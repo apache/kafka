@@ -144,12 +144,7 @@ import static org.mockito.Mockito.when;
 @SuppressWarnings("unchecked")
 public class AsyncKafkaConsumerTest {
 
-    private long retryBackoffMs = 100L;
-    private int defaultApiTimeoutMs = 1000;
-    private boolean autoCommitEnabled = true;
-
     private AsyncKafkaConsumer<String, String> consumer = null;
-
     private Time time = new MockTime(0);
     private final FetchCollector<String, String> fetchCollector = mock(FetchCollector.class);
     private final ApplicationEventHandler applicationEventHandler = mock(ApplicationEventHandler.class);
@@ -210,6 +205,9 @@ public class AsyncKafkaConsumerTest {
         List<ConsumerPartitionAssignor> assignors,
         String groupId,
         String clientId) {
+        long retryBackoffMs = 100L;
+        int defaultApiTimeoutMs = 1000;
+        boolean autoCommitEnabled = true;
         return new AsyncKafkaConsumer<>(
             new LogContext(),
             clientId,

@@ -482,10 +482,12 @@ public class CoordinatorRuntimeTest {
     private static MemoryRecords endTransactionMarker(
         long producerId,
         short producerEpoch,
+        long timestamp,
         int coordinatorEpoch,
         ControlRecordType result
     ) {
         return MemoryRecords.withEndTransactionMarker(
+            timestamp,
             producerId,
             producerEpoch,
             new EndTransactionMarker(
@@ -1575,7 +1577,7 @@ public class CoordinatorRuntimeTest {
         // Records have been written to the log.
         assertEquals(Arrays.asList(
             transactionalRecords(100L, (short) 5, timer.time().milliseconds(), "record1", "record2"),
-            endTransactionMarker(100, (short) 5, 10, expectedType)
+            endTransactionMarker(100L, (short) 5, timer.time().milliseconds(), 10, expectedType)
         ), writer.entries(TP));
 
         // Commit write #1.
@@ -2924,7 +2926,7 @@ public class CoordinatorRuntimeTest {
 
         // Records have been written to the log.
         assertEquals(Collections.singletonList(
-            endTransactionMarker(100, (short) 50, 1, ControlRecordType.COMMIT)
+            endTransactionMarker(100, (short) 50, timer.time().milliseconds(), 1, ControlRecordType.COMMIT)
         ), writer.entries(TP));
 
         // The write timeout tasks exist.

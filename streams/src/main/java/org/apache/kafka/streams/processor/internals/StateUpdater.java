@@ -137,19 +137,6 @@ public interface StateUpdater {
     void add(final Task task);
 
     /**
-     * Removes a task (active or standby) from the state updater and adds the removed task to the removed tasks.
-     *
-     * This method does not block until the removed task is removed from the state updater.
-     *
-     * The task to be removed is not removed from the restored active tasks and the failed tasks.
-     * Stateless tasks will never be added to the removed tasks since they are immediately added to the
-     * restored active tasks.
-     *
-     * @param taskId ID of the task to remove
-     */
-    void remove(final TaskId taskId);
-
-    /**
      * Removes a task (active or standby) from the state updater.
      *
      * This method does not block until the removed task is removed from the state updater. But it returns a future on
@@ -158,7 +145,7 @@ public interface StateUpdater {
      *
      * @param taskId ID of the task to remove
      */
-    CompletableFuture<RemovedTaskResult> removeWithFuture(final TaskId taskId);
+    CompletableFuture<RemovedTaskResult> remove(final TaskId taskId);
 
     /**
      * Wakes up the state updater if it is currently dormant, to check if a paused task should be resumed.
@@ -177,27 +164,6 @@ public interface StateUpdater {
      * @return set of active tasks with up-to-date states
      */
     Set<StreamTask> drainRestoredActiveTasks(final Duration timeout);
-
-
-    /**
-     * Drains the removed tasks (active and standbys) from the state updater.
-     *
-     * Removed tasks returned by this method are tasks extraordinarily removed from the state updater. These do not
-     * include restored or failed tasks.
-     *
-     * The returned removed tasks are removed from the state updater
-     *
-     * @return set of tasks removed from the state updater
-     */
-    Set<Task> drainRemovedTasks();
-
-    /**
-     * Checks if the state updater has any tasks that should be removed and returned to the StreamThread
-     * using `drainRemovedTasks`.
-     *
-     * @return true if a subsequent call to `drainRemovedTasks` would return a non-empty collection.
-     */
-    boolean hasRemovedTasks();
 
     /**
      * Drains the failed tasks and the corresponding exceptions.
@@ -223,9 +189,8 @@ public interface StateUpdater {
      * not been removed from the state updater with one of the following methods:
      * <ul>
      *   <li>{@link StateUpdater#drainRestoredActiveTasks(Duration)}</li>
-     *   <li>{@link StateUpdater#drainRemovedTasks()}</li>
      *   <li>{@link StateUpdater#drainExceptionsAndFailedTasks()}</li>
-     *   <li>{@link StateUpdater#removeWithFuture(org.apache.kafka.streams.processor.TaskId)}</li>
+     *   <li>{@link StateUpdater#remove(org.apache.kafka.streams.processor.TaskId)}</li>
      * </ul>
      *
      * @return set of all tasks managed by the state updater
@@ -236,8 +201,8 @@ public interface StateUpdater {
      * Gets all tasks that are currently being restored inside the state updater.
      *
      * Tasks that have just being added into the state updater via {@link StateUpdater#add(Task)}
-     * or have restored completely or removed will not be returned; similarly tasks that have just being
-     * removed via {@link StateUpdater#remove(TaskId)} maybe returned still.
+     * or have restored completely or removed will not be returned; tasks that have just being
+     * removed via {@link StateUpdater#remove(TaskId)} may still be returned.
      *
      * @return set of all updating tasks inside the state updater
      */
@@ -250,9 +215,8 @@ public interface StateUpdater {
      * and the task was not removed from the state updater with one of the following methods:
      * <ul>
      *   <li>{@link StateUpdater#drainRestoredActiveTasks(Duration)}</li>
-     *   <li>{@link StateUpdater#drainRemovedTasks()}</li>
      *   <li>{@link StateUpdater#drainExceptionsAndFailedTasks()}</li>
-     *   <li>{@link StateUpdater#removeWithFuture(org.apache.kafka.streams.processor.TaskId)}</li>
+     *   <li>{@link StateUpdater#remove(org.apache.kafka.streams.processor.TaskId)}</li>
      * </ul>
      *
      * @return {@code true} if the state updater restores active tasks, {@code false} otherwise
@@ -269,7 +233,6 @@ public interface StateUpdater {
      * The state updater manages all standby tasks that were added with the {@link StateUpdater#add(Task)} and that have
      * not been removed from the state updater with one of the following methods:
      * <ul>
-     *   <li>{@link StateUpdater#drainRemovedTasks()}</li>
      *   <li>{@link StateUpdater#drainExceptionsAndFailedTasks()}</li>
      * </ul>
      *

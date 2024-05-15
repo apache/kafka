@@ -601,25 +601,25 @@ public class TaskManager {
             if (activeTasksToCreate.containsKey(taskId)) {
                 if (task.isActive()) {
                     if (!task.inputPartitions().equals(activeTasksToCreate.get(taskId))) {
-                        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.removeWithFuture(taskId);
+                        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(taskId);
                         futuresForUpdatingInputPartitions.put(taskId, future);
                         newInputPartitions.put(taskId, activeTasksToCreate.get(taskId));
                     }
                 } else {
-                    final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.removeWithFuture(taskId);
+                    final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(taskId);
                     futuresForStandbyTasksToRecycle.put(taskId, future);
                     activeInputPartitions.put(taskId, activeTasksToCreate.get(taskId));
                 }
                 activeTasksToCreate.remove(taskId);
             } else if (standbyTasksToCreate.containsKey(taskId)) {
                 if (task.isActive()) {
-                    final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.removeWithFuture(taskId);
+                    final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(taskId);
                     futuresForActiveTasksToRecycle.put(taskId, future);
                     standbyInputPartitions.put(taskId, standbyTasksToCreate.get(taskId));
                 }
                 standbyTasksToCreate.remove(taskId);
             } else {
-                final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.removeWithFuture(taskId);
+                final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(taskId);
                 futuresForTasksToClose.put(taskId, future);
             }
         }
@@ -1170,7 +1170,7 @@ public class TaskManager {
             for (final Task restoringTask : stateUpdater.getTasks()) {
                 if (restoringTask.isActive()) {
                     if (remainingRevokedPartitions.containsAll(restoringTask.inputPartitions())) {
-                        futures.put(restoringTask.id(), stateUpdater.removeWithFuture(restoringTask.id()));
+                        futures.put(restoringTask.id(), stateUpdater.remove(restoringTask.id()));
                         remainingRevokedPartitions.removeAll(restoringTask.inputPartitions());
                     }
                 }
@@ -1241,7 +1241,7 @@ public class TaskManager {
             final Set<Task> tasksToCloseDirty = new HashSet<>();
             for (final Task restoringTask : stateUpdater.getTasks()) {
                 if (restoringTask.isActive()) {
-                    futures.put(restoringTask.id(), stateUpdater.removeWithFuture(restoringTask.id()));
+                    futures.put(restoringTask.id(), stateUpdater.remove(restoringTask.id()));
                 }
             }
 
@@ -1484,7 +1484,7 @@ public class TaskManager {
         if (stateUpdater != null) {
             final Map<TaskId, CompletableFuture<StateUpdater.RemovedTaskResult>> futures = new LinkedHashMap<>();
             for (final Task task : stateUpdater.getTasks()) {
-                final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.removeWithFuture(task.id());
+                final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id());
                 futures.put(task.id(), future);
             }
             final Set<Task> tasksToCloseClean = new HashSet<>();

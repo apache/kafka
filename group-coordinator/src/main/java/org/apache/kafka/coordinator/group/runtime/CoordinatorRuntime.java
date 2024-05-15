@@ -1122,6 +1122,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                             tp,
                             VerificationGuard.SENTINEL,
                             MemoryRecords.withEndTransactionMarker(
+                                time.milliseconds(),
                                 producerId,
                                 producerEpoch,
                                 new EndTransactionMarker(
