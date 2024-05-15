@@ -718,12 +718,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         final TaskAssignor taskAssignor = createTaskAssignor(lagComputationSuccessful);
 
-        buildApplicationState(
-            clientMetadataMap,
-            partitionsForTask,
-            changelogTopics.changelogPartionsForTask(),
-            racksForProcessConsumer
-        );
         final RackAwareTaskAssignor rackAwareTaskAssignor = new RackAwareTaskAssignor(
             fullMetadata,
             partitionsForTask,
