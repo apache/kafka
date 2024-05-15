@@ -24,7 +24,7 @@ import java.util.Objects;
 /**
  * The assignment specification for a consumer group.
  */
-public class AssignmentSpec implements GroupAssignmentSpec{
+public class AssignmentSpec implements GroupAssignmentSpec {
     /**
      * The member metadata keyed by member Id.
      */

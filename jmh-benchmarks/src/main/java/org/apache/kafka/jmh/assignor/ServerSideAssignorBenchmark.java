@@ -265,7 +265,7 @@ public class ServerSideAssignorBenchmark {
             Collections.emptyMap()
         ));
 
-        assignmentSpec = new AssignmentSpec(updatedMembers, subscriptionType, Collections.emptyMap());
+        assignmentSpec = new AssignmentSpec(updatedMembers, subscriptionType, partitionAssignments);
     }
 
     private Map<Uuid, Map<Integer, String>> updatePartitionAssignments(
