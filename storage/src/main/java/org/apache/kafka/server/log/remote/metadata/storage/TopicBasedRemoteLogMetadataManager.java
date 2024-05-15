@@ -562,11 +562,6 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         return rlmmConfig;
     }
 
-    // Visible for testing.
-    void setRlmTopicPartitioner(RemoteLogMetadataTopicPartitioner rlmTopicPartitioner) {
-        this.rlmTopicPartitioner = Objects.requireNonNull(rlmTopicPartitioner);
-    }
-
     @Override
     public void close() throws IOException {
         // Close all the resources.
