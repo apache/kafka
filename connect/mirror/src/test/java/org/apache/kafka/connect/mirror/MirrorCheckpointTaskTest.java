@@ -278,7 +278,7 @@ public class MirrorCheckpointTaskTest {
         TopicPartition t1p0 = new TopicPartition("t1", 0);
         TopicPartition sourceT1p0 = new TopicPartition("source1.t1", 0);
         OffsetSyncStoreTest.FakeOffsetSyncStore offsetSyncStore = new OffsetSyncStoreTest.FakeOffsetSyncStore();
-        offsetSyncStore.setOptimisticLoading();
+        offsetSyncStore.setLoadingMustReadToEnd(false);
         // OffsetSyncStore contains entries for: 100->100, 200->200, 300->300
         for (int i = 100; i <= 300; i += 100) {
             offsetSyncStore.sync(t1p0, i, i);
@@ -303,7 +303,7 @@ public class MirrorCheckpointTaskTest {
         // corresponding OffsetSyncStore no longer has a mapping for 100->100
         // Now OffsetSyncStore contains entries for: 175->175, 375->375, 475->475
         offsetSyncStore = new OffsetSyncStoreTest.FakeOffsetSyncStore();
-        offsetSyncStore.setOptimisticLoading();
+        offsetSyncStore.setLoadingMustReadToEnd(false);
         for (int i = 175; i <= 475; i += 100) {
             offsetSyncStore.sync(t1p0, i, i);
         }

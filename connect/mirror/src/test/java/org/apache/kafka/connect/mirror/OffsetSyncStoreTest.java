@@ -39,8 +39,8 @@ public class OffsetSyncStoreTest {
             super();
         }
 
-        public void setOptimisticLoading() {
-            this.pessimisticLoading =  false;
+        public void setLoadingMustReadToEnd(boolean b) {
+            this.initializationMustReadToEnd =  false;
         }
 
         public void readToEnd() {
@@ -159,11 +159,11 @@ public class OffsetSyncStoreTest {
 
     // this test has been wriiten knowing the exact offsets syncs stored
     @Test
-    public void testPastOffsetTranslationOptimisticLoading() {
+    public void testPastOffsetTranslationWithoutInitializationReadToEnd() {
         try (FakeOffsetSyncStore store = new FakeOffsetSyncStore()) {
             int maxOffsetLag = 10;
             int offset = 0;
-            store.setOptimisticLoading();
+            store.setLoadingMustReadToEnd(false);
             for (; offset <= 1000; offset += maxOffsetLag) {
                 store.sync(tp, offset, offset);
                 assertSparseSyncInvariant(store, tp);
