@@ -2,6 +2,7 @@ package org.apache.kafka.streams.errors;
 
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.streams.processor.ErrorHandlerContext;
+import org.apache.kafka.streams.processor.api.Record;
 
 /**
  * An interface that allows user code to inspect a record that has failed processing
@@ -14,7 +15,7 @@ public interface ProcessingExceptionHandler extends Configurable {
      * @param record record where the exception occurred
      * @param exception the actual exception
      */
-    ProcessingHandlerResponse handle(ErrorHandlerContext context, Record<?,?> record, Exception exception);
+    ProcessingHandlerResponse handle(ErrorHandlerContext context, Record<?, ?> record, Exception exception);
 
     enum ProcessingHandlerResponse {
         /* continue with processing */
