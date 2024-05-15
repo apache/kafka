@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 package kafka.server.integration;
-
+import kafka.integration.KafkaServerTestHarness;
 import kafka.server.KafkaBroker;
 import kafka.server.KafkaConfig;
 import kafka.utils.Logging;
@@ -66,7 +66,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class EligibleLeaderReplicasIntegrationTest extends kafka.integration.KafkaServerTestHarness implements Logging {
+public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarness implements Logging {
     private String bootstrapServer;
     private String testTopicName;
     private Admin adminClient;
@@ -122,6 +122,7 @@ public class EligibleLeaderReplicasIntegrationTest extends kafka.integration.Kaf
     @AfterEach
     public void close() throws Exception {
         if (adminClient != null) adminClient.close();
+        super.tearDown();
     }
 
     @ParameterizedTest
