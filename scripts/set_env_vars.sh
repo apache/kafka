@@ -1,3 +1,4 @@
+#!/bin/bash
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -12,11 +13,10 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-### service-bot sonarqube plugin managed file
-sonar.coverage.exclusions=**/test/**/*,**/tests/**/*,**/mock/**/*,**/mocks/**/*,**/*mock*,**/*test*
-sonar.coverage.jacoco.xmlReportPaths=**/jacoco.xml
-sonar.exclusions=**/*.pb.*,**/mk-include/**/*
-sonar.java.binaries=.
-sonar.language=java
-sonar.projectKey=kafka
-sonar.sources=.
+
+# Determine the value based on the branch name
+if echo "$SEMAPHORE_GIT_BRANCH" | grep -E '(-rc|-beta|-cp|-post$)' &>/dev/null; then
+  export RELEASE_JOB="true"
+else
+  export RELEASE_JOB="false"
+fi
