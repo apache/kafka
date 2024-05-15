@@ -38,6 +38,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.ApplicationState;
+import org.apache.kafka.streams.processor.assignment.TaskInfo;
 import org.apache.kafka.streams.processor.internals.assignment.ApplicationStateImpl;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.TopicsInfo;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
@@ -54,6 +55,7 @@ import org.apache.kafka.streams.processor.internals.assignment.ReferenceContaine
 import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
 import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.TaskInfoImpl;
 import org.apache.kafka.streams.state.HostInfo;
 import org.slf4j.Logger;
 
@@ -131,23 +133,32 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         private final HostInfo hostInfo;
         private final ClientState state;
         private final SortedSet<String> consumers;
+        private final Map<String, List<TopicPartition>> partitionsForConsumer;
+        private final Optional<String> rackId;
 
-        ClientMetadata(final UUID processId, final String endPoint, final Map<String, String> clientTags) {
+        ClientMetadata(final UUID processId, final String endPoint, final Map<String, String> clientTags, final Optional<String> rackId) {
 
             // get the host info, or null if no endpoint is configured (ie endPoint == null)
             hostInfo = HostInfo.buildFromEndpoint(endPoint);
 
             // initialize the consumer memberIds
             consumers = new TreeSet<>();
+            partitionsForConsumer = new TreeMap<>();
 
             // initialize the client state with client tags
             state = new ClientState(processId, clientTags);
+
+            this.rackId = rackId;
         }
 
         void addConsumer(final String consumerMemberId, final List<TopicPartition> ownedPartitions) {
             consumers.add(consumerMemberId);
             state.incrementCapacity();
             state.addOwnedPartitions(ownedPartitions, consumerMemberId);
+            if (!partitionsForConsumer.containsKey(consumerMemberId)) {
+                partitionsForConsumer.put(consumerMemberId, new ArrayList<>());
+            }
+            partitionsForConsumer.get(consumerMemberId).addAll(ownedPartitions);
         }
 
         void addPreviousTasksAndOffsetSums(final String consumerId, final Map<TaskId, Long> taskOffsetSums) {
@@ -160,6 +171,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         public HostInfo hostInfo() {
             return hostInfo;
+        }
+
+        public Optional<String> rackId() {
+            return rackId;
         }
 
         @Override
@@ -353,7 +368,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 futureMetadataVersion = usedVersion;
                 processId = FUTURE_ID;
                 if (!clientMetadataMap.containsKey(FUTURE_ID)) {
-                    clientMetadataMap.put(FUTURE_ID, new ClientMetadata(FUTURE_ID, null, Collections.emptyMap()));
+                    clientMetadataMap.put(FUTURE_ID, new ClientMetadata(FUTURE_ID, null, Collections.emptyMap(), subscription.rackId()));
                 }
             } else {
                 processId = info.processId();
@@ -365,7 +380,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
             // create the new client metadata if necessary
             if (clientMetadata == null) {
-                clientMetadata = new ClientMetadata(info.processId(), info.userEndPoint(), info.clientTags());
+                clientMetadata = new ClientMetadata(info.processId(), info.userEndPoint(), info.clientTags(), subscription.rackId());
                 clientMetadataMap.put(info.processId(), clientMetadata);
             }
 
@@ -472,23 +487,44 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
      *
      * @param clientMetadataMap the map of process id to client metadata used to build an immutable
      *                          {@code ApplicationState}
-     * @param statefulTasks     the set of {@code TaskId} that correspond to all the stateful
-     *                          tasks that need to be reassigned.
      * @return The {@code ApplicationState} needed by the TaskAssigner to compute new task
      *         assignments.
      */
     private ApplicationState buildApplicationState(final Map<UUID, ClientMetadata> clientMetadataMap,
-                                                   final Set<TaskId> statefulTasks) {
-        final Set<TaskId> statelessTasks = new HashSet<>();
-        for (final Map.Entry<UUID, ClientMetadata> clientEntry : clientMetadataMap.entrySet()) {
-            final ClientState clientState = clientEntry.getValue().state;
-            statelessTasks.addAll(clientState.statelessActiveTasks());
-        }
+                                                   final Map<TaskId, Set<TopicPartition>> inputPartitionsForTask,
+                                                   final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask,
+                                                   final Map<UUID, Map<String, Optional<String>>> rackForProcessConsumer) {
+        final Set<TaskInfo> tasks = new HashSet<>();
+        clientMetadataMap.forEach((processId, clientMetadata) -> {
+            final ClientState clientState = clientMetadata.state;
+            final Map<String, Optional<String>> rackForConsumer = rackForProcessConsumer.get(processId);
+            clientState.standbyTasks().forEach(taskId -> {
+                final TaskInfo taskInfo = TaskInfoImpl.of(
+                    taskId,
+                    true, // All standby tasks are stateful.
+                    clientState::previousOwnerForPartition,
+                    rackForConsumer,
+                    inputPartitionsForTask,
+                    changelogPartitionsForTask
+                );
+                tasks.add(taskInfo);
+            });
+            clientState.activeTasks().forEach(taskId -> {
+                final TaskInfo taskInfo = TaskInfoImpl.of(
+                    taskId,
+                    clientState.statefulActiveTasks().contains(taskId),
+                    clientState::previousOwnerForPartition,
+                    rackForConsumer,
+                    inputPartitionsForTask,
+                    changelogPartitionsForTask
+                );
+                tasks.add(taskInfo);
+            });
+        });
 
         return new ApplicationStateImpl(
             assignmentConfigs.toPublicAssignmentConfigs(),
-            statefulTasks,
-            statelessTasks,
+            tasks,
             clientMetadataMap
         );
     }
@@ -682,6 +718,12 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         final TaskAssignor taskAssignor = createTaskAssignor(lagComputationSuccessful);
 
+        buildApplicationState(
+            clientMetadataMap,
+            partitionsForTask,
+            changelogTopics.changelogPartionsForTask(),
+            racksForProcessConsumer
+        );
         final RackAwareTaskAssignor rackAwareTaskAssignor = new RackAwareTaskAssignor(
             fullMetadata,
             partitionsForTask,

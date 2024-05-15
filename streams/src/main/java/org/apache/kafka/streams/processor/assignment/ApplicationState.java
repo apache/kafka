@@ -18,7 +18,6 @@ package org.apache.kafka.streams.processor.assignment;
 
 import java.util.Map;
 import java.util.Set;
-import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 
 /**
@@ -49,17 +48,5 @@ public interface ApplicationState {
     /**
      * @return the set of all tasks in this topology which must be assigned
      */
-    Set<TaskId> allTasks();
-
-    /**
-     *
-     * @return the set of stateful and changelogged tasks in this topology
-     */
-    Set<TaskId> statefulTasks();
-
-    /**
-     *
-     * @return the set of stateless or changelog-less tasks in this topology
-     */
-    Set<TaskId> statelessTasks();
+    Set<TaskInfo> allTasks();
 }
