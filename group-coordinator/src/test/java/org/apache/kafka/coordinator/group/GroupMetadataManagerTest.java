@@ -110,7 +110,6 @@ import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_I
 import static org.apache.kafka.coordinator.group.Assertions.assertRecordEquals;
 import static org.apache.kafka.coordinator.group.Assertions.assertRecordsEquals;
 import static org.apache.kafka.coordinator.group.Assertions.assertResponseEquals;
-import static org.apache.kafka.coordinator.group.Assertions.assertSyncGroupResponseEquals;
 import static org.apache.kafka.coordinator.group.Assertions.assertUnorderedListEquals;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
@@ -11634,6 +11633,7 @@ public class GroupMetadataManagerTest {
         JoinGroupRequestData request = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
             .withGroupId(groupId)
             .withMemberId(memberId1)
+            .withSessionTimeoutMs(5000)
             .withProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
                 Arrays.asList(fooTopicName, barTopicName, zarTopicName),
                 Collections.emptyList()))
@@ -11704,8 +11704,7 @@ public class GroupMetadataManagerTest {
         context.assertSyncTimeout(groupId, memberId1, request.rebalanceTimeoutMs());
 
         // Member 1 sends sync request to get the assigned partitions.
-        testClassicGroupSyncToConsumerGroup(
-            context,
+        context.verifyClassicGroupSyncToConsumerGroup(
             groupId,
             joinResponse1.memberId(),
             joinResponse1.generationId(),
@@ -11756,8 +11755,7 @@ public class GroupMetadataManagerTest {
         context.assertSyncTimeout(groupId, memberId1, request.rebalanceTimeoutMs());
 
         // Member 1 sends sync request to get the assigned partitions.
-        testClassicGroupSyncToConsumerGroup(
-            context,
+        context.verifyClassicGroupSyncToConsumerGroup(
             groupId,
             joinResponse2.memberId(),
             joinResponse2.generationId(),
@@ -11863,6 +11861,7 @@ public class GroupMetadataManagerTest {
         JoinGroupRequestData request1 = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
             .withGroupId(groupId)
             .withMemberId(memberId1)
+            .withSessionTimeoutMs(5000)
             .withProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
                 Arrays.asList(fooTopicName, barTopicName, zarTopicName),
                 Arrays.asList(new TopicPartition(fooTopicName, 0), new TopicPartition(barTopicName, 0))))
@@ -11934,8 +11933,7 @@ public class GroupMetadataManagerTest {
         context.assertSyncTimeout(groupId, memberId1, request1.rebalanceTimeoutMs());
 
         // Member 1 sends sync request to get the assigned partitions.
-        testClassicGroupSyncToConsumerGroup(
-            context,
+        context.verifyClassicGroupSyncToConsumerGroup(
             groupId,
             joinResponse1.memberId(),
             joinResponse1.generationId(),
@@ -11948,6 +11946,7 @@ public class GroupMetadataManagerTest {
         JoinGroupRequestData request2 = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
             .withGroupId(groupId)
             .withMemberId(memberId1)
+            .withSessionTimeoutMs(5000)
             .withProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
                 Arrays.asList(fooTopicName, barTopicName, zarTopicName),
                 Collections.singletonList(new TopicPartition(fooTopicName, 0))))
@@ -11996,8 +11995,7 @@ public class GroupMetadataManagerTest {
         context.assertSyncTimeout(groupId, memberId1, request2.rebalanceTimeoutMs());
 
         // Member 1 sends sync request to get the assigned partitions.
-        testClassicGroupSyncToConsumerGroup(
-            context,
+        context.verifyClassicGroupSyncToConsumerGroup(
             groupId,
             joinResponse2.memberId(),
             joinResponse2.generationId(),
@@ -12022,6 +12020,7 @@ public class GroupMetadataManagerTest {
         JoinGroupRequestData request3 = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
             .withGroupId(groupId)
             .withMemberId(memberId1)
+            .withSessionTimeoutMs(5000)
             .withProtocols(GroupMetadataManagerTestContext.toConsumerProtocol(
                 Arrays.asList(fooTopicName, barTopicName, zarTopicName),
                 Arrays.asList(new TopicPartition(fooTopicName, 0), new TopicPartition(zarTopicName, 0))))
@@ -12069,8 +12068,7 @@ public class GroupMetadataManagerTest {
         context.assertSyncTimeout(groupId, memberId1, request3.rebalanceTimeoutMs());
 
         // Member 1 sends sync request to get the assigned partitions.
-        testClassicGroupSyncToConsumerGroup(
-            context,
+        context.verifyClassicGroupSyncToConsumerGroup(
             groupId,
             joinResponse3.memberId(),
             joinResponse3.generationId(),
@@ -12124,7 +12122,7 @@ public class GroupMetadataManagerTest {
                 .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                 .setClassicMemberMetadata(
                     new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
-//                        .setClassicMemberSessionTimeout(5000)
+                        .setSessionTimeoutMs(5000)
                         .setSupportedProtocols(protocols)
                 )
                 .setAssignedPartitions(mkAssignment(
@@ -12163,8 +12161,7 @@ public class GroupMetadataManagerTest {
                     .withAssignmentEpoch(10))
                 .build();
 
-            testClassicGroupSyncToConsumerGroup(
-                context,
+            context.verifyClassicGroupSyncToConsumerGroup(
                 groupId,
                 memberId1,
                 10,
@@ -12278,7 +12275,7 @@ public class GroupMetadataManagerTest {
                 .withMember(new ConsumerGroupMember.Builder(memberId)
                     .setClassicMemberMetadata(
                         new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
-//                        .setClassicMemberSessionTimeout(5000)
+                            .setSessionTimeoutMs(5000)
                             .setSupportedProtocols(protocols)
                     )
                     .setMemberEpoch(10)
@@ -12331,7 +12328,7 @@ public class GroupMetadataManagerTest {
                 .withMember(new ConsumerGroupMember.Builder(memberId)
                     .setClassicMemberMetadata(
                         new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
-//                        .setClassicMemberSessionTimeout(5000)
+                            .setSessionTimeoutMs(5000)
                             .setSupportedProtocols(protocols)
                     )
                     .setMemberEpoch(10)
@@ -12346,61 +12343,6 @@ public class GroupMetadataManagerTest {
                 .withProtocolName(ConsumerProtocol.PROTOCOL_TYPE)
                 .withProtocolType("range")
                 .build())
-        );
-    }
-
-    private void testClassicGroupSyncToConsumerGroup(
-        GroupMetadataManagerTestContext context,
-        String groupId,
-        String memberId,
-        int generationId,
-        String protocolName,
-        String protocolType,
-        List<TopicPartition> topicPartitionList,
-        short version
-    ) throws Exception {
-        GroupMetadataManagerTestContext.SyncResult syncResult = context.sendClassicGroupSync(
-            new GroupMetadataManagerTestContext.SyncGroupRequestBuilder()
-                .withGroupId(groupId)
-                .withMemberId(memberId)
-                .withGenerationId(generationId)
-                .withProtocolName(protocolName)
-                .withProtocolType(protocolType)
-                .build()
-        );
-        assertEquals(Collections.emptyList(), syncResult.records);
-        assertSyncGroupResponseEquals(
-            new SyncGroupResponseData()
-                .setProtocolType(protocolType)
-                .setProtocolName(protocolName)
-                .setAssignment(ConsumerProtocol.serializeAssignment(
-                    new ConsumerPartitionAssignor.Assignment(topicPartitionList),
-                    version
-                ).array()),
-            syncResult.syncFuture.get()
-        );
-        context.assertNoSyncTimeout(groupId, memberId);
-//        context.assertSessionTimeout(groupId, memberId, 5000);
-    }
-
-    private void testClassicGroupSyncToConsumerGroup(
-        GroupMetadataManagerTestContext context,
-        String groupId,
-        String memberId,
-        int generationId,
-        String protocolName,
-        String protocolType,
-        List<TopicPartition> topicPartitionList
-    ) throws Exception {
-        testClassicGroupSyncToConsumerGroup(
-            context,
-            groupId,
-            memberId,
-            generationId,
-            protocolName,
-            protocolType,
-            topicPartitionList,
-            ConsumerProtocolAssignment.HIGHEST_SUPPORTED_VERSION
         );
     }
 
