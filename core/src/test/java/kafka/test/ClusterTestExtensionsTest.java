@@ -68,7 +68,7 @@ public class ClusterTestExtensionsTest {
         clusterGenerator.accept(ClusterConfig.defaultBuilder()
                 .setTypes(Collections.singleton(Type.ZK))
                 .setServerProperties(serverProperties)
-                .setTags(Arrays.asList("name", "Generated Test"))
+                .setTags(Collections.singletonList("Generated Test"))
                 .build());
     }
 
@@ -86,6 +86,7 @@ public class ClusterTestExtensionsTest {
         Assertions.assertEquals(Type.ZK, clusterInstance.type(),
             "generate1 provided a Zk cluster, so we should see that here");
         Assertions.assertEquals("bar", clusterInstance.config().serverProperties().get("foo"));
+        Assertions.assertEquals(Collections.singletonList("Generated Test"), clusterInstance.config().tags());
     }
 
     // Multiple @ClusterTest can be used with @ClusterTests
@@ -125,7 +126,7 @@ public class ClusterTestExtensionsTest {
             Assertions.assertEquals("bar", clusterInstance.config().serverProperties().get("foo"));
             Assertions.assertEquals("eggs", clusterInstance.config().serverProperties().get("spam"));
             Assertions.assertEquals("default.value", clusterInstance.config().serverProperties().get("default.key"));
-            Assertions.assertArrayEquals(new String[]{"default.display.key1", "default.display.key2"}, clusterInstance.config().tags().toArray());
+            Assertions.assertEquals(Arrays.asList("default.display.key1", "default.display.key2"), clusterInstance.config().tags());
 
             // assert broker server 0 contains property queued.max.requests 100 from ClusterTestDefaults
             try (Admin admin = clusterInstance.createAdminClient()) {
@@ -138,7 +139,7 @@ public class ClusterTestExtensionsTest {
             Assertions.assertEquals("baz", clusterInstance.config().serverProperties().get("foo"));
             Assertions.assertEquals("eggs", clusterInstance.config().serverProperties().get("spam"));
             Assertions.assertEquals("overwrite.value", clusterInstance.config().serverProperties().get("default.key"));
-            Assertions.assertArrayEquals(new String[]{"default.display.key1", "default.display.key2"}, clusterInstance.config().tags().toArray());
+            Assertions.assertEquals(Arrays.asList("default.display.key1", "default.display.key2"), clusterInstance.config().tags());
 
             // assert broker server 0 contains property queued.max.requests 200 from ClusterTest which overrides
             // the value 100 in server property in ClusterTestDefaults

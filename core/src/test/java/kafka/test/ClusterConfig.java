@@ -159,7 +159,6 @@ public class ClusterConfig {
 
     public Set<String> displayTags() {
         Set<String> displayTags = new LinkedHashSet<>(tags);
-        displayTags.add("tags=" + String.join(",", tags));
         displayTags.add("MetadataVersion=" + metadataVersion);
         displayTags.add("Security=" + securityProtocol.name());
         listenerName().ifPresent(listener -> displayTags.add("Listener=" + listener));
@@ -219,7 +218,8 @@ public class ClusterConfig {
         private Map<String, String> saslServerProperties = Collections.emptyMap();
         private Map<String, String> saslClientProperties = Collections.emptyMap();
         private Map<Integer, Map<String, String>> perServerProperties = Collections.emptyMap();
-        private List<String> tags;
+        private List<String> tags = Collections.emptyList();
+
         private Builder() {}
 
         public Builder setTypes(Set<Type> types) {
