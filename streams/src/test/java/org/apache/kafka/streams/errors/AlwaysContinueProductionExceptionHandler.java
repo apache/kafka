@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.errors;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.streams.processor.ErrorHandlerContext;
 
 import java.util.Map;
 
@@ -26,14 +27,17 @@ import java.util.Map;
  */
 public class AlwaysContinueProductionExceptionHandler implements ProductionExceptionHandler {
     @Override
-    public ProductionExceptionHandlerResponse handle(final ProducerRecord<byte[], byte[]> record,
+    public ProductionExceptionHandlerResponse handle(final ErrorHandlerContext context,
+                                                     final ProducerRecord<byte[], byte[]> record,
                                                      final Exception exception) {
         return ProductionExceptionHandlerResponse.CONTINUE;
     }
 
     @Override
-    public ProductionExceptionHandlerResponse handleSerializationException(final ProducerRecord record,
-                                                                           final Exception exception) {
+    public ProductionExceptionHandlerResponse handleSerializationException(final ErrorHandlerContext context,
+                                                                           final ProducerRecord record,
+                                                                           final Exception exception,
+                                                                           final SerializationExceptionOrigin origin) {
         return ProductionExceptionHandlerResponse.CONTINUE;
     }
 

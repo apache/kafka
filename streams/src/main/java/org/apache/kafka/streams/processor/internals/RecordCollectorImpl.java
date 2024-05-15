@@ -219,7 +219,7 @@ public class RecordCollectorImpl implements RecordCollector {
             log.debug(String.format("Error serializing record to topic %s", topic), exception);
 
             try {
-                response = productionExceptionHandler.handleSerializationException(record, exception);
+                response = productionExceptionHandler.handleSerializationException(null, record, exception, null);
             } catch (final Exception e) {
                 log.error("Fatal when handling serialization exception", e);
                 recordSendError(topic, e, null);
@@ -309,7 +309,7 @@ public class RecordCollectorImpl implements RecordCollector {
                     "`delivery.timeout.ms` to a larger value to wait longer for such scenarios and avoid timeout errors";
                 sendException.set(new TaskCorruptedException(Collections.singleton(taskId)));
             } else {
-                if (productionExceptionHandler.handle(serializedRecord, exception) == ProductionExceptionHandlerResponse.FAIL) {
+                if (productionExceptionHandler.handle(null, serializedRecord, exception) == ProductionExceptionHandlerResponse.FAIL) {
                     errorMessage += "\nException handler choose to FAIL the processing, no more records would be sent.";
                     sendException.set(new StreamsException(errorMessage, exception));
                 } else {

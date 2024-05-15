@@ -19,7 +19,6 @@ package org.apache.kafka.streams.errors;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.streams.processor.ErrorHandlerContext;
-import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 /**
  * Interface that specifies how an exception when attempting to produce a result to
@@ -30,22 +29,22 @@ public interface ProductionExceptionHandler extends Configurable {
      * Inspect a record that we attempted to produce, and the exception that resulted
      * from attempting to produce it and determine whether or not to continue processing.
      *
-     * @param record The record that failed to produce
+     * @param record    The record that failed to produce
      * @param exception The exception that occurred during production
      * @deprecated Use {@link #handle(ErrorHandlerContext, ProducerRecord, Exception)} instead
      */
     @Deprecated
     default ProductionExceptionHandlerResponse handle(final ProducerRecord<byte[], byte[]> record,
-                                              final Exception exception) {
-        throw new NotImplementedException();
+                                                      final Exception exception) {
+        throw new UnsupportedOperationException();
     }
 
     /**
      * Inspect a record that we attempted to produce, and the exception that resulted
      * from attempting to produce it and determine whether or not to continue processing.
      *
-     * @param context The error handler context metadata
-     * @param record The record that failed to produce
+     * @param context   The error handler context metadata
+     * @param record    The record that failed to produce
      * @param exception The exception that occurred during production
      */
     @SuppressWarnings("deprecation")
@@ -59,8 +58,8 @@ public interface ProductionExceptionHandler extends Configurable {
      * Handles serialization exception and determine if the process should continue. The default implementation is to
      * fail the process.
      *
-     * @param record        the record that failed to serialize
-     * @param exception     the exception that occurred during serialization
+     * @param record    the record that failed to serialize
+     * @param exception the exception that occurred during serialization
      * @deprecated Use {@link #handle(ErrorHandlerContext, ProducerRecord, Exception)} instead
      */
     @Deprecated
@@ -73,10 +72,10 @@ public interface ProductionExceptionHandler extends Configurable {
      * Handles serialization exception and determine if the process should continue. The default implementation is to
      * fail the process.
      *
-     * @param context       the error handler context metadata
-     * @param record        the record that failed to serialize
-     * @param exception     the exception that occurred during serialization
-     * @param origin        the origin of the serialization exception
+     * @param context   the error handler context metadata
+     * @param record    the record that failed to serialize
+     * @param exception the exception that occurred during serialization
+     * @param origin    the origin of the serialization exception
      */
     @SuppressWarnings("deprecation")
     default ProductionExceptionHandlerResponse handleSerializationException(final ErrorHandlerContext context,

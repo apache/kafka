@@ -27,13 +27,16 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.LockException;
+import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.Cancellable;
+import org.apache.kafka.streams.processor.ErrorHandlerContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.TaskId;
@@ -44,7 +47,6 @@ import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
-import org.apache.kafka.streams.TopologyConfig.TaskConfig;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.IOException;
@@ -61,8 +63,9 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.singleton;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeRecordSensor;
+import static org.apache.kafka.streams.StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeRecordSensor;
 
 /**
  * A StreamTask is associated with a {@link AbstractPartitionGroup}, and is assigned to a StreamThread for processing.
@@ -111,6 +114,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private boolean commitRequested = false;
     private boolean hasPendingTxCommit = false;
     private Optional<Long> timeCurrentIdlingStarted;
+    private ProcessingExceptionHandler processingExceptionHandler;
 
     @SuppressWarnings({"rawtypes", "this-escape", "checkstyle:ParameterNumber"})
     public StreamTask(final TaskId id,
@@ -217,6 +221,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             highWatermark.put(topicPartition, -1L);
         }
         timeCurrentIdlingStarted = Optional.empty();
+        this.processingExceptionHandler = config.processingExceptionHandler;
     }
 
     // create queues for each assigned partition and associate them
@@ -844,7 +849,30 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             processorContext.timestamp(),
             processorContext.headers()
         );
-        maybeMeasureLatency(() -> currNode.process(toProcess), time, processLatencySensor);
+        maybeMeasureLatency(() -> {
+            try {
+                currNode.process(toProcess);
+            } catch (final Exception e) {
+                final ErrorHandlerContext errorHandlerContext = new ErrorHandlerContextImpl(processorContext.topic(),
+                    processorContext.partition(),
+                    processorContext.offset(),
+                    processorContext.headers(),
+                    null,
+                    null,
+                    currNode.name(),
+                    processorContext.taskId());
+                final ProcessingExceptionHandler.ProcessingHandlerResponse response = this.processingExceptionHandler
+                    .handle(errorHandlerContext, toProcess, e);
+
+                if (response == ProcessingExceptionHandler.ProcessingHandlerResponse.FAIL) {
+                    throw new StreamsException("Processing exception handler is set to fail upon" +
+                        " a processing error. If you would rather have the streaming pipeline" +
+                        " continue after a deserialization error, please set the " +
+                        PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.",
+                        e);
+                }
+            }
+        }, time, processLatencySensor);
 
         log.trace("Completed processing one record [{}]", record);
     }
