@@ -46,11 +46,11 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class RecordSerdeTest {
+public class CoordinatorRecordSerdeTest {
     @Test
     public void testSerializeKey() {
-        RecordSerde serializer = new RecordSerde();
-        Record record = new Record(
+        CoordinatorRecordSerde serializer = new CoordinatorRecordSerde();
+        CoordinatorRecord record = new CoordinatorRecord(
             new ApiMessageAndVersion(
                 new ConsumerGroupMetadataKey().setGroupId("group"),
                 (short) 3
@@ -69,8 +69,8 @@ public class RecordSerdeTest {
 
     @Test
     public void testSerializeValue() {
-        RecordSerde serializer = new RecordSerde();
-        Record record = new Record(
+        CoordinatorRecordSerde serializer = new CoordinatorRecordSerde();
+        CoordinatorRecord record = new CoordinatorRecord(
             new ApiMessageAndVersion(
                 new ConsumerGroupMetadataKey().setGroupId("group"),
                 (short) 3
@@ -89,8 +89,8 @@ public class RecordSerdeTest {
 
     @Test
     public void testSerializeNullValue() {
-        RecordSerde serializer = new RecordSerde();
-        Record record = new Record(
+        CoordinatorRecordSerde serializer = new CoordinatorRecordSerde();
+        CoordinatorRecord record = new CoordinatorRecord(
             new ApiMessageAndVersion(
                 new ConsumerGroupMetadataKey().setGroupId("group"),
                 (short) 1
@@ -103,7 +103,7 @@ public class RecordSerdeTest {
 
     @Test
     public void testDeserialize() {
-        RecordSerde serde = new RecordSerde();
+        CoordinatorRecordSerde serde = new CoordinatorRecordSerde();
 
         ApiMessageAndVersion key = new ApiMessageAndVersion(
             new ConsumerGroupMetadataKey().setGroupId("foo"),
@@ -117,14 +117,14 @@ public class RecordSerdeTest {
         );
         ByteBuffer valueBuffer = MessageUtil.toVersionPrefixedByteBuffer(value.version(), value.message());
 
-        Record record = serde.deserialize(keyBuffer, valueBuffer);
+        CoordinatorRecord record = serde.deserialize(keyBuffer, valueBuffer);
         assertEquals(key, record.key());
         assertEquals(value, record.value());
     }
 
     @Test
     public void testDeserializeWithTombstoneForValue() {
-        RecordSerde serde = new RecordSerde();
+        CoordinatorRecordSerde serde = new CoordinatorRecordSerde();
 
         ApiMessageAndVersion key = new ApiMessageAndVersion(
             new ConsumerGroupMetadataKey().setGroupId("foo"),
@@ -132,14 +132,14 @@ public class RecordSerdeTest {
         );
         ByteBuffer keyBuffer = MessageUtil.toVersionPrefixedByteBuffer(key.version(), key.message());
 
-        Record record = serde.deserialize(keyBuffer, null);
+        CoordinatorRecord record = serde.deserialize(keyBuffer, null);
         assertEquals(key, record.key());
         assertNull(record.value());
     }
 
     @Test
     public void testDeserializeWithInvalidRecordType() {
-        RecordSerde serde = new RecordSerde();
+        CoordinatorRecordSerde serde = new CoordinatorRecordSerde();
 
         ByteBuffer keyBuffer = ByteBuffer.allocate(64);
         keyBuffer.putShort((short) 255);
@@ -155,7 +155,7 @@ public class RecordSerdeTest {
 
     @Test
     public void testDeserializeWithKeyEmptyBuffer() {
-        RecordSerde serde = new RecordSerde();
+        CoordinatorRecordSerde serde = new CoordinatorRecordSerde();
 
         ByteBuffer keyBuffer = ByteBuffer.allocate(0);
         ByteBuffer valueBuffer = ByteBuffer.allocate(64);
@@ -168,7 +168,7 @@ public class RecordSerdeTest {
 
     @Test
     public void testDeserializeWithValueEmptyBuffer() {
-        RecordSerde serde = new RecordSerde();
+        CoordinatorRecordSerde serde = new CoordinatorRecordSerde();
 
         ApiMessageAndVersion key = new ApiMessageAndVersion(
             new ConsumerGroupMetadataKey().setGroupId("foo"),
@@ -186,7 +186,7 @@ public class RecordSerdeTest {
 
     @Test
     public void testDeserializeWithInvalidKeyBytes() {
-        RecordSerde serde = new RecordSerde();
+        CoordinatorRecordSerde serde = new CoordinatorRecordSerde();
 
         ByteBuffer keyBuffer = ByteBuffer.allocate(2);
         keyBuffer.putShort((short) 3);
@@ -205,7 +205,7 @@ public class RecordSerdeTest {
 
     @Test
     public void testDeserializeWithInvalidValueBytes() {
-        RecordSerde serde = new RecordSerde();
+        CoordinatorRecordSerde serde = new CoordinatorRecordSerde();
 
         ApiMessageAndVersion key = new ApiMessageAndVersion(
             new ConsumerGroupMetadataKey().setGroupId("foo"),
@@ -242,13 +242,13 @@ public class RecordSerdeTest {
         ApiMessage key,
         ApiMessage val
     ) {
-        RecordSerde serde = new RecordSerde();
+        CoordinatorRecordSerde serde = new CoordinatorRecordSerde();
 
         for (short version = val.lowestSupportedVersion(); version < val.highestSupportedVersion(); version++) {
             ApiMessageAndVersion keyMessageAndVersion = new ApiMessageAndVersion(key, recordType);
             ApiMessageAndVersion valMessageAndVersion = new ApiMessageAndVersion(val, version);
 
-            Record record = serde.deserialize(
+            CoordinatorRecord record = serde.deserialize(
                 MessageUtil.toVersionPrefixedByteBuffer(recordType, key),
                 MessageUtil.toVersionPrefixedByteBuffer(version, val)
             );
