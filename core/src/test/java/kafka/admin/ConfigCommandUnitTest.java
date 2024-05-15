@@ -47,6 +47,8 @@ import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.server.config.ConfigType;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import scala.collection.JavaConverters;
 import scala.collection.Seq;
 
@@ -907,22 +909,10 @@ public class ConfigCommandUnitTest {
         });
     }
 
-    @Test
-    public void shouldAlterTopicConfig() {
-        doShouldAlterTopicConfig(false);
-    }
-
-    @Test
-    public void shouldAlterTopicConfigFile() {
-        doShouldAlterTopicConfig(true);
-    }
-
-    public ConfigEntry newConfigEntry(String name, String value) {
-        return ConfigTest.newConfigEntry(name, value, ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG, false, false, Collections.emptyList());
-    }
-
     @SuppressWarnings("deprecation") // Added for Scala 2.12 compatibility for usages of JavaConverters
-    public void doShouldAlterTopicConfig(boolean file) {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldAlterTopicConfig(boolean file) {
         String filePath = "";
         Map<String, String> addedConfigs = new HashMap<>();
         addedConfigs.put("delete.retention.ms", "1000000");
@@ -996,6 +986,10 @@ public class ConfigCommandUnitTest {
         ConfigCommand.alterConfig(mockAdminClient, alterOpts);
         assertTrue(alteredConfigs.get());
         verify(describeResult).all();
+    }
+
+    public ConfigEntry newConfigEntry(String name, String value) {
+        return ConfigTest.newConfigEntry(name, value, ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG, false, false, Collections.emptyList());
     }
 
     @Test
