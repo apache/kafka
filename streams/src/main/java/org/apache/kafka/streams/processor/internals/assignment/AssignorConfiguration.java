@@ -340,5 +340,18 @@ public final class AssignorConfiguration {
                 "\n  rackAwareAssignmentTags=" + rackAwareAssignmentTags +
                 "\n}";
         }
+
+        public org.apache.kafka.streams.processor.assignment.AssignmentConfigs toPublicAssignmentConfigs() {
+            return new org.apache.kafka.streams.processor.assignment.AssignmentConfigs(
+                acceptableRecoveryLag,
+                maxWarmupReplicas,
+                numStandbyReplicas,
+                probingRebalanceIntervalMs,
+                rackAwareAssignmentTags,
+                rackAwareAssignmentTrafficCost,
+                rackAwareAssignmentNonOverlapCost,
+                rackAwareAssignmentStrategy
+            );
+        }
     }
 }
