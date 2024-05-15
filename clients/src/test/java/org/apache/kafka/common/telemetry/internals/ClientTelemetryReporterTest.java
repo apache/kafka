@@ -503,6 +503,25 @@ public class ClientTelemetryReporterTest {
     }
 
     @Test
+    public void testHandleResponsePushTelemetryTerminating() {
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.TERMINATING_PUSH_NEEDED));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.TERMINATING_PUSH_IN_PROGRESS));
+
+        PushTelemetryResponse response = new PushTelemetryResponse(new PushTelemetryResponseData());
+
+        telemetrySender.handleResponse(response);
+        // The telemetry sender remains in TERMINATING_PUSH_IN_PROGRESS so that a subsequent close() finishes the job
+        assertEquals(ClientTelemetryState.TERMINATING_PUSH_IN_PROGRESS, telemetrySender.state());
+        assertEquals(subscription.pushIntervalMs(), telemetrySender.intervalMs());
+        assertTrue(telemetrySender.enabled());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.TERMINATED));
+    }
+
+    @Test
     public void testHandleResponsePushTelemetryErrorResponse() {
         ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
         telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
