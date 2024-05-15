@@ -102,15 +102,15 @@ public class Assertions {
     }
 
     public static void assertRecordsEquals(
-        List<Record> expectedRecords,
-        List<Record> actualRecords
+        List<CoordinatorRecord> expectedRecords,
+        List<CoordinatorRecord> actualRecords
     ) {
         try {
             assertEquals(expectedRecords.size(), actualRecords.size());
 
             for (int i = 0; i < expectedRecords.size(); i++) {
-                Record expectedRecord = expectedRecords.get(i);
-                Record actualRecord = actualRecords.get(i);
+                CoordinatorRecord expectedRecord = expectedRecords.get(i);
+                CoordinatorRecord actualRecord = actualRecords.get(i);
                 assertRecordEquals(expectedRecord, actualRecord);
             }
         } catch (AssertionFailedError e) {
@@ -122,8 +122,8 @@ public class Assertions {
     }
 
     public static void assertRecordEquals(
-        Record expected,
-        Record actual
+        CoordinatorRecord expected,
+        CoordinatorRecord actual
     ) {
         try {
             assertApiMessageAndVersionEquals(expected.key(), actual.key());

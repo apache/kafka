@@ -441,7 +441,7 @@ public class TaskManagerTest {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
         when(stateUpdater.getTasks()).thenReturn(mkSet(activeTaskToClose));
         final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
-        when(stateUpdater.removeWithFuture(activeTaskToClose.id())).thenReturn(future);
+        when(stateUpdater.remove(activeTaskToClose.id())).thenReturn(future);
         future.complete(new StateUpdater.RemovedTaskResult(activeTaskToClose));
 
         taskManager.handleAssignment(Collections.emptyMap(), Collections.emptyMap());
@@ -462,7 +462,7 @@ public class TaskManagerTest {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
         when(stateUpdater.getTasks()).thenReturn(mkSet(activeTaskToClose));
         final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
-        when(stateUpdater.removeWithFuture(activeTaskToClose.id())).thenReturn(future);
+        when(stateUpdater.remove(activeTaskToClose.id())).thenReturn(future);
         future.complete(new StateUpdater.RemovedTaskResult(activeTaskToClose, new RuntimeException("KABOOM!")));
 
         taskManager.handleAssignment(Collections.emptyMap(), Collections.emptyMap());
@@ -484,7 +484,7 @@ public class TaskManagerTest {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
         when(stateUpdater.getTasks()).thenReturn(mkSet(standbyTaskToClose));
         final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
-        when(stateUpdater.removeWithFuture(standbyTaskToClose.id())).thenReturn(future);
+        when(stateUpdater.remove(standbyTaskToClose.id())).thenReturn(future);
         future.complete(new StateUpdater.RemovedTaskResult(standbyTaskToClose));
 
         taskManager.handleAssignment(Collections.emptyMap(), Collections.emptyMap());
@@ -504,7 +504,7 @@ public class TaskManagerTest {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
         when(stateUpdater.getTasks()).thenReturn(mkSet(standbyTaskToClose));
         final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
-        when(stateUpdater.removeWithFuture(standbyTaskToClose.id())).thenReturn(future);
+        when(stateUpdater.remove(standbyTaskToClose.id())).thenReturn(future);
         future.complete(new StateUpdater.RemovedTaskResult(standbyTaskToClose, new RuntimeException("KABOOM!")));
 
         taskManager.handleAssignment(Collections.emptyMap(), Collections.emptyMap());
@@ -525,7 +525,7 @@ public class TaskManagerTest {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
         when(stateUpdater.getTasks()).thenReturn(mkSet(failedStandbyTask));
         final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
-        when(stateUpdater.removeWithFuture(failedStandbyTask.id())).thenReturn(future);
+        when(stateUpdater.remove(failedStandbyTask.id())).thenReturn(future);
         final RuntimeException kaboom = new RuntimeException("KABOOM!");
         future.completeExceptionally(kaboom);
         when(stateUpdater.drainExceptionsAndFailedTasks())
@@ -552,7 +552,7 @@ public class TaskManagerTest {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
         when(stateUpdater.getTasks()).thenReturn(mkSet(activeTaskToUpdateInputPartitions));
         final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
-        when(stateUpdater.removeWithFuture(activeTaskToUpdateInputPartitions.id())).thenReturn(future);
+        when(stateUpdater.remove(activeTaskToUpdateInputPartitions.id())).thenReturn(future);
         future.complete(new StateUpdater.RemovedTaskResult(activeTaskToUpdateInputPartitions));
 
         taskManager.handleAssignment(
@@ -582,7 +582,7 @@ public class TaskManagerTest {
         when(standbyTaskCreator.createStandbyTaskFromActive(activeTaskToRecycle, taskId03Partitions))
             .thenReturn(recycledStandbyTask);
         final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
-        when(stateUpdater.removeWithFuture(taskId03)).thenReturn(future);
+        when(stateUpdater.remove(taskId03)).thenReturn(future);
         future.complete(new StateUpdater.RemovedTaskResult(activeTaskToRecycle));
 
         taskManager.handleAssignment(
@@ -606,7 +606,7 @@ public class TaskManagerTest {
         when(standbyTaskCreator.createStandbyTaskFromActive(activeTaskToRecycle, activeTaskToRecycle.inputPartitions()))
             .thenThrow(new RuntimeException());
         final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
-        when(stateUpdater.removeWithFuture(activeTaskToRecycle.id())).thenReturn(future);
+        when(stateUpdater.remove(activeTaskToRecycle.id())).thenReturn(future);
         future.complete(new StateUpdater.RemovedTaskResult(activeTaskToRecycle));
 
         assertThrows(
@@ -636,7 +636,7 @@ public class TaskManagerTest {
         when(activeTaskCreator.createActiveTaskFromStandby(standbyTaskToRecycle, taskId03Partitions, consumer))
             .thenReturn(recycledActiveTask);
         final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
-        when(stateUpdater.removeWithFuture(standbyTaskToRecycle.id())).thenReturn(future);
+        when(stateUpdater.remove(standbyTaskToRecycle.id())).thenReturn(future);
         future.complete(new StateUpdater.RemovedTaskResult(standbyTaskToRecycle));
 
         taskManager.handleAssignment(
@@ -663,7 +663,7 @@ public class TaskManagerTest {
             consumer))
             .thenThrow(new RuntimeException());
         final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
-        when(stateUpdater.removeWithFuture(standbyTaskToRecycle.id())).thenReturn(future);
+        when(stateUpdater.remove(standbyTaskToRecycle.id())).thenReturn(future);
         future.complete(new StateUpdater.RemovedTaskResult(standbyTaskToRecycle));
 
         assertThrows(
@@ -693,7 +693,7 @@ public class TaskManagerTest {
             Collections.emptyMap()
         );
 
-        verify(stateUpdater, never()).removeWithFuture(reassignedActiveTask.id());
+        verify(stateUpdater, never()).remove(reassignedActiveTask.id());
         verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
         verify(standbyTaskCreator).createTasks(Collections.emptyMap());
     }
@@ -731,8 +731,7 @@ public class TaskManagerTest {
             Collections.emptyMap(),
             mkMap(mkEntry(standbyTaskToUpdateInputPartitions.id(), taskId03Partitions))
         );
-
-        verify(stateUpdater, never()).removeWithFuture(standbyTaskToUpdateInputPartitions.id());
+        verify(stateUpdater, never()).remove(standbyTaskToUpdateInputPartitions.id());
         verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
         verify(standbyTaskCreator).createTasks(Collections.emptyMap());
     }
@@ -770,12 +769,12 @@ public class TaskManagerTest {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
         when(stateUpdater.getTasks()).thenReturn(mkSet(activeTaskToClose, standbyTaskToRecycle));
         final CompletableFuture<StateUpdater.RemovedTaskResult> futureForActiveTaskToClose = new CompletableFuture<>();
-        when(stateUpdater.removeWithFuture(activeTaskToClose.id())).thenReturn(futureForActiveTaskToClose);
+        when(stateUpdater.remove(activeTaskToClose.id())).thenReturn(futureForActiveTaskToClose);
         futureForActiveTaskToClose.complete(new StateUpdater.RemovedTaskResult(activeTaskToClose));
         when(activeTaskCreator.createActiveTaskFromStandby(standbyTaskToRecycle, taskId02Partitions, consumer))
             .thenReturn(recycledActiveTask);
         final CompletableFuture<StateUpdater.RemovedTaskResult> futureForStandbyTaskToRecycle = new CompletableFuture<>();
-        when(stateUpdater.removeWithFuture(standbyTaskToRecycle.id())).thenReturn(futureForStandbyTaskToRecycle);
+        when(stateUpdater.remove(standbyTaskToRecycle.id())).thenReturn(futureForStandbyTaskToRecycle);
         futureForStandbyTaskToRecycle.complete(new StateUpdater.RemovedTaskResult(standbyTaskToRecycle));
 
         taskManager.handleAssignment(
@@ -1147,7 +1146,6 @@ public class TaskManagerTest {
             StreamsException.class,
             () -> taskManager.checkStateUpdater(time.milliseconds(), noOpResetter)
         );
-
         verify(stateUpdater, never()).add(task00);
         verify(tasks).addTask(task00);
         assertTrue(streamsException.taskId().isPresent());
@@ -1220,14 +1218,14 @@ public class TaskManagerTest {
         final TaskManager taskManager = setupForRevocationAndLost(mkSet(task), tasks);
         when(stateUpdater.getTasks()).thenReturn(mkSet(task));
         final CompletableFuture<StateUpdater.RemovedTaskResult> future = new CompletableFuture<>();
-        when(stateUpdater.removeWithFuture(task.id())).thenReturn(future);
+        when(stateUpdater.remove(task.id())).thenReturn(future);
         future.complete(new StateUpdater.RemovedTaskResult(task));
 
         taskManager.handleRevocation(task.inputPartitions());
 
         verify(task).suspend();
         verify(tasks).addTask(task);
-        verify(stateUpdater).removeWithFuture(task.id());
+        verify(stateUpdater).remove(task.id());
     }
 
     @Test
@@ -1241,10 +1239,10 @@ public class TaskManagerTest {
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setupForRevocationAndLost(mkSet(task1, task2), tasks);
         final CompletableFuture<StateUpdater.RemovedTaskResult> future1 = new CompletableFuture<>();
-        when(stateUpdater.removeWithFuture(task1.id())).thenReturn(future1);
+        when(stateUpdater.remove(task1.id())).thenReturn(future1);
         future1.complete(new StateUpdater.RemovedTaskResult(task1));
         final CompletableFuture<StateUpdater.RemovedTaskResult> future2 = new CompletableFuture<>();
-        when(stateUpdater.removeWithFuture(task2.id())).thenReturn(future2);
+        when(stateUpdater.remove(task2.id())).thenReturn(future2);
         future2.complete(new StateUpdater.RemovedTaskResult(task2));
 
         taskManager.handleRevocation(union(HashSet::new, taskId00Partitions, taskId01Partitions));
@@ -1267,7 +1265,7 @@ public class TaskManagerTest {
 
         verify(task, never()).suspend();
         verify(tasks, never()).addTask(task);
-        verify(stateUpdater, never()).removeWithFuture(task.id());
+        verify(stateUpdater, never()).remove(task.id());
     }
 
     @Test
@@ -1282,7 +1280,7 @@ public class TaskManagerTest {
 
         verify(task, never()).suspend();
         verify(tasks, never()).addTask(task);
-        verify(stateUpdater, never()).removeWithFuture(task.id());
+        verify(stateUpdater, never()).remove(task.id());
     }
 
     @Test
@@ -1296,10 +1294,10 @@ public class TaskManagerTest {
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setupForRevocationAndLost(mkSet(task1, task2), tasks);
         final CompletableFuture<StateUpdater.RemovedTaskResult> future1 = new CompletableFuture<>();
-        when(stateUpdater.removeWithFuture(task1.id())).thenReturn(future1);
+        when(stateUpdater.remove(task1.id())).thenReturn(future1);
         future1.complete(new StateUpdater.RemovedTaskResult(task1));
         final CompletableFuture<StateUpdater.RemovedTaskResult> future2 = new CompletableFuture<>();
-        when(stateUpdater.removeWithFuture(task2.id())).thenReturn(future2);
+        when(stateUpdater.remove(task2.id())).thenReturn(future2);
         final StreamsException streamsException = new StreamsException("Something happened");
         future2.complete(new StateUpdater.RemovedTaskResult(task2, streamsException));
 
@@ -1329,10 +1327,10 @@ public class TaskManagerTest {
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setupForRevocationAndLost(mkSet(task1, task2, task3), tasks);
         final CompletableFuture<StateUpdater.RemovedTaskResult> future1 = new CompletableFuture<>();
-        when(stateUpdater.removeWithFuture(task1.id())).thenReturn(future1);
+        when(stateUpdater.remove(task1.id())).thenReturn(future1);
         future1.complete(new StateUpdater.RemovedTaskResult(task1));
         final CompletableFuture<StateUpdater.RemovedTaskResult> future3 = new CompletableFuture<>();
-        when(stateUpdater.removeWithFuture(task3.id())).thenReturn(future3);
+        when(stateUpdater.remove(task3.id())).thenReturn(future3);
         future3.complete(new StateUpdater.RemovedTaskResult(task3));
 
         taskManager.handleLostAll();
@@ -1341,7 +1339,7 @@ public class TaskManagerTest {
         verify(task1).closeClean();
         verify(task3).suspend();
         verify(task3).closeClean();
-        verify(stateUpdater, never()).removeWithFuture(task2.id());
+        verify(stateUpdater, never()).remove(task2.id());
     }
 
     @Test
@@ -1355,10 +1353,10 @@ public class TaskManagerTest {
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setupForRevocationAndLost(mkSet(task1, task2), tasks);
         final CompletableFuture<StateUpdater.RemovedTaskResult> future1 = new CompletableFuture<>();
-        when(stateUpdater.removeWithFuture(task1.id())).thenReturn(future1);
+        when(stateUpdater.remove(task1.id())).thenReturn(future1);
         future1.complete(new StateUpdater.RemovedTaskResult(task1, new StreamsException("Something happened")));
         final CompletableFuture<StateUpdater.RemovedTaskResult> future3 = new CompletableFuture<>();
-        when(stateUpdater.removeWithFuture(task2.id())).thenReturn(future3);
+        when(stateUpdater.remove(task2.id())).thenReturn(future3);
         future3.complete(new StateUpdater.RemovedTaskResult(task2));
 
         taskManager.handleLostAll();
@@ -1446,10 +1444,8 @@ public class TaskManagerTest {
     @Test
     public void shouldReturnCorrectBooleanWhenTryingToCompleteRestorationWithStateUpdater() {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, true);
-
         when(stateUpdater.restoresActiveTasks()).thenReturn(false);
         assertTrue(taskManager.checkStateUpdater(time.milliseconds(), noOpResetter));
-
         when(stateUpdater.restoresActiveTasks()).thenReturn(true);
         assertFalse(taskManager.checkStateUpdater(time.milliseconds(), noOpResetter));
     }
@@ -1502,8 +1498,6 @@ public class TaskManagerTest {
         assertEquals(mkSet(taskId00, taskId01), thrown.corruptedTasks());
         assertEquals("Tasks [0_1, 0_0] are corrupted and hence need to be re-initialized", thrown.getMessage());
     }
-
-    @Test
     public void shouldAddSubscribedTopicsFromAssignmentToTopologyMetadata() {
         final Map<TaskId, Set<TopicPartition>> activeTasksAssignment = mkMap(
             mkEntry(taskId01, mkSet(t1p1)),
@@ -3412,13 +3406,13 @@ public class TaskManagerTest {
         final CompletableFuture<StateUpdater.RemovedTaskResult> futureForRemovedFailedStandbyTask = new CompletableFuture<>();
         final CompletableFuture<StateUpdater.RemovedTaskResult> futureForRemovedFailedStatefulTaskDuringRemoval = new CompletableFuture<>();
         final CompletableFuture<StateUpdater.RemovedTaskResult> futureForRemovedFailedStandbyTaskDuringRemoval = new CompletableFuture<>();
-        when(stateUpdater.removeWithFuture(removedStatefulTask.id())).thenReturn(futureForRemovedStatefulTask);
-        when(stateUpdater.removeWithFuture(removedStandbyTask.id())).thenReturn(futureForRemovedStandbyTask);
-        when(stateUpdater.removeWithFuture(removedFailedStatefulTask.id())).thenReturn(futureForRemovedFailedStatefulTask);
-        when(stateUpdater.removeWithFuture(removedFailedStandbyTask.id())).thenReturn(futureForRemovedFailedStandbyTask);
-        when(stateUpdater.removeWithFuture(removedFailedStatefulTaskDuringRemoval.id()))
+        when(stateUpdater.remove(removedStatefulTask.id())).thenReturn(futureForRemovedStatefulTask);
+        when(stateUpdater.remove(removedStandbyTask.id())).thenReturn(futureForRemovedStandbyTask);
+        when(stateUpdater.remove(removedFailedStatefulTask.id())).thenReturn(futureForRemovedFailedStatefulTask);
+        when(stateUpdater.remove(removedFailedStandbyTask.id())).thenReturn(futureForRemovedFailedStandbyTask);
+        when(stateUpdater.remove(removedFailedStatefulTaskDuringRemoval.id()))
             .thenReturn(futureForRemovedFailedStatefulTaskDuringRemoval);
-        when(stateUpdater.removeWithFuture(removedFailedStandbyTaskDuringRemoval.id()))
+        when(stateUpdater.remove(removedFailedStandbyTaskDuringRemoval.id()))
             .thenReturn(futureForRemovedFailedStandbyTaskDuringRemoval);
         when(stateUpdater.drainExceptionsAndFailedTasks()).thenReturn(Arrays.asList(
             new ExceptionAndTask(new StreamsException("KABOOM!"), removedFailedStatefulTaskDuringRemoval),

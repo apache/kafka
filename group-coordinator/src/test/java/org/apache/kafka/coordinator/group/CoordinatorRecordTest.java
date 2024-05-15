@@ -25,25 +25,25 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class RecordTest {
+public class CoordinatorRecordTest {
     @Test
     public void testAttributes() {
         ApiMessageAndVersion key = new ApiMessageAndVersion(new ConsumerGroupMetadataKey(), (short) 0);
         ApiMessageAndVersion value = new ApiMessageAndVersion(new ConsumerGroupMetadataValue(), (short) 0);
-        Record record = new Record(key, value);
+        CoordinatorRecord record = new CoordinatorRecord(key, value);
         assertEquals(key, record.key());
         assertEquals(value, record.value());
     }
 
     @Test
     public void testKeyCannotBeNull() {
-        assertThrows(NullPointerException.class, () -> new Record(null, null));
+        assertThrows(NullPointerException.class, () -> new CoordinatorRecord(null, null));
     }
 
     @Test
     public void testValueCanBeNull() {
         ApiMessageAndVersion key = new ApiMessageAndVersion(new ConsumerGroupMetadataKey(), (short) 0);
-        Record record = new Record(key, null);
+        CoordinatorRecord record = new CoordinatorRecord(key, null);
         assertEquals(key, record.key());
         assertNull(record.value());
     }
@@ -52,8 +52,8 @@ public class RecordTest {
     public void testEquals() {
         ApiMessageAndVersion key = new ApiMessageAndVersion(new ConsumerGroupMetadataKey(), (short) 0);
         ApiMessageAndVersion value = new ApiMessageAndVersion(new ConsumerGroupMetadataValue(), (short) 0);
-        Record record1 = new Record(key, value);
-        Record record2 = new Record(key, value);
+        CoordinatorRecord record1 = new CoordinatorRecord(key, value);
+        CoordinatorRecord record2 = new CoordinatorRecord(key, value);
         assertEquals(record1, record2);
     }
 }
