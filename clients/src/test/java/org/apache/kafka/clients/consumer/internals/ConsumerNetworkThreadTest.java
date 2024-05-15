@@ -22,7 +22,6 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.AsyncCommitEvent;
-import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
@@ -31,16 +30,10 @@ import org.apache.kafka.clients.consumer.internals.events.ResetPositionsEvent;
 import org.apache.kafka.clients.consumer.internals.events.SyncCommitEvent;
 import org.apache.kafka.clients.consumer.internals.events.TopicMetadataEvent;
 import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsEvent;
-import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
-import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.MetadataResponse;
-import org.apache.kafka.common.requests.OffsetCommitRequest;
-import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestCondition;
@@ -59,29 +52,26 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.CompletableFuture;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_HEARTBEAT_INTERVAL_MS;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_REQUEST_TIMEOUT_MS;
+import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.createDefaultGroupInformation;
 import static org.apache.kafka.clients.consumer.internals.events.CompletableEvent.calculateDeadlineMs;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 public class ConsumerNetworkThreadTest {
 
-    private ConsumerTestBuilder.ConsumerNetworkThreadTestBuilder testBuilder;
+    private ConsumerTestBuilder testBuilder;
     private Time time;
     private ConsumerMetadata metadata;
     private NetworkClientDelegate networkClient;
@@ -89,14 +79,13 @@ public class ConsumerNetworkThreadTest {
     private ApplicationEventProcessor applicationEventProcessor;
     private OffsetsRequestManager offsetsRequestManager;
     private CommitRequestManager commitRequestManager;
-    private CoordinatorRequestManager coordinatorRequestManager;
     private ConsumerNetworkThread consumerNetworkThread;
-    private CompletableEventReaper applicationEventReaper;
+    private final CompletableEventReaper applicationEventReaper = mock(CompletableEventReaper.class);
     private MockClient client;
 
     @BeforeEach
     public void setup() {
-        testBuilder = new ConsumerTestBuilder.ConsumerNetworkThreadTestBuilder();
+        testBuilder = new ConsumerTestBuilder(createDefaultGroupInformation());
         time = testBuilder.time;
         metadata = testBuilder.metadata;
         networkClient = testBuilder.networkClientDelegate;
@@ -105,16 +94,24 @@ public class ConsumerNetworkThreadTest {
         applicationEventProcessor = testBuilder.applicationEventProcessor;
         commitRequestManager = testBuilder.commitRequestManager.orElseThrow(IllegalStateException::new);
         offsetsRequestManager = testBuilder.offsetsRequestManager;
-        coordinatorRequestManager = testBuilder.coordinatorRequestManager.orElseThrow(IllegalStateException::new);
-        consumerNetworkThread = testBuilder.consumerNetworkThread;
-        applicationEventReaper = testBuilder.applicationEventReaper;
+        consumerNetworkThread = new ConsumerNetworkThread(
+                testBuilder.logContext,
+                time,
+                testBuilder.applicationEventQueue,
+                applicationEventReaper,
+                () -> applicationEventProcessor,
+                () -> testBuilder.networkClientDelegate,
+                () -> testBuilder.requestManagers
+        );
         consumerNetworkThread.initializeResources();
     }
 
     @AfterEach
     public void tearDown() {
-        if (testBuilder != null)
+        if (testBuilder != null) {
             testBuilder.close();
+            consumerNetworkThread.close(Duration.ZERO);
+        }
     }
 
     @Test
@@ -280,104 +277,15 @@ public class ConsumerNetworkThreadTest {
     }
 
     @Test
-    void testEnsureEventsAreCompleted() {
-        Node node = metadata.fetch().nodes().get(0);
-        coordinatorRequestManager.markCoordinatorUnknown("test", time.milliseconds());
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "group-id", node));
-        prepareOffsetCommitRequest(new HashMap<>(), Errors.NONE, false);
-        CompletableApplicationEvent<Void> event1 = spy(new AsyncCommitEvent(Collections.emptyMap()));
-        ApplicationEvent event2 = new AsyncCommitEvent(Collections.emptyMap());
-        CompletableFuture<Void> future = new CompletableFuture<>();
-        when(event1.future()).thenReturn(future);
-        applicationEventsQueue.add(event1);
-        applicationEventsQueue.add(event2);
-        assertFalse(future.isDone());
-        assertFalse(applicationEventsQueue.isEmpty());
-
+    void testCleanupInvokesReaper() {
         consumerNetworkThread.cleanup();
-        assertTrue(future.isCompletedExceptionally());
-        assertTrue(applicationEventsQueue.isEmpty());
+        verify(applicationEventReaper).reap(any(Collection.class));
     }
 
     @Test
-    void testReaperExpiresExpiredEvents() {
-        long event1TimeoutMs = 100;
-        long event2TimeoutMs = 200;
-        SyncCommitEvent event1 = new SyncCommitEvent(new HashMap<>(), calculateDeadlineMs(time, event1TimeoutMs));
-        SyncCommitEvent event2 = new SyncCommitEvent(new HashMap<>(), calculateDeadlineMs(time, event2TimeoutMs));
-        applicationEventsQueue.add(event1);
-        applicationEventsQueue.add(event2);
+    void testRunOnceInvokesReaper() {
         consumerNetworkThread.runOnce();
-
-        // Make sure both events have been moved from the event queue to the reaper's "tracked" list.
-        assertFalse(applicationEventsQueue.contains(event1));
-        assertFalse(applicationEventsQueue.contains(event2));
-        assertTrue(applicationEventReaper.contains(event1));
-        assertTrue(applicationEventReaper.contains(event2));
-        assertEquals(2, applicationEventReaper.size());
-
-        // Sleep long enough for the first event to have expired.
-        time.sleep(event1TimeoutMs + 1);
-
-        consumerNetworkThread.runOnce();
-
-        // Validate that the first event was expired, but the second continues to be tracked
-        assertTrue(event1.future().isCompletedExceptionally());
-        assertThrows(TimeoutException.class, () -> ConsumerUtils.getResult(event1.future()));
-        assertFalse(applicationEventReaper.contains(event1));
-
-        assertTrue(applicationEventReaper.contains(event2));
-        assertFalse(event2.future().isDone());
-        assertEquals(1, applicationEventReaper.size());
-
-        // The cleanup will trigger the reaper's
-        consumerNetworkThread.cleanup();
-
-        assertTrue(event2.future().isCompletedExceptionally());
-        assertThrows(TimeoutException.class, () -> ConsumerUtils.getResult(event2.future()));
-        assertFalse(applicationEventReaper.contains(event2));
-        assertEquals(0, applicationEventReaper.size());
-    }
-
-    private void prepareOffsetCommitRequest(final Map<TopicPartition, Long> expectedOffsets,
-                                            final Errors error,
-                                            final boolean disconnected) {
-        Map<TopicPartition, Errors> errors = partitionErrors(expectedOffsets.keySet(), error);
-        client.prepareResponse(offsetCommitRequestMatcher(expectedOffsets), offsetCommitResponse(errors), disconnected);
-    }
-
-    private Map<TopicPartition, Errors> partitionErrors(final Collection<TopicPartition> partitions,
-                                                        final Errors error) {
-        final Map<TopicPartition, Errors> errors = new HashMap<>();
-        for (TopicPartition partition : partitions) {
-            errors.put(partition, error);
-        }
-        return errors;
-    }
-
-    private OffsetCommitResponse offsetCommitResponse(final Map<TopicPartition, Errors> responseData) {
-        return new OffsetCommitResponse(responseData);
-    }
-
-    private MockClient.RequestMatcher offsetCommitRequestMatcher(final Map<TopicPartition, Long> expectedOffsets) {
-        return body -> {
-            OffsetCommitRequest req = (OffsetCommitRequest) body;
-            Map<TopicPartition, Long> offsets = req.offsets();
-            if (offsets.size() != expectedOffsets.size())
-                return false;
-
-            for (Map.Entry<TopicPartition, Long> expectedOffset : expectedOffsets.entrySet()) {
-                if (!offsets.containsKey(expectedOffset.getKey())) {
-                    return false;
-                } else {
-                    Long actualOffset = offsets.get(expectedOffset.getKey());
-                    if (!actualOffset.equals(expectedOffset.getValue())) {
-                        return false;
-                    }
-                }
-            }
-            return true;
-        };
+        verify(applicationEventReaper).reap(any(Long.class));
     }
 
     private HashMap<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {
