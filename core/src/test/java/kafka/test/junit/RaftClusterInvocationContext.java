@@ -272,6 +272,13 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
             return clusterTestKit.controllers().values().stream();
         }
 
+        public void format() throws Exception {
+            if(this.clusterTestKit == null){
+                throw new IllegalStateException("Cluster not started yet");
+            }
+            this.clusterTestKit.format();
+        }
+
         private BrokerServer findBrokerOrThrow(int brokerId) {
             return Optional.ofNullable(clusterTestKit.brokers().get(brokerId))
                     .orElseThrow(() -> new IllegalArgumentException("Unknown brokerId " + brokerId));
