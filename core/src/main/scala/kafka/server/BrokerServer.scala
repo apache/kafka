@@ -580,7 +580,8 @@ class BrokerServer(
         config.offsetsRetentionCheckIntervalMs,
         config.offsetsRetentionMinutes * 60 * 1000L,
         config.offsetCommitTimeoutMs,
-        config.consumerGroupMigrationPolicy
+        config.consumerGroupMigrationPolicy,
+        config.offsetsTopicCompressionType
       )
       val timer = new SystemTimerReaper(
         "group-coordinator-reaper",
@@ -592,11 +593,8 @@ class BrokerServer(
         serde,
         config.offsetsLoadBufferSize
       )
-      val writer = new CoordinatorPartitionWriter[group.Record](
-        replicaManager,
-        serde,
-        config.offsetsTopicCompressionType,
-        time
+      val writer = new CoordinatorPartitionWriter(
+        replicaManager
       )
       new GroupCoordinatorService.Builder(config.brokerId, groupCoordinatorConfig)
         .withTime(time)

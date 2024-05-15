@@ -96,7 +96,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
     public static class Builder {
         private final int nodeId;
         private final GroupCoordinatorConfig config;
-        private PartitionWriter<Record> writer;
+        private PartitionWriter writer;
         private CoordinatorLoader<Record> loader;
         private Time time;
         private Timer timer;
@@ -111,7 +111,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             this.config = config;
         }
 
-        public Builder withWriter(PartitionWriter<Record> writer) {
+        public Builder withWriter(PartitionWriter writer) {
             this.writer = writer;
             return this;
         }
@@ -185,6 +185,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     .withDefaultWriteTimeOut(Duration.ofMillis(config.offsetCommitTimeoutMs))
                     .withCoordinatorRuntimeMetrics(coordinatorRuntimeMetrics)
                     .withCoordinatorMetrics(groupCoordinatorMetrics)
+                    .withSerializer(new RecordSerde())
+                    .withCompressionType(config.compressionType)
                     .build();
 
             return new GroupCoordinatorService(
