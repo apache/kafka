@@ -74,7 +74,7 @@ public class MemoryRecordsBuilderTest {
         public String toString() {
             return "magic=" + magic +
                 ", bufferOffset=" + bufferOffset +
-                ", compressionType=" + compression;
+                ", compression=" + compression;
         }
     }
 

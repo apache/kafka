@@ -42,7 +42,7 @@ public enum BrokerCompressionType {
         this.name = name;
     }
 
-    public Compression targetCompression(Optional<Compression> logCompression, CompressionType producerCompressionType) {
+    public static Compression targetCompression(Optional<Compression> logCompression, CompressionType producerCompressionType) {
         return logCompression.orElseGet(() -> Compression.of(producerCompressionType).build());
     }
 

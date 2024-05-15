@@ -96,12 +96,12 @@ class LogValidatorTest {
 
   private def checkOnlyOneBatch(magic: Byte, sourceCompression: Compression, targetCompression: Compression): Unit = {
     assertThrows(classOf[InvalidRecordException],
-      () => validateMessages(createTwoBatchedRecords(magic, 0L, sourceCompression), magic, sourceCompression.`type`(), targetCompression)
+      () => validateMessages(createTwoBatchedRecords(magic, sourceCompression), magic, sourceCompression.`type`(), targetCompression)
     )
   }
 
   private def checkAllowMultiBatch(magic: Byte, sourceCompression: Compression, targetCompression: Compression): Unit = {
-    validateMessages(createTwoBatchedRecords(magic, 0L, sourceCompression), magic, sourceCompression.`type`(), targetCompression)
+    validateMessages(createTwoBatchedRecords(magic, sourceCompression), magic, sourceCompression.`type`(), targetCompression)
   }
 
   private def checkMismatchMagic(batchMagic: Byte, recordMagic: Byte, compression: Compression): Unit = {
@@ -1613,9 +1613,7 @@ class LogValidatorTest {
     builder.build()
   }
 
-  private def createTwoBatchedRecords(magicValue: Byte,
-                                      timestamp: Long,
-                                      codec: Compression): MemoryRecords = {
+  private def createTwoBatchedRecords(magicValue: Byte, codec: Compression): MemoryRecords = {
     val buf = ByteBuffer.allocate(2048)
     var builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L)
     builder.append(10L, "1".getBytes(), "a".getBytes())

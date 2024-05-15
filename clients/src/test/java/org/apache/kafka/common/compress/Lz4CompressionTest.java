@@ -38,6 +38,7 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 import java.util.stream.Stream;
@@ -85,13 +86,13 @@ public class Lz4CompressionTest {
     @Test
     public void testCompressionDecompression() throws IOException {
         Lz4Compression.Builder builder = Compression.lz4();
-        byte[] data = "data".getBytes(StandardCharsets.UTF_8);
+        byte[] data = String.join("", Collections.nCopies(256, "data")).getBytes(StandardCharsets.UTF_8);
 
         for (byte magic : Arrays.asList(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V2)) {
             for (int level : Arrays.asList(Lz4Compression.MIN_LEVEL, Lz4Compression.DEFAULT_LEVEL, Lz4Compression.MAX_LEVEL)) {
                 Lz4Compression compression = builder.level(level).build();
                 ByteBufferOutputStream bufferStream = new ByteBufferOutputStream(4);
-                try (OutputStream out = compression.wrapForOutput(bufferStream, RecordBatch.CURRENT_MAGIC_VALUE)) {
+                try (OutputStream out = compression.wrapForOutput(bufferStream, magic)) {
                     out.write(data);
                     out.flush();
                 }

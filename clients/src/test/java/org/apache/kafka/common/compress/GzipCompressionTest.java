@@ -27,6 +27,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -37,13 +38,13 @@ public class GzipCompressionTest {
     @Test
     public void testCompressionDecompression() throws IOException {
         GzipCompression.Builder builder = Compression.gzip();
-        byte[] data = "data".getBytes(StandardCharsets.UTF_8);
+        byte[] data = String.join("", Collections.nCopies(256, "data")).getBytes(StandardCharsets.UTF_8);
 
         for (byte magic : Arrays.asList(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V2)) {
             for (int level : Arrays.asList(GzipCompression.MIN_LEVEL, GzipCompression.DEFAULT_LEVEL, GzipCompression.MAX_LEVEL)) {
                 GzipCompression compression = builder.level(level).build();
                 ByteBufferOutputStream bufferStream = new ByteBufferOutputStream(4);
-                try (OutputStream out = compression.wrapForOutput(bufferStream, RecordBatch.CURRENT_MAGIC_VALUE)) {
+                try (OutputStream out = compression.wrapForOutput(bufferStream, magic)) {
                     out.write(data);
                     out.flush();
                 }
@@ -77,7 +78,6 @@ public class GzipCompressionTest {
             validator.ensureValid("", level);
         }
         validator.ensureValid("", GzipCompression.DEFAULT_LEVEL);
-        assertThrows(ConfigException.class, () -> validator.ensureValid("", 0));
         assertThrows(ConfigException.class, () -> validator.ensureValid("", GzipCompression.MIN_LEVEL - 1));
         assertThrows(ConfigException.class, () -> validator.ensureValid("", GzipCompression.MAX_LEVEL + 1));
     }
