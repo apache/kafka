@@ -1096,54 +1096,82 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         log.trace("Submitting connector config write request {}", connName);
         addRequest(
             () -> {
-                validateConnectorConfig(config, callback.chainStaging((error, configInfos) -> {
-                    if (error != null) {
-                        callback.onCompletion(error, null);
-                        return;
-                    }
-
-                    // Complete the connector config write via another herder request in order to
-                    // perform the write to the backing store (or forward to the leader) during
-                    // the "external request" portion of the tick loop
-                    addRequest(
-                        () -> {
-                            if (maybeAddConfigErrors(configInfos, callback)) {
-                                return null;
-                            }
-
-                            log.trace("Handling connector config request {}", connName);
-                            if (!isLeader()) {
-                                callback.onCompletion(new NotLeaderException("Only the leader can set connector configs.", leaderUrl()), null);
-                                return null;
-                            }
-                            boolean exists = configState.contains(connName);
-                            if (!allowReplace && exists) {
-                                callback.onCompletion(new AlreadyExistsException("Connector " + connName + " already exists"), null);
-                                return null;
-                            }
-
-                            log.trace("Submitting connector config {} {} {}", connName, allowReplace, configState.connectors());
-                            writeToConfigTopicAsLeader(
-                                    "writing a config for connector " + connName + " to the config topic",
-                                    () -> configBackingStore.putConnectorConfig(connName, config, targetState)
-                            );
-
-                            // Note that we use the updated connector config despite the fact that we don't have an updated
-                            // snapshot yet. The existing task info should still be accurate.
-                            ConnectorInfo info = new ConnectorInfo(connName, config, configState.tasks(connName),
-                                connectorType(config));
-                            callback.onCompletion(null, new Created<>(!exists, info));
-                            return null;
-                        },
-                        forwardErrorAndTickThreadStages(callback)
-                    );
-                }));
+                doPutConnectorConfig(connName, config, targetState, allowReplace, callback);
                 return null;
             },
             forwardErrorAndTickThreadStages(callback)
         );
     }
 
+    @Override
+    public void patchConnectorConfig(String connName, Map<String, String> configPatch, Callback<Created<ConnectorInfo>> callback) {
+        log.trace("Submitting connector config patch request {}", connName);
+        addRequest(() -> {
+            // This reduces (but not completely eliminates) the chance for race conditions.
+            if (!isLeader()) {
+                callback.onCompletion(new NotLeaderException("Only the leader can set connector configs.", leaderUrl()), null);
+                return null;
+            }
+
+            ConnectorInfo connectorInfo = connectorInfo(connName);
+            if (connectorInfo == null) {
+                callback.onCompletion(new NotFoundException("Connector " + connName + " not found", null), null);
+            } else {
+                Map<String, String> patchedConfig = ConnectUtils.patchConfig(connectorInfo.config(), configPatch);
+                doPutConnectorConfig(connName, patchedConfig, null, true, callback);
+            }
+            return null;
+        }, forwardErrorAndTickThreadStages(callback));
+    }
+
+    private void doPutConnectorConfig(
+            String connName,
+            Map<String, String> config,
+            TargetState targetState, boolean allowReplace,
+            Callback<Created<ConnectorInfo>> callback) {
+        validateConnectorConfig(config, callback.chainStaging((error, configInfos) -> {
+            if (error != null) {
+                callback.onCompletion(error, null);
+                return;
+            }
+
+            // Complete the connector config write via another herder request in order to
+            // perform the write to the backing store (or forward to the leader) during
+            // the "external request" portion of the tick loop
+            addRequest(
+                    () -> {
+                        if (maybeAddConfigErrors(configInfos, callback)) {
+                            return null;
+                        }
+
+                        log.trace("Handling connector config request {}", connName);
+                        if (!isLeader()) {
+                            callback.onCompletion(new NotLeaderException("Only the leader can set connector configs.", leaderUrl()), null);
+                            return null;
+                        }
+                        boolean exists = configState.contains(connName);
+                        if (!allowReplace && exists) {
+                            callback.onCompletion(new AlreadyExistsException("Connector " + connName + " already exists"), null);
+                            return null;
+                        }
+
+                        log.trace("Submitting connector config {} {} {}", connName, allowReplace, configState.connectors());
+                        writeToConfigTopicAsLeader(
+                                "writing a config for connector " + connName + " to the config topic",
+                                () -> configBackingStore.putConnectorConfig(connName, config, targetState)
+                        );
+
+                        // Note that we use the updated connector config despite the fact that we don't have an updated
+                        // snapshot yet. The existing task info should still be accurate.
+                        ConnectorInfo info = new ConnectorInfo(connName, config, configState.tasks(connName),
+                                connectorType(config));
+                        callback.onCompletion(null, new Created<>(!exists, info));
+                        return null;
+                    },
+                    forwardErrorAndTickThreadStages(callback)
+            );
+        }));
+    }
     @Override
     public void stopConnector(final String connName, final Callback<Void> callback) {
         log.trace("Submitting request to transition connector {} to STOPPED state", connName);

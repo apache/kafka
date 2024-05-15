@@ -1185,5 +1185,4 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
         return loggers.setLevel(namespace, level);
     }
-
 }

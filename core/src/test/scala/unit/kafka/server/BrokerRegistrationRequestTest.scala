@@ -134,7 +134,7 @@ class BrokerRegistrationRequestTest {
     Errors.forCode(resp.topics().find(topicName).errorCode())
   }
 
-  @ClusterTest(clusterType = Type.KRAFT, brokers = 0, controllers = 1, metadataVersion = MetadataVersion.IBP_3_4_IV0,
+  @ClusterTest(types = Array(Type.KRAFT), brokers = 0, controllers = 1, metadataVersion = MetadataVersion.IBP_3_4_IV0,
     serverProperties = Array(new ClusterConfigProperty(key = "zookeeper.metadata.migration.enable", value = "false")))
   def testRegisterZkWithKRaftMigrationDisabled(clusterInstance: ClusterInstance): Unit = {
     val clusterId = clusterInstance.clusterId()
@@ -162,7 +162,7 @@ class BrokerRegistrationRequestTest {
     }
   }
 
-  @ClusterTest(clusterType = Type.KRAFT, brokers = 0, controllers = 1, metadataVersion = MetadataVersion.IBP_3_3_IV3,
+  @ClusterTest(types = Array(Type.KRAFT), brokers = 0, controllers = 1, metadataVersion = MetadataVersion.IBP_3_3_IV3,
     serverProperties = Array(new ClusterConfigProperty(key = "zookeeper.metadata.migration.enable", value = "false")))
   def testRegisterZkWith33Controller(clusterInstance: ClusterInstance): Unit = {
     // Verify that a controller running an old metadata.version cannot register a ZK broker
@@ -195,7 +195,7 @@ class BrokerRegistrationRequestTest {
   }
 
   @ClusterTest(
-    clusterType = Type.KRAFT,
+    types = Array(Type.KRAFT),
     brokers = 1,
     controllers = 1,
     metadataVersion = MetadataVersion.IBP_3_4_IV0,
@@ -235,7 +235,7 @@ class BrokerRegistrationRequestTest {
    * through the RPCs. The migration never proceeds past pre-migration since no ZK brokers are registered.
    */
   @ClusterTests(Array(
-    new ClusterTest(clusterType = Type.KRAFT, autoStart = AutoStart.NO, controllers = 1, metadataVersion = MetadataVersion.IBP_3_4_IV0,
+    new ClusterTest(types = Array(Type.KRAFT), autoStart = AutoStart.NO, controllers = 1, metadataVersion = MetadataVersion.IBP_3_4_IV0,
       serverProperties = Array(new ClusterConfigProperty(key = "zookeeper.metadata.migration.enable", value = "true")))
   ))
   def testNoMetadataChangesInPreMigrationMode(clusterInstance: ClusterInstance): Unit = {
