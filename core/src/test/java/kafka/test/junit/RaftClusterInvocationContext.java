@@ -78,7 +78,8 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         String clusterDesc = clusterConfig.nameTags().entrySet().stream()
                 .map(Object::toString)
                 .collect(Collectors.joining(", "));
-        return String.format("%s [%d] Type=Raft-%s, %s", baseDisplayName, invocationIndex, isCombined ? "Combined" : "Isolated", clusterDesc);
+        return String.format("%s [%d] Type=Raft-%s, %s", baseDisplayName, invocationIndex, isCombined ? "Combined" :
+                "Isolated", clusterDesc);
     }
 
     @Override
@@ -102,7 +103,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         final AtomicBoolean stopped = new AtomicBoolean(false);
         private final ConcurrentLinkedQueue<Admin> admins = new ConcurrentLinkedQueue<>();
         private EmbeddedZookeeper embeddedZookeeper;
-        private KafkaClusterTestKit clusterTestKit;
+        private volatile KafkaClusterTestKit clusterTestKit;
         private final boolean isCombined;
 
         RaftClusterInstance(ClusterConfig clusterConfig, boolean isCombined) {
@@ -220,7 +221,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         public void start() {
             if (started.compareAndSet(false, true)) {
                 try {
-                    buildAndFormatCluster();
+                    this.format();
                     clusterTestKit.startup();
                     kafka.utils.TestUtils.waitUntilTrue(
                             () -> this.clusterTestKit.brokers().get(0).brokerState() == BrokerState.RUNNING,
@@ -273,9 +274,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         }
 
         public void format() throws Exception {
-            if(this.clusterTestKit == null){
-                throw new IllegalStateException("Cluster not started yet");
-            }
+            safeBuildCluster();
             this.clusterTestKit.format();
         }
 
@@ -284,7 +283,18 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                     .orElseThrow(() -> new IllegalArgumentException("Unknown brokerId " + brokerId));
         }
 
-        private void buildAndFormatCluster() throws Exception {
+        private void safeBuildCluster() throws Exception {
+            if (this.clusterTestKit != null) {
+                return;
+            }
+            synchronized (this) {
+                if (this.clusterTestKit == null) {
+                    doBuild();
+                }
+            }
+        }
+
+        private void doBuild() throws Exception {
             TestKitNodes nodes = new TestKitNodes.Builder()
                     .setBootstrapMetadataVersion(clusterConfig.metadataVersion())
                     .setCombined(isCombined)
@@ -302,7 +312,6 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
             clusterConfig.serverProperties().forEach(builder::setConfigProp);
             // KAFKA-12512 need to pass security protocol and listener name here
             this.clusterTestKit = builder.build();
-            this.clusterTestKit.format();
         }
     }
 }
