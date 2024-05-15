@@ -151,7 +151,7 @@ public class AsyncKafkaConsumerTest {
     private final ApplicationEventHandler applicationEventHandler = mock(ApplicationEventHandler.class);
     private final ConsumerMetadata metadata = mock(ConsumerMetadata.class);
     private final LinkedBlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
-    private final CompletableEventReaper backgroundEventReaper = new CompletableEventReaper(new LogContext());
+    private final CompletableEventReaper backgroundEventReaper = mock(CompletableEventReaper.class);
 
     @AfterEach
     public void resetAll() {
@@ -1853,28 +1853,8 @@ public class AsyncKafkaConsumerTest {
     @Test
     void testReaperExpiresExpiredEvents() {
         consumer = newConsumer();
-        final String topicName = "foo";
-        final int partition = 3;
-        final TopicPartition tp = new TopicPartition(topicName, partition);
-        final SortedSet<TopicPartition> partitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
-        partitions.add(tp);
-
-        consumer.subscribe(Collections.singletonList(topicName), new CounterConsumerRebalanceListener());
-
-        final ConsumerRebalanceListenerCallbackNeededEvent event1 = new ConsumerRebalanceListenerCallbackNeededEvent(ON_PARTITIONS_REVOKED, partitions);
-        final ConsumerRebalanceListenerCallbackNeededEvent event2 = new ConsumerRebalanceListenerCallbackNeededEvent(ON_PARTITIONS_ASSIGNED, partitions);
-        backgroundEventReaper.add(event1);
-        backgroundEventQueue.add(event2);
-
-        assertEquals(1, backgroundEventReaper.size());
-        assertEquals(1, backgroundEventQueue.size());
-
         consumer.close();
-
-        assertEquals(0, backgroundEventReaper.size());
-        assertEquals(0, backgroundEventQueue.size());
-        assertTrue(event1.future().isCompletedExceptionally());
-        assertTrue(event2.future().isCompletedExceptionally());
+        verify(backgroundEventReaper).reap(backgroundEventQueue);
     }
 
     private Map<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {

@@ -46,7 +46,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -279,7 +278,7 @@ public class ConsumerNetworkThreadTest {
     @Test
     void testCleanupInvokesReaper() {
         consumerNetworkThread.cleanup();
-        verify(applicationEventReaper).reap(any(Collection.class));
+        verify(applicationEventReaper).reap(applicationEventsQueue);
     }
 
     @Test
