@@ -59,7 +59,7 @@ class ConsumerGroupCommandTestUtils {
         ClusterConfig classicGroupCoordinator = ClusterConfig.defaultBuilder()
                 .setTypes(Stream.of(ZK, KRAFT, CO_KRAFT).collect(Collectors.toSet()))
                 .setServerProperties(serverProperties)
-                .setTags(Collections.singletonList("newGroupCoordinator"))
+                .setTags(Collections.singletonList("classicGroupCoordinator"))
                 .build();
         clusterGenerator.accept(classicGroupCoordinator);
 
