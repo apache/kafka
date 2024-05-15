@@ -18,6 +18,7 @@ package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
@@ -31,6 +32,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.RecordMetadata;
 
+import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.KafkaBasedLog;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.slf4j.Logger;
@@ -81,13 +83,14 @@ public class MirrorCheckpointTask extends SourceTask {
 
     // for testing
     MirrorCheckpointTask(String sourceClusterAlias, String targetClusterAlias,
-            ReplicationPolicy replicationPolicy, OffsetSyncStore offsetSyncStore,
+            ReplicationPolicy replicationPolicy, OffsetSyncStore offsetSyncStore, Set<String> consumerGroups,
             Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset,
             Map<String, Map<TopicPartition, Checkpoint>> checkpointsPerConsumerGroup) {
         this.sourceClusterAlias = sourceClusterAlias;
         this.targetClusterAlias = targetClusterAlias;
         this.replicationPolicy = replicationPolicy;
         this.offsetSyncStore = offsetSyncStore;
+        this.consumerGroups = consumerGroups;
         this.idleConsumerGroupsOffset = idleConsumerGroupsOffset;
         this.checkpointsPerConsumerGroup = checkpointsPerConsumerGroup;
         this.topicFilter = topic -> true;
@@ -128,12 +131,45 @@ public class MirrorCheckpointTask extends SourceTask {
     // the callback may only handle errors thrown by consumer.poll in KafkaBasedLog
     // e.g. unauthorized to read from topic (non-retriable)
     // if any are encountered, treat the loading of Checkpoints as failed.
-    private Optional<Map<String, Map<TopicPartition, Checkpoint>>> readCheckpoints(MirrorCheckpointTaskConfig config) {
+    Optional<Map<String, Map<TopicPartition, Checkpoint>>> readCheckpoints(MirrorCheckpointTaskConfig config) {
         AtomicBoolean successful = new AtomicBoolean(true);
+        Map<String, Map<TopicPartition, Checkpoint>> checkpoints = new HashMap<>();
+        Callback<ConsumerRecord<byte[], byte[]>> consumedCallback = new Callback<ConsumerRecord<byte[], byte[]>>() {
+            @Override
+            public void onCompletion(Throwable error, ConsumerRecord<byte[], byte[]> cpRecord) {
+                if (error != null && successful.getAndSet(false)) {
+                    log.error("Error loading Checkpoint topic", error);
+                    checkpoints.clear();
+                } else if (successful.get()) {
+                    try {
+                        Checkpoint cp = Checkpoint.deserializeRecord(cpRecord);
+                        if (consumerGroups.contains(cp.consumerGroupId())) {
+                            Map<TopicPartition, Checkpoint> cps = checkpoints.computeIfAbsent(cp.consumerGroupId(), ignored1 -> new HashMap<>());
+                            cps.put(cp.topicPartition(), cp);
+                        }
+                    } catch (SchemaException ex) {
+                        log.warn("Ignored invalid checkpoint record at offset {}", cpRecord.offset(), ex);
+                    }
+                }
+            }
+        };
+
+        log.info("Starting loading Checkpoint topic : {}", config.checkpointsTopic());
+        readCheckpointsImpl(config, consumedCallback);
+        if (successful.get()) {
+            log.info("Succesfully initialized checkpoints from topic : {}", config.checkpointsTopic());
+            log.debug("Initial checkpointsPerConsumerGroup : {}", checkpoints);
+            return Optional.of(checkpoints);
+        } else {
+            log.warn("Failed initializing checkpoints from topic : {}", config.checkpointsTopic());
+            return Optional.empty();
+        }
+    }
+
+    // accessible for testing
+    void readCheckpointsImpl(MirrorCheckpointTaskConfig config, Callback<ConsumerRecord<byte[], byte[]>> consumedCallback) {
         TopicAdmin cpAdmin = null;
         KafkaBasedLog<byte[], byte[]> previousCheckpoints = null;
-
-        Map<String, Map<TopicPartition, Checkpoint>> checkpoints = new HashMap<>();
         try {
             cpAdmin = new TopicAdmin(
                     config.targetAdminConfig("checkpoint-target-admin"),
@@ -144,38 +180,14 @@ public class MirrorCheckpointTask extends SourceTask {
                     MirrorUtils.newConsumer(config.targetConsumerConfig(CHECKPOINTS_TARGET_CONSUMER_ROLE)),
                     null,
                     cpAdmin,
-                    (error, cpRecord) -> {
-                        if (error != null && successful.getAndSet(false)) {
-                            log.error("Error loading Checkpoint topic", error);
-                            checkpoints.clear();
-                        } else if (successful.get()) {
-                            try {
-                                Checkpoint cp = Checkpoint.deserializeRecord(cpRecord);
-                                if (consumerGroups.contains(cp.consumerGroupId())) {
-                                    Map<TopicPartition, Checkpoint> cps = checkpoints.computeIfAbsent(cp.consumerGroupId(), ignored1 -> new HashMap<>());
-                                    cps.put(cp.topicPartition(), cp);
-                                }
-                            } catch (SchemaException ex) {
-                                log.warn("Ignored invalid checkpoint record at offset {}", cpRecord.offset(), ex);
-                            }
-                        }
-                    },
+                    consumedCallback,
                     Time.SYSTEM,
                     ignored -> {
                     },
                     topicPartition -> topicPartition.partition() == 0);
 
-            log.info("Starting loading Checkpoint topic : {}", config.checkpointsTopic());
             previousCheckpoints.start(true);
             previousCheckpoints.stop();
-            if (successful.get()) {
-                log.info("Succesfully initialized checkpoints from topic : {}", config.checkpointsTopic());
-                log.debug("Initial checkpointsPerConsumerGroup : {}", checkpoints);
-                return Optional.of(checkpoints);
-            } else {
-                log.warn("Failed initializing checkpoints from topic : {}", config.checkpointsTopic());
-                return Optional.empty();
-            }
         } finally {
             Utils.closeQuietly(cpAdmin, "admin client for previous Checkpoints");
             Utils.closeQuietly(previousCheckpoints != null ? previousCheckpoints::stop : null, "backing store for previous Checkpoints");
