@@ -116,17 +116,21 @@ public class TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest {
 
         final RemotePartitionMetadataStore spyRemotePartitionMetadataStore = spy(new RemotePartitionMetadataStore());
 
+        // Think of a Phaser as a CountdownLatch which provides a "countUp" operation in addition to a countDown.
+        // The "parties" in a phaser are analogous to the "count". The awaiting semantics of Phaser
+        // however differ slightly compared to a CountdownLatch, which requires us to account for
+        // the test thread as well while initialising the Phaser.
         Phaser initializationPhaser = new Phaser(2); // 1 to register test thread, 1 to register leaderTopicIdPartition
         doAnswer(invocationOnMock -> {
             Object result = invocationOnMock.callRealMethod();
-            initializationPhaser.arriveAndDeregister();
+            initializationPhaser.arriveAndDeregister(); // similar to CountdownLatch::countDown
             return result;
         }).when(spyRemotePartitionMetadataStore).markInitialized(any());
 
-        Phaser handleRemoteLogSegmentMetadataPhaser = new Phaser(2);
+        Phaser handleRemoteLogSegmentMetadataPhaser = new Phaser(2); // 1 to register test thread, 1 to register leaderTopicIdPartition
         doAnswer(invocationOnMock -> {
             Object result = invocationOnMock.callRealMethod();
-            handleRemoteLogSegmentMetadataPhaser.arriveAndDeregister();
+            handleRemoteLogSegmentMetadataPhaser.arriveAndDeregister(); // similar to CountdownLatch::countDown
             return result;
         }).when(spyRemotePartitionMetadataStore).handleRemoteLogSegmentMetadata(any());
 
@@ -170,22 +174,23 @@ public class TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest {
 
         // RemoteLogSegmentMetadata events are already published, and topicBasedRlmm's consumer manager will start
         // fetching those events and build the cache.
-        initializationPhaser.awaitAdvanceInterruptibly(initializationPhaser.arrive(), 30_000, TimeUnit.MILLISECONDS);
+        initializationPhaser.awaitAdvanceInterruptibly(initializationPhaser.arrive(), 30_000, TimeUnit.MILLISECONDS); // similar to CountdownLatch::await
         handleRemoteLogSegmentMetadataPhaser.awaitAdvanceInterruptibly(handleRemoteLogSegmentMetadataPhaser.arrive(), 30_000, TimeUnit.MILLISECONDS);
         verify(spyRemotePartitionMetadataStore).markInitialized(leaderTopicIdPartition);
         verify(spyRemotePartitionMetadataStore).handleRemoteLogSegmentMetadata(leaderSegmentMetadata);
         clearInvocations(spyRemotePartitionMetadataStore);
+
         // leader partitions would have received as it is registered, but follower partition is not yet registered,
         // hence it throws an exception.
         Assertions.assertTrue(rlmm().listRemoteLogSegments(leaderTopicIdPartition).hasNext());
         Assertions.assertThrows(RemoteStorageException.class, () -> rlmm().listRemoteLogSegments(followerTopicIdPartition));
 
         // Register follower partition
+        // Phaser::bulkRegister and Phaser::register provide the "countUp" feature
         initializationPhaser.bulkRegister(2); // 1 for emptyTopicIdPartition and 1 for followerTopicIdPartition
         handleRemoteLogSegmentMetadataPhaser.register(); // 1 for followerTopicIdPartition, emptyTopicIdPartition doesn't have a RemoteLogSegmentMetadata event
         rlmm().onPartitionLeadershipChanges(Collections.singleton(emptyTopicIdPartition),
             Collections.singleton(followerTopicIdPartition));
-
 
         initializationPhaser.awaitAdvanceInterruptibly(initializationPhaser.arrive(), 30_000, TimeUnit.MILLISECONDS);
         handleRemoteLogSegmentMetadataPhaser.awaitAdvanceInterruptibly(handleRemoteLogSegmentMetadataPhaser.arrive(), 30_000, TimeUnit.MILLISECONDS);
