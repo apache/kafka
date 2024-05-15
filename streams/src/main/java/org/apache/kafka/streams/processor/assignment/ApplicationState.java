@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.assignment;
 
 import java.util.Map;
 import java.util.Set;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 
@@ -62,4 +63,22 @@ public interface ApplicationState {
      * @return the set of stateless or changelog-less tasks in this topology
      */
     Set<TaskId> statelessTasks();
+
+    /**
+     * @return map from each task id to the rack ids for each input and changelog topic partition in this task
+     */
+    Map<TaskId, PartitionRackIds> taskIdToPartitionsRackIds();
+
+    interface PartitionRackIds {
+
+        /**
+         * @return map from the input topic partitions of a task to the rack ids of each replica with this partition
+         */
+        Map<TopicPartition, Set<String>> inputTopicPartitionToRackIds();
+
+        /**
+         * @return map from the changelog topic partitions of a task to the rack ids of each replica with this partition
+         */
+        Map<TopicPartition, Set<String>> changelogTopicPartitionToRackIds();
+    }
 }

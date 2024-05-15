@@ -95,6 +95,11 @@ public class ApplicationStateImpl implements ApplicationState {
         return statelessTasks;
     }
 
+    @Override
+    public Map<TaskId, PartitionRackIds> taskIdToPartitionsRackIds() {
+        throw new UnsupportedOperationException("Not implemented");
+    }
+
     private static Set<TaskId> computeAllTasks(final Set<TaskId> statelessTasks, final Set<TaskId> statefulTasks) {
         final Set<TaskId> union = new HashSet<>(statefulTasks);
         union.addAll(statelessTasks);
