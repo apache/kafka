@@ -192,12 +192,12 @@ public class KafkaConsumerTest {
     private final String memberId = "memberId";
     private final String leaderId = "leaderId";
     private final Optional<String> groupInstanceId = Optional.of("mock-instance");
-    private Map<String, Uuid> topicIds = Stream.of(
+    private final Map<String, Uuid> topicIds = Stream.of(
             new AbstractMap.SimpleEntry<>(topic, topicId),
             new AbstractMap.SimpleEntry<>(topic2, topicId2),
             new AbstractMap.SimpleEntry<>(topic3, topicId3))
             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-    private Map<Uuid, String> topicNames = Stream.of(
+    private final Map<Uuid, String> topicNames = Stream.of(
             new AbstractMap.SimpleEntry<>(topicId, topic),
             new AbstractMap.SimpleEntry<>(topicId2, topic2),
             new AbstractMap.SimpleEntry<>(topicId3, topic3))
@@ -1839,63 +1839,33 @@ public class KafkaConsumerTest {
             // OK, expected
         }
 
-        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer(groupProtocol, (String) null)) {
-            consumer.subscribe(Collections.singleton(topic));
-            fail("Expected an InvalidGroupIdException");
-        } catch (InvalidGroupIdException e) {
-            // OK, expected
+        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer(groupProtocol, null)) {
+            assertThrows(InvalidGroupIdException.class, () -> consumer.subscribe(Collections.singleton(topic)));
         }
 
-        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer(groupProtocol, (String) null)) {
-            consumer.committed(Collections.singleton(tp0)).get(tp0);
-            fail("Expected an InvalidGroupIdException");
-        } catch (InvalidGroupIdException e) {
-            // OK, expected
+        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer(groupProtocol, null)) {
+            assertThrows(InvalidGroupIdException.class, () -> consumer.committed(Collections.singleton(tp0)).get(tp0));
         }
 
-        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer(groupProtocol, (String) null)) {
-            consumer.commitAsync();
-            fail("Expected an InvalidGroupIdException");
-        } catch (InvalidGroupIdException e) {
-            // OK, expected
+        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer(groupProtocol, null)) {
+            assertThrows(InvalidGroupIdException.class, () -> consumer.commitAsync());
         }
 
-        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer(groupProtocol, (String) null)) {
-            consumer.commitSync();
-            fail("Expected an InvalidGroupIdException");
-        } catch (InvalidGroupIdException e) {
-            // OK, expected
+        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer(groupProtocol, null)) {
+            assertThrows(InvalidGroupIdException.class, () -> consumer.commitSync());
         }
     }
 
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
     public void testOperationsByAssigningConsumerWithDefaultGroupId(GroupProtocol groupProtocol) {
-        KafkaConsumer<byte[], byte[]> consumer = newConsumer(groupProtocol, null);
-        consumer.assign(singleton(tp0));
+        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer(groupProtocol, null)) {
+            consumer.assign(singleton(tp0));
 
-        try {
-            consumer.committed(Collections.singleton(tp0)).get(tp0);
-            fail("Expected an InvalidGroupIdException");
-        } catch (InvalidGroupIdException e) {
-            // OK, expected
+            assertThrows(InvalidGroupIdException.class, () -> consumer.committed(Collections.singleton(tp0)).get(tp0));
+            assertThrows(InvalidGroupIdException.class, () -> consumer.commitAsync());
+            assertThrows(InvalidGroupIdException.class, () -> consumer.commitSync());
         }
-
-        try {
-            consumer.commitAsync();
-            fail("Expected an InvalidGroupIdException");
-        } catch (InvalidGroupIdException e) {
-            // OK, expected
-        }
-
-        try {
-            consumer.commitSync();
-            fail("Expected an InvalidGroupIdException");
-        } catch (InvalidGroupIdException e) {
-            // OK, expected
-        }
-
-        consumer.close();
     }
 
     @ParameterizedTest
@@ -2054,12 +2024,7 @@ public class KafkaConsumerTest {
                 }
                 if (i < nonCloseRequests) {
                     // the close request should not complete until non-close requests (commit requests) have completed.
-                    try {
-                        future.get(100, TimeUnit.MILLISECONDS);
-                        fail("Close completed without waiting for response");
-                    } catch (TimeoutException e) {
-                        // Expected exception
-                    }
+                    assertThrows(TimeoutException.class, () -> future.get(100, TimeUnit.MILLISECONDS));
                 }
             }
 
@@ -2287,23 +2252,15 @@ public class KafkaConsumerTest {
         client.prepareResponseFrom(syncGroupResponse(singletonList(tp0), Errors.NONE), coordinator);
 
         // assign throws
-        try {
-            consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
-            fail("Should throw exception");
-        } catch (Throwable e) {
-            assertEquals(partitionAssigned + singleTopicPartition, e.getCause().getMessage());
-        }
+        KafkaException exc = assertThrows(KafkaException.class, () -> consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE)));
+        assertEquals(partitionAssigned + singleTopicPartition, exc.getCause().getMessage());
 
         // the assignment is still updated regardless of the exception
         assertEquals(singleton(tp0), subscription.assignedPartitions());
 
         // close's revoke throws
-        try {
-            consumer.close(Duration.ofMillis(0));
-            fail("Should throw exception");
-        } catch (Throwable e) {
-            assertEquals(partitionRevoked + singleTopicPartition, e.getCause().getCause().getMessage());
-        }
+        exc = assertThrows(KafkaException.class, () -> consumer.close(Duration.ofMillis(0)));
+        assertEquals(partitionRevoked + singleTopicPartition, exc.getCause().getCause().getMessage());
 
         consumer.close(Duration.ofMillis(0));
 

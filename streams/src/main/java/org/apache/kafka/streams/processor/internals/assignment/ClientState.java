@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import java.util.SortedMap;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task;
@@ -454,6 +455,22 @@ public class ClientState {
 
     public String consumers() {
         return consumerToPreviousStatefulTaskIds.keySet().toString();
+    }
+
+    public Map<TaskId, Long> taskLagTotals() {
+        return taskLagTotals;
+    }
+
+    public SortedSet<TaskId> previousActiveTasks() {
+        return new TreeSet<>(previousActiveTasks.taskIds());
+    }
+
+    public SortedSet<TaskId> previousStandbyTasks() {
+        return new TreeSet<>(previousStandbyTasks.taskIds());
+    }
+
+    public SortedMap<String, Set<TaskId>> taskIdsByPreviousConsumer() {
+        return new TreeMap<>(consumerToPreviousStatefulTaskIds);
     }
 
     public String currentAssignment() {

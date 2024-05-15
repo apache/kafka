@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.processor.assignment;
 
-import org.apache.kafka.common.protocol.types.Field.UUID;
+import java.util.UUID;
 
 /** A simple wrapper around UUID that abstracts a Process ID */
 public class ProcessId {
@@ -33,5 +33,10 @@ public class ProcessId {
      */
     public UUID id() {
         return id;
+    }
+
+    @Override
+    public String toString() {
+        return "ProcessId{id=" + id + "}";
     }
 }
