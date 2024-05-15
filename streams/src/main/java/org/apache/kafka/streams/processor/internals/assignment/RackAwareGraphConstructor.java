@@ -33,7 +33,7 @@ import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssi
 /**
  * Construct graph for rack aware task assignor
  */
-public interface RackAwareGraphConstructor<ClientStateT> {
+public interface RackAwareGraphConstructor<T> {
     int SOURCE_ID = -1;
 
     int getSinkNodeID(final List<TaskId> taskIdList, final List<UUID> clientList, final Map<Subtopology, Set<TaskId>> tasksForTopicGroup);
@@ -45,10 +45,10 @@ public interface RackAwareGraphConstructor<ClientStateT> {
     Graph<Integer> constructTaskGraph(
         final List<UUID> clientList,
         final List<TaskId> taskIdList,
-        final Map<UUID, ClientStateT> clientStates,
+        final Map<UUID, T> clientStates,
         final Map<TaskId, UUID> taskClientMap,
         final Map<UUID, Integer> originalAssignedTaskNumber,
-        final BiPredicate<ClientStateT, TaskId> hasAssignedTask,
+        final BiPredicate<T, TaskId> hasAssignedTask,
         final CostFunction costFunction,
         final int trafficCost,
         final int nonOverlapCost,
@@ -59,24 +59,24 @@ public interface RackAwareGraphConstructor<ClientStateT> {
         final Graph<Integer> graph,
         final List<UUID> clientList,
         final List<TaskId> taskIdList,
-        final Map<UUID, ClientStateT> clientStates,
+        final Map<UUID, T> clientStates,
         final Map<UUID, Integer> originalAssignedTaskNumber,
         final Map<TaskId, UUID> taskClientMap,
-        final BiConsumer<ClientStateT, TaskId> assignTask,
-        final BiConsumer<ClientStateT, TaskId> unAssignTask,
-        final BiPredicate<ClientStateT, TaskId> hasAssignedTask);
+        final BiConsumer<T, TaskId> assignTask,
+        final BiConsumer<T, TaskId> unAssignTask,
+        final BiPredicate<T, TaskId> hasAssignedTask);
 
     default KeyValue<Boolean, Integer> assignTaskToClient(
         final Graph<Integer> graph,
         final TaskId taskId,
         final int taskNodeId,
         final int topicGroupIndex,
-        final Map<UUID, ClientStateT> clientStates,
+        final Map<UUID, T> clientStates,
         final List<UUID> clientList,
         final List<TaskId> taskIdList,
         final Map<TaskId, UUID> taskClientMap,
-        final BiConsumer<ClientStateT, TaskId> assignTask,
-        final BiConsumer<ClientStateT, TaskId> unAssignTask
+        final BiConsumer<T, TaskId> assignTask,
+        final BiConsumer<T, TaskId> unAssignTask
     ) {
         int tasksAssigned = 0;
         boolean taskMoved = false;
@@ -104,9 +104,9 @@ public interface RackAwareGraphConstructor<ClientStateT> {
     default void validateAssignedTask(
         final List<TaskId> taskIdList,
         final int tasksAssigned,
-        final Map<UUID, ClientStateT> clientStates,
+        final Map<UUID, T> clientStates,
         final Map<UUID, Integer> originalAssignedTaskNumber,
-        final BiPredicate<ClientStateT, TaskId> hasAssignedTask
+        final BiPredicate<T, TaskId> hasAssignedTask
     ) {
         // Validate task assigned
         if (tasksAssigned != taskIdList.size()) {
@@ -117,7 +117,7 @@ public interface RackAwareGraphConstructor<ClientStateT> {
         // Validate original assigned task number matches
         final Map<UUID, Integer> assignedTaskNumber = new HashMap<>();
         for (final TaskId taskId : taskIdList) {
-            for (final Entry<UUID, ClientStateT> clientState : clientStates.entrySet()) {
+            for (final Entry<UUID, T> clientState : clientStates.entrySet()) {
                 if (hasAssignedTask.test(clientState.getValue(), taskId)) {
                     assignedTaskNumber.merge(clientState.getKey(), 1, Integer::sum);
                 }

@@ -25,12 +25,12 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignorConfigura
 
 public class RackAwareGraphConstructorFactory {
 
-    static <ClientStateT> RackAwareGraphConstructor<ClientStateT> create(final AssignmentConfigs assignmentConfigs, final Map<Subtopology, Set<TaskId>> tasksForTopicGroup) {
+    static <T> RackAwareGraphConstructor<T> create(final AssignmentConfigs assignmentConfigs, final Map<Subtopology, Set<TaskId>> tasksForTopicGroup) {
         switch (assignmentConfigs.rackAwareAssignmentStrategy) {
             case StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC:
-                return new MinTrafficGraphConstructor<ClientStateT>();
+                return new MinTrafficGraphConstructor<T>();
             case StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY:
-                return new BalanceSubtopologyGraphConstructor<ClientStateT>(tasksForTopicGroup);
+                return new BalanceSubtopologyGraphConstructor<T>(tasksForTopicGroup);
             default:
                 throw new IllegalArgumentException("Rack aware assignment is disabled");
         }

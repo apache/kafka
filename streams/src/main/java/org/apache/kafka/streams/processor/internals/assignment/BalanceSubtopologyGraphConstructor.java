@@ -35,7 +35,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor.CostFunction;
 
-public class BalanceSubtopologyGraphConstructor<ClientStateT> implements RackAwareGraphConstructor<ClientStateT> {
+public class BalanceSubtopologyGraphConstructor<T> implements RackAwareGraphConstructor<T> {
 
     private final Map<Subtopology, Set<TaskId>> tasksForTopicGroup;
 
@@ -71,10 +71,10 @@ public class BalanceSubtopologyGraphConstructor<ClientStateT> implements RackAwa
     public Graph<Integer> constructTaskGraph(
         final List<UUID> clientList,
         final List<TaskId> taskIdList,
-        final Map<UUID, ClientStateT> clientStates,
+        final Map<UUID, T> clientStates,
         final Map<TaskId, UUID> taskClientMap,
         final Map<UUID, Integer> originalAssignedTaskNumber,
-        final BiPredicate<ClientStateT, TaskId> hasAssignedTask,
+        final BiPredicate<T, TaskId> hasAssignedTask,
         final CostFunction costFunction,
         final int trafficCost,
         final int nonOverlapCost,
@@ -86,7 +86,7 @@ public class BalanceSubtopologyGraphConstructor<ClientStateT> implements RackAwa
         final Graph<Integer> graph = new Graph<>();
 
         for (final TaskId taskId : taskIdList) {
-            for (final Entry<UUID, ClientStateT> clientState : clientStates.entrySet()) {
+            for (final Entry<UUID, T> clientState : clientStates.entrySet()) {
                 if (hasAssignedTask.test(clientState.getValue(), taskId)) {
                     originalAssignedTaskNumber.merge(clientState.getKey(), 1, Integer::sum);
                 }
@@ -122,12 +122,12 @@ public class BalanceSubtopologyGraphConstructor<ClientStateT> implements RackAwa
         final Graph<Integer> graph,
         final List<UUID> clientList,
         final List<TaskId> taskIdList,
-        final Map<UUID, ClientStateT> clientStates,
+        final Map<UUID, T> clientStates,
         final Map<UUID, Integer> originalAssignedTaskNumber,
         final Map<TaskId, UUID> taskClientMap,
-        final BiConsumer<ClientStateT, TaskId> assignTask,
-        final BiConsumer<ClientStateT, TaskId> unAssignTask,
-        final BiPredicate<ClientStateT, TaskId> hasAssignedTask
+        final BiConsumer<T, TaskId> assignTask,
+        final BiConsumer<T, TaskId> unAssignTask,
+        final BiPredicate<T, TaskId> hasAssignedTask
     ) {
         final SortedMap<Subtopology, Set<TaskId>> sortedTasksForTopicGroup = new TreeMap<>(tasksForTopicGroup);
         final Set<TaskId> taskIdSet = new HashSet<>(taskIdList);
@@ -170,10 +170,10 @@ public class BalanceSubtopologyGraphConstructor<ClientStateT> implements RackAwa
         final Graph<Integer> graph,
         final List<TaskId> taskIdList,
         final List<UUID> clientList,
-        final Map<UUID, ClientStateT> clientStates,
+        final Map<UUID, T> clientStates,
         final Map<TaskId, UUID> taskClientMap,
         final Map<UUID, Integer> originalAssignedTaskNumber,
-        final BiPredicate<ClientStateT, TaskId> hasAssignedTask,
+        final BiPredicate<T, TaskId> hasAssignedTask,
         final CostFunction costFunction,
         final int trafficCost,
         final int nonOverlapCost,
