@@ -133,7 +133,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         private final HostInfo hostInfo;
         private final ClientState state;
         private final SortedSet<String> consumers;
-        private final Map<String, List<TopicPartition>> partitionsForConsumer;
         private final Optional<String> rackId;
 
         ClientMetadata(final UUID processId, final String endPoint, final Map<String, String> clientTags, final Optional<String> rackId) {
@@ -143,7 +142,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
             // initialize the consumer memberIds
             consumers = new TreeSet<>();
-            partitionsForConsumer = new TreeMap<>();
 
             // initialize the client state with client tags
             state = new ClientState(processId, clientTags);
@@ -155,10 +153,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             consumers.add(consumerMemberId);
             state.incrementCapacity();
             state.addOwnedPartitions(ownedPartitions, consumerMemberId);
-            if (!partitionsForConsumer.containsKey(consumerMemberId)) {
-                partitionsForConsumer.put(consumerMemberId, new ArrayList<>());
-            }
-            partitionsForConsumer.get(consumerMemberId).addAll(ownedPartitions);
         }
 
         void addPreviousTasksAndOffsetSums(final String consumerId, final Map<TaskId, Long> taskOffsetSums) {
