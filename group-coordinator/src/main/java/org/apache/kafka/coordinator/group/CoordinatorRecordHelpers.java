@@ -78,7 +78,7 @@ public class CoordinatorRecordHelpers {
                     .setInstanceId(member.instanceId())
                     .setClientId(member.clientId())
                     .setClientHost(member.clientHost())
-                    .setSubscribedTopicNames(member.subscribedTopicNames())
+                    .setSubscribedTopicNames(new ArrayList<>(member.subscribedTopicNames()))
                     .setSubscribedTopicRegex(member.subscribedTopicRegex())
                     .setServerAssignor(member.serverAssignorName().orElse(null))
                     .setRebalanceTimeoutMs(member.rebalanceTimeoutMs())

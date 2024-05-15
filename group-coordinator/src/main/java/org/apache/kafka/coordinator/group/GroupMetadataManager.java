@@ -1389,7 +1389,7 @@ public class GroupMetadataManager {
         int rebalanceTimeoutMs,
         String clientId,
         String clientHost,
-        List<String> subscribedTopicNames,
+        Set<String> subscribedTopicNames,
         String assignorName,
         List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions
     ) throws ApiException {
@@ -1654,12 +1654,13 @@ public class GroupMetadataManager {
         // changed, the subscription metadata is updated and persisted by writing a ConsumerGroupPartitionMetadataValue
         // record to the __consumer_offsets partition. Finally, the group epoch is bumped if the subscriptions have
         // changed, and persisted by writing a ConsumerGroupMetadataValue record to the partition.
+        Set<String> subscribedTopicNames = subscription.topics() == null ? null : new HashSet<>(subscription.topics());
         ConsumerGroupMember updatedMember = updatedMemberBuilder
             .maybeUpdateInstanceId(Optional.ofNullable(instanceId))
             .maybeUpdateRackId(subscription.rackId())
             .maybeUpdateRebalanceTimeoutMs(ofSentinel(request.rebalanceTimeoutMs()))
             .maybeUpdateServerAssignorName(Optional.empty())
-            .maybeUpdateSubscribedTopicNames(Optional.ofNullable(subscription.topics()))
+            .maybeUpdateSubscribedTopicNames(Optional.ofNullable(subscribedTopicNames))
             .setClientId(context.clientId())
             .setClientHost(context.clientAddress.toString())
             .setClassicMemberMetadata(
@@ -1899,6 +1900,7 @@ public class GroupMetadataManager {
                     .withSubscriptionMetadata(subscriptionMetadata)
                     .withSubscriptionType(subscriptionType)
                     .withTargetAssignment(group.targetAssignment())
+                    .withTopicsImage(metadataImage.topics())
                     .addOrUpdateMember(updatedMember.memberId(), updatedMember);
             TargetAssignmentBuilder.TargetAssignmentResult assignmentResult;
             // A new static member is replacing an older one with the same subscriptions.
@@ -2260,7 +2262,7 @@ public class GroupMetadataManager {
                 request.rebalanceTimeoutMs(),
                 context.clientId(),
                 context.clientAddress.toString(),
-                request.subscribedTopicNames(),
+                new HashSet<>(request.subscribedTopicNames()),
                 request.serverAssignor(),
                 request.topicPartitions()
             );

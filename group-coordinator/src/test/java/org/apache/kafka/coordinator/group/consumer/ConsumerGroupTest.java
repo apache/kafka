@@ -49,6 +49,7 @@ import java.util.OptionalLong;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpersTest.mkMapOfPartitionRacks;
@@ -103,7 +104,7 @@ public class ConsumerGroupTest {
         member = consumerGroup.getOrMaybeCreateMember("member", true);
 
         member = new ConsumerGroupMember.Builder(member)
-            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setSubscribedTopicNames(mkSet("foo", "bar"))
             .build();
 
         consumerGroup.updateMember(member);
@@ -128,7 +129,7 @@ public class ConsumerGroupTest {
         member = consumerGroup.getOrMaybeCreateMember("member", true);
 
         member = new ConsumerGroupMember.Builder(member)
-            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setSubscribedTopicNames(mkSet("foo", "bar"))
             .setInstanceId("instance")
             .build();
 
@@ -157,7 +158,7 @@ public class ConsumerGroupTest {
         ConsumerGroup consumerGroup = createConsumerGroup("foo");
 
         ConsumerGroupMember member = new ConsumerGroupMember.Builder("member")
-            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setSubscribedTopicNames(mkSet("foo", "bar"))
             .setInstanceId("instance")
             .build();
 
@@ -588,13 +589,13 @@ public class ConsumerGroupTest {
             .build();
 
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
-            .setSubscribedTopicNames(Collections.singletonList("foo"))
+            .setSubscribedTopicNames(Collections.singleton("foo"))
             .build();
         ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member2")
-            .setSubscribedTopicNames(Collections.singletonList("bar"))
+            .setSubscribedTopicNames(Collections.singleton("bar"))
             .build();
         ConsumerGroupMember member3 = new ConsumerGroupMember.Builder("member3")
-            .setSubscribedTopicNames(Collections.singletonList("zar"))
+            .setSubscribedTopicNames(Collections.singleton("zar"))
             .build();
 
         ConsumerGroup consumerGroup = createConsumerGroup("group-foo");
@@ -734,13 +735,13 @@ public class ConsumerGroupTest {
     @Test
     public void testUpdateSubscribedTopicNamesAndSubscriptionType() {
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
-            .setSubscribedTopicNames(Collections.singletonList("foo"))
+            .setSubscribedTopicNames(Collections.singleton("foo"))
             .build();
         ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member2")
-            .setSubscribedTopicNames(Arrays.asList("bar", "foo"))
+            .setSubscribedTopicNames(mkSet("bar", "foo"))
             .build();
         ConsumerGroupMember member3 = new ConsumerGroupMember.Builder("member3")
-            .setSubscribedTopicNames(Arrays.asList("bar", "foo"))
+            .setSubscribedTopicNames(mkSet("bar", "foo"))
             .build();
 
         ConsumerGroup consumerGroup = createConsumerGroup("group-foo");
@@ -787,7 +788,7 @@ public class ConsumerGroupTest {
         );
 
         ConsumerGroupMember member4 = new ConsumerGroupMember.Builder("member2")
-            .setSubscribedTopicNames(Arrays.asList("bar", "foo", "zar"))
+            .setSubscribedTopicNames(mkSet("bar", "foo", "zar"))
             .build();
 
         consumerGroup.updateMember(member4);
@@ -887,7 +888,7 @@ public class ConsumerGroupTest {
         snapshotRegistry.getOrCreateSnapshot(0);
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
         group.updateMember(new ConsumerGroupMember.Builder("member1")
-            .setSubscribedTopicNames(Collections.singletonList("foo"))
+            .setSubscribedTopicNames(Collections.singleton("foo"))
             .build());
         snapshotRegistry.getOrCreateSnapshot(1);
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
@@ -981,10 +982,10 @@ public class ConsumerGroupTest {
             .build();
 
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
-            .setSubscribedTopicNames(Collections.singletonList("foo"))
+            .setSubscribedTopicNames(Collections.singleton("foo"))
             .build();
         ConsumerGroupMember member2 = new ConsumerGroupMember.Builder("member2")
-            .setSubscribedTopicNames(Collections.singletonList("bar"))
+            .setSubscribedTopicNames(Collections.singleton("bar"))
             .build();
 
         ConsumerGroup consumerGroup = createConsumerGroup("group-foo");
@@ -1022,7 +1023,7 @@ public class ConsumerGroupTest {
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
 
         group.updateMember(new ConsumerGroupMember.Builder("member1")
-                .setSubscribedTopicNames(Collections.singletonList("foo"))
+                .setSubscribedTopicNames(Collections.singleton("foo"))
                 .setServerAssignorName("assignorName")
                 .build());
         group.updateMember(new ConsumerGroupMember.Builder("member2")
@@ -1103,7 +1104,7 @@ public class ConsumerGroupTest {
         assertFalse(group.isInStates(Collections.singleton("Empty"), 0));
 
         group.updateMember(new ConsumerGroupMember.Builder("member1")
-            .setSubscribedTopicNames(Collections.singletonList("foo"))
+            .setSubscribedTopicNames(Collections.singleton("foo"))
             .build());
         snapshotRegistry.getOrCreateSnapshot(1);
         assertTrue(group.isInStates(Collections.singleton("empty"), 0));

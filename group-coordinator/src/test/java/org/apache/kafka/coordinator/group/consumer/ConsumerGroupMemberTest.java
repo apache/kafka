@@ -37,6 +37,7 @@ import java.util.OptionalInt;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection;
@@ -57,7 +58,7 @@ public class ConsumerGroupMemberTest {
             .setRebalanceTimeoutMs(5000)
             .setClientId("client-id")
             .setClientHost("hostname")
-            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setSubscribedTopicNames(mkSet("foo", "bar"))
             .setSubscribedTopicRegex("regex")
             .setServerAssignorName("range")
             .setAssignedPartitions(mkAssignment(
@@ -75,8 +76,7 @@ public class ConsumerGroupMemberTest {
         assertEquals("rack-id", member.rackId());
         assertEquals("client-id", member.clientId());
         assertEquals("hostname", member.clientHost());
-        // Names are sorted.
-        assertEquals(Arrays.asList("bar", "foo"), member.subscribedTopicNames());
+        assertEquals(mkSet("bar", "foo"), member.subscribedTopicNames());
         assertEquals("regex", member.subscribedTopicRegex());
         assertEquals("range", member.serverAssignorName().get());
         assertEquals(mkAssignment(mkTopicAssignment(topicId1, 1, 2, 3)), member.assignedPartitions());
@@ -102,7 +102,7 @@ public class ConsumerGroupMemberTest {
             .setRebalanceTimeoutMs(5000)
             .setClientId("client-id")
             .setClientHost("hostname")
-            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setSubscribedTopicNames(mkSet("foo", "bar"))
             .setSubscribedTopicRegex("regex")
             .setServerAssignorName("range")
             .setAssignedPartitions(mkAssignment(
@@ -121,7 +121,7 @@ public class ConsumerGroupMemberTest {
             .setRebalanceTimeoutMs(5000)
             .setClientId("client-id")
             .setClientHost("hostname")
-            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setSubscribedTopicNames(mkSet("foo", "bar"))
             .setSubscribedTopicRegex("regex")
             .setServerAssignorName("range")
             .setAssignedPartitions(mkAssignment(
@@ -148,7 +148,7 @@ public class ConsumerGroupMemberTest {
             .setRebalanceTimeoutMs(5000)
             .setClientId("client-id")
             .setClientHost("hostname")
-            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setSubscribedTopicNames(mkSet("foo", "bar"))
             .setSubscribedTopicRegex("regex")
             .setServerAssignorName("range")
             .setAssignedPartitions(mkAssignment(
@@ -175,7 +175,7 @@ public class ConsumerGroupMemberTest {
             .maybeUpdateRackId(Optional.of("new-rack-id"))
             .maybeUpdateInstanceId(Optional.of("new-instance-id"))
             .maybeUpdateServerAssignorName(Optional.of("new-assignor"))
-            .maybeUpdateSubscribedTopicNames(Optional.of(Arrays.asList("zar")))
+            .maybeUpdateSubscribedTopicNames(Optional.of(mkSet("zar")))
             .maybeUpdateSubscribedTopicRegex(Optional.of("new-regex"))
             .maybeUpdateRebalanceTimeoutMs(OptionalInt.of(6000))
             .build();
@@ -183,7 +183,7 @@ public class ConsumerGroupMemberTest {
         assertEquals("new-instance-id", updatedMember.instanceId());
         assertEquals("new-rack-id", updatedMember.rackId());
         // Names are sorted.
-        assertEquals(Arrays.asList("zar"), updatedMember.subscribedTopicNames());
+        assertEquals(mkSet("zar"), updatedMember.subscribedTopicNames());
         assertEquals("new-regex", updatedMember.subscribedTopicRegex());
         assertEquals("new-assignor", updatedMember.serverAssignorName().get());
     }
@@ -210,8 +210,7 @@ public class ConsumerGroupMemberTest {
         assertEquals("rack-id", member.rackId());
         assertEquals("client-id", member.clientId());
         assertEquals("host-id", member.clientHost());
-        // Names are sorted.
-        assertEquals(Arrays.asList("bar", "foo"), member.subscribedTopicNames());
+        assertEquals(mkSet("bar", "foo"), member.subscribedTopicNames());
         assertEquals("regex", member.subscribedTopicRegex());
         assertEquals("range", member.serverAssignorName().get());
         assertEquals(
@@ -274,7 +273,7 @@ public class ConsumerGroupMemberTest {
         String instanceId = "instanceId";
         String rackId = "rackId";
         String clientHost = "clientHost";
-        List<String> subscribedTopicNames = Arrays.asList("topic1", "topic2");
+        Set<String> subscribedTopicNames = mkSet("topic1", "topic2");
         String subscribedTopicRegex = "topic.*";
         Map<Uuid, Set<Integer>> assignmentMap = new HashMap<>();
         assignmentMap.put(topicId4, new HashSet<>(assignedPartitions));
@@ -297,7 +296,7 @@ public class ConsumerGroupMemberTest {
             .setInstanceId(instanceId)
             .setRackId(rackId)
             .setClientHost(clientHost)
-            .setSubscribedTopicNames(subscribedTopicNames)
+            .setSubscribedTopicNames(new ArrayList<>(subscribedTopicNames))
             .setSubscribedTopicRegex(subscribedTopicRegex)
             .setAssignment(
                 new ConsumerGroupDescribeResponseData.Assignment()

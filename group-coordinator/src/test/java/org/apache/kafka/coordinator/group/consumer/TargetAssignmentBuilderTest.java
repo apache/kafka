@@ -17,23 +17,24 @@
 package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
 import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
+import org.apache.kafka.image.TopicsImage;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.coordinator.group.Assertions.assertUnorderedListEquals;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
@@ -61,6 +62,7 @@ public class TargetAssignmentBuilderTest {
         private final Map<String, Assignment> targetAssignment = new HashMap<>();
         private final Map<String, MemberAssignment> memberAssignments = new HashMap<>();
         private final Map<String, String> staticMembers = new HashMap<>();
+        private MetadataImageBuilder topicsImageBuilder = new MetadataImageBuilder();
 
         public TargetAssignmentBuilderTestContext(
             String groupId,
@@ -72,7 +74,7 @@ public class TargetAssignmentBuilderTest {
 
         public void addGroupMember(
             String memberId,
-            List<String> subscriptions,
+            Set<String> subscriptions,
             Map<Uuid, Set<Integer>> targetPartitions
         ) {
             addGroupMember(memberId, null, subscriptions, targetPartitions);
@@ -81,7 +83,7 @@ public class TargetAssignmentBuilderTest {
         private void addGroupMember(
             String memberId,
             String instanceId,
-            List<String> subscriptions,
+            Set<String> subscriptions,
             Map<Uuid, Set<Integer>> targetPartitions
         ) {
             ConsumerGroupMember.Builder memberBuilder = new ConsumerGroupMember.Builder(memberId)
@@ -107,12 +109,15 @@ public class TargetAssignmentBuilderTest {
                 numPartitions,
                 partitionRacks
             ));
+
+            topicsImageBuilder = topicsImageBuilder.addTopic(topicId, topicName, numPartitions);
+
             return topicId;
         }
 
         public void updateMemberSubscription(
             String memberId,
-            List<String> subscriptions
+            Set<String> subscriptions
         ) {
             updateMemberSubscription(
                 memberId,
@@ -124,7 +129,7 @@ public class TargetAssignmentBuilderTest {
 
         public void updateMemberSubscription(
             String memberId,
-            List<String> subscriptions,
+            Set<String> subscriptions,
             Optional<String> instanceId,
             Optional<String> rackId
         ) {
@@ -156,6 +161,7 @@ public class TargetAssignmentBuilderTest {
         }
 
         public TargetAssignmentBuilder.TargetAssignmentResult build() {
+            TopicsImage topicsImage = topicsImageBuilder.build().topics();
             // Prepare expected member specs.
             Map<String, AssignmentMemberSpec> memberSpecs = new HashMap<>();
 
@@ -164,7 +170,7 @@ public class TargetAssignmentBuilderTest {
                 memberSpecs.put(memberId, createAssignmentMemberSpec(
                     member,
                     targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
-                    subscriptionMetadata
+                    topicsImage
                 )
             ));
 
@@ -187,7 +193,7 @@ public class TargetAssignmentBuilderTest {
                     memberSpecs.put(memberId, createAssignmentMemberSpec(
                         updatedMemberOrNull,
                         assignment,
-                        subscriptionMetadata
+                        topicsImage
                     ));
                 }
             });
@@ -215,7 +221,8 @@ public class TargetAssignmentBuilderTest {
                 .withStaticMembers(staticMembers)
                 .withSubscriptionMetadata(subscriptionMetadata)
                 .withSubscriptionType(subscriptionType)
-                .withTargetAssignment(targetAssignment);
+                .withTargetAssignment(targetAssignment)
+                .withTopicsImage(topicsImage);
 
             // Add the updated members or delete the deleted members.
             updatedMembers.forEach((memberId, updatedMemberOrNull) -> {
@@ -242,19 +249,17 @@ public class TargetAssignmentBuilderTest {
     public void testCreateAssignmentMemberSpec() {
         Uuid fooTopicId = Uuid.randomUuid();
         Uuid barTopicId = Uuid.randomUuid();
+        TopicsImage topicsImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, "foo", 5)
+            .addTopic(barTopicId, "bar", 5)
+            .build()
+            .topics();
 
         ConsumerGroupMember member = new ConsumerGroupMember.Builder("member-id")
-            .setSubscribedTopicNames(Arrays.asList("foo", "bar", "zar"))
+            .setSubscribedTopicNames(mkSet("foo", "bar", "zar"))
             .setRackId("rackId")
             .setInstanceId("instanceId")
             .build();
-
-        Map<String, TopicMetadata> subscriptionMetadata = new HashMap<String, TopicMetadata>() {
-            {
-                put("foo", new TopicMetadata(fooTopicId, "foo", 5, Collections.emptyMap()));
-                put("bar", new TopicMetadata(barTopicId, "bar", 5, Collections.emptyMap()));
-            }
-        };
 
         Assignment assignment = new Assignment(mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2, 3),
@@ -264,13 +269,13 @@ public class TargetAssignmentBuilderTest {
         AssignmentMemberSpec assignmentMemberSpec = createAssignmentMemberSpec(
             member,
             assignment,
-            subscriptionMetadata
+            topicsImage
         );
 
         assertEquals(new AssignmentMemberSpec(
             Optional.of("instanceId"),
             Optional.of("rackId"),
-            new HashSet<>(Arrays.asList(fooTopicId, barTopicId)),
+            new TopicIds(mkSet("bar", "foo", "zar"), topicsImage),
             assignment.partitions()
         ), assignmentMemberSpec);
     }
@@ -300,12 +305,12 @@ public class TargetAssignmentBuilderTest {
         Uuid fooTopicId = context.addTopicMetadata("foo", 6, Collections.emptyMap());
         Uuid barTopicId = context.addTopicMetadata("bar", 6, Collections.emptyMap());
 
-        context.addGroupMember("member-1", Arrays.asList("foo", "bar", "zar"), mkAssignment(
+        context.addGroupMember("member-1", mkSet("foo", "bar", "zar"), mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2, 3),
             mkTopicAssignment(barTopicId, 1, 2, 3)
         ));
 
-        context.addGroupMember("member-2", Arrays.asList("foo", "bar", "zar"), mkAssignment(
+        context.addGroupMember("member-2", mkSet("foo", "bar", "zar"), mkAssignment(
             mkTopicAssignment(fooTopicId, 4, 5, 6),
             mkTopicAssignment(barTopicId, 4, 5, 6)
         ));
@@ -350,12 +355,12 @@ public class TargetAssignmentBuilderTest {
         Uuid fooTopicId = context.addTopicMetadata("foo", 6, Collections.emptyMap());
         Uuid barTopicId = context.addTopicMetadata("bar", 6, Collections.emptyMap());
 
-        context.addGroupMember("member-1", Arrays.asList("foo", "bar", "zar"), mkAssignment(
+        context.addGroupMember("member-1", mkSet("foo", "bar", "zar"), mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2, 3),
             mkTopicAssignment(barTopicId, 1, 2, 3)
         ));
 
-        context.addGroupMember("member-2", Arrays.asList("foo", "bar", "zar"), mkAssignment(
+        context.addGroupMember("member-2", mkSet("foo", "bar", "zar"), mkAssignment(
             mkTopicAssignment(fooTopicId, 4, 5, 6),
             mkTopicAssignment(barTopicId, 4, 5, 6)
         ));
@@ -413,17 +418,17 @@ public class TargetAssignmentBuilderTest {
         Uuid fooTopicId = context.addTopicMetadata("foo", 6, Collections.emptyMap());
         Uuid barTopicId = context.addTopicMetadata("bar", 6, Collections.emptyMap());
 
-        context.addGroupMember("member-1", Arrays.asList("foo", "bar", "zar"), mkAssignment(
+        context.addGroupMember("member-1", mkSet("foo", "bar", "zar"), mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2, 3),
             mkTopicAssignment(barTopicId, 1, 2, 3)
         ));
 
-        context.addGroupMember("member-2", Arrays.asList("foo", "bar", "zar"), mkAssignment(
+        context.addGroupMember("member-2", mkSet("foo", "bar", "zar"), mkAssignment(
             mkTopicAssignment(fooTopicId, 4, 5, 6),
             mkTopicAssignment(barTopicId, 4, 5, 6)
         ));
 
-        context.updateMemberSubscription("member-3", Arrays.asList("foo", "bar", "zar"));
+        context.updateMemberSubscription("member-3", mkSet("foo", "bar", "zar"));
 
         context.prepareMemberAssignment("member-1", mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2),
@@ -491,23 +496,23 @@ public class TargetAssignmentBuilderTest {
         Uuid fooTopicId = context.addTopicMetadata("foo", 6, Collections.emptyMap());
         Uuid barTopicId = context.addTopicMetadata("bar", 6, Collections.emptyMap());
 
-        context.addGroupMember("member-1", Arrays.asList("foo", "bar", "zar"), mkAssignment(
+        context.addGroupMember("member-1", mkSet("foo", "bar", "zar"), mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2, 3),
             mkTopicAssignment(barTopicId, 1, 2)
         ));
 
-        context.addGroupMember("member-2", Arrays.asList("foo", "bar", "zar"), mkAssignment(
+        context.addGroupMember("member-2", mkSet("foo", "bar", "zar"), mkAssignment(
             mkTopicAssignment(fooTopicId, 4, 5, 6),
             mkTopicAssignment(barTopicId, 3, 4)
         ));
 
-        context.addGroupMember("member-3", Arrays.asList("bar", "zar"), mkAssignment(
+        context.addGroupMember("member-3", mkSet("bar", "zar"), mkAssignment(
             mkTopicAssignment(barTopicId, 5, 6)
         ));
 
         context.updateMemberSubscription(
             "member-3",
-            Arrays.asList("foo", "bar", "zar"),
+            mkSet("foo", "bar", "zar"),
             Optional.of("instance-id-3"),
             Optional.of("rack-0")
         );
@@ -578,17 +583,17 @@ public class TargetAssignmentBuilderTest {
         Uuid fooTopicId = context.addTopicMetadata("foo", 6, mkMapOfPartitionRacks(6));
         Uuid barTopicId = context.addTopicMetadata("bar", 6, mkMapOfPartitionRacks(6));
 
-        context.addGroupMember("member-1", Arrays.asList("foo", "bar", "zar"), mkAssignment(
+        context.addGroupMember("member-1", mkSet("foo", "bar", "zar"), mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2),
             mkTopicAssignment(barTopicId, 1, 2)
         ));
 
-        context.addGroupMember("member-2", Arrays.asList("foo", "bar", "zar"), mkAssignment(
+        context.addGroupMember("member-2", mkSet("foo", "bar", "zar"), mkAssignment(
             mkTopicAssignment(fooTopicId, 3, 4),
             mkTopicAssignment(barTopicId, 3, 4)
         ));
 
-        context.addGroupMember("member-3", Arrays.asList("bar", "zar"), mkAssignment(
+        context.addGroupMember("member-3", mkSet("bar", "zar"), mkAssignment(
             mkTopicAssignment(fooTopicId, 5, 6),
             mkTopicAssignment(barTopicId, 5, 6)
         ));
@@ -656,17 +661,17 @@ public class TargetAssignmentBuilderTest {
         Uuid fooTopicId = context.addTopicMetadata("foo", 6, Collections.emptyMap());
         Uuid barTopicId = context.addTopicMetadata("bar", 6, Collections.emptyMap());
 
-        context.addGroupMember("member-1", Arrays.asList("foo", "bar", "zar"), mkAssignment(
+        context.addGroupMember("member-1", mkSet("foo", "bar", "zar"), mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2),
             mkTopicAssignment(barTopicId, 1, 2)
         ));
 
-        context.addGroupMember("member-2", Arrays.asList("foo", "bar", "zar"), mkAssignment(
+        context.addGroupMember("member-2", mkSet("foo", "bar", "zar"), mkAssignment(
             mkTopicAssignment(fooTopicId, 3, 4),
             mkTopicAssignment(barTopicId, 3, 4)
         ));
 
-        context.addGroupMember("member-3", Arrays.asList("foo", "bar", "zar"), mkAssignment(
+        context.addGroupMember("member-3", mkSet("foo", "bar", "zar"), mkAssignment(
             mkTopicAssignment(fooTopicId, 5, 6),
             mkTopicAssignment(barTopicId, 5, 6)
         ));
@@ -726,17 +731,17 @@ public class TargetAssignmentBuilderTest {
         Uuid fooTopicId = context.addTopicMetadata("foo", 6, Collections.emptyMap());
         Uuid barTopicId = context.addTopicMetadata("bar", 6, Collections.emptyMap());
 
-        context.addGroupMember("member-1", "instance-member-1", Arrays.asList("foo", "bar", "zar"), mkAssignment(
+        context.addGroupMember("member-1", "instance-member-1", mkSet("foo", "bar", "zar"), mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2),
             mkTopicAssignment(barTopicId, 1, 2)
         ));
 
-        context.addGroupMember("member-2", "instance-member-2", Arrays.asList("foo", "bar", "zar"), mkAssignment(
+        context.addGroupMember("member-2", "instance-member-2", mkSet("foo", "bar", "zar"), mkAssignment(
             mkTopicAssignment(fooTopicId, 3, 4),
             mkTopicAssignment(barTopicId, 3, 4)
         ));
 
-        context.addGroupMember("member-3", "instance-member-3", Arrays.asList("foo", "bar", "zar"), mkAssignment(
+        context.addGroupMember("member-3", "instance-member-3", mkSet("foo", "bar", "zar"), mkAssignment(
             mkTopicAssignment(fooTopicId, 5, 6),
             mkTopicAssignment(barTopicId, 5, 6)
         ));
@@ -745,7 +750,7 @@ public class TargetAssignmentBuilderTest {
         context.removeMemberSubscription("member-3");
 
         // Another static member joins with the same instance id as the departed one
-        context.updateMemberSubscription("member-3-a", Arrays.asList("foo", "bar", "zar"), Optional.of("instance-member-3"), Optional.empty());
+        context.updateMemberSubscription("member-3-a", mkSet("foo", "bar", "zar"), Optional.of("instance-member-3"), Optional.empty());
 
         context.prepareMemberAssignment("member-1", mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2),
