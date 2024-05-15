@@ -83,6 +83,8 @@ public class TargetAssignmentBuilderBenchmark {
 
     private AssignmentSpec assignmentSpec;
 
+    private Map<Uuid, Map<Integer, String>> partitionAssignments;
+
     private final List<String> allTopicNames = new ArrayList<>();
 
     private final List<Uuid> allTopicIds = new ArrayList<>();
@@ -95,7 +97,7 @@ public class TargetAssignmentBuilderBenchmark {
 
         subscriptionMetadata = generateMockSubscriptionMetadata();
         Map<String, ConsumerGroupMember> members = generateMockMembers();
-        Map<String, Assignment> existingTargetAssignment = generateMockInitialTargetAssignment();
+        Map<String, Assignment> existingTargetAssignment = generateMockInitialTargetAssignmentAndUpdatePartitionAssignments();
 
         ConsumerGroupMember newMember = new ConsumerGroupMember.Builder("newMember")
             .setSubscribedTopicNames(allTopicNames)
@@ -105,6 +107,7 @@ public class TargetAssignmentBuilderBenchmark {
             .withMembers(members)
             .withSubscriptionMetadata(subscriptionMetadata)
             .withTargetAssignment(existingTargetAssignment)
+            .withPartitionAssignments(partitionAssignments)
             .addOrUpdateMember(newMember.memberId(), newMember);
     }
 
@@ -142,7 +145,7 @@ public class TargetAssignmentBuilderBenchmark {
         return subscriptionMetadata;
     }
 
-    private Map<String, Assignment> generateMockInitialTargetAssignment() {
+    private Map<String, Assignment> generateMockInitialTargetAssignmentAndUpdatePartitionAssignments() {
         Map<Uuid, TopicMetadata> topicMetadataMap = new HashMap<>(topicCount);
         subscriptionMetadata.forEach((topicName, topicMetadata) ->
             topicMetadataMap.put(
@@ -157,6 +160,7 @@ public class TargetAssignmentBuilderBenchmark {
             assignmentSpec,
             new SubscribedTopicMetadata(topicMetadataMap)
         );
+        partitionAssignments = partitionAssignments(groupAssignment);
 
         Map<String, Assignment> initialTargetAssignment = new HashMap<>(memberCount);
 
@@ -185,8 +189,32 @@ public class TargetAssignmentBuilderBenchmark {
                 Collections.emptyMap()
             ));
         }
-        assignmentSpec = new AssignmentSpec(members, HOMOGENEOUS);
+        assignmentSpec = new AssignmentSpec(members, HOMOGENEOUS, Collections.emptyMap());
     }
+
+    public Map<Uuid, Map<Integer, String>> partitionAssignments(
+        GroupAssignment groupAssignment
+    ) {
+        Map<Uuid, Map<Integer, String>> partitionAssignments = new HashMap<>();
+        for (Map.Entry<String, MemberAssignment> memberEntry : groupAssignment.members().entrySet()) {
+            String memberId = memberEntry.getKey();
+            Map<Uuid, Set<Integer>> topicsAndPartitions = memberEntry.getValue().targetPartitions();
+
+            for (Map.Entry<Uuid, Set<Integer>> topicEntry : topicsAndPartitions.entrySet()) {
+                Uuid topicId = topicEntry.getKey();
+                Set<Integer> partitions = topicEntry.getValue();
+
+                partitionAssignments.putIfAbsent(topicId, new HashMap<>());
+                Map<Integer, String> partitionMap = partitionAssignments.get(topicId);
+
+                for (Integer partitionId : partitions) {
+                    partitionMap.put(partitionId, memberId);
+                }
+            }
+        }
+        return partitionAssignments;
+    }
+
 
     @Benchmark
     @Threads(1)

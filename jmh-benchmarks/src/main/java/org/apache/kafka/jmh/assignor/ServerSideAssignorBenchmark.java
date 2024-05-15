@@ -237,7 +237,7 @@ public class ServerSideAssignorBenchmark {
         GroupAssignment initialAssignment = partitionAssignor.assign(assignmentSpec, subscribedTopicDescriber);
         Map<String, MemberAssignment> members = initialAssignment.members();
 
-        Map<Uuid, byte[]> partitionAssignments = updatePartitionAssignments(initialAssignment);
+        Map<Uuid, Map<Integer, String>> partitionAssignments = updatePartitionAssignments(initialAssignment);
 
         Map<String, AssignmentMemberSpec> updatedMembers = new HashMap<>();
         members.forEach((memberId, memberAssignment) -> {
@@ -265,25 +265,26 @@ public class ServerSideAssignorBenchmark {
             Collections.emptyMap()
         ));
 
-        assignmentSpec = new AssignmentSpec(updatedMembers, subscriptionType, partitionAssignments);
+        assignmentSpec = new AssignmentSpec(updatedMembers, subscriptionType, Collections.emptyMap());
     }
 
-    private Map<Uuid, byte[]> updatePartitionAssignments(
+    private Map<Uuid, Map<Integer, String>> updatePartitionAssignments(
         GroupAssignment targetAssignment
     ) {
-        Map<Uuid, byte[]> partitionAssignments = new HashMap<>(topicCount);
+        Map<Uuid, Map<Integer, String>> partitionAssignments = new HashMap<>(topicCount);
         for (Uuid topicId : allTopicIds) {
-            partitionAssignments.put(topicId, new byte[subscribedTopicDescriber.numPartitions(topicId)]);
+            partitionAssignments.put(topicId, new HashMap<>(subscribedTopicDescriber.numPartitions(topicId)));
         }
 
         for (Map.Entry<String, MemberAssignment> e : targetAssignment.members().entrySet()) {
+            String memberId = e.getKey();
             MemberAssignment memberAssignment = e.getValue();
             for (Map.Entry<Uuid, Set<Integer>> entry : memberAssignment.targetPartitions().entrySet()) {
                 Uuid topicId = entry.getKey();
                 Set<Integer> partitions = entry.getValue();
-                byte[] topicPartitionAssignment = partitionAssignments.get(topicId);
+                Map<Integer, String> topicPartitionAssignment = partitionAssignments.get(topicId);
                 for (int partition : partitions) {
-                    topicPartitionAssignment[partition] = 1;
+                    topicPartitionAssignment.put(partition, memberId);
                 }
             }
         }
