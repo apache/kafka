@@ -17,7 +17,7 @@
 package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.group.Record;
+import org.apache.kafka.coordinator.group.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
 import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
@@ -36,8 +36,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
-import static org.apache.kafka.coordinator.group.RecordHelpers.newTargetAssignmentEpochRecord;
-import static org.apache.kafka.coordinator.group.RecordHelpers.newTargetAssignmentRecord;
+import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTargetAssignmentEpochRecord;
+import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTargetAssignmentRecord;
 
 /**
  * Build a new Target Assignment based on the provided parameters. As a result,
@@ -60,7 +60,7 @@ public class TargetAssignmentBuilder {
          * The records that must be applied to the __consumer_offsets
          * topics to persist the new target assignment.
          */
-        private final List<Record> records;
+        private final List<CoordinatorRecord> records;
 
         /**
          * The new target assignment for the group.
@@ -68,7 +68,7 @@ public class TargetAssignmentBuilder {
         private final Map<String, Assignment> targetAssignment;
 
         TargetAssignmentResult(
-            List<org.apache.kafka.coordinator.group.Record> records,
+            List<CoordinatorRecord> records,
             Map<String, Assignment> targetAssignment
         ) {
             Objects.requireNonNull(records);
@@ -80,7 +80,7 @@ public class TargetAssignmentBuilder {
         /**
          * @return The records.
          */
-        public List<Record> records() {
+        public List<CoordinatorRecord> records() {
             return records;
         }
 
@@ -306,7 +306,7 @@ public class TargetAssignmentBuilder {
 
         // Compute delta from previous to new target assignment and create the
         // relevant records.
-        List<Record> records = new ArrayList<>();
+        List<CoordinatorRecord> records = new ArrayList<>();
         Map<String, Assignment> newTargetAssignment = new HashMap<>();
 
         memberSpecs.keySet().forEach(memberId -> {

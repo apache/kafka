@@ -34,10 +34,11 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Supplier;
 
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.BROKER_ID;
-import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.LOG_DIR;
+import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_RETENTION_MS_PROP;
@@ -60,17 +61,30 @@ public class TopicBasedRemoteLogMetadataManagerHarness extends IntegrationTestHa
 
     public void initialize(Set<TopicIdPartition> topicIdPartitions,
                            boolean startConsumerThread) {
+        initialize(topicIdPartitions, startConsumerThread, RemotePartitionMetadataStore::new);
+    }
+
+    public void initialize(Set<TopicIdPartition> topicIdPartitions,
+                           boolean startConsumerThread,
+                           Supplier<RemotePartitionMetadataStore> remotePartitionMetadataStoreSupplier) {
         // Call setup to start the cluster.
         super.setUp(new EmptyTestInfo());
 
-        initializeRemoteLogMetadataManager(topicIdPartitions, startConsumerThread, null);
+        initializeRemoteLogMetadataManager(topicIdPartitions, startConsumerThread, null, remotePartitionMetadataStoreSupplier);
     }
 
     public void initializeRemoteLogMetadataManager(Set<TopicIdPartition> topicIdPartitions,
                                                    boolean startConsumerThread,
                                                    RemoteLogMetadataTopicPartitioner remoteLogMetadataTopicPartitioner) {
+        initializeRemoteLogMetadataManager(topicIdPartitions, startConsumerThread, remoteLogMetadataTopicPartitioner, RemotePartitionMetadataStore::new);
+    }
+
+    public void initializeRemoteLogMetadataManager(Set<TopicIdPartition> topicIdPartitions,
+                                                   boolean startConsumerThread,
+                                                   RemoteLogMetadataTopicPartitioner remoteLogMetadataTopicPartitioner,
+                                                   Supplier<RemotePartitionMetadataStore> remotePartitionMetadataStoreSupplier) {
         String logDir = TestUtils.tempDirectory("rlmm_segs_").getAbsolutePath();
-        topicBasedRemoteLogMetadataManager = new TopicBasedRemoteLogMetadataManager(startConsumerThread) {
+        topicBasedRemoteLogMetadataManager = new TopicBasedRemoteLogMetadataManager(startConsumerThread, remotePartitionMetadataStoreSupplier) {
             @Override
             public void onPartitionLeadershipChanges(Set<TopicIdPartition> leaderPartitions,
                                                      Set<TopicIdPartition> followerPartitions) {

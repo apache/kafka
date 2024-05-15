@@ -37,8 +37,7 @@ import org.apache.kafka.common.metadata.{PartitionChangeRecord, RegisterBrokerRe
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, ObjectSerializationCache}
 import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, MemoryRecords, Record, RecordVersion, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.coordinator.group
-import org.apache.kafka.coordinator.group.RecordSerde
+import org.apache.kafka.coordinator.group.{CoordinatorRecord, CoordinatorRecordSerde}
 import org.apache.kafka.coordinator.group.generated.{ConsumerGroupMemberMetadataValue, ConsumerGroupMetadataKey, ConsumerGroupMetadataValue, GroupMetadataKey, GroupMetadataValue}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.metadata.MetadataRecordSerde
@@ -412,11 +411,11 @@ class DumpLogSegmentsTest {
 
   @Test
   def testOffsetsMessageParser(): Unit = {
-    val serde = new RecordSerde()
+    val serde = new CoordinatorRecordSerde()
     val parser = new OffsetsMessageParser()
 
     def serializedRecord(key: ApiMessageAndVersion, value: ApiMessageAndVersion): Record = {
-      val record = new group.Record(key, value)
+      val record = new CoordinatorRecord(key, value)
       TestUtils.singletonRecords(
         key = serde.serializeKey(record),
         value = serde.serializeValue(record)
