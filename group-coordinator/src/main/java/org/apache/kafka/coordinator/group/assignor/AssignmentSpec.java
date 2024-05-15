@@ -36,14 +36,15 @@ public class AssignmentSpec implements GroupAssignmentSpec{
     private final SubscriptionType subscriptionType;
 
     /**
-     * Reverse lookup map representing partitions per topic that are currently assigned.
+     * Reverse lookup map representing partitions per topic and
+     * their member assignment.
      */
-    Map<Uuid, byte[]> partitionAssignmentsPerTopic;
+    Map<Uuid, Map<Integer, String>> partitionAssignmentsPerTopic;
 
     public AssignmentSpec(
         Map<String, AssignmentMemberSpec> members,
         SubscriptionType subscriptionType,
-        Map<Uuid, byte[]> partitionAssignmentsPerTopic
+        Map<Uuid, Map<Integer, String>> partitionAssignmentsPerTopic
     ) {
         Objects.requireNonNull(members);
         this.members = members;
@@ -68,19 +69,15 @@ public class AssignmentSpec implements GroupAssignmentSpec{
     /**
      * @param topicId           The topic Id.
      * @param partitionId       The partition Id.
-     * @return True iff the partition is currently assigned,
-     *         false otherwise.
+     * @return True if the partition is currently assigned, false otherwise.
      */
     @Override
     public boolean isPartitionAssigned(Uuid topicId, int partitionId) {
-        byte[] partitionArray = partitionAssignmentsPerTopic.get(topicId);
-        if (partitionArray == null) {
+        Map<Integer, String> partitionMap = partitionAssignmentsPerTopic.get(topicId);
+        if (partitionMap == null) {
             return false;
         }
-        if (partitionId < 0 || partitionId >= partitionArray.length) {
-            return false;
-        }
-        return partitionArray[partitionId] == 1;
+        return partitionMap.containsKey(partitionId);
     }
 
     @Override

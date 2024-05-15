@@ -147,9 +147,9 @@ public class ConsumerGroup implements Group {
     private final TimelineHashMap<String, Integer> subscribedTopicNames;
 
     /**
-     * The number of subscribers per topic.
+     * Partition assignments per topic.
      */
-    private final TimelineHashMap<Uuid, byte[]> partitionAssignments;
+    private final TimelineHashMap<Uuid, TimelineHashMap<Integer, String>> partitionAssignments;
 
     /**
      * The metadata associated with each subscribed topic name.
@@ -494,10 +494,9 @@ public class ConsumerGroup implements Group {
 
     /**
      * @return An immutable map containing all the topic partitions
-     *         with their current assignment status.
-     *         Newly added partitions are not tracked until they are assigned once.
+     *         with their current member assignments.
      */
-    public Map<Uuid, byte[]> partitionAssignments() {
+    public Map<Uuid, Map<Integer, String>> partitionAssignments() {
         return Collections.unmodifiableMap(partitionAssignments);
     }
 
@@ -537,26 +536,59 @@ public class ConsumerGroup implements Group {
      * @param newTargetAssignment   The new target assignment.
      */
     public void updateTargetAssignment(String memberId, Assignment newTargetAssignment) {
-        updatePartitionAssignments(targetAssignment.get(memberId), newTargetAssignment);
+        updatePartitionAssignments(
+            memberId,
+            targetAssignment.getOrDefault(memberId, new Assignment(Collections.emptyMap())),
+            newTargetAssignment
+        );
         targetAssignment.put(memberId, newTargetAssignment);
     }
 
     /**
      * Updates partition assignments of the topics.
      *
+     * @param memberId              The member Id.
+     * @param oldTargetAssignment   The old target assignment.
      * @param newTargetAssignment   The new target assignment.
      */
-    public void updatePartitionAssignments(Assignment oldTargetAssignment, Assignment newTargetAssignment) {
-        // O - (OxN) = 0
-        // N - (OxN) = 1
-        oldTargetAssignment.partitions().forEach((topicId, partitions) -> {
-            byte[] topicPartitions = partitionAssignments.get(topicId);
-            partitions.forEach(partition -> topicPartitions[partition] = 0);
-        });
-        newTargetAssignment.partitions().forEach((topicId, partitions) -> {
-            byte[] topicPartitions = partitionAssignments.get(topicId);
-            partitions.forEach(partition -> topicPartitions[partition] = 1);
-        });
+    public void updatePartitionAssignments(
+        String memberId,
+        Assignment oldTargetAssignment,
+        Assignment newTargetAssignment
+    ) {
+        // Combine keys from both old and new assignments
+        Set<Uuid> allTopicIds = new HashSet<>();
+        allTopicIds.addAll(oldTargetAssignment.partitions().keySet());
+        allTopicIds.addAll(newTargetAssignment.partitions().keySet());
+
+        for (Uuid topicId : allTopicIds) {
+            Set<Integer> oldPartitions = oldTargetAssignment.partitions().getOrDefault(topicId, Collections.emptySet());
+            Set<Integer> newPartitions = newTargetAssignment.partitions().getOrDefault(topicId, Collections.emptySet());
+
+            TimelineHashMap<Integer, String> topicPartitionAssignment = partitionAssignments.computeIfAbsent(
+                topicId, k -> new TimelineHashMap<>(snapshotRegistry, Math.max(oldPartitions.size(), newPartitions.size()))
+            );
+
+            // Remove partitions that aren't present in the new assignment.
+            for (Integer partition : oldPartitions) {
+                if (!newPartitions.contains(partition) && memberId.equals(topicPartitionAssignment.get(partition))) {
+                    topicPartitionAssignment.remove(partition);
+                }
+            }
+
+            // Add partitions that are in new assignment but not in old assignment.
+            for (Integer partition : newPartitions) {
+                if (!oldPartitions.contains(partition)) {
+                    topicPartitionAssignment.put(partition, memberId);
+                }
+            }
+
+            if (topicPartitionAssignment.isEmpty()) {
+                partitionAssignments.remove(topicId);
+            } else {
+                partitionAssignments.put(topicId, topicPartitionAssignment);
+            }
+        }
     }
 
     /**

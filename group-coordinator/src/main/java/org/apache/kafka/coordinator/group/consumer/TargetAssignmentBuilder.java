@@ -128,6 +128,11 @@ public class TargetAssignmentBuilder {
     private Map<String, Assignment> targetAssignment = Collections.emptyMap();
 
     /**
+     * The map of partitions and their member assignments per topic.
+     */
+    private Map<Uuid, Map<Integer, String>> partitionAssignments = Collections.emptyMap();
+
+    /**
      * The members which have been updated or deleted. Deleted members
      * are signaled by a null value.
      */
@@ -221,6 +226,19 @@ public class TargetAssignmentBuilder {
     }
 
     /**
+     * Adds the existing topic partition assignments.
+     *
+     * @param partitionAssignments   The existing partition assignment.
+     * @return This object.
+     */
+    public TargetAssignmentBuilder withPartitionAssignments(
+        Map<Uuid, Map<Integer, String>> partitionAssignments
+    ) {
+        this.partitionAssignments = partitionAssignments;
+        return this;
+    }
+
+    /**
      * Adds or updates a member. This is useful when the updated member is
      * not yet materialized in memory.
      *
@@ -300,7 +318,11 @@ public class TargetAssignmentBuilder {
 
         // Compute the assignment.
         GroupAssignment newGroupAssignment = assignor.assign(
-            new AssignmentSpec(Collections.unmodifiableMap(memberSpecs), subscriptionType, Collections.emptyMap()),
+            new AssignmentSpec(
+                Collections.unmodifiableMap(memberSpecs),
+                subscriptionType,
+                partitionAssignments
+            ),
             new SubscribedTopicMetadata(topicMetadataMap)
         );
 
