@@ -1901,7 +1901,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     return ConsumerUtils.getResult(future);
                 } else if (!hadEvents) {
                     // If the above processing yielded no events, then let's sit tight for a bit to allow the
-                    // background thread to either a) finish the task, or b) populate the background event
+                    // background thread to either finish the task, or populate the background event
                     // queue with things to process in our next loop.
                     Timer pollInterval = time.timer(100L);
                     return ConsumerUtils.getResult(future, pollInterval);
