@@ -1215,19 +1215,19 @@ public class GroupMetadataManager {
     /**
      * Validates if the generation id from the request matches the member epoch.
      *
-     * @param groupId               The ConsumerGroup id.
+     * @param memberId              The member id.
      * @param memberEpoch           The member epoch.
      * @param requestGenerationId   The generation id from the request.
      */
     private void throwIfGenerationIdUnmatched(
-        String groupId,
+        String memberId,
         int memberEpoch,
         int requestGenerationId
     ) {
         if (memberEpoch != requestGenerationId) {
             throw Errors.ILLEGAL_GENERATION.exception(
-                String.format("The request generation id %s is not equal to the member epoch %d from the consumer group %s.",
-                    requestGenerationId, memberEpoch, groupId)
+                String.format("The request generation id %s is not equal to the member epoch %d of member %s.",
+                    requestGenerationId, memberEpoch, memberId)
             );
         }
     }
@@ -1244,15 +1244,16 @@ public class GroupMetadataManager {
         String requestProtocolType,
         String requestProtocolName
     ) {
+        String protocolName = member.supportedClassicProtocols().get().iterator().next().name();
         if (!ConsumerProtocol.PROTOCOL_TYPE.equals(requestProtocolType)) {
             throw Errors.INCONSISTENT_GROUP_PROTOCOL.exception(
                 String.format("The protocol type %s from member %s request is not equal to the group protocol type %s.",
                     requestProtocolType, member.memberId(), ConsumerProtocol.PROTOCOL_TYPE)
             );
-        } else if (!member.supportedClassicProtocols().get().iterator().next().name().equals(requestProtocolName)) {
+        } else if (!protocolName.equals(requestProtocolName)) {
             throw Errors.INCONSISTENT_GROUP_PROTOCOL.exception(
                 String.format("The protocol name %s from member %s request is not equal to the protocol name %s returned in the join response.",
-                    requestProtocolName, member.memberId(), member.supportedClassicProtocols().get().iterator().next().name())
+                    requestProtocolName, member.memberId(), protocolName)
             );
         }
     }
@@ -1267,6 +1268,10 @@ public class GroupMetadataManager {
         ConsumerGroup group,
         ConsumerGroupMember member
     ) {
+        // If the group epoch is greater than the member epoch, there is a new rebalance triggered and the member
+        // needs to rejoin to catch up. However, if the member is in UNREVOKED_PARTITIONS state, it means the
+        // member has already rejoined, so it needs to first finish revoking the partitions and the reconciliation,
+        // and then the next rejoin will be triggered automatically if needed.
         if (group.groupEpoch() > member.memberEpoch() && !member.state().equals(MemberState.UNREVOKED_PARTITIONS)) {
             throw Errors.REBALANCE_IN_PROGRESS.exception(
                 String.format("A new rebalance is triggered in group %s and member %s should rejoin to catch up.",
@@ -4074,7 +4079,7 @@ public class GroupMetadataManager {
      * @param request        The actual SyncGroup request.
      * @param responseFuture The sync group response future.
      *
-     * @return The result that contains records to append.
+     * @return The result that contains the appendFuture to return the response.
      */
     private CoordinatorResult<Void, CoordinatorRecord> classicGroupSyncToConsumerGroup(
         ConsumerGroup group,
@@ -4101,9 +4106,8 @@ public class GroupMetadataManager {
         }
 
         throwIfMemberDoesNotUseClassicProtocol(member);
-        throwIfGenerationIdUnmatched(groupId, member.memberEpoch(), request.generationId());
+        throwIfGenerationIdUnmatched(member.memberId(), member.memberEpoch(), request.generationId());
         throwIfClassicProtocolUnmatched(member, request.protocolType(), request.protocolName());
-
         throwIfRebalanceInProgress(group, member);
 
         CompletableFuture<Void> appendFuture = new CompletableFuture<>();
@@ -4115,14 +4119,24 @@ public class GroupMetadataManager {
                 responseFuture.complete(new SyncGroupResponseData()
                     .setProtocolType(request.protocolType())
                     .setProtocolName(request.protocolName())
-                    .setAssignment(ConsumerProtocol.serializeAssignment(
-                        new ConsumerPartitionAssignor.Assignment(toTopicPartitionList(member.assignedPartitions(), metadataImage.topics())),
-                        deserializeProtocolVersion(member.classicMemberMetadata().get())
-                    ).array()));
+                    .setAssignment(prepareAssignment(member)));
             }
         });
 
         return new CoordinatorResult<>(Collections.emptyList(), appendFuture, false);
+    }
+
+    /**
+     * Serializes the member's assigned partitions with ConsumerProtocol.
+     *
+     * @param member The ConsumerGroupMember.
+     * @return The serialized assigned partitions.
+     */
+    private byte[] prepareAssignment(ConsumerGroupMember member) {
+        return ConsumerProtocol.serializeAssignment(
+            new ConsumerPartitionAssignor.Assignment(toTopicPartitionList(member.assignedPartitions(), metadataImage.topics())),
+            deserializeProtocolVersion(member.classicMemberMetadata().get())
+        ).array();
     }
 
     // Visible for testing

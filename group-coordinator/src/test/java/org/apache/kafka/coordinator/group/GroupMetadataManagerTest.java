@@ -29,6 +29,7 @@ import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.InconsistentGroupProtocolException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
+import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
@@ -12193,8 +12194,8 @@ public class GroupMetadataManagerTest {
                 .withGroupId(groupId)
                 .withMemberId(Uuid.randomUuid().toString())
                 .withGenerationId(10)
-                .withProtocolName(ConsumerProtocol.PROTOCOL_TYPE)
-                .withProtocolType("range")
+                .withProtocolName("range")
+                .withProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
                 .build())
         );
 
@@ -12205,8 +12206,8 @@ public class GroupMetadataManagerTest {
                 .withMemberId(memberId)
                 .withGroupInstanceId("unknown-instance-id")
                 .withGenerationId(10)
-                .withProtocolName(ConsumerProtocol.PROTOCOL_TYPE)
-                .withProtocolType("range")
+                .withProtocolName("range")
+                .withProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
                 .build())
         );
 
@@ -12216,8 +12217,8 @@ public class GroupMetadataManagerTest {
                 .withGroupId(groupId)
                 .withMemberId(memberId)
                 .withGenerationId(10)
-                .withProtocolName(ConsumerProtocol.PROTOCOL_TYPE)
-                .withProtocolType("range")
+                .withProtocolName("range")
+                .withProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
                 .build())
         );
     }
@@ -12244,8 +12245,8 @@ public class GroupMetadataManagerTest {
                 .withMemberId(Uuid.randomUuid().toString())
                 .withGroupInstanceId(instanceId)
                 .withGenerationId(10)
-                .withProtocolName(ConsumerProtocol.PROTOCOL_TYPE)
-                .withProtocolType("range")
+                .withProtocolName("range")
+                .withProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
                 .build())
         );
     }
@@ -12267,7 +12268,7 @@ public class GroupMetadataManagerTest {
                 )))
         );
 
-        // Consumer group with a static member.
+        // Consumer group with a member using the classic protocol.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConsumerGroupMigrationPolicy(ConsumerGroupMigrationPolicy.DOWNGRADE)
             .withAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
@@ -12287,8 +12288,8 @@ public class GroupMetadataManagerTest {
                 .withGroupId(groupId)
                 .withMemberId(memberId)
                 .withGenerationId(10)
-                .withProtocolName(ConsumerProtocol.PROTOCOL_TYPE)
-                .withProtocolType("roundrobin")
+                .withProtocolName("roundrobin")
+                .withProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
                 .build())
         );
 
@@ -12297,8 +12298,8 @@ public class GroupMetadataManagerTest {
                 .withGroupId(groupId)
                 .withMemberId(memberId)
                 .withGenerationId(10)
-                .withProtocolName("connect")
-                .withProtocolType("range")
+                .withProtocolName("range")
+                .withProtocolType("connect")
                 .build())
         );
     }
@@ -12320,7 +12321,7 @@ public class GroupMetadataManagerTest {
                 )))
         );
 
-        // Consumer group with a static member.
+        // Consumer group with a member using the classic protocol.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withConsumerGroupMigrationPolicy(ConsumerGroupMigrationPolicy.DOWNGRADE)
             .withAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
@@ -12340,8 +12341,52 @@ public class GroupMetadataManagerTest {
                 .withGroupId(groupId)
                 .withMemberId(memberId)
                 .withGenerationId(9)
-                .withProtocolName(ConsumerProtocol.PROTOCOL_TYPE)
-                .withProtocolType("range")
+                .withProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                .withProtocolName("range")
+                .build())
+        );
+    }
+
+    @Test
+    public void testClassicGroupSyncToConsumerGroupRebalanceInProgress() throws Exception {
+        String groupId = "group-id";
+        String memberId = Uuid.randomUuid().toString();
+
+        List<ConsumerGroupMemberMetadataValue.ClassicProtocol> protocols = Collections.singletonList(
+            new ConsumerGroupMemberMetadataValue.ClassicProtocol()
+                .setName("range")
+                .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(
+                    new ConsumerPartitionAssignor.Subscription(
+                        Arrays.asList("foo"),
+                        null,
+                        Collections.emptyList()
+                    )
+                )))
+        );
+
+        // Consumer group with a member using the classic protocol.
+        // The group epoch is greater than the member epoch.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConsumerGroupMigrationPolicy(ConsumerGroupMigrationPolicy.DOWNGRADE)
+            .withAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 11)
+                .withMember(new ConsumerGroupMember.Builder(memberId)
+                    .setClassicMemberMetadata(
+                        new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                            .setSessionTimeoutMs(5000)
+                            .setSupportedProtocols(protocols)
+                    )
+                    .setMemberEpoch(10)
+                    .build()))
+            .build();
+
+        assertThrows(RebalanceInProgressException.class, () -> context.sendClassicGroupSync(
+            new GroupMetadataManagerTestContext.SyncGroupRequestBuilder()
+                .withGroupId(groupId)
+                .withMemberId(memberId)
+                .withGenerationId(10)
+                .withProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                .withProtocolName("range")
                 .build())
         );
     }
