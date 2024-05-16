@@ -2114,8 +2114,8 @@ class ReplicaManager(val config: KafkaConfig,
         partition.log.foreach { _ =>
           val leader = BrokerEndPoint(config.brokerId, "localhost", -1)
 
+          // Add future replica log to partition's map if it's not existed
           if (partition.maybeCreateFutureReplica(futureLog.parentDir, offsetCheckpoints, topicIds(partition.topic))) {
-            // Add future replica log to partition's map
             val futureLogInPartition = futureLocalLogOrException(topicPartition)
             // pause cleaning for partitions that are being moved and start ReplicaAlterDirThread to move
             // replica from source dir to destination dir
