@@ -85,7 +85,7 @@ class BrokerCompressionTest {
     }
 
     if (brokerCompressionType != BrokerCompressionType.PRODUCER) {
-      val targetCompression = brokerCompressionType.targetCompression(log.config.compression, null)
+      val targetCompression = BrokerCompressionType.targetCompression(log.config.compression, null)
       assertEquals(targetCompression.`type`(), readBatch(0).compressionType, "Compression at offset 0 should produce " + brokerCompressionType)
     }
     else

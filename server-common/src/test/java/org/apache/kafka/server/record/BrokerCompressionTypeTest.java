@@ -33,21 +33,21 @@ public class BrokerCompressionTypeTest {
     @Test
     public void testTargetCompressionType() {
         GzipCompression gzipWithLevel = Compression.gzip().level(GzipCompression.MAX_LEVEL).build();
-        assertEquals(gzipWithLevel, BrokerCompressionType.GZIP.targetCompression(Optional.of(gzipWithLevel), CompressionType.ZSTD));
+        assertEquals(gzipWithLevel, BrokerCompressionType.targetCompression(Optional.of(gzipWithLevel), CompressionType.ZSTD));
         SnappyCompression snappy = Compression.snappy().build();
-        assertEquals(snappy, BrokerCompressionType.SNAPPY.targetCompression(Optional.of(snappy), CompressionType.LZ4));
+        assertEquals(snappy, BrokerCompressionType.targetCompression(Optional.of(snappy), CompressionType.LZ4));
         Lz4Compression lz4WithLevel = Compression.lz4().level(Lz4Compression.MAX_LEVEL).build();
-        assertEquals(lz4WithLevel, BrokerCompressionType.LZ4.targetCompression(Optional.of(lz4WithLevel), CompressionType.ZSTD));
+        assertEquals(lz4WithLevel, BrokerCompressionType.targetCompression(Optional.of(lz4WithLevel), CompressionType.ZSTD));
         ZstdCompression zstdWithLevel = Compression.zstd().level(ZstdCompression.MAX_LEVEL).build();
-        assertEquals(zstdWithLevel, BrokerCompressionType.ZSTD.targetCompression(Optional.of(zstdWithLevel), CompressionType.GZIP));
+        assertEquals(zstdWithLevel, BrokerCompressionType.targetCompression(Optional.of(zstdWithLevel), CompressionType.GZIP));
 
         GzipCompression gzip = Compression.gzip().build();
-        assertEquals(gzip, BrokerCompressionType.PRODUCER.targetCompression(Optional.empty(), CompressionType.GZIP));
-        assertEquals(snappy, BrokerCompressionType.PRODUCER.targetCompression(Optional.empty(), CompressionType.SNAPPY));
+        assertEquals(gzip, BrokerCompressionType.targetCompression(Optional.empty(), CompressionType.GZIP));
+        assertEquals(snappy, BrokerCompressionType.targetCompression(Optional.empty(), CompressionType.SNAPPY));
         Lz4Compression lz4 = Compression.lz4().build();
-        assertEquals(lz4, BrokerCompressionType.PRODUCER.targetCompression(Optional.empty(), CompressionType.LZ4));
+        assertEquals(lz4, BrokerCompressionType.targetCompression(Optional.empty(), CompressionType.LZ4));
         ZstdCompression zstd = Compression.zstd().build();
-        assertEquals(zstd, BrokerCompressionType.PRODUCER.targetCompression(Optional.empty(), CompressionType.ZSTD));
+        assertEquals(zstd, BrokerCompressionType.targetCompression(Optional.empty(), CompressionType.ZSTD));
     }
 
 }
