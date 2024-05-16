@@ -91,10 +91,8 @@ public class RateTest {
         for (int stepMs : steps) {
             time.sleep(stepMs);
             rate.record(config, 1, time.milliseconds());
-            double observedRate1 = rate.measure(config, time.milliseconds());
-            assertTrue(10 <= observedRate1 && observedRate1 <= 11);
-            double observedRate2 = rate.measure(config, time.milliseconds());
-            assertTrue(10 <= observedRate2 && observedRate2 <= 11);
+            double observedRate = rate.measure(config, time.milliseconds());
+            assertTrue(10 <= observedRate && observedRate <= 11);
         }
     }
 }

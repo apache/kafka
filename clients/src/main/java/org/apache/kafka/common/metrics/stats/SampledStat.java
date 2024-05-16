@@ -141,10 +141,6 @@ public abstract class SampledStat implements MeasurableStat {
         public boolean isComplete(long timeMs, MetricConfig config) {
             return timeMs - startTimeMs >= config.timeWindowMs() || eventCount >= config.eventWindow();
         }
-        
-        public long endTimeMs(MetricConfig config) {
-            return startTimeMs + config.timeWindowMs();
-        }
 
         @Override
         public String toString() {
