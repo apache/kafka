@@ -93,14 +93,14 @@ import java.util.concurrent.TimeUnit;
  * 2) The replay methods which apply records to the hard state. Those are used in the request
  *    handling as well as during the initial loading of the records from the partitions.
  */
-public class GroupCoordinatorShard implements CoordinatorShard<Record> {
+public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord> {
 
-    public static class Builder implements CoordinatorShardBuilder<GroupCoordinatorShard, Record> {
+    public static class Builder implements CoordinatorShardBuilder<GroupCoordinatorShard, CoordinatorRecord> {
         private final GroupCoordinatorConfig config;
         private LogContext logContext;
         private SnapshotRegistry snapshotRegistry;
         private Time time;
-        private CoordinatorTimer<Void, Record> timer;
+        private CoordinatorTimer<Void, CoordinatorRecord> timer;
         private CoordinatorMetrics coordinatorMetrics;
         private TopicPartition topicPartition;
 
@@ -111,7 +111,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         }
 
         @Override
-        public CoordinatorShardBuilder<GroupCoordinatorShard, Record> withLogContext(
+        public CoordinatorShardBuilder<GroupCoordinatorShard, CoordinatorRecord> withLogContext(
             LogContext logContext
         ) {
             this.logContext = logContext;
@@ -119,7 +119,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         }
 
         @Override
-        public CoordinatorShardBuilder<GroupCoordinatorShard, Record> withTime(
+        public CoordinatorShardBuilder<GroupCoordinatorShard, CoordinatorRecord> withTime(
             Time time
         ) {
             this.time = time;
@@ -127,15 +127,15 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         }
 
         @Override
-        public CoordinatorShardBuilder<GroupCoordinatorShard, Record> withTimer(
-            CoordinatorTimer<Void, Record> timer
+        public CoordinatorShardBuilder<GroupCoordinatorShard, CoordinatorRecord> withTimer(
+            CoordinatorTimer<Void, CoordinatorRecord> timer
         ) {
             this.timer = timer;
             return this;
         }
 
         @Override
-        public CoordinatorShardBuilder<GroupCoordinatorShard, Record> withCoordinatorMetrics(
+        public CoordinatorShardBuilder<GroupCoordinatorShard, CoordinatorRecord> withCoordinatorMetrics(
             CoordinatorMetrics coordinatorMetrics
         ) {
             this.coordinatorMetrics = coordinatorMetrics;
@@ -143,13 +143,13 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         }
 
         @Override
-        public CoordinatorShardBuilder<GroupCoordinatorShard, Record> withTopicPartition(TopicPartition topicPartition) {
+        public CoordinatorShardBuilder<GroupCoordinatorShard, CoordinatorRecord> withTopicPartition(TopicPartition topicPartition) {
             this.topicPartition = topicPartition;
             return this;
         }
 
         @Override
-        public CoordinatorShardBuilder<GroupCoordinatorShard, Record> withSnapshotRegistry(
+        public CoordinatorShardBuilder<GroupCoordinatorShard, CoordinatorRecord> withSnapshotRegistry(
             SnapshotRegistry snapshotRegistry
         ) {
             this.snapshotRegistry = snapshotRegistry;
@@ -245,7 +245,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     /**
      * The coordinator timer.
      */
-    private final CoordinatorTimer<Void, Record> timer;
+    private final CoordinatorTimer<Void, CoordinatorRecord> timer;
 
     /**
      * The group coordinator config.
@@ -276,7 +276,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         GroupMetadataManager groupMetadataManager,
         OffsetMetadataManager offsetMetadataManager,
         Time time,
-        CoordinatorTimer<Void, Record> timer,
+        CoordinatorTimer<Void, CoordinatorRecord> timer,
         GroupCoordinatorConfig config,
         CoordinatorMetrics coordinatorMetrics,
         CoordinatorMetricsShard metricsShard
@@ -300,7 +300,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
      * @return A Result containing the ConsumerGroupHeartbeat response and
      *         a list of records to update the state machine.
      */
-    public CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> consumerGroupHeartbeat(
+    public CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> consumerGroupHeartbeat(
         RequestContext context,
         ConsumerGroupHeartbeatRequestData request
     ) {
@@ -316,7 +316,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
      * @return A Result containing the JoinGroup response and
      *         a list of records to update the state machine.
      */
-    public CoordinatorResult<Void, Record> classicGroupJoin(
+    public CoordinatorResult<Void, CoordinatorRecord> classicGroupJoin(
         RequestContext context,
         JoinGroupRequestData request,
         CompletableFuture<JoinGroupResponseData> responseFuture
@@ -337,7 +337,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
      * @return A Result containing the SyncGroup response and
      *         a list of records to update the state machine.
      */
-    public CoordinatorResult<Void, Record> classicGroupSync(
+    public CoordinatorResult<Void, CoordinatorRecord> classicGroupSync(
         RequestContext context,
         SyncGroupRequestData request,
         CompletableFuture<SyncGroupResponseData> responseFuture
@@ -375,13 +375,13 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
      * @return A Result containing the DeleteGroupsResponseData.DeletableGroupResultCollection response and
      *         a list of records to update the state machine.
      */
-    public CoordinatorResult<DeleteGroupsResponseData.DeletableGroupResultCollection, Record> deleteGroups(
+    public CoordinatorResult<DeleteGroupsResponseData.DeletableGroupResultCollection, CoordinatorRecord> deleteGroups(
         RequestContext context,
         List<String> groupIds
     ) throws ApiException {
         final DeleteGroupsResponseData.DeletableGroupResultCollection resultCollection =
             new DeleteGroupsResponseData.DeletableGroupResultCollection(groupIds.size());
-        final List<Record> records = new ArrayList<>();
+        final List<CoordinatorRecord> records = new ArrayList<>();
         int numDeletedOffsets = 0;
         final List<String> deletedGroups = new ArrayList<>();
 
@@ -453,7 +453,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
      * @return A Result containing the OffsetCommitResponse response and
      *         a list of records to update the state machine.
      */
-    public CoordinatorResult<OffsetCommitResponseData, Record> commitOffset(
+    public CoordinatorResult<OffsetCommitResponseData, CoordinatorRecord> commitOffset(
         RequestContext context,
         OffsetCommitRequestData request
     ) throws ApiException {
@@ -469,7 +469,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
      * @return A Result containing the TxnOffsetCommitResponse response and
      *         a list of records to update the state machine.
      */
-    public CoordinatorResult<TxnOffsetCommitResponseData, Record> commitTransactionalOffset(
+    public CoordinatorResult<TxnOffsetCommitResponseData, CoordinatorRecord> commitTransactionalOffset(
         RequestContext context,
         TxnOffsetCommitRequestData request
     ) throws ApiException {
@@ -541,7 +541,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
      * @return A Result containing the LeaveGroup response and
      *         a list of records to update the state machine.
      */
-    public CoordinatorResult<LeaveGroupResponseData, Record> classicGroupLeave(
+    public CoordinatorResult<LeaveGroupResponseData, CoordinatorRecord> classicGroupLeave(
         RequestContext context,
         LeaveGroupRequestData request
     ) throws ApiException {
@@ -557,7 +557,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
      * @return A Result containing the OffsetDeleteResponse response and
      *         a list of records to update the state machine.
      */
-    public CoordinatorResult<OffsetDeleteResponseData, Record> deleteOffsets(
+    public CoordinatorResult<OffsetDeleteResponseData, CoordinatorRecord> deleteOffsets(
         RequestContext context,
         OffsetDeleteRequestData request
     ) throws ApiException {
@@ -570,9 +570,9 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
      *
      * @return The list of tombstones (offset commit and group metadata) to append.
      */
-    public CoordinatorResult<Void, Record> cleanupGroupMetadata() {
+    public CoordinatorResult<Void, CoordinatorRecord> cleanupGroupMetadata() {
         long startMs = time.milliseconds();
-        List<Record> records = new ArrayList<>();
+        List<CoordinatorRecord> records = new ArrayList<>();
         groupMetadataManager.groupIds().forEach(groupId -> {
             boolean allOffsetsExpired = offsetMetadataManager.cleanupExpiredOffsets(groupId, records);
             if (allOffsetsExpired) {
@@ -607,11 +607,11 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
      * @param topicPartitions   The partitions that have been deleted.
      * @return The list of tombstones (offset commit) to append.
      */
-    public CoordinatorResult<Void, Record> onPartitionsDeleted(
+    public CoordinatorResult<Void, CoordinatorRecord> onPartitionsDeleted(
         List<TopicPartition> topicPartitions
     ) {
         final long startTimeMs = time.milliseconds();
-        final List<Record> records = offsetMetadataManager.onPartitionsDeleted(topicPartitions);
+        final List<CoordinatorRecord> records = offsetMetadataManager.onPartitionsDeleted(topicPartitions);
 
         log.info("Generated {} tombstone records in {} milliseconds while deleting offsets for partitions {}.",
             records.size(), time.milliseconds() - startTimeMs, topicPartitions);
@@ -680,7 +680,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         long offset,
         long producerId,
         short producerEpoch,
-        Record record
+        CoordinatorRecord record
     ) throws RuntimeException {
         ApiMessageAndVersion key = record.key();
         ApiMessageAndVersion value = record.value();

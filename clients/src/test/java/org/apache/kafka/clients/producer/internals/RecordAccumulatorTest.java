@@ -72,6 +72,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -83,23 +84,23 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 public class RecordAccumulatorTest {
 
-    private String topic = "test";
-    private int partition1 = 0;
-    private int partition2 = 1;
-    private int partition3 = 2;
-    private Node node1 = new Node(0, "localhost", 1111);
-    private Node node2 = new Node(1, "localhost", 1112);
+    private final String topic = "test";
+    private final int partition1 = 0;
+    private final int partition2 = 1;
+    private final int partition3 = 2;
+    private final Node node1 = new Node(0, "localhost", 1111);
+    private final Node node2 = new Node(1, "localhost", 1112);
 
-    private TopicPartition tp1 = new TopicPartition(topic, partition1);
-    private TopicPartition tp2 = new TopicPartition(topic, partition2);
-    private TopicPartition tp3 = new TopicPartition(topic, partition3);
+    private final TopicPartition tp1 = new TopicPartition(topic, partition1);
+    private final TopicPartition tp2 = new TopicPartition(topic, partition2);
+    private final TopicPartition tp3 = new TopicPartition(topic, partition3);
 
-    private PartitionMetadata partMetadata1 = new PartitionMetadata(Errors.NONE, tp1, Optional.of(node1.id()), Optional.empty(), null, null, null);
-    private PartitionMetadata partMetadata2 = new PartitionMetadata(Errors.NONE, tp2, Optional.of(node1.id()), Optional.empty(), null, null, null);
-    private PartitionMetadata partMetadata3 = new PartitionMetadata(Errors.NONE, tp3, Optional.of(node2.id()), Optional.empty(), null, null, null);
-    private List<PartitionMetadata> partMetadatas = new ArrayList<>(Arrays.asList(partMetadata1, partMetadata2, partMetadata3));
+    private final PartitionMetadata partMetadata1 = new PartitionMetadata(Errors.NONE, tp1, Optional.of(node1.id()), Optional.empty(), null, null, null);
+    private final PartitionMetadata partMetadata2 = new PartitionMetadata(Errors.NONE, tp2, Optional.of(node1.id()), Optional.empty(), null, null, null);
+    private final PartitionMetadata partMetadata3 = new PartitionMetadata(Errors.NONE, tp3, Optional.of(node2.id()), Optional.empty(), null, null, null);
+    private final List<PartitionMetadata> partMetadatas = new ArrayList<>(Arrays.asList(partMetadata1, partMetadata2, partMetadata3));
 
-    private Map<Integer, Node> nodes = Arrays.asList(node1, node2).stream().collect(Collectors.toMap(Node::id, Function.identity()));
+    private final Map<Integer, Node> nodes = Stream.of(node1, node2).collect(Collectors.toMap(Node::id, Function.identity()));
     private MetadataSnapshot metadataCache = new MetadataSnapshot(null,
         nodes,
         partMetadatas,
@@ -109,14 +110,14 @@ public class RecordAccumulatorTest {
         null,
         Collections.emptyMap());
 
-    private Cluster cluster = metadataCache.cluster();
+    private final Cluster cluster = metadataCache.cluster();
 
-    private MockTime time = new MockTime();
-    private byte[] key = "key".getBytes();
-    private byte[] value = "value".getBytes();
-    private int msgSize = DefaultRecord.sizeInBytes(0, 0, key.length, value.length, Record.EMPTY_HEADERS);
+    private final MockTime time = new MockTime();
+    private final byte[] key = "key".getBytes();
+    private final byte[] value = "value".getBytes();
+    private final int msgSize = DefaultRecord.sizeInBytes(0, 0, key.length, value.length, Record.EMPTY_HEADERS);
 
-    private Metrics metrics = new Metrics(time);
+    private final Metrics metrics = new Metrics(time);
     private final long maxBlockTimeMs = 1000;
     private final LogContext logContext = new LogContext();
 
@@ -790,7 +791,7 @@ public class RecordAccumulatorTest {
         int lingerMs = 300;
         List<Boolean> muteStates = Arrays.asList(false, true);
         Set<Node> readyNodes;
-        List<ProducerBatch> expiredBatches = new ArrayList<>();
+        List<ProducerBatch> expiredBatches;
         // test case assumes that the records do not fill the batch completely
         int batchSize = 1025;
         RecordAccumulator accum = createTestRecordAccumulator(deliveryTimeoutMs,
@@ -953,7 +954,7 @@ public class RecordAccumulatorTest {
         // Test ready without muted partition
         accum.unmutePartition(tp1);
         result = accum.ready(metadataCache, time.milliseconds());
-        assertTrue(result.readyNodes.size() > 0, "The batch should be ready");
+        assertFalse(result.readyNodes.isEmpty(), "The batch should be ready");
 
         // Test drain with muted partition
         accum.mutePartition(tp1);
@@ -963,7 +964,7 @@ public class RecordAccumulatorTest {
         // Test drain without muted partition.
         accum.unmutePartition(tp1);
         drained = accum.drain(metadataCache, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
-        assertTrue(drained.get(node1.id()).size() > 0, "The batch should have been drained.");
+        assertFalse(drained.get(node1.id()).isEmpty(), "The batch should have been drained.");
     }
 
     @Test
@@ -1057,7 +1058,7 @@ public class RecordAccumulatorTest {
         time.sleep(121L);
         // Drain the batch.
         RecordAccumulator.ReadyCheckResult result = accum.ready(metadataCache, time.milliseconds());
-        assertTrue(result.readyNodes.size() > 0, "The batch should be ready");
+        assertFalse(result.readyNodes.isEmpty(), "The batch should be ready");
         Map<Integer, List<ProducerBatch>> drained = accum.drain(metadataCache, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
         assertEquals(1, drained.size(), "Only node1 should be drained");
         assertEquals(1, drained.get(node1.id()).size(), "Only one batch should be drained");
@@ -1682,7 +1683,7 @@ public class RecordAccumulatorTest {
         return value;
     }
 
-    private class BatchDrainedResult {
+    private static class BatchDrainedResult {
         final int numSplit;
         final int numBatches;
         BatchDrainedResult(int numSplit, int numBatches) {

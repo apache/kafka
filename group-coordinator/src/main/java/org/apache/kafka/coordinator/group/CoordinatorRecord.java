@@ -27,7 +27,7 @@ import java.util.Objects;
  *
  * This class is immutable.
  */
-public class Record {
+public class CoordinatorRecord {
     /**
      * The key of the record.
      */
@@ -40,12 +40,12 @@ public class Record {
     private final ApiMessageAndVersion value;
 
     /**
-     * Constructs a Record.
+     * Constructs a CoordinatorRecord.
      *
      * @param key   A non-null key.
      * @param value A key or null.
      */
-    public Record(
+    public CoordinatorRecord(
         ApiMessageAndVersion key,
         ApiMessageAndVersion value
     ) {
@@ -72,7 +72,7 @@ public class Record {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
 
-        Record record = (Record) o;
+        CoordinatorRecord record = (CoordinatorRecord) o;
 
         if (!Objects.equals(key, record.key)) return false;
         return Objects.equals(value, record.value);
@@ -87,6 +87,6 @@ public class Record {
 
     @Override
     public String toString() {
-        return "Record(key=" + key + ", value=" + value + ")";
+        return "CoordinatorRecord(key=" + key + ", value=" + value + ")";
     }
 }

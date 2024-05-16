@@ -16,34 +16,64 @@
  */
 package org.apache.kafka.streams.processor.assignment;
 
+import static java.util.Collections.unmodifiableSet;
+
 import java.time.Instant;
+import java.util.Optional;
 import java.util.Set;
 import org.apache.kafka.streams.processor.TaskId;
 
 /**
- * A simple interface for the assignor to return the desired placement of active and standby tasks on
+ * A simple container class for the assignor to return the desired placement of active and standby tasks on
  * KafkaStreams clients.
  */
-public interface KafkaStreamsAssignment {
+public class KafkaStreamsAssignment {
+
+    private final ProcessId processId;
+    private final Set<AssignedTask> assignment;
+    private final Optional<Instant> followupRebalanceDeadline;
+
+    private KafkaStreamsAssignment(final ProcessId processId,
+                                   final Set<AssignedTask> assignment,
+                                   final Optional<Instant> followupRebalanceDeadline) {
+        this.processId = processId;
+        this.assignment = unmodifiableSet(assignment);
+        this.followupRebalanceDeadline = followupRebalanceDeadline;
+    }
+
     /**
      *
      * @return the {@code ProcessID} associated with this {@code KafkaStreamsAssignment}
      */
-    ProcessId processId();
+    public ProcessId processId() {
+        return processId;
+    }
 
     /**
      *
      * @return a set of assigned tasks that are part of this {@code KafkaStreamsAssignment}
      */
-    Set<AssignedTask> assignment();
+    public Set<AssignedTask> assignment() {
+        return assignment;
+    }
 
     /**
      * @return the followup rebalance deadline in epoch time, after which this KafkaStreams
-     * client will trigger a new rebalance
+     * client will trigger a new rebalance.
      */
-    Instant followupRebalanceDeadline();
+    public Optional<Instant> followupRebalanceDeadline() {
+        return followupRebalanceDeadline;
+    }
 
-    class AssignedTask {
+    public static KafkaStreamsAssignment of(final ProcessId processId, final Set<AssignedTask> assignment) {
+        return new KafkaStreamsAssignment(processId, assignment, Optional.empty());
+    }
+
+    public KafkaStreamsAssignment withFollowupRebalance(final Instant rebalanceDeadline) {
+        return new KafkaStreamsAssignment(this.processId(), this.assignment(), Optional.of(rebalanceDeadline));
+    }
+
+    public static class AssignedTask {
         private final TaskId id;
         private final Type taskType;
 

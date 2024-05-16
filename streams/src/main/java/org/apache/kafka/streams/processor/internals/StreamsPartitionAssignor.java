@@ -37,6 +37,8 @@ import org.apache.kafka.streams.errors.MissingSourceTopicException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.ApplicationState;
+import org.apache.kafka.streams.processor.internals.assignment.ApplicationStateImpl;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.TopicsInfo;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
@@ -124,7 +126,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         }
     }
 
-    private static class ClientMetadata {
+    public static class ClientMetadata {
 
         private final HostInfo hostInfo;
         private final ClientState state;
@@ -150,6 +152,14 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         void addPreviousTasksAndOffsetSums(final String consumerId, final Map<TaskId, Long> taskOffsetSums) {
             state.addPreviousTasksAndOffsetSums(consumerId, taskOffsetSums);
+        }
+
+        public ClientState state() {
+            return state;
+        }
+
+        public HostInfo hostInfo() {
+            return hostInfo;
         }
 
         @Override
@@ -431,7 +441,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             // ---------------- Step Four ---------------- //
 
             // compute the assignment of tasks to threads within each client and build the final group assignment
-
             final Map<String, Assignment> assignment = computeNewAssignment(
                 statefulTasks,
                 clientMetadataMap,
@@ -457,6 +466,31 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 errorAssignment(clientMetadataMap, AssignorError.ASSIGNMENT_ERROR.code())
             );
         }
+    }
+
+    /**
+     *
+     * @param clientMetadataMap the map of process id to client metadata used to build an immutable
+     *                          {@code ApplicationState}
+     * @param statefulTasks     the set of {@code TaskId} that correspond to all the stateful
+     *                          tasks that need to be reassigned.
+     * @return The {@code ApplicationState} needed by the TaskAssigner to compute new task
+     *         assignments.
+     */
+    private ApplicationState buildApplicationState(final Map<UUID, ClientMetadata> clientMetadataMap,
+                                                   final Set<TaskId> statefulTasks) {
+        final Set<TaskId> statelessTasks = new HashSet<>();
+        for (final Map.Entry<UUID, ClientMetadata> clientEntry : clientMetadataMap.entrySet()) {
+            final ClientState clientState = clientEntry.getValue().state;
+            statelessTasks.addAll(clientState.statelessActiveTasks());
+        }
+
+        return new ApplicationStateImpl(
+            assignmentConfigs.toPublicAssignmentConfigs(),
+            statefulTasks,
+            statelessTasks,
+            clientMetadataMap
+        );
     }
 
     /**
