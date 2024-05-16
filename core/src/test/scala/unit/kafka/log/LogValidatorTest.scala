@@ -20,7 +20,7 @@ import java.nio.ByteBuffer
 import java.util.concurrent.TimeUnit
 import kafka.server.{BrokerTopicStats, RequestLocal}
 import kafka.utils.TestUtils.meterCount
-import org.apache.kafka.common.compress.Compression
+import org.apache.kafka.common.compress.{Compression, GzipCompression, Lz4Compression}
 import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{PrimitiveRef, Time}
@@ -1365,7 +1365,7 @@ class LogValidatorTest {
         RecordBatch.MAGIC_VALUE_V0,
         TimestampType.CREATE_TIME,
         5000L,
-      5000L,
+        5000L,
         RecordBatch.NO_PARTITION_LEADER_EPOCH,
         AppendOrigin.CLIENT,
         MetadataVersion.latestTesting
@@ -1563,6 +1563,79 @@ class LogValidatorTest {
     assertEquals(e.recordErrors.size, 3)
   }
 
+  @Test
+  def testDifferentLevelDoesNotCauseRecompression(): Unit = {
+    val records = List(
+      List.fill(256)("some").mkString("").getBytes,
+      List.fill(256)("data").mkString("").getBytes
+    )
+    // Records from the producer were created with gzip max level
+    val gzipMax: Compression = Compression.gzip().level(GzipCompression.MAX_LEVEL).build()
+    val recordsGzipMax = createRecords(records, RecordBatch.MAGIC_VALUE_V2, RecordBatch.NO_TIMESTAMP, gzipMax)
+
+    // The topic is configured with gzip min level
+    val gzipMin: Compression = Compression.gzip().level(GzipCompression.MIN_LEVEL).build()
+    val recordsGzipMin = createRecords(records, RecordBatch.MAGIC_VALUE_V2, RecordBatch.NO_TIMESTAMP, gzipMin)
+
+    // ensure data compressed with gzip max and min is different
+    assertNotEquals(recordsGzipMax, recordsGzipMin)
+    val validator = new LogValidator(recordsGzipMax,
+      topicPartition,
+      time,
+      gzipMax.`type`(),
+      gzipMin,
+      false,
+      RecordBatch.CURRENT_MAGIC_VALUE,
+      TimestampType.CREATE_TIME,
+      5000L,
+      5000L,
+      RecordBatch.NO_PARTITION_LEADER_EPOCH,
+      AppendOrigin.CLIENT,
+      MetadataVersion.latestTesting
+    )
+    val result = validator.validateMessagesAndAssignOffsets(
+      PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
+    )
+    // ensure validated records have not been changed so they are the same as the producer records
+    assertEquals(recordsGzipMax, result.validatedRecords)
+    assertNotEquals(recordsGzipMin, result.validatedRecords)
+  }
+
+  @Test
+  def testDifferentCodecCausesRecompression(): Unit = {
+    val records = List(
+      List.fill(256)("some").mkString("").getBytes,
+      List.fill(256)("data").mkString("").getBytes
+    )
+    // Records from the producer were created with gzip max level
+    val gzipMax: Compression = Compression.gzip().level(GzipCompression.MAX_LEVEL).build()
+    val recordsGzipMax = createRecords(records, RecordBatch.MAGIC_VALUE_V2, RecordBatch.NO_TIMESTAMP, gzipMax)
+
+    // The topic is configured with lz4 min level
+    val lz4Min: Compression = Compression.lz4().level(Lz4Compression.MIN_LEVEL).build()
+    val recordsLz4Min = createRecords(records, RecordBatch.MAGIC_VALUE_V2, RecordBatch.NO_TIMESTAMP, lz4Min)
+
+    val validator = new LogValidator(recordsGzipMax,
+      topicPartition,
+      time,
+      gzipMax.`type`(),
+      lz4Min,
+      false,
+      RecordBatch.CURRENT_MAGIC_VALUE,
+      TimestampType.CREATE_TIME,
+      5000L,
+      5000L,
+      RecordBatch.NO_PARTITION_LEADER_EPOCH,
+      AppendOrigin.CLIENT,
+      MetadataVersion.latestTesting
+    )
+    val result = validator.validateMessagesAndAssignOffsets(
+      PrimitiveRef.ofLong(0L), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
+    )
+    // ensure validated records have been recompressed and match lz4 min level
+    assertEquals(recordsLz4Min, result.validatedRecords)
+  }
+
   private def testBatchWithoutRecordsNotAllowed(sourceCompression: CompressionType, targetCompression: Compression): Unit = {
     val offset = 1234567
     val (producerId, producerEpoch, baseSequence, isTransactional, partitionLeaderEpoch) =
@@ -1594,11 +1667,19 @@ class LogValidatorTest {
   private def createRecords(magicValue: Byte,
                             timestamp: Long = RecordBatch.NO_TIMESTAMP,
                             codec: Compression): MemoryRecords = {
+    val records = List("hello".getBytes, "there".getBytes, "beautiful".getBytes)
+    createRecords(records = records, magicValue = magicValue, timestamp = timestamp, codec = codec)
+  }
+
+  private def createRecords(records: List[Array[Byte]],
+                            magicValue: Byte,
+                            timestamp: Long,
+                            codec: Compression): MemoryRecords = {
     val buf = ByteBuffer.allocate(512)
     val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L)
-    builder.appendWithOffset(0, timestamp, null, "hello".getBytes)
-    builder.appendWithOffset(1, timestamp, null, "there".getBytes)
-    builder.appendWithOffset(2, timestamp, null, "beautiful".getBytes)
+    records.indices.foreach { offset =>
+      builder.appendWithOffset(offset, timestamp, null, records(offset))
+    }
     builder.build()
   }
 
