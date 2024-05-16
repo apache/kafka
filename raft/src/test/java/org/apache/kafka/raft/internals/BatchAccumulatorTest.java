@@ -683,6 +683,36 @@ class BatchAccumulatorTest {
         }
     }
 
+    @Test
+    public void testEmptyControlBatch() {
+        int leaderEpoch = 17;
+        long baseOffset = 157;
+        int lingerMs = 50;
+        int maxBatchSize = 512;
+
+        ByteBuffer buffer = ByteBuffer.allocate(maxBatchSize);
+        Mockito.when(memoryPool.tryAllocate(maxBatchSize))
+                .thenReturn(buffer);
+
+        BatchAccumulator.MemoryRecordsCreator creator = (offset, epoch, buf) -> {
+            long now = 1234;
+            try (MemoryRecordsBuilder builder = controlRecordsBuilder(offset, epoch, now, buf)) {
+                // Create a control batch without any records
+                return builder.build();
+            }
+        };
+
+        try (BatchAccumulator<String> acc = buildAccumulator(
+                leaderEpoch,
+                baseOffset,
+                lingerMs,
+                maxBatchSize
+            )
+        ) {
+            assertThrows(IllegalArgumentException.class, () -> acc.appendControlMessages(creator));
+        }
+    }
+
     private static MemoryRecordsBuilder controlRecordsBuilder(
         long baseOffset,
         int epoch,

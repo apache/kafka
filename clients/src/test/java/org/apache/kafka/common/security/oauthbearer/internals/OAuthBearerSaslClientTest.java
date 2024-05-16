@@ -51,8 +51,8 @@ public class OAuthBearerSaslClientTest {
     private final String errorMessage = "Error as expected!";
 
     public class ExtensionsCallbackHandler implements AuthenticateCallbackHandler {
+        private final boolean toThrow;
         private boolean configured = false;
-        private boolean toThrow;
 
         ExtensionsCallbackHandler(boolean toThrow) {
             this.toThrow = toThrow;

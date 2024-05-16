@@ -28,11 +28,18 @@ public class AssignmentSpec {
      */
     private final Map<String, AssignmentMemberSpec> members;
 
+    /**
+     * The subscription type followed by the group.
+     */
+    private final SubscriptionType subscriptionType;
+
     public AssignmentSpec(
-        Map<String, AssignmentMemberSpec> members
+        Map<String, AssignmentMemberSpec> members,
+        SubscriptionType subscriptionType
     ) {
         Objects.requireNonNull(members);
         this.members = members;
+        this.subscriptionType = subscriptionType;
     }
 
     /**
@@ -42,21 +49,28 @@ public class AssignmentSpec {
         return members;
     }
 
+    /**
+     * @return The group's subscription type.
+     */
+    public SubscriptionType subscriptionType() {
+        return subscriptionType;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         AssignmentSpec that = (AssignmentSpec) o;
-        return members.equals(that.members);
+        return subscriptionType == that.subscriptionType &&
+            members.equals(that.members);
     }
 
     @Override
     public int hashCode() {
-        return members.hashCode();
+        return Objects.hash(members, subscriptionType);
     }
 
-    @Override
     public String toString() {
-        return "AssignmentSpec(members=" + members + ')';
+        return "AssignmentSpec(members=" + members + ", subscriptionType=" + subscriptionType.toString() + ')';
     }
 }

@@ -171,7 +171,7 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
                 assertDoesNotThrow(() -> wrappedCert.checkValidity(dateRecentPast));
             } else {
                 // Cert not valid yet
-                Exception origException = assertThrows(CertificateException.class,
+                assertThrows(CertificateException.class,
                         () -> cert.checkValidity(dateRecentPast));
                 // The wrappend certificate class does not check dates at all
                 assertDoesNotThrow(() -> wrappedCert.checkValidity(dateRecentPast));

@@ -730,7 +730,7 @@ public class MemoryRecords extends AbstractRecords {
         ByteBuffer buffer,
         LeaderChangeMessage leaderChangeMessage
     ) {
-        try (MemoryRecordsBuilder builder = createKraftControlReccordBuilder(
+        try (MemoryRecordsBuilder builder = createKraftControlRecordBuilder(
                 initialOffset,
                 timestamp,
                 leaderEpoch,
@@ -749,7 +749,7 @@ public class MemoryRecords extends AbstractRecords {
         ByteBuffer buffer,
         SnapshotHeaderRecord snapshotHeaderRecord
     ) {
-        try (MemoryRecordsBuilder builder = createKraftControlReccordBuilder(
+        try (MemoryRecordsBuilder builder = createKraftControlRecordBuilder(
                 initialOffset,
                 timestamp,
                 leaderEpoch,
@@ -768,7 +768,7 @@ public class MemoryRecords extends AbstractRecords {
         ByteBuffer buffer,
         SnapshotFooterRecord snapshotFooterRecord
     ) {
-        try (MemoryRecordsBuilder builder = createKraftControlReccordBuilder(
+        try (MemoryRecordsBuilder builder = createKraftControlRecordBuilder(
                 initialOffset,
                 timestamp,
                 leaderEpoch,
@@ -787,7 +787,7 @@ public class MemoryRecords extends AbstractRecords {
         ByteBuffer buffer,
         KRaftVersionRecord kraftVersionRecord
     ) {
-        try (MemoryRecordsBuilder builder = createKraftControlReccordBuilder(
+        try (MemoryRecordsBuilder builder = createKraftControlRecordBuilder(
                 initialOffset,
                 timestamp,
                 leaderEpoch,
@@ -806,7 +806,7 @@ public class MemoryRecords extends AbstractRecords {
         ByteBuffer buffer,
         VotersRecord votersRecord
     ) {
-        try (MemoryRecordsBuilder builder = createKraftControlReccordBuilder(
+        try (MemoryRecordsBuilder builder = createKraftControlRecordBuilder(
                 initialOffset,
                 timestamp,
                 leaderEpoch,
@@ -818,7 +818,7 @@ public class MemoryRecords extends AbstractRecords {
         }
     }
 
-    private static MemoryRecordsBuilder createKraftControlReccordBuilder(
+    private static MemoryRecordsBuilder createKraftControlRecordBuilder(
         long initialOffset,
         long timestamp,
         int leaderEpoch,

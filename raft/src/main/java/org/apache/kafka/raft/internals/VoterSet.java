@@ -38,7 +38,7 @@ import org.apache.kafka.common.utils.Utils;
  *
  * It encapsulates static information like a voter's endpoint and their supported kraft.version.
  *
- * It providees functionality for converting to and from {@code VotersRecord} and for converting
+ * It provides functionality for converting to and from {@code VotersRecord} and for converting
  * from the static configuration.
  */
 final public class VoterSet {
@@ -161,8 +161,8 @@ final public class VoterSet {
      * An overlapping majority means that for all majorities in {@code this} set of voters and for
      * all majority in {@code that} set of voters, they have at least one voter in common.
      *
-     * If this function returns true is means that one of the voter set commits an offset, it means
-     * that the other voter set cannot commit a conflicting offset.
+     * If this function returns true, it means that if one of the set of voters commits an offset,
+     * the other set of voters cannot commit a conflicting offset.
      *
      * @param that the other voter set to compare
      * @return true if they have an overlapping majority, false otherwise

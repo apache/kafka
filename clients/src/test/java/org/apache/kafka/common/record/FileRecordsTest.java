@@ -65,7 +65,7 @@ import static org.mockito.Mockito.when;
 
 public class FileRecordsTest {
 
-    private byte[][] values = new byte[][] {
+    private final byte[][] values = new byte[][] {
             "abcd".getBytes(),
             "efgh".getBytes(),
             "ijkl".getBytes()
