@@ -22,8 +22,6 @@ import kafka.test.junit.RaftClusterInvocationContext;
 import kafka.test.junit.ZkClusterInvocationContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 
-import java.util.List;
-import java.util.Collections;
 
 /**
  * The type of cluster config being requested. Used by {@link kafka.test.ClusterConfig} and the test annotations.
@@ -31,22 +29,22 @@ import java.util.Collections;
 public enum Type {
     KRAFT {
         @Override
-        public List<TestTemplateInvocationContext> invocationContexts(String baseDisplayName, ClusterConfig config) {
-            return Collections.singletonList(new RaftClusterInvocationContext(baseDisplayName, config, false));
+        public TestTemplateInvocationContext invocationContexts(String baseDisplayName, ClusterConfig config) {
+            return new RaftClusterInvocationContext(baseDisplayName, config, false);
         }
     },
     CO_KRAFT {
         @Override
-        public List<TestTemplateInvocationContext> invocationContexts(String baseDisplayName, ClusterConfig config) {
-            return Collections.singletonList(new RaftClusterInvocationContext(baseDisplayName, config, true));
+        public TestTemplateInvocationContext invocationContexts(String baseDisplayName, ClusterConfig config) {
+            return new RaftClusterInvocationContext(baseDisplayName, config, true);
         }
     },
     ZK {
         @Override
-        public List<TestTemplateInvocationContext> invocationContexts(String baseDisplayName, ClusterConfig config) {
-            return Collections.singletonList(new ZkClusterInvocationContext(baseDisplayName, config));
+        public TestTemplateInvocationContext invocationContexts(String baseDisplayName, ClusterConfig config) {
+            return new ZkClusterInvocationContext(baseDisplayName, config);
         }
     };
 
-    public abstract List<TestTemplateInvocationContext> invocationContexts(String baseDisplayName, ClusterConfig config);
+    public abstract TestTemplateInvocationContext invocationContexts(String baseDisplayName, ClusterConfig config);
 }

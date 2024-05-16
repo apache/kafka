@@ -125,7 +125,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         String baseDisplayName = context.getRequiredTestMethod().getName();
         generatedClusterConfigs.forEach(config -> {
             for (Type type: config.clusterTypes()) {
-                contexts.addAll(type.invocationContexts(baseDisplayName, config));
+                contexts.add(type.invocationContexts(baseDisplayName, config));
             }
         });
 
@@ -192,7 +192,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
 
         List<TestTemplateInvocationContext> ret = new ArrayList<>();
         for (Type type : types) {
-            ret.addAll(type.invocationContexts(context.getRequiredTestMethod().getName(), config));
+            ret.add(type.invocationContexts(context.getRequiredTestMethod().getName(), config));
         }
         return ret;
     }
