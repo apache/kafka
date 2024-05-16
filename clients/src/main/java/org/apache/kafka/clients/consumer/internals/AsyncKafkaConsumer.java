@@ -1972,7 +1972,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     private void maybeUpdateSubscriptionMetadata() {
-        if (subscriptions.hasPatternSubscription() && this.mirroredMetadataUpdateVersion < metadata.updateVersion()) {
+       if (this.metadataVersionSnapshot < metadata.updateVersion()) {
+           this.metadataVersionSnapshot = metadata.updateVersion();
+           if (subscriptions.hasPatternSubscription()) {
+               updatePatternSubscription(metadata.fetch());
+           }
+       }
             updatePatternSubscription(metadata.fetch());
         }
     }
