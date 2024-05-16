@@ -32,15 +32,19 @@ import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 public class TestKitNodes {
+    public static final int CONTROLLER_ID_OFFSET = 3000;
+    public static final int BROKER_ID_OFFSET = 0;
+
     public static class Builder {
         private boolean combined;
         private Uuid clusterId;
         private int numControllerNodes;
         private int numBrokerNodes;
         private int numDisksPerBroker = 1;
-        private Map<Integer, Map<String, String>> perBrokerProperties = Collections.emptyMap();
+        private Map<Integer, Map<String, String>> perServerProperties = Collections.emptyMap();
         private BootstrapMetadata bootstrapMetadata = BootstrapMetadata.
             fromVersion(MetadataVersion.latestTesting(), "testkit");
 
@@ -79,22 +83,22 @@ public class TestKitNodes {
             return this;
         }
 
-        public Builder setPerBrokerProperties(Map<Integer, Map<String, String>> perBrokerProperties) {
-            this.perBrokerProperties = Collections.unmodifiableMap(
-                perBrokerProperties.entrySet().stream()
+        public Builder setPerServerProperties(Map<Integer, Map<String, String>> perServerProperties) {
+            this.perServerProperties = Collections.unmodifiableMap(
+                perServerProperties.entrySet().stream()
                     .collect(Collectors.toMap(Map.Entry::getKey, e -> Collections.unmodifiableMap(new HashMap<>(e.getValue())))));
             return this;
         }
 
         public TestKitNodes build() {
             if (numControllerNodes < 0) {
-                throw new RuntimeException("Invalid negative value for numControllerNodes");
+                throw new IllegalArgumentException("Invalid negative value for numControllerNodes");
             }
             if (numBrokerNodes < 0) {
-                throw new RuntimeException("Invalid negative value for numBrokerNodes");
+                throw new IllegalArgumentException("Invalid negative value for numBrokerNodes");
             }
             if (numDisksPerBroker <= 0) {
-                throw new RuntimeException("Invalid value for numDisksPerBroker");
+                throw new IllegalArgumentException("Invalid value for numDisksPerBroker");
             }
 
             String baseDirectory = TestUtils.tempDirectory().getAbsolutePath();
@@ -102,12 +106,27 @@ public class TestKitNodes {
                 clusterId = Uuid.randomUuid();
             }
 
-            List<Integer> controllerNodeIds = IntStream.range(startControllerId(), startControllerId() + numControllerNodes)
+            int controllerId = combined ? BROKER_ID_OFFSET : BROKER_ID_OFFSET + CONTROLLER_ID_OFFSET;
+            List<Integer> controllerNodeIds = IntStream.range(controllerId, controllerId + numControllerNodes)
                 .boxed()
                 .collect(Collectors.toList());
-            List<Integer> brokerNodeIds = IntStream.range(startBrokerId(), startBrokerId() + numBrokerNodes)
+            List<Integer> brokerNodeIds = IntStream.range(BROKER_ID_OFFSET, BROKER_ID_OFFSET + numBrokerNodes)
                 .boxed()
                 .collect(Collectors.toList());
+
+            String unknownIds = perServerProperties.keySet().stream()
+                    .filter(id -> !controllerNodeIds.contains(id))
+                    .filter(id -> !brokerNodeIds.contains(id))
+                    .map(Object::toString)
+                    .collect(Collectors.joining(", "));
+            if (!unknownIds.isEmpty()) {
+                throw new IllegalArgumentException(
+                        String.format("Unknown server id %s in perServerProperties, the existent server ids are %s",
+                                unknownIds,
+                                Stream.concat(brokerNodeIds.stream(), controllerNodeIds.stream())
+                                        .map(Object::toString)
+                                        .collect(Collectors.joining(", "))));
+            }
 
             TreeMap<Integer, ControllerNode> controllerNodes = new TreeMap<>();
             for (int id : controllerNodeIds) {
@@ -116,6 +135,7 @@ public class TestKitNodes {
                     .setBaseDirectory(baseDirectory)
                     .setClusterId(clusterId)
                     .setCombined(brokerNodeIds.contains(id))
+                    .setPropertyOverrides(perServerProperties.getOrDefault(id, Collections.emptyMap()))
                     .build();
                 controllerNodes.put(id, controllerNode);
             }
@@ -128,7 +148,7 @@ public class TestKitNodes {
                     .setBaseDirectory(baseDirectory)
                     .setClusterId(clusterId)
                     .setCombined(controllerNodeIds.contains(id))
-                    .setPropertyOverrides(perBrokerProperties.getOrDefault(id, Collections.emptyMap()))
+                    .setPropertyOverrides(perServerProperties.getOrDefault(id, Collections.emptyMap()))
                     .build();
                 brokerNodes.put(id, brokerNode);
             }
@@ -138,17 +158,6 @@ public class TestKitNodes {
                 bootstrapMetadata,
                 controllerNodes,
                 brokerNodes);
-        }
-
-        private int startBrokerId() {
-            return 0;
-        }
-
-        private int startControllerId() {
-            if (combined) {
-                return startBrokerId();
-            }
-            return startBrokerId() + 3000;
         }
     }
 

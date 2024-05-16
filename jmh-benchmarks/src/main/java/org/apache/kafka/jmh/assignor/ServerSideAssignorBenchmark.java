@@ -24,6 +24,7 @@ import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.assignor.SubscribedTopicDescriber;
+import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
 import org.apache.kafka.coordinator.group.consumer.SubscribedTopicMetadata;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
@@ -53,6 +54,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HETEROGENEOUS;
+import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOGENEOUS;
+
 @State(Scope.Benchmark)
 @Fork(value = 1)
 @Warmup(iterations = 5)
@@ -77,16 +81,6 @@ public class ServerSideAssignorBenchmark {
     }
 
     /**
-     * The subscription pattern followed by the members of the group.
-     *
-     * A subscription model is considered homogenous if all the members of the group
-     * are subscribed to the same set of topics, it is heterogeneous otherwise.
-     */
-    public enum SubscriptionModel {
-        HOMOGENEOUS, HETEROGENEOUS
-    }
-
-    /**
      * The assignment type is decided based on whether all the members are assigned partitions
      * for the first time (full), or incrementally when a rebalance is triggered.
      */
@@ -107,7 +101,7 @@ public class ServerSideAssignorBenchmark {
     private boolean isRackAware;
 
     @Param({"HOMOGENEOUS", "HETEROGENEOUS"})
-    private SubscriptionModel subscriptionModel;
+    private SubscriptionType subscriptionType;
 
     @Param({"RANGE", "UNIFORM"})
     private AssignorType assignorType;
@@ -171,7 +165,7 @@ public class ServerSideAssignorBenchmark {
         // This is done to keep the total members count consistent with the input.
         int numberOfMembers = assignmentType.equals(AssignmentType.INCREMENTAL) ? memberCount - 1 : memberCount;
 
-        if (subscriptionModel.equals(SubscriptionModel.HOMOGENEOUS)) {
+        if (subscriptionType == HOMOGENEOUS) {
             for (int i = 0; i < numberOfMembers; i++) {
                 addMemberSpec(members, i, new HashSet<>(allTopicIds));
             }
@@ -204,7 +198,7 @@ public class ServerSideAssignorBenchmark {
             }
         }
 
-        this.assignmentSpec = new AssignmentSpec(members);
+        this.assignmentSpec = new AssignmentSpec(members, subscriptionType);
     }
 
     private Optional<String> rackId(int memberIndex) {
@@ -255,7 +249,7 @@ public class ServerSideAssignorBenchmark {
         });
 
         Collection<Uuid> subscribedTopicIdsForNewMember;
-        if (subscriptionModel == SubscriptionModel.HETEROGENEOUS) {
+        if (subscriptionType == HETEROGENEOUS) {
             subscribedTopicIdsForNewMember = updatedMembers.get("member" + (memberCount - 2)).subscribedTopicIds();
         } else {
             subscribedTopicIdsForNewMember = allTopicIds;
@@ -269,7 +263,7 @@ public class ServerSideAssignorBenchmark {
             Collections.emptyMap()
         ));
 
-        assignmentSpec = new AssignmentSpec(updatedMembers);
+        assignmentSpec = new AssignmentSpec(updatedMembers, subscriptionType);
     }
 
     @Benchmark
