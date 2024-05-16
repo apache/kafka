@@ -1244,7 +1244,15 @@ public class GroupMetadataManager {
         String requestProtocolType,
         String requestProtocolName
     ) {
-        String protocolName = member.supportedClassicProtocols().get().iterator().next().name();
+        Optional<List<ConsumerGroupMemberMetadataValue.ClassicProtocol>> protocols = member.supportedClassicProtocols();
+        if (!protocols.isPresent() || protocols.get().isEmpty()) {
+            throw new IllegalStateException(
+                String.format("The consumer group member %s that uses the classic protocol has empty supported protocols.",
+                    member.memberId())
+            );
+        }
+
+        String protocolName = protocols.get().iterator().next().name();
         if (!ConsumerProtocol.PROTOCOL_TYPE.equals(requestProtocolType)) {
             throw Errors.INCONSISTENT_GROUP_PROTOCOL.exception(
                 String.format("The protocol type %s from member %s request is not equal to the group protocol type %s.",
@@ -1296,25 +1304,6 @@ public class GroupMetadataManager {
             );
         } catch (SchemaException e) {
             throw new IllegalStateException("Malformed embedded consumer protocol in subscription deserialization.");
-        }
-    }
-
-    /**
-     * Deserialize the consumer protocol version in ClassicMemberMetadata.
-     * All the protocols have the same subscription, so the method picks a random one.
-     *
-     * @param classicMemberMetadata The ClassicMemberMetadata.
-     * @return The consumer protocol version.
-     */
-    private static short deserializeProtocolVersion(
-        ConsumerGroupMemberMetadataValue.ClassicMemberMetadata classicMemberMetadata
-    ) {
-        try {
-            return ConsumerProtocol.deserializeVersion(
-                ByteBuffer.wrap(classicMemberMetadata.supportedProtocols().iterator().next().metadata())
-            );
-        } catch (SchemaException e) {
-            throw new IllegalStateException("Malformed embedded consumer protocol in version deserialization.");
         }
     }
 
@@ -4133,10 +4122,16 @@ public class GroupMetadataManager {
      * @return The serialized assigned partitions.
      */
     private byte[] prepareAssignment(ConsumerGroupMember member) {
-        return ConsumerProtocol.serializeAssignment(
-            new ConsumerPartitionAssignor.Assignment(toTopicPartitionList(member.assignedPartitions(), metadataImage.topics())),
-            deserializeProtocolVersion(member.classicMemberMetadata().get())
-        ).array();
+        try {
+            return ConsumerProtocol.serializeAssignment(
+                new ConsumerPartitionAssignor.Assignment(toTopicPartitionList(member.assignedPartitions(), metadataImage.topics())),
+                ConsumerProtocol.deserializeVersion(
+                    ByteBuffer.wrap(member.classicMemberMetadata().get().supportedProtocols().iterator().next().metadata())
+                )
+            ).array();
+        } catch (SchemaException e) {
+            throw new IllegalStateException("Malformed embedded consumer protocol in version deserialization.");
+        }
     }
 
     // Visible for testing
