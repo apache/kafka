@@ -12283,6 +12283,7 @@ public class GroupMetadataManagerTest {
                     .build()))
             .build();
 
+        // Request with unmatched protocol name.
         assertThrows(InconsistentGroupProtocolException.class, () -> context.sendClassicGroupSync(
             new GroupMetadataManagerTestContext.SyncGroupRequestBuilder()
                 .withGroupId(groupId)
@@ -12293,6 +12294,7 @@ public class GroupMetadataManagerTest {
                 .build())
         );
 
+        // Request with unmatched protocol type.
         assertThrows(InconsistentGroupProtocolException.class, () -> context.sendClassicGroupSync(
             new GroupMetadataManagerTestContext.SyncGroupRequestBuilder()
                 .withGroupId(groupId)
@@ -12301,6 +12303,16 @@ public class GroupMetadataManagerTest {
                 .withProtocolName("range")
                 .withProtocolType("connect")
                 .build())
+        );
+
+        // Request with null protocol type or null protocol name won't fail the validation.
+        context.verifyClassicGroupSyncToConsumerGroup(
+            groupId,
+            memberId,
+            10,
+            null,
+            null,
+            Collections.emptyList()
         );
     }
 

@@ -1244,21 +1244,13 @@ public class GroupMetadataManager {
         String requestProtocolType,
         String requestProtocolName
     ) {
-        Optional<List<ConsumerGroupMemberMetadataValue.ClassicProtocol>> protocols = member.supportedClassicProtocols();
-        if (!protocols.isPresent() || protocols.get().isEmpty()) {
-            throw new IllegalStateException(
-                String.format("The consumer group member %s that uses the classic protocol has empty supported protocols.",
-                    member.memberId())
-            );
-        }
-
-        String protocolName = protocols.get().iterator().next().name();
-        if (!ConsumerProtocol.PROTOCOL_TYPE.equals(requestProtocolType)) {
+        String protocolName = member.supportedClassicProtocols().get().iterator().next().name();
+        if (requestProtocolType != null && !ConsumerProtocol.PROTOCOL_TYPE.equals(requestProtocolType)) {
             throw Errors.INCONSISTENT_GROUP_PROTOCOL.exception(
                 String.format("The protocol type %s from member %s request is not equal to the group protocol type %s.",
                     requestProtocolType, member.memberId(), ConsumerProtocol.PROTOCOL_TYPE)
             );
-        } else if (!protocolName.equals(requestProtocolName)) {
+        } else if (requestProtocolName != null && !protocolName.equals(requestProtocolName)) {
             throw Errors.INCONSISTENT_GROUP_PROTOCOL.exception(
                 String.format("The protocol name %s from member %s request is not equal to the protocol name %s returned in the join response.",
                     requestProtocolName, member.memberId(), protocolName)
