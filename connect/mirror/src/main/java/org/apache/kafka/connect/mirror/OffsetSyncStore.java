@@ -108,11 +108,8 @@ class OffsetSyncStore implements AutoCloseable {
      */
     public void start(boolean initializationMustReadToEnd) {
         this.initializationMustReadToEnd = initializationMustReadToEnd;
-        if (initializationMustReadToEnd) {
-            log.warn("OffsetSyncStore initializationMustReadToEnd = {}", initializationMustReadToEnd);
-        } else {
-            log.debug("OffsetSyncStore initializationMustReadToEnd = {}", initializationMustReadToEnd);
-        }
+        log.info("OffsetSyncStore initializationMustReadToEnd:{}{}", initializationMustReadToEnd,
+                initializationMustReadToEnd ? " - fewer checkpoints may be emitted" : "");
         backingStore.start();
         readToEnd = true;
     }
