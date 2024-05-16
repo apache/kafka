@@ -1155,7 +1155,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          * both of the following are true:
          *
          * <ul>
-         *     <li>The request completed with a <code>null</code> {@link Throwable error}</li>
+         *     <li>The request completed without an error</li>
          *     <li>The request is not {@link OffsetFetchRequestState#isExpired expired}</li>
          * </ul>
          *
@@ -1164,7 +1164,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          * In some cases, even though an offset fetch request may complete without an error, <em>technically</em>
          * the request took longer than the user's provided timeout. In that case, the application thread will
          * still receive a timeout error, and will shortly try to fetch these offsets again. Keeping the result
-         * of the <em>current</em> attempt will enable the </em><em>next</em> attempt to use that result and return
+         * of the <em>current</em> attempt will enable the <em>next</em> attempt to use that result and return
          * almost immediately.
          */
         private void maybeRemoveInflightOffsetFetch(OffsetFetchRequestState fetchRequest, Throwable error) {
