@@ -137,13 +137,13 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         return contexts;
     }
 
+    @SuppressWarnings("unchecked")
     private List<ClusterConfig> generateClusterConfigurations(ExtensionContext context, String generateClustersMethods) {
         Object testInstance = context.getTestInstance().orElse(null);
         Method method = ReflectionUtils.getRequiredMethod(context.getRequiredTestClass(), generateClustersMethods);
         return (List<ClusterConfig>) ReflectionUtils.invokeMethod(method, testInstance);
     }
 
-    @SuppressWarnings("unchecked")
     private List<TestTemplateInvocationContext> processClusterTests(ExtensionContext context, ClusterTests annots, ClusterTestDefaults defaults) {
 
         List<TestTemplateInvocationContext> ret = Arrays.stream(annots.value())
