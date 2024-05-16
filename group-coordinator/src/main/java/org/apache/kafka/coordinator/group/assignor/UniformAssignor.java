@@ -57,7 +57,7 @@ public class UniformAssignor implements PartitionAssignor {
      * Perform the group assignment given the current members and
      * topics metadata.
      *
-     * @param groupSpec                The assignment specification that included member metadata.
+     * @param groupSpec                     The assignment specification that included member metadata.
      * @param subscribedTopicDescriber      The topic and cluster metadata describer {@link SubscribedTopicDescriber}.
      * @return The new target assignment for the group.
      */

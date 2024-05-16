@@ -557,7 +557,7 @@ public class ConsumerGroup implements Group {
         Assignment oldTargetAssignment,
         Assignment newTargetAssignment
     ) {
-        // Combine keys from both old and new assignments
+        // Combine keys from both old and new assignments.
         Set<Uuid> allTopicIds = new HashSet<>();
         allTopicIds.addAll(oldTargetAssignment.partitions().keySet());
         allTopicIds.addAll(newTargetAssignment.partitions().keySet());
