@@ -100,9 +100,10 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         private final ClusterConfig clusterConfig;
         final AtomicBoolean started = new AtomicBoolean(false);
         final AtomicBoolean stopped = new AtomicBoolean(false);
+        final AtomicBoolean formated = new AtomicBoolean(false);
         private final ConcurrentLinkedQueue<Admin> admins = new ConcurrentLinkedQueue<>();
         private EmbeddedZookeeper embeddedZookeeper;
-        private volatile KafkaClusterTestKit clusterTestKit;
+        private KafkaClusterTestKit clusterTestKit;
         private final boolean isCombined;
 
         RaftClusterInstance(ClusterConfig clusterConfig, boolean isCombined) {
@@ -220,7 +221,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         public void start() {
             if (started.compareAndSet(false, true)) {
                 try {
-                    this.format();
+                    safeBuildCluster();
                     clusterTestKit.startup();
                     kafka.utils.TestUtils.waitUntilTrue(
                             () -> this.clusterTestKit.brokers().get(0).brokerState() == BrokerState.RUNNING,
@@ -273,8 +274,10 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         }
 
         public void format() throws Exception {
-            safeBuildCluster();
-            this.clusterTestKit.format();
+            if (formated.compareAndSet(false,true)) {
+                safeBuildCluster();
+                this.clusterTestKit.format();
+            }
         }
 
         private BrokerServer findBrokerOrThrow(int brokerId) {
@@ -283,13 +286,8 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         }
 
         private void safeBuildCluster() throws Exception {
-            if (this.clusterTestKit != null) {
-                return;
-            }
-            synchronized (this) {
-                if (this.clusterTestKit == null) {
-                    doBuild();
-                }
+            if (this.clusterTestKit == null) {
+                doBuild();
             }
         }
 
