@@ -1,0 +1,39 @@
+{
+  "apiKey": 78,
+  "type": "request",
+  "listeners": ["zkBroker", "broker"],
+  "name": "StreamsInstallAssignmentRequest",
+  "validVersions": "0",
+  "flexibleVersions": "0+",
+  "fields": [
+    { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
+      "about": "The group identifier." },
+    { "name": "MemberId", "type": "string", "versions": "0+",
+      "about": "The member id assigned by the group coordinator." },
+    { "name": "MemberEpoch", "type": "int32", "versions": "0+",
+      "about": "The member epoch." },
+    { "name": "GroupEpoch", "type": "int32", "versions": "0+",
+      "about": "The group epoch." },
+    { "name": "Error", "type": "int8", "versions": "0+",
+      "about": "The assignment error; or zero if the assignment is successful." },
+    { "name": "Members", "type": "[]Member", "versions": "0+",
+      "about": "The members.", "fields": [
+      { "name": "MemberId", "type": "string", "versions": "0+",
+        "about": "The member ID." },
+      { "name": "ActiveTasks", "type": "[]TaskId", "versions": "0+",
+        "about": "Local assignment for this consumer." },
+      { "name": "StandbyTasks", "type": "[]TaskId", "versions": "0+",
+        "about": "Local standby tasks for this consumer." },
+      { "name": "WarmupTasks", "type": "[]TaskId", "versions": "0+",
+        "about": "Local warming up tasks for this consumer." }
+    ]}
+  ],
+  "commonStructs": [
+    { "name": "TaskId", "versions": "0+", "fields": [
+      { "name": "Subtopology", "type": "string", "versions": "0+",
+        "about": "subtopology ID" },
+      { "name": "Partitions", "type": "[]int32", "versions": "0+",
+        "about": "partitions" }
+    ]}
+  ]
+}

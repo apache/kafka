@@ -1,0 +1,96 @@
+{
+  "apiKey": 79,
+  "type": "response",
+  "name": "StreamsPrepareAssignmentResponse",
+  "validVersions": "0",
+  "flexibleVersions": "0+",
+  // Supported errors:
+  // - GROUP_AUTHORIZATION_FAILED
+  // - NOT_COORDINATOR
+  // - COORDINATOR_NOT_AVAILABLE
+  // - COORDINATOR_LOAD_IN_PROGRESS
+  // - INVALID_REQUEST
+  // - INVALID_GROUP_ID
+  // - GROUP_ID_NOT_FOUND
+  // - UNKNOWN_MEMBER_ID
+  // - STALE_MEMBER_EPOCH
+  "fields": [
+    { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
+      "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
+    { "name": "ErrorCode", "type": "int16", "versions": "0+",
+      "about": "The top-level error code, or 0 if there was no error" },
+    { "name": "ErrorMessage", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
+      "about": "The top-level error message, or null if there was no error." },
+    { "name": "GroupEpoch", "type": "int32", "versions": "0+",
+      "about": "The group epoch." },
+    { "name": "AssignorName", "type": "string", "versions": "0+",
+      "about": "The selected assignor." },
+    { "name": "Members", "type": "[]Member", "versions": "0+",
+      "about": "The members.", "fields": [
+      { "name": "MemberId", "type": "string", "versions": "0+",
+        "about": "The member ID." },
+      { "name": "MemberEpoch", "type": "int32", "versions": "0+",
+        "about": "The member epoch." },
+      { "name": "InstanceId", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
+        "about": "The member instance ID." },
+      { "name": "RackId", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
+        "about": "The rack ID." },
+
+      { "name": "TopologyHash", "type": "bytes", "versions": "0+",
+        "about": "The hash of the topology." },
+
+      { "name": "ActiveTasks", "type": "[]TaskId", "versions": "0+",
+        "about": "Target active tasks for this consumer." },
+      { "name": "StandbyTasks", "type": "[]TaskId", "versions": "0+",
+        "about": "Target standby tasks for this consumer." },
+      { "name": "WarmupTasks", "type": "[]TaskId", "versions": "0+",
+        "about": "Target warming up tasks for this consumer. " },
+
+      { "name": "ProcessId", "type": "uuid", "versions": "0+",
+        "about": "Identity of the streams instance that may have multiple consumers. " },
+      { "name": "ClientTags", "type": "[]KeyValue", "versions": "0+",
+        "about": "Used for rack-aware assignment algorithm." },
+      { "name": "TaskOffsetUpdateReason", "type":  "int8", "versions": "0+", "default": 0,
+        "about": "Reason for updating task offset. 0 if no update, 1 if task catches up with acceptable.recovery.lag, 2 if task falls behind acceptable.recovery.lag, 3 if a standby task is added or removed, 4 if triggerd by a time-interval" },
+      { "name": "TaskOffset", "type": "[]TaskOffset", "versions": "0+", "nullableVersions": "0+", "default": "null",
+        "about": "Cumulative offsets for assigned and dormant standby tasks. Only updatable when TaskOffsetUpdateReason is not zero. Null if unchanged since last heartbeat.",
+        "fields": [
+          { "name": "TaskId", "type": "TaskId", "versions": "0+",
+            "about": "The task ID" },
+          { "name": "Offset", "type": "int64", "versions": "0+",
+            "about": "The cumulative offset for the task" }
+        ]
+      },
+      { "name": "UserData", "type": "bytes", "versions": "0+", "nullableVersions": "0+", "default": "null",
+        "about": "Opaque user data to be passed to the client-side assignor. Null if unchanged since last heartbeat." },
+      { "name": "AssignmentConfigs", "type": "[]KeyValue", "versions": "0+", "nullableVersions": "0+", "default": "null",
+        "about": "Generic array of assignment configuration strings."}
+    ]},
+    { "name": "Topics", "type": "[]TopicMetadata", "versions": "0+",
+      "about": "The topic-partition metadata.",
+      "fields": [
+        { "name": "TopicId", "type": "uuid", "versions": "0+",
+          "about": "The topic ID." },
+        { "name": "TopicName", "type": "string", "versions": "0+",
+          "about": "The topic name." },
+        { "name": "NumPartitions", "type": "int32", "versions": "0+",
+          "about": "The number of partitions." }
+      ]}
+  ],
+  "commonStructs": [
+    { "name": "TaskId", "versions": "0+", "fields": [
+      { "name": "Subtopology", "type": "string", "versions": "0+",
+        "about": "subtopology ID" },
+      { "name": "Partitions", "type": "[]int32", "versions": "0+",
+        "about": "partitions" }
+    ]},
+    { "name": "KeyValue", "versions": "0+",
+      "fields": [
+        { "name": "Key", "type": "string", "versions": "0+",
+          "about": "key of the config" },
+        { "name": "Value", "type": "string", "versions": "0+",
+          "about": "value of the config" }
+      ]
+    }
+  ]
+}
