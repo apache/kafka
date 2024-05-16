@@ -142,4 +142,18 @@ public class AssignmentConfigs {
         }
         return value;
     }
+
+    @Override
+    public String toString() {
+        return "AssignmentConfigs{" +
+               "\n  acceptableRecoveryLag=" + acceptableRecoveryLag +
+               "\n  maxWarmupReplicas=" + maxWarmupReplicas +
+               "\n  numStandbyReplicas=" + numStandbyReplicas +
+               "\n  probingRebalanceIntervalMs=" + probingRebalanceIntervalMs +
+               "\n  rackAwareAssignmentTags=" + rackAwareAssignmentTags +
+               "\n  rackAwareTrafficCost=" + rackAwareTrafficCost +
+               "\n  rackAwareNonOverlapCost=" + rackAwareNonOverlapCost +
+               "\n  rackAwareAssignmentStrategy=" + rackAwareAssignmentStrategy +
+               "\n}";
+    }
 }

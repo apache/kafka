@@ -24,7 +24,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class KerberosNameTest {
 
@@ -132,10 +132,8 @@ public class KerberosNameTest {
     }
 
     private void testInvalidRule(List<String> rules) {
-        try {
-            KerberosShortNamer.fromUnparsedRules("REALM.COM", rules);
-            fail("should have thrown IllegalArgumentException");
-        } catch (IllegalArgumentException e) {
-        }
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> KerberosShortNamer.fromUnparsedRules("REALM.COM", rules));
     }
 }

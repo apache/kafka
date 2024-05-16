@@ -105,6 +105,7 @@ public class TargetAssignmentBuilderBenchmark {
             .withMembers(members)
             .withSubscriptionMetadata(subscriptionMetadata)
             .withTargetAssignment(existingTargetAssignment)
+            .withSubscriptionType(HOMOGENEOUS)
             .addOrUpdateMember(newMember.memberId(), newMember);
     }
 
