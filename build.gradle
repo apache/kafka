@@ -671,8 +671,7 @@ subprojects {
       "-Xlint:private-shadow",
       "-Xlint:stars-align",
       "-Xlint:type-parameter-shadow",
-      "-Xlint:unused",
-      "-Wconf:cat=unused-nowarn:s"
+      "-Xlint:unused"
     ]
 
     // See README.md for details on this option and the meaning of each value
