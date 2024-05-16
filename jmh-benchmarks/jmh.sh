@@ -37,8 +37,6 @@ echo "gradle build done"
 
 echo "running JMH with args: $@"
 
-java -jar "${libDir}"/kafka-jmh-benchmarks-*.jar "$@" -rf csv -rff "${libDir}"/AfterChanges16625justRangeInc.csv
-
-echo "JMH benchmarks done. Results are saved in CSV format at ${libDir}/AfterChanges16625justRangeInc.csv"
+java -jar ${libDir}/kafka-jmh-benchmarks-*.jar "$@"
 
 echo "JMH benchmarks done"
