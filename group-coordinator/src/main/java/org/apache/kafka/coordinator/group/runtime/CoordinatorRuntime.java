@@ -558,7 +558,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         @Override
         public void run() {
             String name = event.toString();
-            scheduleInternalOperation("OperationTimeout", tp,
+            scheduleInternalOperation("OperationTimeout(name=" + name + ", tp=" + tp + ")", tp,
                 () -> event.complete(new TimeoutException(name + " timed out after " + delayMs + "ms")));
         }
     }
