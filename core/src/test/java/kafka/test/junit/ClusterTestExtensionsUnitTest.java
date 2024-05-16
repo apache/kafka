@@ -27,7 +27,6 @@ import static org.mockito.Mockito.when;
 
 public class ClusterTestExtensionsUnitTest {
     @Test
-    @SuppressWarnings("unchecked")
     void testProcessClusterTemplate() {
         ClusterTestExtensions ext = new ClusterTestExtensions();
         ExtensionContext context = mock(ExtensionContext.class);

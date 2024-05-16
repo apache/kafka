@@ -31,7 +31,6 @@ import org.junit.jupiter.api.extension.TestTemplateInvocationContextProvider;
 import org.junit.platform.commons.util.ReflectionUtils;
 
 import java.lang.reflect.Method;
-import java.util.function.Consumer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -108,6 +107,11 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             generatedContexts.addAll(processClusterTests(context, clusterTestsAnnot, defaults));
         }
 
+        if (generatedContexts.isEmpty()) {
+            throw new IllegalStateException("Please annotate test methods with @ClusterTemplate, @ClusterTest, or " +
+                    "@ClusterTests when using the ClusterTestExtensions provider");
+        }
+
         return generatedContexts.stream();
     }
 
@@ -116,19 +120,15 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
     List<TestTemplateInvocationContext> processClusterTemplate(ExtensionContext context, ClusterTemplate annot) {
         // If specified, call cluster config generated method (must be static)
         List<ClusterConfig> generatedClusterConfigs = new ArrayList<>();
-        List<TestTemplateInvocationContext> contexts = new ArrayList<>();
 
         if (annot.value().trim().isEmpty()) {
             throw new IllegalStateException("ClusterTemplate value can't be empty string.");
         }
-        generatedClusterConfigs.addAll(generateClusterConfigurations(context, annot.value()));
 
         String baseDisplayName = context.getRequiredTestMethod().getName();
-        generatedClusterConfigs.forEach(config -> {
-            for (Type type: config.clusterTypes()) {
-                contexts.add(type.invocationContexts(baseDisplayName, config));
-            }
-        });
+        List<TestTemplateInvocationContext> contexts = generateClusterConfigurations(context, annot.value())
+                .stream().flatMap(config -> config.clusterTypes().stream()
+                        .map(type -> type.invocationContexts(baseDisplayName, config))).collect(Collectors.toList());
 
         if (contexts.isEmpty()) {
             throw new IllegalStateException("ClusterConfig generator method should provide at least one config");
@@ -143,12 +143,11 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         return (List<ClusterConfig>) ReflectionUtils.invokeMethod(method, testInstance);
     }
 
+    @SuppressWarnings("unchecked")
     private List<TestTemplateInvocationContext> processClusterTests(ExtensionContext context, ClusterTests annots, ClusterTestDefaults defaults) {
-        List<TestTemplateInvocationContext> ret = new ArrayList<>();
 
-        for (ClusterTest annot : annots.value()) {
-            ret.addAll(processClusterTestInternal(context, annot, defaults));
-        }
+        List<TestTemplateInvocationContext> ret = Arrays.stream(annots.value())
+                .flatMap(annot -> processClusterTestInternal(context, annot, defaults).stream()).collect(Collectors.toList());
 
         if (ret.isEmpty()) {
             throw new IllegalStateException("processClusterTests method should provide at least one config");
@@ -190,11 +189,8 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
                 .setTags(Arrays.asList(annot.tags()))
                 .build();
 
-        List<TestTemplateInvocationContext> ret = new ArrayList<>();
-        for (Type type : types) {
-            ret.add(type.invocationContexts(context.getRequiredTestMethod().getName(), config));
-        }
-        return ret;
+        return Arrays.stream(types).map(type -> type.invocationContexts(context.getRequiredTestMethod().getName(), config))
+                .collect(Collectors.toList());
     }
 
     private ClusterTestDefaults getClusterTestDefaults(Class<?> testClass) {
