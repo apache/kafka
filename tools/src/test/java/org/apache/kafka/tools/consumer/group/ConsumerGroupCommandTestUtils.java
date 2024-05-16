@@ -49,7 +49,8 @@ class ConsumerGroupCommandTestUtils {
     private ConsumerGroupCommandTestUtils() {
     }
 
-    static void generator(ClusterGenerator clusterGenerator) {
+    static List<ClusterConfig> generator() {
+        List<ClusterConfig> ret = new ArrayList<>();
         Map<String, String> serverProperties = new HashMap<>();
         serverProperties.put(OFFSETS_TOPIC_PARTITIONS_CONFIG, "1");
         serverProperties.put(OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
@@ -59,7 +60,7 @@ class ConsumerGroupCommandTestUtils {
                 .setTypes(Stream.of(ZK, KRAFT, CO_KRAFT).collect(Collectors.toSet()))
                 .setServerProperties(serverProperties)
                 .build();
-        clusterGenerator.accept(classicGroupCoordinator);
+        ret.add(classicGroupCoordinator);
 
         // Following are test case config with new group coordinator
         serverProperties.put(NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "true");
@@ -69,7 +70,8 @@ class ConsumerGroupCommandTestUtils {
                 .setName("consumerGroupCoordinator")
                 .setServerProperties(serverProperties)
                 .build();
-        clusterGenerator.accept(consumerGroupCoordinator);
+        ret.add(consumerGroupCoordinator);
+        return ret;
     }
 
     static <T> AutoCloseable buildConsumers(int numberOfConsumers,

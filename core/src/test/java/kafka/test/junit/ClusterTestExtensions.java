@@ -18,7 +18,6 @@
 package kafka.test.junit;
 
 import kafka.test.ClusterConfig;
-import kafka.test.ClusterGenerator;
 import kafka.test.annotation.AutoStart;
 import kafka.test.annotation.ClusterTestDefaults;
 import kafka.test.annotation.ClusterConfigProperty;
@@ -121,7 +120,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         if (annot.value().trim().isEmpty()) {
             throw new IllegalStateException("ClusterTemplate value can't be empty string.");
         }
-        generateClusterConfigurations(context, annot.value(), generatedClusterConfigs::add);
+        generatedClusterConfigs.addAll(generateClusterConfigurations(context, annot.value()));
 
         String baseDisplayName = context.getRequiredTestMethod().getName();
         generatedClusterConfigs.forEach(config -> {
@@ -137,10 +136,10 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         return contexts;
     }
 
-    private void generateClusterConfigurations(ExtensionContext context, String generateClustersMethods, ClusterGenerator generator) {
+    private List<ClusterConfig> generateClusterConfigurations(ExtensionContext context, String generateClustersMethods) {
         Object testInstance = context.getTestInstance().orElse(null);
-        Method method = ReflectionUtils.getRequiredMethod(context.getRequiredTestClass(), generateClustersMethods, ClusterGenerator.class);
-        ReflectionUtils.invokeMethod(method, testInstance, generator);
+        Method method = ReflectionUtils.getRequiredMethod(context.getRequiredTestClass(), generateClustersMethods);
+        return (List<ClusterConfig>) ReflectionUtils.invokeMethod(method, testInstance);
     }
 
     private List<TestTemplateInvocationContext> processClusterTests(ExtensionContext context, ClusterTests annots, ClusterTestDefaults defaults) {

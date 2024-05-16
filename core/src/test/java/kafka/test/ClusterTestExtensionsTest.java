@@ -35,12 +35,14 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.extension.ExtendWith;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
+import java.util.List;
+import java.util.Collections;
 import java.util.concurrent.ExecutionException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Set;
+import java.util.HashSet;
 
 import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
 import static org.apache.kafka.clients.consumer.GroupProtocol.CONSUMER;
@@ -61,14 +63,16 @@ public class ClusterTestExtensionsTest {
     }
 
     // Static methods can generate cluster configurations
-    static void generate1(ClusterGenerator clusterGenerator) {
+    static List<ClusterConfig> generate1() {
+        List<ClusterConfig> ret = new ArrayList<>();
         Map<String, String> serverProperties = new HashMap<>();
         serverProperties.put("foo", "bar");
-        clusterGenerator.accept(ClusterConfig.defaultBuilder()
+        ret.add(ClusterConfig.defaultBuilder()
                 .setTypes(Collections.singleton(Type.ZK))
                 .setName("Generated Test")
                 .setServerProperties(serverProperties)
                 .build());
+        return ret;
     }
 
     // With no params, configuration comes from the annotation defaults as well as @ClusterTestDefaults (if present)
