@@ -16,6 +16,7 @@
  */
 package kafka.admin;
 
+import kafka.cluster.Broker;
 import kafka.zk.AdminZkClient;
 import kafka.zk.KafkaZkClient;
 import org.apache.kafka.clients.admin.Admin;
@@ -25,6 +26,8 @@ import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.AlterConfigsOptions;
 import org.apache.kafka.clients.admin.AlterConfigsResult;
 import org.apache.kafka.clients.admin.Config;
+import org.apache.kafka.clients.admin.ConfigEntry;
+import org.apache.kafka.clients.admin.ConfigTest;
 import org.apache.kafka.clients.admin.DescribeClientQuotasOptions;
 import org.apache.kafka.clients.admin.DescribeClientQuotasResult;
 import org.apache.kafka.clients.admin.DescribeConfigsOptions;
@@ -34,6 +37,7 @@ import org.apache.kafka.clients.admin.DescribeUserScramCredentialsResult;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
@@ -43,6 +47,9 @@ import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.server.config.ConfigType;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import scala.collection.JavaConverters;
 import scala.collection.Seq;
 
 import java.io.File;
@@ -53,9 +60,11 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
@@ -71,6 +80,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class ConfigCommandUnitTest {
@@ -401,7 +412,6 @@ public class ConfigCommandUnitTest {
         assertEquals("[[1, 2], [3, 4]]", addedProps.getProperty("nested"));
     }
 
-    @SuppressWarnings("deprecation") // Added for Scala 2.12 compatibility for usages of JavaConverters
     public void testExpectedEntityTypeNames(List<String> expectedTypes, List<String> expectedNames, List<String> connectOpts, String...args) {
         ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray(Arrays.asList(connectOpts.get(0), connectOpts.get(1), "--describe"), Arrays.asList(args)));
         createOpts.checkArgs();
@@ -878,6 +888,478 @@ public class ConfigCommandUnitTest {
         verifyUserScramCredentialsNotDescribed(defaultUserOpt);
     }
 
+    @Test
+    public void shouldAddTopicConfigUsingZookeeper() {
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
+            "--entity-name", "my-topic",
+            "--entity-type", "topics",
+            "--alter",
+            "--add-config", "a=b,c=d"));
+
+        KafkaZkClient zkClient = mock(KafkaZkClient.class);
+        when(zkClient.getEntityConfigs(anyString(), anyString())).thenReturn(new Properties());
+
+        ConfigCommand.alterConfigWithZk(null, createOpts, new AdminZkClient(zkClient, scala.None$.empty()) {
+            @Override
+            public void changeTopicConfig(String topic, Properties configChange) {
+                assertEquals("my-topic", topic);
+                assertEquals("b", configChange.get("a"));
+                assertEquals("d", configChange.get("c"));
+            }
+        });
+    }
+
+    @SuppressWarnings("deprecation") // Added for Scala 2.12 compatibility for usages of JavaConverters
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldAlterTopicConfig(boolean file) {
+        String filePath = "";
+        Map<String, String> addedConfigs = new HashMap<>();
+        addedConfigs.put("delete.retention.ms", "1000000");
+        addedConfigs.put("min.insync.replicas", "2");
+        if (file) {
+            File f = kafka.utils.TestUtils.tempPropertiesFile(JavaConverters.mapAsScalaMap(addedConfigs));
+            filePath = f.getPath();
+        }
+
+        String resourceName = "my-topic";
+        ConfigCommand.ConfigCommandOptions alterOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-name", resourceName,
+            "--entity-type", "topics",
+            "--alter",
+            file ? "--add-config-file" : "--add-config",
+            file ? filePath : addedConfigs.entrySet().stream().map(e -> e.getKey() + "=" + e.getValue()).collect(Collectors.joining(",")),
+            "--delete-config", "unclean.leader.election.enable"));
+        AtomicBoolean alteredConfigs = new AtomicBoolean();
+
+        ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, resourceName);
+        List<ConfigEntry> configEntries = Arrays.asList(newConfigEntry("min.insync.replicas", "1"), newConfigEntry("unclean.leader.election.enable", "1"));
+        KafkaFutureImpl<Map<ConfigResource, Config>> future = new KafkaFutureImpl<>();
+        future.complete(Collections.singletonMap(resource, new Config(configEntries)));
+        DescribeConfigsResult describeResult = mock(DescribeConfigsResult.class);
+        when(describeResult.all()).thenReturn(future);
+
+        KafkaFutureImpl<Void> alterFuture = new KafkaFutureImpl<>();
+        alterFuture.complete(null);
+        AlterConfigsResult alterResult = mock(AlterConfigsResult.class);
+        when(alterResult.all()).thenReturn(alterFuture);
+
+        Node node = new Node(1, "localhost", 9092);
+        MockAdminClient mockAdminClient = new MockAdminClient(Collections.singletonList(node), node) {
+            @Override
+            public synchronized DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
+                assertFalse(options.includeSynonyms(), "Config synonyms requested unnecessarily");
+                assertEquals(1, resources.size());
+                ConfigResource res = resources.iterator().next();
+                assertEquals(res.type(), ConfigResource.Type.TOPIC);
+                assertEquals(res.name(), resourceName);
+                return describeResult;
+            }
+
+            @Override
+            public synchronized AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs, AlterConfigsOptions options) {
+                assertEquals(1, configs.size());
+                Map.Entry<ConfigResource, Collection<AlterConfigOp>> entry = configs.entrySet().iterator().next();
+                Collection<AlterConfigOp> alterConfigOps = entry.getValue();
+                assertEquals(ConfigResource.Type.TOPIC, entry.getKey().type());
+                assertEquals(3, alterConfigOps.size());
+
+                Set<AlterConfigOp> expectedConfigOps = new HashSet<>(Arrays.asList(
+                    new AlterConfigOp(newConfigEntry("delete.retention.ms", "1000000"), AlterConfigOp.OpType.SET),
+                    new AlterConfigOp(newConfigEntry("min.insync.replicas", "2"), AlterConfigOp.OpType.SET),
+                    new AlterConfigOp(newConfigEntry("unclean.leader.election.enable", ""), AlterConfigOp.OpType.DELETE)
+                ));
+                assertEquals(expectedConfigOps.size(), alterConfigOps.size());
+                expectedConfigOps.forEach(expectedOp -> {
+                    Optional<AlterConfigOp> actual = alterConfigOps.stream()
+                        .filter(op -> Objects.equals(op.configEntry().name(), expectedOp.configEntry().name()))
+                        .findFirst();
+                    assertTrue(actual.isPresent());
+                    assertEquals(expectedOp.opType(), actual.get().opType());
+                    assertEquals(expectedOp.configEntry().name(), actual.get().configEntry().name());
+                    assertEquals(expectedOp.configEntry().value(), actual.get().configEntry().value());
+                });
+                alteredConfigs.set(true);
+                return alterResult;
+            }
+        };
+        ConfigCommand.alterConfig(mockAdminClient, alterOpts);
+        assertTrue(alteredConfigs.get());
+        verify(describeResult).all();
+    }
+
+    public ConfigEntry newConfigEntry(String name, String value) {
+        return ConfigTest.newConfigEntry(name, value, ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG, false, false, Collections.emptyList());
+    }
+
+    @Test
+    public void shouldDescribeConfigSynonyms() {
+        String resourceName = "my-topic";
+        ConfigCommand.ConfigCommandOptions describeOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-name", resourceName,
+            "--entity-type", "topics",
+            "--describe",
+            "--all"));
+
+        ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, resourceName);
+        KafkaFutureImpl<Map<ConfigResource, Config>> future = new KafkaFutureImpl<>();
+        future.complete(Collections.singletonMap(resource, new Config(Collections.emptyList())));
+        DescribeConfigsResult describeResult = mock(DescribeConfigsResult.class);
+        when(describeResult.all()).thenReturn(future);
+
+        Node node = new Node(1, "localhost", 9092);
+        MockAdminClient mockAdminClient = new MockAdminClient(Collections.singletonList(node), node) {
+            @Override
+            public synchronized DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
+                assertTrue(options.includeSynonyms(), "Synonyms not requested");
+                assertEquals(Collections.singleton(resource), new HashSet<>(resources));
+                return describeResult;
+            }
+        };
+        ConfigCommand.describeConfig(mockAdminClient, describeOpts);
+        verify(describeResult).all();
+    }
+
+    @Test
+    public void shouldNotAllowAddBrokerQuotaConfigWhileBrokerUpUsingZookeeper() {
+        ConfigCommand.ConfigCommandOptions alterOpts = new ConfigCommand.ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
+            "--entity-name", "1",
+            "--entity-type", "brokers",
+            "--alter",
+            "--add-config", "leader.replication.throttled.rate=10,follower.replication.throttled.rate=20"));
+
+        KafkaZkClient mockZkClient = mock(KafkaZkClient.class);
+        Broker mockBroker = mock(Broker.class);
+        when(mockZkClient.getBroker(1)).thenReturn(scala.Option.apply(mockBroker));
+
+        assertThrows(IllegalArgumentException.class,
+            () -> ConfigCommand.alterConfigWithZk(mockZkClient, alterOpts, DUMMY_ADMIN_ZK_CLIENT));
+    }
+
+    @Test
+    public void shouldNotAllowDescribeBrokerWhileBrokerUpUsingZookeeper() {
+        ConfigCommand.ConfigCommandOptions describeOpts = new ConfigCommand.ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
+            "--entity-name", "1",
+            "--entity-type", "brokers",
+            "--describe"));
+
+        KafkaZkClient mockZkClient = mock(KafkaZkClient.class);
+        Broker mockBroker = mock(Broker.class);
+        when(mockZkClient.getBroker(1)).thenReturn(scala.Option.apply(mockBroker));
+
+        assertThrows(IllegalArgumentException.class,
+            () -> ConfigCommand.describeConfigWithZk(mockZkClient, describeOpts, DUMMY_ADMIN_ZK_CLIENT));
+    }
+
+    @Test
+    public void shouldSupportDescribeBrokerBeforeBrokerUpUsingZookeeper() {
+        ConfigCommand.ConfigCommandOptions describeOpts = new ConfigCommand.ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
+            "--entity-name", "1",
+            "--entity-type", "brokers",
+            "--describe"));
+
+        class TestAdminZkClient extends AdminZkClient {
+            public TestAdminZkClient(KafkaZkClient zkClient) {
+                super(zkClient, scala.None$.empty());
+            }
+
+            @Override
+            public Properties fetchEntityConfig(String rootEntityType, String sanitizedEntityName) {
+                assertEquals("brokers", rootEntityType);
+                assertEquals("1", sanitizedEntityName);
+
+                return new Properties();
+            }
+        }
+
+        KafkaZkClient mockZkClient = mock(KafkaZkClient.class);
+        when(mockZkClient.getBroker(1)).thenReturn(scala.None$.empty());
+
+        ConfigCommand.describeConfigWithZk(mockZkClient, describeOpts, new TestAdminZkClient(null));
+    }
+
+    @Test
+    public void shouldAddBrokerLoggerConfig() {
+        Node node = new Node(1, "localhost", 9092);
+        verifyAlterBrokerLoggerConfig(node, "1", "1", Arrays.asList(
+            new ConfigEntry("kafka.log.LogCleaner", "INFO"),
+            new ConfigEntry("kafka.server.ReplicaManager", "INFO"),
+            new ConfigEntry("kafka.server.KafkaApi", "INFO")
+        ));
+    }
+
+    @Test
+    public void testNoSpecifiedEntityOptionWithDescribeBrokersInZKIsAllowed() {
+        String[] optsList = new String[]{"--zookeeper", ZK_CONNECT,
+            "--entity-type", ConfigType.BROKER,
+            "--describe"
+        };
+
+        new ConfigCommand.ConfigCommandOptions(optsList).checkArgs();
+    }
+
+    @Test
+    public void testNoSpecifiedEntityOptionWithDescribeBrokersInBootstrapServerIsAllowed() {
+        String[] optsList = new String[]{"--bootstrap-server", "localhost:9092",
+            "--entity-type", ConfigType.BROKER,
+            "--describe"
+        };
+
+        new ConfigCommand.ConfigCommandOptions(optsList).checkArgs();
+    }
+
+    @Test
+    public void testDescribeAllBrokerConfig() {
+        String[] optsList = new String[]{"--bootstrap-server", "localhost:9092",
+            "--entity-type", ConfigType.BROKER,
+            "--entity-name", "1",
+            "--describe",
+            "--all"};
+
+        new ConfigCommand.ConfigCommandOptions(optsList).checkArgs();
+    }
+
+    @Test
+    public void testDescribeAllTopicConfig() {
+        String[] optsList = new String[]{"--bootstrap-server", "localhost:9092",
+            "--entity-type", ConfigType.TOPIC,
+            "--entity-name", "foo",
+            "--describe",
+            "--all"};
+
+        new ConfigCommand.ConfigCommandOptions(optsList).checkArgs();
+    }
+
+    @Test
+    public void testDescribeAllBrokerConfigBootstrapServerRequired() {
+        String[] optsList = new String[]{"--zookeeper", ZK_CONNECT,
+            "--entity-type", ConfigType.BROKER,
+            "--entity-name", "1",
+            "--describe",
+            "--all"};
+
+        assertThrows(IllegalArgumentException.class, () -> new ConfigCommand.ConfigCommandOptions(optsList).checkArgs());
+    }
+
+    @Test
+    public void testEntityDefaultOptionWithDescribeBrokerLoggerIsNotAllowed() {
+        String[] optsList = new String[]{"--bootstrap-server", "localhost:9092",
+            "--entity-type", ConfigCommand.BrokerLoggerConfigType(),
+            "--entity-default",
+            "--describe"
+        };
+
+        assertThrows(IllegalArgumentException.class, () -> new ConfigCommand.ConfigCommandOptions(optsList).checkArgs());
+    }
+
+    @Test
+    public void testEntityDefaultOptionWithAlterBrokerLoggerIsNotAllowed() {
+        String[] optsList = new String[]{"--bootstrap-server", "localhost:9092",
+            "--entity-type", ConfigCommand.BrokerLoggerConfigType(),
+            "--entity-default",
+            "--alter",
+            "--add-config", "kafka.log.LogCleaner=DEBUG"
+        };
+
+        assertThrows(IllegalArgumentException.class, () -> new ConfigCommand.ConfigCommandOptions(optsList).checkArgs());
+    }
+
+    @Test
+    public void shouldRaiseInvalidConfigurationExceptionWhenAddingInvalidBrokerLoggerConfig() {
+        Node node = new Node(1, "localhost", 9092);
+        // verifyAlterBrokerLoggerConfig tries to alter kafka.log.LogCleaner, kafka.server.ReplicaManager and kafka.server.KafkaApi
+        // yet, we make it so DescribeConfigs returns only one logger, implying that kafka.server.ReplicaManager and kafka.log.LogCleaner are invalid
+        assertThrows(InvalidConfigurationException.class, () -> verifyAlterBrokerLoggerConfig(node, "1", "1", Collections.singletonList(
+            new ConfigEntry("kafka.server.KafkaApi", "INFO")
+        )));
+    }
+
+    @Test
+    public void shouldAddDefaultBrokerDynamicConfig() {
+        Node node = new Node(1, "localhost", 9092);
+        verifyAlterBrokerConfig(node, "", Collections.singletonList("--entity-default"));
+    }
+
+    @Test
+    public void shouldAddBrokerDynamicConfig() {
+        Node node = new Node(1, "localhost", 9092);
+        verifyAlterBrokerConfig(node, "1", Arrays.asList("--entity-name", "1"));
+    }
+
+    public void verifyAlterBrokerConfig(Node node, String resourceName, List<String> resourceOpts) {
+        String[] optsList = toArray(Arrays.asList("--bootstrap-server", "localhost:9092",
+            "--entity-type", "brokers",
+            "--alter",
+            "--add-config", "message.max.bytes=10,leader.replication.throttled.rate=10"), resourceOpts);
+        ConfigCommand.ConfigCommandOptions alterOpts = new ConfigCommand.ConfigCommandOptions(optsList);
+        Map<String, String> brokerConfigs = new HashMap<>();
+        brokerConfigs.put("num.io.threads", "5");
+
+        ConfigResource resource = new ConfigResource(ConfigResource.Type.BROKER, resourceName);
+        List<ConfigEntry> configEntries = Collections.singletonList(new ConfigEntry("num.io.threads", "5"));
+        KafkaFutureImpl<Map<ConfigResource, Config>> future = new KafkaFutureImpl<>();
+        future.complete(Collections.singletonMap(resource, new Config(configEntries)));
+        DescribeConfigsResult describeResult = mock(DescribeConfigsResult.class);
+        when(describeResult.all()).thenReturn(future);
+
+        KafkaFutureImpl<Void> alterFuture = new KafkaFutureImpl<>();
+        alterFuture.complete(null);
+        AlterConfigsResult alterResult = mock(AlterConfigsResult.class);
+        when(alterResult.all()).thenReturn(alterFuture);
+
+        MockAdminClient mockAdminClient = new MockAdminClient(Collections.singletonList(node), node) {
+            @Override
+            public synchronized DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
+                assertFalse(options.includeSynonyms(), "Config synonyms requested unnecessarily");
+                assertEquals(1, resources.size());
+                ConfigResource res = resources.iterator().next();
+                assertEquals(ConfigResource.Type.BROKER, res.type());
+                assertEquals(resourceName, res.name());
+                return describeResult;
+            }
+
+            @Override
+            public synchronized AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options) {
+                assertEquals(1, configs.size());
+                Map.Entry<ConfigResource, Config> entry = configs.entrySet().iterator().next();
+                ConfigResource res = entry.getKey();
+                Config config = entry.getValue();
+                assertEquals(ConfigResource.Type.BROKER, res.type());
+                config.entries().forEach(e -> brokerConfigs.put(e.name(), e.value()));
+                return alterResult;
+            }
+        };
+        ConfigCommand.alterConfig(mockAdminClient, alterOpts);
+        Map<String, String> expected = new HashMap<>();
+        expected.put("message.max.bytes", "10");
+        expected.put("num.io.threads", "5");
+        expected.put("leader.replication.throttled.rate", "10");
+        assertEquals(expected, brokerConfigs);
+        verify(describeResult).all();
+    }
+
+    @Test
+    public void shouldDescribeConfigBrokerWithoutEntityName() {
+        ConfigCommand.ConfigCommandOptions describeOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+            "--entity-type", "brokers",
+            "--describe"));
+
+        String brokerDefaultEntityName = "";
+        ConfigResource resourceCustom = new ConfigResource(ConfigResource.Type.BROKER, "1");
+        ConfigResource resourceDefault = new ConfigResource(ConfigResource.Type.BROKER, brokerDefaultEntityName);
+        KafkaFutureImpl<Map<ConfigResource, Config>> future = new KafkaFutureImpl<>();
+        Config emptyConfig = new Config(Collections.emptyList());
+        Map<ConfigResource, Config> resultMap = new HashMap<>();
+        resultMap.put(resourceCustom, emptyConfig);
+        resultMap.put(resourceDefault, emptyConfig);
+        future.complete(resultMap);
+        DescribeConfigsResult describeResult = mock(DescribeConfigsResult.class);
+        // make sure it will be called 2 times: (1) for broker "1" (2) for default broker ""
+        when(describeResult.all()).thenReturn(future);
+
+        Node node = new Node(1, "localhost", 9092);
+        MockAdminClient mockAdminClient = new MockAdminClient(Collections.singletonList(node), node) {
+            @Override
+            public synchronized DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
+                assertTrue(options.includeSynonyms(), "Synonyms not requested");
+                ConfigResource resource = resources.iterator().next();
+                assertEquals(ConfigResource.Type.BROKER, resource.type());
+                assertTrue(Objects.equals(resourceCustom.name(), resource.name()) || Objects.equals(resourceDefault.name(), resource.name()));
+                assertEquals(1, resources.size());
+                return describeResult;
+            }
+        };
+        ConfigCommand.describeConfig(mockAdminClient, describeOpts);
+        verify(describeResult, times(2)).all();
+    }
+
+    private void verifyAlterBrokerLoggerConfig(Node node, String resourceName, String entityName,
+                                               List<ConfigEntry> describeConfigEntries) {
+        String[] optsList = toArray("--bootstrap-server", "localhost:9092",
+            "--entity-type", ConfigCommand.BrokerLoggerConfigType(),
+            "--alter",
+            "--entity-name", entityName,
+            "--add-config", "kafka.log.LogCleaner=DEBUG",
+            "--delete-config", "kafka.server.ReplicaManager,kafka.server.KafkaApi");
+        ConfigCommand.ConfigCommandOptions alterOpts = new ConfigCommand.ConfigCommandOptions(optsList);
+        AtomicBoolean alteredConfigs = new AtomicBoolean();
+
+        ConfigResource resource = new ConfigResource(ConfigResource.Type.BROKER_LOGGER, resourceName);
+        KafkaFutureImpl<Map<ConfigResource, Config>> future = new KafkaFutureImpl<>();
+        future.complete(Collections.singletonMap(resource, new Config(describeConfigEntries)));
+        DescribeConfigsResult describeResult = mock(DescribeConfigsResult.class);
+        when(describeResult.all()).thenReturn(future);
+
+        KafkaFutureImpl<Void> alterFuture = new KafkaFutureImpl<>();
+        alterFuture.complete(null);
+        AlterConfigsResult alterResult = mock(AlterConfigsResult.class);
+        when(alterResult.all()).thenReturn(alterFuture);
+
+        MockAdminClient mockAdminClient = new MockAdminClient(Collections.singletonList(node), node) {
+            @Override
+            public synchronized DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
+                assertEquals(1, resources.size());
+                ConfigResource res = resources.iterator().next();
+                assertEquals(ConfigResource.Type.BROKER_LOGGER, res.type());
+                assertEquals(resourceName, res.name());
+                return describeResult;
+            }
+
+            @Override
+            public synchronized AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs, AlterConfigsOptions options) {
+                assertEquals(1, configs.size());
+                Map.Entry<ConfigResource, Collection<AlterConfigOp>> entry = configs.entrySet().iterator().next();
+                ConfigResource res = entry.getKey();
+                Collection<AlterConfigOp> alterConfigOps = entry.getValue();
+                assertEquals(ConfigResource.Type.BROKER_LOGGER, res.type());
+                assertEquals(3, alterConfigOps.size());
+
+                List<AlterConfigOp> expectedConfigOps = Arrays.asList(
+                    new AlterConfigOp(new ConfigEntry("kafka.log.LogCleaner", "DEBUG"), AlterConfigOp.OpType.SET),
+                    new AlterConfigOp(new ConfigEntry("kafka.server.ReplicaManager", ""), AlterConfigOp.OpType.DELETE),
+                    new AlterConfigOp(new ConfigEntry("kafka.server.KafkaApi", ""), AlterConfigOp.OpType.DELETE)
+                );
+                assertEquals(expectedConfigOps.size(), alterConfigOps.size());
+                Iterator<AlterConfigOp> alterConfigOpsIter = alterConfigOps.iterator();
+                for (AlterConfigOp expectedConfigOp : expectedConfigOps) {
+                    assertEquals(expectedConfigOp, alterConfigOpsIter.next());
+                }
+                alteredConfigs.set(true);
+                return alterResult;
+            }
+        };
+        ConfigCommand.alterConfig(mockAdminClient, alterOpts);
+        assertTrue(alteredConfigs.get());
+        verify(describeResult).all();
+    }
+
+    @Test
+    public void shouldSupportCommaSeparatedValuesUsingZookeeper() {
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
+            "--entity-name", "my-topic",
+            "--entity-type", "topics",
+            "--alter",
+            "--add-config", "a=b,c=[d,e ,f],g=[h,i]"));
+
+        KafkaZkClient zkClient = mock(KafkaZkClient.class);
+        when(zkClient.getEntityConfigs(anyString(), anyString())).thenReturn(new Properties());
+
+        class TestAdminZkClient extends AdminZkClient {
+            public TestAdminZkClient(KafkaZkClient zkClient) {
+                super(zkClient, scala.None$.empty());
+            }
+
+            @Override
+            public void changeTopicConfig(String topic, Properties configChange) {
+                assertEquals("my-topic", topic);
+                assertEquals("b", configChange.get("a"));
+                assertEquals("d,e ,f", configChange.get("c"));
+                assertEquals("h,i", configChange.get("g"));
+            }
+        }
+
+        ConfigCommand.alterConfigWithZk(null, createOpts, new TestAdminZkClient(zkClient));
+    }
 
     public static String[] toArray(String... first) {
         return first;
