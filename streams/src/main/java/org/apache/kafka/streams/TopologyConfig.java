@@ -22,15 +22,16 @@ import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
+import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.TimestampExtractor;
-
 import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNamedTopologyWrapper;
 import org.apache.kafka.streams.state.DslStoreSuppliers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import java.util.Optional;
 import java.util.Properties;
 import java.util.function.Supplier;
@@ -40,23 +41,24 @@ import static org.apache.kafka.streams.StreamsConfig.BUFFERED_RECORDS_PER_PARTIT
 import static org.apache.kafka.streams.StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_DOC;
 import static org.apache.kafka.streams.StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.CACHE_MAX_BYTES_BUFFERING_DOC;
+import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC;
+import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_DOC;
+import static org.apache.kafka.streams.StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC;
 import static org.apache.kafka.streams.StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_DEFAULT;
 import static org.apache.kafka.streams.StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_DOC;
-import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG;
-import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_DOC;
-import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG;
-import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC;
-import static org.apache.kafka.streams.StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG;
-import static org.apache.kafka.streams.StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC;
+import static org.apache.kafka.streams.StreamsConfig.IN_MEMORY;
 import static org.apache.kafka.streams.StreamsConfig.MAX_TASK_IDLE_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.MAX_TASK_IDLE_MS_DOC;
+import static org.apache.kafka.streams.StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.ROCKS_DB;
+import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_DOC;
 import static org.apache.kafka.streams.StreamsConfig.TASK_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.TASK_TIMEOUT_MS_DOC;
-import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_CONFIG;
-import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_DOC;
-import static org.apache.kafka.streams.StreamsConfig.ROCKS_DB;
-import static org.apache.kafka.streams.StreamsConfig.IN_MEMORY;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.getTotalCacheSize;
 
 /**
@@ -135,6 +137,7 @@ public class TopologyConfig extends AbstractConfig {
     public final Class<?> dslStoreSuppliers;
     public final Supplier<TimestampExtractor> timestampExtractorSupplier;
     public final Supplier<DeserializationExceptionHandler> deserializationExceptionHandlerSupplier;
+    public final Supplier<ProcessingExceptionHandler> processingExceptionHandlerSupplier;
 
     public TopologyConfig(final StreamsConfig globalAppConfigs) {
         this(null, globalAppConfigs, new Properties());
@@ -225,6 +228,13 @@ public class TopologyConfig extends AbstractConfig {
             deserializationExceptionHandlerSupplier = () -> globalAppConfigs.getConfiguredInstance(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, DeserializationExceptionHandler.class);
         }
 
+        if (isTopologyOverride(PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, topologyOverrides)) {
+            processingExceptionHandlerSupplier = () -> getConfiguredInstance(PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, ProcessingExceptionHandler.class);
+            log.info("Topology {} is overriding {} to {}", topologyName, PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, getClass(PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG));
+        } else {
+            processingExceptionHandlerSupplier = () -> globalAppConfigs.getConfiguredInstance(PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, ProcessingExceptionHandler.class);
+        }
+
         if (isTopologyOverride(DEFAULT_DSL_STORE_CONFIG, topologyOverrides)) {
             storeType = getString(DEFAULT_DSL_STORE_CONFIG);
             log.info("Topology {} is overriding {} to {}", topologyName, DEFAULT_DSL_STORE_CONFIG, storeType);
@@ -280,7 +290,8 @@ public class TopologyConfig extends AbstractConfig {
             maxBufferedSize,
             timestampExtractorSupplier.get(),
             deserializationExceptionHandlerSupplier.get(),
-            eosEnabled
+            eosEnabled,
+            processingExceptionHandlerSupplier.get()
         );
     }
 
@@ -291,19 +302,22 @@ public class TopologyConfig extends AbstractConfig {
         public final TimestampExtractor timestampExtractor;
         public final DeserializationExceptionHandler deserializationExceptionHandler;
         public final boolean eosEnabled;
+        public final ProcessingExceptionHandler processingExceptionHandler;
 
         private TaskConfig(final long maxTaskIdleMs,
                            final long taskTimeoutMs,
                            final int maxBufferedSize,
                            final TimestampExtractor timestampExtractor,
                            final DeserializationExceptionHandler deserializationExceptionHandler,
-                           final boolean eosEnabled) {
+                           final boolean eosEnabled,
+                           final ProcessingExceptionHandler processingExceptionHandler) {
             this.maxTaskIdleMs = maxTaskIdleMs;
             this.taskTimeoutMs = taskTimeoutMs;
             this.maxBufferedSize = maxBufferedSize;
             this.timestampExtractor = timestampExtractor;
             this.deserializationExceptionHandler = deserializationExceptionHandler;
             this.eosEnabled = eosEnabled;
+            this.processingExceptionHandler = processingExceptionHandler;
         }
     }
 }

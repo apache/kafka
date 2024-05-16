@@ -331,6 +331,7 @@ public class RecordCollectorImpl implements RecordCollector {
                         processorNodeId,
                         taskId);
                 if (productionExceptionHandler.handle(errorHandlerContext, serializedRecord, exception) == ProductionExceptionHandlerResponse.FAIL) {
+
                     errorMessage += "\nException handler choose to FAIL the processing, no more records would be sent.";
                     sendException.set(new StreamsException(errorMessage, exception));
                 } else {

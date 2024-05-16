@@ -22,8 +22,10 @@ import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Cancellable;
+import org.apache.kafka.streams.processor.ErrorHandlerContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
@@ -44,6 +46,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
+import static org.apache.kafka.streams.StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG;
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDuration;
 import static org.apache.kafka.streams.processor.internals.AbstractReadOnlyDecorator.getReadOnlyStore;
@@ -288,7 +291,24 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
                                         final Record<K, V> record) {
         setCurrentNode(child);
 
-        child.process(record);
+        try {
+            child.process(record);
+        }  catch (final Exception e) {
+            final ErrorHandlerContext errorHandlerContext = new ErrorHandlerContextImpl(null, topic(),
+                partition(), offset(), headers(), null, null, child.name(), taskId());
+            final ProcessingExceptionHandler.ProcessingHandlerResponse response = streamTask.config
+                .processingExceptionHandler
+                .handle(errorHandlerContext, record, e);
+
+            if (response == ProcessingExceptionHandler.ProcessingHandlerResponse.FAIL) {
+                throw new StreamsException("Processing exception handler is set to fail upon" +
+                    " a processing error. If you would rather have the streaming pipeline" +
+                    " continue after a deserialization error, please set the " +
+                    PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.",
+                    e);
+            }
+        }
+
 
         if (child.isTerminalNode()) {
             streamTask.maybeRecordE2ELatency(record.timestamp(), currentSystemTimeMs(), child.name());

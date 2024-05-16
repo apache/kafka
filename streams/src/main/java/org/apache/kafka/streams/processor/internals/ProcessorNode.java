@@ -141,7 +141,6 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
         }
     }
 
-
     public void process(final Record<KIn, VIn> record) {
         throwIfClosed();
 
