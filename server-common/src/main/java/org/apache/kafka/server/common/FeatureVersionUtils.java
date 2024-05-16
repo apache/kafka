@@ -24,8 +24,14 @@ import java.util.stream.Collectors;
 public interface FeatureVersionUtils {
 
     interface FeatureVersionImpl {
+        /**
+         * The level of the feature. 0 means the feature is disabled.
+         */
         short featureLevel();
 
+        /**
+         * The name of the feature.
+         */
         String featureName();
 
         /**

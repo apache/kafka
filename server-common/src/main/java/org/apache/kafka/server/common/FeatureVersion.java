@@ -71,6 +71,10 @@ public enum FeatureVersion {
         return name;
     }
 
+    public FeatureVersionUtils.FeatureVersionImpl[] features() {
+        return features;
+    }
+
     /**
      * Creates a FeatureVersion from a given name and level with the correct feature object underneath.
      *
@@ -127,7 +131,7 @@ public enum FeatureVersion {
 
         for (Iterator<FeatureVersionUtils.FeatureVersionImpl> it = Arrays.stream(features).iterator(); it.hasNext(); ) {
             FeatureVersionUtils.FeatureVersionImpl feature = it.next();
-            if (feature.metadataVersionMapping().isLessThan(mv))
+            if (feature.metadataVersionMapping().isLessThan(mv) || feature.metadataVersionMapping().equals(mv))
                 level = feature.featureLevel();
             else
                 return level;

@@ -72,7 +72,7 @@ object StorageTool extends Logging {
             Option(config.get.originals.get(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG)).map(_.toString))
           validateMetadataVersion(metadataVersion, config)
           // Get all other features, validate, and create records for them
-          metadataRecords.appendAll(generateFeatureRecords(metadataVersion, featureNamesAndLevelsMap, FeatureVersion.PRODUCTION_FEATURES.asScala.toList))
+          generateFeatureRecords(metadataRecords, metadataVersion, featureNamesAndLevelsMap, FeatureVersion.PRODUCTION_FEATURES.asScala.toList)
           getUserScramCredentialRecords(namespace).foreach(userScramCredentialRecords => {
             if (!metadataVersion.isScramSupported) {
               throw new TerseFailure(s"SCRAM is only supported in metadata.version ${MetadataVersion.IBP_3_5_IV2} or later.")
@@ -118,9 +118,10 @@ object StorageTool extends Logging {
     }
   }
 
-  def generateFeatureRecords(metadataVersion: MetadataVersion,
-                             specifiedFeatures: Map[String, java.lang.Short],
-                             allFeatures: List[FeatureVersion]): List[ApiMessageAndVersion] = {
+  private[tools] def generateFeatureRecords(metadataRecords: ArrayBuffer[ApiMessageAndVersion],
+                                     metadataVersion: MetadataVersion,
+                                     specifiedFeatures: Map[String, java.lang.Short],
+                                     allFeatures: List[FeatureVersion]): Unit = {
     // If we are using --version-default, the default is based on the metadata version.
     val metadataVersionOpt: Optional[MetadataVersion] = if (specifiedFeatures.isEmpty) Optional.of(metadataVersion) else Optional.empty[MetadataVersion]
 
@@ -129,20 +130,19 @@ object StorageTool extends Logging {
       feature.fromFeatureLevel(level)
     }
     val featuresMap = FeatureVersionImpl.featureImplsToMap(allFeaturesAndLevels.asJava)
+    featuresMap.put(MetadataVersion.FEATURE_NAME, metadataVersion.featureLevel)
 
-    val records = mutable.ListBuffer.empty[ApiMessageAndVersion]
     try {
       for (feature <- allFeaturesAndLevels) {
         // In order to validate, we need all feature versions set.
         FeatureVersion.validateVersion(feature, metadataVersion, featuresMap)
         // Only set feature records for levels greater than 0. 0 is assumed if there is no record.
         if (feature.featureLevel > 0) {
-          records += new ApiMessageAndVersion(new FeatureLevelRecord().
+          metadataRecords.addOne(new ApiMessageAndVersion(new FeatureLevelRecord().
             setName(feature.featureName).
-            setFeatureLevel(feature.featureLevel), 0.toShort)
+            setFeatureLevel(feature.featureLevel), 0.toShort))
         }
       }
-      records.toList
     } catch {
       case e: Throwable => throw new TerseFailure(e.getMessage)
     }
@@ -523,7 +523,7 @@ object StorageTool extends Logging {
     0
   }
 
-  private def parseNameAndLevel(input: String): Array[String] = {
+  private def parseNameAndLevel(input: String): (String, java.lang.Short) = {
     val equalsIndex = input.indexOf("=")
     if (equalsIndex < 0)
       throw new RuntimeException("Can't parse feature=level string " + input + ": equals sign not found.")
@@ -535,15 +535,14 @@ object StorageTool extends Logging {
       case _: Throwable =>
         throw new RuntimeException("Can't parse feature=level string " + input + ": " + "unable to parse " + levelString + " as a short.")
     }
-    Array[String](name, levelString)
+    (name, levelString.toShort)
   }
 
   def featureNamesAndLevels(features: List[String]): Map[String, java.lang.Short] = {
-    features.map((feature: String) => {
+    features.map { (feature: String) =>
       // Ensure the feature exists
-
       val nameAndLevel = parseNameAndLevel(feature)
-      (nameAndLevel(0), java.lang.Short.valueOf(nameAndLevel(1)))
-    }).toMap
+      (nameAndLevel._1, nameAndLevel._2)
+    }.toMap
   }
 }

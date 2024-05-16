@@ -344,19 +344,27 @@ Found problem:
   @EnumSource(classOf[TestFeatureVersion])
   def testFeatureFlag(testFeatureVersion: TestFeatureVersion): Unit = {
     val featureLevel = testFeatureVersion.featureLevel
-    val records = StorageTool.generateFeatureRecords(MetadataVersion.LATEST_PRODUCTION,
-      Map(TestFeatureVersion.FEATURE_NAME -> featureLevel),
-      allFeatures
-    )
-    if (featureLevel > 0) {
-      assertEquals(List(generateRecord(TestFeatureVersion.FEATURE_NAME, featureLevel)), records)
+    if (featureLevel <= TestFeatureVersion.PRODUCTION_VERSION.featureLevel) {
+      val records = new ArrayBuffer[ApiMessageAndVersion]()
+      StorageTool.generateFeatureRecords(
+        records,
+        MetadataVersion.LATEST_PRODUCTION,
+        Map(TestFeatureVersion.FEATURE_NAME -> featureLevel),
+        allFeatures
+      )
+      if (featureLevel > 0) {
+        assertEquals(List(generateRecord(TestFeatureVersion.FEATURE_NAME, featureLevel)), records)
+      }
     }
   }
 
   @ParameterizedTest
   @EnumSource(classOf[MetadataVersion])
   def testVersionDefault(metadataVersion: MetadataVersion): Unit = {
-    val records = StorageTool.generateFeatureRecords(metadataVersion,
+    val records = new ArrayBuffer[ApiMessageAndVersion]()
+    StorageTool.generateFeatureRecords(
+      records,
+      metadataVersion,
       Map.empty,
       allFeatures
     )
@@ -370,7 +378,9 @@ Found problem:
   @Test
   def testFeatureDependency(): Unit = {
     val featureLevel = 1.toShort
-    assertThrows(classOf[TerseFailure], () => StorageTool.generateFeatureRecords(MetadataVersion.IBP_2_8_IV1,
+    assertThrows(classOf[TerseFailure], () => StorageTool.generateFeatureRecords(
+      new ArrayBuffer[ApiMessageAndVersion](),
+      MetadataVersion.IBP_2_8_IV1,
       Map(TestFeatureVersion.FEATURE_NAME -> featureLevel),
       allFeatures
     ))
@@ -379,7 +389,9 @@ Found problem:
   @Test
   def testFeatureInvalidFlag(): Unit = {
     val featureLevel = 99.toShort
-    assertThrows(classOf[IllegalArgumentException], () => StorageTool.generateFeatureRecords(MetadataVersion.LATEST_PRODUCTION,
+    assertThrows(classOf[IllegalArgumentException], () => StorageTool.generateFeatureRecords(
+      new ArrayBuffer[ApiMessageAndVersion](),
+      MetadataVersion.LATEST_PRODUCTION,
       Map(TestFeatureVersion.FEATURE_NAME -> featureLevel),
       allFeatures
     ))

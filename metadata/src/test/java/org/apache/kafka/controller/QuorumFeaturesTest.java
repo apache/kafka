@@ -58,8 +58,8 @@ public class QuorumFeaturesTest {
             MetadataVersion.LATEST_PRODUCTION.featureLevel()));
         for (FeatureVersion feature : FeatureVersion.PRODUCTION_FEATURES) {
             expectedFeatures.put(feature.featureName(), VersionRange.of(
-                    0,
-                    feature.defaultValue(Optional.empty())
+                0,
+                feature.defaultValue(Optional.empty())
             ));
         }
         assertEquals(expectedFeatures, QuorumFeatures.defaultFeatureMap(false));
@@ -73,8 +73,8 @@ public class QuorumFeaturesTest {
             MetadataVersion.latestTesting().featureLevel()));
         for (FeatureVersion feature : FeatureVersion.PRODUCTION_FEATURES) {
             expectedFeatures.put(feature.featureName(), VersionRange.of(
-                    0,
-                    feature.defaultValue(Optional.empty())
+                0,
+                feature.defaultValue(Optional.empty())
             ));
         }
         assertEquals(expectedFeatures, QuorumFeatures.defaultFeatureMap(true));

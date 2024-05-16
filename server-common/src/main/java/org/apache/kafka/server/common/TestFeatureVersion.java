@@ -23,7 +23,7 @@ public enum TestFeatureVersion implements FeatureVersionUtils.FeatureVersionImpl
 
     TEST_0(0, MetadataVersion.IBP_3_3_IV0, Collections.emptyMap()),
     TEST_1(1, MetadataVersion.IBP_3_7_IV0, Collections.emptyMap()),
-    TEST_2(2, MetadataVersion.IBP_3_8_IV0, Collections.emptyMap());
+    TEST_2(2, MetadataVersion.IBP_3_8_IV0, Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_8_IV0.featureLevel()));
 
     private short featureLevel;
     private MetadataVersion metadataVersionMapping;
