@@ -46,7 +46,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * This class contains helper methods to create records stored in
@@ -231,6 +230,17 @@ public class CoordinatorRecordHelpers {
         String memberId,
         Map<Uuid, Set<Integer>> partitions
     ) {
+        List<ConsumerGroupTargetAssignmentMemberValue.TopicPartition> topicPartitions =
+            new ArrayList<>(partitions.size());
+
+        for (Map.Entry<Uuid, Set<Integer>> entry : partitions.entrySet()) {
+            topicPartitions.add(
+                new ConsumerGroupTargetAssignmentMemberValue.TopicPartition()
+                    .setTopicId(entry.getKey())
+                    .setPartitions(new ArrayList<>(entry.getValue()))
+            );
+        }
+
         return new CoordinatorRecord(
             new ApiMessageAndVersion(
                 new ConsumerGroupTargetAssignmentMemberKey()
@@ -240,11 +250,7 @@ public class CoordinatorRecordHelpers {
             ),
             new ApiMessageAndVersion(
                 new ConsumerGroupTargetAssignmentMemberValue()
-                    .setTopicPartitions(partitions.entrySet().stream()
-                        .map(keyValue -> new ConsumerGroupTargetAssignmentMemberValue.TopicPartition()
-                            .setTopicId(keyValue.getKey())
-                            .setPartitions(new ArrayList<>(keyValue.getValue())))
-                        .collect(Collectors.toList())),
+                    .setTopicPartitions(topicPartitions),
                 (short) 0
             )
         );
