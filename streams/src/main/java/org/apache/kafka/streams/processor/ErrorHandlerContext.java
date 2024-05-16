@@ -18,8 +18,7 @@ package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
-import org.apache.kafka.streams.processor.api.ProcessorContext;
-import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+
 
 /**
  * ErrorHandlerContext interface

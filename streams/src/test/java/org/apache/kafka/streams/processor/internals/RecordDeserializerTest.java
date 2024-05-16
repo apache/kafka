@@ -32,36 +32,39 @@ import org.junit.Test;
 
 import java.util.Optional;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertNull;
+
 
 public class RecordDeserializerTest {
 
-    private final RecordHeaders headers = new RecordHeaders(new Header[] {new RecordHeader("key", "value".getBytes())});
+    private final RecordHeaders headers = new RecordHeaders(new Header[]{new RecordHeader("key", "value".getBytes())});
     private final ConsumerRecord<byte[], byte[]> rawRecord = new ConsumerRecord<>("topic",
-        1,
-        1,
-        10,
-        TimestampType.LOG_APPEND_TIME,
-        3,
-        5,
-        new byte[0],
-        new byte[0],
-        headers,
-        Optional.empty());
+            1,
+            1,
+            10,
+            TimestampType.LOG_APPEND_TIME,
+            3,
+            5,
+            new byte[0],
+            new byte[0],
+            headers,
+            Optional.empty());
 
     private final InternalProcessorContext<Void, Void> context = new InternalMockProcessorContext<>();
 
     @Test
     public void shouldReturnConsumerRecordWithDeserializedValueWhenNoExceptions() {
         final RecordDeserializer recordDeserializer = new RecordDeserializer(
-            new TheSourceNode(
-                false,
-                false,
-                "key", "value"
-            ),
-            null,
-            new LogContext(),
-            new Metrics().sensor("dropped-records")
+                new TheSourceNode(
+                        false,
+                        false,
+                        "key", "value"
+                ),
+                null,
+                new LogContext(),
+                new Metrics().sensor("dropped-records")
         );
         final ConsumerRecord<Object, Object> record = recordDeserializer.deserialize(null, rawRecord);
         assertEquals(rawRecord.topic(), record.topic());
@@ -86,8 +89,8 @@ public class RecordDeserializerTest {
                 new LogContext(),
                 new Metrics().sensor("dropped-records")
         );
-        StreamsException e = assertThrows(StreamsException.class, () -> recordDeserializer.deserialize(context, rawRecord));
-     assertEquals(e.getMessage(), "Deserialization exception handler is set to fail upon a deserialization error. If you would rather have the streaming pipeline continue after a deserialization error, please set the default.deserialization.exception.handler appropriately.");
+        final StreamsException e = assertThrows(StreamsException.class, () -> recordDeserializer.deserialize(context, rawRecord));
+        assertEquals(e.getMessage(), "Deserialization exception handler is set to fail upon a deserialization error. If you would rather have the streaming pipeline continue after a deserialization error, please set the default.deserialization.exception.handler appropriately.");
     }
 
     @Test
@@ -102,7 +105,7 @@ public class RecordDeserializerTest {
                 new LogContext(),
                 new Metrics().sensor("dropped-records")
         );
-        StreamsException e = assertThrows(StreamsException.class, () -> recordDeserializer.deserialize(context, rawRecord));
+        final StreamsException e = assertThrows(StreamsException.class, () -> recordDeserializer.deserialize(context, rawRecord));
         assertEquals(e.getMessage(), "Deserialization exception handler is set to fail upon a deserialization error. If you would rather have the streaming pipeline continue after a deserialization error, please set the default.deserialization.exception.handler appropriately.");
     }
 
@@ -118,7 +121,7 @@ public class RecordDeserializerTest {
                 new LogContext(),
                 new Metrics().sensor("dropped-records")
         );
-        final ConsumerRecord<Object, Object> record =  recordDeserializer.deserialize(context, rawRecord);
+        final ConsumerRecord<Object, Object> record = recordDeserializer.deserialize(context, rawRecord);
         assertNull(record);
     }
 
@@ -134,7 +137,7 @@ public class RecordDeserializerTest {
                 new LogContext(),
                 new Metrics().sensor("dropped-records")
         );
-        final ConsumerRecord<Object, Object> record =  recordDeserializer.deserialize(context, rawRecord);
+        final ConsumerRecord<Object, Object> record = recordDeserializer.deserialize(context, rawRecord);
         assertNull(record);
     }
 

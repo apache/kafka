@@ -219,7 +219,7 @@ public class RecordCollectorImpl implements RecordCollector {
             log.debug(String.format("Error serializing record to topic %s", topic), exception);
 
             try {
-                ErrorHandlerContextImpl errorHandlerContext = new ErrorHandlerContextImpl(
+                final ErrorHandlerContextImpl errorHandlerContext = new ErrorHandlerContextImpl(
                         context,
                         record.topic(),
                         record.partition(),
@@ -320,7 +320,7 @@ public class RecordCollectorImpl implements RecordCollector {
                     "`delivery.timeout.ms` to a larger value to wait longer for such scenarios and avoid timeout errors";
                 sendException.set(new TaskCorruptedException(Collections.singleton(taskId)));
             } else {
-                ErrorHandlerContextImpl errorHandlerContext = new ErrorHandlerContextImpl(
+                final ErrorHandlerContextImpl errorHandlerContext = new ErrorHandlerContextImpl(
                         context,
                         serializedRecord.topic(),
                         serializedRecord.partition(),

@@ -34,15 +34,15 @@ public class ErrorHandlerContextImpl implements ErrorHandlerContext {
     private final String processorNodeId;
     private final TaskId taskId;
 
-    public ErrorHandlerContextImpl(InternalProcessorContext processorContext,
-                                   String topic,
-                                   int partition,
-                                   long offset,
-                                   Headers headers,
-                                   byte[] sourceRawKey,
-                                   byte[] sourceRawValue,
-                                   String processorNodeId,
-                                   TaskId taskId) {
+    public ErrorHandlerContextImpl(final InternalProcessorContext processorContext,
+                                   final String topic,
+                                   final int partition,
+                                   final long offset,
+                                   final Headers headers,
+                                   final byte[] sourceRawKey,
+                                   final byte[] sourceRawValue,
+                                   final String processorNodeId,
+                                   final TaskId taskId) {
         this.processorContext = processorContext;
         this.topic = topic;
         this.partition = partition;
@@ -71,7 +71,7 @@ public class ErrorHandlerContextImpl implements ErrorHandlerContext {
 
     @Override
     public Headers headers() {
-       return this.headers;
+        return this.headers;
     }
 
     @Override

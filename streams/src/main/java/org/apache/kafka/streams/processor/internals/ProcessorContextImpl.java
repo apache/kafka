@@ -303,7 +303,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
             if (response == ProcessingExceptionHandler.ProcessingHandlerResponse.FAIL) {
                 throw new StreamsException("Processing exception handler is set to fail upon" +
                     " a processing error. If you would rather have the streaming pipeline" +
-                    " continue after a deserialization error, please set the " +
+                    " continue after a processing error, please set the " +
                     PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.",
                     e);
             }
