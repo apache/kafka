@@ -29,7 +29,7 @@ import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.TaskInfo;
 
-public class TaskInfoImpl implements TaskInfo {
+public class DefaultTaskInfo implements TaskInfo {
 
     private final TaskId id;
     private final boolean isStateful;
@@ -38,12 +38,12 @@ public class TaskInfoImpl implements TaskInfo {
     private final Set<TopicPartition> inputTopicPartitions;
     private final Set<TopicPartition> changelogTopicPartitions;
 
-    public TaskInfoImpl(final TaskId id,
-                        final boolean isStateful,
-                        final Map<TopicPartition, Set<String>> partitionToRackIds,
-                        final Set<String> stateStoreNames,
-                        final Set<TopicPartition> inputTopicPartitions,
-                        final Set<TopicPartition> changelogTopicPartitions) {
+    public DefaultTaskInfo(final TaskId id,
+                           final boolean isStateful,
+                           final Map<TopicPartition, Set<String>> partitionToRackIds,
+                           final Set<String> stateStoreNames,
+                           final Set<TopicPartition> inputTopicPartitions,
+                           final Set<TopicPartition> changelogTopicPartitions) {
         this.id = id;
         this.partitionToRackIds = unmodifiableMap(partitionToRackIds);
         this.isStateful = isStateful;
@@ -52,12 +52,12 @@ public class TaskInfoImpl implements TaskInfo {
         this.changelogTopicPartitions = unmodifiableSet(changelogTopicPartitions);
     }
 
-    public static TaskInfoImpl of(final TaskId taskId,
-                                  final boolean isStateful,
-                                  final ValueMapper<TopicPartition, String> previousOwnerForPartition,
-                                  final Map<String, Optional<String>> rackForConsumer,
-                                  final Map<TaskId, Set<TopicPartition>> inputPartitionsForTask,
-                                  final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask) {
+    public static DefaultTaskInfo of(final TaskId taskId,
+                                     final boolean isStateful,
+                                     final ValueMapper<TopicPartition, String> previousOwnerForPartition,
+                                     final Map<String, Optional<String>> rackForConsumer,
+                                     final Map<TaskId, Set<TopicPartition>> inputPartitionsForTask,
+                                     final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask) {
 
         final Set<TopicPartition> inputPartitions = inputPartitionsForTask.get(taskId);
         final Set<TopicPartition> changelogPartitions = changelogPartitionsForTask.get(taskId);
@@ -78,7 +78,7 @@ public class TaskInfoImpl implements TaskInfo {
         });
 
         final Set<String> stateStoreNames = new HashSet<>();
-        return new TaskInfoImpl(
+        return new DefaultTaskInfo(
             taskId,
             isStateful, // All standby tasks are stateful.
             racksForPartition,

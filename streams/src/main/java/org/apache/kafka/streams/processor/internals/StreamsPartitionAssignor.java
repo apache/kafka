@@ -55,7 +55,7 @@ import org.apache.kafka.streams.processor.internals.assignment.ReferenceContaine
 import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
 import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
-import org.apache.kafka.streams.processor.internals.assignment.TaskInfoImpl;
+import org.apache.kafka.streams.processor.internals.assignment.DefaultTaskInfo;
 import org.apache.kafka.streams.state.HostInfo;
 import org.slf4j.Logger;
 
@@ -493,7 +493,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             final ClientState clientState = clientMetadata.state;
             final Map<String, Optional<String>> rackForConsumer = rackForProcessConsumer.get(processId);
             clientState.standbyTasks().forEach(taskId -> {
-                final TaskInfo taskInfo = TaskInfoImpl.of(
+                final TaskInfo taskInfo = DefaultTaskInfo.of(
                     taskId,
                     true, // All standby tasks are stateful.
                     clientState::previousOwnerForPartition,
@@ -504,7 +504,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 tasks.add(taskInfo);
             });
             clientState.activeTasks().forEach(taskId -> {
-                final TaskInfo taskInfo = TaskInfoImpl.of(
+                final TaskInfo taskInfo = DefaultTaskInfo.of(
                     taskId,
                     clientState.statefulActiveTasks().contains(taskId),
                     clientState::previousOwnerForPartition,
