@@ -60,20 +60,21 @@
     { "name": "ClientTags", "type": "[]KeyValue", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "Used for rack-aware assignment algorithm. Null if unchanged since last heartbeat." },
 
-    { "name": "TaskLagUpdateReason", "type":  "int8", "versions": "0+", "default": 0,
-      "about": "Reason for updating task lag. 0 if no update, 1 if task lag is updated due to warm up being ready, 2 if warm up failed" },
-    { "name": "TaskLag", "type": "[]TaskLag", "versions": "0+", "nullableVersions": "0+", "default": "null",
-      "about": "Cumulative lags for standby tasks. Only updatable when TaskLagUpdateReason is not zero. Null if unchanged since last heartbeat.",
+    { "name": "TaskOffsetUpdateReason", "type":  "int8", "versions": "0+", "default": 0,
+      "about": "Reason for updating task offset. 0 if no update, 1 if task catches up with acceptable.recovery.lag, 2 if task falls behind acceptable.recovery.lag, 3 if a standby task is added or removed, 4 if triggerd by a time-interval" },
+    { "name": "TaskOffset", "type": "[]TaskOffset", "versions": "0+", "nullableVersions": "0+", "default": "null",
+      "about": "Cumulative offsets for assigned and dormant standby tasks. Only updatable when TaskOffsetUpdateReason is not zero. Null if unchanged since last heartbeat.",
       "fields": [
         { "name": "TaskId", "type": "TaskId", "versions": "0+",
           "about": "The task ID" },
-        { "name": "Lag", "type": "int64", "versions": "0+",
-          "about": "The cumulative lag for the task" }
+        { "name": "Offset", "type": "int64", "versions": "0+",
+          "about": "The cumulative offset for the task" }
       ]
     },
+    { "name": "UserData", "type": "bytes", "versions": "0+", "nullableVersions": "0+", "default": "null",
+      "about": "Opaque user data to be passed to the client-side assignor. Null if unchanged since last heartbeat." },
     { "name": "AssignmentConfigs", "type": "[]KeyValue", "versions": "0+", "nullableVersions": "0+", "default": "null",
-      "about": "Generic array of assignment configuration strings. Null if unchanged since last heartbeat."
-    },
+      "about": "Generic array of assignment configuration strings. Null if unchanged since last heartbeat." },
     { "name": "ShutdownApplication", "type": "bool", "versions": "0+", "default": false,
       "about": "Whether all Streams clients in the group should shut down." }
   ],

@@ -21,6 +21,7 @@ import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
 import org.apache.kafka.common.errors.BrokerNotAvailableException;
 import org.apache.kafka.common.errors.StreamsInconsistentTopologyException;
+import org.apache.kafka.common.errors.StreamsInvalidAssignment;
 import org.apache.kafka.common.errors.StreamsInvalidTopologyException;
 import org.apache.kafka.common.errors.StreamsMissingInternalTopicsException;
 import org.apache.kafka.common.errors.StreamsMissingSourceTopicsException;
