@@ -77,7 +77,12 @@ public class OptimizedUniformAssignmentBuilderTest {
             )
         );
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members, HOMOGENEOUS, Collections.emptyMap());
+        AssignmentSpec assignmentSpec = new AssignmentSpec(
+            members,
+            HOMOGENEOUS,
+            Collections.emptyMap()
+        );
+
         GroupAssignment groupAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
 
         assertEquals(Collections.emptyMap(), groupAssignment.members());
@@ -107,7 +112,11 @@ public class OptimizedUniformAssignmentBuilderTest {
             )
         );
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members, HOMOGENEOUS, Collections.emptyMap());
+        AssignmentSpec assignmentSpec = new AssignmentSpec(
+            members,
+            HOMOGENEOUS,
+            Collections.emptyMap()
+        );
 
         assertThrows(PartitionAssignorException.class,
             () -> assignor.assign(assignmentSpec, subscribedTopicMetadata));
@@ -153,12 +162,17 @@ public class OptimizedUniformAssignmentBuilderTest {
             mkTopicAssignment(topic3Uuid, 0)
         ));
 
-        Map<Uuid, Map<Integer, String>> partitionsAssignedPerTopic = partitionAssignments(members);
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members, HOMOGENEOUS, partitionsAssignedPerTopic);
-
+        AssignmentSpec assignmentSpec = new AssignmentSpec(
+            members,
+            HOMOGENEOUS,
+            Collections.emptyMap()
+        );
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
-        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
+        GroupAssignment computedAssignment = assignor.assign(
+            assignmentSpec,
+            subscribedTopicMetadata
+        );
 
         assertAssignment(expectedAssignment, computedAssignment);
         checkValidityAndBalance(members, computedAssignment);
@@ -206,12 +220,17 @@ public class OptimizedUniformAssignmentBuilderTest {
             Collections.emptyMap()
         );
 
-        Map<Uuid, Map<Integer, String>> partitionsAssignedPerTopic = partitionAssignments(members);
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members, HOMOGENEOUS, partitionsAssignedPerTopic);
-
+        AssignmentSpec assignmentSpec = new AssignmentSpec(
+            members,
+            HOMOGENEOUS,
+            Collections.emptyMap()
+        );
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
-        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
+        GroupAssignment computedAssignment = assignor.assign(
+            assignmentSpec,
+            subscribedTopicMetadata
+        );
 
         assertAssignment(expectedAssignment, computedAssignment);
         checkValidityAndBalance(members, computedAssignment);
@@ -242,10 +261,17 @@ public class OptimizedUniformAssignmentBuilderTest {
             ));
         }
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members, HOMOGENEOUS, Collections.emptyMap());
+        AssignmentSpec assignmentSpec = new AssignmentSpec(
+            members,
+            HOMOGENEOUS,
+            Collections.emptyMap()
+        );
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
-        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
+        GroupAssignment computedAssignment = assignor.assign(
+            assignmentSpec,
+            subscribedTopicMetadata
+        );
 
         checkValidityAndBalance(members, computedAssignment);
     }
@@ -303,12 +329,17 @@ public class OptimizedUniformAssignmentBuilderTest {
             mkTopicAssignment(topic2Uuid, 1, 2)
         ));
 
-        Map<Uuid, Map<Integer, String>> partitionsAssignedPerTopic = partitionAssignments(members);
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members, HOMOGENEOUS, partitionsAssignedPerTopic);
-
+        AssignmentSpec assignmentSpec = new AssignmentSpec(
+            members,
+            HOMOGENEOUS,
+            partitionAssignments(members)
+        );
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
-        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
+        GroupAssignment computedAssignment = assignor.assign(
+            assignmentSpec,
+            subscribedTopicMetadata
+        );
 
         assertAssignment(expectedAssignment, computedAssignment);
         checkValidityAndBalance(members, computedAssignment);
@@ -369,12 +400,17 @@ public class OptimizedUniformAssignmentBuilderTest {
             mkTopicAssignment(topic2Uuid, 1, 2, 3)
         ));
 
-        Map<Uuid, Map<Integer, String>> partitionsAssignedPerTopic = partitionAssignments(members);
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members, HOMOGENEOUS, partitionsAssignedPerTopic);
-
+        AssignmentSpec assignmentSpec = new AssignmentSpec(
+            members,
+            HOMOGENEOUS,
+            partitionAssignments(members)
+        );
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
-        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
+        GroupAssignment computedAssignment = assignor.assign(
+            assignmentSpec,
+            subscribedTopicMetadata
+        );
 
         assertAssignment(expectedAssignment, computedAssignment);
         checkValidityAndBalance(members, computedAssignment);
@@ -440,12 +476,17 @@ public class OptimizedUniformAssignmentBuilderTest {
             mkTopicAssignment(topic2Uuid, 0, 2)
         ));
 
-        Map<Uuid, Map<Integer, String>> partitionsAssignedPerTopic = partitionAssignments(members);
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members, HOMOGENEOUS, partitionsAssignedPerTopic);
-
+        AssignmentSpec assignmentSpec = new AssignmentSpec(
+            members,
+            HOMOGENEOUS,
+            partitionAssignments(members)
+        );
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
-        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
+        GroupAssignment computedAssignment = assignor.assign(
+            assignmentSpec,
+            subscribedTopicMetadata
+        );
 
         assertAssignment(expectedAssignment, computedAssignment);
         checkValidityAndBalance(members, computedAssignment);
@@ -503,12 +544,17 @@ public class OptimizedUniformAssignmentBuilderTest {
             mkTopicAssignment(topic2Uuid, 1, 2)
         ));
 
-        Map<Uuid, Map<Integer, String>> partitionsAssignedPerTopic = partitionAssignments(members);
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members, HOMOGENEOUS, partitionsAssignedPerTopic);
-
+        AssignmentSpec assignmentSpec = new AssignmentSpec(
+            members,
+            HOMOGENEOUS,
+            partitionAssignments(members)
+        );
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
-        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
+        GroupAssignment computedAssignment = assignor.assign(
+            assignmentSpec,
+            subscribedTopicMetadata
+        );
 
         assertAssignment(expectedAssignment, computedAssignment);
         checkValidityAndBalance(members, computedAssignment);
@@ -563,12 +609,17 @@ public class OptimizedUniformAssignmentBuilderTest {
             mkTopicAssignment(topic2Uuid, 1)
         ));
 
-        Map<Uuid, Map<Integer, String>> partitionsAssignedPerTopic = partitionAssignments(members);
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members, HOMOGENEOUS, partitionsAssignedPerTopic);
-
+        AssignmentSpec assignmentSpec = new AssignmentSpec(
+            members,
+            HOMOGENEOUS,
+            partitionAssignments(members)
+        );
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
-        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
+        GroupAssignment computedAssignment = assignor.assign(
+            assignmentSpec,
+            subscribedTopicMetadata
+        );
 
         assertAssignment(expectedAssignment, computedAssignment);
         checkValidityAndBalance(members, computedAssignment);
