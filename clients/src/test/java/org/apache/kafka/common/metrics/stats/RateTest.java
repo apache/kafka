@@ -70,7 +70,6 @@ public class RateTest {
         assertEquals(expectedRatePerSec, observedRate, EPS);
     }
 
-
     // Record an event every 100 ms on average, moving some 1 ms back or forth for fine-grained 
     // window control. The expected rate, hence, is 10-11 events/sec depending on the moment of 
     // measurement. Start assertions from the second window.
@@ -92,8 +91,10 @@ public class RateTest {
         for (int stepMs : steps) {
             time.sleep(stepMs);
             rate.record(config, 1, time.milliseconds());
-            double observedRate = rate.measure(config, time.milliseconds());
-            assertTrue(observedRate >= 10 && observedRate <= 11);
+            double observedRate1 = rate.measure(config, time.milliseconds());
+            assertTrue(10 <= observedRate1 && observedRate1 <= 11);
+            double observedRate2 = rate.measure(config, time.milliseconds());
+            assertTrue(10 <= observedRate2 && observedRate2 <= 11);
         }
     }
 }

@@ -63,21 +63,20 @@ public class Rate implements MeasurableStat {
 
     @Override
     public double measure(MetricConfig config, long now) {
-        long windowSizeMs = windowSize(config, now);
         double value = stat.measure(config, now);
-        return value / convert(windowSizeMs, unit);
+        return value / convert(windowSize(config, now), unit);
     }
 
     public long windowSize(MetricConfig config, long now) {
         // purge old samples before we compute the window size
-        long purgedUpToMs = stat.purgeObsoleteSamples(config, now);
+        stat.purgeObsoleteSamples(config, now);
 
         /*
          * Here we check the total amount of time elapsed since the oldest non-obsolete window.
          * This give the total windowSize of the batch which is the time used for Rate computation.
-         * However, there is an issue if we do not have sufficient data for e.g. if only 1 second has elapsed in a 30-second
+         * However, there is an issue if we do not have sufficient data for e.g. if only 1 second has elapsed in a 30 second
          * window, the measured rate will be very high.
-         * Hence, we assume that the elapsed time is always N-1 complete windows plus whatever fraction of the final window is complete.
+         * Hence we assume that the elapsed time is always N-1 complete windows plus whatever fraction of the final window is complete.
          *
          * Note that we could simply count the amount of time elapsed in the current window and add n-1 windows to get the total time,
          * but this approach does not account for sleeps. SampledStat only creates samples whenever record is called,
@@ -89,12 +88,8 @@ public class Rate implements MeasurableStat {
         int minFullWindows = config.samples() - 1;
 
         // If the available windows are less than the minimum required, add the difference to the totalElapsedTime
-        if (numFullWindows < minFullWindows) {
+        if (numFullWindows < minFullWindows)
             totalElapsedTimeMs += (minFullWindows - numFullWindows) * config.timeWindowMs();
-        }
-        
-        // if some part of considered interval was just purged with its data, exclude it 
-        totalElapsedTimeMs = Math.min(totalElapsedTimeMs, now - purgedUpToMs);
 
         // If window size is being calculated at the exact beginning of the window with no prior samples, the window size
         // will result in a value of 0. Calculation of rate over a window is size 0 is undefined, hence, we assume the

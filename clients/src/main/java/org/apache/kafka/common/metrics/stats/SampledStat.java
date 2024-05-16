@@ -50,6 +50,7 @@ public abstract class SampledStat implements MeasurableStat {
             sample = advance(config, timeMs);
         update(sample, config, value, timeMs);
         sample.eventCount += 1;
+        sample.lastEventMs = timeMs;
     }
 
     private Sample advance(MetricConfig config, long timeMs) {
@@ -106,38 +107,34 @@ public abstract class SampledStat implements MeasurableStat {
 
     public abstract double combine(List<Sample> samples, MetricConfig config, long now);
 
-    /**
-     * Purges any windows that started before the configured period.
-     * Returns the end of the most recent of purged windows.
-     */
-    protected long purgeObsoleteSamples(MetricConfig config, long now) {
+    /* Timeout any windows that have expired in the absence of any events */
+    protected void purgeObsoleteSamples(MetricConfig config, long now) {
         long expireAge = config.samples() * config.timeWindowMs();
-        long purgedUpToMs = 0;
         for (Sample sample : samples) {
-            if (now - sample.startTimeMs >= expireAge) {
-                purgedUpToMs = Math.max(purgedUpToMs, sample.endTimeMs(config));
+            if (now - sample.lastEventMs >= expireAge)
                 sample.reset(now);
-            }
         }
-        return purgedUpToMs;
     }
 
     protected static class Sample {
         public double initialValue;
         public long eventCount;
         public long startTimeMs;
+        public long lastEventMs;
         public double value;
 
         public Sample(double initialValue, long now) {
             this.initialValue = initialValue;
             this.eventCount = 0;
             this.startTimeMs = now;
+            this.lastEventMs = now;
             this.value = initialValue;
         }
 
         public void reset(long now) {
             this.eventCount = 0;
             this.startTimeMs = now;
+            this.lastEventMs = now;
             this.value = initialValue;
         }
 
