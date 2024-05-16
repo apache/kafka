@@ -17,10 +17,8 @@
 package org.apache.kafka.tools.consumer.group;
 
 import kafka.test.ClusterInstance;
-import kafka.test.annotation.ClusterConfigProperty;
-import kafka.test.annotation.ClusterTest;
-import kafka.test.annotation.ClusterTestDefaults;
-import kafka.test.annotation.Type;
+import kafka.test.ClusterGenerator;
+import kafka.test.annotation.ClusterTemplate;
 import kafka.test.junit.ClusterTestExtensions;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
@@ -44,7 +42,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -57,28 +54,21 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 @Tag("integration")
-@ClusterTestDefaults(clusterType = Type.ALL, serverProperties = {
-        @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-        @ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
-        @ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true")
-})
 @ExtendWith(ClusterTestExtensions.class)
 public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
     public static final String TOPIC_PREFIX = "foo.";
     public static final String GROUP_PREFIX = "test.group.";
     private final ClusterInstance clusterInstance;
 
-    private final Iterable<Map<String, Object>> consumerConfigs;
-
     DeleteOffsetsConsumerGroupCommandIntegrationTest(ClusterInstance clusterInstance) {
         this.clusterInstance = clusterInstance;
-        this.consumerConfigs = clusterInstance.isKRaftTest()
-                ? Arrays.asList(Collections.singletonMap(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name()),
-                Collections.singletonMap(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name()))
-                : Collections.singletonList(Collections.emptyMap());
     }
 
-    @ClusterTest
+    private static void generator(ClusterGenerator clusterGenerator) {
+        ConsumerGroupCommandTestUtils.generator(clusterGenerator);
+    }
+
+    @ClusterTemplate("generator")
     public void testDeleteOffsetsNonExistingGroup() {
         String group = "missing.group";
         String topic = "foo:1";
@@ -88,91 +78,91 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
         }
     }
 
-    @ClusterTest
+    @ClusterTemplate("generator")
     public void testDeleteOffsetsOfStableConsumerGroupWithTopicPartition() {
-        for (Map<String, Object> consumerConfig: consumerConfigs) {
-            String topic = TOPIC_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
-            String group = GROUP_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
+        for (GroupProtocol groupProtocol : clusterInstance.supportedGroupProtocols()) {
+            String topic = TOPIC_PREFIX + groupProtocol.name();
+            String group = GROUP_PREFIX + groupProtocol.name();
             createTopic(topic);
             Runnable validateRunnable = getValidateRunnable(topic, group, 0, 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC);
-            testWithConsumerGroup(topic, group, consumerConfig, true, validateRunnable);
+            testWithConsumerGroup(topic, group, groupProtocol, true, validateRunnable);
             removeTopic(topic);
         }
     }
 
-    @ClusterTest
+    @ClusterTemplate("generator")
     public void testDeleteOffsetsOfStableConsumerGroupWithTopicOnly() {
-        for (Map<String, Object> consumerConfig: consumerConfigs) {
-            String topic = TOPIC_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
-            String group = GROUP_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
+        for (GroupProtocol groupProtocol : clusterInstance.supportedGroupProtocols()) {
+            String topic = TOPIC_PREFIX + groupProtocol.name();
+            String group = GROUP_PREFIX + groupProtocol.name();
             createTopic(topic);
             Runnable validateRunnable = getValidateRunnable(topic, group, -1, 0, Errors.GROUP_SUBSCRIBED_TO_TOPIC);
-            testWithConsumerGroup(topic, group, consumerConfig, true, validateRunnable);
+            testWithConsumerGroup(topic, group, groupProtocol, true, validateRunnable);
             removeTopic(topic);
         }
     }
 
-    @ClusterTest
+    @ClusterTemplate("generator")
     public void testDeleteOffsetsOfStableConsumerGroupWithUnknownTopicPartition() {
-        for (Map<String, Object> consumerConfig: consumerConfigs) {
-            String topic = TOPIC_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
-            String group = GROUP_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
+        for (GroupProtocol groupProtocol : clusterInstance.supportedGroupProtocols()) {
+            String topic = TOPIC_PREFIX + groupProtocol.name();
+            String group = GROUP_PREFIX + groupProtocol.name();
             Runnable validateRunnable = getValidateRunnable("foobar", group, 0, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION);
-            testWithConsumerGroup(topic, group, consumerConfig, true, validateRunnable);
+            testWithConsumerGroup(topic, group, groupProtocol, true, validateRunnable);
         }
     }
 
-    @ClusterTest
+    @ClusterTemplate("generator")
     public void testDeleteOffsetsOfStableConsumerGroupWithUnknownTopicOnly() {
-        for (Map<String, Object> consumerConfig: consumerConfigs) {
-            String topic = TOPIC_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
-            String group = GROUP_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
+        for (GroupProtocol groupProtocol : clusterInstance.supportedGroupProtocols()) {
+            String topic = TOPIC_PREFIX + groupProtocol.name();
+            String group = GROUP_PREFIX + groupProtocol.name();
             Runnable validateRunnable = getValidateRunnable("foobar", group, -1, -1, Errors.UNKNOWN_TOPIC_OR_PARTITION);
-            testWithConsumerGroup(topic, group, consumerConfig, true, validateRunnable);
+            testWithConsumerGroup(topic, group, groupProtocol, true, validateRunnable);
         }
     }
 
-    @ClusterTest
+    @ClusterTemplate("generator")
     public void testDeleteOffsetsOfEmptyConsumerGroupWithTopicPartition() {
-        for (Map<String, Object> consumerConfig: consumerConfigs) {
-            String topic = TOPIC_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
-            String group = GROUP_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
+        for (GroupProtocol groupProtocol : clusterInstance.supportedGroupProtocols()) {
+            String topic = TOPIC_PREFIX + groupProtocol.name();
+            String group = GROUP_PREFIX + groupProtocol.name();
             createTopic(topic);
             Runnable validateRunnable = getValidateRunnable(topic, group, 0, 0, Errors.NONE);
-            testWithConsumerGroup(topic, group, consumerConfig, false, validateRunnable);
+            testWithConsumerGroup(topic, group, groupProtocol, false, validateRunnable);
             removeTopic(topic);
         }
     }
 
-    @ClusterTest
+    @ClusterTemplate("generator")
     public void testDeleteOffsetsOfEmptyConsumerGroupWithTopicOnly() {
-        for (Map<String, Object> consumerConfig: consumerConfigs) {
-            String topic = TOPIC_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
-            String group = GROUP_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
+        for (GroupProtocol groupProtocol : clusterInstance.supportedGroupProtocols()) {
+            String topic = TOPIC_PREFIX + groupProtocol.name();
+            String group = GROUP_PREFIX + groupProtocol.name();
             createTopic(topic);
             Runnable validateRunnable = getValidateRunnable(topic, group, -1, 0, Errors.NONE);
-            testWithConsumerGroup(topic, group, consumerConfig, false, validateRunnable);
+            testWithConsumerGroup(topic, group, groupProtocol, false, validateRunnable);
             removeTopic(topic);
         }
     }
 
-    @ClusterTest
+    @ClusterTemplate("generator")
     public void testDeleteOffsetsOfEmptyConsumerGroupWithUnknownTopicPartition() {
-        for (Map<String, Object> consumerConfig: consumerConfigs) {
-            String topic = TOPIC_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
-            String group = GROUP_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
+        for (GroupProtocol groupProtocol : clusterInstance.supportedGroupProtocols()) {
+            String topic = TOPIC_PREFIX + groupProtocol.name();
+            String group = GROUP_PREFIX + groupProtocol.name();
             Runnable validateRunnable = getValidateRunnable("foobar", group, 0, 0, Errors.UNKNOWN_TOPIC_OR_PARTITION);
-            testWithConsumerGroup(topic, group, consumerConfig, false, validateRunnable);
+            testWithConsumerGroup(topic, group, groupProtocol, false, validateRunnable);
         }
     }
 
-    @ClusterTest
+    @ClusterTemplate("generator")
     public void testDeleteOffsetsOfEmptyConsumerGroupWithUnknownTopicOnly() {
-        for (Map<String, Object> consumerConfig: consumerConfigs) {
-            String topic = TOPIC_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
-            String group = GROUP_PREFIX + consumerConfig.getOrDefault(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
+        for (GroupProtocol groupProtocol : clusterInstance.supportedGroupProtocols()) {
+            String topic = TOPIC_PREFIX + groupProtocol.name();
+            String group = GROUP_PREFIX + groupProtocol.name();
             Runnable validateRunnable = getValidateRunnable("foobar", group, -1, -1, Errors.UNKNOWN_TOPIC_OR_PARTITION);
-            testWithConsumerGroup(topic, group, consumerConfig, false, validateRunnable);
+            testWithConsumerGroup(topic, group, groupProtocol, false, validateRunnable);
         }
     }
 
@@ -217,11 +207,11 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
     }
     private void testWithConsumerGroup(String inputTopic,
                                        String inputGroup,
-                                       Map<String, Object> consumerConfig,
+                                       GroupProtocol groupProtocol,
                                        boolean isStable,
                                        Runnable validateRunnable) {
         produceRecord(inputTopic);
-        try (Consumer<byte[], byte[]> consumer = createConsumer(inputGroup, consumerConfig)) {
+        try (Consumer<byte[], byte[]> consumer = createConsumer(inputGroup, groupProtocol)) {
             consumer.subscribe(Collections.singletonList(inputTopic));
             ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(DEFAULT_MAX_WAIT_MS));
             Assertions.assertNotEquals(0, records.count());
@@ -251,9 +241,10 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
         return new KafkaProducer<>(config);
     }
 
-    private Consumer<byte[], byte[]> createConsumer(String group, Map<String, Object> config) {
-        Map<String, Object> consumerConfig = new HashMap<>(config);
+    private Consumer<byte[], byte[]> createConsumer(String group, GroupProtocol groupProtocol) {
+        Map<String, Object> consumerConfig = new HashMap<>();
         consumerConfig.putIfAbsent(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers());
+        consumerConfig.putIfAbsent(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         consumerConfig.putIfAbsent(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         consumerConfig.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, group);
         consumerConfig.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());

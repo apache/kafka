@@ -32,7 +32,6 @@ import kafka.utils.CoreUtils.inLock
 import kafka.utils.Implicits._
 import kafka.utils._
 import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.{Metrics, Sensor}
 import org.apache.kafka.common.metrics.stats.{Avg, Max, Meter}
@@ -42,7 +41,7 @@ import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.{OffsetCommitRequest, OffsetFetchResponse}
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{KafkaException, MessageFormatter, TopicIdPartition, TopicPartition}
+import org.apache.kafka.common.{MessageFormatter, TopicIdPartition, TopicPartition}
 import org.apache.kafka.coordinator.group.OffsetConfig
 import org.apache.kafka.coordinator.group.generated.{GroupMetadataValue, OffsetCommitKey, OffsetCommitValue, GroupMetadataKey => GroupMetadataKeyData}
 import org.apache.kafka.server.common.MetadataVersion
@@ -1284,83 +1283,6 @@ object GroupMetadataManager {
         case _ => // no-op
       }
     }
-  }
-
-  /**
-   * Exposed for printing records using [[kafka.tools.DumpLogSegments]]
-   */
-  def formatRecordKeyAndValue(record: Record): (Option[String], Option[String]) = {
-    if (!record.hasKey) {
-      throw new KafkaException("Failed to decode message using offset topic decoder (message had a missing key)")
-    } else {
-      GroupMetadataManager.readMessageKey(record.key) match {
-        case offsetKey: OffsetKey => parseOffsets(offsetKey, record.value)
-        case groupMetadataKey: GroupMetadataKey => parseGroupMetadata(groupMetadataKey, record.value)
-        case unknownKey: UnknownKey => (Some(s"unknown::version=${unknownKey.version}"), None)
-      }
-    }
-  }
-
-  private def parseOffsets(offsetKey: OffsetKey, payload: ByteBuffer): (Option[String], Option[String]) = {
-    val groupId = offsetKey.key.group
-    val topicPartition = offsetKey.key.topicPartition
-    val keyString = s"offset_commit::group=$groupId,partition=$topicPartition"
-
-    val offset = GroupMetadataManager.readOffsetMessageValue(payload)
-    val valueString = if (offset == null) {
-      "<DELETE>"
-    } else {
-      if (offset.metadata.isEmpty)
-        s"offset=${offset.offset}"
-      else
-        s"offset=${offset.offset},metadata=${offset.metadata}"
-    }
-
-    (Some(keyString), Some(valueString))
-  }
-
-  private def parseGroupMetadata(groupMetadataKey: GroupMetadataKey, payload: ByteBuffer): (Option[String], Option[String]) = {
-    val groupId = groupMetadataKey.key
-    val keyString = s"group_metadata::group=$groupId"
-
-    val group = GroupMetadataManager.readGroupMessageValue(groupId, payload, Time.SYSTEM)
-    val valueString = if (group == null)
-      "<DELETE>"
-    else {
-      val protocolType = group.protocolType.getOrElse("")
-
-      val assignment = group.allMemberMetadata.map { member =>
-        if (protocolType == ConsumerProtocol.PROTOCOL_TYPE) {
-          val partitionAssignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(member.assignment))
-          val userData = Option(partitionAssignment.userData)
-            .map(Utils.toArray)
-            .map(hex)
-            .getOrElse("")
-
-          if (userData.isEmpty)
-            s"${member.memberId}=${partitionAssignment.partitions}"
-          else
-            s"${member.memberId}=${partitionAssignment.partitions}:$userData"
-        } else {
-          s"${member.memberId}=${hex(member.assignment)}"
-        }
-      }.mkString("{", ",", "}")
-
-      Json.encodeAsString(Map(
-        "protocolType" -> protocolType,
-        "protocol" -> group.protocolName.orNull,
-        "generationId" -> group.generationId,
-        "assignment" -> assignment
-      ).asJava)
-    }
-    (Some(keyString), Some(valueString))
-  }
-
-  private def hex(bytes: Array[Byte]): String = {
-    if (bytes.isEmpty)
-      ""
-    else
-      "%X".format(BigInt(1, bytes))
   }
 
   def maybeConvertOffsetCommitError(error: Errors) : Errors = {

@@ -36,12 +36,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class RoundRobinAssignorTest {
 
-    private RoundRobinAssignor assignor = new RoundRobinAssignor();
-    private String topic = "topic";
-    private String consumerId = "consumer";
-
-    private String topic1 = "topic1";
-    private String topic2 = "topic2";
+    private final RoundRobinAssignor assignor = new RoundRobinAssignor();
+    private final String topic = "topic";
+    private final String consumerId = "consumer";
+    private final String topic1 = "topic1";
+    private final String topic2 = "topic2";
 
     @Test
     public void testOneConsumerNoTopic() {

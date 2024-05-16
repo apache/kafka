@@ -43,13 +43,11 @@ import java.util.stream.Collectors;
  * <li> Balance:          Ensure partitions are distributed equally among all members.
  *                        The difference in assignments sizes between any two members
  *                        should not exceed one partition. </li>
- * <li> Rack Matching:    When feasible, aim to assign partitions to members
- *                        located on the same rack thus avoiding cross-zone traffic. </li>
  * <li> Stickiness:       Minimize partition movements among members by retaining
  *                        as much of the existing assignment as possible. </li>
  *
  * This assignment builder prioritizes the above properties in the following order:
- *      Balance > Rack Matching > Stickiness.
+ *      Balance > Stickiness.
  */
 public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBuilder {
     private static final Logger LOG = LoggerFactory.getLogger(GeneralUniformAssignmentBuilder.class);
@@ -80,11 +78,6 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
     private final Map<String, MemberAssignment> targetAssignment;
 
     /**
-     * Rack information.
-     */
-    private final RackInfo rackInfo;
-
-    /**
      * The partitions that still need to be assigned.
      */
     private final Set<TopicIdPartition> unassignedPartitions;
@@ -103,14 +96,6 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
      * List of all the members sorted by their respective assignment sizes.
      */
     private final TreeSet<String> sortedMembersByAssignmentSize;
-
-    /**
-     * Tracks the owner of each partition in the existing assignment of the member.
-     *
-     * Only populated when rack aware strategy is used.
-     * Contains partitions that weren't retained due to a rack mismatch.
-     */
-    private final Map<TopicIdPartition, String> currentPartitionOwners;
 
     /**
      * Tracks the owner of each partition in the target assignment.
@@ -142,12 +127,10 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
                 targetAssignment.put(memberId, new MemberAssignment(new HashMap<>()));
             })
         );
-        this.rackInfo = new RackInfo(assignmentSpec, subscribedTopicDescriber, subscribedTopicIds);
         this.unassignedPartitions = new HashSet<>(topicIdPartitions(subscribedTopicIds, subscribedTopicDescriber));
         this.assignedStickyPartitions = new HashSet<>();
         this.assignmentManager = new AssignmentManager(this.members, this.subscribedTopicDescriber);
         this.sortedMembersByAssignmentSize = assignmentManager.sortMembersByAssignmentSize(members.keySet());
-        this.currentPartitionOwners = new HashMap<>();
         this.partitionOwnerInTargetAssignment = new HashMap<>();
         this.partitionMovements = new PartitionMovements();
     }
@@ -156,10 +139,7 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
      * Here's the step-by-step breakdown of the assignment process:
      *
      * <li> Retain partitions from the existing assignments a.k.a sticky partitions. </li>
-     *      <ul><li> If a partition's rack mismatches with its owner, track it for future use. </li></ul>
-     * <li> If rack aware strategy is possible, allocate unassigned partitions to members in the same rack. </li>
-     * <li> Allocate all the remaining unassigned partitions to the members in a balanced manner. If possible, allocate
-     *      the partition back to it's existing owner in case it was not retained earlier due to a rack mismatch. </li>
+     * <li> Allocate all the remaining unassigned partitions to the members in a balanced manner.</li>
      * <li> Iterate through the assignment until it is balanced. </li>
      */
     @Override
@@ -169,11 +149,9 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
             return new GroupAssignment(Collections.emptyMap());
         }
 
-        // When rack awareness is enabled, only sticky partitions with matching rack are retained.
-        // Otherwise, all existing partitions are retained until max assignment size.
+        // All existing partitions are retained until max assignment size.
         assignStickyPartitions();
 
-        if (rackInfo.useRackStrategy) rackAwarePartitionAssignment();
         unassignedPartitionsAssignment();
 
         balance();
@@ -211,8 +189,6 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
     /**
      * Gets a set of partitions that are to be retained from the existing assignment. This includes:
      * <li> Partitions from topics that are still present in both the new subscriptions and the topic metadata. </li>
-     * <li> When using a rack-aware strategy, only partitions with member owners in the same rack are retained. </li>
-     * <li> Track current partition owners when there is a rack mismatch. </li>
      */
     private void assignStickyPartitions() {
         members.forEach((memberId, assignmentMemberSpec) ->
@@ -220,12 +196,8 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
                 if (assignmentMemberSpec.subscribedTopicIds().contains(topicId)) {
                     currentAssignment.forEach(partition -> {
                         TopicIdPartition topicIdPartition = new TopicIdPartition(topicId, partition);
-                        if (rackInfo.useRackStrategy && rackInfo.racksMismatch(memberId, topicIdPartition)) {
-                            currentPartitionOwners.put(topicIdPartition, memberId);
-                        } else {
-                            assignmentManager.addPartitionToTargetAssignment(topicIdPartition, memberId);
-                            assignedStickyPartitions.add(topicIdPartition);
-                        }
+                        assignmentManager.addPartitionToTargetAssignment(topicIdPartition, memberId);
+                        assignedStickyPartitions.add(topicIdPartition);
                     });
                 } else {
                     LOG.debug("The topic " + topicId + " is no longer present in the subscribed topics list");
@@ -235,32 +207,8 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
     }
 
     /**
-     * Allocates the unassigned partitions to members in the same rack, if available.
-     */
-    private void rackAwarePartitionAssignment() {
-        // Sort partitions in ascending order by the number of potential members with matching racks.
-        // Only partitions with potential members in the same rack are returned.
-        List<TopicIdPartition> sortedPartitions = rackInfo.sortPartitionsByRackMembers(unassignedPartitions);
-
-        sortedPartitions.forEach(partition -> {
-            List<String> sortedMembersByAssignmentSize = rackInfo.getSortedMembersWithMatchingRack(
-                partition,
-                targetAssignment
-            );
-
-            for (String memberId : sortedMembersByAssignmentSize) {
-                if (assignmentManager.maybeAssignPartitionToMember(partition, memberId)) {
-                    break;
-                }
-            }
-        });
-    }
-
-    /**
      * Allocates the remaining unassigned partitions to members in a balanced manner.
      * <li> Partitions are sorted to maximize the probability of a balanced assignment. </li>
-     * <li> If there was an assignment that wasn't retained due to a rack mismatch,
-     *      check if the partition can retain its existing assignment. </li>
      * <li> Sort members in ascending order of their current target assignment sizes
      *      to ensure the least filled member gets the partition first. </li>
      */
@@ -268,13 +216,6 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
         List<TopicIdPartition> sortedPartitions = sortTopicIdPartitions(unassignedPartitions);
 
         for (TopicIdPartition partition : sortedPartitions) {
-            if (rackInfo.useRackStrategy && currentPartitionOwners.containsKey(partition)) {
-                String prevOwner = currentPartitionOwners.get(partition);
-                if  (assignmentManager.maybeAssignPartitionToMember(partition, prevOwner)) {
-                    continue;
-                }
-            }
-
             TreeSet<String> sortedMembers = assignmentManager.sortMembersByAssignmentSize(
                 membersPerTopic.get(partition.topicId())
             );
@@ -405,10 +346,6 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
      * Performs reassignments of partitions to balance the load across members.
      * This method iteratively reassigns partitions until no further moves can improve the balance.
      *
-     * The process involves sorting reassignable partitions for efficiency and considering rack matching
-     * and sticky partition assignments. Reassignments are made based on the comparative load of members
-     * and the adherence to rack policies.
-     *
      * The method uses a do-while loop to ensure at least one pass over the partitions and continues
      * reassigning as long as there are modifications to the current assignments. It checks for balance
      * after each reassignment and exits if the balance is achieved.
@@ -448,65 +385,12 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
                         "to a member", reassignablePartition)
                     );
 
-                boolean foundMatchingRackMember = false;
-
-                // If rack strategy is used and the current assignment adheres to rack matching,
-                // check if another member in the same rack is better suited for this topicIdPartition.
-                if (rackInfo.useRackStrategy) {
-                    String memberRack = rackInfo.memberRacks.get(currentTargetOwner);
-                    Set<String> partitionRacks = rackInfo.partitionRacks.get(reassignablePartition);
-
-                    if (partitionRacks.contains(memberRack)) {
-                        for (String otherMember : rackInfo.getSortedMembersWithMatchingRack(reassignablePartition, targetAssignment)) {
-                            // Only subscribed members eligible for re-balancing should be considered.
-                            if (!sortedMembersByAssignmentSize.contains(otherMember) || !membersPerTopic.containsKey(reassignablePartition.topicId()))
-                                continue;
-
-                            String otherMemberRack = rackInfo.memberRacks.get(otherMember);
-                            if (otherMemberRack == null || !partitionRacks.contains(otherMemberRack))
-                                continue;
-                            if (assignmentManager.targetAssignmentSize(currentTargetOwner) > assignmentManager.targetAssignmentSize(otherMember) + 1) {
-                                reassignPartition(reassignablePartition, otherMember);
-                                modified = true;
-                                reassignmentOccurred = true;
-                                foundMatchingRackMember = true;
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                // If rack-aware strategy is not used OR no other member with matching rack was better suited,
-                // First check if the topicIdPartition already belongs to its previous owner, if not and a previous owner
-                // exists, check if the topicIdPartition can be assigned to it.
-                // If not, assign to any other better suited member with the topic subscription.
-                if (!foundMatchingRackMember) {
-                    boolean isPartitionSticky = assignedStickyPartitions.contains(reassignablePartition);
-                    boolean isCurrentOwnerKnown = currentPartitionOwners.containsKey(reassignablePartition);
-
-                    if (rackInfo.useRackStrategy && !isPartitionSticky && isCurrentOwnerKnown) {
-                        String currentOwner = currentPartitionOwners.get(reassignablePartition);
-                        int currentMemberAssignmentSize = assignmentManager.targetAssignmentSize(currentTargetOwner);
-                        int currentOwnerAssignmentSize = assignmentManager.targetAssignmentSize(currentOwner);
-
-                        // Check if reassignment is needed based on assignment sizes
-                        if (currentMemberAssignmentSize > currentOwnerAssignmentSize + 1) {
-                            reassignPartition(reassignablePartition, currentOwner);
-                            modified = true;
-                            reassignmentOccurred = true;
-                        }
-                    }
-
-                    // The topicIdPartition is already sticky and no other member with matching rack is better suited.
-                    if (!reassignmentOccurred) {
-                        for (String otherMember : membersPerTopic.get(reassignablePartition.topicId())) {
-                            if (assignmentManager.targetAssignmentSize(currentTargetOwner) > assignmentManager.targetAssignmentSize(otherMember) + 1) {
-                                reassignPartition(reassignablePartition);
-                                modified = true;
-                                reassignmentOccurred = true;
-                                break;
-                            }
-                        }
+                for (String otherMember : membersPerTopic.get(reassignablePartition.topicId())) {
+                    if (assignmentManager.targetAssignmentSize(currentTargetOwner) > assignmentManager.targetAssignmentSize(otherMember) + 1) {
+                        reassignPartition(reassignablePartition);
+                        modified = true;
+                        reassignmentOccurred = true;
+                        break;
                     }
                 }
             }

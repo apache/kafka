@@ -28,7 +28,6 @@ import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopi
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -416,9 +415,9 @@ public class MetadataResponse extends AbstractResponse {
                     ", partition=" + topicPartition +
                     ", leader=" + leaderId +
                     ", leaderEpoch=" + leaderEpoch +
-                    ", replicas=" + Utils.join(replicaIds, ",") +
-                    ", isr=" + Utils.join(inSyncReplicaIds, ",") +
-                    ", offlineReplicas=" + Utils.join(offlineReplicaIds, ",") + ')';
+                    ", replicas=" + replicaIds.stream().map(Object::toString).collect(Collectors.joining(",")) +
+                    ", isr=" + inSyncReplicaIds.stream().map(Object::toString).collect(Collectors.joining(",")) +
+                    ", offlineReplicas=" + offlineReplicaIds.stream().map(Object::toString).collect(Collectors.joining(",")) + ')';
         }
     }
 

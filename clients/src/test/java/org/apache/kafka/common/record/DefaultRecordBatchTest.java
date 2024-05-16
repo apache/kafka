@@ -187,7 +187,7 @@ public class DefaultRecordBatchTest {
     public void testSizeInBytes() {
         Header[] headers = new Header[] {
             new RecordHeader("foo", "value".getBytes()),
-            new RecordHeader("bar", (byte[]) null)
+            new RecordHeader("bar", null)
         };
 
         long timestamp = System.currentTimeMillis();

@@ -32,6 +32,8 @@ import java.util.TreeMap;
 
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
+import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HETEROGENEOUS;
+import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOGENEOUS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -72,7 +74,7 @@ public class RangeAssignorTest {
             )
         );
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, HOMOGENEOUS);
         GroupAssignment groupAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
 
         assertEquals(Collections.emptyMap(), groupAssignment.members());
@@ -102,7 +104,7 @@ public class RangeAssignorTest {
             )
         );
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, HOMOGENEOUS);
 
         assertThrows(PartitionAssignorException.class,
             () -> assignor.assign(assignmentSpec, subscribedTopicMetadata));
@@ -142,7 +144,7 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, HOMOGENEOUS);
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
@@ -207,7 +209,7 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, HETEROGENEOUS);
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
@@ -270,7 +272,7 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, HOMOGENEOUS);
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
@@ -344,7 +346,7 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, HOMOGENEOUS);
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
@@ -409,7 +411,7 @@ public class RangeAssignorTest {
             currentAssignmentForB
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, HOMOGENEOUS);
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
@@ -479,7 +481,7 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, HOMOGENEOUS);
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
@@ -555,7 +557,7 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, HETEROGENEOUS);
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
@@ -610,7 +612,7 @@ public class RangeAssignorTest {
             currentAssignmentForB
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, HOMOGENEOUS);
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
@@ -687,7 +689,7 @@ public class RangeAssignorTest {
             currentAssignmentForC
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        AssignmentSpec assignmentSpec = new AssignmentSpec(members, HETEROGENEOUS);
         GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
