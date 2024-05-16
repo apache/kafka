@@ -219,10 +219,20 @@ public class RecordCollectorImpl implements RecordCollector {
             log.debug(String.format("Error serializing record to topic %s", topic), exception);
 
             try {
-                response = productionExceptionHandler.handleSerializationException(record, exception);
+                ErrorHandlerContextImpl errorHandlerContext = new ErrorHandlerContextImpl(
+                        context,
+                        record.topic(),
+                        record.partition(),
+                        context.offset(),
+                        record.headers(),
+                        null,
+                        null,
+                        processorNodeId,
+                        taskId);
+                response = productionExceptionHandler.handleSerializationException(errorHandlerContext, record, exception, ProductionExceptionHandler.SerializationExceptionOrigin.VALUE);
             } catch (final Exception e) {
                 log.error("Fatal when handling serialization exception", e);
-                recordSendError(topic, e, null);
+                recordSendError(topic, e, null, context, processorNodeId);
                 return;
             }
 
@@ -281,7 +291,7 @@ public class RecordCollectorImpl implements RecordCollector {
                     topicProducedSensor.record(bytesProduced, context.currentSystemTimeMs());
                 }
             } else {
-                recordSendError(topic, exception, serializedRecord);
+                recordSendError(topic, exception, serializedRecord, context, processorNodeId);
 
                 // KAFKA-7510 only put message key and value in TRACE level log so we don't leak data by default
                 log.trace("Failed record: (key {} value {} timestamp {}) topic=[{}] partition=[{}]", key, value, timestamp, topic, partition);
@@ -289,7 +299,8 @@ public class RecordCollectorImpl implements RecordCollector {
         });
     }
 
-    private void recordSendError(final String topic, final Exception exception, final ProducerRecord<byte[], byte[]> serializedRecord) {
+    private void recordSendError(final String topic, final Exception exception, final ProducerRecord<byte[], byte[]> serializedRecord,
+                                 final InternalProcessorContext<Void, Void> context, final String processorNodeId) {
         String errorMessage = String.format(SEND_EXCEPTION_MESSAGE, topic, taskId, exception.toString());
 
         if (isFatalException(exception)) {
@@ -309,7 +320,17 @@ public class RecordCollectorImpl implements RecordCollector {
                     "`delivery.timeout.ms` to a larger value to wait longer for such scenarios and avoid timeout errors";
                 sendException.set(new TaskCorruptedException(Collections.singleton(taskId)));
             } else {
-                if (productionExceptionHandler.handle(serializedRecord, exception) == ProductionExceptionHandlerResponse.FAIL) {
+                ErrorHandlerContextImpl errorHandlerContext = new ErrorHandlerContextImpl(
+                        context,
+                        serializedRecord.topic(),
+                        serializedRecord.partition(),
+                        context.offset(),
+                        serializedRecord.headers(),
+                        null,
+                        null,
+                        processorNodeId,
+                        taskId);
+                if (productionExceptionHandler.handle(errorHandlerContext, serializedRecord, exception) == ProductionExceptionHandlerResponse.FAIL) {
                     errorMessage += "\nException handler choose to FAIL the processing, no more records would be sent.";
                     sendException.set(new StreamsException(errorMessage, exception));
                 } else {

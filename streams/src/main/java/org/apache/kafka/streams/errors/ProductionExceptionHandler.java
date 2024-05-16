@@ -19,7 +19,6 @@ package org.apache.kafka.streams.errors;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.streams.processor.ErrorHandlerContext;
-import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 /**
  * Interface that specifies how an exception when attempting to produce a result to
@@ -37,7 +36,7 @@ public interface ProductionExceptionHandler extends Configurable {
     @Deprecated
     default ProductionExceptionHandlerResponse handle(final ProducerRecord<byte[], byte[]> record,
                                               final Exception exception) {
-        throw new NotImplementedException();
+        throw new UnsupportedOperationException();
     }
 
     /**

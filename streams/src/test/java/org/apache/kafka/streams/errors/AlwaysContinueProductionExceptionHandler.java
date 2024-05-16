@@ -26,12 +26,14 @@ import java.util.Map;
  */
 public class AlwaysContinueProductionExceptionHandler implements ProductionExceptionHandler {
     @Override
+    @Deprecated
     public ProductionExceptionHandlerResponse handle(final ProducerRecord<byte[], byte[]> record,
                                                      final Exception exception) {
         return ProductionExceptionHandlerResponse.CONTINUE;
     }
 
     @Override
+    @Deprecated
     public ProductionExceptionHandlerResponse handleSerializationException(final ProducerRecord record,
                                                                            final Exception exception) {
         return ProductionExceptionHandlerResponse.CONTINUE;

@@ -24,11 +24,15 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
+import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
+import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.test.InternalMockProcessorContext;
 import org.junit.Test;
 
 import java.util.Optional;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.*;
 
 public class RecordDeserializerTest {
 
@@ -44,6 +48,8 @@ public class RecordDeserializerTest {
         new byte[0],
         headers,
         Optional.empty());
+
+    private final InternalProcessorContext<Void, Void> context = new InternalMockProcessorContext<>();
 
     @Test
     public void shouldReturnConsumerRecordWithDeserializedValueWhenNoExceptions() {
@@ -66,6 +72,70 @@ public class RecordDeserializerTest {
         assertEquals(rawRecord.timestamp(), record.timestamp());
         assertEquals(TimestampType.CREATE_TIME, record.timestampType());
         assertEquals(rawRecord.headers(), record.headers());
+    }
+
+    @Test
+    public void shouldThrowExceptionWithKeyDeserializationAndFail() {
+        final RecordDeserializer recordDeserializer = new RecordDeserializer(
+                new TheSourceNode(
+                        true,
+                        false,
+                        "key", "value"
+                ),
+                new LogAndFailExceptionHandler(),
+                new LogContext(),
+                new Metrics().sensor("dropped-records")
+        );
+        StreamsException e = assertThrows(StreamsException.class, () -> recordDeserializer.deserialize(context, rawRecord));
+     assertEquals(e.getMessage(), "Deserialization exception handler is set to fail upon a deserialization error. If you would rather have the streaming pipeline continue after a deserialization error, please set the default.deserialization.exception.handler appropriately.");
+    }
+
+    @Test
+    public void shouldThrowExceptionWithValueDeserializationAndFail() {
+        final RecordDeserializer recordDeserializer = new RecordDeserializer(
+                new TheSourceNode(
+                        false,
+                        true,
+                        "key", "value"
+                ),
+                new LogAndFailExceptionHandler(),
+                new LogContext(),
+                new Metrics().sensor("dropped-records")
+        );
+        StreamsException e = assertThrows(StreamsException.class, () -> recordDeserializer.deserialize(context, rawRecord));
+        assertEquals(e.getMessage(), "Deserialization exception handler is set to fail upon a deserialization error. If you would rather have the streaming pipeline continue after a deserialization error, please set the default.deserialization.exception.handler appropriately.");
+    }
+
+    @Test
+    public void shouldThrowExceptionWithKeyDeserializationAndContinue() {
+        final RecordDeserializer recordDeserializer = new RecordDeserializer(
+                new TheSourceNode(
+                        true,
+                        false,
+                        "key", "value"
+                ),
+                new LogAndContinueExceptionHandler(),
+                new LogContext(),
+                new Metrics().sensor("dropped-records")
+        );
+        final ConsumerRecord<Object, Object> record =  recordDeserializer.deserialize(context, rawRecord);
+        assertNull(record);
+    }
+
+    @Test
+    public void shouldThrowExceptionWithValueDeserializationAndContinue() {
+        final RecordDeserializer recordDeserializer = new RecordDeserializer(
+                new TheSourceNode(
+                        false,
+                        true,
+                        "key", "value"
+                ),
+                new LogAndContinueExceptionHandler(),
+                new LogContext(),
+                new Metrics().sensor("dropped-records")
+        );
+        final ConsumerRecord<Object, Object> record =  recordDeserializer.deserialize(context, rawRecord);
+        assertNull(record);
     }
 
     static class TheSourceNode extends SourceNode<Object, Object> {

@@ -81,10 +81,19 @@ public class RecordDeserializer {
                                                     final Sensor droppedRecordsSensor) {
         final DeserializationExceptionHandler.DeserializationHandlerResponse response;
         try {
-            response = deserializationExceptionHandler.handle(
-                (InternalProcessorContext<?, ?>) processorContext,
-                rawRecord,
-                deserializationException);
+
+            ErrorHandlerContextImpl errorHandlerContext = new ErrorHandlerContextImpl(
+                    (InternalProcessorContext<?, ?>) processorContext,
+                    rawRecord.topic(),
+                    rawRecord.partition(),
+                    rawRecord.offset(),
+                    rawRecord.headers(),
+                    rawRecord.key(),
+                    rawRecord.value(),
+                    null,
+                    processorContext.taskId());
+              response = deserializationExceptionHandler.handle(errorHandlerContext, rawRecord, deserializationException);
+
         } catch (final Exception fatalUserException) {
             log.error(
                 "Deserialization error callback failed after deserialization error for record {}",

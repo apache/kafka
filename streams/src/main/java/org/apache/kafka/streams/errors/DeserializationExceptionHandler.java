@@ -19,7 +19,9 @@ package org.apache.kafka.streams.errors;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.streams.processor.ErrorHandlerContext;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.ErrorHandlerContextImpl;
 
 /**
  * Interface that specifies how an exception from source node deserialization
@@ -37,11 +39,28 @@ public interface DeserializationExceptionHandler extends Configurable {
      * @param context processor context
      * @param record record that failed deserialization
      * @param exception the actual exception
+     * @deprecated Please {@link #handle(ErrorHandlerContext, ConsumerRecord, Exception)
      */
-    @SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
-    DeserializationHandlerResponse handle(final ProcessorContext context,
-                                          final ConsumerRecord<byte[], byte[]> record,
-                                          final Exception exception);
+    @Deprecated
+    default DeserializationHandlerResponse handle(final ProcessorContext context,
+                                                  final ConsumerRecord<byte[], byte[]> record,
+                                                  final Exception exception) {
+
+        throw new UnsupportedOperationException();
+    }
+    /**
+     * Inspect a record and the exception received.
+     *
+     * @param context error handler context
+     * @param record record that failed deserialization
+     * @param exception the actual exception
+     */
+    default DeserializationHandlerResponse handle(final ErrorHandlerContext context,
+                                                  final ConsumerRecord<byte[], byte[]> record,
+                                                  final Exception exception) {
+
+        return handle(((ErrorHandlerContextImpl) context).convertToProcessorContext(), record, exception);
+    }
 
     /**
      * Enumeration that describes the response from the exception handler.
