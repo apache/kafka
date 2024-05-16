@@ -39,8 +39,11 @@ public class MeteredMultiVersionedKeyQueryIterator<V> implements VersionedRecord
 
     @Override
     public void close() {
-        iterator.close();
-        numOpenIterators.decrementAndGet();
+        try {
+            iterator.close();
+        } finally {
+            numOpenIterators.decrementAndGet();
+        }
     }
 
     @Override
