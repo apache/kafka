@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.StreamsAssignmentInterface;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -358,7 +359,10 @@ public class TopologyTestDriver implements Closeable {
                 public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
                     throw new IllegalStateException();
                 }
-
+                @Override
+                public Consumer<byte[], byte[]> getStreamsRebalanceProtocolConsumer(final Map<String, Object> config, StreamsAssignmentInterface assignmentInterface) {
+                    throw new IllegalStateException();
+                }
                 @Override
                 public Consumer<byte[], byte[]> getRestoreConsumer(final Map<String, Object> config) {
                     throw new IllegalStateException();

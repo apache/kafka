@@ -21,6 +21,7 @@ import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.StreamsAssignmentInterface;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -88,6 +89,10 @@ public class MockClientSupplier implements KafkaClientSupplier {
     @Override
     public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
         return consumer;
+    }
+    @Override
+    public Consumer<byte[], byte[]> getStreamsRebalanceProtocolConsumer(final Map<String, Object> config, StreamsAssignmentInterface assignmentInterface) {
+        throw new IllegalArgumentException("Should not be called");
     }
 
     @Override

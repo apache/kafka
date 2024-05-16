@@ -18,6 +18,7 @@ package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.internals.StreamsAssignmentInterface;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.processor.StateStore;
@@ -57,6 +58,16 @@ public interface KafkaClientSupplier {
      * @return an instance of Kafka consumer
      */
     Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config);
+
+    /**
+     * Create a {@link Consumer} which is used to read records of source topics.
+     *
+     * @param config {@link StreamsConfig#getMainConsumerConfigs(String, String, int) consumer config} which is
+     *               supplied by the {@link java.util.Properties} given to the {@link KafkaStreams} instance
+     * @param assignmentInterface the assignment interface to take part in the streams rebalance protocol.
+     * @return an instance of Kafka consumer
+     */
+    Consumer<byte[], byte[]> getStreamsRebalanceProtocolConsumer(final Map<String, Object> config, StreamsAssignmentInterface assignmentInterface);
 
     /**
      * Create a {@link Consumer} which is used to read records to restore {@link StateStore}s.

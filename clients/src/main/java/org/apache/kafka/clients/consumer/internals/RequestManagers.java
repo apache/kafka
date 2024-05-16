@@ -52,6 +52,10 @@ public class RequestManagers implements Closeable {
     public final OffsetsRequestManager offsetsRequestManager;
     public final TopicMetadataRequestManager topicMetadataRequestManager;
     public final FetchRequestManager fetchRequestManager;
+    public final Optional<StreamsHeartbeatRequestManager> streamsHeartbeatRequestManager;
+    public final Optional<StreamsInitializeRequestManager> streamsInitializeRequestManager;
+    public final Optional<StreamsPrepareAssignmentRequestManager> streamsPrepareAssignmentRequestManager;
+    public final Optional<StreamsInstallAssignmentRequestManager> streamsInstallAssignmentRequestManager;
     private final List<Optional<? extends RequestManager>> entries;
     private final IdempotentCloser closer = new IdempotentCloser();
 
@@ -62,7 +66,11 @@ public class RequestManagers implements Closeable {
                            Optional<CoordinatorRequestManager> coordinatorRequestManager,
                            Optional<CommitRequestManager> commitRequestManager,
                            Optional<HeartbeatRequestManager> heartbeatRequestManager,
-                           Optional<MembershipManager> membershipManager) {
+                           Optional<MembershipManager> membershipManager,
+                           Optional<StreamsHeartbeatRequestManager> streamsHeartbeatRequestManager,
+                           Optional<StreamsInitializeRequestManager> streamsInitializeRequestManager,
+                           Optional<StreamsPrepareAssignmentRequestManager> streamsPrepareAssignmentRequestManager,
+                           Optional<StreamsInstallAssignmentRequestManager> streamsInstallAssignmentRequestManager) {
         this.log = logContext.logger(RequestManagers.class);
         this.offsetsRequestManager = requireNonNull(offsetsRequestManager, "OffsetsRequestManager cannot be null");
         this.coordinatorRequestManager = coordinatorRequestManager;
@@ -71,6 +79,10 @@ public class RequestManagers implements Closeable {
         this.fetchRequestManager = fetchRequestManager;
         this.heartbeatRequestManager = heartbeatRequestManager;
         this.membershipManager = membershipManager;
+        this.streamsHeartbeatRequestManager = streamsHeartbeatRequestManager;
+        this.streamsInitializeRequestManager = streamsInitializeRequestManager;
+        this.streamsPrepareAssignmentRequestManager = streamsPrepareAssignmentRequestManager;
+        this.streamsInstallAssignmentRequestManager = streamsInstallAssignmentRequestManager;
 
         List<Optional<? extends RequestManager>> list = new ArrayList<>();
         list.add(coordinatorRequestManager);
@@ -80,6 +92,10 @@ public class RequestManagers implements Closeable {
         list.add(Optional.of(offsetsRequestManager));
         list.add(Optional.of(topicMetadataRequestManager));
         list.add(Optional.of(fetchRequestManager));
+        list.add(streamsHeartbeatRequestManager);
+        list.add(streamsInitializeRequestManager);
+        list.add(streamsPrepareAssignmentRequestManager);
+        list.add(streamsInstallAssignmentRequestManager);
         entries = Collections.unmodifiableList(list);
     }
 
@@ -124,7 +140,8 @@ public class RequestManagers implements Closeable {
                                                      final Optional<ClientTelemetryReporter> clientTelemetryReporter,
                                                      final Metrics metrics,
                                                      final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
-                                                     final MemberStateListener applicationThreadMemberStateListener
+                                                     final MemberStateListener applicationThreadMemberStateListener,
+                                                     final Optional<StreamsAssignmentInterface> streamsInstanceMetadata
                                                      ) {
         return new CachedSupplier<RequestManagers>() {
             @Override
@@ -160,6 +177,10 @@ public class RequestManagers implements Closeable {
                 MembershipManager membershipManager = null;
                 CoordinatorRequestManager coordinator = null;
                 CommitRequestManager commit = null;
+                StreamsHeartbeatRequestManager streamsHeartbeatRequestManager = null;
+                StreamsInitializeRequestManager streamsInitializeRequestManager = null;
+                StreamsPrepareAssignmentRequestManager streamsPrepareAssignmentRequestManager = null;
+                StreamsInstallAssignmentRequestManager streamsInstallAssignmentRequestManager = null;
 
                 if (groupRebalanceConfig != null && groupRebalanceConfig.groupId != null) {
                     Optional<String> serverAssignor = Optional.ofNullable(config.getString(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG));
@@ -194,7 +215,20 @@ public class RequestManagers implements Closeable {
                             metrics);
                     membershipManager.registerStateListener(commit);
                     membershipManager.registerStateListener(applicationThreadMemberStateListener);
-                    heartbeatRequestManager = new HeartbeatRequestManager(
+
+                    if (streamsInstanceMetadata.isPresent()) {
+                        streamsInitializeRequestManager = new StreamsInitializeRequestManager(
+                            streamsInstanceMetadata.get());
+                        streamsPrepareAssignmentRequestManager = new StreamsPrepareAssignmentRequestManager(
+                            streamsInstanceMetadata.get());
+                        streamsInstallAssignmentRequestManager = new StreamsInstallAssignmentRequestManager(
+                            streamsInstanceMetadata.get());
+                        streamsHeartbeatRequestManager = new StreamsHeartbeatRequestManager(
+                            streamsInitializeRequestManager,
+                            streamsPrepareAssignmentRequestManager,
+                            streamsInstanceMetadata.get());
+                    } else {
+                        heartbeatRequestManager = new HeartbeatRequestManager(
                             logContext,
                             time,
                             config,
@@ -203,6 +237,7 @@ public class RequestManagers implements Closeable {
                             membershipManager,
                             backgroundEventHandler,
                             metrics);
+                    }
                 }
 
                 return new RequestManagers(
@@ -213,7 +248,11 @@ public class RequestManagers implements Closeable {
                         Optional.ofNullable(coordinator),
                         Optional.ofNullable(commit),
                         Optional.ofNullable(heartbeatRequestManager),
-                        Optional.ofNullable(membershipManager)
+                        Optional.ofNullable(membershipManager),
+                        Optional.ofNullable(streamsHeartbeatRequestManager),
+                        Optional.ofNullable(streamsInitializeRequestManager),
+                        Optional.ofNullable(streamsPrepareAssignmentRequestManager),
+                        Optional.ofNullable(streamsInstallAssignmentRequestManager)
                 );
             }
         };
