@@ -73,6 +73,9 @@ object KafkaBroker {
 }
 
 trait KafkaBroker extends Logging {
+  // Number of shards to split FetchSessionCache into. This is to reduce contention when trying to
+  // acquire lock while handling Fetch requests.
+  val NumFetchSessionCacheShards: Int = 8
 
   def authorizer: Option[Authorizer]
   def brokerState: BrokerState

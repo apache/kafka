@@ -489,11 +489,11 @@ public class MockLog implements ReplicatedLog {
             );
         }
 
-        return storeSnapshot(snapshotId);
+        return createNewSnapshotUnchecked(snapshotId);
     }
 
     @Override
-    public Optional<RawSnapshotWriter> storeSnapshot(OffsetAndEpoch snapshotId) {
+    public Optional<RawSnapshotWriter> createNewSnapshotUnchecked(OffsetAndEpoch snapshotId) {
         if (snapshots.containsKey(snapshotId)) {
             return Optional.empty();
         } else {

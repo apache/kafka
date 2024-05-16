@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.internals.BatchAccumulator;
+import org.apache.kafka.raft.internals.ReplicaKey;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -544,9 +545,9 @@ public class LeaderStateTest {
     public void testGrantVote(boolean isLogUpToDate) {
         LeaderState<?> state = newLeaderState(Utils.mkSet(1, 2, 3), 1);
 
-        assertFalse(state.canGrantVote(1, isLogUpToDate));
-        assertFalse(state.canGrantVote(2, isLogUpToDate));
-        assertFalse(state.canGrantVote(3, isLogUpToDate));
+        assertFalse(state.canGrantVote(ReplicaKey.of(1, Optional.empty()), isLogUpToDate));
+        assertFalse(state.canGrantVote(ReplicaKey.of(2, Optional.empty()), isLogUpToDate));
+        assertFalse(state.canGrantVote(ReplicaKey.of(3, Optional.empty()), isLogUpToDate));
     }
 
     private static class MockOffsetMetadata implements OffsetMetadata {

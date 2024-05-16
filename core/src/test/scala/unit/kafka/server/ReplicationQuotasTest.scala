@@ -24,7 +24,6 @@ import kafka.server.KafkaConfig.fromProps
 import kafka.server.QuotaType._
 import kafka.utils.TestUtils._
 import kafka.utils.CoreUtils._
-import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry, NewTopic}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
@@ -44,6 +43,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
 import scala.jdk.CollectionConverters._
+import scala.util.Using
 
 /**
   * This is the main test which ensure Replication Quotas work correctly.
@@ -112,7 +112,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
     //replicate for each of the two follower brokers.
     if (!leaderThrottle) throttle = throttle * 3
 
-    TestUtils.resource(createAdminClient(brokers, listenerName)) { admin =>
+    Using(createAdminClient(brokers, listenerName)) { admin =>
       if (isKRaftTest()) {
         (106 to 107).foreach(registerBroker)
       }
@@ -228,7 +228,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
     val expectedDuration = 4
     val throttle: Long = msg.length * msgCount / expectedDuration
 
-    TestUtils.resource(createAdminClient(brokers, listenerName)) { admin =>
+    Using(createAdminClient(brokers, listenerName)) { admin =>
       if (isKRaftTest()) {
         registerBroker(101)
       }

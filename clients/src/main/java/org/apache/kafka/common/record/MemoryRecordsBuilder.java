@@ -18,9 +18,11 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.LeaderChangeMessage;
-import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.message.SnapshotFooterRecord;
+import org.apache.kafka.common.message.SnapshotHeaderRecord;
+import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
@@ -602,11 +604,12 @@ public class MemoryRecordsBuilder implements AutoCloseable {
 
     /**
      * Append a control record at the next sequential offset.
+     *
      * @param timestamp The record timestamp
      * @param type The control record type (cannot be UNKNOWN)
      * @param value The control record value
      */
-    private void appendControlRecord(long timestamp, ControlRecordType type, ByteBuffer value) {
+    public void appendControlRecord(long timestamp, ControlRecordType type, ByteBuffer value) {
         Struct keyStruct = type.recordKey();
         ByteBuffer key = ByteBuffer.allocate(keyStruct.sizeOf());
         keyStruct.writeTo(key);
@@ -647,6 +650,22 @@ public class MemoryRecordsBuilder implements AutoCloseable {
             timestamp,
             ControlRecordType.SNAPSHOT_FOOTER,
             MessageUtil.toByteBuffer(snapshotHeaderRecord, ControlRecordUtils.SNAPSHOT_FOOTER_CURRENT_VERSION)
+        );
+    }
+
+    public void appendKRaftVersionMessage(long timestamp, KRaftVersionRecord kraftVersionRecord) {
+        appendControlRecord(
+            timestamp,
+            ControlRecordType.KRAFT_VERSION,
+            MessageUtil.toByteBuffer(kraftVersionRecord, ControlRecordUtils.KRAFT_VERSION_CURRENT_VERSION)
+        );
+    }
+
+    public void appendVotersMessage(long timestamp, VotersRecord votersRecord) {
+        appendControlRecord(
+            timestamp,
+            ControlRecordType.KRAFT_VOTERS,
+            MessageUtil.toByteBuffer(votersRecord, ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION)
         );
     }
 

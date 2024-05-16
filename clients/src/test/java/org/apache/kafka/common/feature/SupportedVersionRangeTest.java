@@ -36,18 +36,18 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class SupportedVersionRangeTest {
     @Test
     public void testFailDueToInvalidParams() {
-        // min and max can't be < 1.
+        // min and max can't be < 0.
         assertThrows(
             IllegalArgumentException.class,
-            () -> new SupportedVersionRange((short) 0, (short) 0));
-        // min can't be < 1.
+            () -> new SupportedVersionRange((short) -1, (short) -1));
+        // min can't be < 0.
         assertThrows(
             IllegalArgumentException.class,
-            () -> new SupportedVersionRange((short) 0, (short) 1));
-        // max can't be < 1.
+            () -> new SupportedVersionRange((short) -1, (short) 0));
+        // max can't be < 0.
         assertThrows(
             IllegalArgumentException.class,
-            () -> new SupportedVersionRange((short) 1, (short) 0));
+            () -> new SupportedVersionRange((short) 0, (short) -1));
         // min can't be > max.
         assertThrows(
             IllegalArgumentException.class,
@@ -73,23 +73,23 @@ public class SupportedVersionRangeTest {
 
     @Test
     public void testFromMapFailure() {
-        // min_version can't be < 1.
+        // min_version can't be < 0.
         Map<String, Short> invalidWithBadMinVersion =
-            mkMap(mkEntry("min_version", (short) 0), mkEntry("max_version", (short) 1));
+            mkMap(mkEntry("min_version", (short) -1), mkEntry("max_version", (short) 0));
         assertThrows(
             IllegalArgumentException.class,
             () -> SupportedVersionRange.fromMap(invalidWithBadMinVersion));
 
-        // max_version can't be < 1.
+        // max_version can't be < 0.
         Map<String, Short> invalidWithBadMaxVersion =
-            mkMap(mkEntry("min_version", (short) 1), mkEntry("max_version", (short) 0));
+            mkMap(mkEntry("min_version", (short) 0), mkEntry("max_version", (short) -1));
         assertThrows(
             IllegalArgumentException.class,
             () -> SupportedVersionRange.fromMap(invalidWithBadMaxVersion));
 
-        // min_version and max_version can't be < 1.
+        // min_version and max_version can't be < 0.
         Map<String, Short> invalidWithBadMinMaxVersion =
-            mkMap(mkEntry("min_version", (short) 0), mkEntry("max_version", (short) 0));
+            mkMap(mkEntry("min_version", (short) -1), mkEntry("max_version", (short) -1));
         assertThrows(
             IllegalArgumentException.class,
             () -> SupportedVersionRange.fromMap(invalidWithBadMinMaxVersion));
