@@ -54,6 +54,7 @@ import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsEvent
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
@@ -102,6 +103,8 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Pattern;
+import java.util.HashSet;
 import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
@@ -138,6 +141,7 @@ import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.clearInvocations;
 
 @SuppressWarnings("unchecked")
 public class AsyncKafkaConsumerTest {
@@ -461,6 +465,42 @@ public class AsyncKafkaConsumerTest {
         consumer.subscribe(Collections.singletonList(topicName), listener);
         consumer.poll(Duration.ZERO);
         assertTrue(callbackExecuted.get());
+    }
+
+    @Test
+    public void testCheckForNewTopicOnlyWhenMetadataChange() {
+        SubscriptionState subscriptions = mock(SubscriptionState.class);
+        Cluster cluster = mock(Cluster.class);
+
+        consumer = newConsumer(
+                mock(FetchBuffer.class),
+                mock(ConsumerInterceptors.class),
+                mock(ConsumerRebalanceListenerInvoker.class),
+                subscriptions,
+                singletonList(new RoundRobinAssignor()),
+                "group-id",
+                "client-id");
+
+        final String topicName = "foo";
+        final int partition = 3;
+        final TopicPartition tp = new TopicPartition(topicName, partition);
+        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
+        Map<TopicPartition, OffsetAndMetadata> offsets = mkMap(mkEntry(tp, new OffsetAndMetadata(1)));
+        completeFetchedCommittedOffsetApplicationEventSuccessfully(offsets);
+        doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
+        doReturn(cluster).when(metadata).fetch();
+
+        HashSet<String> topics = new HashSet<>();
+        topics.add(topicName);
+        doReturn(topics).when(cluster).topics();
+
+        consumer.subscribe(Pattern.compile("f*"));
+        verify(metadata).requestUpdateForNewTopics();
+        verify(subscriptions).matchesSubscribedPattern(topicName);
+
+        consumer.poll(Duration.ZERO);
+        clearInvocations(subscriptions);
+        verify(subscriptions, never()).matchesSubscribedPattern(topicName);
     }
 
     @Test
