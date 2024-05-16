@@ -1978,7 +1978,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 updatePatternSubscription(metadata.fetch());
             }
         }
-        updatePatternSubscription(metadata.fetch());
     }
 }
 
