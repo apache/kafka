@@ -18,6 +18,7 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.memory.MemoryPool;
@@ -48,8 +49,8 @@ import org.apache.kafka.common.requests.DescribeQuorumRequest;
 import org.apache.kafka.common.requests.DescribeQuorumResponse;
 import org.apache.kafka.common.requests.EndQuorumEpochRequest;
 import org.apache.kafka.common.requests.EndQuorumEpochResponse;
-import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.FetchRequest;
+import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.FetchSnapshotRequest;
 import org.apache.kafka.common.requests.FetchSnapshotResponse;
 import org.apache.kafka.common.requests.VoteRequest;
@@ -69,6 +70,7 @@ import org.apache.kafka.raft.internals.KRaftControlRecordStateMachine;
 import org.apache.kafka.raft.internals.KafkaRaftMetrics;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
 import org.apache.kafka.raft.internals.RecordsBatchReader;
+import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.raft.internals.ThresholdPurgatory;
 import org.apache.kafka.raft.internals.VoterSet;
 import org.apache.kafka.server.common.serialization.RecordSerde;
@@ -150,6 +152,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
     public static final int MAX_FETCH_SIZE_BYTES = MAX_BATCH_SIZE_BYTES;
 
     private final OptionalInt nodeId;
+    private final Uuid nodeDirectoryId;
     private final AtomicReference<GracefulShutdown> shutdown = new AtomicReference<>();
     private final LogContext logContext;
     private final Logger logger;
@@ -197,6 +200,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
      */
     public KafkaRaftClient(
         OptionalInt nodeId,
+        Uuid nodeDirectoryId,
         RecordSerde<T> serde,
         NetworkChannel channel,
         ReplicatedLog log,
@@ -208,6 +212,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
     ) {
         this(
             nodeId,
+            nodeDirectoryId,
             serde,
             channel,
             new BlockingMessageQueue(),
@@ -225,6 +230,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
 
     KafkaRaftClient(
         OptionalInt nodeId,
+        Uuid nodeDirectoryId,
         RecordSerde<T> serde,
         NetworkChannel channel,
         RaftMessageQueue messageQueue,
@@ -239,6 +245,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         QuorumConfig quorumConfig
     ) {
         this.nodeId = nodeId;
+        this.nodeDirectoryId = nodeDirectoryId;
         this.logContext = logContext;
         this.serde = serde;
         this.channel = channel;
@@ -396,7 +403,9 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
 
         quorum = new QuorumState(
             nodeId,
-            lastVoterSet.voterIds(),
+            nodeDirectoryId,
+            partitionState::lastVoterSet,
+            partitionState::lastKraftVersion,
             quorumConfig.electionTimeoutMs(),
             quorumConfig.fetchTimeoutMs(),
             quorumStateStore,
@@ -426,10 +435,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         // When there is only a single voter, become candidate immediately
-        if (quorum.isVoter()
-            && quorum.remoteVoters().isEmpty()
-            && !quorum.isCandidate()) {
-
+        if (quorum.isOnlyVoter() && !quorum.isCandidate()) {
             transitionToCandidate(currentTimeMs);
         }
     }
@@ -539,8 +545,8 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         resetConnections();
     }
 
-    private void transitionToVoted(int candidateId, int epoch) {
-        quorum.transitionToVoted(epoch, candidateId);
+    private void transitionToVoted(ReplicaKey candidateKey, int epoch) {
+        quorum.transitionToVoted(epoch, candidateKey);
         maybeFireLeaderChange();
         resetConnections();
     }
@@ -627,10 +633,14 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         OffsetAndEpoch lastEpochEndOffsetAndEpoch = new OffsetAndEpoch(lastEpochEndOffset, lastEpoch);
-        boolean voteGranted = quorum.canGrantVote(candidateId, lastEpochEndOffsetAndEpoch.compareTo(endOffset()) >= 0);
+        ReplicaKey candidateKey = ReplicaKey.of(candidateId, Optional.empty());
+        boolean voteGranted = quorum.canGrantVote(
+            candidateKey,
+            lastEpochEndOffsetAndEpoch.compareTo(endOffset()) >= 0
+        );
 
         if (voteGranted && quorum.isUnattached()) {
-            transitionToVoted(candidateId, candidateEpoch);
+            transitionToVoted(candidateKey, candidateEpoch);
         }
 
         logger.info("Vote request {} with epoch {} is {}", request, candidateEpoch, voteGranted ? "granted" : "rejected");
@@ -1700,16 +1710,16 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     /**
-     * Validate a request which is only valid between voters. If an error is
-     * present in the returned value, it should be returned in the response.
+     * Validate common state for requests to establish leadership.
+     *
+     * These include the Vote, BeginQuorumEpoch and EndQuorumEpoch RPCs. If an error is present in
+     * the returned value, it should be returned in the response.
      */
     private Optional<Errors> validateVoterOnlyRequest(int remoteNodeId, int requestEpoch) {
         if (requestEpoch < quorum.epoch()) {
             return Optional.of(Errors.FENCED_LEADER_EPOCH);
         } else if (remoteNodeId < 0) {
             return Optional.of(Errors.INVALID_REQUEST);
-        } else if (quorum.isObserver() || !quorum.isVoter(remoteNodeId)) {
-            return Optional.of(Errors.INCONSISTENT_VOTER_SET);
         } else {
             return Optional.empty();
         }
@@ -2300,9 +2310,9 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         if (quorum.isObserver()
-            || quorum.remoteVoters().isEmpty()
-            || quorum.hasRemoteLeader()) {
-
+            || quorum.isOnlyVoter()
+            || quorum.hasRemoteLeader()
+        ) {
             shutdown.complete();
             return true;
         }

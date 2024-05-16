@@ -269,7 +269,7 @@ public class BatchAccumulator<T> implements Closeable {
         } else if (batch.baseOffset() != nextOffset) {
             throw new IllegalArgumentException(
                 String.format(
-                    "Expected a base offset of {} but got {}",
+                    "Expected a base offset of %d but got %d",
                     nextOffset,
                     batch.baseOffset()
                 )
@@ -277,7 +277,7 @@ public class BatchAccumulator<T> implements Closeable {
         } else if (batch.partitionLeaderEpoch() != epoch) {
             throw new IllegalArgumentException(
                 String.format(
-                    "Expected a partition leader epoch of {} but got {}",
+                    "Expected a partition leader epoch of %d but got %d",
                     epoch,
                     batch.partitionLeaderEpoch()
                 )

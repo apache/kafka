@@ -54,6 +54,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.internals.BatchBuilder;
+import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.raft.internals.StringSerde;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
@@ -138,6 +139,8 @@ public final class RaftClientTestContext {
         private final Uuid clusterId = Uuid.randomUuid();
         private final Set<Integer> voters;
         private final OptionalInt localId;
+        private final Uuid localDirectoryId = Uuid.randomUuid();
+        private final short kraftVersion = 0;
 
         private int requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS;
         private int electionTimeoutMs = DEFAULT_ELECTION_TIMEOUT_MS;
@@ -154,17 +157,26 @@ public final class RaftClientTestContext {
         }
 
         Builder withElectedLeader(int epoch, int leaderId) {
-            quorumStateStore.writeElectionState(ElectionState.withElectedLeader(epoch, leaderId, voters));
+            quorumStateStore.writeElectionState(
+                ElectionState.withElectedLeader(epoch, leaderId, voters),
+                kraftVersion
+            );
             return this;
         }
 
         Builder withUnknownLeader(int epoch) {
-            quorumStateStore.writeElectionState(ElectionState.withUnknownLeader(epoch, voters));
+            quorumStateStore.writeElectionState(
+                ElectionState.withUnknownLeader(epoch, voters),
+                kraftVersion
+            );
             return this;
         }
 
-        Builder withVotedCandidate(int epoch, int votedId) {
-            quorumStateStore.writeElectionState(ElectionState.withVotedCandidate(epoch, votedId, voters));
+        Builder withVotedCandidate(int epoch, ReplicaKey votedKey) {
+            quorumStateStore.writeElectionState(
+                ElectionState.withVotedCandidate(epoch, votedKey, voters),
+                kraftVersion
+            );
             return this;
         }
 
@@ -247,6 +259,7 @@ public final class RaftClientTestContext {
 
             KafkaRaftClient<String> client = new KafkaRaftClient<>(
                 localId,
+                localDirectoryId,
                 SERDE,
                 channel,
                 messageQueue,
@@ -392,8 +405,8 @@ public final class RaftClientTestContext {
     }
 
     LeaderAndEpoch currentLeaderAndEpoch() {
-        ElectionState election = quorumStateStore.readElectionState();
-        return new LeaderAndEpoch(election.leaderIdOpt, election.epoch);
+        ElectionState election = quorumStateStore.readElectionState().get();
+        return new LeaderAndEpoch(election.optionalLeaderId(), election.epoch());
     }
 
     void expectAndGrantVotes(int epoch) throws Exception {
@@ -439,21 +452,37 @@ public final class RaftClientTestContext {
         pollUntil(channel::hasSentRequests);
     }
 
-    void assertVotedCandidate(int epoch, int leaderId) {
-        assertEquals(ElectionState.withVotedCandidate(epoch, leaderId, voters), quorumStateStore.readElectionState());
+    void assertVotedCandidate(int epoch, int candidateId) {
+        assertEquals(
+            ElectionState.withVotedCandidate(
+                epoch,
+                ReplicaKey.of(candidateId, Optional.empty()),
+                voters
+            ),
+            quorumStateStore.readElectionState().get()
+        );
     }
 
     public void assertElectedLeader(int epoch, int leaderId) {
-        assertEquals(ElectionState.withElectedLeader(epoch, leaderId, voters), quorumStateStore.readElectionState());
+        assertEquals(
+            ElectionState.withElectedLeader(epoch, leaderId, voters),
+            quorumStateStore.readElectionState().get()
+        );
     }
 
     void assertUnknownLeader(int epoch) {
-        assertEquals(ElectionState.withUnknownLeader(epoch, voters), quorumStateStore.readElectionState());
+        assertEquals(
+            ElectionState.withUnknownLeader(epoch, voters),
+            quorumStateStore.readElectionState().get()
+        );
     }
 
     void assertResignedLeader(int epoch, int leaderId) {
         assertTrue(client.quorum().isResigned());
-        assertEquals(ElectionState.withElectedLeader(epoch, leaderId, voters), quorumStateStore.readElectionState());
+        assertEquals(
+            ElectionState.withElectedLeader(epoch, leaderId, voters),
+            quorumStateStore.readElectionState().get()
+        );
     }
 
     DescribeQuorumResponseData collectDescribeQuorumResponse() {
@@ -496,9 +525,7 @@ public final class RaftClientTestContext {
         return voteRequests.iterator().next().correlationId();
     }
 
-    void assertSentVoteResponse(
-            Errors error
-    ) {
+    void assertSentVoteResponse(Errors error) {
         List<RaftResponse.Outbound> sentMessages = drainSentResponses(ApiKeys.VOTE);
         assertEquals(1, sentMessages.size());
         RaftMessage raftMessage = sentMessages.get(0);

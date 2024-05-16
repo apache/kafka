@@ -16,15 +16,16 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.raft.internals.ReplicaKey;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Optional;
-import java.util.Set;
+import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -39,14 +40,14 @@ class VotedStateTest {
     private final int electionTimeoutMs = 10000;
 
     private VotedState newVotedState(
-        Set<Integer> voters,
+        Optional<Uuid> votedDirectoryId,
         Optional<LogOffsetMetadata> highWatermark
     ) {
         return new VotedState(
             time,
             epoch,
-            votedId,
-            voters,
+            ReplicaKey.of(votedId, votedDirectoryId),
+            Collections.emptySet(),
             highWatermark,
             electionTimeoutMs,
             logContext
@@ -55,13 +56,15 @@ class VotedStateTest {
 
     @Test
     public void testElectionTimeout() {
-        Set<Integer> voters = Utils.mkSet(1, 2, 3);
-
-        VotedState state = newVotedState(voters, Optional.empty());
+        VotedState state = newVotedState(Optional.empty(), Optional.empty());
+        ReplicaKey votedKey  = ReplicaKey.of(votedId, Optional.empty());
 
         assertEquals(epoch, state.epoch());
-        assertEquals(votedId, state.votedId());
-        assertEquals(ElectionState.withVotedCandidate(epoch, votedId, voters), state.election());
+        assertEquals(votedKey, state.votedKey());
+        assertEquals(
+            ElectionState.withVotedCandidate(epoch, votedKey, Collections.emptySet()),
+            state.election()
+        );
         assertEquals(electionTimeoutMs, state.remainingElectionTimeMs(time.milliseconds()));
         assertFalse(state.hasElectionTimeoutExpired(time.milliseconds()));
 
@@ -76,14 +79,37 @@ class VotedStateTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void testGrantVote(boolean isLogUpToDate) {
-        VotedState state = newVotedState(
-            Utils.mkSet(1, 2, 3),
-            Optional.empty()
+    public void testCanGrantVoteWithoutDirectoryId(boolean isLogUpToDate) {
+        VotedState state = newVotedState(Optional.empty(), Optional.empty());
+
+        assertTrue(
+            state.canGrantVote(ReplicaKey.of(votedId, Optional.empty()), isLogUpToDate)
+        );
+        assertTrue(
+            state.canGrantVote(
+                ReplicaKey.of(votedId, Optional.of(Uuid.randomUuid())),
+                isLogUpToDate
+            )
         );
 
-        assertTrue(state.canGrantVote(1, isLogUpToDate));
-        assertFalse(state.canGrantVote(2, isLogUpToDate));
-        assertFalse(state.canGrantVote(3, isLogUpToDate));
+        assertFalse(
+            state.canGrantVote(ReplicaKey.of(votedId + 1, Optional.empty()), isLogUpToDate)
+        );
+    }
+
+    @Test
+    void testCanGrantVoteWithDirectoryId() {
+        Optional<Uuid> votedDirectoryId = Optional.of(Uuid.randomUuid());
+        VotedState state = newVotedState(votedDirectoryId, Optional.empty());
+
+        assertTrue(state.canGrantVote(ReplicaKey.of(votedId, votedDirectoryId), false));
+
+        assertFalse(
+            state.canGrantVote(ReplicaKey.of(votedId, Optional.of(Uuid.randomUuid())), false)
+        );
+        assertFalse(state.canGrantVote(ReplicaKey.of(votedId, Optional.empty()), false));
+
+        assertFalse(state.canGrantVote(ReplicaKey.of(votedId + 1, votedDirectoryId), false));
+        assertFalse(state.canGrantVote(ReplicaKey.of(votedId + 1, Optional.empty()), false));
     }
 }
