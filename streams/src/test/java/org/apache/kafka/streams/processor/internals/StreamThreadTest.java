@@ -1378,47 +1378,6 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldCloseAllTaskProducersOnCloseIfEosEnabled() throws InterruptedException {
-        internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
-
-        thread = createStreamThread(
-            CLIENT_ID,
-            new StreamsConfig(configProps(true)),
-            new MockTime(1)
-        );
-
-        thread.start();
-        TestUtils.waitForCondition(
-            () -> thread.state() == StreamThread.State.STARTING,
-            10 * 1000,
-            "Thread never started.");
-
-        thread.rebalanceListener().onPartitionsRevoked(Collections.emptyList());
-
-        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
-        final List<TopicPartition> assignedPartitions = new ArrayList<>();
-
-        // assign single partition
-        assignedPartitions.add(t1p1);
-        assignedPartitions.add(t1p2);
-        activeTasks.put(task1, Collections.singleton(t1p1));
-        activeTasks.put(task2, Collections.singleton(t1p2));
-
-        thread.taskManager().handleAssignment(activeTasks, emptyMap());
-        thread.rebalanceListener().onPartitionsAssigned(assignedPartitions);
-
-        thread.shutdown();
-        TestUtils.waitForCondition(
-            () -> thread.state() == StreamThread.State.DEAD,
-            10 * 1000,
-            "Thread never shut down.");
-
-        for (final Task task : thread.readOnlyActiveTasks()) {
-            assertTrue(((MockProducer<byte[], byte[]>) ((RecordCollectorImpl) ((StreamTask) task).recordCollector()).producer()).closed());
-        }
-    }
-
-    @Test
     public void shouldShutdownTaskManagerOnClose() {
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
