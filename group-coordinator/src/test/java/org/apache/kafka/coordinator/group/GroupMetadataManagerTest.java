@@ -7452,7 +7452,7 @@ public class GroupMetadataManagerTest {
             .setMemberId(rebalanceResult.leaderId)
             .setGenerationId(rebalanceResult.generationId);
 
-        HeartbeatResponseData validHeartbeatResponse = context.sendClassicGroupHeartbeat(heartbeatRequest);
+        HeartbeatResponseData validHeartbeatResponse = context.sendClassicGroupHeartbeat(heartbeatRequest).response();
         assertEquals(Errors.NONE.code(), validHeartbeatResponse.errorCode());
 
         assertThrows(FencedInstanceIdException.class, () -> context.sendClassicGroupHeartbeat(
@@ -7513,7 +7513,7 @@ public class GroupMetadataManagerTest {
             .setMemberId("member-id")
             .setGenerationId(0);
 
-        HeartbeatResponseData heartbeatResponse = context.sendClassicGroupHeartbeat(heartbeatRequest);
+        HeartbeatResponseData heartbeatResponse = context.sendClassicGroupHeartbeat(heartbeatRequest).response();
         assertEquals(Errors.UNKNOWN_MEMBER_ID.code(), heartbeatResponse.errorCode());
     }
 
@@ -7560,7 +7560,7 @@ public class GroupMetadataManagerTest {
                 .setGroupId("group-id")
                 .setMemberId(memberId)
                 .setGenerationId(0)
-        );
+        ).response();
 
         assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), heartbeatResponse.errorCode());
     }
@@ -7586,7 +7586,7 @@ public class GroupMetadataManagerTest {
                 .setGroupId("group-id")
                 .setMemberId(leaderJoinResponse.memberId())
                 .setGenerationId(leaderJoinResponse.generationId())
-        );
+        ).response();
 
         assertEquals(new HeartbeatResponseData(), heartbeatResponse);
     }
@@ -7616,7 +7616,7 @@ public class GroupMetadataManagerTest {
                 .setGroupId("group-id")
                 .setMemberId(leaderJoinResponse.memberId())
                 .setGenerationId(leaderJoinResponse.generationId())
-        );
+        ).response();
 
         assertEquals(Errors.NONE.code(), heartbeatResponse.errorCode());
     }
@@ -7653,12 +7653,12 @@ public class GroupMetadataManagerTest {
             .setMemberId(leaderJoinResponse.memberId())
             .setGenerationId(leaderJoinResponse.generationId());
 
-        HeartbeatResponseData heartbeatResponse = context.sendClassicGroupHeartbeat(heartbeatRequest);
+        HeartbeatResponseData heartbeatResponse = context.sendClassicGroupHeartbeat(heartbeatRequest).response();
         assertEquals(Errors.NONE.code(), heartbeatResponse.errorCode());
 
         GroupMetadataManagerTestContext.assertNoOrEmptyResult(context.sleep(2500));
 
-        heartbeatResponse = context.sendClassicGroupHeartbeat(heartbeatRequest);
+        heartbeatResponse = context.sendClassicGroupHeartbeat(heartbeatRequest).response();
         assertEquals(Errors.NONE.code(), heartbeatResponse.errorCode());
     }
 
@@ -7693,7 +7693,7 @@ public class GroupMetadataManagerTest {
             .setMemberId(leaderJoinResponse.memberId())
             .setGenerationId(leaderJoinResponse.generationId());
 
-        HeartbeatResponseData heartbeatResponse = context.sendClassicGroupHeartbeat(heartbeatRequest);
+        HeartbeatResponseData heartbeatResponse = context.sendClassicGroupHeartbeat(heartbeatRequest).response();
         assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), heartbeatResponse.errorCode());
 
         // Advance clock by first member's session timeout.
@@ -7771,7 +7771,7 @@ public class GroupMetadataManagerTest {
 
         for (int i = 0; i < 2; i++) {
             GroupMetadataManagerTestContext.assertNoOrEmptyResult(context.sleep(2500));
-            HeartbeatResponseData heartbeatResponse = context.sendClassicGroupHeartbeat(firstMemberHeartbeatRequest);
+            HeartbeatResponseData heartbeatResponse = context.sendClassicGroupHeartbeat(firstMemberHeartbeatRequest).response();
             assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), heartbeatResponse.errorCode());
         }
 
@@ -7813,7 +7813,7 @@ public class GroupMetadataManagerTest {
                 firstMemberHeartbeatRequest
                     .setMemberId(otherMemberId)
                     .setGenerationId(2)
-            );
+            ).response();
 
             assertEquals(expectedError.code(), heartbeatResponse.errorCode());
         }
@@ -7855,7 +7855,7 @@ public class GroupMetadataManagerTest {
                 firstMemberHeartbeatRequest
                     .setMemberId(otherMemberId)
                     .setGenerationId(3)
-            );
+            ).response();
 
             assertEquals(Errors.NONE.code(), heartbeatResponse.errorCode());
         }
@@ -7872,7 +7872,7 @@ public class GroupMetadataManagerTest {
                 .setGroupId("group-id")
                 .setMemberId(leaderJoinResponse.memberId())
                 .setGenerationId(leaderJoinResponse.generationId())
-        );
+        ).response();
 
         assertEquals(Errors.NONE.code(), heartbeatResponse.errorCode());
     }
@@ -7942,7 +7942,7 @@ public class GroupMetadataManagerTest {
 
         for (int i = 0; i < 2; i++) {
             GroupMetadataManagerTestContext.assertNoOrEmptyResult(context.sleep(2500));
-            HeartbeatResponseData heartbeatResponse = context.sendClassicGroupHeartbeat(heartbeatRequest);
+            HeartbeatResponseData heartbeatResponse = context.sendClassicGroupHeartbeat(heartbeatRequest).response();
             assertEquals(Errors.NONE.code(), heartbeatResponse.errorCode());
         }
 
@@ -8203,7 +8203,7 @@ public class GroupMetadataManagerTest {
             .setMemberId(leaderJoinResponse.memberId())
             .setGenerationId(leaderJoinResponse.generationId());
 
-        HeartbeatResponseData heartbeatResponse = context.sendClassicGroupHeartbeat(heartbeatRequest);
+        HeartbeatResponseData heartbeatResponse = context.sendClassicGroupHeartbeat(heartbeatRequest).response();
         assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), heartbeatResponse.errorCode());
     }
 

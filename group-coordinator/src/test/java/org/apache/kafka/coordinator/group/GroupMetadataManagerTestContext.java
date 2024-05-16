@@ -1112,7 +1112,7 @@ public class GroupMetadataManagerTestContext {
         assertEquals(0, group.size());
     }
 
-    public HeartbeatResponseData sendClassicGroupHeartbeat(
+    public CoordinatorResult<HeartbeatResponseData, CoordinatorRecord> sendClassicGroupHeartbeat(
         HeartbeatRequestData request
     ) {
         RequestContext context = new RequestContext(
@@ -1164,7 +1164,7 @@ public class GroupMetadataManagerTestContext {
         if (expectedError == Errors.UNKNOWN_MEMBER_ID) {
             assertThrows(UnknownMemberIdException.class, () -> sendClassicGroupHeartbeat(request));
         } else {
-            HeartbeatResponseData response = sendClassicGroupHeartbeat(request);
+            HeartbeatResponseData response = sendClassicGroupHeartbeat(request).response();
             assertEquals(expectedError.code(), response.errorCode());
         }
     }

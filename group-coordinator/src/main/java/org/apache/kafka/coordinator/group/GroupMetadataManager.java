@@ -4072,19 +4072,7 @@ public class GroupMetadataManager {
         String groupId = request.groupId();
         String memberId = request.memberId();
         String instanceId = request.groupInstanceId();
-
-        ConsumerGroupMember member;
-        if (instanceId == null) {
-            member = group.getOrMaybeCreateMember(request.memberId(), false);
-        } else {
-            member = group.staticMember(instanceId);
-            if (member == null) {
-                throw new UnknownMemberIdException(
-                    String.format("Member with instance id %s is not a member of group %s.", instanceId, groupId)
-                );
-            }
-            throwIfInstanceIdIsFenced(member, groupId, memberId, instanceId);
-        }
+        ConsumerGroupMember member = validateConsumerGroupMember(group, memberId, instanceId);
 
         throwIfMemberDoesNotUseClassicProtocol(member);
         throwIfGenerationIdUnmatched(member.memberId(), member.memberEpoch(), request.generationId());
@@ -4209,23 +4197,56 @@ public class GroupMetadataManager {
      * @param context        The request context.
      * @param request        The actual Heartbeat request.
      *
-     * @return The Heartbeat response.
+     * @return The coordinator result that contains the heartbeat response.
      */
-    public HeartbeatResponseData classicGroupHeartbeat(
+    public CoordinatorResult<HeartbeatResponseData, CoordinatorRecord> classicGroupHeartbeat(
         RequestContext context,
         HeartbeatRequestData request
     ) {
-        ClassicGroup group = getOrMaybeCreateClassicGroup(request.groupId(), false);
+        Group group = groups.get(request.groupId(), Long.MAX_VALUE);
 
+        if (group == null) {
+            throw new UnknownMemberIdException(
+                String.format("Group %s not found.", request.groupId())
+            );
+        }
+
+        if (group.type() == CLASSIC) {
+            return classicGroupHeartbeatToClassicGroup((ClassicGroup) group, context, request);
+        } else {
+            return classicGroupHeartbeatToConsumerGroup((ConsumerGroup) group, context, request);
+        }
+    }
+
+    /**
+     * Handle a classic group HeartbeatRequest to a classic group.
+     *
+     * @param group          The ClassicGroup.
+     * @param context        The request context.
+     * @param request        The actual Heartbeat request.
+     *
+     * @return The coordinator result that contains the heartbeat response.
+     */
+    public CoordinatorResult<HeartbeatResponseData, CoordinatorRecord> classicGroupHeartbeatToClassicGroup(
+        ClassicGroup group,
+        RequestContext context,
+        HeartbeatRequestData request
+    ) {
         validateClassicGroupHeartbeat(group, request.memberId(), request.groupInstanceId(), request.generationId());
 
         switch (group.currentState()) {
             case EMPTY:
-                return new HeartbeatResponseData().setErrorCode(Errors.UNKNOWN_MEMBER_ID.code());
+                return new CoordinatorResult<>(
+                    Collections.emptyList(),
+                    new HeartbeatResponseData().setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
+                );
 
             case PREPARING_REBALANCE:
                 rescheduleClassicGroupMemberHeartbeat(group, group.member(request.memberId()));
-                return new HeartbeatResponseData().setErrorCode(Errors.REBALANCE_IN_PROGRESS.code());
+                return new CoordinatorResult<>(
+                    Collections.emptyList(),
+                    new HeartbeatResponseData().setErrorCode(Errors.REBALANCE_IN_PROGRESS.code())
+                );
 
             case COMPLETING_REBALANCE:
             case STABLE:
@@ -4233,7 +4254,10 @@ public class GroupMetadataManager {
                 // is in CompletingRebalance state. In this case, we should treat them as
                 // normal heartbeat requests and reset the timer
                 rescheduleClassicGroupMemberHeartbeat(group, group.member(request.memberId()));
-                return new HeartbeatResponseData();
+                return new CoordinatorResult<>(
+                    Collections.emptyList(),
+                    new HeartbeatResponseData()
+                );
 
             default:
                 throw new IllegalStateException("Reached unexpected state " +
@@ -4272,6 +4296,73 @@ public class GroupMetadataManager {
                 throw ILLEGAL_GENERATION.exception();
             }
         }
+    }
+
+    /**
+     * Handle a classic group HeartbeatRequest to a consumer group.
+     *
+     * @param group          The ConsumerGroup.
+     * @param context        The request context.
+     * @param request        The actual Heartbeat request.
+     *
+     * @return The coordinator result that contains the heartbeat response.
+     */
+    public CoordinatorResult<HeartbeatResponseData, CoordinatorRecord> classicGroupHeartbeatToConsumerGroup(
+        ConsumerGroup group,
+        RequestContext context,
+        HeartbeatRequestData request
+    ) throws UnknownMemberIdException, FencedInstanceIdException, IllegalGenerationException {
+        String groupId = request.groupId();
+        String memberId = request.memberId();
+        String instanceId = request.groupInstanceId();
+        ConsumerGroupMember member = validateConsumerGroupMember(group, memberId, instanceId);
+
+        throwIfMemberDoesNotUseClassicProtocol(member);
+        throwIfGenerationIdUnmatched(memberId, member.memberEpoch(), request.generationId());
+
+        scheduleConsumerGroupSessionTimeout(groupId, memberId, member.classicProtocolSessionTimeout().get());
+
+        Errors error = Errors.NONE;
+        if (member.memberEpoch() < group.groupEpoch() ||
+            member.state() == MemberState.UNRELEASED_PARTITIONS ||
+            (member.state() == MemberState.UNRELEASED_PARTITIONS && !group.hasUnreleasedPartitions(member))) {
+            error = Errors.REBALANCE_IN_PROGRESS;
+        }
+
+        return new CoordinatorResult<>(
+            Collections.emptyList(),
+            new HeartbeatResponseData().setErrorCode(error.code())
+        );
+    }
+
+    /**
+     * Validates that (1) the instance id exists and is mapped to the member id
+     * if the group instance id is provided; and (2) the member id exists in the group.
+     *
+     * @param group             The consumer group.
+     * @param memberId          The member id.
+     * @param instanceId        The instance id.
+     *
+     * @return The ConsumerGruopMember.
+     */
+    private ConsumerGroupMember validateConsumerGroupMember(
+        ConsumerGroup group,
+        String memberId,
+        String instanceId
+    ) throws UnknownMemberIdException, FencedInstanceIdException {
+        ConsumerGroupMember member;
+        if (instanceId == null) {
+            member = group.getOrMaybeCreateMember(memberId, false);
+        } else {
+            member = group.staticMember(instanceId);
+            if (member == null) {
+                throw new UnknownMemberIdException(
+                    String.format("Member with instance id %s is not a member of group %s.", instanceId, group.groupId())
+                );
+            }
+            throwIfInstanceIdIsFenced(member, group.groupId(), memberId, instanceId);
+        }
+        return member;
     }
 
     /**
