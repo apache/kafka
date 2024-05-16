@@ -71,8 +71,10 @@ public interface ConfigBackingStore {
      * Update the task configurations for a connector.
      * @param connector name of the connector
      * @param configs the new task configs for the connector
+     * @param configHash a {@link org.apache.kafka.connect.util.ConnectUtils#configHash(Map)  hash}
+     *                   of the most recent config for the connector
      */
-    void putTaskConfigs(String connector, List<Map<String, String>> configs);
+    void putTaskConfigs(String connector, List<Map<String, String>> configs, int configHash);
 
     /**
      * Remove the task configs associated with a connector.

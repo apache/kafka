@@ -1039,21 +1039,42 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         return result;
     }
 
-    public boolean taskConfigsChanged(ClusterConfigState configState, String connName, List<Map<String, String>> taskProps) {
+    public boolean taskConfigsChanged(
+            ClusterConfigState configState,
+            String connName,
+            List<Map<String, String>> taskProps,
+            int connectorConfigHash
+    ) {
         int currentNumTasks = configState.taskCount(connName);
         boolean result = false;
         if (taskProps.size() != currentNumTasks) {
             log.debug("Connector {} task count changed from {} to {}", connName, currentNumTasks, taskProps.size());
             result = true;
         } else {
-            for (int index = 0; index < currentNumTasks; index++) {
+            for (int index = 0; index < currentNumTasks && !result; index++) {
                 ConnectorTaskId taskId = new ConnectorTaskId(connName, index);
                 if (!taskProps.get(index).equals(configState.taskConfig(taskId))) {
                     log.debug("Connector {} has change in configuration for task {}-{}", connName, connName, index);
                     result = true;
                 }
             }
+            // Do a final check to see if runtime-controlled properties that affect tasks but may
+            // not be included in the connector-generated configs for them (such as converter overrides)
+            // have changed
+            if (!result) {
+                Integer storedConnectorConfigHash = configState.taskConfigHash(connName);
+                if (storedConnectorConfigHash == null) {
+                    log.debug("Connector {} has no config hash stored for its existing tasks", connName);
+                } else if (storedConnectorConfigHash != connectorConfigHash) {
+                    log.debug(
+                            "Connector {} has change in config hash ({}) for tasks ({})",
+                            connName, connectorConfigHash, storedConnectorConfigHash
+                    );
+                    result = true;
+                }
+            }
         }
+
         if (result) {
             log.debug("Reconfiguring connector {}: writing new updated configurations for tasks", connName);
         } else {

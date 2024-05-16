@@ -130,8 +130,10 @@ public class KafkaConfigBackingStoreTest {
             .put("state", "PAUSED")
             .put("state.v2", "STOPPED");
 
-    private static final Struct TASKS_COMMIT_STRUCT_TWO_TASK_CONNECTOR
-            = new Struct(KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0).put("tasks", 2);
+    private static final Struct TASKS_COMMIT_STRUCT_TWO_TASK_CONNECTOR_V1
+            = new Struct(KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V1)
+            .put("tasks", 2)
+            .put("connector-config-hash", 3);
 
     private static final Struct ONLY_FAILED_MISSING_STRUCT = new Struct(KafkaConfigBackingStore.RESTART_REQUEST_V0).put(INCLUDE_TASKS_FIELD_NAME, false);
     private static final Struct INCLUDE_TASKS_MISSING_STRUCT = new Struct(KafkaConfigBackingStore.RESTART_REQUEST_V0).put(ONLY_FAILED_FIELD_NAME, true);
@@ -211,7 +213,7 @@ public class KafkaConfigBackingStoreTest {
                 "properties", SAMPLE_CONFIGS.get(1));
         expectReadToEnd(new LinkedHashMap<>());
         expectConvertWriteRead(
-                COMMIT_TASKS_CONFIG_KEYS.get(0), KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0, CONFIGS_SERIALIZED.get(2),
+                COMMIT_TASKS_CONFIG_KEYS.get(0), KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V1, CONFIGS_SERIALIZED.get(2),
                 "tasks", 2); // Starts with 0 tasks, after update has 2
         // As soon as root is rewritten, we should see a callback notifying us that we reconfigured some tasks
         configUpdateListener.onTaskConfigUpdate(Arrays.asList(TASK_IDS.get(0), TASK_IDS.get(1)));
@@ -253,7 +255,7 @@ public class KafkaConfigBackingStoreTest {
         // Writing task configs should block until all the writes have been performed and the root record update
         // has completed
         List<Map<String, String>> taskConfigs = Arrays.asList(SAMPLE_CONFIGS.get(0), SAMPLE_CONFIGS.get(1));
-        configStorage.putTaskConfigs("connector1", taskConfigs);
+        configStorage.putTaskConfigs("connector1", taskConfigs, 0);
 
         configState = configStorage.snapshot();
         assertEquals(3, configState.offset());
@@ -289,7 +291,7 @@ public class KafkaConfigBackingStoreTest {
                 "properties", SAMPLE_CONFIGS.get(1));
         expectReadToEnd(new LinkedHashMap<>());
         expectConvertWriteRead(
-                COMMIT_TASKS_CONFIG_KEYS.get(0), KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0, CONFIGS_SERIALIZED.get(2),
+                COMMIT_TASKS_CONFIG_KEYS.get(0), KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V1, CONFIGS_SERIALIZED.get(2),
                 "tasks", 2); // Starts with 0 tasks, after update has 2
         // As soon as root is rewritten, we should see a callback notifying us that we reconfigured some tasks
         configUpdateListener.onTaskConfigUpdate(Arrays.asList(TASK_IDS.get(0), TASK_IDS.get(1)));
@@ -322,7 +324,7 @@ public class KafkaConfigBackingStoreTest {
         // Writing task configs should block until all the writes have been performed and the root record update
         // has completed
         List<Map<String, String>> taskConfigs = Arrays.asList(SAMPLE_CONFIGS.get(0), SAMPLE_CONFIGS.get(1));
-        configStorage.putTaskConfigs("connector1", taskConfigs);
+        configStorage.putTaskConfigs("connector1", taskConfigs, 0);
 
         // Validate root config by listing all connectors and tasks
         configState = configStorage.snapshot();
@@ -354,7 +356,7 @@ public class KafkaConfigBackingStoreTest {
                 "properties", SAMPLE_CONFIGS.get(1));
         expectReadToEnd(new LinkedHashMap<>());
         expectConvertWriteRead(
-                COMMIT_TASKS_CONFIG_KEYS.get(0), KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0, CONFIGS_SERIALIZED.get(2),
+                COMMIT_TASKS_CONFIG_KEYS.get(0), KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V1, CONFIGS_SERIALIZED.get(2),
                 "tasks", 2); // Starts with 0 tasks, after update has 2
         // As soon as root is rewritten, we should see a callback notifying us that we reconfigured some tasks
         configUpdateListener.onTaskConfigUpdate(Arrays.asList(TASK_IDS.get(0), TASK_IDS.get(1)));
@@ -374,7 +376,7 @@ public class KafkaConfigBackingStoreTest {
                 "properties", SAMPLE_CONFIGS.get(2));
         expectReadToEnd(new LinkedHashMap<>());
         expectConvertWriteRead(
-                COMMIT_TASKS_CONFIG_KEYS.get(1), KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0, CONFIGS_SERIALIZED.get(4),
+                COMMIT_TASKS_CONFIG_KEYS.get(1), KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V1, CONFIGS_SERIALIZED.get(4),
                 "tasks", 1); // Starts with 2 tasks, after update has 3
 
         // As soon as root is rewritten, we should see a callback notifying us that we reconfigured some tasks
@@ -408,9 +410,9 @@ public class KafkaConfigBackingStoreTest {
         // Writing task configs should block until all the writes have been performed and the root record update
         // has completed
         List<Map<String, String>> taskConfigs = Arrays.asList(SAMPLE_CONFIGS.get(0), SAMPLE_CONFIGS.get(1));
-        configStorage.putTaskConfigs("connector1", taskConfigs);
+        configStorage.putTaskConfigs("connector1", taskConfigs, 0);
         taskConfigs = Collections.singletonList(SAMPLE_CONFIGS.get(2));
-        configStorage.putTaskConfigs("connector2", taskConfigs);
+        configStorage.putTaskConfigs("connector2", taskConfigs, 0);
 
         // Validate root config by listing all connectors and tasks
         configState = configStorage.snapshot();
@@ -438,7 +440,7 @@ public class KafkaConfigBackingStoreTest {
         // Task configs should read to end, write to the log, read to end, write root.
         expectReadToEnd(new LinkedHashMap<>());
         expectConvertWriteRead(
-            COMMIT_TASKS_CONFIG_KEYS.get(0), KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0, CONFIGS_SERIALIZED.get(0),
+            COMMIT_TASKS_CONFIG_KEYS.get(0), KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V1, CONFIGS_SERIALIZED.get(0),
             "tasks", 0); // We have 0 tasks
         // As soon as root is rewritten, we should see a callback notifying us that we reconfigured some tasks
         configUpdateListener.onTaskConfigUpdate(Collections.emptyList());
@@ -467,7 +469,7 @@ public class KafkaConfigBackingStoreTest {
         // Writing task configs should block until all the writes have been performed and the root record update
         // has completed
         List<Map<String, String>> taskConfigs = Collections.emptyList();
-        configStorage.putTaskConfigs("connector1", taskConfigs);
+        configStorage.putTaskConfigs("connector1", taskConfigs, 0);
 
         // Validate root config by listing all connectors and tasks
         configState = configStorage.snapshot();
@@ -500,7 +502,7 @@ public class KafkaConfigBackingStoreTest {
         deserializedOnStartup.put(CONFIGS_SERIALIZED.get(0), CONNECTOR_CONFIG_STRUCTS.get(0));
         deserializedOnStartup.put(CONFIGS_SERIALIZED.get(1), TASK_CONFIG_STRUCTS.get(0));
         deserializedOnStartup.put(CONFIGS_SERIALIZED.get(2), TASK_CONFIG_STRUCTS.get(0));
-        deserializedOnStartup.put(CONFIGS_SERIALIZED.get(3), TASKS_COMMIT_STRUCT_TWO_TASK_CONNECTOR);
+        deserializedOnStartup.put(CONFIGS_SERIALIZED.get(3), TASKS_COMMIT_STRUCT_TWO_TASK_CONNECTOR_V1);
         logOffset = 5;
 
         expectStart(existingRecords, deserializedOnStartup);
@@ -561,7 +563,7 @@ public class KafkaConfigBackingStoreTest {
         deserialized.put(CONFIGS_SERIALIZED.get(0), CONNECTOR_CONFIG_STRUCTS.get(0));
         deserialized.put(CONFIGS_SERIALIZED.get(1), TASK_CONFIG_STRUCTS.get(0));
         deserialized.put(CONFIGS_SERIALIZED.get(2), TASK_CONFIG_STRUCTS.get(0));
-        deserialized.put(CONFIGS_SERIALIZED.get(3), TASKS_COMMIT_STRUCT_TWO_TASK_CONNECTOR);
+        deserialized.put(CONFIGS_SERIALIZED.get(3), TASKS_COMMIT_STRUCT_TWO_TASK_CONNECTOR_V1);
         logOffset = 5;
 
         expectStart(existingRecords, deserialized);

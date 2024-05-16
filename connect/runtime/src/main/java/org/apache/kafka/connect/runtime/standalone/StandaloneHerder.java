@@ -519,11 +519,13 @@ public class StandaloneHerder extends AbstractHerder {
         }
 
         List<Map<String, String>> newTaskConfigs = recomputeTaskConfigs(connName);
+        Map<String, String> connectorConfig = configState.connectorConfig(connName);
+        int configHash = ConnectUtils.configHash(connectorConfig);
 
-        if (taskConfigsChanged(configState, connName, newTaskConfigs)) {
+        if (taskConfigsChanged(configState, connName, newTaskConfigs, configHash)) {
             removeConnectorTasks(connName);
             List<Map<String, String>> rawTaskConfigs = reverseTransform(connName, configState, newTaskConfigs);
-            configBackingStore.putTaskConfigs(connName, rawTaskConfigs);
+            configBackingStore.putTaskConfigs(connName, rawTaskConfigs, configHash);
             createConnectorTasks(connName);
         }
     }

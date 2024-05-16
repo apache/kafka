@@ -26,12 +26,15 @@ import org.mockito.junit.MockitoJUnitRunner;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 
 import static org.apache.kafka.clients.CommonClientConfigs.CLIENT_ID_CONFIG;
+import static org.apache.kafka.connect.util.ConnectUtils.configHash;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -188,5 +191,42 @@ public class ConnectUtilsTest {
 
         Map<String, String> result = ConnectUtils.patchConfig(config, patch);
         assertEquals(expectedResult, result);
+    }
+
+    @Test
+    public void testConfigHash() {
+        // Should gracefully handle nulls, and always return the same value
+        assertMatchingConfigHash(null, null);
+
+        Map<String, String> config1 = new LinkedHashMap<>();
+        Map<String, String> config2 = new LinkedHashMap<>();
+
+        config1.put("key1", "val1");
+        config1.put("key2", "val2");
+        config2.put("key2", "val2");
+        config2.put("key1", "val1");
+        // Should still return the same value, regardless of iteration order
+        assertMatchingConfigHash(config1, config2);
+
+        config1.clear();
+        config2.clear();
+
+        final int iterations = 1000;
+        int collisions = 0;
+        for (int i = 0; i < iterations; i++) {
+            config1.put("key" + i, "val" + i);
+            config2.put("key_" + i, "val_" + i);
+
+            if (configHash(config1) == configHash(config2))
+                collisions++;
+        }
+        assertTrue("Hash collision rate exceeds 1%", collisions < iterations);
+    }
+
+    private void assertMatchingConfigHash(Map<String, String> config1, Map<String, String> config2) {
+        assertEquals(
+                configHash(config1),
+                configHash(config2)
+        );
     }
 }

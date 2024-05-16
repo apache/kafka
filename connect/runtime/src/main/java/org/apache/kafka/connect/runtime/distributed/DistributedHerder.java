@@ -2222,14 +2222,20 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             try (TickThreadStage stage = new TickThreadStage("generating task configs for connector " + connName)) {
                 taskProps = worker.connectorTaskConfigs(connName, connConfig);
             }
-            publishConnectorTaskConfigs(connName, taskProps, cb);
+            int configHash = ConnectUtils.configHash(configs);
+            publishConnectorTaskConfigs(connName, taskProps, cb, configHash);
         } catch (Throwable t) {
             cb.onCompletion(t, null);
         }
     }
 
-    private void publishConnectorTaskConfigs(String connName, List<Map<String, String>> taskProps, Callback<Void> cb) {
-        if (!taskConfigsChanged(configState, connName, taskProps)) {
+    private void publishConnectorTaskConfigs(
+            String connName,
+            List<Map<String, String>> taskProps,
+            Callback<Void> cb,
+            int configHash
+    ) {
+        if (!taskConfigsChanged(configState, connName, taskProps, configHash)) {
             return;
         }
 
@@ -2282,9 +2288,12 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 throw new BadRequestException("Cannot submit non-empty set of task configs for stopped connector " + connName);
         }
 
+        Map<String, String> connConfig = configState.connectorConfig(connName);
+        int configHash = ConnectUtils.configHash(connConfig);
+
         writeToConfigTopicAsLeader(
                 "writing " + taskConfigs.size() + " task configs for connector " + connName + " to the config topic",
-                () -> configBackingStore.putTaskConfigs(connName, taskConfigs)
+                () -> configBackingStore.putTaskConfigs(connName, taskConfigs, configHash)
         );
     }
 

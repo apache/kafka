@@ -236,6 +236,10 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
     public static final Schema CONNECTOR_TASKS_COMMIT_V0 = SchemaBuilder.struct()
             .field("tasks", Schema.INT32_SCHEMA)
             .build();
+    public static final Schema CONNECTOR_TASKS_COMMIT_V1 = SchemaBuilder.struct()
+            .field("tasks", Schema.INT32_SCHEMA)
+            .field("connector-config-hash", Schema.OPTIONAL_INT32_SCHEMA)
+            .build();
     public static final Schema TARGET_STATE_V0 = SchemaBuilder.struct()
             .field("state", Schema.STRING_SCHEMA)
             .build();
@@ -318,6 +322,7 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
 
     final Map<String, Integer> connectorTaskCountRecords = new HashMap<>();
     final Map<String, Integer> connectorTaskConfigGenerations = new HashMap<>();
+    final Map<String, Integer> taskConfigHashes = new HashMap<>();
     final Set<String> connectorsPendingFencing = new HashSet<>();
 
     private final WorkerConfigTransformer configTransformer;
@@ -476,6 +481,7 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
                     new HashMap<>(connectorConfigs),
                     new HashMap<>(connectorTargetStates),
                     new HashMap<>(taskConfigs),
+                    new HashMap<>(taskConfigHashes),
                     new HashMap<>(connectorTaskCountRecords),
                     new HashMap<>(connectorTaskConfigGenerations),
                     new HashSet<>(connectorsPendingFencing),
@@ -568,6 +574,8 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
      *
      * @param connector the connector to write task configuration
      * @param configs list of task configurations for the connector
+     * @param configHash a {@link org.apache.kafka.connect.util.ConnectUtils#configHash(Map)  hash}
+     *                   of the most recent config for the connector
      * @throws ConnectException if the task configurations do not resolve inconsistencies found in the existing root
      *                          and task configurations.
      * @throws IllegalStateException if {@link #claimWritePrivileges()} is required, but was not successfully invoked before
@@ -576,7 +584,7 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
      * and the write fails
      */
     @Override
-    public void putTaskConfigs(String connector, List<Map<String, String>> configs) {
+    public void putTaskConfigs(String connector, List<Map<String, String>> configs, int configHash) {
         Timer timer = time.timer(READ_WRITE_TOTAL_TIMEOUT_MS);
         // Make sure we're at the end of the log. We should be the only writer, but we want to make sure we don't have
         // any outstanding lagging data to consume.
@@ -619,12 +627,13 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
                 timer.update();
             }
             // Write the commit message
-            Struct connectConfig = new Struct(CONNECTOR_TASKS_COMMIT_V0);
-            connectConfig.put("tasks", taskCount);
-            byte[] serializedConfig = converter.fromConnectData(topic, CONNECTOR_TASKS_COMMIT_V0, connectConfig);
+            Struct commitMessage = new Struct(CONNECTOR_TASKS_COMMIT_V1);
+            commitMessage.put("tasks", taskCount);
+            commitMessage.put("connector-config-hash", configHash);
+            byte[] serializedCommitMessage = converter.fromConnectData(topic, CONNECTOR_TASKS_COMMIT_V1, commitMessage);
             log.debug("Writing commit for connector '{}' with {} tasks.", connector, taskCount);
 
-            sendPrivileged(COMMIT_TASKS_KEY(connector), serializedConfig, timer);
+            sendPrivileged(COMMIT_TASKS_KEY(connector), serializedCommitMessage, timer);
 
             // Read to end to ensure all the commit messages have been written
             configLog.readToEnd().get(timer.remainingMs(), TimeUnit.MILLISECONDS);
@@ -1002,6 +1011,7 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
                 connectorTaskCounts.remove(connectorName);
                 taskConfigs.keySet().removeIf(taskId -> taskId.connector().equals(connectorName));
                 deferredTaskUpdates.remove(connectorName);
+                taskConfigHashes.remove(connectorName);
                 removed = true;
             } else {
                 // Connector configs can be applied and callbacks invoked immediately
@@ -1092,7 +1102,8 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
             Map<ConnectorTaskId, Map<String, String>> deferred = deferredTaskUpdates.get(connectorName);
 
             @SuppressWarnings("unchecked")
-            int newTaskCount = intValue(((Map<String, Object>) value.value()).get("tasks"));
+            Map<String, Object> valueMap = (Map<String, Object>) value.value();
+            int newTaskCount = intValue(valueMap.get("tasks"));
 
             // Validate the configs we're supposed to update to ensure we're getting a complete configuration
             // update of all tasks that are expected based on the number of tasks in the commit message.
@@ -1109,6 +1120,13 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
                     taskConfigs.putAll(deferred);
                     updatedTasks.addAll(deferred.keySet());
                     connectorTaskConfigGenerations.compute(connectorName, (ignored, generation) -> generation != null ? generation + 1 : 0);
+
+                    Object configHash = valueMap.get("connector-config-hash");
+                    if (configHash != null) {
+                        taskConfigHashes.put(connectorName, intValue(configHash));
+                    } else {
+                        taskConfigHashes.remove(connectorName);
+                    }
                 }
                 inconsistent.remove(connectorName);
             }

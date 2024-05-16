@@ -35,6 +35,7 @@ import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.anySet;
@@ -138,15 +139,16 @@ public class MemoryConfigBackingStoreTest {
     public void testPutTaskConfigs() {
         // Can't write task configs for non-existent connector
         assertThrows(IllegalArgumentException.class,
-            () -> configStore.putTaskConfigs(CONNECTOR_IDS.get(0), Collections.singletonList(SAMPLE_CONFIGS.get(1))));
+            () -> configStore.putTaskConfigs(CONNECTOR_IDS.get(0), Collections.singletonList(SAMPLE_CONFIGS.get(1)), 0));
 
         configStore.putConnectorConfig(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0), null);
-        configStore.putTaskConfigs(CONNECTOR_IDS.get(0), Collections.singletonList(SAMPLE_CONFIGS.get(1)));
+        configStore.putTaskConfigs(CONNECTOR_IDS.get(0), Collections.singletonList(SAMPLE_CONFIGS.get(1)), 0);
         ClusterConfigState configState = configStore.snapshot();
 
         ConnectorTaskId taskId = new ConnectorTaskId(CONNECTOR_IDS.get(0), 0);
         assertEquals(1, configState.taskCount(CONNECTOR_IDS.get(0)));
         assertEquals(SAMPLE_CONFIGS.get(1), configState.taskConfig(taskId));
+        assertEquals(0, (int) configState.taskConfigHash(CONNECTOR_IDS.get(0)));
 
         verify(configUpdateListener).onConnectorConfigUpdate(eq(CONNECTOR_IDS.get(0)));
         verify(configUpdateListener).onTaskConfigUpdate(eq(Collections.singleton(taskId)));
@@ -168,12 +170,13 @@ public class MemoryConfigBackingStoreTest {
         }).when(configUpdateListener).onTaskConfigUpdate(anySet());
 
         configStore.putConnectorConfig(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0), null);
-        configStore.putTaskConfigs(CONNECTOR_IDS.get(0), Collections.singletonList(SAMPLE_CONFIGS.get(1)));
+        configStore.putTaskConfigs(CONNECTOR_IDS.get(0), Collections.singletonList(SAMPLE_CONFIGS.get(1)), 0);
         configStore.removeTaskConfigs(CONNECTOR_IDS.get(0));
         ClusterConfigState configState = configStore.snapshot();
 
         assertEquals(0, configState.taskCount(CONNECTOR_IDS.get(0)));
         assertEquals(Collections.emptyList(), configState.tasks(CONNECTOR_IDS.get(0)));
+        assertNull(configState.taskConfigHash(CONNECTOR_IDS.get(0)));
 
         verify(configUpdateListener).onConnectorConfigUpdate(eq(CONNECTOR_IDS.get(0)));
         verify(configUpdateListener, times(2)).onTaskConfigUpdate(anySet());

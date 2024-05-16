@@ -53,6 +53,7 @@ import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.apache.kafka.connect.util.Callback;
+import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.FutureCallback;
 import org.junit.Test;
@@ -138,6 +139,10 @@ public class AbstractHerderTest {
         TASK_CONFIGS_MAP.put(TASK1, TASK_CONFIG);
         TASK_CONFIGS_MAP.put(TASK2, TASK_CONFIG);
     }
+    private static final Map<String, Integer> TASK_CONFIG_HASHES = new HashMap<>();
+    static {
+        TASK_CONFIG_HASHES.put(CONN1, ConnectUtils.configHash(CONN1_CONFIG));
+    }
     private static final ClusterConfigState SNAPSHOT = new ClusterConfigState(
             1,
             null,
@@ -145,6 +150,7 @@ public class AbstractHerderTest {
             Collections.singletonMap(CONN1, CONN1_CONFIG),
             Collections.singletonMap(CONN1, TargetState.STARTED),
             TASK_CONFIGS_MAP,
+            TASK_CONFIG_HASHES,
             Collections.emptyMap(),
             Collections.emptyMap(),
             Collections.emptySet(),
@@ -155,6 +161,7 @@ public class AbstractHerderTest {
             Collections.singletonMap(CONN1, 3),
             Collections.singletonMap(CONN1, CONN1_CONFIG),
             Collections.singletonMap(CONN1, TargetState.STARTED),
+            Collections.emptyMap(),
             Collections.emptyMap(),
             Collections.emptyMap(),
             Collections.emptyMap(),
@@ -1114,6 +1121,54 @@ public class AbstractHerderTest {
         FutureCallback<ConnectorOffsets> cb = new FutureCallback<>();
         herder.connectorOffsets(CONN1, cb);
         assertEquals(offsets, cb.get(1000, TimeUnit.MILLISECONDS));
+    }
+
+    @Test
+    public void testTaskConfigHashing() {
+        AbstractHerder herder = testHerder();
+
+        assertFalse(
+                "Tasks should not be restarted when no changes have taken place",
+                herder.taskConfigsChanged(
+                    SNAPSHOT,
+                    CONN1,
+                    TASK_CONFIGS,
+                    SNAPSHOT.taskConfigHash(CONN1)
+                )
+        );
+
+        ClusterConfigState snapshotWithoutConfigHash = new ClusterConfigState(
+                1,
+                null,
+                Collections.singletonMap(CONN1, 3),
+                Collections.singletonMap(CONN1, CONN1_CONFIG),
+                Collections.singletonMap(CONN1, TargetState.STARTED),
+                TASK_CONFIGS_MAP,
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptySet(),
+                Collections.emptySet()
+        );
+        assertFalse(
+                "Tasks should not be restarted when no config hash has been stored for existing generation",
+                herder.taskConfigsChanged(
+                        snapshotWithoutConfigHash,
+                        CONN1,
+                        TASK_CONFIGS,
+                        ConnectUtils.configHash(CONN1_CONFIG)
+                )
+        );
+
+        assertTrue(
+                "Tasks should be restarted when config hashes differ",
+                herder.taskConfigsChanged(
+                        SNAPSHOT,
+                        CONN1,
+                        TASK_CONFIGS,
+                        SNAPSHOT.taskConfigHash(CONN1) + 1
+                )
+        );
     }
 
     protected void addConfigKey(Map<String, ConfigDef.ConfigKey> keys, String name, String group) {

@@ -387,6 +387,7 @@ public class StandaloneHerderTest {
                 Collections.singletonMap(taskId, taskConfig(SourceSink.SOURCE)),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
+                Collections.emptyMap(),
                 new HashSet<>(),
                 new HashSet<>(),
                 transformer);
@@ -418,6 +419,7 @@ public class StandaloneHerderTest {
                 Collections.singletonMap(CONNECTOR_NAME, connectorConfig),
                 Collections.singletonMap(CONNECTOR_NAME, TargetState.STARTED),
                 Collections.singletonMap(new ConnectorTaskId(CONNECTOR_NAME, 0), taskConfig(SourceSink.SOURCE)),
+                Collections.emptyMap(),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
                 new HashSet<>(),
@@ -555,6 +557,7 @@ public class StandaloneHerderTest {
                 Collections.singletonMap(taskId, taskConfig(SourceSink.SINK)),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
+                Collections.emptyMap(),
                 new HashSet<>(),
                 new HashSet<>(),
                 transformer);
@@ -607,6 +610,7 @@ public class StandaloneHerderTest {
                 Collections.singletonMap(CONNECTOR_NAME, connectorConfig),
                 Collections.singletonMap(CONNECTOR_NAME, TargetState.STARTED),
                 Collections.singletonMap(taskId, taskConfig(SourceSink.SINK)),
+                Collections.emptyMap(),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
                 new HashSet<>(),
@@ -710,7 +714,6 @@ public class StandaloneHerderTest {
     public void testPutConnectorConfig() throws Exception {
         Map<String, String> connConfig = connectorConfig(SourceSink.SOURCE);
         Map<String, String> newConnConfig = new HashMap<>(connConfig);
-        newConnConfig.put("foo", "bar");
 
         Callback<Map<String, String>> connectorConfigCb = mock(Callback.class);
 
@@ -748,7 +751,6 @@ public class StandaloneHerderTest {
                 ConnectorType.SOURCE);
         assertEquals(newConnInfo, newConnectorInfo.result());
 
-        assertEquals("bar", capturedConfig.getValue().get("foo"));
         herder.connectorConfig(CONNECTOR_NAME, connectorConfigCb);
         verifyNoMoreInteractions(connectorConfigCb);
     }
@@ -937,6 +939,7 @@ public class StandaloneHerderTest {
                 Collections.emptyMap(),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
+                Collections.emptyMap(),
                 Collections.emptySet(),
                 Collections.emptySet()
         );
@@ -972,6 +975,7 @@ public class StandaloneHerderTest {
                 Collections.emptyMap(),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
+                Collections.emptyMap(),
                 Collections.emptySet(),
                 Collections.emptySet()
         );
@@ -998,6 +1002,7 @@ public class StandaloneHerderTest {
                 Collections.singletonMap(CONNECTOR_NAME, 0),
                 Collections.singletonMap(CONNECTOR_NAME, connectorConfig(SourceSink.SOURCE)),
                 Collections.singletonMap(CONNECTOR_NAME, TargetState.STOPPED),
+                Collections.emptyMap(),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
@@ -1083,6 +1088,7 @@ public class StandaloneHerderTest {
                 Collections.singletonMap(CONNECTOR_NAME, connectorConfig(sourceSink)),
                 Collections.singletonMap(CONNECTOR_NAME, TargetState.STARTED),
                 Collections.singletonMap(new ConnectorTaskId(CONNECTOR_NAME, 0), generatedTaskProps),
+                Collections.emptyMap(),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
                 new HashSet<>(),

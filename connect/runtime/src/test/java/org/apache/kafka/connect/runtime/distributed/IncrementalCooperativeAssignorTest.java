@@ -1405,6 +1405,7 @@ public class IncrementalCooperativeAssignorTest {
                 taskConfigs,
                 Collections.emptyMap(),
                 Collections.emptyMap(),
+                Collections.emptyMap(),
                 Collections.emptySet(),
                 Collections.emptySet());
     }

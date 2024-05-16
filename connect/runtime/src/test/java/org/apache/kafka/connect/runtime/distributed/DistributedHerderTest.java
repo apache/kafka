@@ -129,6 +129,7 @@ import static org.junit.Assert.fail;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.AdditionalMatchers.leq;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
@@ -220,6 +221,7 @@ public class DistributedHerderTest {
             TASK_CONFIGS_MAP,
             Collections.emptyMap(),
             Collections.emptyMap(),
+            Collections.emptyMap(),
             Collections.emptySet(),
             Collections.emptySet());
     private static final ClusterConfigState SNAPSHOT_PAUSED_CONN1 = new ClusterConfigState(
@@ -231,6 +233,7 @@ public class DistributedHerderTest {
             TASK_CONFIGS_MAP,
             Collections.emptyMap(),
             Collections.emptyMap(),
+            Collections.emptyMap(),
             Collections.emptySet(),
             Collections.emptySet());
     private static final ClusterConfigState SNAPSHOT_STOPPED_CONN1 = new ClusterConfigState(
@@ -240,6 +243,7 @@ public class DistributedHerderTest {
             Collections.singletonMap(CONN1, CONN1_CONFIG),
             Collections.singletonMap(CONN1, TargetState.STOPPED),
             Collections.emptyMap(), // Stopped connectors should have an empty set of task configs
+            Collections.emptyMap(),
             Collections.singletonMap(CONN1, 3),
             Collections.singletonMap(CONN1, 10),
             Collections.singleton(CONN1),
@@ -252,6 +256,7 @@ public class DistributedHerderTest {
             Collections.singletonMap(CONN1, CONN1_CONFIG),
             Collections.singletonMap(CONN1, TargetState.STOPPED),
             Collections.emptyMap(),
+            Collections.emptyMap(),
             Collections.singletonMap(CONN1, 0),
             Collections.singletonMap(CONN1, 11),
             Collections.emptySet(),
@@ -263,6 +268,7 @@ public class DistributedHerderTest {
             Collections.singletonMap(CONN1, CONN1_CONFIG_UPDATED),
             Collections.singletonMap(CONN1, TargetState.STARTED),
             TASK_CONFIGS_MAP,
+            Collections.emptyMap(),
             Collections.emptyMap(),
             Collections.emptyMap(),
             Collections.emptySet(),
@@ -630,6 +636,7 @@ public class DistributedHerderTest {
                     Collections.singletonMap(CONN1, CONN1_CONFIG),
                     Collections.singletonMap(CONN1, TargetState.STARTED),
                     TASK_CONFIGS_MAP,
+                    Collections.emptyMap(),
                     Collections.emptyMap(),
                     Collections.emptyMap(),
                     Collections.emptySet(),
@@ -1616,6 +1623,7 @@ public class DistributedHerderTest {
                 TASK_CONFIGS_MAP,
                 Collections.emptyMap(),
                 Collections.emptyMap(),
+                Collections.emptyMap(),
                 Collections.emptySet(),
                 Collections.emptySet(),
                 configTransformer
@@ -1797,7 +1805,7 @@ public class DistributedHerderTest {
         // handle stop request
         expectMemberEnsureActive();
         expectConfigRefreshAndSnapshot(SNAPSHOT);
-        doNothing().when(configBackingStore).putTaskConfigs(CONN1, Collections.emptyList());
+        doNothing().when(configBackingStore).putTaskConfigs(eq(CONN1), eq(Collections.emptyList()), anyInt());
         doNothing().when(configBackingStore).putTargetState(CONN1, TargetState.STOPPED);
 
         FutureCallback<Void> cb = new FutureCallback<>();
@@ -1862,7 +1870,7 @@ public class DistributedHerderTest {
         ConnectException taskConfigsWriteException = new ConnectException("Could not write task configs to config topic");
         // handle stop request
         expectMemberEnsureActive();
-        doThrow(taskConfigsWriteException).when(configBackingStore).putTaskConfigs(CONN1, Collections.emptyList());
+        doThrow(taskConfigsWriteException).when(configBackingStore).putTaskConfigs(eq(CONN1), eq(Collections.emptyList()), anyInt());
         // We do not expect configBackingStore::putTargetState to be invoked, which
         // is intentional since that call should only take place if we are first able to
         // successfully write the empty list of task configs
@@ -2220,6 +2228,7 @@ public class DistributedHerderTest {
                 TASK_CONFIGS_MAP,
                 Collections.emptyMap(),
                 Collections.emptyMap(),
+                Collections.emptyMap(),
                 Collections.emptySet(),
                 Collections.emptySet(),
                 configTransformer);
@@ -2351,6 +2360,7 @@ public class DistributedHerderTest {
                 Collections.emptyMap(),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
+                Collections.emptyMap(),
                 Collections.emptySet(),
                 Collections.emptySet());
         expectConfigRefreshAndSnapshot(clusterConfigState);
@@ -2377,6 +2387,7 @@ public class DistributedHerderTest {
                 Collections.singletonMap(CONN1, 0),
                 Collections.singletonMap(CONN1, CONN1_CONFIG),
                 Collections.singletonMap(CONN1, TargetState.STARTED),
+                Collections.emptyMap(),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
@@ -2417,6 +2428,7 @@ public class DistributedHerderTest {
                 Collections.singletonMap(CONN1, 0),
                 Collections.singletonMap(CONN1, originalConnConfig),
                 Collections.singletonMap(CONN1, TargetState.STARTED),
+                Collections.emptyMap(),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
@@ -2490,6 +2502,7 @@ public class DistributedHerderTest {
                 TASK_CONFIGS_MAP,
                 Collections.emptyMap(),
                 Collections.emptyMap(),
+                Collections.emptyMap(),
                 Collections.emptySet(),
                 Collections.emptySet());
         expectConfigRefreshAndSnapshot(snapshotWithKey);
@@ -2534,6 +2547,7 @@ public class DistributedHerderTest {
                 Collections.singletonMap(CONN1, CONN1_CONFIG),
                 Collections.singletonMap(CONN1, TargetState.STARTED),
                 TASK_CONFIGS_MAP,
+                Collections.emptyMap(),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
                 Collections.emptySet(),
@@ -2735,6 +2749,7 @@ public class DistributedHerderTest {
                 Collections.singletonMap(CONN1, CONN1_CONFIG),
                 Collections.singletonMap(CONN1, TargetState.STARTED),
                 TASK_CONFIGS_MAP,
+                Collections.emptyMap(),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
                 Collections.emptySet(),
@@ -3219,6 +3234,7 @@ public class DistributedHerderTest {
                 Collections.singletonMap(CONN1, CONN1_CONFIG),
                 Collections.singletonMap(CONN1, TargetState.STARTED),
                 TASK_CONFIGS_MAP,
+                Collections.emptyMap(),
                 Collections.emptyMap(),
                 taskConfigGenerations,
                 Collections.emptySet(),
@@ -4145,6 +4161,7 @@ public class DistributedHerderTest {
                 connectorConfigs,
                 Collections.singletonMap(CONN1, TargetState.STARTED),
                 taskConfigs,
+                Collections.emptyMap(),
                 taskCountRecords,
                 taskConfigGenerations,
                 pendingFencing,

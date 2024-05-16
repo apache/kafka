@@ -634,6 +634,7 @@ public class WorkerTest {
                 Collections.singletonMap(TASK_ID, origProps),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
+                Collections.emptyMap(),
                 Collections.emptySet(),
                 Collections.emptySet()
         );
@@ -687,6 +688,7 @@ public class WorkerTest {
                 Collections.singletonMap(CONNECTOR_ID, connectorConfigs),
                 Collections.singletonMap(CONNECTOR_ID, TargetState.STARTED),
                 Collections.singletonMap(TASK_ID, origProps),
+                Collections.emptyMap(),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
                 Collections.emptySet(),
@@ -757,6 +759,7 @@ public class WorkerTest {
                 Collections.singletonMap(CONNECTOR_ID, connectorConfigs),
                 Collections.singletonMap(CONNECTOR_ID, TargetState.STARTED),
                 Collections.singletonMap(TASK_ID, origProps),
+                Collections.emptyMap(),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
                 Collections.emptySet(),
@@ -2726,6 +2729,7 @@ public class WorkerTest {
                 Collections.singletonMap(connName, connectorConfigs),
                 Collections.singletonMap(connName, TargetState.STARTED),
                 Collections.singletonMap(TASK_ID, origProps),
+                Collections.emptyMap(),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
                 Collections.emptySet(),

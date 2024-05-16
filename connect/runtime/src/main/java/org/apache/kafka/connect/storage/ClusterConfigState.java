@@ -43,6 +43,7 @@ public class ClusterConfigState {
             Collections.emptyMap(),
             Collections.emptyMap(),
             Collections.emptyMap(),
+            Collections.emptyMap(),
             Collections.emptySet(),
             Collections.emptySet());
 
@@ -53,6 +54,7 @@ public class ClusterConfigState {
     final Map<String, Map<String, String>> connectorConfigs;
     final Map<String, TargetState> connectorTargetStates;
     final Map<ConnectorTaskId, Map<String, String>> taskConfigs;
+    final Map<String, Integer> taskConfigHashses;
     final Map<String, Integer> connectorTaskCountRecords;
     final Map<String, Integer> connectorTaskConfigGenerations;
     final Set<String> connectorsPendingFencing;
@@ -64,6 +66,7 @@ public class ClusterConfigState {
                               Map<String, Map<String, String>> connectorConfigs,
                               Map<String, TargetState> connectorTargetStates,
                               Map<ConnectorTaskId, Map<String, String>> taskConfigs,
+                              Map<String, Integer> taskConfigHashses,
                               Map<String, Integer> connectorTaskCountRecords,
                               Map<String, Integer> connectorTaskConfigGenerations,
                               Set<String> connectorsPendingFencing,
@@ -74,6 +77,7 @@ public class ClusterConfigState {
                 connectorConfigs,
                 connectorTargetStates,
                 taskConfigs,
+                taskConfigHashses,
                 connectorTaskCountRecords,
                 connectorTaskConfigGenerations,
                 connectorsPendingFencing,
@@ -87,6 +91,7 @@ public class ClusterConfigState {
                               Map<String, Map<String, String>> connectorConfigs,
                               Map<String, TargetState> connectorTargetStates,
                               Map<ConnectorTaskId, Map<String, String>> taskConfigs,
+                              Map<String, Integer> taskConfigHashses,
                               Map<String, Integer> connectorTaskCountRecords,
                               Map<String, Integer> connectorTaskConfigGenerations,
                               Set<String> connectorsPendingFencing,
@@ -97,6 +102,7 @@ public class ClusterConfigState {
         this.connectorTaskCounts = connectorTaskCounts;
         this.connectorConfigs = connectorConfigs;
         this.connectorTargetStates = connectorTargetStates;
+        this.taskConfigHashses = taskConfigHashses;
         this.taskConfigs = taskConfigs;
         this.connectorTaskCountRecords = connectorTaskCountRecords;
         this.connectorTaskConfigGenerations = connectorTaskConfigGenerations;
@@ -185,6 +191,17 @@ public class ClusterConfigState {
 
     public Map<String, String> rawTaskConfig(ConnectorTaskId task) {
         return taskConfigs.get(task);
+    }
+
+    /**
+     * Get the hash of the connector config that was used to generate the
+     * latest set of task configs for the connector
+     * @param connectorName name of the connector
+     * @return the config hash, or null if the connector does not exist or
+     * no config hash for its latest set of tasks has been stored
+     */
+    public Integer taskConfigHash(String connectorName) {
+        return taskConfigHashses.get(connectorName);
     }
 
     /**

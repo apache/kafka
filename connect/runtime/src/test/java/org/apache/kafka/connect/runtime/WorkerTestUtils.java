@@ -72,6 +72,7 @@ public class WorkerTestUtils {
                 taskConfigs(0, connectorNum, connectorNum * taskNum),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
+                Collections.emptyMap(),
                 Collections.emptySet(),
                 Collections.emptySet());
     }

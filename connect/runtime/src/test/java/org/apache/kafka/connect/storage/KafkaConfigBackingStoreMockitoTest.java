@@ -83,6 +83,7 @@ import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.READ_WRIT
 import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.RESTART_KEY;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
@@ -179,11 +180,19 @@ public class KafkaConfigBackingStoreMockitoTest {
             "config-bytes-4".getBytes(), "config-bytes-5".getBytes(), "config-bytes-6".getBytes(),
             "config-bytes-7".getBytes(), "config-bytes-8".getBytes(), "config-bytes-9".getBytes()
     );
-    private static final Struct TASKS_COMMIT_STRUCT_TWO_TASK_CONNECTOR
-            = new Struct(KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0).put("tasks", 2);
+    private static final Struct TASKS_COMMIT_STRUCT_V0_TWO_TASK_CONNECTOR =
+            new Struct(KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0)
+                    .put("tasks", 2);
 
-    private static final Struct TASKS_COMMIT_STRUCT_ZERO_TASK_CONNECTOR
-            = new Struct(KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0).put("tasks", 0);
+    private static final Struct TASKS_COMMIT_STRUCT_V1_TWO_TASK_CONNECTOR =
+            new Struct(KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V1)
+                    .put("tasks", 2)
+                    .put("connector-config-hash", 1838);
+
+    private static final Struct TASKS_COMMIT_STRUCT_V1_ZERO_TASK_CONNECTOR =
+            new Struct(KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V1)
+                    .put("tasks", 0)
+                    .put("connector-config-hash", 1838);
 
     private static final List<byte[]> TARGET_STATES_SERIALIZED = Arrays.asList(
             "started".getBytes(), "paused".getBytes(), "stopped".getBytes()
@@ -579,7 +588,7 @@ public class KafkaConfigBackingStoreMockitoTest {
         deserialized.put(CONFIGS_SERIALIZED.get(1), TASK_CONFIG_STRUCTS.get(0));
         deserialized.put(CONFIGS_SERIALIZED.get(2), TASK_CONFIG_STRUCTS.get(0));
         deserialized.put(CONFIGS_SERIALIZED.get(3), null);
-        deserialized.put(CONFIGS_SERIALIZED.get(4), TASKS_COMMIT_STRUCT_TWO_TASK_CONNECTOR);
+        deserialized.put(CONFIGS_SERIALIZED.get(4), TASKS_COMMIT_STRUCT_V1_TWO_TASK_CONNECTOR);
         logOffset = 5;
 
         expectStart(existingRecords, deserialized);
@@ -600,7 +609,7 @@ public class KafkaConfigBackingStoreMockitoTest {
     }
 
     @Test
-    public void testRestoreTargetState() {
+    public void testRestoreLegacyWrites() {
         List<ConsumerRecord<String, byte[]>> existingRecords = Arrays.asList(
                 new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0, 0, CONNECTOR_CONFIG_KEYS.get(0),
                         CONFIGS_SERIALIZED.get(0), new RecordHeaders(), Optional.empty()),
@@ -620,7 +629,8 @@ public class KafkaConfigBackingStoreMockitoTest {
         deserialized.put(CONFIGS_SERIALIZED.get(2), TASK_CONFIG_STRUCTS.get(0));
         // A worker running an older version wrote this target state; make sure we can handle it correctly
         deserialized.put(CONFIGS_SERIALIZED.get(3), TARGET_STATE_PAUSED_LEGACY);
-        deserialized.put(CONFIGS_SERIALIZED.get(4), TASKS_COMMIT_STRUCT_TWO_TASK_CONNECTOR);
+        // The same worker produced an older tasks commit message; also make sure we can handle it
+        deserialized.put(CONFIGS_SERIALIZED.get(4), TASKS_COMMIT_STRUCT_V0_TWO_TASK_CONNECTOR);
         deserialized.put(CONFIGS_SERIALIZED.get(5), TARGET_STATE_STOPPED);
         logOffset = 6;
 
@@ -639,6 +649,7 @@ public class KafkaConfigBackingStoreMockitoTest {
         assertEquals(Collections.singletonList(CONNECTOR_IDS.get(0)), new ArrayList<>(configState.connectors()));
         assertEquals(TargetState.PAUSED, configState.targetState(CONNECTOR_IDS.get(0)));
         assertEquals(TargetState.STOPPED, configState.targetState(CONNECTOR_IDS.get(1)));
+        assertNull(configState.taskConfigHash(CONNECTOR_IDS.get(0)));
 
         configStorage.stop();
         verify(configLog).stop();
@@ -676,7 +687,7 @@ public class KafkaConfigBackingStoreMockitoTest {
         deserialized.put(CONFIGS_SERIALIZED.get(2), TASK_CONFIG_STRUCTS.get(0));
         deserialized.put(CONFIGS_SERIALIZED.get(3), TASK_CONFIG_STRUCTS.get(0));
         deserialized.put(CONFIGS_SERIALIZED.get(4), CONNECTOR_CONFIG_STRUCTS.get(1));
-        deserialized.put(CONFIGS_SERIALIZED.get(5), TASKS_COMMIT_STRUCT_TWO_TASK_CONNECTOR);
+        deserialized.put(CONFIGS_SERIALIZED.get(5), TASKS_COMMIT_STRUCT_V1_TWO_TASK_CONNECTOR);
         deserialized.put(CONFIGS_SERIALIZED.get(6), CONNECTOR_TASK_COUNT_RECORD_STRUCTS.get(1));
         deserialized.put(CONFIGS_SERIALIZED.get(7), CONNECTOR_CONFIG_STRUCTS.get(2));
         deserialized.put(CONFIGS_SERIALIZED.get(8), TASK_CONFIG_STRUCTS.get(1));
@@ -704,6 +715,7 @@ public class KafkaConfigBackingStoreMockitoTest {
         assertEquals(9, (int) configState.taskCountRecord(CONNECTOR_IDS.get(1)));
         assertEquals(Collections.EMPTY_SET, configState.inconsistentConnectors());
         assertEquals(Collections.singleton("connector1"), configState.connectorsPendingFencing);
+        assertNotNull(configState.taskConfigHash(CONNECTOR_IDS.get(0)));
 
         // Shouldn't see any callbacks since this is during startup
         configStorage.stop();
@@ -736,7 +748,7 @@ public class KafkaConfigBackingStoreMockitoTest {
         deserialized.put(CONFIGS_SERIALIZED.get(2), TASK_CONFIG_STRUCTS.get(0));
         deserialized.put(CONFIGS_SERIALIZED.get(3), null);
         deserialized.put(CONFIGS_SERIALIZED.get(4), null);
-        deserialized.put(CONFIGS_SERIALIZED.get(5), TASKS_COMMIT_STRUCT_TWO_TASK_CONNECTOR);
+        deserialized.put(CONFIGS_SERIALIZED.get(5), TASKS_COMMIT_STRUCT_V1_TWO_TASK_CONNECTOR);
 
         logOffset = 6;
         expectStart(existingRecords, deserialized);
@@ -750,6 +762,7 @@ public class KafkaConfigBackingStoreMockitoTest {
         ClusterConfigState configState = configStorage.snapshot();
         assertEquals(6, configState.offset()); // Should always be next to be read, even if uncommitted
         assertTrue(configState.connectors().isEmpty());
+        assertEquals(Collections.emptyMap(), configState.taskConfigHashses);
 
         // Shouldn't see any callbacks since this is during startup
         configStorage.stop();
@@ -785,10 +798,10 @@ public class KafkaConfigBackingStoreMockitoTest {
         deserialized.put(CONFIGS_SERIALIZED.get(1), TASK_CONFIG_STRUCTS.get(0));
         deserialized.put(CONFIGS_SERIALIZED.get(2), TASK_CONFIG_STRUCTS.get(0));
         deserialized.put(CONFIGS_SERIALIZED.get(3), CONNECTOR_CONFIG_STRUCTS.get(1));
-        deserialized.put(CONFIGS_SERIALIZED.get(4), TASKS_COMMIT_STRUCT_TWO_TASK_CONNECTOR);
+        deserialized.put(CONFIGS_SERIALIZED.get(4), TASKS_COMMIT_STRUCT_V1_TWO_TASK_CONNECTOR);
         deserialized.put(CONFIGS_SERIALIZED.get(5), CONNECTOR_CONFIG_STRUCTS.get(2));
         deserialized.put(CONFIGS_SERIALIZED.get(6), TASK_CONFIG_STRUCTS.get(1));
-        deserialized.put(CONFIGS_SERIALIZED.get(7), TASKS_COMMIT_STRUCT_ZERO_TASK_CONNECTOR);
+        deserialized.put(CONFIGS_SERIALIZED.get(7), TASKS_COMMIT_STRUCT_V1_ZERO_TASK_CONNECTOR);
         logOffset = 8;
         expectStart(existingRecords, deserialized);
         when(configLog.partitionCount()).thenReturn(1);
@@ -807,6 +820,7 @@ public class KafkaConfigBackingStoreMockitoTest {
         assertEquals(Collections.emptyList(), configState.tasks(CONNECTOR_IDS.get(0)));
         // Both TASK_CONFIG_STRUCTS[0] -> SAMPLE_CONFIGS[0]
         assertEquals(Collections.EMPTY_SET, configState.inconsistentConnectors());
+        assertNotNull(configState.taskConfigHash(CONNECTOR_IDS.get(0)));
 
         // Shouldn't see any callbacks since this is during startup
         configStorage.stop();
@@ -976,7 +990,7 @@ public class KafkaConfigBackingStoreMockitoTest {
         deserialized.put(CONFIGS_SERIALIZED.get(0), CONNECTOR_CONFIG_STRUCTS.get(0));
         deserialized.put(CONFIGS_SERIALIZED.get(1), TASK_CONFIG_STRUCTS.get(0));
         deserialized.put(CONFIGS_SERIALIZED.get(2), TASK_CONFIG_STRUCTS.get(1));
-        deserialized.put(CONFIGS_SERIALIZED.get(3), TASKS_COMMIT_STRUCT_TWO_TASK_CONNECTOR);
+        deserialized.put(CONFIGS_SERIALIZED.get(3), TASKS_COMMIT_STRUCT_V1_TWO_TASK_CONNECTOR);
         logOffset = 5;
 
         expectStart(existingRecords, deserialized);
@@ -1040,7 +1054,7 @@ public class KafkaConfigBackingStoreMockitoTest {
         LinkedHashMap<byte[], Struct> deserialized = new LinkedHashMap<>();
         deserialized.put(CONFIGS_SERIALIZED.get(0), CONNECTOR_CONFIG_STRUCTS.get(0));
         deserialized.put(CONFIGS_SERIALIZED.get(2), TASK_CONFIG_STRUCTS.get(0));
-        deserialized.put(CONFIGS_SERIALIZED.get(4), TASKS_COMMIT_STRUCT_TWO_TASK_CONNECTOR);
+        deserialized.put(CONFIGS_SERIALIZED.get(4), TASKS_COMMIT_STRUCT_V1_TWO_TASK_CONNECTOR);
         deserialized.put(CONFIGS_SERIALIZED.get(5), TASK_CONFIG_STRUCTS.get(1));
         logOffset = 6;
         expectStart(existingRecords, deserialized);
@@ -1074,12 +1088,12 @@ public class KafkaConfigBackingStoreMockitoTest {
                 TASK_CONFIG_KEYS.get(0), KafkaConfigBackingStore.TASK_CONFIGURATION_V0, CONFIGS_SERIALIZED.get(0),
                 "properties", SAMPLE_CONFIGS.get(0));
         expectConvertWriteRead(
-                COMMIT_TASKS_CONFIG_KEYS.get(0), KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0, CONFIGS_SERIALIZED.get(2),
+                COMMIT_TASKS_CONFIG_KEYS.get(0), KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V1, CONFIGS_SERIALIZED.get(2),
                 "tasks", 1); // Updated to just 1 task
 
         // Next, issue a write that has everything that is needed and it should be accepted. Note that in this case
         // we are going to shrink the number of tasks to 1
-        configStorage.putTaskConfigs("connector1", Collections.singletonList(SAMPLE_CONFIGS.get(0)));
+        configStorage.putTaskConfigs("connector1", Collections.singletonList(SAMPLE_CONFIGS.get(0)), 0);
 
         // Validate updated config
         configState = configStorage.snapshot();
