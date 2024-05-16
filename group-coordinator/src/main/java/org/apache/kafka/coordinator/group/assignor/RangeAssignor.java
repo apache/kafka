@@ -88,7 +88,7 @@ public class RangeAssignor implements PartitionAssignor {
      * @throws PartitionAssignorException If a member is subscribed to a non-existent topic.
      */
     private Map<Uuid, Collection<String>> membersPerTopic(
-        final AssignmentSpec assignmentSpec,
+        final GroupSpecImpl assignmentSpec,
         final SubscribedTopicDescriber subscribedTopicDescriber
     ) {
         Map<Uuid, Collection<String>> membersPerTopic = new HashMap<>();
@@ -139,7 +139,7 @@ public class RangeAssignor implements PartitionAssignor {
      */
     @Override
     public GroupAssignment assign(
-        final AssignmentSpec assignmentSpec,
+        final GroupSpecImpl assignmentSpec,
         final SubscribedTopicDescriber subscribedTopicDescriber
     ) throws PartitionAssignorException {
 

@@ -74,7 +74,7 @@ public class RangeAssignorTest {
             )
         );
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(
+        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
             Collections.emptyMap()
@@ -112,7 +112,7 @@ public class RangeAssignorTest {
             )
         );
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(
+        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
             Collections.emptyMap()
@@ -154,7 +154,7 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(
+        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
             Collections.emptyMap()
@@ -224,7 +224,7 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(
+        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             Collections.emptyMap()
@@ -291,7 +291,7 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(
+        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
             Collections.emptyMap()
@@ -368,7 +368,7 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(
+        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
             partitionAssignments(members)
@@ -436,7 +436,7 @@ public class RangeAssignorTest {
             currentAssignmentForB
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(
+        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
             partitionAssignments(members)
@@ -509,7 +509,7 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(
+        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
             partitionAssignments(members)
@@ -587,7 +587,7 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(
+        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             partitionAssignments(members)
@@ -645,7 +645,7 @@ public class RangeAssignorTest {
             currentAssignmentForB
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(
+        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
             partitionAssignments(members)
@@ -724,7 +724,7 @@ public class RangeAssignorTest {
             currentAssignmentForC
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(
+        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             partitionAssignments(members)

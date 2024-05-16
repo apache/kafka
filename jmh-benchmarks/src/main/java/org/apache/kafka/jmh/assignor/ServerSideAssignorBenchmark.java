@@ -18,7 +18,7 @@ package org.apache.kafka.jmh.assignor;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
-import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
+import org.apache.kafka.coordinator.group.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
@@ -88,25 +88,25 @@ public class ServerSideAssignorBenchmark {
         FULL, INCREMENTAL
     }
 
-    @Param({"100", "500", "1000", "5000", "10000"})
+    @Param({"100", "1000", "10000"})
     private int memberCount;
 
-    @Param({"5", "10", "50"})
+    @Param({"10"})
     private int partitionsToMemberRatio;
 
-    @Param({"10", "100", "1000"})
+    @Param({"100", "1000"})
     private int topicCount;
 
-    @Param({"true", "false"})
+    @Param({"false"})
     private boolean isRackAware;
 
-    @Param({"HOMOGENEOUS", "HETEROGENEOUS"})
+    @Param({"HETEROGENEOUS"})
     private SubscriptionType subscriptionType;
 
-    @Param({"RANGE", "UNIFORM"})
+    @Param({"RANGE"})
     private AssignorType assignorType;
 
-    @Param({"FULL", "INCREMENTAL"})
+    @Param({"INCREMENTAL"})
     private AssignmentType assignmentType;
 
     private PartitionAssignor partitionAssignor;
@@ -115,7 +115,7 @@ public class ServerSideAssignorBenchmark {
 
     private static final int MAX_BUCKET_COUNT = 5;
 
-    private AssignmentSpec assignmentSpec;
+    private GroupSpecImpl assignmentSpec;
 
     private SubscribedTopicDescriber subscribedTopicDescriber;
 
@@ -198,7 +198,7 @@ public class ServerSideAssignorBenchmark {
             }
         }
 
-        this.assignmentSpec = new AssignmentSpec(members, subscriptionType, Collections.emptyMap());
+        this.assignmentSpec = new GroupSpecImpl(members, subscriptionType, Collections.emptyMap());
     }
 
     private Optional<String> rackId(int memberIndex) {
@@ -240,12 +240,17 @@ public class ServerSideAssignorBenchmark {
         Map<Uuid, Map<Integer, String>> partitionAssignments = updatePartitionAssignments(initialAssignment);
 
         Map<String, AssignmentMemberSpec> updatedMembers = new HashMap<>();
-        members.forEach((memberId, memberAssignment) -> {
-            AssignmentMemberSpec memberSpec = assignmentSpec.members().get(memberId);
+
+        assignmentSpec.members().forEach((memberId, assignmentMemberSpec) -> {
+            MemberAssignment memberAssignment = members.getOrDefault(
+                memberId,
+                new MemberAssignment(Collections.emptyMap())
+            );
+
             updatedMembers.put(memberId, new AssignmentMemberSpec(
-                memberSpec.instanceId(),
-                memberSpec.rackId(),
-                memberSpec.subscribedTopicIds(),
+                assignmentMemberSpec.instanceId(),
+                assignmentMemberSpec.rackId(),
+                assignmentMemberSpec.subscribedTopicIds(),
                 memberAssignment.targetPartitions()
             ));
         });
@@ -265,7 +270,7 @@ public class ServerSideAssignorBenchmark {
             Collections.emptyMap()
         ));
 
-        assignmentSpec = new AssignmentSpec(updatedMembers, subscriptionType, partitionAssignments);
+        assignmentSpec = new GroupSpecImpl(updatedMembers, subscriptionType, partitionAssignments);
     }
 
     private Map<Uuid, Map<Integer, String>> updatePartitionAssignments(

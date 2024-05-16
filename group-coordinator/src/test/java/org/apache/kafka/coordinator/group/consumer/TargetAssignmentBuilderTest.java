@@ -18,7 +18,7 @@ package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
-import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
+import org.apache.kafka.coordinator.group.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
@@ -202,7 +202,7 @@ public class TargetAssignmentBuilderTest {
             SubscriptionType subscriptionType = HOMOGENEOUS;
 
             // Prepare the expected assignment spec.
-            AssignmentSpec assignmentSpec = new AssignmentSpec(memberSpecs, subscriptionType, Collections.emptyMap());
+            GroupSpecImpl assignmentSpec = new GroupSpecImpl(memberSpecs, subscriptionType, Collections.emptyMap());
 
             // We use `any` here to always return an assignment but use `verify` later on
             // to ensure that the input was correct.

@@ -77,7 +77,7 @@ public class OptimizedUniformAssignmentBuilderTest {
             )
         );
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(
+        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
             Collections.emptyMap()
@@ -112,7 +112,7 @@ public class OptimizedUniformAssignmentBuilderTest {
             )
         );
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(
+        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
             Collections.emptyMap()
@@ -162,7 +162,7 @@ public class OptimizedUniformAssignmentBuilderTest {
             mkTopicAssignment(topic3Uuid, 0)
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(
+        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
             Collections.emptyMap()
@@ -220,7 +220,7 @@ public class OptimizedUniformAssignmentBuilderTest {
             Collections.emptyMap()
         );
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(
+        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
             Collections.emptyMap()
@@ -261,7 +261,7 @@ public class OptimizedUniformAssignmentBuilderTest {
             ));
         }
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(
+        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
             Collections.emptyMap()
@@ -329,7 +329,7 @@ public class OptimizedUniformAssignmentBuilderTest {
             mkTopicAssignment(topic2Uuid, 1, 2)
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(
+        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
             partitionAssignments(members)
@@ -400,7 +400,7 @@ public class OptimizedUniformAssignmentBuilderTest {
             mkTopicAssignment(topic2Uuid, 1, 2, 3)
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(
+        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
             partitionAssignments(members)
@@ -476,7 +476,7 @@ public class OptimizedUniformAssignmentBuilderTest {
             mkTopicAssignment(topic2Uuid, 0, 2)
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(
+        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
             partitionAssignments(members)
@@ -544,7 +544,7 @@ public class OptimizedUniformAssignmentBuilderTest {
             mkTopicAssignment(topic2Uuid, 1, 2)
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(
+        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
             partitionAssignments(members)
@@ -609,7 +609,7 @@ public class OptimizedUniformAssignmentBuilderTest {
             mkTopicAssignment(topic2Uuid, 1)
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(
+        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
             partitionAssignments(members)

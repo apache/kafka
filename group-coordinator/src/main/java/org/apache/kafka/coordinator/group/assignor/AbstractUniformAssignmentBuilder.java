@@ -80,7 +80,7 @@ public abstract class AbstractUniformAssignmentBuilder {
     protected static Set<TopicIdPartition> unassignedTopicIdPartitions(
         Collection<Uuid> topicIds,
         SubscribedTopicDescriber subscribedTopicDescriber,
-        AssignmentSpec assignmentSpec
+        GroupSpecImpl assignmentSpec
     ) {
         Set<TopicIdPartition> unassignedPartitions = new HashSet<>();
         topicIds.forEach(topicId -> {

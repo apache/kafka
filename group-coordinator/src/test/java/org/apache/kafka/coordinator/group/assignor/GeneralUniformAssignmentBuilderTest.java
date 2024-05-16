@@ -79,7 +79,7 @@ public class GeneralUniformAssignmentBuilderTest {
             Collections.emptyMap()
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(
+        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             Collections.emptyMap()
@@ -121,7 +121,7 @@ public class GeneralUniformAssignmentBuilderTest {
             Collections.emptyMap()
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(
+        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             Collections.emptyMap()
@@ -161,7 +161,7 @@ public class GeneralUniformAssignmentBuilderTest {
             Collections.emptyMap()
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(
+        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             Collections.emptyMap()
@@ -221,7 +221,7 @@ public class GeneralUniformAssignmentBuilderTest {
             Collections.emptyMap()
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(
+        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             Collections.emptyMap()
@@ -311,7 +311,7 @@ public class GeneralUniformAssignmentBuilderTest {
             currentAssignmentForC
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(
+        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             partitionAssignments(members)
@@ -395,7 +395,7 @@ public class GeneralUniformAssignmentBuilderTest {
             currentAssignmentForB
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(
+        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             partitionAssignments(members)
@@ -469,7 +469,7 @@ public class GeneralUniformAssignmentBuilderTest {
             Collections.emptyMap()
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(
+        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             partitionAssignments(members)
@@ -543,7 +543,7 @@ public class GeneralUniformAssignmentBuilderTest {
 
         // Member C was removed
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(
+        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             partitionAssignments(members)
@@ -608,7 +608,7 @@ public class GeneralUniformAssignmentBuilderTest {
             currentAssignmentForB
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(
+        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             partitionAssignments(members)

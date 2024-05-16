@@ -18,7 +18,7 @@ package org.apache.kafka.jmh.assignor;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
-import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
+import org.apache.kafka.coordinator.group.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
@@ -81,7 +81,7 @@ public class TargetAssignmentBuilderBenchmark {
 
     private TargetAssignmentBuilder targetAssignmentBuilder;
 
-    private AssignmentSpec assignmentSpec;
+    private GroupSpecImpl assignmentSpec;
 
     private Map<Uuid, Map<Integer, String>> partitionAssignments;
 
@@ -190,7 +190,7 @@ public class TargetAssignmentBuilderBenchmark {
                 Collections.emptyMap()
             ));
         }
-        assignmentSpec = new AssignmentSpec(members, HOMOGENEOUS, Collections.emptyMap());
+        assignmentSpec = new GroupSpecImpl(members, HOMOGENEOUS, Collections.emptyMap());
     }
 
     public Map<Uuid, Map<Integer, String>> partitionAssignments(

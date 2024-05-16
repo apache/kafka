@@ -107,7 +107,7 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
      */
     private final PartitionMovements partitionMovements;
 
-    public GeneralUniformAssignmentBuilder(AssignmentSpec assignmentSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
+    public GeneralUniformAssignmentBuilder(GroupSpecImpl assignmentSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
         this.members = assignmentSpec.members();
         this.subscribedTopicDescriber = subscribedTopicDescriber;
         this.subscribedTopicIds = new HashSet<>();

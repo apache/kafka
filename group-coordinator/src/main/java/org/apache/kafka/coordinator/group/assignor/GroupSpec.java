@@ -23,7 +23,7 @@ import java.util.Map;
 /**
  * The assignment specifications for a consumer group.
  */
-public interface GroupAssignmentSpec {
+public interface GroupSpec {
     /**
      * @return Member metadata keyed by member Id.
      */

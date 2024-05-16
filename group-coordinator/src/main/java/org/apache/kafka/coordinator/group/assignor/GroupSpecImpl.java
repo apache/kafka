@@ -24,7 +24,7 @@ import java.util.Objects;
 /**
  * The assignment specification for a consumer group.
  */
-public class AssignmentSpec implements GroupAssignmentSpec {
+public class GroupSpecImpl implements GroupSpec {
     /**
      * The member metadata keyed by member Id.
      */
@@ -41,7 +41,7 @@ public class AssignmentSpec implements GroupAssignmentSpec {
      */
     Map<Uuid, Map<Integer, String>> partitionAssignmentsPerTopic;
 
-    public AssignmentSpec(
+    public GroupSpecImpl(
         Map<String, AssignmentMemberSpec> members,
         SubscriptionType subscriptionType,
         Map<Uuid, Map<Integer, String>> partitionAssignmentsPerTopic
@@ -84,7 +84,7 @@ public class AssignmentSpec implements GroupAssignmentSpec {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        AssignmentSpec that = (AssignmentSpec) o;
+        GroupSpecImpl that = (GroupSpecImpl) o;
         return subscriptionType == that.subscriptionType &&
             members.equals(that.members);
     }

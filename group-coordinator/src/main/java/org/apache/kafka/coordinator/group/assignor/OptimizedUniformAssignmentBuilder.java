@@ -59,7 +59,7 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
     /**
      * The assignment specification which includes member metadata.
      */
-    private final AssignmentSpec assignmentSpec;
+    private final GroupSpecImpl assignmentSpec;
 
     /**
      * The topic and partition metadata describer.
@@ -96,7 +96,7 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
      */
     private final Map<String, MemberAssignment> targetAssignment;
 
-    OptimizedUniformAssignmentBuilder(AssignmentSpec assignmentSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
+    OptimizedUniformAssignmentBuilder(GroupSpecImpl assignmentSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
         this.assignmentSpec = assignmentSpec;
         this.subscribedTopicDescriber = subscribedTopicDescriber;
         this.subscribedTopicIds = new HashSet<>(assignmentSpec.members().values().iterator().next().subscribedTopicIds());
