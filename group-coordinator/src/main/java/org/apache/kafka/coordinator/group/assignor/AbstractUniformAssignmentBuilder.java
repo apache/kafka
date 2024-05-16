@@ -72,7 +72,7 @@ public abstract class AbstractUniformAssignmentBuilder {
      *
      * @param topicIds                      Collection of topic Ids.
      * @param subscribedTopicDescriber      Describer to fetch partition counts for topics.
-     * @param assignmentSpec                The group's assignment spec.
+     * @param groupSpec                The group's assignment spec.
      *
      *
      * @return Set of unassigned {@code TopicIdPartition} including newly added topic partitions.
@@ -80,13 +80,13 @@ public abstract class AbstractUniformAssignmentBuilder {
     protected static Set<TopicIdPartition> unassignedTopicIdPartitions(
         Collection<Uuid> topicIds,
         SubscribedTopicDescriber subscribedTopicDescriber,
-        GroupSpecImpl assignmentSpec
+        GroupSpecImpl groupSpec
     ) {
         Set<TopicIdPartition> unassignedPartitions = new HashSet<>();
         topicIds.forEach(topicId -> {
             int numPartitions = subscribedTopicDescriber.numPartitions(topicId);
             for (int i = 0; i < numPartitions; i++) {
-                if (!assignmentSpec.isPartitionAssigned(topicId, i)) {
+                if (!groupSpec.isPartitionAssigned(topicId, i)) {
                     unassignedPartitions.add(new TopicIdPartition(topicId, i));
                 }
             }

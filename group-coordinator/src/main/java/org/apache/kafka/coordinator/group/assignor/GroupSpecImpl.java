@@ -39,17 +39,17 @@ public class GroupSpecImpl implements GroupSpec {
      * Reverse lookup map representing partitions per topic and
      * their member assignment.
      */
-    Map<Uuid, Map<Integer, String>> partitionAssignmentsPerTopic;
+    Map<Uuid, Map<Integer, String>> partitionAssignments;
 
     public GroupSpecImpl(
         Map<String, AssignmentMemberSpec> members,
         SubscriptionType subscriptionType,
-        Map<Uuid, Map<Integer, String>> partitionAssignmentsPerTopic
+        Map<Uuid, Map<Integer, String>> partitionAssignments
     ) {
         Objects.requireNonNull(members);
         this.members = members;
         this.subscriptionType = subscriptionType;
-        this.partitionAssignmentsPerTopic = partitionAssignmentsPerTopic;
+        this.partitionAssignments = partitionAssignments;
     }
 
     /**
@@ -73,7 +73,7 @@ public class GroupSpecImpl implements GroupSpec {
      */
     @Override
     public boolean isPartitionAssigned(Uuid topicId, int partitionId) {
-        Map<Integer, String> partitionMap = partitionAssignmentsPerTopic.get(topicId);
+        Map<Integer, String> partitionMap = partitionAssignments.get(topicId);
         if (partitionMap == null) {
             return false;
         }

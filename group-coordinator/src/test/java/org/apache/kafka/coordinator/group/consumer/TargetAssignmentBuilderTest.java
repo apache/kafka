@@ -202,7 +202,7 @@ public class TargetAssignmentBuilderTest {
             SubscriptionType subscriptionType = HOMOGENEOUS;
 
             // Prepare the expected assignment spec.
-            GroupSpecImpl assignmentSpec = new GroupSpecImpl(memberSpecs, subscriptionType, Collections.emptyMap());
+            GroupSpecImpl groupSpec = new GroupSpecImpl(memberSpecs, subscriptionType, Collections.emptyMap());
 
             // We use `any` here to always return an assignment but use `verify` later on
             // to ensure that the input was correct.
@@ -232,7 +232,7 @@ public class TargetAssignmentBuilderTest {
             // Verify that the assignor was called once with the expected
             // assignment spec.
             verify(assignor, times(1))
-                .assign(assignmentSpec, subscribedTopicMetadata);
+                .assign(groupSpec, subscribedTopicMetadata);
 
             return result;
         }

@@ -34,8 +34,8 @@ public class NoOpPartitionAssignor implements PartitionAssignor {
     }
 
     @Override
-    public GroupAssignment assign(GroupSpecImpl assignmentSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
-        return new GroupAssignment(assignmentSpec.members().entrySet()
+    public GroupAssignment assign(GroupSpecImpl groupSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
+        return new GroupAssignment(groupSpec.members().entrySet()
             .stream()
             .collect(Collectors.toMap(
                 Map.Entry::getKey,

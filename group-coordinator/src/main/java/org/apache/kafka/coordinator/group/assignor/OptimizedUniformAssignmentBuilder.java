@@ -59,7 +59,7 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
     /**
      * The assignment specification which includes member metadata.
      */
-    private final GroupSpecImpl assignmentSpec;
+    private final GroupSpecImpl groupSpec;
 
     /**
      * The topic and partition metadata describer.
@@ -96,10 +96,10 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
      */
     private final Map<String, MemberAssignment> targetAssignment;
 
-    OptimizedUniformAssignmentBuilder(GroupSpecImpl assignmentSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
-        this.assignmentSpec = assignmentSpec;
+    OptimizedUniformAssignmentBuilder(GroupSpecImpl groupSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
+        this.groupSpec = groupSpec;
         this.subscribedTopicDescriber = subscribedTopicDescriber;
-        this.subscribedTopicIds = new HashSet<>(assignmentSpec.members().values().iterator().next().subscribedTopicIds());
+        this.subscribedTopicIds = new HashSet<>(groupSpec.members().values().iterator().next().subscribedTopicIds());
         this.potentiallyUnfilledMembers = new HashMap<>();
         this.targetAssignment = new HashMap<>();
     }
@@ -137,18 +137,18 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
 
         // The minimum required quota that each member needs to meet for a balanced assignment.
         // This is the same for all members.
-        final int numberOfMembers = assignmentSpec.members().size();
+        final int numberOfMembers = groupSpec.members().size();
         final int minQuota = totalPartitionsCount / numberOfMembers;
         remainingMembersToGetAnExtraPartition = totalPartitionsCount % numberOfMembers;
 
-        assignmentSpec.members().keySet().forEach(memberId ->
+        groupSpec.members().keySet().forEach(memberId ->
             targetAssignment.put(memberId, new MemberAssignment(new HashMap<>())
         ));
 
         unassignedPartitions = unassignedTopicIdPartitions(
             subscribedTopicIds,
             subscribedTopicDescriber,
-            assignmentSpec
+            groupSpec
         );
 
         potentiallyUnfilledMembers = assignStickyPartitions(minQuota);
@@ -184,7 +184,7 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
     private Map<String, Integer> assignStickyPartitions(int minQuota) {
         Map<String, Integer> potentiallyUnfilledMembers = new HashMap<>();
 
-        assignmentSpec.members().forEach((memberId, assignmentMemberSpec) -> {
+        groupSpec.members().forEach((memberId, assignmentMemberSpec) -> {
             List<TopicIdPartition> validCurrentMemberAssignment = validCurrentMemberAssignment(
                 assignmentMemberSpec.assignedPartitions()
             );

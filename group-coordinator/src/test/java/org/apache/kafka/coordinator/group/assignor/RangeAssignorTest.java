@@ -74,14 +74,14 @@ public class RangeAssignorTest {
             )
         );
 
-        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
+        GroupSpecImpl groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
             Collections.emptyMap()
         );
 
         GroupAssignment groupAssignment = assignor.assign(
-            assignmentSpec,
+            groupSpec,
             subscribedTopicMetadata
         );
 
@@ -112,14 +112,14 @@ public class RangeAssignorTest {
             )
         );
 
-        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
+        GroupSpecImpl groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
             Collections.emptyMap()
         );
 
         assertThrows(PartitionAssignorException.class,
-            () -> assignor.assign(assignmentSpec, subscribedTopicMetadata));
+            () -> assignor.assign(groupSpec, subscribedTopicMetadata));
     }
 
     @Test
@@ -154,7 +154,7 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
+        GroupSpecImpl groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
             Collections.emptyMap()
@@ -162,7 +162,7 @@ public class RangeAssignorTest {
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(
-            assignmentSpec,
+            groupSpec,
             subscribedTopicMetadata
         );
 
@@ -224,7 +224,7 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
+        GroupSpecImpl groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             Collections.emptyMap()
@@ -232,7 +232,7 @@ public class RangeAssignorTest {
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(
-            assignmentSpec,
+            groupSpec,
             subscribedTopicMetadata
         );
 
@@ -291,7 +291,7 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
+        GroupSpecImpl groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
             Collections.emptyMap()
@@ -299,7 +299,7 @@ public class RangeAssignorTest {
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(
-            assignmentSpec,
+            groupSpec,
             subscribedTopicMetadata
         );
 
@@ -368,7 +368,7 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
+        GroupSpecImpl groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
             partitionAssignments(members)
@@ -376,7 +376,7 @@ public class RangeAssignorTest {
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(
-            assignmentSpec,
+            groupSpec,
             subscribedTopicMetadata
         );
 
@@ -436,7 +436,7 @@ public class RangeAssignorTest {
             currentAssignmentForB
         ));
 
-        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
+        GroupSpecImpl groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
             partitionAssignments(members)
@@ -444,7 +444,7 @@ public class RangeAssignorTest {
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(
-            assignmentSpec,
+            groupSpec,
             subscribedTopicMetadata
         );
 
@@ -509,7 +509,7 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
+        GroupSpecImpl groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
             partitionAssignments(members)
@@ -517,7 +517,7 @@ public class RangeAssignorTest {
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(
-            assignmentSpec,
+            groupSpec,
             subscribedTopicMetadata
         );
 
@@ -587,7 +587,7 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
+        GroupSpecImpl groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             partitionAssignments(members)
@@ -595,7 +595,7 @@ public class RangeAssignorTest {
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(
-            assignmentSpec,
+            groupSpec,
             subscribedTopicMetadata
         );
 
@@ -645,7 +645,7 @@ public class RangeAssignorTest {
             currentAssignmentForB
         ));
 
-        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
+        GroupSpecImpl groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
             partitionAssignments(members)
@@ -653,7 +653,7 @@ public class RangeAssignorTest {
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(
-            assignmentSpec,
+            groupSpec,
             subscribedTopicMetadata
         );
 
@@ -724,7 +724,7 @@ public class RangeAssignorTest {
             currentAssignmentForC
         ));
 
-        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
+        GroupSpecImpl groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             partitionAssignments(members)
@@ -732,7 +732,7 @@ public class RangeAssignorTest {
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(
-            assignmentSpec,
+            groupSpec,
             subscribedTopicMetadata
         );
 

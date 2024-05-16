@@ -79,14 +79,14 @@ public class GeneralUniformAssignmentBuilderTest {
             Collections.emptyMap()
         ));
 
-        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
+        GroupSpecImpl groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             Collections.emptyMap()
         );
 
         GroupAssignment groupAssignment = assignor.assign(
-            assignmentSpec,
+            groupSpec,
             subscribedTopicMetadata
         );
 
@@ -121,14 +121,14 @@ public class GeneralUniformAssignmentBuilderTest {
             Collections.emptyMap()
         ));
 
-        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
+        GroupSpecImpl groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             Collections.emptyMap()
         );
 
         assertThrows(PartitionAssignorException.class,
-            () -> assignor.assign(assignmentSpec, subscribedTopicMetadata));
+            () -> assignor.assign(groupSpec, subscribedTopicMetadata));
     }
 
     @Test
@@ -161,7 +161,7 @@ public class GeneralUniformAssignmentBuilderTest {
             Collections.emptyMap()
         ));
 
-        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
+        GroupSpecImpl groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             Collections.emptyMap()
@@ -169,7 +169,7 @@ public class GeneralUniformAssignmentBuilderTest {
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(
-            assignmentSpec,
+            groupSpec,
             subscribedTopicMetadata
         );
 
@@ -221,7 +221,7 @@ public class GeneralUniformAssignmentBuilderTest {
             Collections.emptyMap()
         ));
 
-        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
+        GroupSpecImpl groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             Collections.emptyMap()
@@ -229,7 +229,7 @@ public class GeneralUniformAssignmentBuilderTest {
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(
-            assignmentSpec,
+            groupSpec,
             subscribedTopicMetadata
         );
 
@@ -311,7 +311,7 @@ public class GeneralUniformAssignmentBuilderTest {
             currentAssignmentForC
         ));
 
-        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
+        GroupSpecImpl groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             partitionAssignments(members)
@@ -319,7 +319,7 @@ public class GeneralUniformAssignmentBuilderTest {
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(
-            assignmentSpec,
+            groupSpec,
             subscribedTopicMetadata
         );
 
@@ -395,7 +395,7 @@ public class GeneralUniformAssignmentBuilderTest {
             currentAssignmentForB
         ));
 
-        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
+        GroupSpecImpl groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             partitionAssignments(members)
@@ -403,7 +403,7 @@ public class GeneralUniformAssignmentBuilderTest {
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(
-            assignmentSpec,
+            groupSpec,
             subscribedTopicMetadata
         );
 
@@ -469,7 +469,7 @@ public class GeneralUniformAssignmentBuilderTest {
             Collections.emptyMap()
         ));
 
-        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
+        GroupSpecImpl groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             partitionAssignments(members)
@@ -477,7 +477,7 @@ public class GeneralUniformAssignmentBuilderTest {
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(
-            assignmentSpec,
+            groupSpec,
             subscribedTopicMetadata
         );
 
@@ -543,7 +543,7 @@ public class GeneralUniformAssignmentBuilderTest {
 
         // Member C was removed
 
-        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
+        GroupSpecImpl groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             partitionAssignments(members)
@@ -551,7 +551,7 @@ public class GeneralUniformAssignmentBuilderTest {
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(
-            assignmentSpec,
+            groupSpec,
             subscribedTopicMetadata
         );
 
@@ -608,7 +608,7 @@ public class GeneralUniformAssignmentBuilderTest {
             currentAssignmentForB
         ));
 
-        GroupSpecImpl assignmentSpec = new GroupSpecImpl(
+        GroupSpecImpl groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             partitionAssignments(members)
@@ -616,7 +616,7 @@ public class GeneralUniformAssignmentBuilderTest {
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(
-            assignmentSpec,
+            groupSpec,
             subscribedTopicMetadata
         );
 

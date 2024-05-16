@@ -115,7 +115,7 @@ public class ServerSideAssignorBenchmark {
 
     private static final int MAX_BUCKET_COUNT = 5;
 
-    private GroupSpecImpl assignmentSpec;
+    private GroupSpecImpl groupSpec;
 
     private SubscribedTopicDescriber subscribedTopicDescriber;
 
@@ -198,7 +198,7 @@ public class ServerSideAssignorBenchmark {
             }
         }
 
-        this.assignmentSpec = new GroupSpecImpl(members, subscriptionType, Collections.emptyMap());
+        this.groupSpec = new GroupSpecImpl(members, subscriptionType, Collections.emptyMap());
     }
 
     private Optional<String> rackId(int memberIndex) {
@@ -234,14 +234,14 @@ public class ServerSideAssignorBenchmark {
     }
 
     private void simulateIncrementalRebalance() {
-        GroupAssignment initialAssignment = partitionAssignor.assign(assignmentSpec, subscribedTopicDescriber);
+        GroupAssignment initialAssignment = partitionAssignor.assign(groupSpec, subscribedTopicDescriber);
         Map<String, MemberAssignment> members = initialAssignment.members();
 
         Map<Uuid, Map<Integer, String>> partitionAssignments = updatePartitionAssignments(initialAssignment);
 
         Map<String, AssignmentMemberSpec> updatedMembers = new HashMap<>();
 
-        assignmentSpec.members().forEach((memberId, assignmentMemberSpec) -> {
+        groupSpec.members().forEach((memberId, assignmentMemberSpec) -> {
             MemberAssignment memberAssignment = members.getOrDefault(
                 memberId,
                 new MemberAssignment(Collections.emptyMap())
@@ -270,7 +270,7 @@ public class ServerSideAssignorBenchmark {
             Collections.emptyMap()
         ));
 
-        assignmentSpec = new GroupSpecImpl(updatedMembers, subscriptionType, partitionAssignments);
+        groupSpec = new GroupSpecImpl(updatedMembers, subscriptionType, partitionAssignments);
     }
 
     private Map<Uuid, Map<Integer, String>> updatePartitionAssignments(
@@ -300,6 +300,6 @@ public class ServerSideAssignorBenchmark {
     @Threads(1)
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
     public void doAssignment() {
-        partitionAssignor.assign(assignmentSpec, subscribedTopicDescriber);
+        partitionAssignor.assign(groupSpec, subscribedTopicDescriber);
     }
 }

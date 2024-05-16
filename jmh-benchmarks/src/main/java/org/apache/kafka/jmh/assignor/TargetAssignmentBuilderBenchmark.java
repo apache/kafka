@@ -81,7 +81,7 @@ public class TargetAssignmentBuilderBenchmark {
 
     private TargetAssignmentBuilder targetAssignmentBuilder;
 
-    private GroupSpecImpl assignmentSpec;
+    private GroupSpecImpl groupSpec;
 
     private Map<Uuid, Map<Integer, String>> partitionAssignments;
 
@@ -158,7 +158,7 @@ public class TargetAssignmentBuilderBenchmark {
         createAssignmentSpec();
 
         GroupAssignment groupAssignment = partitionAssignor.assign(
-            assignmentSpec,
+            groupSpec,
             new SubscribedTopicMetadata(topicMetadataMap)
         );
         partitionAssignments = partitionAssignments(groupAssignment);
@@ -190,7 +190,7 @@ public class TargetAssignmentBuilderBenchmark {
                 Collections.emptyMap()
             ));
         }
-        assignmentSpec = new GroupSpecImpl(members, HOMOGENEOUS, Collections.emptyMap());
+        groupSpec = new GroupSpecImpl(members, HOMOGENEOUS, Collections.emptyMap());
     }
 
     public Map<Uuid, Map<Integer, String>> partitionAssignments(

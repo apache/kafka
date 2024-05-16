@@ -45,7 +45,7 @@ public class MockPartitionAssignor implements PartitionAssignor {
     }
 
     @Override
-    public GroupAssignment assign(GroupSpecImpl assignmentSpec, SubscribedTopicDescriber subscribedTopicDescriber) throws PartitionAssignorException {
+    public GroupAssignment assign(GroupSpecImpl groupSpec, SubscribedTopicDescriber subscribedTopicDescriber) throws PartitionAssignorException {
         return prepareGroupAssignment;
     }
 
