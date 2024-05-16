@@ -1851,10 +1851,27 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
-    void testReaperExpiresExpiredEvents() {
+    void testReaperInvokedInClose() {
         consumer = newConsumer();
         consumer.close();
         verify(backgroundEventReaper).reap(backgroundEventQueue);
+    }
+
+    @Test
+    void testReaperInvokedInUnsubscribe() {
+        consumer = newConsumer();
+        completeUnsubscribeApplicationEventSuccessfully();
+        consumer.unsubscribe();
+        verify(backgroundEventReaper).reap(any(Long.class));
+    }
+
+    @Test
+    void testReaperInvokedInPoll() {
+        consumer = newConsumer();
+        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
+        consumer.subscribe(Collections.singletonList("topic"));
+        consumer.poll(Duration.ZERO);
+        verify(backgroundEventReaper).reap(any(Long.class));
     }
 
     private Map<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {
