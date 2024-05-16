@@ -65,15 +65,13 @@ public class ClusterTestExtensionsTest {
 
     // Static methods can generate cluster configurations
     static List<ClusterConfig> generate1() {
-        List<ClusterConfig> ret = new ArrayList<>();
         Map<String, String> serverProperties = new HashMap<>();
         serverProperties.put("foo", "bar");
-        ret.add(ClusterConfig.defaultBuilder()
+        return Arrays.asList(ClusterConfig.defaultBuilder()
                 .setTypes(Collections.singleton(Type.ZK))
                 .setServerProperties(serverProperties)
                 .setTags(Collections.singletonList("Generated Test"))
                 .build());
-        return ret;
     }
 
     // With no params, configuration comes from the annotation defaults as well as @ClusterTestDefaults (if present)
