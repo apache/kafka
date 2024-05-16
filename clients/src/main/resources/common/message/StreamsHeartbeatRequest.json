@@ -71,9 +71,10 @@
           "about": "The cumulative lag for the task" }
       ]
     },
+    { "name": "UserData", "type": "bytes", "versions": "0+", "nullableVersions": "0+", "default": "null",
+      "about": "Opaque user data to be passed to the client-side assignor. Null if unchanged since last heartbeat." },
     { "name": "AssignmentConfigs", "type": "[]KeyValue", "versions": "0+", "nullableVersions": "0+", "default": "null",
-      "about": "Generic array of assignment configuration strings. Null if unchanged since last heartbeat."
-    },
+      "about": "Generic array of assignment configuration strings. Null if unchanged since last heartbeat." },
     { "name": "ShutdownApplication", "type": "bool", "versions": "0+", "default": false,
       "about": "Whether all Streams clients in the group should shut down." }
   ],
