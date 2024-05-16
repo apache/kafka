@@ -29,6 +29,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.InvalidPidMappingException;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.SerializationException;
@@ -168,7 +169,8 @@ public class RecordCollectorTest {
             emptyList(),
             emptyList(),
             emptyMap(),
-            emptySet()
+            emptySet(),
+            emptyMap()
         );
         collector = new RecordCollectorImpl(
             logContext,
@@ -333,7 +335,8 @@ public class RecordCollectorTest {
                 emptyList(),
                 emptyList(),
                 emptyMap(),
-                emptySet()
+                emptySet(),
+                emptyMap()
         );
         collector = new RecordCollectorImpl(
                 logContext,
@@ -400,7 +403,8 @@ public class RecordCollectorTest {
                 emptyList(),
                 emptyList(),
                 emptyMap(),
-                emptySet()
+                emptySet(),
+                emptyMap()
         );
         collector = new RecordCollectorImpl(
                 logContext,
@@ -467,7 +471,8 @@ public class RecordCollectorTest {
                 emptyList(),
                 emptyList(),
                 emptyMap(),
-                emptySet()
+                emptySet(),
+                emptyMap()
         );
         collector = new RecordCollectorImpl(
                 logContext,
@@ -546,7 +551,8 @@ public class RecordCollectorTest {
                 emptyList(),
                 emptyList(),
                 emptyMap(),
-                emptySet()
+                emptySet(),
+                emptyMap()
         );
         collector = new RecordCollectorImpl(
                 logContext,
@@ -599,7 +605,8 @@ public class RecordCollectorTest {
                 emptyList(),
                 emptyList(),
                 emptyMap(),
-                emptySet()
+                emptySet(),
+                emptyMap()
         );
         collector = new RecordCollectorImpl(
                 logContext,
@@ -649,7 +656,8 @@ public class RecordCollectorTest {
                 emptyList(),
                 emptyList(),
                 emptyMap(),
-                emptySet()
+                emptySet(),
+                emptyMap()
         );
         collector = new RecordCollectorImpl(
                 logContext,
@@ -714,7 +722,7 @@ public class RecordCollectorTest {
         collector.send(topic, "999", "0", null, 1, null, stringSerializer, stringSerializer, null, context);
         collector.send(topic, "999", "0", null, 2, null, stringSerializer, stringSerializer, null, context);
 
-        assertEquals(Collections.<TopicPartition, Long>emptyMap(), offsets);
+        assertEquals(Collections.emptyMap(), offsets);
 
         collector.flush();
 
@@ -1049,6 +1057,11 @@ public class RecordCollectorTest {
     }
 
     @Test
+    public void shouldThrowTaskMigratedExceptionOnSubsequentSendWhenInvalidPidMappingInCallback() {
+        testThrowTaskMigratedExceptionOnSubsequentSend(new InvalidPidMappingException("KABOOM!"));
+    }
+
+    @Test
     public void shouldThrowTaskMigratedExceptionOnSubsequentSendWhenInvalidEpochInCallback() {
         testThrowTaskMigratedExceptionOnSubsequentSend(new InvalidProducerEpochException("KABOOM!"));
     }
@@ -1079,6 +1092,11 @@ public class RecordCollectorTest {
     }
 
     @Test
+    public void shouldThrowTaskMigratedExceptionOnSubsequentFlushWhenInvalidPidMappingInCallback() {
+        testThrowTaskMigratedExceptionOnSubsequentFlush(new InvalidPidMappingException("KABOOM!"));
+    }
+
+    @Test
     public void shouldThrowTaskMigratedExceptionOnSubsequentFlushWhenInvalidEpochInCallback() {
         testThrowTaskMigratedExceptionOnSubsequentFlush(new InvalidProducerEpochException("KABOOM!"));
     }
@@ -1103,6 +1121,11 @@ public class RecordCollectorTest {
     @Test
     public void shouldThrowTaskMigratedExceptionOnSubsequentCloseWhenProducerFencedInCallback() {
         testThrowTaskMigratedExceptionOnSubsequentClose(new ProducerFencedException("KABOOM!"));
+    }
+
+    @Test
+    public void shouldThrowTaskMigratedExceptionOnSubsequentCloseWhenInvalidPidMappingInCallback() {
+        testThrowTaskMigratedExceptionOnSubsequentClose(new InvalidPidMappingException("KABOOM!"));
     }
 
     @Test

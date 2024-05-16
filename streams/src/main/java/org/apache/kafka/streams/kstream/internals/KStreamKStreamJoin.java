@@ -51,7 +51,8 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
     private final long joinAfterMs;
     private final long joinGraceMs;
     private final boolean enableSpuriousResultFix;
-    private final long joinSpuriousLookBackTimeMs;
+    private final long windowsBeforeMs;
+    private final long windowsAfterMs;
 
     private final boolean outer;
     private final boolean isLeftSide;
@@ -72,12 +73,12 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
         if (isLeftSide) {
             this.joinBeforeMs = windows.beforeMs;
             this.joinAfterMs = windows.afterMs;
-            this.joinSpuriousLookBackTimeMs = windows.beforeMs;
         } else {
             this.joinBeforeMs = windows.afterMs;
             this.joinAfterMs = windows.beforeMs;
-            this.joinSpuriousLookBackTimeMs = windows.afterMs;
         }
+        this.windowsAfterMs = windows.afterMs;
+        this.windowsBeforeMs = windows.beforeMs;
         this.joinGraceMs = windows.gracePeriodMs();
         this.enableSpuriousResultFix = windows.spuriousResultFixEnabled();
         this.joiner = joiner;
@@ -124,9 +125,11 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
         @SuppressWarnings("unchecked")
         @Override
         public void process(final Record<K, V1> record) {
+
             final long inputRecordTimestamp = record.timestamp();
             final long timeFrom = Math.max(0L, inputRecordTimestamp - joinBeforeMs);
             final long timeTo = Math.max(0L, inputRecordTimestamp + joinAfterMs);
+
             sharedTimeTracker.advanceStreamTime(inputRecordTimestamp);
 
             if (outer && record.key() == null && record.value() != null) {
@@ -136,11 +139,12 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                 return;
             }
 
-            boolean needOuterJoin = outer;
             // Emit all non-joined records which window has closed
             if (inputRecordTimestamp == sharedTimeTracker.streamTime) {
                 outerJoinStore.ifPresent(store -> emitNonJoinedOuterRecords(store, record));
             }
+
+            boolean needOuterJoin = outer;
             try (final WindowStoreIterator<V2> iter = otherWindowStore.fetch(record.key(), timeFrom, timeTo)) {
                 while (iter.hasNext()) {
                     needOuterJoin = false;
@@ -191,7 +195,6 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
             }
         }
 
-        @SuppressWarnings("unchecked")
         private void emitNonJoinedOuterRecords(
             final KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>> store,
             final Record<K, V1> record) {
@@ -200,7 +203,7 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
             // to reduce runtime cost, we try to avoid paying those cost
 
             // only try to emit left/outer join results if there _might_ be any result records
-            if (sharedTimeTracker.minTime >= sharedTimeTracker.streamTime - joinSpuriousLookBackTimeMs - joinGraceMs) {
+            if (sharedTimeTracker.minTime + joinAfterMs + joinGraceMs >= sharedTimeTracker.streamTime) {
                 return;
             }
             // throttle the emit frequency to a (configurable) interval;
@@ -221,30 +224,35 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
             try (final KeyValueIterator<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>> it = store.all()) {
                 TimestampedKeyAndJoinSide<K> prevKey = null;
 
+                boolean outerJoinLeftWindowOpen = false;
+                boolean outerJoinRightWindowOpen = false;
                 while (it.hasNext()) {
+                    if (outerJoinLeftWindowOpen && outerJoinRightWindowOpen) {
+                        // if windows are open for both joinSides we can break since there are no more candidates to emit
+                        break;
+                    }
                     final KeyValue<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>> next = it.next();
                     final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide = next.key;
-                    final LeftOrRightValue<V1, V2> value = next.value;
-                    final K key = timestampedKeyAndJoinSide.getKey();
                     final long timestamp = timestampedKeyAndJoinSide.getTimestamp();
                     sharedTimeTracker.minTime = timestamp;
 
-                    // Skip next records if window has not closed
-                    if (timestamp + joinAfterMs + joinGraceMs >= sharedTimeTracker.streamTime) {
-                        break;
+                    // Continue with the next outer record if window for this joinSide has not closed yet
+                    // There might be an outer record for the other joinSide which window has not closed yet
+                    // We rely on the <timestamp><left/right-boolean><key> ordering of KeyValueIterator
+                    final long outerJoinLookBackTimeMs = getOuterJoinLookBackTimeMs(timestampedKeyAndJoinSide);
+                    if (sharedTimeTracker.minTime + outerJoinLookBackTimeMs + joinGraceMs >= sharedTimeTracker.streamTime) {
+                        if (timestampedKeyAndJoinSide.isLeftSide()) {
+                            outerJoinLeftWindowOpen = true; // there are no more candidates to emit on left-outerJoin-side
+                        } else {
+                            outerJoinRightWindowOpen = true; // there are no more candidates to emit on right-outerJoin-side
+                        }
+                        // We continue with the next outer record
+                        continue;
                     }
-
-                    final VOut nullJoinedValue;
-                    if (isLeftSide) {
-                        nullJoinedValue = joiner.apply(key,
-                                value.getLeftValue(),
-                                value.getRightValue());
-                    } else {
-                        nullJoinedValue = joiner.apply(key,
-                                (V1) value.getRightValue(),
-                                (V2) value.getLeftValue());
-                    }
-
+                    
+                    final K key = timestampedKeyAndJoinSide.getKey();
+                    final LeftOrRightValue<V1, V2> leftOrRightValue = next.value;
+                    final VOut nullJoinedValue = getNullJoinedValue(key, leftOrRightValue);
                     context().forward(
                         record.withKey(key).withValue(nullJoinedValue).withTimestamp(timestamp)
                     );
@@ -257,7 +265,6 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                         // we do not use delete() calls since it would incur extra get()
                         store.put(prevKey, null);
                     }
-
                     prevKey = timestampedKeyAndJoinSide;
                 }
 
@@ -265,6 +272,32 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                 if (prevKey != null) {
                     store.put(prevKey, null);
                 }
+            }
+        }
+
+        @SuppressWarnings("unchecked")
+        private VOut getNullJoinedValue(
+            final K key, 
+            final LeftOrRightValue<V1, V2> leftOrRightValue) {
+            // depending on the JoinSide fill in the joiner key and joiner values
+            if (isLeftSide) {
+                return joiner.apply(key,
+                        leftOrRightValue.getLeftValue(),
+                        leftOrRightValue.getRightValue());
+            } else {
+                return joiner.apply(key,
+                        (V1) leftOrRightValue.getRightValue(),
+                        (V2) leftOrRightValue.getLeftValue());
+            }
+        }
+
+        private long getOuterJoinLookBackTimeMs(
+            final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide) {
+            // depending on the JoinSide we fill in the outerJoinLookBackTimeMs
+            if (timestampedKeyAndJoinSide.isLeftSide()) {
+                return windowsAfterMs; // On the left-JoinSide we look back in time
+            } else {
+                return windowsBeforeMs; // On the right-JoinSide we look forward in time
             }
         }
 

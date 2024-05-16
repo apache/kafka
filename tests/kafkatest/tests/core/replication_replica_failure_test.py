@@ -20,7 +20,7 @@ from ducktape.mark import matrix
 from ducktape.mark import parametrize
 from ducktape.mark.resource import cluster
 
-from kafkatest.services.kafka import quorum
+from kafkatest.services.kafka import quorum, consumer_group
 from kafkatest.tests.end_to_end import EndToEndTest
 from kafkatest.services.kafka import config_property
 from kafkatest.services.trogdor.network_partition_fault_spec import NetworkPartitionFaultSpec
@@ -38,14 +38,15 @@ class ReplicationReplicaFailureTest(EndToEndTest):
 
     @cluster(num_nodes=7)
     @matrix(
-        metadata_quorum=[quorum.zk],
+        metadata_quorum=[quorum.zk, quorum.isolated_kraft],
         use_new_coordinator=[False]
     )
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True, False]
+        use_new_coordinator=[True],
+        group_protocol=consumer_group.all_group_protocols
     )
-    def test_replication_with_replica_failure(self, metadata_quorum=quorum.zk, use_new_coordinator=False):
+    def test_replication_with_replica_failure(self, metadata_quorum=quorum.zk, use_new_coordinator=False, group_protocol=None):
         """
         This test verifies that replication shrinks the ISR when a replica is not fetching anymore.
         It also verifies that replication provides simple durability guarantees by checking that data acked by
@@ -90,7 +91,7 @@ class ReplicationReplicaFailureTest(EndToEndTest):
         self.create_producer()
         self.producer.start()
 
-        self.create_consumer()
+        self.create_consumer(group_protocol=group_protocol)
         self.consumer.start()
 
         self.await_startup()

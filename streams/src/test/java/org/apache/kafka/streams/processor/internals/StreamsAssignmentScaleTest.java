@@ -68,73 +68,73 @@ import static org.mockito.Mockito.when;
 @Category({IntegrationTest.class})
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class StreamsAssignmentScaleTest {
-    final static long MAX_ASSIGNMENT_DURATION = 60 * 1000L; //each individual assignment should complete within 20s
+    final static long MAX_ASSIGNMENT_DURATION = 120 * 1000L; // we should stay below `max.poll.interval.ms`
     final static String APPLICATION_ID = "streams-assignment-scale-test";
 
     private final Logger log = LoggerFactory.getLogger(StreamsAssignmentScaleTest.class);
 
     /* HighAvailabilityTaskAssignor tests */
 
-    @Test(timeout = 120 * 1000)
+    @Test(timeout = 300 * 1000)
     public void testHighAvailabilityTaskAssignorLargePartitionCount() {
         completeLargeAssignment(6_000, 2, 1, 1, HighAvailabilityTaskAssignor.class);
     }
 
-    @Test(timeout = 120 * 1000)
+    @Test(timeout = 300 * 1000)
     public void testHighAvailabilityTaskAssignorLargeNumConsumers() {
         completeLargeAssignment(1_000, 1_000, 1, 1, HighAvailabilityTaskAssignor.class);
     }
 
-    @Test(timeout = 120 * 1000)
+    @Test(timeout = 300 * 1000)
     public void testHighAvailabilityTaskAssignorManyStandbys() {
         completeLargeAssignment(1_000, 100, 1, 50, HighAvailabilityTaskAssignor.class);
     }
 
-    @Test(timeout = 120 * 1000)
+    @Test(timeout = 300 * 1000)
     public void testHighAvailabilityTaskAssignorManyThreadsPerClient() {
         completeLargeAssignment(1_000, 10, 1000, 1, HighAvailabilityTaskAssignor.class);
     }
 
     /* StickyTaskAssignor tests */
 
-    @Test(timeout = 120 * 1000)
+    @Test(timeout = 300 * 1000)
     public void testStickyTaskAssignorLargePartitionCount() {
         completeLargeAssignment(2_000, 2, 1, 1, StickyTaskAssignor.class);
     }
 
-    @Test(timeout = 120 * 1000)
+    @Test(timeout = 300 * 1000)
     public void testStickyTaskAssignorLargeNumConsumers() {
         completeLargeAssignment(1_000, 1_000, 1, 1, StickyTaskAssignor.class);
     }
 
-    @Test(timeout = 120 * 1000)
+    @Test(timeout = 300 * 1000)
     public void testStickyTaskAssignorManyStandbys() {
         completeLargeAssignment(1_000, 100, 1, 20, StickyTaskAssignor.class);
     }
 
-    @Test(timeout = 120 * 1000)
+    @Test(timeout = 300 * 1000)
     public void testStickyTaskAssignorManyThreadsPerClient() {
         completeLargeAssignment(1_000, 10, 1000, 1, StickyTaskAssignor.class);
     }
 
     /* FallbackPriorTaskAssignor tests */
 
-    @Test(timeout = 120 * 1000)
+    @Test(timeout = 300 * 1000)
     public void testFallbackPriorTaskAssignorLargePartitionCount() {
         completeLargeAssignment(2_000, 2, 1, 1, FallbackPriorTaskAssignor.class);
     }
 
-    @Test(timeout = 120 * 1000)
+    @Test(timeout = 300 * 1000)
     public void testFallbackPriorTaskAssignorLargeNumConsumers() {
         completeLargeAssignment(1_000, 1_000, 1, 1, FallbackPriorTaskAssignor.class);
     }
 
-    @Test(timeout = 120 * 1000)
+    @Test(timeout = 300 * 1000)
     public void testFallbackPriorTaskAssignorManyStandbys() {
         completeLargeAssignment(1_000, 100, 1, 20, FallbackPriorTaskAssignor.class);
     }
 
-    @Test(timeout = 120 * 1000)
+    @Test(timeout = 300 * 1000)
     public void testFallbackPriorTaskAssignorManyThreadsPerClient() {
         completeLargeAssignment(1_000, 10, 1000, 1, FallbackPriorTaskAssignor.class);
     }

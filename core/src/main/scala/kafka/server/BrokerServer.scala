@@ -24,7 +24,6 @@ import kafka.log.LogManager
 import kafka.log.remote.RemoteLogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.KafkaRaftManager
-import kafka.security.CredentialProvider
 import kafka.server.metadata.{AclPublisher, BrokerMetadataPublisher, ClientQuotaMetadataManager, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, ScramPublisher}
 import kafka.utils.CoreUtils
 import org.apache.kafka.common.config.ConfigException
@@ -36,12 +35,12 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, KafkaException, TopicPartition, Uuid}
-import org.apache.kafka.coordinator.group
 import org.apache.kafka.coordinator.group.metrics.{GroupCoordinatorMetrics, GroupCoordinatorRuntimeMetrics}
-import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorConfig, GroupCoordinatorService, RecordSerde}
+import org.apache.kafka.coordinator.group.{CoordinatorRecord, GroupCoordinator, GroupCoordinatorConfig, GroupCoordinatorService, CoordinatorRecordSerde}
 import org.apache.kafka.image.publisher.MetadataPublisher
 import org.apache.kafka.metadata.{BrokerState, ListenerInfo, VersionRange}
-import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.{AssignmentsManager, ClientMetricsManager, NodeToControllerChannelManager}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, TopicIdPartition}
@@ -53,6 +52,7 @@ import org.apache.kafka.server.util.timer.{SystemTimer, SystemTimerReaper}
 import org.apache.kafka.server.util.{Deadline, FutureUtils, KafkaScheduler}
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel
 
+import java.time.Duration
 import java.util
 import java.util.Optional
 import java.util.concurrent.atomic.AtomicBoolean
@@ -96,7 +96,6 @@ class BrokerServer(
   var status: ProcessStatus = SHUTDOWN
 
   @volatile var dataPlaneRequestProcessor: KafkaApis = _
-  var controlPlaneRequestProcessor: KafkaApis = _
 
   var authorizer: Option[Authorizer] = None
   @volatile var socketServer: SocketServer = _
@@ -222,7 +221,7 @@ class BrokerServer(
         "controller quorum voters future",
         sharedServer.controllerQuorumVotersFuture,
         startupDeadline, time)
-      val controllerNodes = RaftConfig.voterConnectionsToNodes(voterConnections).asScala
+      val controllerNodes = QuorumConfig.voterConnectionsToNodes(voterConnections).asScala
       val controllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)
 
       clientToControllerChannelManager = new NodeToControllerChannelManagerImpl(
@@ -296,11 +295,13 @@ class BrokerServer(
         time,
         assignmentsChannelManager,
         config.brokerId,
-        () => lifecycleManager.brokerEpoch
+        () => lifecycleManager.brokerEpoch,
+        (directoryId: Uuid) => logManager.directoryPath(directoryId).asJava,
+        (topicId: Uuid) => Optional.ofNullable(metadataCache.topicIdsToNames().get(topicId))
       )
       val directoryEventHandler = new DirectoryEventHandler {
-        override def handleAssignment(partition: TopicIdPartition, directoryId: Uuid, callback: Runnable): Unit =
-          assignmentsManager.onAssignment(partition, directoryId, callback)
+        override def handleAssignment(partition: TopicIdPartition, directoryId: Uuid, reason: String, callback: Runnable): Unit =
+          assignmentsManager.onAssignment(partition, directoryId, reason, callback)
 
         override def handleFailure(directoryId: Uuid): Unit =
           lifecycleManager.propagateDirectoryFailure(directoryId)
@@ -387,9 +388,17 @@ class BrokerServer(
       authorizer = config.createNewAuthorizer()
       authorizer.foreach(_.configure(config.originals))
 
-      val fetchManager = new FetchManager(Time.SYSTEM,
-        new FetchSessionCache(config.maxIncrementalFetchSessionCacheSlots,
-          KafkaServer.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS))
+      // The FetchSessionCache is divided into config.numIoThreads shards, each responsible
+      // for Math.max(1, shardNum * sessionIdRange) <= sessionId < (shardNum + 1) * sessionIdRange
+      val sessionIdRange = Int.MaxValue / NumFetchSessionCacheShards
+      val fetchSessionCacheShards = (0 until NumFetchSessionCacheShards)
+        .map(shardNum => new FetchSessionCacheShard(
+          config.maxIncrementalFetchSessionCacheSlots / NumFetchSessionCacheShards,
+          KafkaServer.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS,
+          sessionIdRange,
+          shardNum
+        ))
+      val fetchManager = new FetchManager(Time.SYSTEM, new FetchSessionCache(fetchSessionCacheShards))
 
       // Create the request processor objects.
       val raftSupport = RaftSupport(forwardingManager, metadataCache)
@@ -553,7 +562,7 @@ class BrokerServer(
     // to fix the underlying issue.
     if (config.isNewGroupCoordinatorEnabled) {
       val time = Time.SYSTEM
-      val serde = new RecordSerde
+      val serde = new CoordinatorRecordSerde
       val groupCoordinatorConfig = new GroupCoordinatorConfig(
         config.groupCoordinatorNumThreads,
         config.consumerGroupSessionTimeoutMs,
@@ -569,19 +578,20 @@ class BrokerServer(
         config.groupMaxSessionTimeoutMs,
         config.offsetsRetentionCheckIntervalMs,
         config.offsetsRetentionMinutes * 60 * 1000L,
-        config.offsetCommitTimeoutMs
+        config.offsetCommitTimeoutMs,
+        config.consumerGroupMigrationPolicy
       )
       val timer = new SystemTimerReaper(
         "group-coordinator-reaper",
         new SystemTimer("group-coordinator")
       )
-      val loader = new CoordinatorLoaderImpl[group.Record](
+      val loader = new CoordinatorLoaderImpl[CoordinatorRecord](
         time,
         replicaManager,
         serde,
         config.offsetsLoadBufferSize
       )
-      val writer = new CoordinatorPartitionWriter[group.Record](
+      val writer = new CoordinatorPartitionWriter[CoordinatorRecord](
         replicaManager,
         serde,
         config.offsetsTopicCompressionType,
@@ -624,9 +634,10 @@ class BrokerServer(
     }
   }
 
-  override def shutdown(): Unit = {
+  override def shutdown(timeout: Duration): Unit = {
     if (!maybeChangeStatus(STARTED, SHUTTING_DOWN)) return
     try {
+      val deadline = time.milliseconds() + timeout.toMillis
       info("shutting down")
 
       if (config.controlledShutdownEnable) {
@@ -635,7 +646,8 @@ class BrokerServer(
 
         lifecycleManager.beginControlledShutdown()
         try {
-          lifecycleManager.controlledShutdownFuture.get(5L, TimeUnit.MINUTES)
+          val controlledShutdownTimeoutMs = deadline - time.milliseconds()
+          lifecycleManager.controlledShutdownFuture.get(controlledShutdownTimeoutMs, TimeUnit.MILLISECONDS)
         } catch {
           case _: TimeoutException =>
             error("Timed out waiting for the controller to approve controlled shutdown")
@@ -655,8 +667,6 @@ class BrokerServer(
         CoreUtils.swallow(dataPlaneRequestHandlerPool.shutdown(), this)
       if (dataPlaneRequestProcessor != null)
         CoreUtils.swallow(dataPlaneRequestProcessor.close(), this)
-      if (controlPlaneRequestProcessor != null)
-        CoreUtils.swallow(controlPlaneRequestProcessor.close(), this)
       CoreUtils.swallow(authorizer.foreach(_.close()), this)
 
       /**
@@ -711,6 +721,7 @@ class BrokerServer(
 
       CoreUtils.swallow(lifecycleManager.close(), this)
       CoreUtils.swallow(config.dynamicConfig.clear(), this)
+      CoreUtils.swallow(clientMetricsManager.close(), this)
       sharedServer.stopForBroker()
       info("shut down completed")
     } catch {

@@ -30,6 +30,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
@@ -39,15 +40,18 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
+import org.apache.kafka.common.message.DescribeClusterResponseData;
 import org.apache.kafka.common.message.DescribeConfigsResponseData;
+import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData;
 import org.apache.kafka.common.message.ListOffsetsResponseData;
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse;
 import org.apache.kafka.common.message.MetadataResponseData;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
+import org.apache.kafka.common.requests.DescribeClusterResponse;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
+import org.apache.kafka.common.requests.DescribeTopicPartitionsResponse;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.MockTime;
@@ -76,7 +80,9 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
+@SuppressWarnings("ClassDataAbstractionCoupling")
 public class TopicAdminTest {
 
     /**
@@ -95,25 +101,7 @@ public class TopicAdminTest {
             assertTrue(admin.createOrFindTopics(newTopic).isEmpty());
         }
     }
-
-    /**
-     * 0.11.0.0 clients can talk with older brokers, but the DESCRIBE_TOPIC API was added in 0.10.0.0. That means,
-     * if our TopicAdmin talks to a pre 0.10.0 broker, it should receive an UnsupportedVersionException, should
-     * create no topics, and return false.
-     */
-    @Test
-    public void throwsWithApiVersionMismatchOnDescribe() {
-        final NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
-        Cluster cluster = createCluster(1);
-        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
-            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
-            env.kafkaClient().prepareResponse(describeTopicResponseWithUnsupportedVersion(newTopic));
-            TopicAdmin admin = new TopicAdmin(env.adminClient());
-            Exception e = assertThrows(ConnectException.class, () -> admin.describeTopics(newTopic.name()));
-            assertTrue(e.getCause() instanceof UnsupportedVersionException);
-        }
-    }
-
+    
     @Test
     public void returnEmptyWithClusterAuthorizationFailureOnCreate() {
         final NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
@@ -133,10 +121,11 @@ public class TopicAdminTest {
         final NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
         Cluster cluster = createCluster(1);
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
+            env.kafkaClient().prepareResponse(describeClusterResponse(cluster));
             env.kafkaClient().prepareResponse(describeTopicResponseWithClusterAuthorizationException(newTopic));
             TopicAdmin admin = new TopicAdmin(env.adminClient());
             Exception e = assertThrows(ConnectException.class, () -> admin.describeTopics(newTopic.name()));
-            assertTrue(e.getCause() instanceof ClusterAuthorizationException);
+            assertInstanceOf(ClusterAuthorizationException.class, e.getCause());
         }
     }
 
@@ -159,10 +148,11 @@ public class TopicAdminTest {
         final NewTopic newTopic = TopicAdmin.defineTopic("myTopic").partitions(1).compacted().build();
         Cluster cluster = createCluster(1);
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
+            env.kafkaClient().prepareResponse(describeClusterResponse(cluster));
             env.kafkaClient().prepareResponse(describeTopicResponseWithTopicAuthorizationException(newTopic));
             TopicAdmin admin = new TopicAdmin(env.adminClient());
             Exception e = assertThrows(ConnectException.class, () -> admin.describeTopics(newTopic.name()));
-            assertTrue(e.getCause() instanceof TopicAuthorizationException);
+            assertInstanceOf(TopicAuthorizationException.class, e.getCause());
         }
     }
 
@@ -610,7 +600,7 @@ public class TopicAdminTest {
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
             env.kafkaClient().prepareResponse(listOffsetsResultWithUnsupportedVersion(tp1, offset));
             TopicAdmin admin = new TopicAdmin(env.adminClient());
-            UnsupportedVersionException e = assertThrows(UnsupportedVersionException.class, () -> admin.endOffsets(tps));
+            assertThrows(UnsupportedVersionException.class, () -> admin.endOffsets(tps));
         }
     }
 
@@ -628,7 +618,7 @@ public class TopicAdminTest {
             env.kafkaClient().prepareResponse(prepareMetadataResponse(cluster, Errors.NONE));
             env.kafkaClient().prepareResponse(listOffsetsResultWithTimeout(tp1, offset));
             TopicAdmin admin = new TopicAdmin(env.adminClient());
-            TimeoutException e = assertThrows(TimeoutException.class, () -> admin.endOffsets(tps));
+            assertThrows(TimeoutException.class, () -> admin.endOffsets(tps));
         }
     }
 
@@ -704,7 +694,6 @@ public class TopicAdminTest {
         String topicName = "myTopic";
         TopicPartition tp1 = new TopicPartition(topicName, 0);
         Set<TopicPartition> tps = Collections.singleton(tp1);
-        long offset = 1000;
         Cluster cluster = createCluster(1, topicName, 1);
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(new MockTime(), cluster)) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
@@ -732,14 +721,13 @@ public class TopicAdminTest {
         for (int i = 0; i < partitions; ++i) {
             pInfos.add(new PartitionInfo(topicName, i, leader, nodeArray, nodeArray));
         }
-        Cluster cluster = new Cluster(
+        return new Cluster(
                 "mockClusterId",
                 nodes.values(),
                 pInfos,
                 Collections.emptySet(),
                 Collections.emptySet(),
                 leader);
-        return cluster;
     }
 
     private MetadataResponse prepareMetadataResponse(Cluster cluster, Errors error) {
@@ -913,27 +901,44 @@ public class TopicAdminTest {
         return byName.get(topicName).get();
     }
 
-    private MetadataResponse describeTopicResponseWithUnsupportedVersion(NewTopic... topics) {
-        return describeTopicResponse(new ApiError(Errors.UNSUPPORTED_VERSION, "This version of the API is not supported"), topics);
-    }
-
-    private MetadataResponse describeTopicResponseWithClusterAuthorizationException(NewTopic... topics) {
+    private DescribeTopicPartitionsResponse describeTopicResponseWithClusterAuthorizationException(NewTopic... topics) {
         return describeTopicResponse(new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, "Not authorized to create topic(s)"), topics);
     }
 
-    private MetadataResponse describeTopicResponseWithTopicAuthorizationException(NewTopic... topics) {
+    private DescribeTopicPartitionsResponse describeTopicResponseWithTopicAuthorizationException(NewTopic... topics) {
         return describeTopicResponse(new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED, "Not authorized to create topic(s)"), topics);
     }
 
-    private MetadataResponse describeTopicResponse(ApiError error, NewTopic... topics) {
+    private DescribeTopicPartitionsResponse describeTopicResponse(ApiError error, NewTopic... topics) {
         if (error == null) error = new ApiError(Errors.NONE, "");
-        MetadataResponseData response = new MetadataResponseData();
+        DescribeTopicPartitionsResponseData response = new DescribeTopicPartitionsResponseData();
         for (NewTopic topic : topics) {
-            response.topics().add(new MetadataResponseTopic()
-                    .setName(topic.name())
-                    .setErrorCode(error.error().code()));
+            response.topics().add(new DescribeTopicPartitionsResponseData.DescribeTopicPartitionsResponseTopic()
+                .setErrorCode(error.error().code())
+                .setTopicId(Uuid.ZERO_UUID)
+                .setName(topic.name())
+                .setIsInternal(false)
+            );
         }
-        return new MetadataResponse(response, ApiKeys.METADATA.latestVersion());
+        return new DescribeTopicPartitionsResponse(response);
+    }
+
+    private DescribeClusterResponse describeClusterResponse(Cluster cluster) {
+        DescribeClusterResponseData data = new DescribeClusterResponseData()
+            .setErrorCode(Errors.NONE.code())
+            .setThrottleTimeMs(0)
+            .setControllerId(cluster.nodes().get(0).id())
+            .setClusterId(cluster.clusterResource().clusterId())
+            .setClusterAuthorizedOperations(MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED);
+
+        cluster.nodes().forEach(broker ->
+            data.brokers().add(new DescribeClusterResponseData.DescribeClusterBroker()
+                .setHost(broker.host())
+                .setPort(broker.port())
+                .setBrokerId(broker.id())
+                .setRack(broker.rack())));
+
+        return new DescribeClusterResponse(data);
     }
 
     private DescribeConfigsResponse describeConfigsResponseWithUnsupportedVersion(NewTopic... topics) {

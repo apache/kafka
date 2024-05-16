@@ -17,10 +17,10 @@
 
 package kafka.server
 
-import java.util.Arrays
+import java.util
 import java.util.Collections
 import kafka.network.SocketServer
-import kafka.utils._
+import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.message.DeleteTopicsRequestData
 import org.apache.kafka.common.message.DeleteTopicsRequestData.DeleteTopicState
@@ -38,7 +38,7 @@ import scala.jdk.CollectionConverters._
 
 class DeleteTopicsRequestTest extends BaseRequestTest with Logging {
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testTopicDeletionClusterHasOfflinePartitions(quorum: String): Unit = {
     // Create a two topics with one partition/replica. Make one of them offline.
@@ -72,22 +72,22 @@ class DeleteTopicsRequestTest extends BaseRequestTest with Logging {
       "The topics are found in the Broker's cache")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testValidDeleteTopicRequests(quorum: String): Unit = {
     val timeout = 10000
     // Single topic
-    createTopic("topic-1", 1, 1)
+    createTopic("topic-1")
     validateValidDeleteTopicRequests(new DeleteTopicsRequest.Builder(
         new DeleteTopicsRequestData()
-          .setTopicNames(Arrays.asList("topic-1"))
+          .setTopicNames(util.Arrays.asList("topic-1"))
           .setTimeoutMs(timeout)).build())
     // Multi topic
     createTopic("topic-3", 5, 2)
     createTopic("topic-4", 1, 2)
     validateValidDeleteTopicRequests(new DeleteTopicsRequest.Builder(
         new DeleteTopicsRequestData()
-          .setTopicNames(Arrays.asList("topic-3", "topic-4"))
+          .setTopicNames(util.Arrays.asList("topic-3", "topic-4"))
           .setTimeoutMs(timeout)).build())
 
     // Topic Ids
@@ -96,7 +96,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest with Logging {
     val ids = getTopicIds()
     validateValidDeleteTopicRequestsWithIds(new DeleteTopicsRequest.Builder(
       new DeleteTopicsRequestData()
-        .setTopics(Arrays.asList(new DeleteTopicState().setTopicId(ids("topic-7")),
+        .setTopics(util.Arrays.asList(new DeleteTopicState().setTopicId(ids("topic-7")),
              new DeleteTopicState().setTopicId(ids("topic-6"))
         )
       ).setTimeoutMs(timeout)).build())
@@ -129,7 +129,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest with Logging {
   /*
    * Only run this test against ZK cluster. The KRaft controller doesn't perform operations that have timed out.
    */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk"))
   def testErrorDeleteTopicRequests(quorum: String): Unit = {
     val timeout = 30000
@@ -138,15 +138,15 @@ class DeleteTopicsRequestTest extends BaseRequestTest with Logging {
     // Basic
     validateErrorDeleteTopicRequests(new DeleteTopicsRequest.Builder(
         new DeleteTopicsRequestData()
-          .setTopicNames(Arrays.asList("invalid-topic"))
+          .setTopicNames(util.Arrays.asList("invalid-topic"))
           .setTimeoutMs(timeout)).build(),
       Map("invalid-topic" -> Errors.UNKNOWN_TOPIC_OR_PARTITION))
 
     // Partial
-    createTopic("partial-topic-1", 1, 1)
+    createTopic("partial-topic-1")
     validateErrorDeleteTopicRequests(new DeleteTopicsRequest.Builder(
         new DeleteTopicsRequestData()
-          .setTopicNames(Arrays.asList("partial-topic-1", "partial-invalid-topic"))
+          .setTopicNames(util.Arrays.asList("partial-topic-1", "partial-invalid-topic"))
           .setTimeoutMs(timeout)).build(),
       Map(
         "partial-topic-1" -> Errors.NONE,
@@ -155,12 +155,12 @@ class DeleteTopicsRequestTest extends BaseRequestTest with Logging {
     )
 
     // Topic IDs
-    createTopic("topic-id-1", 1, 1)
+    createTopic("topic-id-1")
     val validId = getTopicIds()("topic-id-1")
     val invalidId = Uuid.randomUuid
     validateErrorDeleteTopicRequestsWithIds(new DeleteTopicsRequest.Builder(
       new DeleteTopicsRequestData()
-        .setTopics(Arrays.asList(new DeleteTopicState().setTopicId(invalidId),
+        .setTopics(util.Arrays.asList(new DeleteTopicState().setTopicId(invalidId),
             new DeleteTopicState().setTopicId(validId)))
         .setTimeoutMs(timeout)).build(),
       Map(
@@ -174,7 +174,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest with Logging {
     // Must be a 0ms timeout to avoid transient test failures. Even a timeout of 1ms has succeeded in the past.
     validateErrorDeleteTopicRequests(new DeleteTopicsRequest.Builder(
         new DeleteTopicsRequestData()
-          .setTopicNames(Arrays.asList(timeoutTopic))
+          .setTopicNames(util.Arrays.asList(timeoutTopic))
           .setTimeoutMs(0)).build(),
       Map(timeoutTopic -> Errors.REQUEST_TIMED_OUT))
     // The topic should still get deleted eventually
@@ -220,7 +220,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest with Logging {
    * Only run this test against ZK clusters. KRaft doesn't have this behavior of returning NOT_CONTROLLER.
    * Instead, the request is forwarded.
    */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "zkMigration"))
   def testNotController(quorum: String): Unit = {
     val request = new DeleteTopicsRequest.Builder(
@@ -248,7 +248,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest with Logging {
     connectAndReceive[DeleteTopicsResponse](request, destination = socketServer)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk"))
   def testDeleteTopicsVersions(quorum: String): Unit = {
     // This test assumes that the current valid versions are 0-6 please adjust the test if there are changes.
@@ -256,18 +256,18 @@ class DeleteTopicsRequestTest extends BaseRequestTest with Logging {
     assertEquals(6, DeleteTopicsRequestData.HIGHEST_SUPPORTED_VERSION)
 
     val timeout = 10000
-    (0 until DeleteTopicsRequestData.SCHEMAS.size).foreach { version =>
+    DeleteTopicsRequestData.SCHEMAS.indices.foreach { version =>
       info(s"Creating and deleting tests for version $version")
 
       val topicName = s"topic-$version"
 
-      createTopic(topicName, 1, 1)
+      createTopic(topicName)
       val data = new DeleteTopicsRequestData().setTimeoutMs(timeout)
 
       if (version < 6) {
-        data.setTopicNames(Arrays.asList(topicName))
+        data.setTopicNames(util.Arrays.asList(topicName))
       } else {
-        data.setTopics(Arrays.asList(new DeleteTopicState().setName(topicName)))
+        data.setTopics(util.Arrays.asList(new DeleteTopicState().setName(topicName)))
       }
 
       validateValidDeleteTopicRequests(new DeleteTopicsRequest.Builder(data).build(version.toShort))

@@ -1396,12 +1396,13 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 continue
 
             fields = line.split("\t")
-            # ["Partition: 4", "Leader: 0"] -> ["4", "0"]
-            fields = list(map(lambda x: x.split(" ")[1], fields))
+            fields = dict([field.split(": ") for field in fields if len(field.split(": ")) == 2])
             partitions.append(
-                {"topic": fields[0],
-                 "partition": int(fields[1]),
-                 "replicas": list(map(int, fields[3].split(',')))})
+                {"topic": fields["Topic"],
+                 "partition": int(fields["Partition"]),
+                 "replicas": list(map(int, fields["Replicas"].split(',')))
+                 })
+
         return {"partitions": partitions}
 
 

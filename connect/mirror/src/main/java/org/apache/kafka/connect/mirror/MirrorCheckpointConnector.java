@@ -43,6 +43,7 @@ import java.util.stream.IntStream;
 
 import static org.apache.kafka.connect.mirror.Checkpoint.CONSUMER_GROUP_ID_KEY;
 import static org.apache.kafka.connect.mirror.MirrorUtils.TOPIC_KEY;
+import static org.apache.kafka.connect.mirror.MirrorUtils.adminCall;
 
 /** Replicate consumer group state between clusters. Emits checkpoint records.
  *
@@ -202,10 +203,10 @@ public class MirrorCheckpointConnector extends SourceConnector {
                     .collect(Collectors.toSet());
             // Only perform checkpoints for groups that have offsets for at least one topic that's accepted
             // by the topic filter.
-            if (consumedTopics.size() > 0) {
-                checkpointGroups.add(group);
-            } else {
+            if (consumedTopics.isEmpty()) {
                 irrelevantGroups.add(group);
+            } else {
+                checkpointGroups.add(group);
             }
         }
 
@@ -216,7 +217,10 @@ public class MirrorCheckpointConnector extends SourceConnector {
 
     Collection<ConsumerGroupListing> listConsumerGroups()
             throws InterruptedException, ExecutionException {
-        return sourceAdminClient.listConsumerGroups().valid().get();
+        return adminCall(
+                () -> sourceAdminClient.listConsumerGroups().valid().get(),
+                () -> "list consumer groups on " + config.sourceClusterAlias() + " cluster"
+        );
     }
 
     private void createInternalTopics() {
@@ -229,7 +233,11 @@ public class MirrorCheckpointConnector extends SourceConnector {
 
     Map<TopicPartition, OffsetAndMetadata> listConsumerGroupOffsets(String group)
             throws InterruptedException, ExecutionException {
-        return sourceAdminClient.listConsumerGroupOffsets(group).partitionsToOffsetAndMetadata().get();
+        return adminCall(
+                () -> sourceAdminClient.listConsumerGroupOffsets(group).partitionsToOffsetAndMetadata().get(),
+                () -> String.format("list offsets for consumer group %s on %s cluster", group,
+                        config.sourceClusterAlias())
+        );
     }
 
     boolean shouldReplicateByGroupFilter(String group) {

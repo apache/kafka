@@ -80,7 +80,7 @@ public class OffsetCheckpointTest {
 
         assertFalse(f.exists());
 
-        assertEquals(Collections.<TopicPartition, Long>emptyMap(), checkpoint.read());
+        assertEquals(Collections.emptyMap(), checkpoint.read());
 
         // deleting a non-exist checkpoint file should be fine
         checkpoint.delete();
@@ -101,7 +101,7 @@ public class OffsetCheckpointTest {
         checkpoint.write(Collections.emptyMap());
 
         assertThat(file.exists(), is(false));
-        assertThat(Collections.<TopicPartition, Long>emptyMap(), is(checkpoint.read()));
+        assertThat(Collections.emptyMap(), is(checkpoint.read()));
     }
 
     @Test

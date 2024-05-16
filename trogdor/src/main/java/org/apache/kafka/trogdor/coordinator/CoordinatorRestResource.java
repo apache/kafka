@@ -63,7 +63,7 @@ import java.util.concurrent.atomic.AtomicReference;
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class CoordinatorRestResource {
-    private final AtomicReference<Coordinator> coordinator = new AtomicReference<Coordinator>();
+    private final AtomicReference<Coordinator> coordinator = new AtomicReference<>();
 
     @javax.ws.rs.core.Context
     private ServletContext context;
@@ -113,7 +113,7 @@ public class CoordinatorRestResource {
             @DefaultValue("0") @QueryParam("firstEndMs") long firstEndMs,
             @DefaultValue("0") @QueryParam("lastEndMs") long lastEndMs,
             @DefaultValue("") @QueryParam("state") String state) throws Throwable {
-        boolean isEmptyState = state.equals("");
+        boolean isEmptyState = state.isEmpty();
         if (!isEmptyState && !TaskStateType.Constants.VALUES.contains(state)) {
             return Response.status(400).entity(
                 String.format("State %s is invalid. Must be one of %s",

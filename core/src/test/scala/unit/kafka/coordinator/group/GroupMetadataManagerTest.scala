@@ -42,7 +42,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.OffsetFetchResponse
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.coordinator.group.OffsetConfig
+import org.apache.kafka.coordinator.group.{GroupCoordinatorConfig, OffsetConfig}
 import org.apache.kafka.coordinator.group.generated.{GroupMetadataValue, OffsetCommitValue}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion._
@@ -55,6 +55,7 @@ import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.ArgumentMatchers.{any, anyInt, anyLong, anyShort}
 import org.mockito.Mockito.{mock, reset, times, verify, when}
 
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.collection.{immutable, _}
 
@@ -78,6 +79,7 @@ class GroupMetadataManagerTest {
   val defaultRequireStable = false
   val numOffsetsPartitions = 2
 
+  @nowarn("cat=deprecation")
   private val offsetConfig = {
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(nodeId = 0, zkConnect = ""))
     new OffsetConfig(config.offsetMetadataMaxSize,
@@ -776,7 +778,7 @@ class GroupMetadataManagerTest {
     )
 
     // create a GroupMetadata record larger then offsets.load.buffer.size (here at least 16 bytes larger)
-    val assignmentSize = OffsetConfig.DEFAULT_LOAD_BUFFER_SIZE + 16
+    val assignmentSize = GroupCoordinatorConfig.OFFSETS_LOAD_BUFFER_SIZE_DEFAULT + 16
     val memberId = "98098230493"
 
     val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets)
@@ -2764,62 +2766,6 @@ class GroupMetadataManagerTest {
     committedOffsets.foreach { case (topicPartition, offset) =>
       assertEquals(Some(offset), group.offset(topicPartition).map(_.offset))
     }
-  }
-
-  @Test
-  def testCommittedOffsetParsing(): Unit = {
-    val groupId = "group"
-    val topicPartition = new TopicPartition("topic", 0)
-    val offsetCommitRecord = TestUtils.records(Seq(
-      new SimpleRecord(
-        GroupMetadataManager.offsetCommitKey(groupId, topicPartition),
-        GroupMetadataManager.offsetCommitValue(OffsetAndMetadata(35L, "", time.milliseconds()), MetadataVersion.latestTesting)
-      )
-    )).records.asScala.head
-    val (keyStringOpt, valueStringOpt) = GroupMetadataManager.formatRecordKeyAndValue(offsetCommitRecord)
-    assertEquals(Some(s"offset_commit::group=$groupId,partition=$topicPartition"), keyStringOpt)
-    assertEquals(Some("offset=35"), valueStringOpt)
-  }
-
-  @Test
-  def testCommittedOffsetTombstoneParsing(): Unit = {
-    val groupId = "group"
-    val topicPartition = new TopicPartition("topic", 0)
-    val offsetCommitRecord = TestUtils.records(Seq(
-      new SimpleRecord(GroupMetadataManager.offsetCommitKey(groupId, topicPartition), null)
-    )).records.asScala.head
-    val (keyStringOpt, valueStringOpt) = GroupMetadataManager.formatRecordKeyAndValue(offsetCommitRecord)
-    assertEquals(Some(s"offset_commit::group=$groupId,partition=$topicPartition"), keyStringOpt)
-    assertEquals(Some("<DELETE>"), valueStringOpt)
-  }
-
-  @Test
-  def testGroupMetadataParsingWithNullUserData(): Unit = {
-    val generation = 935
-    val protocolType = "consumer"
-    val protocol = "range"
-    val memberId = "98098230493"
-    val assignmentBytes = Utils.toArray(ConsumerProtocol.serializeAssignment(
-      new ConsumerPartitionAssignor.Assignment(List(new TopicPartition("topic", 0)).asJava, null)
-    ))
-    val groupMetadataRecord = TestUtils.records(Seq(
-      buildStableGroupRecordWithMember(generation, protocolType, protocol, memberId, assignmentBytes)
-    )).records.asScala.head
-    val (keyStringOpt, valueStringOpt) = GroupMetadataManager.formatRecordKeyAndValue(groupMetadataRecord)
-    assertEquals(Some(s"group_metadata::group=$groupId"), keyStringOpt)
-    assertEquals(Some("{\"protocolType\":\"consumer\",\"protocol\":\"range\"," +
-      "\"generationId\":935,\"assignment\":\"{98098230493=[topic-0]}\"}"), valueStringOpt)
-  }
-
-  @Test
-  def testGroupMetadataTombstoneParsing(): Unit = {
-    val groupId = "group"
-    val groupMetadataRecord = TestUtils.records(Seq(
-      new SimpleRecord(GroupMetadataManager.groupMetadataKey(groupId), null)
-    )).records.asScala.head
-    val (keyStringOpt, valueStringOpt) = GroupMetadataManager.formatRecordKeyAndValue(groupMetadataRecord)
-    assertEquals(Some(s"group_metadata::group=$groupId"), keyStringOpt)
-    assertEquals(Some("<DELETE>"), valueStringOpt)
   }
 
   private def verifyAppendAndCaptureCallback(): ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] = {

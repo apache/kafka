@@ -193,12 +193,14 @@ public class ProcessorRecordContext implements RecordContext, RecordMetadata {
     }
 
     /**
-     * Equality is implemented in support of tests, *not* for use in Hash collections, since this class is mutable.
+     * Equality is implemented in support of tests, *not* for use in Hash collections, since this class is mutable
+     * due to the {@link Headers} field it contains.
      */
     @Deprecated
     @Override
     public int hashCode() {
-        throw new UnsupportedOperationException("ProcessorRecordContext is unsafe for use in Hash collections");
+        throw new UnsupportedOperationException("ProcessorRecordContext is unsafe for use in Hash collections "
+                                                    + "due to the mutable Headers field");
     }
 
     @Override

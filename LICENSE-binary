@@ -270,8 +270,8 @@ scala-java8-compat_2.12-1.0.2
 scala-java8-compat_2.13-1.0.2
 snappy-java-1.1.10.5
 swagger-annotations-2.2.8
-zookeeper-3.8.3
-zookeeper-jute-3.8.3
+zookeeper-3.8.4
+zookeeper-jute-3.8.4
 
 ===============================================================================
 This product bundles various third-party components under other open source
@@ -333,7 +333,7 @@ zstd-jni-1.5.5-11 see: licenses/zstd-jni-BSD-2-clause
 ---------------------------------------
 BSD 3-Clause
 
-jline-3.22.0, see: licenses/jline-BSD-3-clause
+jline-3.25.1, see: licenses/jline-BSD-3-clause
 jsr305-3.0.2, see: licenses/jsr305-BSD-3-clause
 paranamer-2.8, see: licenses/paranamer-BSD-3-clause
 protobuf-java-3.23.4, see: licenses/protobuf-java-BSD-3-clause

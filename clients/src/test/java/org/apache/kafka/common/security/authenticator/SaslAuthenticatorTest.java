@@ -140,6 +140,7 @@ import java.util.stream.IntStream;
 import static org.apache.kafka.common.protocol.ApiKeys.LIST_OFFSETS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -157,8 +158,6 @@ public class SaslAuthenticatorTest {
     private NioEchoServer server;
     private Selector selector;
     private ChannelBuilder channelBuilder;
-    private CertStores serverCertStores;
-    private CertStores clientCertStores;
     private Map<String, Object> saslClientConfigs;
     private Map<String, Object> saslServerConfigs;
     private CredentialCache credentialCache;
@@ -168,8 +167,8 @@ public class SaslAuthenticatorTest {
     public void setup() throws Exception {
         LoginManager.closeAll();
         time = Time.SYSTEM;
-        serverCertStores = new CertStores(true, "localhost");
-        clientCertStores = new CertStores(false, "localhost");
+        CertStores serverCertStores = new CertStores(true, "localhost");
+        CertStores clientCertStores = new CertStores(false, "localhost");
         saslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
         saslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
         credentialCache = new CredentialCache();
@@ -660,10 +659,9 @@ public class SaslAuthenticatorTest {
             @Override
             public TokenInformation token(String tokenId) {
                 TokenInformation baseTokenInfo = super.token(tokenId);
-                long thisLifetimeMs = System.currentTimeMillis() + tokenLifetime.apply(++callNum).longValue();
-                TokenInformation retvalTokenInfo = new TokenInformation(baseTokenInfo.tokenId(), baseTokenInfo.owner(),
+                long thisLifetimeMs = System.currentTimeMillis() + tokenLifetime.apply(++callNum);
+                return new TokenInformation(baseTokenInfo.tokenId(), baseTokenInfo.owner(),
                         baseTokenInfo.renewers(), baseTokenInfo.issueTimestamp(), thisLifetimeMs, thisLifetimeMs);
-                return retvalTokenInfo;
             }
         };
         server = createEchoServer(ListenerName.forSecurityProtocol(securityProtocol), securityProtocol, tokenCache);
@@ -1091,7 +1089,7 @@ public class SaslAuthenticatorTest {
     public void testServerAuthenticateCallbackHandler() throws Exception {
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
         TestJaasConfig jaasConfig = configureMechanisms("PLAIN", Collections.singletonList("PLAIN"));
-        jaasConfig.createOrUpdateEntry(TestJaasConfig.LOGIN_CONTEXT_SERVER, PlainLoginModule.class.getName(), new HashMap<String, Object>());
+        jaasConfig.createOrUpdateEntry(TestJaasConfig.LOGIN_CONTEXT_SERVER, PlainLoginModule.class.getName(), new HashMap<>());
         String callbackPrefix = ListenerName.forSecurityProtocol(securityProtocol).saslMechanismConfigPrefix("PLAIN");
         saslServerConfigs.put(callbackPrefix + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS,
                 TestServerCallbackHandler.class.getName());
@@ -1204,7 +1202,7 @@ public class SaslAuthenticatorTest {
         try {
             createClientConnection(securityProtocol, "invalid");
         } catch (Exception e) {
-            assertTrue(e.getCause() instanceof LoginException, "Unexpected exception " + e.getCause());
+            assertInstanceOf(LoginException.class, e.getCause(), "Unexpected exception " + e.getCause());
         }
     }
 
@@ -1805,12 +1803,12 @@ public class SaslAuthenticatorTest {
         // Server with extensions, but without a token should fail to start up since it could indicate a configuration error
         saslServerConfigs.put("listener.name.sasl_ssl.oauthbearer." + SaslConfigs.SASL_JAAS_CONFIG,
                 TestJaasConfig.jaasConfigProperty("OAUTHBEARER", Collections.singletonMap("unsecuredLoginExtension_test", "something")));
-        try {
-            createEchoServer(securityProtocol);
-            fail("Server created with invalid login config containing extensions without a token");
-        } catch (Throwable e) {
-            assertTrue(e.getCause() instanceof LoginException, "Unexpected exception " + Utils.stackTrace(e));
-        }
+
+        Throwable throwable = assertThrows(
+            Throwable.class,
+            () -> createEchoServer(securityProtocol),
+            "Server created with invalid login config containing extensions without a token");
+        assertInstanceOf(LoginException.class, throwable.getCause(), "Unexpected exception " + Utils.stackTrace(throwable));
     }
 
     /**
@@ -2198,7 +2196,7 @@ public class SaslAuthenticatorTest {
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
     }
 
-    private void closeClientConnectionIfNecessary() throws Exception {
+    private void closeClientConnectionIfNecessary() {
         if (selector != null) {
             selector.close();
             selector = null;
@@ -2221,7 +2219,7 @@ public class SaslAuthenticatorTest {
             String mechanism, String expectedErrorMessage) throws Exception {
         ChannelState finalState = createAndCheckClientConnectionFailure(securityProtocol, node);
         Exception exception = finalState.exception();
-        assertTrue(exception instanceof SaslAuthenticationException, "Invalid exception class " + exception.getClass());
+        assertInstanceOf(SaslAuthenticationException.class, exception, "Invalid exception class " + exception.getClass());
         String expectedExceptionMessage = expectedErrorMessage != null ? expectedErrorMessage :
                 "Authentication failed during authentication due to invalid credentials with SASL mechanism " + mechanism;
         assertEquals(expectedExceptionMessage, exception.getMessage());
@@ -2231,8 +2229,7 @@ public class SaslAuthenticatorTest {
             throws Exception {
         try {
             createClientConnection(securityProtocol, node);
-            ChannelState finalState = NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.AUTHENTICATION_FAILED);
-            return finalState;
+            return NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.AUTHENTICATION_FAILED);
         } finally {
             closeClientConnectionIfNecessary();
         }

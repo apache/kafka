@@ -415,7 +415,9 @@ public class MemoryRecordsBuilderTest {
             assertEquals(2L, info.maxTimestamp);
         }
 
-        if (args.compressionType == CompressionType.NONE && magic == MAGIC_VALUE_V1)
+        if (magic == MAGIC_VALUE_V0)
+            assertEquals(-1, info.shallowOffsetOfMaxTimestamp);
+        else if (args.compressionType == CompressionType.NONE && magic == MAGIC_VALUE_V1)
             assertEquals(1L, info.shallowOffsetOfMaxTimestamp);
         else
             assertEquals(2L, info.shallowOffsetOfMaxTimestamp);
@@ -495,12 +497,13 @@ public class MemoryRecordsBuilderTest {
         MemoryRecords records = builder.build();
 
         MemoryRecordsBuilder.RecordsInfo info = builder.info();
-        if (magic == MAGIC_VALUE_V0)
+        if (magic == MAGIC_VALUE_V0) {
+            assertEquals(-1, info.shallowOffsetOfMaxTimestamp);
             assertEquals(-1, info.maxTimestamp);
-        else
+        } else {
+            assertEquals(2L, info.shallowOffsetOfMaxTimestamp);
             assertEquals(2L, info.maxTimestamp);
-
-        assertEquals(2L, info.shallowOffsetOfMaxTimestamp);
+        }
 
         long i = 0L;
         for (RecordBatch batch : records.batches()) {

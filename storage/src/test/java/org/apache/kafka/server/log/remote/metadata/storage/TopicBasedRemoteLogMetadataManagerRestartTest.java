@@ -65,7 +65,7 @@ public class TopicBasedRemoteLogMetadataManagerRestartTest {
     }
 
     private void startTopicBasedRemoteLogMetadataManagerHarness(boolean startConsumerThread) {
-        remoteLogMetadataManagerHarness.initializeRemoteLogMetadataManager(Collections.emptySet(), startConsumerThread, null);
+        remoteLogMetadataManagerHarness.initializeRemoteLogMetadataManager(Collections.emptySet(), startConsumerThread, RemoteLogMetadataTopicPartitioner::new);
     }
 
     @AfterEach
@@ -75,7 +75,7 @@ public class TopicBasedRemoteLogMetadataManagerRestartTest {
         }
     }
 
-    private void stopTopicBasedRemoteLogMetadataManagerHarness() throws IOException {
+    private void stopTopicBasedRemoteLogMetadataManagerHarness() {
         remoteLogMetadataManagerHarness.closeRemoteLogMetadataManager();
     }
 

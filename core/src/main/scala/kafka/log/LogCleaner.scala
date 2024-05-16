@@ -499,13 +499,13 @@ class LogCleaner(initialConfig: CleanerConfig,
 
 object LogCleaner {
   val ReconfigurableConfigs: Set[String] = Set(
-    KafkaConfig.LogCleanerThreadsProp,
-    KafkaConfig.LogCleanerDedupeBufferSizeProp,
-    KafkaConfig.LogCleanerDedupeBufferLoadFactorProp,
-    KafkaConfig.LogCleanerIoBufferSizeProp,
+    CleanerConfig.LOG_CLEANER_THREADS_PROP,
+    CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP,
+    CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_LOAD_FACTOR_PROP,
+    CleanerConfig.LOG_CLEANER_IO_BUFFER_SIZE_PROP,
     KafkaConfig.MessageMaxBytesProp,
-    KafkaConfig.LogCleanerIoMaxBytesPerSecondProp,
-    KafkaConfig.LogCleanerBackoffMsProp
+    CleanerConfig.LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP,
+    CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP
   )
 
   def cleanerConfig(config: KafkaConfig): CleanerConfig = {
@@ -812,7 +812,7 @@ private[log] class Cleaner(val id: Int,
         val retained = MemoryRecords.readableRecords(outputBuffer)
         // it's OK not to hold the Log's lock in this case, because this segment is only accessed by other threads
         // after `Log.replaceSegments` (which acquires the lock) is called
-        dest.append(result.maxOffset, result.maxTimestamp, result.shallowOffsetOfMaxTimestamp, retained)
+        dest.append(result.maxOffset, result.maxTimestamp, result.shallowOffsetOfMaxTimestamp(), retained)
         throttler.maybeThrottle(outputBuffer.limit())
       }
 

@@ -17,7 +17,6 @@
 
 package org.apache.kafka.shell.command;
 
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.junit.jupiter.api.Test;
@@ -27,7 +26,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Optional;
 
-@Timeout(value = 120000, unit = MILLISECONDS)
+@Timeout(value = 120)
 public class CommandTest {
     @Test
     public void testParseCommands() {

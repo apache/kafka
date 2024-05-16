@@ -104,9 +104,19 @@ class DelayedOperations(topicPartition: TopicPartition,
 object Partition {
   private val metricsGroup = new KafkaMetricsGroup(classOf[Partition])
 
-  def apply(topicPartition: TopicPartition,
+  def apply(topicIdPartition: TopicIdPartition,
             time: Time,
             replicaManager: ReplicaManager): Partition = {
+    Partition(
+      topicPartition = topicIdPartition.topicPartition(),
+      topicId = Option(topicIdPartition.topicId()),
+      time = time,
+      replicaManager = replicaManager)
+  }
+  def apply(topicPartition: TopicPartition,
+            time: Time,
+            replicaManager: ReplicaManager,
+            topicId: Option[Uuid] = None): Partition = {
 
     val isrChangeListener = new AlterPartitionListener {
       override def markIsrExpand(): Unit = {
@@ -127,6 +137,7 @@ object Partition {
       replicaManager.delayedDeleteRecordsPurgatory)
 
     new Partition(topicPartition,
+      _topicId = topicId,
       replicaLagTimeMaxMs = replicaManager.config.replicaLagTimeMaxMs,
       interBrokerProtocolVersion = replicaManager.config.interBrokerProtocolVersion,
       localBrokerId = replicaManager.config.brokerId,
@@ -289,10 +300,11 @@ class Partition(val topicPartition: TopicPartition,
                 delayedOperations: DelayedOperations,
                 metadataCache: MetadataCache,
                 logManager: LogManager,
-                alterIsrManager: AlterPartitionManager) extends Logging {
+                alterIsrManager: AlterPartitionManager,
+                @volatile private var _topicId: Option[Uuid] = None // TODO: merge topicPartition and _topicId into TopicIdPartition once TopicId persist in most of the code by KAFKA-16212
+               ) extends Logging {
 
   import Partition.metricsGroup
-
   def topic: String = topicPartition.topic
   def partitionId: Int = topicPartition.partition
 
@@ -570,11 +582,15 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   /**
+   * Return either the value of _topicId if it is provided or return the topic id attached to the log itself.
+   * If _topicId is empty then the method will fetch topicId from the log and update _topicId.
    * @return the topic ID for the log or None if the log or the topic ID does not exist.
    */
   def topicId: Option[Uuid] = {
-    val log = this.log.orElse(logManager.getLog(topicPartition))
-    log.flatMap(_.topicId)
+    if (_topicId.isEmpty || _topicId.contains(Uuid.ZERO_UUID)) {
+      _topicId = this.log.orElse(logManager.getLog(topicPartition)).flatMap(_.topicId)
+    }
+    _topicId
   }
 
   // remoteReplicas will be called in the hot path, and must be inexpensive
@@ -600,7 +616,7 @@ class Partition(val topicPartition: TopicPartition,
   def maybeStartTransactionVerification(producerId: Long, sequence: Int, epoch: Short): VerificationGuard = {
     leaderLogIfLocal match {
       case Some(log) => log.maybeStartTransactionVerification(producerId, sequence, epoch)
-      case None => throw new NotLeaderOrFollowerException();
+      case None => throw new NotLeaderOrFollowerException()
     }
   }
 
@@ -1574,8 +1590,8 @@ class Partition(val topicPartition: TopicPartition,
       "unknown epoch"
     }
 
-    // Only consider throwing an error if we get a client request (isolationLevel is defined) and the start offset
-    // is lagging behind the high watermark
+    // Only consider throwing an error if we get a client request (isolationLevel is defined) and the high watermark
+    // is lagging behind the start offset
     val maybeOffsetsError: Option[ApiException] = leaderEpochStartOffsetOpt
       .filter(epochStart => isolationLevel.isDefined && epochStart > localLog.highWatermark)
       .map(epochStart => Errors.OFFSET_NOT_AVAILABLE.exception(s"Failed to fetch offsets for " +

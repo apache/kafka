@@ -29,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TimerTaskListTest {
 
-    private class TestTask extends TimerTask {
+    private static class TestTask extends TimerTask {
         TestTask(long delayMs) {
             super(delayMs);
         }
