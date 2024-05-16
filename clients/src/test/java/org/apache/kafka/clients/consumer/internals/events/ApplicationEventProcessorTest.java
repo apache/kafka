@@ -82,7 +82,13 @@ public class ApplicationEventProcessorTest {
                 withGroupId ? Optional.of(mock(CoordinatorRequestManager.class)) : Optional.empty(),
                 withGroupId ? Optional.of(commitRequestManager) : Optional.empty(),
                 withGroupId ? Optional.of(heartbeatRequestManager) : Optional.empty(),
-                withGroupId ? Optional.of(membershipManager) : Optional.empty());
+                withGroupId ? Optional.of(membershipManager) : Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty()
+        );
+
         processor = new ApplicationEventProcessor(
                 new LogContext(),
                 requestManagers,

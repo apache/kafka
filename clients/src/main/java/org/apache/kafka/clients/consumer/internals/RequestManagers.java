@@ -56,6 +56,9 @@ public class RequestManagers implements Closeable {
     public final TopicMetadataRequestManager topicMetadataRequestManager;
     public final FetchRequestManager fetchRequestManager;
     public final Optional<ShareConsumeRequestManager> shareConsumeRequestManager;
+    public final Optional<StreamsInitializeRequestManager> streamsInitializeRequestManager;
+    public final Optional<StreamsPrepareAssignmentRequestManager> streamsPrepareAssignmentRequestManager;
+    public final Optional<StreamsInstallAssignmentRequestManager> streamsInstallAssignmentRequestManager;
     private final List<Optional<? extends RequestManager>> entries;
     private final IdempotentCloser closer = new IdempotentCloser();
 
@@ -67,6 +70,10 @@ public class RequestManagers implements Closeable {
                            Optional<CommitRequestManager> commitRequestManager,
                            Optional<ConsumerHeartbeatRequestManager> heartbeatRequestManager,
                            Optional<ConsumerMembershipManager> membershipManager) {
+                           Optional<StreamsHeartbeatRequestManager> streamsHeartbeatRequestManager,
+                           Optional<StreamsInitializeRequestManager> streamsInitializeRequestManager,
+                           Optional<StreamsPrepareAssignmentRequestManager> streamsPrepareAssignmentRequestManager,
+                           Optional<StreamsInstallAssignmentRequestManager> streamsInstallAssignmentRequestManager) {
         this.log = logContext.logger(RequestManagers.class);
         this.offsetsRequestManager = requireNonNull(offsetsRequestManager, "OffsetsRequestManager cannot be null");
         this.coordinatorRequestManager = coordinatorRequestManager;
@@ -78,6 +85,10 @@ public class RequestManagers implements Closeable {
         this.shareHeartbeatRequestManager = Optional.empty();
         this.consumerMembershipManager = membershipManager;
         this.shareMembershipManager = Optional.empty();
+        this.streamsHeartbeatRequestManager = streamsHeartbeatRequestManager;
+        this.streamsInitializeRequestManager = streamsInitializeRequestManager;
+        this.streamsPrepareAssignmentRequestManager = streamsPrepareAssignmentRequestManager;
+        this.streamsInstallAssignmentRequestManager = streamsInstallAssignmentRequestManager;
 
         List<Optional<? extends RequestManager>> list = new ArrayList<>();
         list.add(coordinatorRequestManager);
@@ -87,6 +98,10 @@ public class RequestManagers implements Closeable {
         list.add(Optional.of(offsetsRequestManager));
         list.add(Optional.of(topicMetadataRequestManager));
         list.add(Optional.of(fetchRequestManager));
+        list.add(streamsHeartbeatRequestManager);
+        list.add(streamsInitializeRequestManager);
+        list.add(streamsPrepareAssignmentRequestManager);
+        list.add(streamsInstallAssignmentRequestManager);
         entries = Collections.unmodifiableList(list);
     }
 
@@ -156,7 +171,8 @@ public class RequestManagers implements Closeable {
                                                      final Optional<ClientTelemetryReporter> clientTelemetryReporter,
                                                      final Metrics metrics,
                                                      final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
-                                                     final MemberStateListener applicationThreadMemberStateListener
+                                                     final MemberStateListener applicationThreadMemberStateListener,
+                                                     final Optional<StreamsAssignmentInterface> streamsInstanceMetadata
                                                      ) {
         return new CachedSupplier<RequestManagers>() {
             @Override
@@ -185,6 +201,10 @@ public class RequestManagers implements Closeable {
                 ConsumerMembershipManager membershipManager = null;
                 CoordinatorRequestManager coordinator = null;
                 CommitRequestManager commitRequestManager = null;
+                StreamsHeartbeatRequestManager streamsHeartbeatRequestManager = null;
+                StreamsInitializeRequestManager streamsInitializeRequestManager = null;
+                StreamsPrepareAssignmentRequestManager streamsPrepareAssignmentRequestManager = null;
+                StreamsInstallAssignmentRequestManager streamsInstallAssignmentRequestManager = null;
 
                 if (groupRebalanceConfig != null && groupRebalanceConfig.groupId != null) {
                     Optional<String> serverAssignor = Optional.ofNullable(config.getString(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG));
@@ -219,7 +239,7 @@ public class RequestManagers implements Closeable {
                             metrics);
                     membershipManager.registerStateListener(commitRequestManager);
                     membershipManager.registerStateListener(applicationThreadMemberStateListener);
-                    heartbeatRequestManager = new ConsumerHeartbeatRequestManager(
+
                             logContext,
                             time,
                             config,
@@ -228,6 +248,7 @@ public class RequestManagers implements Closeable {
                             membershipManager,
                             backgroundEventHandler,
                             metrics);
+                    }
                 }
 
                 final OffsetsRequestManager listOffsets = new OffsetsRequestManager(subscriptions,
@@ -250,7 +271,11 @@ public class RequestManagers implements Closeable {
                         Optional.ofNullable(coordinator),
                         Optional.ofNullable(commitRequestManager),
                         Optional.ofNullable(heartbeatRequestManager),
-                        Optional.ofNullable(membershipManager)
+                        Optional.ofNullable(membershipManager),
+                        Optional.ofNullable(streamsHeartbeatRequestManager),
+                        Optional.ofNullable(streamsInitializeRequestManager),
+                        Optional.ofNullable(streamsPrepareAssignmentRequestManager),
+                        Optional.ofNullable(streamsInstallAssignmentRequestManager)
                 );
             }
         };
