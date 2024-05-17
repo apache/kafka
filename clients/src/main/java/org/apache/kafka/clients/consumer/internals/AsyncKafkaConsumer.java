@@ -320,10 +320,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             ApiVersions apiVersions = new ApiVersions();
             final BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
-            final BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(
-                    logContext,
-                    backgroundEventQueue
-            );
+            final BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
 
             // This FetchBuffer is shared between the application and network threads.
             this.fetchBuffer = new FetchBuffer(logContext);
@@ -501,10 +498,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventQueue = new LinkedBlockingQueue<>();
-        BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(
-            logContext,
-            backgroundEventQueue
-        );
+        BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
         ConsumerRebalanceListenerInvoker rebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(
             logContext,
             subscriptions,
@@ -1904,8 +1898,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     <T> T processBackgroundEvents(EventProcessor<BackgroundEvent> eventProcessor,
                                   Future<T> future,
                                   Timer timer) {
-        log.trace("Will wait up to {} ms for future {} to complete", timer.remainingMs(), future);
-
         do {
             boolean hadEvents = processBackgroundEvents(eventProcessor);
 
@@ -1917,10 +1909,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     return ConsumerUtils.getResult(future);
                 } else if (!hadEvents) {
                     // If the above processing yielded no events, then let's sit tight for a bit to allow the
-                    // background thread to either a) finish the task, or b) populate the background event
+                    // background thread to either finish the task, or populate the background event
                     // queue with things to process in our next loop.
                     Timer pollInterval = time.timer(100L);
-                    log.trace("Waiting {} ms for future {} to complete", pollInterval.remainingMs(), future);
                     return ConsumerUtils.getResult(future, pollInterval);
                 }
             } catch (TimeoutException e) {
@@ -1930,7 +1921,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             }
         } while (timer.notExpired());
 
-        log.trace("Future {} did not complete within timeout", future);
         throw new TimeoutException("Operation timed out before completion");
     }
 
