@@ -26,7 +26,7 @@ import java.util.Random;
 import org.apache.kafka.common.Node;
 
 public class RequestManager {
-    private final Map<Node, ConnectionState> connections = new HashMap<>();
+    private final Map<String, ConnectionState> connections = new HashMap<>();
     private final ArrayList<Node> bootstrapServers;
 
     private final int retryBackoffMs;
@@ -79,7 +79,7 @@ public class RequestManager {
     }
 
     public boolean hasRequestTimedOut(Node node, long timeMs) {
-        ConnectionState state = connections.get(node);
+        ConnectionState state = connections.get(node.idString());
         if (state == null) {
             return false;
         }
@@ -88,7 +88,7 @@ public class RequestManager {
     }
 
     public boolean isReady(Node node, long timeMs) {
-        ConnectionState state = connections.get(node);
+        ConnectionState state = connections.get(node.idString());
         if (state == null) {
             return true;
         }
@@ -102,7 +102,7 @@ public class RequestManager {
     }
 
     public boolean isBackingOff(Node node, long timeMs) {
-        ConnectionState state = connections.get(node);
+        ConnectionState state = connections.get(node.idString());
         if (state == null) {
             return false;
         }
@@ -111,7 +111,7 @@ public class RequestManager {
     }
 
     public long remainingRequestTimeMs(Node node, long timeMs) {
-        ConnectionState state = connections.get(node);
+        ConnectionState state = connections.get(node.idString());
         if (state == null) {
             return 0;
         }
@@ -120,7 +120,7 @@ public class RequestManager {
     }
 
     public long remainingBackoffMs(Node node, long timeMs) {
-        ConnectionState state = connections.get(node);
+        ConnectionState state = connections.get(node.idString());
         if (state == null) {
             return 0;
         }
@@ -129,7 +129,7 @@ public class RequestManager {
     }
 
     public boolean isResponseExpected(Node node, long correlationId) {
-        ConnectionState state = connections.get(node);
+        ConnectionState state = connections.get(node.idString());
         if (state == null) {
             return false;
         }
@@ -145,13 +145,13 @@ public class RequestManager {
 
     public void onResponseError(Node node, long correlationId, long timeMs) {
         if (isResponseExpected(node, correlationId)) {
-            connections.get(node).onResponseError(correlationId, timeMs);
+            connections.get(node.idString()).onResponseError(correlationId, timeMs);
         }
     }
 
     public void onRequestSent(Node node, long correlationId, long timeMs) {
         ConnectionState state = connections.computeIfAbsent(
-            node,
+            node.idString(),
             key -> new ConnectionState(node, retryBackoffMs, requestTimeoutMs)
         );
 
@@ -159,7 +159,7 @@ public class RequestManager {
     }
 
     public void reset(Node node) {
-        connections.remove(node);
+        connections.remove(node.idString());
     }
 
     public void resetAll() {
@@ -167,7 +167,7 @@ public class RequestManager {
     }
 
     private boolean hasInflightRequest(Node node, long timeMs) {
-        ConnectionState state = connections.get(node);
+        ConnectionState state = connections.get(node.idString());
         if (state == null) {
             return false;
         }

@@ -393,7 +393,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         logger.info("Reading KRaft snapshot and log as part of the initialization");
         partitionState.updateState();
 
-        // TODO: introduce the bootstrap server configuration
+        // TODO: introduce the bootstrap server configuration; ids must be decreasing negative values
         List<Node> bootstrapServers = partitionState
             .lastVoterSet()
             .voterIds()
@@ -1164,7 +1164,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
             return handleTopLevelError(topLevelError, responseMetadata);
         }
 
-        if (!RaftUtil.hasValidTopicPartition(response, log.topicPartition(), log.topicId())) {
+        if (!hasValidTopicPartition(response, log.topicPartition(), log.topicId())) {
             return false;
         }
         // If the ID is valid, we can set the topic name.

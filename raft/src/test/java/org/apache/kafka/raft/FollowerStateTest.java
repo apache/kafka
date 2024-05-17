@@ -97,4 +97,10 @@ public class FollowerStateTest {
         assertFalse(state.canGrantVote(ReplicaKey.of(3, Optional.empty()), isLogUpToDate));
     }
 
+    @Test
+    public void testLeaderNode() {
+        FollowerState state = newFollowerState(Utils.mkSet(0, 1, 2), Optional.empty());
+
+        assertEquals(leader, state.leader());
+    }
 }
