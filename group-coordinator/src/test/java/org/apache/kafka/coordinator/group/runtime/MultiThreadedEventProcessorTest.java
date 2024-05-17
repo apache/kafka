@@ -478,6 +478,8 @@ public class MultiThreadedEventProcessorTest {
             doAnswer(invocation -> {
                 long threadIdleTime = idleTimeCaptured.getValue();
                 assertEquals(100, threadIdleTime);
+
+                // No synchronization required as the test uses a single event processor thread.
                 recordedIdleTimesMs.add(threadIdleTime);
                 return null;
             }).when(mockRuntimeMetrics).recordThreadIdleTime(idleTimeCaptured.capture());
