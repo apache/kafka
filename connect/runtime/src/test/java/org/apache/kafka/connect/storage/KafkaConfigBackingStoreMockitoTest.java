@@ -221,7 +221,7 @@ public class KafkaConfigBackingStoreMockitoTest {
         doReturn("test-cluster").when(config).kafkaClusterId();
         configStorage = Mockito.spy(
                 new KafkaConfigBackingStore(
-                        converter, config, null, null, CLIENT_ID_BASE, time)
+                        converter, config, null, () -> null, CLIENT_ID_BASE, time)
         );
         configStorage.setConfigLog(configLog);
         configStorage.setUpdateListener(configUpdateListener);

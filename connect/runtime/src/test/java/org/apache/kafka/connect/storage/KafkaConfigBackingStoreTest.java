@@ -178,10 +178,11 @@ public class KafkaConfigBackingStoreTest {
         // The kafkaClusterId is used in the constructor for KafkaConfigBackingStore
         // So temporarily enter replay mode in order to mock that call
         EasyMock.replay(config);
+        Supplier<TopicAdmin> topicAdminSupplier = () -> null;
         configStorage = PowerMock.createPartialMock(
                 KafkaConfigBackingStore.class,
                 new String[]{"createKafkaBasedLog", "createFencableProducer"},
-                converter, config, null, null, CLIENT_ID_BASE, time);
+                converter, config, null, topicAdminSupplier, CLIENT_ID_BASE, time);
         Whitebox.setInternalState(configStorage, "configLog", storeLog);
         configStorage.setUpdateListener(configUpdateListener);
         // The mock must be reset and re-mocked for the remainder of the test.
