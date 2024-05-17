@@ -1975,6 +1975,15 @@ public class InternalTopologyBuilder {
         }
 
         /**
+         *
+         * @return the set of changelog topics, which includes both source changelog topics and non
+         * source changelog topics.
+         */
+        public Set<InternalTopicConfig> stateChangelogTopics() {
+            return Collections.unmodifiableSet(new HashSet<>(stateChangelogTopics.values()));
+        }
+
+        /**
          * Returns the topic names for any optimized source changelogs
          */
         public Set<String> sourceTopicChangelogs() {

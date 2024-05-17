@@ -85,7 +85,7 @@ public class RackAwareTaskAssignor {
     private final Map<Subtopology, Set<TaskId>> tasksForTopicGroup;
     private final AssignmentConfigs assignmentConfigs;
     private final Map<TopicPartition, Set<String>> racksForPartition;
-    private final Map<UUID, String> racksForProcess;
+    private final Map<UUID, String> rackForProcess;
     private final InternalTopicManager internalTopicManager;
     private final boolean validClientRack;
     private final Time time;
@@ -106,9 +106,11 @@ public class RackAwareTaskAssignor {
         this.internalTopicManager = internalTopicManager;
         this.assignmentConfigs = assignmentConfigs;
         this.racksForPartition = new HashMap<>();
-        this.racksForProcess = new HashMap<>();
+        this.rackForProcess = new HashMap<>();
         this.time = Objects.requireNonNull(time, "Time was not specified");
-        validClientRack = validateClientRack(racksForProcessConsumer);
+        validClientRack = validateClientRack(racksForProcessConsumer, assignmentConfigs,
+            rackForProcess
+        );
     }
 
     public boolean validClientRack() {
@@ -132,7 +134,17 @@ public class RackAwareTaskAssignor {
     }
 
     // Visible for testing. This method also checks if all TopicPartitions exist in cluster
-    public boolean populateTopicsToDescribe(final Set<String> topicsToDescribe, final boolean changelog) {
+    public boolean populateTopicsToDescribe(final Set<String> topicsToDescribe,
+                                            final boolean changelog) {
+        return populateTopicsToDescribe(fullMetadata, changelogPartitionsForTask, partitionsForTask, changelog, topicsToDescribe, racksForPartition);
+    }
+
+    public static boolean populateTopicsToDescribe(final Cluster fullMetadata,
+                                                   final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask,
+                                                   final Map<TaskId, Set<TopicPartition>> partitionsForTask,
+                                                   final boolean changelog,
+                                                   final Set<String> topicsToDescribe,
+                                                   final Map<TopicPartition, Set<String>> racksForPartition) {
         if (changelog) {
             // Changelog topics are not in metadata, we need to describe them
             changelogPartitionsForTask.values().stream().flatMap(Collection::stream).forEach(tp -> topicsToDescribe.add(tp.topic()));
@@ -166,9 +178,25 @@ public class RackAwareTaskAssignor {
     }
 
     private boolean validateTopicPartitionRack(final boolean changelogTopics) {
+        return validateTopicPartitionRack(fullMetadata, internalTopicManager, changelogPartitionsForTask, partitionsForTask, changelogTopics, racksForPartition);
+    }
+
+    /**
+     * This function populates the {@param racksForPartition} parameter passed into the function by using both
+     * the {@code Cluster} metadata as well as the {@param internalTopicManager} for topics that have stale
+     * information.
+     *
+     * @return whether the operation successfully completed and the rack information is valid.
+     */
+    public static boolean validateTopicPartitionRack(final Cluster fullMetadata,
+                                                     final InternalTopicManager internalTopicManager,
+                                                     final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask,
+                                                     final Map<TaskId, Set<TopicPartition>> partitionsForTask,
+                                                     final boolean changelogTopics,
+                                                     final Map<TopicPartition, Set<String>> racksForPartition) {
         // Make sure rackId exist for all TopicPartitions needed
         final Set<String> topicsToDescribe = new HashSet<>();
-        if (!populateTopicsToDescribe(topicsToDescribe, changelogTopics)) {
+        if (!populateTopicsToDescribe(fullMetadata, changelogPartitionsForTask, partitionsForTask, changelogTopics, topicsToDescribe, racksForPartition)) {
             return false;
         }
 
@@ -208,7 +236,16 @@ public class RackAwareTaskAssignor {
         return true;
     }
 
-    private boolean validateClientRack(final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer) {
+    /**
+     * Verifies that within the {@param racksForProcessConsumer}, a single process is only running on a single
+     * rack. This function mutates the parameter {@param racksForProcess} to contain the resulting process
+     * to rack mapping.
+     *
+     * @return true if the validation was successful, and false otherwise.
+     */
+    public static boolean validateClientRack(final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer,
+                                             final AssignmentConfigs assignmentConfigs,
+                                             final Map<UUID, String> rackForProcess) {
         if (racksForProcessConsumer == null) {
             return false;
         }
@@ -250,14 +287,14 @@ public class RackAwareTaskAssignor {
                 }
                 return false;
             }
-            racksForProcess.put(entry.getKey(), previousRackInfo.value);
+            rackForProcess.put(entry.getKey(), previousRackInfo.value);
         }
 
         return true;
     }
 
     public Map<UUID, String> racksForProcess() {
-        return Collections.unmodifiableMap(racksForProcess);
+        return Collections.unmodifiableMap(rackForProcess);
     }
 
     public Map<TopicPartition, Set<String>> racksForPartition() {
@@ -265,7 +302,7 @@ public class RackAwareTaskAssignor {
     }
 
     private int getCost(final TaskId taskId, final UUID processId, final boolean inCurrentAssignment, final int trafficCost, final int nonOverlapCost, final boolean isStandby) {
-        final String clientRack = racksForProcess.get(processId);
+        final String clientRack = rackForProcess.get(processId);
         if (clientRack == null) {
             throw new IllegalStateException("Client " + processId + " doesn't have rack configured. Maybe forgot to call canEnableRackAwareAssignor first");
         }
@@ -428,8 +465,8 @@ public class RackAwareTaskAssignor {
                 for (int j = i + 1; j < clientList.size(); j++) {
                     final ClientState clientState2 = clientStates.get(clientList.get(j));
 
-                    final String rack1 = racksForProcess.get(clientState1.processId());
-                    final String rack2 = racksForProcess.get(clientState2.processId());
+                    final String rack1 = rackForProcess.get(clientState1.processId());
+                    final String rack2 = rackForProcess.get(clientState2.processId());
                     // Cross rack traffic can not be reduced if racks are the same
                     if (rack1.equals(rack2)) {
                         continue;

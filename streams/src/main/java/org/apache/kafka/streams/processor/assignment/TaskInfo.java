@@ -36,7 +36,7 @@ public interface TaskInfo {
 
     Set<String> stateStoreNames();
 
-    Set<TopicPartition> inputTopicPartitions();
+    Set<TopicPartition> sourceTopicPartitions();
 
     Set<TopicPartition> changelogTopicPartitions();
 

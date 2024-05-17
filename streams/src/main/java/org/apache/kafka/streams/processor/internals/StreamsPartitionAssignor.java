@@ -51,6 +51,7 @@ import org.apache.kafka.streams.processor.internals.assignment.ClientState;
 import org.apache.kafka.streams.processor.internals.assignment.CopartitionedTopicsEnforcer;
 import org.apache.kafka.streams.processor.internals.assignment.FallbackPriorTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.RackUtils;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
@@ -484,41 +485,71 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
      * @return The {@code ApplicationState} needed by the TaskAssigner to compute new task
      *         assignments.
      */
-    private ApplicationState buildApplicationState(final Map<UUID, ClientMetadata> clientMetadataMap,
-                                                   final Map<TaskId, Set<TopicPartition>> inputPartitionsForTask,
-                                                   final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask,
-                                                   final Map<UUID, Map<String, Optional<String>>> rackForProcessConsumer) {
-        final Set<TaskInfo> tasks = new HashSet<>();
-        clientMetadataMap.forEach((processId, clientMetadata) -> {
-            final ClientState clientState = clientMetadata.state;
-            final Map<String, Optional<String>> rackForConsumer = rackForProcessConsumer.get(processId);
-            clientState.standbyTasks().forEach(taskId -> {
-                final TaskInfo taskInfo = DefaultTaskInfo.of(
-                    taskId,
-                    true, // All standby tasks are stateful.
-                    clientState::previousOwnerForPartition,
-                    rackForConsumer,
-                    inputPartitionsForTask,
-                    changelogPartitionsForTask
-                );
-                tasks.add(taskInfo);
+    private ApplicationState buildApplicationState(final TopologyMetadata topologyMetadata,
+                                                   final Map<UUID, ClientMetadata> clientMetadataMap,
+                                                   final Map<Subtopology, TopicsInfo> topicGroups,
+                                                   final Cluster cluster) {
+        final Map<Subtopology, Set<String>> sourceTopicsByGroup = new HashMap<>();
+        final Map<Subtopology, Set<String>> changelogTopicsByGroup = new HashMap<>();
+        for (final Map.Entry<Subtopology, TopicsInfo> entry : topicGroups.entrySet()) {
+            final Set<String> sourceTopics = entry.getValue().sourceTopics;
+            final Set<String> changelogTopics = entry.getValue().stateChangelogTopics()
+                .stream().map(t -> t.name).collect(Collectors.toSet());
+            sourceTopicsByGroup.put(entry.getKey(), sourceTopics);
+            changelogTopicsByGroup.put(entry.getKey(), changelogTopics);
+        }
+
+        final Map<TaskId, Set<TopicPartition>> sourcePartitionsForTask =
+            partitionGrouper.partitionGroups(sourceTopicsByGroup, cluster);
+        final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask =
+            partitionGrouper.partitionGroups(changelogTopicsByGroup, cluster);
+
+        final Set<TaskId> logicalTaskIds = new HashSet<>();
+        final Set<TopicPartition> sourceTopicPartitions = new HashSet<>();
+        sourcePartitionsForTask.forEach((taskId, partitions) -> {
+            logicalTaskIds.add(taskId);
+            sourceTopicPartitions.addAll(partitions);
+        });
+        final Set<TopicPartition> changelogTopicPartitions = new HashSet<>();
+        changelogPartitionsForTask.forEach((taskId, partitions) -> {
+            logicalTaskIds.add(taskId);
+            changelogTopicPartitions.addAll(partitions);
+        });
+
+        final Map<TopicPartition, Set<String>> racksForSourcePartitions = RackUtils.getRacksForTopicPartition(
+            cluster, internalTopicManager, sourceTopicPartitions, false);
+        final Map<TopicPartition, Set<String>> racksForChangelogPartitions = RackUtils.getRacksForTopicPartition(
+            cluster, internalTopicManager, changelogTopicPartitions, true);
+
+        final Set<TaskInfo> logicalTasks = new HashSet<>();
+        logicalTaskIds.forEach(taskId -> {
+            final Set<String> stateStoreNames = topologyMetadata
+                .stateStoreNameToSourceTopicsForTopology(taskId.topologyName())
+                .keySet();
+            final Set<TopicPartition> sourcePartitions = sourcePartitionsForTask.get(taskId);
+            final Set<TopicPartition> changelogPartitions = changelogPartitionsForTask.get(taskId);
+            final Map<TopicPartition, Set<String>> racksForTaskPartition = new HashMap<>();
+            sourcePartitions.forEach(topicPartition -> {
+                racksForTaskPartition.put(topicPartition, racksForSourcePartitions.get(topicPartition));
             });
-            clientState.activeTasks().forEach(taskId -> {
-                final TaskInfo taskInfo = DefaultTaskInfo.of(
-                    taskId,
-                    clientState.statefulActiveTasks().contains(taskId),
-                    clientState::previousOwnerForPartition,
-                    rackForConsumer,
-                    inputPartitionsForTask,
-                    changelogPartitionsForTask
-                );
-                tasks.add(taskInfo);
+            changelogPartitions.forEach(topicPartition -> {
+                racksForTaskPartition.put(topicPartition, racksForChangelogPartitions.get(topicPartition));
             });
+
+            final TaskInfo task = new DefaultTaskInfo(
+                taskId,
+                !stateStoreNames.isEmpty(),
+                racksForTaskPartition,
+                stateStoreNames,
+                sourcePartitions,
+                changelogPartitions
+            );
+            logicalTasks.add(task);
         });
 
         return new ApplicationStateImpl(
             assignmentConfigs.toPublicAssignmentConfigs(),
-            tasks,
+            logicalTasks,
             clientMetadataMap
         );
     }
