@@ -297,7 +297,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
         try {
             child.process(record);
         } catch (final Exception e) {
-            if(!processingExceptionOccurred) {
+            if (!processingExceptionOccurred) {
                 processingExceptionOccurred = true;
                 final ErrorHandlerContext errorHandlerContext = new ErrorHandlerContextImpl(null, topic(),
                         partition(), offset(), headers(), streamTask.rawRecord().key(), streamTask.rawRecord().value(),
