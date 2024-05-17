@@ -37,17 +37,17 @@ class BaseHashTable<T> {
     /**
      * The maximum load factor we will allow the hash table to climb to before expanding.
      */
-    private static final double MAX_LOAD_FACTOR = 0.75f;
+    private final static double MAX_LOAD_FACTOR = 0.75f;
 
     /**
      * The minimum number of slots we can have in the hash table.
      */
-    static final int MIN_CAPACITY = 2;
+    final static int MIN_CAPACITY = 2;
 
     /**
      * The maximum number of slots we can have in the hash table.
      */
-    static final int MAX_CAPACITY = 1 << 30;
+    final static int MAX_CAPACITY = 1 << 30;
 
     private Object[] elements;
     private int size = 0;
