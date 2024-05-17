@@ -61,8 +61,11 @@ public class MultiThreadedEventProcessorTest {
 
         @Override
         public CoordinatorEvent take() {
-            time.sleep(takeDelayMs);
-            return super.take();
+            CoordinatorEvent event = super.take();
+            if (event != null) {
+                time.sleep(takeDelayMs);
+            }
+            return event;
         }
     }
 
@@ -475,9 +478,7 @@ public class MultiThreadedEventProcessorTest {
             doAnswer(invocation -> {
                 long threadIdleTime = idleTimeCaptured.getValue();
                 assertEquals(100, threadIdleTime);
-                synchronized (recordedIdleTimesMs) {
-                    recordedIdleTimesMs.add(threadIdleTime);
-                }
+                recordedIdleTimesMs.add(threadIdleTime);
                 return null;
             }).when(mockRuntimeMetrics).recordThreadIdleTime(idleTimeCaptured.capture());
 
