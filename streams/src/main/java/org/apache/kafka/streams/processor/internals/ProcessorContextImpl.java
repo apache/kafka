@@ -60,6 +60,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
     private final ProcessorStateManager stateManager;
     private final boolean consistencyEnabled;
 
+    private boolean processingExceptionOccurred;
+
     final Map<String, DirtyEntryFlushListener> cacheNameToFlushListener = new HashMap<>();
 
     @SuppressWarnings("this-escape")
@@ -74,6 +76,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
                 appConfigs(),
                 IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
                 false);
+
     }
 
     @Override
@@ -294,19 +297,22 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
         try {
             child.process(record);
         } catch (final Exception e) {
-            final ErrorHandlerContext errorHandlerContext = new ErrorHandlerContextImpl(null, topic(),
-                partition(), offset(), headers(), streamTask.rawRecord().key(), streamTask.rawRecord().value(),
-                    child.name(), taskId());
-            final ProcessingExceptionHandler.ProcessingHandlerResponse response = streamTask.config
-                .processingExceptionHandler
-                .handle(errorHandlerContext, record, e);
+            if(!processingExceptionOccurred) {
+                processingExceptionOccurred = true;
+                final ErrorHandlerContext errorHandlerContext = new ErrorHandlerContextImpl(null, topic(),
+                        partition(), offset(), headers(), streamTask.rawRecord().key(), streamTask.rawRecord().value(),
+                        child.name(), taskId());
+                final ProcessingExceptionHandler.ProcessingHandlerResponse response = streamTask.config
+                        .processingExceptionHandler
+                        .handle(errorHandlerContext, record, e);
 
-            if (response == ProcessingExceptionHandler.ProcessingHandlerResponse.FAIL) {
-                throw new StreamsException("Processing exception handler is set to fail upon" +
-                    " a processing error. If you would rather have the streaming pipeline" +
-                    " continue after a processing error, please set the " +
-                    PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.",
-                    e);
+                if (response == ProcessingExceptionHandler.ProcessingHandlerResponse.FAIL) {
+                    throw new StreamsException("Processing exception handler is set to fail upon" +
+                            " a processing error. If you would rather have the streaming pipeline" +
+                            " continue after a processing error, please set the " +
+                            PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.",
+                            e);
+                }
             }
         }
 
