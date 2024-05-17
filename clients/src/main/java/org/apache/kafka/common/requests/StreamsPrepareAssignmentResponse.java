@@ -12,6 +12,19 @@ import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.Map;
 
+/**
+ * Possible error codes.
+ *
+ * - {@link Errors#GROUP_AUTHORIZATION_FAILED}
+ * - {@link Errors#NOT_COORDINATOR}
+ * - {@link Errors#COORDINATOR_NOT_AVAILABLE}
+ * - {@link Errors#COORDINATOR_LOAD_IN_PROGRESS}
+ * - {@link Errors#INVALID_REQUEST}
+ * - {@link Errors#INVALID_GROUP_ID}
+ * - {@link Errors#GROUP_ID_NOT_FOUND}
+ * - {@link Errors#UNKNOWN_MEMBER_ID}
+ * - {@link Errors#STALE_MEMBER_EPOCH}
+ */
 public class StreamsPrepareAssignmentResponse extends AbstractResponse {
 
     private final StreamsPrepareAssignmentResponseData data;

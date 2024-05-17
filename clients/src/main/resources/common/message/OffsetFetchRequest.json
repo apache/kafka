@@ -54,9 +54,9 @@
       { "name": "GroupId", "type": "string", "versions": "8+", "entityType": "groupId",
         "about": "The group ID."},
       { "name": "MemberId", "type": "string", "versions": "9+", "nullableVersions": "9+", "default": "null", "ignorable": true,
-        "about": "The member ID assigned by the group coordinator if using the new consumer protocol (KIP-848)." },
+        "about": "The member ID assigned by the group coordinator if using the new consumer or streams protocol (KIP-848 / KIP-XXX)." },
       { "name": "MemberEpoch", "type": "int32", "versions": "9+", "default": "-1", "ignorable": true,
-        "about": "The member epoch if using the new consumer protocol (KIP-848)." },
+        "about": "The member epoch if using the new consumer or streams protocol (KIP-848 / KIP-XXX)." },
       { "name": "Topics", "type": "[]OffsetFetchRequestTopics", "versions": "8+", "nullableVersions": "8+",
         "about": "Each topic we would like to fetch offsets for, or null to fetch offsets for all topics.", "fields": [
         { "name": "Name", "type": "string", "versions": "8+", "entityType": "topicName",

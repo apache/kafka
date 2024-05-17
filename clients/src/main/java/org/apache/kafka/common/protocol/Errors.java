@@ -21,6 +21,7 @@ import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
 import org.apache.kafka.common.errors.BrokerNotAvailableException;
 import org.apache.kafka.common.errors.StreamsInconsistentTopologyException;
+import org.apache.kafka.common.errors.StreamsInvalidAssignment;
 import org.apache.kafka.common.errors.StreamsInvalidTopologyException;
 import org.apache.kafka.common.errors.StreamsMissingInternalTopicsException;
 import org.apache.kafka.common.errors.StreamsMissingSourceTopicsException;
@@ -409,7 +410,9 @@ public enum Errors {
     STREAMS_MISSING_INTERNAL_TOPICS(124, "One or more internal topics are missing.",
         StreamsMissingInternalTopicsException::new),
     STREAMS_SHUTDOWN_APPLICATION(125, "A client requested the shutdown of the whole application.",
-        StreamsShutdownApplicationException::new);
+        StreamsShutdownApplicationException::new),
+    STREAMS_INVALID_ASSIGNMENT(126, "The assignment produced the by the client-side assignment is invalid.",
+        StreamsInvalidAssignment::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
