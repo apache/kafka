@@ -17,96 +17,188 @@
 package org.apache.kafka.raft;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.OptionalInt;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Random;
-import java.util.Set;
+import org.apache.kafka.common.Node;
 
 public class RequestManager {
-    private final Map<Integer, ConnectionState> connections = new HashMap<>();
-    private final List<Integer> voters = new ArrayList<>();
+    private final Map<Node, ConnectionState> connections = new HashMap<>();
+    private final ArrayList<Node> bootstrapServers;
 
     private final int retryBackoffMs;
     private final int requestTimeoutMs;
     private final Random random;
 
-    public RequestManager(Set<Integer> voterIds,
-                          int retryBackoffMs,
-                          int requestTimeoutMs,
-                          Random random) {
-
+    public RequestManager(
+        Collection<Node> bootstrapServers,
+        int retryBackoffMs,
+        int requestTimeoutMs,
+        Random random
+    ) {
+        this.bootstrapServers = new ArrayList<>(bootstrapServers);
         this.retryBackoffMs = retryBackoffMs;
         this.requestTimeoutMs = requestTimeoutMs;
-        this.voters.addAll(voterIds);
         this.random = random;
-
-        for (Integer voterId: voterIds) {
-            ConnectionState connection = new ConnectionState(voterId);
-            connections.put(voterId, connection);
-        }
     }
 
-    public ConnectionState getOrCreate(int id) {
-        return connections.computeIfAbsent(id, key -> new ConnectionState(id));
-    }
+    public Optional<Node> findReadyBootstrapServer(long currentTimeMs) {
+        int startIndex = random.nextInt(bootstrapServers.size());
+        Optional<Node> res = Optional.empty();
+        for (int i = 0; i < bootstrapServers.size(); i++) {
+            int index = (startIndex + i) % bootstrapServers.size();
+            Node node = bootstrapServers.get(index);
 
-    public OptionalInt findReadyVoter(long currentTimeMs) {
-        int startIndex = random.nextInt(voters.size());
-        OptionalInt res = OptionalInt.empty();
-        for (int i = 0; i < voters.size(); i++) {
-            int index = (startIndex + i) % voters.size();
-            Integer voterId = voters.get(index);
-            ConnectionState connection = connections.get(voterId);
-            boolean isReady = connection.isReady(currentTimeMs);
-
-            if (isReady) {
-                res = OptionalInt.of(voterId);
-            } else if (connection.inFlightCorrelationId.isPresent()) {
-                res = OptionalInt.empty();
+            if (isReady(node, currentTimeMs)) {
+                res = Optional.of(node);
+            } else if (hasInflightRequest(node, currentTimeMs)) {
+                res = Optional.empty();
                 break;
             }
         }
+
         return res;
     }
 
-    public long backoffBeforeAvailableVoter(long currentTimeMs) {
+    public long backoffBeforeAvailableBootstrapServer(long currentTimeMs) {
         long minBackoffMs = Long.MAX_VALUE;
-        for (Integer voterId : voters) {
-            ConnectionState connection = connections.get(voterId);
-            if (connection.isReady(currentTimeMs)) {
+        for (Node node : bootstrapServers) {
+            if (isReady(node, currentTimeMs)) {
                 return 0L;
-            } else if (connection.isBackingOff(currentTimeMs)) {
-                minBackoffMs = Math.min(minBackoffMs, connection.remainingBackoffMs(currentTimeMs));
+            } else if (isBackingOff(node, currentTimeMs)) {
+                minBackoffMs = Math.min(minBackoffMs, remainingBackoffMs(node, currentTimeMs));
             } else {
-                minBackoffMs = Math.min(minBackoffMs, connection.remainingRequestTimeMs(currentTimeMs));
+                minBackoffMs = Math.min(minBackoffMs, remainingRequestTimeMs(node, currentTimeMs));
             }
         }
+
         return minBackoffMs;
     }
 
+    public boolean hasRequestTimedOut(Node node, long timeMs) {
+        ConnectionState state = connections.get(node);
+        if (state == null) {
+            return false;
+        }
+
+        return state.hasRequestTimedOut(timeMs);
+    }
+
+    public boolean isReady(Node node, long timeMs) {
+        ConnectionState state = connections.get(node);
+        if (state == null) {
+            return true;
+        }
+
+        boolean ready = state.isReady(timeMs);
+        if (ready) {
+            reset(node);
+        }
+
+        return ready;
+    }
+
+    public boolean isBackingOff(Node node, long timeMs) {
+        ConnectionState state = connections.get(node);
+        if (state == null) {
+            return false;
+        }
+
+        return state.isBackingOff(timeMs);
+    }
+
+    public long remainingRequestTimeMs(Node node, long timeMs) {
+        ConnectionState state = connections.get(node);
+        if (state == null) {
+            return 0;
+        }
+
+        return state.remainingRequestTimeMs(timeMs);
+    }
+
+    public long remainingBackoffMs(Node node, long timeMs) {
+        ConnectionState state = connections.get(node);
+        if (state == null) {
+            return 0;
+        }
+
+        return  state.remainingBackoffMs(timeMs);
+    }
+
+    public boolean isResponseExpected(Node node, long correlationId) {
+        ConnectionState state = connections.get(node);
+        if (state == null) {
+            return false;
+        }
+
+        return state.isResponseExpected(correlationId);
+    }
+
+    public void onResponseReceived(Node node, long correlationId) {
+        if (isResponseExpected(node, correlationId)) {
+            reset(node);
+        }
+    }
+
+    public void onResponseError(Node node, long correlationId, long timeMs) {
+        if (isResponseExpected(node, correlationId)) {
+            connections.get(node).onResponseError(correlationId, timeMs);
+        }
+    }
+
+    public void onRequestSent(Node node, long correlationId, long timeMs) {
+        ConnectionState state = connections.computeIfAbsent(
+            node,
+            key -> new ConnectionState(node, retryBackoffMs, requestTimeoutMs)
+        );
+
+        state.onRequestSent(correlationId, timeMs);
+    }
+
+    public void reset(Node node) {
+        connections.remove(node);
+    }
+
     public void resetAll() {
-        for (ConnectionState connectionState : connections.values())
-            connectionState.reset();
+        connections.clear();
+    }
+
+    private boolean hasInflightRequest(Node node, long timeMs) {
+        ConnectionState state = connections.get(node);
+        if (state == null) {
+            return false;
+        }
+
+        return state.hasInflightRequest(timeMs);
     }
 
     private enum State {
-        AWAITING_REQUEST,
+        AWAITING_RESPONSE,
         BACKING_OFF,
         READY
     }
 
-    public class ConnectionState {
-        private final long id;
+    private final static class ConnectionState {
+        private final Node node;
+        private final int retryBackoffMs;
+        private final int requestTimeoutMs;
+
         private State state = State.READY;
         private long lastSendTimeMs = 0L;
         private long lastFailTimeMs = 0L;
         private OptionalLong inFlightCorrelationId = OptionalLong.empty();
 
-        public ConnectionState(long id) {
-            this.id = id;
+        private ConnectionState(
+            Node node,
+            int retryBackoffMs,
+            int requestTimeoutMs
+        ) {
+            this.node = node;
+            this.retryBackoffMs = retryBackoffMs;
+            this.requestTimeoutMs = requestTimeoutMs;
         }
 
         private boolean isBackoffComplete(long timeMs) {
@@ -114,11 +206,7 @@ public class RequestManager {
         }
 
         boolean hasRequestTimedOut(long timeMs) {
-            return state == State.AWAITING_REQUEST && timeMs >= lastSendTimeMs + requestTimeoutMs;
-        }
-
-        public long id() {
-            return id;
+            return state == State.AWAITING_RESPONSE && timeMs >= lastSendTimeMs + requestTimeoutMs;
         }
 
         boolean isReady(long timeMs) {
@@ -136,8 +224,8 @@ public class RequestManager {
             }
         }
 
-        boolean hasInflightRequest(long timeMs) {
-            if (state != State.AWAITING_REQUEST) {
+        private boolean hasInflightRequest(long timeMs) {
+            if (state != State.AWAITING_RESPONSE) {
                 return false;
             } else {
                 return !hasRequestTimedOut(timeMs);
@@ -174,41 +262,22 @@ public class RequestManager {
             });
         }
 
-        void onResponseReceived(long correlationId) {
-            inFlightCorrelationId.ifPresent(inflightRequestId -> {
-                if (inflightRequestId == correlationId) {
-                    state = State.READY;
-                    inFlightCorrelationId = OptionalLong.empty();
-                }
-            });
-        }
-
         void onRequestSent(long correlationId, long timeMs) {
             lastSendTimeMs = timeMs;
             inFlightCorrelationId = OptionalLong.of(correlationId);
-            state = State.AWAITING_REQUEST;
-        }
-
-        /**
-         * Ignore in-flight requests or backoff and become available immediately. This is used
-         * when there is a state change which usually means in-flight requests are obsolete
-         * and we need to send new requests.
-         */
-        void reset() {
-            state = State.READY;
-            inFlightCorrelationId = OptionalLong.empty();
+            state = State.AWAITING_RESPONSE;
         }
 
         @Override
         public String toString() {
-            return "ConnectionState(" +
-                "id=" + id +
-                ", state=" + state +
-                ", lastSendTimeMs=" + lastSendTimeMs +
-                ", lastFailTimeMs=" + lastFailTimeMs +
-                ", inFlightCorrelationId=" + inFlightCorrelationId +
-                ')';
+            return String.format(
+                "ConnectionState(node=%s, state=%s, lastSendTimeMs=%d, lastFailTimeMs=%d, inFlightCorrelationId=%d)",
+                node,
+                state,
+                lastSendTimeMs,
+                lastFailTimeMs,
+                inFlightCorrelationId
+            );
         }
     }
-
 }

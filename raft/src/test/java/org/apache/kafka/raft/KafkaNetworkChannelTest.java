@@ -27,6 +27,7 @@ import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.VoteResponseData;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
@@ -48,7 +49,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 
-import java.net.InetSocketAddress;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
@@ -88,7 +88,13 @@ public class KafkaNetworkChannelTest {
     private final MockClient client = new MockClient(time, new StubMetadataUpdater());
     private final TopicPartition topicPartition = new TopicPartition("topic", 0);
     private final Uuid topicId = Uuid.randomUuid();
-    private final KafkaNetworkChannel channel = new KafkaNetworkChannel(time, client, requestTimeoutMs, "test-raft");
+    private final KafkaNetworkChannel channel = new KafkaNetworkChannel(
+        time,
+        ListenerName.normalised("NAME"),
+        client,
+        requestTimeoutMs,
+        "test-raft"
+    );
 
     @BeforeEach
     public void setupSupportedApis() {
@@ -98,25 +104,17 @@ public class KafkaNetworkChannelTest {
     }
 
     @Test
-    public void testSendToUnknownDestination() throws ExecutionException, InterruptedException {
-        int destinationId = 2;
-        assertBrokerNotAvailable(destinationId);
-    }
-
-    @Test
     public void testSendToBlackedOutDestination() throws ExecutionException, InterruptedException {
         int destinationId = 2;
         Node destinationNode = new Node(destinationId, "127.0.0.1", 9092);
-        channel.updateEndpoint(destinationId, new InetSocketAddress(destinationNode.host(), destinationNode.port()));
         client.backoff(destinationNode, 500);
-        assertBrokerNotAvailable(destinationId);
+        assertBrokerNotAvailable(destinationNode);
     }
 
     @Test
     public void testWakeupClientOnSend() throws InterruptedException, ExecutionException {
         int destinationId = 2;
         Node destinationNode = new Node(destinationId, "127.0.0.1", 9092);
-        channel.updateEndpoint(destinationId, new InetSocketAddress(destinationNode.host(), destinationNode.port()));
 
         client.enableBlockingUntilWakeup(1);
 
@@ -132,7 +130,7 @@ public class KafkaNetworkChannelTest {
         client.prepareResponseFrom(response, destinationNode, false);
 
         ioThread.start();
-        RaftRequest.Outbound request = sendTestRequest(ApiKeys.FETCH, destinationId);
+        RaftRequest.Outbound request = sendTestRequest(ApiKeys.FETCH, destinationNode);
 
         ioThread.join();
         assertResponseCompleted(request, Errors.INVALID_REQUEST);
@@ -142,12 +140,11 @@ public class KafkaNetworkChannelTest {
     public void testSendAndDisconnect() throws ExecutionException, InterruptedException {
         int destinationId = 2;
         Node destinationNode = new Node(destinationId, "127.0.0.1", 9092);
-        channel.updateEndpoint(destinationId, new InetSocketAddress(destinationNode.host(), destinationNode.port()));
 
         for (ApiKeys apiKey : RAFT_APIS) {
             AbstractResponse response = buildResponse(buildTestErrorResponse(apiKey, Errors.INVALID_REQUEST));
             client.prepareResponseFrom(response, destinationNode, true);
-            sendAndAssertErrorResponse(apiKey, destinationId, Errors.BROKER_NOT_AVAILABLE);
+            sendAndAssertErrorResponse(apiKey, destinationNode, Errors.BROKER_NOT_AVAILABLE);
         }
     }
 
@@ -155,20 +152,19 @@ public class KafkaNetworkChannelTest {
     public void testSendAndFailAuthentication() throws ExecutionException, InterruptedException {
         int destinationId = 2;
         Node destinationNode = new Node(destinationId, "127.0.0.1", 9092);
-        channel.updateEndpoint(destinationId, new InetSocketAddress(destinationNode.host(), destinationNode.port()));
 
         for (ApiKeys apiKey : RAFT_APIS) {
             client.createPendingAuthenticationError(destinationNode, 100);
-            sendAndAssertErrorResponse(apiKey, destinationId, Errors.NETWORK_EXCEPTION);
+            sendAndAssertErrorResponse(apiKey, destinationNode, Errors.NETWORK_EXCEPTION);
 
             // reset to clear backoff time
             client.reset();
         }
     }
 
-    private void assertBrokerNotAvailable(int destinationId) throws ExecutionException, InterruptedException {
+    private void assertBrokerNotAvailable(Node destination) throws ExecutionException, InterruptedException {
         for (ApiKeys apiKey : RAFT_APIS) {
-            sendAndAssertErrorResponse(apiKey, destinationId, Errors.BROKER_NOT_AVAILABLE);
+            sendAndAssertErrorResponse(apiKey, destination, Errors.BROKER_NOT_AVAILABLE);
         }
     }
 
@@ -176,14 +172,13 @@ public class KafkaNetworkChannelTest {
     public void testSendAndReceiveOutboundRequest() throws ExecutionException, InterruptedException {
         int destinationId = 2;
         Node destinationNode = new Node(destinationId, "127.0.0.1", 9092);
-        channel.updateEndpoint(destinationId, new InetSocketAddress(destinationNode.host(), destinationNode.port()));
 
         for (ApiKeys apiKey : RAFT_APIS) {
             Errors expectedError = Errors.INVALID_REQUEST;
             AbstractResponse response = buildResponse(buildTestErrorResponse(apiKey, expectedError));
             client.prepareResponseFrom(response, destinationNode);
             System.out.println("api key " + apiKey + ", response " + response);
-            sendAndAssertErrorResponse(apiKey, destinationId, expectedError);
+            sendAndAssertErrorResponse(apiKey, destinationNode, expectedError);
         }
     }
 
@@ -191,11 +186,10 @@ public class KafkaNetworkChannelTest {
     public void testUnsupportedVersionError() throws ExecutionException, InterruptedException {
         int destinationId = 2;
         Node destinationNode = new Node(destinationId, "127.0.0.1", 9092);
-        channel.updateEndpoint(destinationId, new InetSocketAddress(destinationNode.host(), destinationNode.port()));
 
         for (ApiKeys apiKey : RAFT_APIS) {
             client.prepareUnsupportedVersionResponse(request -> request.apiKey() == apiKey);
-            sendAndAssertErrorResponse(apiKey, destinationId, Errors.UNSUPPORTED_VERSION);
+            sendAndAssertErrorResponse(apiKey, destinationNode, Errors.UNSUPPORTED_VERSION);
         }
     }
 
@@ -204,8 +198,7 @@ public class KafkaNetworkChannelTest {
     public void testFetchRequestDowngrade(short version) {
         int destinationId = 2;
         Node destinationNode = new Node(destinationId, "127.0.0.1", 9092);
-        channel.updateEndpoint(destinationId, new InetSocketAddress(destinationNode.host(), destinationNode.port()));
-        sendTestRequest(ApiKeys.FETCH, destinationId);
+        sendTestRequest(ApiKeys.FETCH, destinationNode);
         channel.pollOnce();
 
         assertEquals(1, client.requests().size());
@@ -220,27 +213,39 @@ public class KafkaNetworkChannelTest {
         }
     }
 
-    private RaftRequest.Outbound sendTestRequest(ApiKeys apiKey, int destinationId) {
+    private RaftRequest.Outbound sendTestRequest(ApiKeys apiKey, Node destination) {
         int correlationId = channel.newCorrelationId();
         long createdTimeMs = time.milliseconds();
         ApiMessage apiRequest = buildTestRequest(apiKey);
-        RaftRequest.Outbound request = new RaftRequest.Outbound(correlationId, apiRequest, destinationId, createdTimeMs);
+        RaftRequest.Outbound request = new RaftRequest.Outbound(
+            correlationId,
+            apiRequest,
+            destination,
+            createdTimeMs
+        );
         channel.send(request);
         return request;
     }
 
-    private void assertResponseCompleted(RaftRequest.Outbound request, Errors expectedError) throws ExecutionException, InterruptedException {
+    private void assertResponseCompleted(
+        RaftRequest.Outbound request,
+        Errors expectedError
+    ) throws ExecutionException, InterruptedException {
         assertTrue(request.completion.isDone());
 
         RaftResponse.Inbound response = request.completion.get();
-        assertEquals(request.destinationId(), response.sourceId());
-        assertEquals(request.correlationId, response.correlationId);
-        assertEquals(request.data.apiKey(), response.data.apiKey());
-        assertEquals(expectedError, extractError(response.data));
+        assertEquals(request.destination(), response.source());
+        assertEquals(request.correlationId(), response.correlationId());
+        assertEquals(request.data().apiKey(), response.data().apiKey());
+        assertEquals(expectedError, extractError(response.data()));
     }
 
-    private void sendAndAssertErrorResponse(ApiKeys apiKey, int destinationId, Errors error) throws ExecutionException, InterruptedException {
-        RaftRequest.Outbound request = sendTestRequest(apiKey, destinationId);
+    private void sendAndAssertErrorResponse(
+        ApiKeys apiKey,
+        Node destination,
+        Errors error
+    ) throws ExecutionException, InterruptedException {
+        RaftRequest.Outbound request = sendTestRequest(apiKey, destination);
         channel.pollOnce();
         assertResponseCompleted(request, error);
     }

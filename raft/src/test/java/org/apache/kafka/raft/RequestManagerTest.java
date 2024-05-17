@@ -16,11 +16,14 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+import java.util.stream.Collectors;
 import java.util.Random;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -33,105 +36,117 @@ public class RequestManagerTest {
 
     @Test
     public void testResetAllConnections() {
+        List<Node> nodes = makeNodeList(IntStream.of(1, 2, 3));
+        Node node1 = nodes.get(0);
+        Node node2 = nodes.get(1);
+
         RequestManager cache = new RequestManager(
-            Utils.mkSet(1, 2, 3),
+            nodes,
             retryBackoffMs,
             requestTimeoutMs,
             random);
 
         // One host has an inflight request
-        RequestManager.ConnectionState connectionState1 = cache.getOrCreate(1);
-        connectionState1.onRequestSent(1, time.milliseconds());
-        assertFalse(connectionState1.isReady(time.milliseconds()));
+        cache.onRequestSent(node1, 1, time.milliseconds());
+        assertFalse(cache.isReady(node1, time.milliseconds()));
 
         // Another is backing off
-        RequestManager.ConnectionState connectionState2 = cache.getOrCreate(2);
-        connectionState2.onRequestSent(2, time.milliseconds());
-        connectionState2.onResponseError(2, time.milliseconds());
-        assertFalse(connectionState2.isReady(time.milliseconds()));
+        cache.onRequestSent(node2, 2, time.milliseconds());
+        cache.onResponseError(node2, 2, time.milliseconds());
+        assertFalse(cache.isReady(node2, time.milliseconds()));
 
         cache.resetAll();
 
         // Now both should be ready
-        assertTrue(connectionState1.isReady(time.milliseconds()));
-        assertTrue(connectionState2.isReady(time.milliseconds()));
+        assertTrue(cache.isReady(node1, time.milliseconds()));
+        assertTrue(cache.isReady(node2, time.milliseconds()));
     }
 
     @Test
     public void testBackoffAfterFailure() {
+        List<Node> nodes = makeNodeList(IntStream.of(1, 2, 3));
+        Node node1 = nodes.get(0);
+
         RequestManager cache = new RequestManager(
-            Utils.mkSet(1, 2, 3),
+            nodes,
             retryBackoffMs,
             requestTimeoutMs,
             random);
 
-        RequestManager.ConnectionState connectionState = cache.getOrCreate(1);
-        assertTrue(connectionState.isReady(time.milliseconds()));
+        assertTrue(cache.isReady(node1, time.milliseconds()));
 
         long correlationId = 1;
-        connectionState.onRequestSent(correlationId, time.milliseconds());
-        assertFalse(connectionState.isReady(time.milliseconds()));
+        cache.onRequestSent(node1, correlationId, time.milliseconds());
+        assertFalse(cache.isReady(node1, time.milliseconds()));
 
-        connectionState.onResponseError(correlationId, time.milliseconds());
-        assertFalse(connectionState.isReady(time.milliseconds()));
+        cache.onResponseError(node1, correlationId, time.milliseconds());
+        assertFalse(cache.isReady(node1, time.milliseconds()));
 
         time.sleep(retryBackoffMs);
-        assertTrue(connectionState.isReady(time.milliseconds()));
+        assertTrue(cache.isReady(node1, time.milliseconds()));
     }
 
     @Test
     public void testSuccessfulResponse() {
+        List<Node> nodes = makeNodeList(IntStream.of(1, 2, 3));
+        Node node1 = nodes.get(0);
+
         RequestManager cache = new RequestManager(
-            Utils.mkSet(1, 2, 3),
+            nodes,
             retryBackoffMs,
             requestTimeoutMs,
             random);
 
-        RequestManager.ConnectionState connectionState = cache.getOrCreate(1);
-
         long correlationId = 1;
-        connectionState.onRequestSent(correlationId, time.milliseconds());
-        assertFalse(connectionState.isReady(time.milliseconds()));
-        connectionState.onResponseReceived(correlationId);
-        assertTrue(connectionState.isReady(time.milliseconds()));
+        cache.onRequestSent(node1, correlationId, time.milliseconds());
+        assertFalse(cache.isReady(node1, time.milliseconds()));
+        cache.onResponseReceived(node1, correlationId);
+        assertTrue(cache.isReady(node1, time.milliseconds()));
     }
 
     @Test
     public void testIgnoreUnexpectedResponse() {
+        List<Node> nodes = makeNodeList(IntStream.of(1, 2, 3));
+        Node node1 = nodes.get(0);
+
         RequestManager cache = new RequestManager(
-            Utils.mkSet(1, 2, 3),
+            nodes,
             retryBackoffMs,
             requestTimeoutMs,
             random);
 
-        RequestManager.ConnectionState connectionState = cache.getOrCreate(1);
-
         long correlationId = 1;
-        connectionState.onRequestSent(correlationId, time.milliseconds());
-        assertFalse(connectionState.isReady(time.milliseconds()));
-        connectionState.onResponseReceived(correlationId + 1);
-        assertFalse(connectionState.isReady(time.milliseconds()));
+        cache.onRequestSent(node1, correlationId, time.milliseconds());
+        assertFalse(cache.isReady(node1, time.milliseconds()));
+        cache.onResponseReceived(node1, correlationId + 1);
+        assertFalse(cache.isReady(node1, time.milliseconds()));
     }
 
     @Test
     public void testRequestTimeout() {
+        List<Node> nodes = makeNodeList(IntStream.of(1, 2, 3));
+        Node node1 = nodes.get(0);
+
         RequestManager cache = new RequestManager(
-            Utils.mkSet(1, 2, 3),
+            nodes,
             retryBackoffMs,
             requestTimeoutMs,
             random);
 
-        RequestManager.ConnectionState connectionState = cache.getOrCreate(1);
-
         long correlationId = 1;
-        connectionState.onRequestSent(correlationId, time.milliseconds());
-        assertFalse(connectionState.isReady(time.milliseconds()));
+        cache.onRequestSent(node1, correlationId, time.milliseconds());
+        assertFalse(cache.isReady(node1, time.milliseconds()));
 
         time.sleep(requestTimeoutMs - 1);
-        assertFalse(connectionState.isReady(time.milliseconds()));
+        assertFalse(cache.isReady(node1, time.milliseconds()));
 
         time.sleep(1);
-        assertTrue(connectionState.isReady(time.milliseconds()));
+        assertTrue(cache.isReady(node1, time.milliseconds()));
     }
 
+    private List<Node> makeNodeList(IntStream nodes) {
+        return nodes
+            .mapToObj(id -> new Node(id, String.format("mock-host-%d", id), 1234))
+            .collect(Collectors.toList());
+    }
 }

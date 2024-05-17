@@ -184,7 +184,6 @@ class KafkaRaftManager[T](
   def startup(): Unit = {
     client.initialize(
       controllerQuorumVotersFuture.get(),
-      config.controllerListenerNames.head,
       new FileQuorumStateStore(new File(dataDir, FileQuorumStateStore.DEFAULT_FILE_NAME)),
       metrics
     )
@@ -233,8 +232,8 @@ class KafkaRaftManager[T](
   }
 
   private def buildNetworkChannel(): KafkaNetworkChannel = {
-    val netClient = buildNetworkClient()
-    new KafkaNetworkChannel(time, netClient, config.quorumRequestTimeoutMs, threadNamePrefix)
+    val (listenerName, netClient) = buildNetworkClient()
+    new KafkaNetworkChannel(time, listenerName, netClient, config.quorumRequestTimeoutMs, threadNamePrefix)
   }
 
   private def createDataDir(): File = {
@@ -253,7 +252,7 @@ class KafkaRaftManager[T](
     )
   }
 
-  private def buildNetworkClient(): NetworkClient = {
+  private def buildNetworkClient(): (ListenerName, NetworkClient) = {
     val controllerListenerName = new ListenerName(config.controllerListenerNames.head)
     val controllerSecurityProtocol = config.effectiveListenerSecurityProtocolMap.getOrElse(
       controllerListenerName,
@@ -291,7 +290,7 @@ class KafkaRaftManager[T](
     val reconnectBackoffMsMs = 500
     val discoverBrokerVersions = true
 
-    new NetworkClient(
+    val networkClient = new NetworkClient(
       selector,
       new ManualMetadataUpdater(),
       clientId,
@@ -308,6 +307,8 @@ class KafkaRaftManager[T](
       apiVersions,
       logContext
     )
+
+    (controllerListenerName, networkClient)
   }
 
   override def leaderAndEpoch: LeaderAndEpoch = {
