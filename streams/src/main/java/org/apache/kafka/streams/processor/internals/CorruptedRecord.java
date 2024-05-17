@@ -27,7 +27,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 public class CorruptedRecord extends StampedRecord {
 
     CorruptedRecord(final ConsumerRecord<byte[], byte[]> rawRecord) {
-        super(rawRecord, ConsumerRecord.NO_TIMESTAMP);
+        super(rawRecord, ConsumerRecord.NO_TIMESTAMP, rawRecord);
     }
 
     @Override

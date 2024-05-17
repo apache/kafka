@@ -20,9 +20,11 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Headers;
 
 public class StampedRecord extends Stamped<ConsumerRecord<?, ?>> {
+    private final ConsumerRecord<byte[], byte[]> rawRecord;
 
-    public StampedRecord(final ConsumerRecord<?, ?> record, final long timestamp) {
+    public StampedRecord(final ConsumerRecord<?, ?> record, final long timestamp, final ConsumerRecord<byte[], byte[]> rawRecord) {
         super(record, timestamp);
+        this.rawRecord = rawRecord;
     }
 
     public String topic() {
@@ -47,6 +49,10 @@ public class StampedRecord extends Stamped<ConsumerRecord<?, ?>> {
 
     public Headers headers() {
         return value.headers();
+    }
+
+    public ConsumerRecord<byte[], byte[]> rawRecord() {
+        return rawRecord;
     }
 
     @Override

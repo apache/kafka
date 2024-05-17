@@ -100,7 +100,7 @@ public interface ErrorHandlerContext {
      * to the repartition topic.
      *
      * <p> Always returns null if this method is invoked within a
-     * {@link ProductionExceptionHandler.handle(ErrorHandlerContext, ProducerRecord, Exception, SerializationExceptionOrigin)}
+     * {@link org.apache.kafka.streams.errors.ProductionExceptionHandler#handle(ErrorHandlerContext, org.apache.kafka.clients.producer.ProducerRecord, Exception)}
      *
      * @return the raw byte of the key of the source message
      */
@@ -117,7 +117,7 @@ public interface ErrorHandlerContext {
      * to the repartition topic.
      *
      * <p> Always returns null if this method is invoked within a
-     * {@link ProductionExceptionHandler.handle(ErrorHandlerContext, ProducerRecord, Exception, SerializationExceptionOrigin)}
+     * {@link org.apache.kafka.streams.errors.ProductionExceptionHandler#handle(ErrorHandlerContext, org.apache.kafka.clients.producer.ProducerRecord, Exception)}
      *
      * @return the raw byte of the value of the source message
      */

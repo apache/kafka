@@ -230,7 +230,7 @@ public class RecordQueue {
                 droppedRecordsSensor.record();
                 continue;
             }
-            headRecord = new StampedRecord(deserialized, timestamp);
+            headRecord = new StampedRecord(deserialized, timestamp, raw);
             headRecordSizeInBytes = consumerRecordSizeInBytes(raw);
         }
 

@@ -38,7 +38,7 @@ public interface DeserializationExceptionHandler extends Configurable {
      * @param context processor context
      * @param record record that failed deserialization
      * @param exception the actual exception
-     * @deprecated Please {@link #handle(ErrorHandlerContext, ConsumerRecord, Exception)
+     * @deprecated Please {@link #handle(ErrorHandlerContext, ConsumerRecord, Exception)}
      */
     @Deprecated
     default DeserializationHandlerResponse handle(final ProcessorContext context,

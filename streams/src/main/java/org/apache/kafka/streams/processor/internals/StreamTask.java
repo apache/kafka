@@ -1314,6 +1314,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         return partitionGroup.streamTime();
     }
 
+    ConsumerRecord<byte[], byte[]> rawRecord() {
+        return record.rawRecord();
+    }
+
     private class RecordQueueCreator {
         private final LogContext logContext;
         private final TimestampExtractor defaultTimestampExtractor;

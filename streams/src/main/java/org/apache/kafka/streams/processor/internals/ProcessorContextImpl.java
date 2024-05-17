@@ -293,9 +293,10 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
 
         try {
             child.process(record);
-        }  catch (final Exception e) {
+        } catch (final Exception e) {
             final ErrorHandlerContext errorHandlerContext = new ErrorHandlerContextImpl(null, topic(),
-                partition(), offset(), headers(), null, null, child.name(), taskId());
+                partition(), offset(), headers(), streamTask.rawRecord().key(), streamTask.rawRecord().value(),
+                    child.name(), taskId());
             final ProcessingExceptionHandler.ProcessingHandlerResponse response = streamTask.config
                 .processingExceptionHandler
                 .handle(errorHandlerContext, record, e);
@@ -308,7 +309,6 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
                     e);
             }
         }
-
 
         if (child.isTerminalNode()) {
             streamTask.maybeRecordE2ELatency(record.timestamp(), currentSystemTimeMs(), child.name());
