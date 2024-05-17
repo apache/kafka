@@ -71,27 +71,18 @@ public abstract class EventProcessor<T> implements Closeable {
 
         List<T> events = drain();
 
-        if (events.isEmpty()) {
-            log.trace("No events to process");
+        if (events.isEmpty())
             return false;
-        }
 
-        try {
-            log.trace("Starting processing of {} event{}", events.size(), events.size() == 1 ? "" : "s");
-
-            for (T event : events) {
-                try {
-                    Objects.requireNonNull(event, "Attempted to process a null event");
-                    log.trace("Processing event: {}", event);
-                    process(event);
-                    processHandler.onProcess(event, Optional.empty());
-                } catch (Throwable t) {
-                    KafkaException error = ConsumerUtils.maybeWrapAsKafkaException(t);
-                    processHandler.onProcess(event, Optional.of(error));
-                }
+        for (T event : events) {
+            try {
+                Objects.requireNonNull(event, "Attempted to process a null event");
+                process(event);
+                processHandler.onProcess(event, Optional.empty());
+            } catch (Throwable t) {
+                KafkaException error = ConsumerUtils.maybeWrapAsKafkaException(t);
+                processHandler.onProcess(event, Optional.of(error));
             }
-        } finally {
-            log.trace("Completed processing");
         }
 
         return true;

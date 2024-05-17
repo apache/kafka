@@ -52,7 +52,7 @@ final class KRaftControlRecordStateMachineTest {
     @Test
     void testEmptyPartition() {
         MockLog log = buildLog();
-        VoterSet voterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(Arrays.asList(1, 2, 3)));
+        VoterSet voterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(Arrays.asList(1, 2, 3), true));
 
         KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, Optional.of(voterSet));
 
@@ -65,7 +65,7 @@ final class KRaftControlRecordStateMachineTest {
     @Test
     void testUpdateWithoutSnapshot() {
         MockLog log = buildLog();
-        VoterSet staticVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(Arrays.asList(1, 2, 3)));
+        VoterSet staticVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(Arrays.asList(1, 2, 3), true));
         BufferSupplier bufferSupplier = BufferSupplier.NO_CACHING;
         int epoch = 1;
 
@@ -85,7 +85,7 @@ final class KRaftControlRecordStateMachineTest {
         );
 
         // Append the voter set control record
-        VoterSet voterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(Arrays.asList(4, 5, 6)));
+        VoterSet voterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(Arrays.asList(4, 5, 6), true));
         log.appendAsLeader(
             MemoryRecords.withVotersRecord(
                 log.endOffset().offset,
@@ -108,7 +108,7 @@ final class KRaftControlRecordStateMachineTest {
     @Test
     void testUpdateWithEmptySnapshot() {
         MockLog log = buildLog();
-        VoterSet staticVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(Arrays.asList(1, 2, 3)));
+        VoterSet staticVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(Arrays.asList(1, 2, 3), true));
         BufferSupplier bufferSupplier = BufferSupplier.NO_CACHING;
         int epoch = 1;
 
@@ -136,7 +136,7 @@ final class KRaftControlRecordStateMachineTest {
         );
 
         // Append the voter set control record
-        VoterSet voterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(Arrays.asList(4, 5, 6)));
+        VoterSet voterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(Arrays.asList(4, 5, 6), true));
         log.appendAsLeader(
             MemoryRecords.withVotersRecord(
                 log.endOffset().offset,
@@ -159,14 +159,14 @@ final class KRaftControlRecordStateMachineTest {
     @Test
     void testUpdateWithSnapshot() {
         MockLog log = buildLog();
-        VoterSet staticVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(Arrays.asList(1, 2, 3)));
+        VoterSet staticVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(Arrays.asList(1, 2, 3), true));
         int epoch = 1;
 
         KRaftControlRecordStateMachine partitionState = buildPartitionListener(log, Optional.of(staticVoterSet));
 
         // Create a snapshot that has kraft.version and voter set control records
         short kraftVersion = 1;
-        VoterSet voterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(Arrays.asList(4, 5, 6)));
+        VoterSet voterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(Arrays.asList(4, 5, 6), true));
 
         RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder()
             .setRawSnapshotWriter(log.createNewSnapshotUnchecked(new OffsetAndEpoch(10, epoch)).get())
@@ -188,7 +188,7 @@ final class KRaftControlRecordStateMachineTest {
     @Test
     void testUpdateWithSnapshotAndLogOverride() {
         MockLog log = buildLog();
-        VoterSet staticVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(Arrays.asList(1, 2, 3)));
+        VoterSet staticVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(Arrays.asList(1, 2, 3), true));
         BufferSupplier bufferSupplier = BufferSupplier.NO_CACHING;
         int epoch = 1;
 
@@ -196,7 +196,7 @@ final class KRaftControlRecordStateMachineTest {
 
         // Create a snapshot that has kraft.version and voter set control records
         short kraftVersion = 1;
-        VoterSet snapshotVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(Arrays.asList(4, 5, 6)));
+        VoterSet snapshotVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(Arrays.asList(4, 5, 6), true));
 
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(10, epoch);
         RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder()
@@ -209,7 +209,7 @@ final class KRaftControlRecordStateMachineTest {
         log.truncateToLatestSnapshot();
 
         // Append the voter set control record
-        VoterSet voterSet = snapshotVoterSet.addVoter(VoterSetTest.voterNode(7)).get();
+        VoterSet voterSet = snapshotVoterSet.addVoter(VoterSetTest.voterNode(7, true)).get();
         log.appendAsLeader(
             MemoryRecords.withVotersRecord(
                 log.endOffset().offset,
@@ -235,7 +235,7 @@ final class KRaftControlRecordStateMachineTest {
     @Test
     void testTruncateTo() {
         MockLog log = buildLog();
-        VoterSet staticVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(Arrays.asList(1, 2, 3)));
+        VoterSet staticVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(Arrays.asList(1, 2, 3), true));
         BufferSupplier bufferSupplier = BufferSupplier.NO_CACHING;
         int epoch = 1;
 
@@ -256,7 +256,7 @@ final class KRaftControlRecordStateMachineTest {
 
         // Append the voter set control record
         long firstVoterSetOffset = log.endOffset().offset;
-        VoterSet firstVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(Arrays.asList(4, 5, 6)));
+        VoterSet firstVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(Arrays.asList(4, 5, 6), true));
         log.appendAsLeader(
             MemoryRecords.withVotersRecord(
                 firstVoterSetOffset,
@@ -270,7 +270,7 @@ final class KRaftControlRecordStateMachineTest {
 
         // Append another voter set control record
         long voterSetOffset = log.endOffset().offset;
-        VoterSet voterSet = firstVoterSet.addVoter(VoterSetTest.voterNode(7)).get();
+        VoterSet voterSet = firstVoterSet.addVoter(VoterSetTest.voterNode(7, true)).get();
         log.appendAsLeader(
             MemoryRecords.withVotersRecord(
                 voterSetOffset,
@@ -303,7 +303,7 @@ final class KRaftControlRecordStateMachineTest {
     @Test
     void testTrimPrefixTo() {
         MockLog log = buildLog();
-        VoterSet staticVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(Arrays.asList(1, 2, 3)));
+        VoterSet staticVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(Arrays.asList(1, 2, 3), true));
         BufferSupplier bufferSupplier = BufferSupplier.NO_CACHING;
         int epoch = 1;
 
@@ -325,7 +325,7 @@ final class KRaftControlRecordStateMachineTest {
 
         // Append the voter set control record
         long firstVoterSetOffset = log.endOffset().offset;
-        VoterSet firstVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(Arrays.asList(4, 5, 6)));
+        VoterSet firstVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(Arrays.asList(4, 5, 6), true));
         log.appendAsLeader(
             MemoryRecords.withVotersRecord(
                 firstVoterSetOffset,
@@ -339,7 +339,7 @@ final class KRaftControlRecordStateMachineTest {
 
         // Append another voter set control record
         long voterSetOffset = log.endOffset().offset;
-        VoterSet voterSet = firstVoterSet.addVoter(VoterSetTest.voterNode(7)).get();
+        VoterSet voterSet = firstVoterSet.addVoter(VoterSetTest.voterNode(7, true)).get();
         log.appendAsLeader(
             MemoryRecords.withVotersRecord(
                 voterSetOffset,
