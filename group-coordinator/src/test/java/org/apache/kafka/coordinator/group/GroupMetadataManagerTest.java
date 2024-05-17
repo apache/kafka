@@ -12143,7 +12143,6 @@ public class GroupMetadataManagerTest {
             // Consumer group with two members.
             // Member 1 uses the classic protocol and member 2 uses the consumer protocol.
             GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-                .withConsumerGroupMigrationPolicy(ConsumerGroupMigrationPolicy.DOWNGRADE)
                 .withAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
                 .withMetadataImage(new MetadataImageBuilder()
                     .addTopic(fooTopicId, fooTopicName, 6)
@@ -12181,7 +12180,6 @@ public class GroupMetadataManagerTest {
 
         // Consumer group with a member that doesn't use the classic protocol.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withConsumerGroupMigrationPolicy(ConsumerGroupMigrationPolicy.DOWNGRADE)
             .withAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId)
@@ -12231,7 +12229,6 @@ public class GroupMetadataManagerTest {
 
         // Consumer group with a static member.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withConsumerGroupMigrationPolicy(ConsumerGroupMigrationPolicy.DOWNGRADE)
             .withAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId)
@@ -12270,7 +12267,6 @@ public class GroupMetadataManagerTest {
 
         // Consumer group with a member using the classic protocol.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withConsumerGroupMigrationPolicy(ConsumerGroupMigrationPolicy.DOWNGRADE)
             .withAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId)
@@ -12335,7 +12331,6 @@ public class GroupMetadataManagerTest {
 
         // Consumer group with a member using the classic protocol.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withConsumerGroupMigrationPolicy(ConsumerGroupMigrationPolicy.DOWNGRADE)
             .withAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
                 .withMember(new ConsumerGroupMember.Builder(memberId)
@@ -12379,7 +12374,6 @@ public class GroupMetadataManagerTest {
         // Consumer group with a member using the classic protocol.
         // The group epoch is greater than the member epoch.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withConsumerGroupMigrationPolicy(ConsumerGroupMigrationPolicy.DOWNGRADE)
             .withAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 11)
                 .withMember(new ConsumerGroupMember.Builder(memberId)
@@ -12401,6 +12395,241 @@ public class GroupMetadataManagerTest {
                 .withProtocolName("range")
                 .build())
         );
+    }
+
+    @Test
+    public void testClassicGroupHeartbeatToConsumerGroupMaintainsSession() throws Exception {
+        String groupId = "group-id";
+        String memberId = Uuid.randomUuid().toString();
+        int sessionTimeout = 5000;
+
+        List<ConsumerGroupMemberMetadataValue.ClassicProtocol> protocols = Collections.singletonList(
+            new ConsumerGroupMemberMetadataValue.ClassicProtocol()
+                .setName("range")
+                .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(
+                    new ConsumerPartitionAssignor.Subscription(
+                        Arrays.asList("foo"),
+                        null,
+                        Collections.emptyList()
+                    )
+                )))
+        );
+
+        // Consumer group with a member using the classic protocol.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(new ConsumerGroupMember.Builder(memberId)
+                    .setClassicMemberMetadata(
+                        new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                            .setSessionTimeoutMs(sessionTimeout)
+                            .setSupportedProtocols(protocols)
+                    )
+                    .setMemberEpoch(10)
+                    .build()))
+            .build();
+
+        // Heartbeat to schedule the session timeout.
+        HeartbeatRequestData request = new HeartbeatRequestData()
+            .setGroupId(groupId)
+            .setMemberId(memberId)
+            .setGenerationId(10);
+        context.sendClassicGroupHeartbeat(request);
+        context.assertSessionTimeout(groupId, memberId, sessionTimeout);
+
+        // Advance clock by 1/2 of session timeout.
+        GroupMetadataManagerTestContext.assertNoOrEmptyResult(context.sleep(sessionTimeout / 2));
+
+        HeartbeatResponseData heartbeatResponse = context.sendClassicGroupHeartbeat(request).response();
+        assertEquals(Errors.NONE.code(), heartbeatResponse.errorCode());
+        context.assertSessionTimeout(groupId, memberId, sessionTimeout);
+
+        // Advance clock by 1/2 of session timeout.
+        GroupMetadataManagerTestContext.assertNoOrEmptyResult(context.sleep(sessionTimeout / 2));
+
+        heartbeatResponse = context.sendClassicGroupHeartbeat(request).response();
+        assertEquals(Errors.NONE.code(), heartbeatResponse.errorCode());
+        context.assertSessionTimeout(groupId, memberId, sessionTimeout);
+    }
+
+    @Test
+    public void testClassicGroupHeartbeatToConsumerGroupRebalanceInProgress() throws Exception {
+        String groupId = "group-id";
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+        String memberId3 = Uuid.randomUuid().toString();
+        Uuid fooTopicId = Uuid.randomUuid();
+        Uuid barTopicId = Uuid.randomUuid();
+        int sessionTimeout = 5000;
+        int rebalanceTimeout = 10000;
+
+        List<ConsumerGroupMemberMetadataValue.ClassicProtocol> protocols = Collections.singletonList(
+            new ConsumerGroupMemberMetadataValue.ClassicProtocol()
+                .setName("range")
+                .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(
+                    new ConsumerPartitionAssignor.Subscription(
+                        Arrays.asList("foo"),
+                        null,
+                        Collections.emptyList()
+                    )
+                )))
+        );
+
+        // Member 1 has a member epoch smaller than the group epoch.
+        ConsumerGroupMember member1 = new ConsumerGroupMember.Builder(memberId1)
+            .setRebalanceTimeoutMs(rebalanceTimeout)
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(sessionTimeout)
+                    .setSupportedProtocols(protocols)
+            )
+            .setMemberEpoch(9)
+            .build();
+
+        // Member 2 has unrevoked partition.
+        ConsumerGroupMember member2 = new ConsumerGroupMember.Builder(memberId2)
+            .setState(MemberState.UNREVOKED_PARTITIONS)
+            .setRebalanceTimeoutMs(rebalanceTimeout)
+            .setPartitionsPendingRevocation(mkAssignment(mkTopicAssignment(fooTopicId, 0)))
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(sessionTimeout)
+                    .setSupportedProtocols(protocols)
+            )
+            .setMemberEpoch(10)
+            .build();
+
+        // Member 3 is in UNRELEASED_PARTITIONS and all the partitions in its target assignment are free.
+        ConsumerGroupMember member3 = new ConsumerGroupMember.Builder(memberId3)
+            .setState(MemberState.UNRELEASED_PARTITIONS)
+            .setRebalanceTimeoutMs(rebalanceTimeout)
+            .setAssignedPartitions(mkAssignment(mkTopicAssignment(barTopicId, 0)))
+            .setClassicMemberMetadata(
+                new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                    .setSessionTimeoutMs(sessionTimeout)
+                    .setSupportedProtocols(protocols)
+            )
+            .setMemberEpoch(10)
+            .build();
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(member1)
+                .withMember(member2)
+                .withMember(member3)
+                .withAssignment(memberId3, mkAssignment(mkTopicAssignment(barTopicId, 0, 1, 2))))
+            .build();
+
+        Arrays.asList(memberId1, memberId2, memberId3).forEach(memberId -> {
+            CoordinatorResult<HeartbeatResponseData, CoordinatorRecord> heartbeatResult = context.sendClassicGroupHeartbeat(
+                new HeartbeatRequestData()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId)
+                    .setGenerationId(memberId.equals(memberId1) ? 9 : 10)
+            );
+            assertEquals(Collections.emptyList(), heartbeatResult.records());
+            assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), heartbeatResult.response().errorCode());
+            context.assertSessionTimeout(groupId, memberId, sessionTimeout);
+            context.assertJoinTimeout(groupId, memberId, rebalanceTimeout);
+        });
+    }
+
+    @Test
+    public void testClassicGroupHeartbeatToConsumerWithUnknownMember() {
+        String groupId = "group-id";
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10))
+            .build();
+
+        assertThrows(UnknownMemberIdException.class, () -> context.sendClassicGroupHeartbeat(
+            new HeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId("unknown-member-id")
+                .setGenerationId(10)
+        ));
+
+        assertThrows(UnknownMemberIdException.class, () -> context.sendClassicGroupHeartbeat(
+            new HeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId("unknown-member-id")
+                .setGroupInstanceId("unknown-instance-id")
+                .setGenerationId(10)
+        ));
+    }
+
+    @Test
+    public void testClassicGroupHeartbeatToConsumerWithFencedInstanceId() {
+        String groupId = "group-id";
+        String memberId = "member-id";
+        String instanceId = "instance-id";
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(new ConsumerGroupMember.Builder(memberId)
+                    .setInstanceId(instanceId)
+                    .setMemberEpoch(10)
+                    .setClassicMemberMetadata(
+                        new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                            .setSessionTimeoutMs(5000)
+                            .setSupportedProtocols(Collections.emptyList())
+                    )
+                    .build()))
+            .build();
+
+        assertThrows(FencedInstanceIdException.class, () -> context.sendClassicGroupHeartbeat(
+            new HeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId("unknown-member-id")
+                .setGroupInstanceId(instanceId)
+                .setGenerationId(10)
+        ));
+    }
+
+    @Test
+    public void testClassicGroupHeartbeatToConsumerWithIllegalGenerationId() {
+        String groupId = "group-id";
+        String memberId = "member-id";
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(new ConsumerGroupMember.Builder(memberId)
+                    .setMemberEpoch(10)
+                    .setClassicMemberMetadata(
+                        new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                            .setSessionTimeoutMs(5000)
+                            .setSupportedProtocols(Collections.emptyList())
+                    )
+                    .build()))
+            .build();
+
+        assertThrows(IllegalGenerationException.class, () -> context.sendClassicGroupHeartbeat(
+            new HeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setGenerationId(9)
+        ));
+    }
+
+    @Test
+    public void testClassicGroupHeartbeatToConsumerWithMemberNotUsingClassicProtocol() {
+        String groupId = "group-id";
+        String memberId = "member-id";
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(new ConsumerGroupMember.Builder(memberId)
+                    .setMemberEpoch(10)
+                    .build()))
+            .build();
+
+        assertThrows(UnknownMemberIdException.class, () -> context.sendClassicGroupHeartbeat(
+            new HeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setGenerationId(10)
+        ));
     }
 
     private static void checkJoinGroupResponse(

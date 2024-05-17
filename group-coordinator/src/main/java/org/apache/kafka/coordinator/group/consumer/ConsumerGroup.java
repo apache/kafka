@@ -1315,8 +1315,8 @@ public class ConsumerGroup implements Group {
                 Set<Integer> assignedPartitions = member.assignedPartitions().get(topicId);
 
                 for (int partition : entry.getValue()) {
-                    if (!assignedPartitions.contains(partition) &&
-                        currentPartitionEpoch(topicId, partition) == -1) {
+                    if ((assignedPartitions == null || !assignedPartitions.contains(partition)) &&
+                        currentPartitionEpoch(topicId, partition) != -1) {
                         return true;
                     }
                 }

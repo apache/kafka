@@ -4270,7 +4270,7 @@ public class GroupMetadataManager {
      *
      * @return The coordinator result that contains the heartbeat response.
      */
-    public CoordinatorResult<HeartbeatResponseData, CoordinatorRecord> classicGroupHeartbeatToClassicGroup(
+    private CoordinatorResult<HeartbeatResponseData, CoordinatorRecord> classicGroupHeartbeatToClassicGroup(
         ClassicGroup group,
         RequestContext context,
         HeartbeatRequestData request
@@ -4342,7 +4342,10 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Handle a classic group HeartbeatRequest to a consumer group.
+     * Handle a classic group HeartbeatRequest to a consumer group. A response with
+     * REBALANCE_IN_PROGRESS is returned if 1) the member epoch is smaller than the
+     * group epoch, 2) the member is in UNREVOKED_PARTITIONS, or 3) the member is in
+     * UNRELEASED_PARTITIONS and all its partitions pending assignment are free.
      *
      * @param group          The ConsumerGroup.
      * @param context        The request context.
@@ -4350,7 +4353,7 @@ public class GroupMetadataManager {
      *
      * @return The coordinator result that contains the heartbeat response.
      */
-    public CoordinatorResult<HeartbeatResponseData, CoordinatorRecord> classicGroupHeartbeatToConsumerGroup(
+    private CoordinatorResult<HeartbeatResponseData, CoordinatorRecord> classicGroupHeartbeatToConsumerGroup(
         ConsumerGroup group,
         RequestContext context,
         HeartbeatRequestData request
@@ -4367,10 +4370,10 @@ public class GroupMetadataManager {
 
         Errors error = Errors.NONE;
         if (member.memberEpoch() < group.groupEpoch() ||
-            member.state() == MemberState.UNRELEASED_PARTITIONS ||
+            member.state() == MemberState.UNREVOKED_PARTITIONS ||
             (member.state() == MemberState.UNRELEASED_PARTITIONS && !group.hasUnreleasedPartitions(member))) {
             error = Errors.REBALANCE_IN_PROGRESS;
-            scheduleConsumerGroupSyncTimeout(groupId, memberId, member.rebalanceTimeoutMs());
+            scheduleConsumerGroupJoinTimeout(groupId, memberId, member.rebalanceTimeoutMs());
         }
 
         return new CoordinatorResult<>(
