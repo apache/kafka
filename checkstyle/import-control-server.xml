@@ -86,7 +86,6 @@
     </subpackage>
     <subpackage name="config">
       <allow pkg="org.apache.kafka.server" />
-      <allow class="org.apache.zookeeper.client.ZKClientConfig" />
     </subpackage>
   </subpackage>
 

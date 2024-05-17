@@ -223,7 +223,6 @@ public class RemoteLogManager implements Closeable {
         remoteStorageReaderThreadPool.removeMetrics();
     }
 
-    @SuppressWarnings("unchecked")
     private <T> T createDelegate(ClassLoader classLoader, String className) {
         try {
             return (T) classLoader.loadClass(className)

@@ -25,11 +25,13 @@ import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.storage.internals.log.LogConfig;
 
+import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map.Entry;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -62,8 +64,8 @@ public class ConfigCommandOptions extends CommandDefaultOptions {
     final OptionSpec<String> ip;
     final OptionSpec<String> zkTlsConfigFile;
 
-    final List<Tuple2<OptionSpec<String>, String>> entityFlags;
-    final List<Tuple2<OptionSpec<?>, String>> entityDefaultsFlags;
+    final List<Entry<OptionSpec<String>, String>> entityFlags;
+    final List<Entry<OptionSpec<?>, String>> entityDefaultsFlags;
 
     public ConfigCommandOptions(String[] args) {
         super(args);
@@ -143,17 +145,17 @@ public class ConfigCommandOptions extends CommandDefaultOptions {
                                 ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.keySet().stream().sorted().collect(Collectors.joining(", ")) + " are ignored.")
                 .withRequiredArg().describedAs("ZooKeeper TLS configuration").ofType(String.class);
 
-        entityFlags = Arrays.asList(new Tuple2<>(topic, ConfigType.TOPIC),
-                new Tuple2<>(client, ConfigType.CLIENT),
-                new Tuple2<>(user, ConfigType.USER),
-                new Tuple2<>(broker, ConfigType.BROKER),
-                new Tuple2<>(brokerLogger, ConfigCommand.BROKER_LOGGER_CONFIG_TYPE),
-                new Tuple2<>(ip, ConfigType.IP));
+        entityFlags = Arrays.asList(new SimpleImmutableEntry<>(topic, ConfigType.TOPIC),
+                new SimpleImmutableEntry<>(client, ConfigType.CLIENT),
+                new SimpleImmutableEntry<>(user, ConfigType.USER),
+                new SimpleImmutableEntry<>(broker, ConfigType.BROKER),
+                new SimpleImmutableEntry<>(brokerLogger, ConfigCommand.BROKER_LOGGER_CONFIG_TYPE),
+                new SimpleImmutableEntry<>(ip, ConfigType.IP));
 
-        entityDefaultsFlags = Arrays.asList(new Tuple2<>(clientDefaults, ConfigType.CLIENT),
-                new Tuple2<>(userDefaults, ConfigType.USER),
-                new Tuple2<>(brokerDefaults, ConfigType.BROKER),
-                new Tuple2<>(ipDefaults, ConfigType.IP));
+        entityDefaultsFlags = Arrays.asList(new SimpleImmutableEntry<>(clientDefaults, ConfigType.CLIENT),
+                new SimpleImmutableEntry<>(userDefaults, ConfigType.USER),
+                new SimpleImmutableEntry<>(brokerDefaults, ConfigType.BROKER),
+                new SimpleImmutableEntry<>(ipDefaults, ConfigType.IP));
 
         options = parser.parse(args);
     }
@@ -162,8 +164,8 @@ public class ConfigCommandOptions extends CommandDefaultOptions {
         List<String> res = new ArrayList<>(options.valuesOf(entityType));
 
         Stream.concat(entityFlags.stream(), entityDefaultsFlags.stream())
-                .filter(entity -> options.has(entity.v1))
-                .map(t -> t.v2)
+                .filter(entity -> options.has(entity.getKey()))
+                .map(Entry::getValue)
                 .forEach(res::add);
 
         return res;
@@ -178,12 +180,12 @@ public class ConfigCommandOptions extends CommandDefaultOptions {
             .collect(Collectors.toList());
 
         entityFlags.stream()
-            .filter(entity -> options.has(entity.v1))
-            .map(entity -> options.valueOf(entity.v1))
+            .filter(entity -> options.has(entity.getKey()))
+            .map(entity -> options.valueOf(entity.getKey()))
             .forEach(res::add);
 
         entityDefaultsFlags.stream()
-            .filter(entity -> options.has(entity.v1))
+            .filter(entity -> options.has(entity.getKey()))
             .map(r -> "")
             .forEach(res::add);
 
@@ -226,7 +228,7 @@ public class ConfigCommandOptions extends CommandDefaultOptions {
             throw new IllegalArgumentException("Only '" + ConfigType.USER + "' and '" + ConfigType.CLIENT + "' entity types may be specified together");
 
         if ((options.has(entityName) || options.has(entityType) || options.has(entityDefault)) &&
-            (entityFlags.stream().anyMatch(entity -> options.has(entity.v1)) || entityDefaultsFlags.stream().anyMatch(entity -> options.has(entity.v1))))
+            (entityFlags.stream().anyMatch(entity -> options.has(entity.getKey())) || entityDefaultsFlags.stream().anyMatch(entity -> options.has(entity.getKey()))))
                 throw new IllegalArgumentException("--entity-{type,name,default} should not be used in conjunction with specific entity flags");
 
         boolean hasEntityName = entityNames().stream().anyMatch(n -> !n.isEmpty());

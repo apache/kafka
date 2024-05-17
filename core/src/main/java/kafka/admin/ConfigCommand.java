@@ -70,6 +70,7 @@ import org.slf4j.LoggerFactory;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.NoSuchAlgorithmException;
+import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -79,6 +80,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
@@ -424,7 +426,7 @@ public class ConfigCommand {
         Map<String, String> configsToBeAddedMap = new HashMap<>();
         parseConfigsToBeAdded(opts).forEach((k, v) -> configsToBeAddedMap.put((String) k, (String) v));
         Map<String, ConfigEntry> configsToBeAdded = configsToBeAddedMap.entrySet().stream()
-            .collect(Collectors.toMap(Map.Entry::getKey, e -> new ConfigEntry(e.getKey(), e.getValue())));
+            .collect(Collectors.toMap(Entry::getKey, e -> new ConfigEntry(e.getKey(), e.getValue())));
         List<String> configsToBeDeleted = parseConfigsToBeDeleted(opts);
 
         Map<String, ConfigEntry> oldConfig;
@@ -474,7 +476,7 @@ public class ConfigCommand {
 
                 Map<String, ConfigEntry> sensitiveEntries = newEntries.entrySet().stream()
                     .filter(e -> e.getValue().value() == null)
-                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                    .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
                 if (!sensitiveEntries.isEmpty())
                     throw new InvalidConfigurationException("All sensitive broker config entries must be specified for --alter, missing entries: " + sensitiveEntries.keySet());
                 Config newConfig = new Config(newEntries.values());
@@ -518,7 +520,7 @@ public class ConfigCommand {
                 boolean hasQuotaConfigsToAdd = configsToBeAdded.keySet().stream().anyMatch(QuotaConfigs::isClientOrUserQuotaConfig);
                 Map<String, ConfigEntry> scramConfigsToAddMap = configsToBeAdded.entrySet().stream()
                     .filter(entry -> ScramMechanism.isScram(entry.getKey()))
-                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                    .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
                 List<String> unknownConfigsToAdd = configsToBeAdded.keySet().stream()
                     .filter(key -> !(ScramMechanism.isScram(key) || QuotaConfigs.isClientOrUserQuotaConfig(key)))
                     .collect(Collectors.toList());
@@ -609,7 +611,7 @@ public class ConfigCommand {
             System.out.println("Completed updating default config for " + entityTypeHead + " in the cluster.");
     }
 
-    public static Tuple2<Integer, byte[]> iterationsAndPasswordBytes(ScramMechanism mechanism, String credentialStr) {
+    public static Entry<Integer, byte[]> iterationsAndPasswordBytes(ScramMechanism mechanism, String credentialStr) {
         Pattern pattern = Pattern.compile("(?:iterations=(\\-?[0-9]*),)?password=(.*)");
         Matcher matcher = pattern.matcher(credentialStr);
         if (!matcher.matches()) {
@@ -623,7 +625,7 @@ public class ConfigCommand {
 
         if (iterations < mechanism.minIterations())
             throw new IllegalArgumentException("Iterations " + iterations + " is less than the minimum " + mechanism.minIterations() + " required for " + mechanism.mechanismName());
-        return new Tuple2<>(iterations, password.getBytes(StandardCharsets.UTF_8));
+        return new SimpleImmutableEntry<>(iterations, password.getBytes(StandardCharsets.UTF_8));
     }
 
     private static void alterUserScramCredentialConfigs(Admin adminClient, String user, Map<String, ConfigEntry> scramConfigsToAddMap, List<String> scramConfigsToDelete) throws Exception {
@@ -636,9 +638,9 @@ public class ConfigCommand {
         List<UserScramCredentialUpsertion> upsertions = scramConfigsToAddMap.entrySet().stream().map(e -> {
             String mechanismName = e.getKey();
             ConfigEntry configEntry = e.getValue();
-            Tuple2<Integer, byte[]> t = iterationsAndPasswordBytes(ScramMechanism.forMechanismName(mechanismName), configEntry.value());
-            Integer iterations = t.v1;
-            byte[] passwordBytes = t.v2;
+            Entry<Integer, byte[]> t = iterationsAndPasswordBytes(ScramMechanism.forMechanismName(mechanismName), configEntry.value());
+            Integer iterations = t.getKey();
+            byte[] passwordBytes = t.getValue();
             return new UserScramCredentialUpsertion(
                 user,
                 new ScramCredentialInfo(org.apache.kafka.clients.admin.ScramMechanism.fromMechanismName(mechanismName), iterations), passwordBytes);

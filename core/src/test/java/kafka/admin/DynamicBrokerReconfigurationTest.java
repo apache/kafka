@@ -38,12 +38,14 @@ import scala.None$;
 import scala.collection.JavaConverters;
 
 import java.io.File;
+import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
@@ -149,21 +151,21 @@ public class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerRecon
         verifyConfig(CleanerConfig.LOG_CLEANER_THREADS_PROP, logCleanerThreads,
             false, false, expectedProps);
 
-        Function<ConfigEntry, List<Tuple2<String, ConfigSource>>> synonymsList =
+        Function<ConfigEntry, List<Entry<String, ConfigSource>>> synonymsList =
             configEntry -> configEntry.synonyms().stream()
-                .map(s -> new Tuple2<>(s.name(), s.source()))
+                .map(s -> new SimpleImmutableEntry<>(s.name(), s.source()))
                 .collect(Collectors.toList());
         assertEquals(Arrays.asList(
-                new Tuple2<>(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, ConfigSource.STATIC_BROKER_CONFIG),
-                new Tuple2<>(ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG, ConfigSource.STATIC_BROKER_CONFIG),
-                new Tuple2<>(ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG, ConfigSource.DEFAULT_CONFIG)),
+                new SimpleImmutableEntry<>(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, ConfigSource.STATIC_BROKER_CONFIG),
+                new SimpleImmutableEntry<>(ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG, ConfigSource.STATIC_BROKER_CONFIG),
+                new SimpleImmutableEntry<>(ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG, ConfigSource.DEFAULT_CONFIG)),
             synonymsList.apply(logRetentionMs));
         assertEquals(Arrays.asList(
-                new Tuple2<>(ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG, ConfigSource.STATIC_BROKER_CONFIG),
-                new Tuple2<>(ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG, ConfigSource.DEFAULT_CONFIG)),
+                new SimpleImmutableEntry<>(ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG, ConfigSource.STATIC_BROKER_CONFIG),
+                new SimpleImmutableEntry<>(ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG, ConfigSource.DEFAULT_CONFIG)),
             synonymsList.apply(logRetentionHours));
-        assertEquals(Collections.singletonList(new Tuple2<>(ServerLogConfigs.LOG_ROLL_TIME_HOURS_CONFIG, ConfigSource.DEFAULT_CONFIG)), synonymsList.apply(logRollHours));
-        assertEquals(Collections.singletonList(new Tuple2<>(CleanerConfig.LOG_CLEANER_THREADS_PROP, ConfigSource.DEFAULT_CONFIG)), synonymsList.apply(logCleanerThreads));
+        assertEquals(Collections.singletonList(new SimpleImmutableEntry<>(ServerLogConfigs.LOG_ROLL_TIME_HOURS_CONFIG, ConfigSource.DEFAULT_CONFIG)), synonymsList.apply(logRollHours));
+        assertEquals(Collections.singletonList(new SimpleImmutableEntry<>(CleanerConfig.LOG_CLEANER_THREADS_PROP, ConfigSource.DEFAULT_CONFIG)), synonymsList.apply(logCleanerThreads));
     }
 
     @ParameterizedTest
