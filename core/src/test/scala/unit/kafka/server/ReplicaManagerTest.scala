@@ -343,9 +343,9 @@ class ReplicaManagerTest {
     try {
       val partition = rm.createPartition(tp0)
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
-        new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints), None)
+        new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints), Option.apply(uuid))
 
-      rm.becomeLeaderOrFollower(0, new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
+      val response = rm.becomeLeaderOrFollower(0, new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
         Seq(new LeaderAndIsrPartitionState()
           .setTopicName(topic)
           .setPartitionIndex(0)
@@ -356,8 +356,12 @@ class ReplicaManagerTest {
           .setPartitionEpoch(0)
           .setReplicas(Seq[Integer](0).asJava)
           .setIsNew(false)).asJava,
-        Collections.singletonMap(topic, Uuid.randomUuid()),
+        Collections.singletonMap(topic, uuid),
         Set(new Node(0, "host1", 0)).asJava).build(), (_, _) => ())
+      // expect the errorCounts only has 1 entry with Errors.NONE
+      val errorCounts = response.errorCounts()
+      assertEquals(1, response.errorCounts().size())
+      assertNotNull(errorCounts.get(Errors.NONE))
       spyLogManager.maybeUpdatePreferredLogDir(tp0, dir2.getAbsolutePath)
 
       if (futureLogCreated) {
@@ -505,11 +509,10 @@ class ReplicaManagerTest {
   }
 
   private[this] def testFencedErrorCausedByBecomeLeader(loopEpochChange: Int): Unit = {
-    val topicPartition = new TopicPartition(topic, 0)
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time))
-    replicaManager.replicaFetcherManager.failedPartitions.removeAll(Set.apply(topicPartition))
     try {
       val brokerList = Seq[Integer](0, 1).asJava
+      val topicPartition = new TopicPartition(topic, 0)
       replicaManager.createPartition(topicPartition)
         .createLogIfNotExists(isNew = false, isFutureReplica = false,
           new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints), None)
