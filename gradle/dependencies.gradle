@@ -27,8 +27,8 @@ ext {
 }
 
 // Add Scala version
-def defaultScala212Version = '2.12.18'
-def defaultScala213Version = '2.13.12'
+def defaultScala212Version = '2.12.19'
+def defaultScala213Version = '2.13.14'
 if (hasProperty('scalaVersion')) {
   if (scalaVersion == '2.12') {
     versions["scala"] = defaultScala212Version

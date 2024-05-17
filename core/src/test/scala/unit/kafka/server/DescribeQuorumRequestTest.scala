@@ -20,7 +20,6 @@ import java.io.IOException
 import kafka.test.ClusterInstance
 import kafka.test.annotation.{ClusterTest, ClusterTestDefaults, Type}
 import kafka.test.junit.ClusterTestExtensions
-import kafka.utils.NotNothing
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.DescribeQuorumRequest.singletonRequest
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ApiVersionsRequest, ApiVersionsResponse, DescribeQuorumRequest, DescribeQuorumResponse}
@@ -103,7 +102,7 @@ class DescribeQuorumRequestTest(cluster: ClusterInstance) {
   private def connectAndReceive[T <: AbstractResponse](
     request: AbstractRequest
   )(
-    implicit classTag: ClassTag[T], nn: NotNothing[T]
+    implicit classTag: ClassTag[T]
   ): T = {
     IntegrationTestUtils.connectAndReceive(
       request,
