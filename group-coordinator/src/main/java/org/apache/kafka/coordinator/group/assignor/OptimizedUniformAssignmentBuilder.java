@@ -21,20 +21,13 @@ import org.apache.kafka.server.common.TopicIdPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
+import java.util.Iterator;
 import java.util.Map;
-import java.util.Queue;
 import java.util.Set;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-
-import static java.lang.Math.min;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * The optimized uniform assignment builder is used to generate the target assignment for a consumer group with
@@ -141,14 +134,9 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
         final int minQuota = totalPartitionsCount / numberOfMembers;
         remainingMembersToGetAnExtraPartition = totalPartitionsCount % numberOfMembers;
 
-        assignmentSpec.members().keySet().forEach(memberId ->
-            targetAssignment.put(memberId, new MemberAssignment(new HashMap<>())
-        ));
-
         unassignedPartitions = topicIdPartitions(subscribedTopicIds, subscribedTopicDescriber);
         potentiallyUnfilledMembers = assignStickyPartitions(minQuota);
-
-        unassignedPartitionsRoundRobinAssignment();
+        assignRemainingPartitions();
 
         if (!unassignedPartitions.isEmpty()) {
             throw new PartitionAssignorException("Partitions were left unassigned");
@@ -179,165 +167,86 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
     private Map<String, Integer> assignStickyPartitions(int minQuota) {
         Map<String, Integer> potentiallyUnfilledMembers = new HashMap<>();
 
-        assignmentSpec.members().forEach((memberId, assignmentMemberSpec) -> {
-            List<TopicIdPartition> validCurrentMemberAssignment = validCurrentMemberAssignment(
-                assignmentMemberSpec.assignedPartitions()
-            );
+        for (Map.Entry<String, AssignmentMemberSpec> entry : assignmentSpec.members().entrySet()) {
+            String memberId = entry.getKey();
+            AssignmentMemberSpec assignmentMemberSpec = entry.getValue();
+            Map<Uuid, Set<Integer>> oldAssignment = assignmentMemberSpec.assignedPartitions();
+            Map<Uuid, Set<Integer>> newAssignment = null;
 
-            int currentAssignmentSize = validCurrentMemberAssignment.size();
-            // Number of partitions required to meet the minimum quota.
-            int remaining = minQuota - currentAssignmentSize;
+            AtomicInteger quota = new AtomicInteger(minQuota);
+            if (remainingMembersToGetAnExtraPartition > 0) {
+                quota.incrementAndGet();
+                remainingMembersToGetAnExtraPartition--;
+            }
 
-            if (currentAssignmentSize > 0) {
-                int retainedPartitionsCount = min(currentAssignmentSize, minQuota);
-                IntStream.range(0, retainedPartitionsCount).forEach(i -> {
-                    TopicIdPartition topicIdPartition = validCurrentMemberAssignment.get(i);
-                    addPartitionToAssignment(
-                        targetAssignment,
-                        memberId,
-                        topicIdPartition.topicId(),
-                        topicIdPartition.partitionId()
-                    );
-                    unassignedPartitions.remove(topicIdPartition);
-                });
+            for (Map.Entry<Uuid, Set<Integer>> topicPartitions : oldAssignment.entrySet()) {
+                Uuid topicId = topicPartitions.getKey();
+                Set<Integer> partitions = topicPartitions.getValue();
 
-                // The extra partition is located at the last index from the previous step.
-                if (remaining < 0 && remainingMembersToGetAnExtraPartition > 0) {
-                    TopicIdPartition topicIdPartition = validCurrentMemberAssignment.get(retainedPartitionsCount);
-                    addPartitionToAssignment(
-                        targetAssignment,
-                        memberId,
-                        topicIdPartition.topicId(),
-                        topicIdPartition.partitionId()
-                    );
-                    unassignedPartitions.remove(topicIdPartition);
-                    remainingMembersToGetAnExtraPartition--;
+                if (subscribedTopicIds.contains(topicId)) {
+                    for (Integer partition : partitions) {
+                        if (quota.get() > 0) {
+                            quota.decrementAndGet();
+                            unassignedPartitions.remove(new TopicIdPartition(topicId, partition));
+                        } else {
+                            if (newAssignment == null) newAssignment = deepCopy(oldAssignment);
+                            Set<Integer> parts = newAssignment.get(topicId);
+                            parts.remove(partition);
+                            if (parts.isEmpty()) newAssignment.remove(topicId);
+                        }
+                    }
+                } else {
+                    if (newAssignment == null) newAssignment = deepCopy(oldAssignment);
+                    newAssignment.remove(topicId);
                 }
             }
 
-            if (remaining >= 0) {
-                potentiallyUnfilledMembers.put(memberId, remaining);
+            if (quota.get() > 0) {
+                potentiallyUnfilledMembers.put(memberId, quota.get());
             }
-        });
+
+            if (newAssignment == null) {
+                targetAssignment.put(memberId, new MemberAssignment(oldAssignment));
+            } else {
+                targetAssignment.put(memberId, new MemberAssignment(newAssignment));
+            }
+        }
 
         return potentiallyUnfilledMembers;
     }
 
-    /**
-     * Filters the current assignment of partitions for a given member based on certain criteria.
-     *
-     * Any partition that still belongs to the member's subscribed topics list is considered valid.
-     *
-     * @param currentMemberAssignment       The map of topics to partitions currently assigned to the member.
-     *
-     * @return List of valid partitions after applying the filters.
-     */
-    private List<TopicIdPartition> validCurrentMemberAssignment(
-        Map<Uuid, Set<Integer>> currentMemberAssignment
-    ) {
-        List<TopicIdPartition> validCurrentAssignmentList = new ArrayList<>();
-        currentMemberAssignment.forEach((topicId, partitions) -> {
-            if (subscribedTopicIds.contains(topicId)) {
-                partitions.forEach(partition -> {
-                    TopicIdPartition topicIdPartition = new TopicIdPartition(topicId, partition);
-                    validCurrentAssignmentList.add(topicIdPartition);
-                });
-            } else {
-                LOG.debug("The topic " + topicId + " is no longer present in the subscribed topics list");
-            }
-        });
+    private void assignRemainingPartitions() {
+        for (Map.Entry<String, Integer> unfilledMemberEntry : potentiallyUnfilledMembers.entrySet()) {
+            String memberId = unfilledMemberEntry.getKey();
 
-        return validCurrentAssignmentList;
-    }
-
-    /**
-     * Allocates the unassigned partitions to unfilled members in a round-robin fashion.
-     */
-    private void unassignedPartitionsRoundRobinAssignment() {
-        Queue<String> roundRobinMembers = new LinkedList<>(potentiallyUnfilledMembers.keySet());
-
-        // Partitions are sorted to ensure an even topic wise distribution across members.
-        // This not only balances the load but also makes partition-to-member mapping more predictable.
-        List<TopicIdPartition> sortedPartitionsList = unassignedPartitions.stream()
-            .sorted(Comparator.comparing(TopicIdPartition::topicId).thenComparing(TopicIdPartition::partitionId))
-            .collect(Collectors.toList());
-
-        for (TopicIdPartition topicIdPartition : sortedPartitionsList) {
-            boolean assigned = false;
-
-            for (int i = 0; i < roundRobinMembers.size() && !assigned; i++) {
-                String memberId = roundRobinMembers.poll();
-                if (potentiallyUnfilledMembers.containsKey(memberId)) {
-                    assigned = maybeAssignPartitionToMember(memberId, topicIdPartition);
-                }
-                // Only re-add the member to the end of the queue if it's still available for assignment.
-                if (potentiallyUnfilledMembers.containsKey(memberId)) {
-                    roundRobinMembers.add(memberId);
-                }
+            int remaining = unfilledMemberEntry.getValue();
+            if (remainingMembersToGetAnExtraPartition > 0) {
+                remaining++;
+                remainingMembersToGetAnExtraPartition--;
             }
 
-            if (assigned) {
-                unassignedPartitions.remove(topicIdPartition);
+            Map<Uuid, Set<Integer>> newAssignment = targetAssignment.get(memberId).targetPartitions();
+            if (!(newAssignment instanceof HashMap)) {
+                newAssignment = deepCopy(newAssignment);
+                targetAssignment.put(memberId, new MemberAssignment(newAssignment));
+            }
+
+            Iterator<TopicIdPartition> it = unassignedPartitions.iterator();
+            for (int i = 0; i < remaining && it.hasNext(); i++) {
+                TopicIdPartition unassignedTopicIdPartition = it.next();
+                it.remove();
+                newAssignment
+                    .computeIfAbsent(unassignedTopicIdPartition.topicId(), __ -> new HashSet<>())
+                    .add(unassignedTopicIdPartition.partitionId());
             }
         }
     }
 
-    /**
-     * Assigns the specified partition to the given member and updates the potentially unfilled members map.
-     * Only assign extra partitions once the member has met its minimum quota = total partitions / total members.
-     *
-     * <ol>
-     *     <li> If the minimum quota hasn't been met aka remaining > 0 directly assign the partition.
-     *          After assigning the partition, if the min quota has been met aka remaining = 0, remove the member
-     *          if there's no members left to receive an extra partition. Otherwise, keep it in the
-     *          potentially unfilled map. </li>
-     *     <li> If the minimum quota has been met and if there is potential to receive an extra partition, assign it.
-     *          Remove the member from the potentially unfilled map since it has already received the extra partition
-     *          and met the min quota. </li>
-     *     <li> Else, don't assign the partition. </li>
-     * </ol>
-     *
-     * @param memberId              The Id of the member to which the partition will be assigned.
-     * @param topicIdPartition      The topicIdPartition to be assigned.
-     * @return true if the assignment was successful, false otherwise.
-     */
-    private boolean maybeAssignPartitionToMember(String memberId, TopicIdPartition topicIdPartition) {
-        int remaining = potentiallyUnfilledMembers.get(memberId);
-        boolean shouldAssign = false;
-
-        // If the member hasn't met the minimum quota, set the flag for assignment.
-        // If member has met minimum quota and there's an extra partition available, set the flag for assignment.
-        if (remaining > 0) {
-            potentiallyUnfilledMembers.put(memberId, --remaining);
-            shouldAssign = true;
-
-            // If the member meets the minimum quota due to this assignment,
-            // check if any extra partitions are available.
-            // Removing the member from the list reduces an iteration for when remaining = 0 but there's no extras left.
-            if (remaining == 0 && remainingMembersToGetAnExtraPartition == 0) {
-                potentiallyUnfilledMembers.remove(memberId);
-            }
-        } else if (remaining == 0 && remainingMembersToGetAnExtraPartition > 0) {
-            remainingMembersToGetAnExtraPartition--;
-            // Each member can only receive one extra partition, once they meet the minimum quota and receive an extra
-            // partition they can be removed from the potentially unfilled members map.
-            potentiallyUnfilledMembers.remove(memberId);
-            shouldAssign = true;
+    private static Map<Uuid, Set<Integer>> deepCopy(Map<Uuid, Set<Integer>> map) {
+        Map<Uuid, Set<Integer>> copy = new HashMap<>(map.size());
+        for (Map.Entry<Uuid, Set<Integer>> entry : map.entrySet()) {
+            copy.put(entry.getKey(), new HashSet<>(entry.getValue()));
         }
-
-        // Assign the partition if flag is set.
-        if (shouldAssign) {
-            addPartitionToAssignment(
-                targetAssignment,
-                memberId,
-                topicIdPartition.topicId(),
-                topicIdPartition.partitionId()
-            );
-            return true;
-        }
-
-        // No assignment possible because the member met the minimum quota but
-        // number of members to receive an extra partition is zero.
-        return false;
+        return copy;
     }
 }

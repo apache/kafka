@@ -88,25 +88,25 @@ public class ServerSideAssignorBenchmark {
         FULL, INCREMENTAL
     }
 
-    @Param({"100", "500", "1000", "5000", "10000"})
+    @Param({"10000"})
     private int memberCount;
 
-    @Param({"5", "10", "50"})
+    @Param({"10"})
     private int partitionsToMemberRatio;
 
-    @Param({"10", "100", "1000"})
+    @Param({"100"})
     private int topicCount;
 
-    @Param({"true", "false"})
+    @Param({"true"})
     private boolean isRackAware;
 
-    @Param({"HOMOGENEOUS", "HETEROGENEOUS"})
+    @Param({"HOMOGENEOUS"})
     private SubscriptionType subscriptionType;
 
-    @Param({"RANGE", "UNIFORM"})
+    @Param({"UNIFORM"})
     private AssignorType assignorType;
 
-    @Param({"FULL", "INCREMENTAL"})
+    @Param({"INCREMENTAL"})
     private AssignmentType assignmentType;
 
     private PartitionAssignor partitionAssignor;
