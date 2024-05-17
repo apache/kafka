@@ -20,56 +20,65 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.ShortNode;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.generated.QuorumStateData;
-import org.apache.kafka.raft.generated.QuorumStateData.Voter;
 import org.apache.kafka.raft.generated.QuorumStateDataJsonConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
-import java.io.UncheckedIOException;
 import java.io.EOFException;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
-import java.util.OptionalInt;
-import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.Optional;
 
 /**
  * Local file based quorum state store. It takes the JSON format of {@link QuorumStateData}
- * with an extra data version number as part of the data for easy deserialization.
+ * with an extra data version number field (data_version) as part of the data.
  *
- * Example format:
+ * Example version 0 format:
  * <pre>
- * {"clusterId":"",
- *   "leaderId":1,
- *   "leaderEpoch":2,
- *   "votedId":-1,
- *   "appliedOffset":0,
- *   "currentVoters":[],
- *   "data_version":0}
+ * {
+ *   "clusterId": "",
+ *   "leaderId": 1,
+ *   "leaderEpoch": 2,
+ *   "votedId": -1,
+ *   "appliedOffset": 0,
+ *   "currentVoters": [],
+ *   "data_version": 0
+ * }
+ * </pre>
+ *
+ * Example version 1 format:
+ * <pre>
+ * {
+ *   "leaderId": -1,
+ *   "leaderEpoch": 2,
+ *   "votedId": 1,
+ *   "votedDirectoryId": "J8aAPcfLQt2bqs1JT_rMgQ",
+ *   "data_version": 1
+ * }
  * </pre>
  * */
-public class FileBasedStateStore implements QuorumStateStore {
-    private static final Logger log = LoggerFactory.getLogger(FileBasedStateStore.class);
+public class FileQuorumStateStore implements QuorumStateStore {
+    private static final Logger log = LoggerFactory.getLogger(FileQuorumStateStore.class);
     private static final String DATA_VERSION = "data_version";
 
-    static final short HIGHEST_SUPPORTED_VERSION = 0;
+    static final short LOWEST_SUPPORTED_VERSION = 0;
+    static final short HIGHEST_SUPPORTED_VERSION = 1;
 
     public static final String DEFAULT_FILE_NAME = "quorum-state";
 
     private final File stateFile;
 
-    public FileBasedStateStore(final File stateFile) {
+    public FileQuorumStateStore(final File stateFile) {
         this.stateFile = stateFile;
     }
 
@@ -95,11 +104,18 @@ public class FileBasedStateStore implements QuorumStateStore {
                     " does not have " + DATA_VERSION + " field");
             }
 
-            if (dataVersionNode.asInt() != 0) {
-                throw new UnsupportedVersionException("Unknown data version of " + dataVersionNode);
+            final short dataVersion = dataVersionNode.shortValue();
+            if (dataVersion < LOWEST_SUPPORTED_VERSION || dataVersion > HIGHEST_SUPPORTED_VERSION) {
+                throw new IllegalStateException(
+                    String.format(
+                        "data_version (%d) is not within the min (%d) and max ($d) supported version",
+                        dataVersion,
+                        LOWEST_SUPPORTED_VERSION,
+                        HIGHEST_SUPPORTED_VERSION
+                    )
+                );
             }
 
-            final short dataVersion = dataVersionNode.shortValue();
             return QuorumStateDataJsonConverter.read(dataObject, dataVersion);
         } catch (IOException e) {
             throw new UncheckedIOException(
@@ -111,30 +127,23 @@ public class FileBasedStateStore implements QuorumStateStore {
      * Reads the election state from local file.
      */
     @Override
-    public ElectionState readElectionState() {
+    public Optional<ElectionState> readElectionState() {
         if (!stateFile.exists()) {
-            return null;
+            return Optional.empty();
         }
 
-        QuorumStateData data = readStateFromFile(stateFile);
-
-        return new ElectionState(data.leaderEpoch(),
-            data.leaderId() == UNKNOWN_LEADER_ID ? OptionalInt.empty() :
-                OptionalInt.of(data.leaderId()),
-            data.votedId() == NOT_VOTED ? OptionalInt.empty() :
-                OptionalInt.of(data.votedId()),
-            data.currentVoters()
-                .stream().map(Voter::voterId).collect(Collectors.toSet()));
+        return Optional.of(ElectionState.fromQuorumStateData(readStateFromFile(stateFile)));
     }
 
     @Override
-    public void writeElectionState(ElectionState latest) {
-        QuorumStateData data = new QuorumStateData()
-            .setLeaderEpoch(latest.epoch)
-            .setVotedId(latest.hasVoted() ? latest.votedId() : NOT_VOTED)
-            .setLeaderId(latest.hasLeader() ? latest.leaderId() : UNKNOWN_LEADER_ID)
-            .setCurrentVoters(voters(latest.voters()));
-        writeElectionStateToFile(stateFile, data);
+    public void writeElectionState(ElectionState latest, short kraftVersion) {
+        short quorumStateVersion = quorumStateVersionFromKRaftVersion(kraftVersion);
+
+        writeElectionStateToFile(
+            stateFile,
+            latest.toQuorumStateData(quorumStateVersion),
+            quorumStateVersion
+        );
     }
 
     @Override
@@ -142,12 +151,28 @@ public class FileBasedStateStore implements QuorumStateStore {
         return stateFile.toPath();
     }
 
-    private List<Voter> voters(Set<Integer> votersId) {
-        return votersId.stream().map(
-            voterId -> new Voter().setVoterId(voterId)).collect(Collectors.toList());
+    private short quorumStateVersionFromKRaftVersion(short kraftVersion) {
+        if (kraftVersion == 0) {
+            return 0;
+        } else if (kraftVersion == 1) {
+            return 1;
+        } else {
+            throw new IllegalArgumentException(
+                String.format("Unknown kraft.version %d", kraftVersion)
+            );
+        }
     }
 
-    private void writeElectionStateToFile(final File stateFile, QuorumStateData state) {
+    private void writeElectionStateToFile(final File stateFile, QuorumStateData state, short version) {
+        if (version > HIGHEST_SUPPORTED_VERSION) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Quorum state data version (%d) is greater than the supported version (%d)",
+                    version,
+                    HIGHEST_SUPPORTED_VERSION
+                )
+            );
+        }
         final File temp = new File(stateFile.getAbsolutePath() + ".tmp");
         deleteFileIfExists(temp);
 
@@ -159,8 +184,8 @@ public class FileBasedStateStore implements QuorumStateStore {
                      new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8)
                  )
             ) {
-                ObjectNode jsonState = (ObjectNode) QuorumStateDataJsonConverter.write(state, HIGHEST_SUPPORTED_VERSION);
-                jsonState.set(DATA_VERSION, new ShortNode(HIGHEST_SUPPORTED_VERSION));
+                ObjectNode jsonState = (ObjectNode) QuorumStateDataJsonConverter.write(state, version);
+                jsonState.set(DATA_VERSION, new ShortNode(version));
                 writer.write(jsonState.toString());
                 writer.flush();
                 fileOutputStream.getFD().sync();

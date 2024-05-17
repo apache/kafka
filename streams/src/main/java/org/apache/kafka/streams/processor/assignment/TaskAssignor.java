@@ -66,9 +66,9 @@ public interface TaskAssignor extends Configurable {
      * be thrown up to kill the StreamThread and can be handled as any other uncaught exception would if the application
      * has registered a {@link StreamsUncaughtExceptionHandler}.
      *
-     * @param assignment:   the final assignment returned to the kafka broker
-     * @param subscription: the original subscription passed into the assignor
-     * @param error:        the corresponding error type if one was detected while processing the returned assignment,
+     * @param assignment    the final assignment returned to the kafka broker
+     * @param subscription  the original subscription passed into the assignor
+     * @param error         the corresponding error type if one was detected while processing the returned assignment,
      *                      or AssignmentError.NONE if the returned assignment was valid
      */
     default void onAssignmentComputed(GroupAssignment assignment, GroupSubscription subscription, AssignmentError error) {}

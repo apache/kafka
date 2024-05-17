@@ -202,7 +202,9 @@ public final class RecordsIteratorTest {
     @Test
     public void testControlRecordIterationWithKraftVerion1() {
         AtomicReference<ByteBuffer> buffer = new AtomicReference<>(null);
-        VoterSet voterSet = new VoterSet(new HashMap<>(VoterSetTest.voterMap(Arrays.asList(1, 2, 3))));
+        VoterSet voterSet = new VoterSet(
+            new HashMap<>(VoterSetTest.voterMap(Arrays.asList(1, 2, 3), true))
+        );
         RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder()
             .setTime(new MockTime())
             .setKraftVersion((short) 1)
