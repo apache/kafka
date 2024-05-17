@@ -82,7 +82,7 @@ public class KafkaEventQueueTest {
 
     @BeforeEach
     public void setUp(TestInfo testInfo) {
-        logContext = new LogContext("[test=" + testInfo.getDisplayName() + "]");
+        logContext = new LogContext("[KafkaEventQueue test=" + testInfo.getDisplayName() + "]");
     }
 
     @Test
