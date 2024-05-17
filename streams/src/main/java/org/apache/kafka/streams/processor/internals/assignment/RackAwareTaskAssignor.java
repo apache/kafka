@@ -325,7 +325,7 @@ public class RackAwareTaskAssignor {
         }
         final List<UUID> clientList = new ArrayList<>(clientStates.keySet());
         final List<TaskId> taskIdList = new ArrayList<>(tasks);
-        final Graph<Integer> graph = new MinTrafficGraphConstructor()
+        final Graph<Integer> graph = new MinTrafficGraphConstructor<ClientState>()
             .constructTaskGraph(
                 clientList,
                 taskIdList,
@@ -373,7 +373,7 @@ public class RackAwareTaskAssignor {
         final List<TaskId> taskIdList = new ArrayList<>(activeTasks);
         final Map<TaskId, UUID> taskClientMap = new HashMap<>();
         final Map<UUID, Integer> originalAssignedTaskNumber = new HashMap<>();
-        final RackAwareGraphConstructor graphConstructor = RackAwareGraphConstructorFactory.create(assignmentConfigs, tasksForTopicGroup);
+        final RackAwareGraphConstructor<ClientState> graphConstructor = RackAwareGraphConstructorFactory.create(assignmentConfigs, tasksForTopicGroup);
         final Graph<Integer> graph = graphConstructor.constructTaskGraph(
             clientList,
             taskIdList,
@@ -419,7 +419,7 @@ public class RackAwareTaskAssignor {
 
         boolean taskMoved = true;
         int round = 0;
-        final RackAwareGraphConstructor graphConstructor = new MinTrafficGraphConstructor();
+        final RackAwareGraphConstructor<ClientState> graphConstructor = new MinTrafficGraphConstructor<>();
         while (taskMoved && round < STANDBY_OPTIMIZER_MAX_ITERATION) {
             taskMoved = false;
             round++;

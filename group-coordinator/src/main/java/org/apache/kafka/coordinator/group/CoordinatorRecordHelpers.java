@@ -46,14 +46,13 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * This class contains helper methods to create records stored in
  * the __consumer_offsets topic.
  */
-public class RecordHelpers {
-    private RecordHelpers() {}
+public class CoordinatorRecordHelpers {
+    private CoordinatorRecordHelpers() {}
 
     /**
      * Creates a ConsumerGroupMemberMetadata record.
@@ -62,11 +61,11 @@ public class RecordHelpers {
      * @param member    The consumer group member.
      * @return The record.
      */
-    public static Record newMemberSubscriptionRecord(
+    public static CoordinatorRecord newMemberSubscriptionRecord(
         String groupId,
         ConsumerGroupMember member
     ) {
-        return new Record(
+        return new CoordinatorRecord(
             new ApiMessageAndVersion(
                 new ConsumerGroupMemberMetadataKey()
                     .setGroupId(groupId)
@@ -96,11 +95,11 @@ public class RecordHelpers {
      * @param memberId  The consumer group member id.
      * @return The record.
      */
-    public static Record newMemberSubscriptionTombstoneRecord(
+    public static CoordinatorRecord newMemberSubscriptionTombstoneRecord(
         String groupId,
         String memberId
     ) {
-        return new Record(
+        return new CoordinatorRecord(
             new ApiMessageAndVersion(
                 new ConsumerGroupMemberMetadataKey()
                     .setGroupId(groupId)
@@ -118,7 +117,7 @@ public class RecordHelpers {
      * @param newSubscriptionMetadata   The subscription metadata.
      * @return The record.
      */
-    public static Record newGroupSubscriptionMetadataRecord(
+    public static CoordinatorRecord newGroupSubscriptionMetadataRecord(
         String groupId,
         Map<String, TopicMetadata> newSubscriptionMetadata
     ) {
@@ -142,7 +141,7 @@ public class RecordHelpers {
             );
         });
 
-        return new Record(
+        return new CoordinatorRecord(
             new ApiMessageAndVersion(
                 new ConsumerGroupPartitionMetadataKey()
                     .setGroupId(groupId),
@@ -161,10 +160,10 @@ public class RecordHelpers {
      * @param groupId   The consumer group id.
      * @return The record.
      */
-    public static Record newGroupSubscriptionMetadataTombstoneRecord(
+    public static CoordinatorRecord newGroupSubscriptionMetadataTombstoneRecord(
         String groupId
     ) {
-        return new Record(
+        return new CoordinatorRecord(
             new ApiMessageAndVersion(
                 new ConsumerGroupPartitionMetadataKey()
                     .setGroupId(groupId),
@@ -181,11 +180,11 @@ public class RecordHelpers {
      * @param newGroupEpoch The consumer group epoch.
      * @return The record.
      */
-    public static Record newGroupEpochRecord(
+    public static CoordinatorRecord newGroupEpochRecord(
         String groupId,
         int newGroupEpoch
     ) {
-        return new Record(
+        return new CoordinatorRecord(
             new ApiMessageAndVersion(
                 new ConsumerGroupMetadataKey()
                     .setGroupId(groupId),
@@ -205,10 +204,10 @@ public class RecordHelpers {
      * @param groupId   The consumer group id.
      * @return The record.
      */
-    public static Record newGroupEpochTombstoneRecord(
+    public static CoordinatorRecord newGroupEpochTombstoneRecord(
         String groupId
     ) {
-        return new Record(
+        return new CoordinatorRecord(
             new ApiMessageAndVersion(
                 new ConsumerGroupMetadataKey()
                     .setGroupId(groupId),
@@ -226,12 +225,23 @@ public class RecordHelpers {
      * @param partitions    The target partitions of the member.
      * @return The record.
      */
-    public static Record newTargetAssignmentRecord(
+    public static CoordinatorRecord newTargetAssignmentRecord(
         String groupId,
         String memberId,
         Map<Uuid, Set<Integer>> partitions
     ) {
-        return new Record(
+        List<ConsumerGroupTargetAssignmentMemberValue.TopicPartition> topicPartitions =
+            new ArrayList<>(partitions.size());
+
+        for (Map.Entry<Uuid, Set<Integer>> entry : partitions.entrySet()) {
+            topicPartitions.add(
+                new ConsumerGroupTargetAssignmentMemberValue.TopicPartition()
+                    .setTopicId(entry.getKey())
+                    .setPartitions(new ArrayList<>(entry.getValue()))
+            );
+        }
+
+        return new CoordinatorRecord(
             new ApiMessageAndVersion(
                 new ConsumerGroupTargetAssignmentMemberKey()
                     .setGroupId(groupId)
@@ -240,11 +250,7 @@ public class RecordHelpers {
             ),
             new ApiMessageAndVersion(
                 new ConsumerGroupTargetAssignmentMemberValue()
-                    .setTopicPartitions(partitions.entrySet().stream()
-                        .map(keyValue -> new ConsumerGroupTargetAssignmentMemberValue.TopicPartition()
-                            .setTopicId(keyValue.getKey())
-                            .setPartitions(new ArrayList<>(keyValue.getValue())))
-                        .collect(Collectors.toList())),
+                    .setTopicPartitions(topicPartitions),
                 (short) 0
             )
         );
@@ -257,11 +263,11 @@ public class RecordHelpers {
      * @param memberId      The consumer group member id.
      * @return The record.
      */
-    public static Record newTargetAssignmentTombstoneRecord(
+    public static CoordinatorRecord newTargetAssignmentTombstoneRecord(
         String groupId,
         String memberId
     ) {
-        return new Record(
+        return new CoordinatorRecord(
             new ApiMessageAndVersion(
                 new ConsumerGroupTargetAssignmentMemberKey()
                     .setGroupId(groupId)
@@ -279,11 +285,11 @@ public class RecordHelpers {
      * @param assignmentEpoch   The consumer group epoch.
      * @return The record.
      */
-    public static Record newTargetAssignmentEpochRecord(
+    public static CoordinatorRecord newTargetAssignmentEpochRecord(
         String groupId,
         int assignmentEpoch
     ) {
-        return new Record(
+        return new CoordinatorRecord(
             new ApiMessageAndVersion(
                 new ConsumerGroupTargetAssignmentMetadataKey()
                     .setGroupId(groupId),
@@ -303,10 +309,10 @@ public class RecordHelpers {
      * @param groupId   The consumer group id.
      * @return The record.
      */
-    public static Record newTargetAssignmentEpochTombstoneRecord(
+    public static CoordinatorRecord newTargetAssignmentEpochTombstoneRecord(
         String groupId
     ) {
-        return new Record(
+        return new CoordinatorRecord(
             new ApiMessageAndVersion(
                 new ConsumerGroupTargetAssignmentMetadataKey()
                     .setGroupId(groupId),
@@ -323,11 +329,11 @@ public class RecordHelpers {
      * @param member    The consumer group member.
      * @return The record.
      */
-    public static Record newCurrentAssignmentRecord(
+    public static CoordinatorRecord newCurrentAssignmentRecord(
         String groupId,
         ConsumerGroupMember member
     ) {
-        return new Record(
+        return new CoordinatorRecord(
             new ApiMessageAndVersion(
                 new ConsumerGroupCurrentMemberAssignmentKey()
                     .setGroupId(groupId)
@@ -353,11 +359,11 @@ public class RecordHelpers {
      * @param memberId  The consumer group member id.
      * @return The record.
      */
-    public static Record newCurrentAssignmentTombstoneRecord(
+    public static CoordinatorRecord newCurrentAssignmentTombstoneRecord(
         String groupId,
         String memberId
     ) {
-        return new Record(
+        return new CoordinatorRecord(
             new ApiMessageAndVersion(
                 new ConsumerGroupCurrentMemberAssignmentKey()
                     .setGroupId(groupId)
@@ -376,7 +382,7 @@ public class RecordHelpers {
      * @param metadataVersion    The metadata version.
      * @return The record.
      */
-    public static Record newGroupMetadataRecord(
+    public static CoordinatorRecord newGroupMetadataRecord(
         ClassicGroup group,
         Map<String, byte[]> assignment,
         MetadataVersion metadataVersion
@@ -407,7 +413,7 @@ public class RecordHelpers {
             );
         });
 
-        return new Record(
+        return new CoordinatorRecord(
             new ApiMessageAndVersion(
                 new GroupMetadataKey()
                     .setGroup(group.groupId()),
@@ -432,10 +438,10 @@ public class RecordHelpers {
      * @param groupId  The group id.
      * @return The record.
      */
-    public static Record newGroupMetadataTombstoneRecord(
+    public static CoordinatorRecord newGroupMetadataTombstoneRecord(
         String groupId
     ) {
-        return new Record(
+        return new CoordinatorRecord(
             new ApiMessageAndVersion(
                 new GroupMetadataKey()
                     .setGroup(groupId),
@@ -452,11 +458,11 @@ public class RecordHelpers {
      * @param metadataVersion    The metadata version.
      * @return The record.
      */
-    public static Record newEmptyGroupMetadataRecord(
+    public static CoordinatorRecord newEmptyGroupMetadataRecord(
         ClassicGroup group,
         MetadataVersion metadataVersion
     ) {
-        return new Record(
+        return new CoordinatorRecord(
             new ApiMessageAndVersion(
                 new GroupMetadataKey()
                     .setGroup(group.groupId()),
@@ -485,7 +491,7 @@ public class RecordHelpers {
      * @param metadataVersion   The metadata version.
      * @return The record.
      */
-    public static Record newOffsetCommitRecord(
+    public static CoordinatorRecord newOffsetCommitRecord(
         String groupId,
         String topic,
         int partitionId,
@@ -494,7 +500,7 @@ public class RecordHelpers {
     ) {
         short version = metadataVersion.offsetCommitValueVersion(offsetAndMetadata.expireTimestampMs.isPresent());
 
-        return new Record(
+        return new CoordinatorRecord(
             new ApiMessageAndVersion(
                 new OffsetCommitKey()
                     .setGroup(groupId)
@@ -523,12 +529,12 @@ public class RecordHelpers {
      * @param partitionId       The partition id.
      * @return The record.
      */
-    public static Record newOffsetCommitTombstoneRecord(
+    public static CoordinatorRecord newOffsetCommitTombstoneRecord(
         String groupId,
         String topic,
         int partitionId
     ) {
-        return new Record(
+        return new CoordinatorRecord(
             new ApiMessageAndVersion(
                 new OffsetCommitKey()
                     .setGroup(groupId)
