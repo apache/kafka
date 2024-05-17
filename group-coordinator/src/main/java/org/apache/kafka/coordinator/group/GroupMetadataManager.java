@@ -1753,6 +1753,7 @@ public class GroupMetadataManager {
         CompletableFuture<Void> appendFuture = new CompletableFuture<>();
         appendFuture.whenComplete((__, t) -> {
             if (t == null) {
+                cancelConsumerGroupJoinTimeout(groupId, response.memberId());
                 scheduleConsumerGroupSessionTimeout(groupId, response.memberId(), sessionTimeoutMs);
                 // The sync timeout ensures that the member send sync request within the rebalance timeout.
                 scheduleConsumerGroupSyncTimeout(groupId, response.memberId(), request.rebalanceTimeoutMs());
@@ -2222,7 +2223,7 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Cancels the sync timeout of the member.
+     * Cancels the join timeout of the member.
      *
      * @param groupId       The group id.
      * @param memberId      The member id.
