@@ -48,15 +48,6 @@
 
       { "name": "ProcessId", "type": "uuid", "versions": "0+",
         "about": "Identity of the streams instance that may have multiple consumers. " },
-      { "name": "HostInfo", "type": "HostInfo", "versions": "0+",
-        "about": "Host information for running interactive queries on this instance. ",
-        "fields": [
-          { "name": "Host", "type": "string", "versions": "0+",
-            "about": "Host for running interactive queries on this instance." },
-          { "name": "Port", "type": "int32", "versions": "0+",
-            "about": "Port for running interactive queries on this instance." }
-        ]
-      },
       { "name": "ClientTags", "type": "[]KeyValue", "versions": "0+",
         "about": "Used for rack-aware assignment algorithm." },
       { "name": "TaskOffsetUpdateReason", "type":  "int8", "versions": "0+", "default": 0,
