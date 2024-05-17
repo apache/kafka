@@ -202,7 +202,7 @@ public class ConfigCommandOptions extends CommandDefaultOptions {
 
         List<String> entityTypeVals = entityTypes();
         if (entityTypeVals.size() != new HashSet<>(entityTypeVals).size())
-            throw new IllegalArgumentException("Duplicate entity type(s) specified: " + Utils.join(Utils.diff(HashSet::new, new HashSet<>(entityTypeVals), new HashSet<>(entityTypeVals)), ","));
+            throw new IllegalArgumentException("Duplicate entity type(s) specified: " + String.join(",", Utils.diff(HashSet::new, new HashSet<>(entityTypeVals), new HashSet<>(entityTypeVals))));
 
         List<String> allowedEntityTypes;
         String connectOptString;
@@ -217,7 +217,7 @@ public class ConfigCommandOptions extends CommandDefaultOptions {
 
         entityTypeVals.forEach(entityTypeVal -> {
             if (!allowedEntityTypes.contains(entityTypeVal))
-                throw new IllegalArgumentException("Invalid entity type " + entityTypeVal + ", the entity type must be one of " + Utils.join(allowedEntityTypes, ", ") + " with a " + connectOptString + " argument");
+                throw new IllegalArgumentException("Invalid entity type " + entityTypeVal + ", the entity type must be one of " + String.join(", ", allowedEntityTypes) + " with a " + connectOptString + " argument");
         });
 
         if (entityTypeVals.isEmpty())
@@ -264,7 +264,7 @@ public class ConfigCommandOptions extends CommandDefaultOptions {
         }
 
         if (options.has(describeOpt) && entityTypeVals.contains(ConfigCommand.BROKER_LOGGER_CONFIG_TYPE) && !hasEntityName)
-            throw new IllegalArgumentException("an entity name must be specified with --describe of " + Utils.join(entityTypeVals, ","));
+            throw new IllegalArgumentException("an entity name must be specified with --describe of " + String.join(",", entityTypeVals));
 
         if (options.has(alterOpt)) {
             if (entityTypeVals.contains(ConfigType.USER) ||
@@ -274,7 +274,7 @@ public class ConfigCommandOptions extends CommandDefaultOptions {
                 if (!hasEntityName && !hasEntityDefault)
                     throw new IllegalArgumentException("an entity-name or default entity must be specified with --alter of users, clients, brokers or ips");
             } else if (!hasEntityName)
-                throw new IllegalArgumentException("an entity name must be specified with --alter of " + Utils.join(entityTypeVals, ","));
+                throw new IllegalArgumentException("an entity name must be specified with --alter of " + String.join(",", entityTypeVals));
 
             boolean isAddConfigPresent = options.has(addConfig);
             boolean isAddConfigFilePresent = options.has(addConfigFile);

@@ -154,12 +154,12 @@ public class ConfigCommand {
                 processCommand(opts);
             }
         } catch (IllegalArgumentException | InvalidConfigurationException | OptionException e) {
-            LOGGER.debug("Failed config command with args '" + Utils.join(args, " ") + "'", e);
+            LOGGER.debug("Failed config command with args '" + String.join(" ", args) + "'", e);
             System.err.println(e.getMessage());
             Exit.exit(1, scala.None$.empty());
         } catch (Throwable t) {
-            LOGGER.debug("Error while executing config command with args '" + Utils.join(args, " ") + "'", t);
-            System.err.println("Error while executing config command with args '" + Utils.join(args, " ") + "'");
+            LOGGER.debug("Error while executing config command with args '" + String.join(" ", args) + "'", t);
+            System.err.println("Error while executing config command with args '" + String.join(" ", args) + "'");
             t.printStackTrace(System.err);
             Exit.exit(1, scala.None$.empty());
         }
@@ -170,7 +170,7 @@ public class ConfigCommand {
                 .getOrElse(ZKClientConfig::new);
         KafkaZkClient zkClient = KafkaZkClient.apply(zkConnectString, JaasUtils.isZkSaslEnabled() || KafkaConfig.zkTlsClientAuthEnabled(zkClientConfig), 30000, 30000,
                 Integer.MAX_VALUE, Time.SYSTEM, "ConfigCommand", zkClientConfig,
-                "kafka.server", "SessionExpireListener", false);
+                "kafka.server", "SessionExpireListener", false, true);
         AdminZkClient adminZkClient = new AdminZkClient(zkClient, scala.None$.empty());
         try {
             if (opts.options.has(opts.alterOpt))
@@ -218,7 +218,7 @@ public class ConfigCommand {
         // fail the command if any of the configs to be deleted does not exist
         List<String> invalidConfigs = configsToBeDeleted.stream().filter(c -> !configs.containsKey(c)).collect(Collectors.toList());
         if (!invalidConfigs.isEmpty())
-            throw new InvalidConfigurationException("Invalid config(s): " + Utils.join(invalidConfigs, ","));
+            throw new InvalidConfigurationException("Invalid config(s): " + String.join(",", invalidConfigs));
 
         configs.putAll(configsToBeAdded);
         configsToBeDeleted.forEach(configs::remove);
