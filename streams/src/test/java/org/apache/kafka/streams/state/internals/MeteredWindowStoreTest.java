@@ -52,6 +52,7 @@ import org.mockito.junit.MockitoJUnitRunner;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static java.time.Instant.ofEpochMilli;
@@ -94,11 +95,12 @@ public class MeteredWindowStoreTest {
     private InternalMockProcessorContext context;
     @SuppressWarnings("unchecked")
     private final WindowStore<Bytes, byte[]> innerStoreMock = mock(WindowStore.class);
+    private final MockTime mockTime = new MockTime();
     private MeteredWindowStore<String, String> store = new MeteredWindowStore<>(
         innerStoreMock,
         WINDOW_SIZE_MS, // any size
         STORE_TYPE,
-        new MockTime(),
+        mockTime,
         Serdes.String(),
         new SerdeThatDoesntHandleNull()
     );
@@ -461,6 +463,36 @@ public class MeteredWindowStoreTest {
         }
 
         assertThat((Integer) openIteratorsMetric.metricValue(), equalTo(0));
+    }
+
+    @Test
+    public void shouldTimeIteratorDuration() {
+        when(innerStoreMock.all()).thenReturn(KeyValueIterators.emptyIterator());
+        store.init((StateStoreContext) context, store);
+
+        final KafkaMetric iteratorDurationAvgMetric = metric("iterator-duration-avg");
+        final KafkaMetric iteratorDurationMaxMetric = metric("iterator-duration-max");
+        assertThat(iteratorDurationAvgMetric, not(nullValue()));
+        assertThat(iteratorDurationMaxMetric, not(nullValue()));
+
+        assertThat((Double) iteratorDurationAvgMetric.metricValue(), equalTo(Double.NaN));
+        assertThat((Double) iteratorDurationMaxMetric.metricValue(), equalTo(Double.NaN));
+
+        try (final KeyValueIterator<Windowed<String>, String> iterator = store.all()) {
+            // nothing to do, just close immediately
+            mockTime.sleep(2);
+        }
+
+        assertThat((double) iteratorDurationAvgMetric.metricValue(), equalTo(2.0 * TimeUnit.MILLISECONDS.toNanos(1)));
+        assertThat((double) iteratorDurationMaxMetric.metricValue(), equalTo(2.0 * TimeUnit.MILLISECONDS.toNanos(1)));
+
+        try (final KeyValueIterator<Windowed<String>, String> iterator = store.all()) {
+            // nothing to do, just close immediately
+            mockTime.sleep(3);
+        }
+
+        assertThat((double) iteratorDurationAvgMetric.metricValue(), equalTo(2.5 * TimeUnit.MILLISECONDS.toNanos(1)));
+        assertThat((double) iteratorDurationMaxMetric.metricValue(), equalTo(3.0 * TimeUnit.MILLISECONDS.toNanos(1)));
     }
 
     private KafkaMetric metric(final String name) {

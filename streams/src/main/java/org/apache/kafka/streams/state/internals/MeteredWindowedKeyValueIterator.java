@@ -30,7 +30,8 @@ import java.util.function.Function;
 class MeteredWindowedKeyValueIterator<K, V> implements KeyValueIterator<Windowed<K>, V> {
 
     private final KeyValueIterator<Windowed<Bytes>, byte[]> iter;
-    private final Sensor sensor;
+    private final Sensor operationSensor;
+    private final Sensor iteratorSensor;
     private final StreamsMetrics metrics;
     private final Function<byte[], K> deserializeKey;
     private final Function<byte[], V> deserializeValue;
@@ -39,14 +40,16 @@ class MeteredWindowedKeyValueIterator<K, V> implements KeyValueIterator<Windowed
     private final AtomicInteger numOpenIterators;
 
     MeteredWindowedKeyValueIterator(final KeyValueIterator<Windowed<Bytes>, byte[]> iter,
-                                    final Sensor sensor,
+                                    final Sensor operationSensor,
+                                    final Sensor iteratorSensor,
                                     final StreamsMetrics metrics,
                                     final Function<byte[], K> deserializeKey,
                                     final Function<byte[], V> deserializeValue,
                                     final Time time,
                                     final AtomicInteger numOpenIterators) {
         this.iter = iter;
-        this.sensor = sensor;
+        this.operationSensor = operationSensor;
+        this.iteratorSensor = iteratorSensor;
         this.metrics = metrics;
         this.deserializeKey = deserializeKey;
         this.deserializeValue = deserializeValue;
@@ -77,7 +80,9 @@ class MeteredWindowedKeyValueIterator<K, V> implements KeyValueIterator<Windowed
         try {
             iter.close();
         } finally {
-            sensor.record(time.nanoseconds() - startNs);
+            final long duration = time.nanoseconds() - startNs;
+            operationSensor.record(duration);
+            iteratorSensor.record(duration);
             numOpenIterators.decrementAndGet();
         }
     }
