@@ -79,10 +79,10 @@ trait LowPrioritySerdes {
 
   implicit val nullSerde: Serde[Null] =
     Serdes.fromFn[Null](
-      { _: Null =>
+      { (_: Null) =>
         null
       },
-      { _: Array[Byte] =>
+      { (_: Array[Byte]) =>
         None
       }
     )

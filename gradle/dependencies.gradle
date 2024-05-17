@@ -29,6 +29,7 @@ ext {
 // Add Scala version
 def defaultScala212Version = '2.12.18'
 def defaultScala213Version = '2.13.12'
+def defaultScala3Version = '3.3.1'
 if (hasProperty('scalaVersion')) {
   if (scalaVersion == '2.12') {
     versions["scala"] = defaultScala212Version
@@ -41,6 +42,20 @@ if (hasProperty('scalaVersion')) {
   versions["scala"] = defaultScala212Version
 }
 
+if (hasProperty('streamsScalaVersion')) {
+  if (streamsScalaVersion == '2.12') {
+    versions["streamsScala"] = defaultScala212Version
+  } else if (streamsScalaVersion == '2.13') {
+    versions["streamsScala"] = defaultScala213Version
+  } else if (streamsScalaVersion == '3') {
+    versions["streamsScala"] = defaultScala3Version
+  } else {
+    versions["streamsScala"] = streamsScalaVersion
+  }
+} else {
+  versions["streamsScala"] = versions["scala"]
+}
+
 /* Resolve base Scala version according to these patterns:
  1. generally available Scala versions (such as: 2.12.y and 2.13.z) corresponding base versions will be: 2.12 and 2.13 (respectively)
  2. pre-release Scala versions (i.e. milestone/rc, such as: 2.13.0-M5, 2.13.0-RC1, 2.14.0-M1, etc.) will have identical base versions;
@@ -51,6 +66,15 @@ if ( !versions.scala.contains('-') ) {
   versions["baseScala"] = versions.scala.substring(0, versions.scala.lastIndexOf("."))
 } else {
   versions["baseScala"] = versions.scala
+}
+
+versions["streamsBaseScala"] =
+  versions.streamsScala.startsWith('2.12.') ? '2.12' :
+  versions.streamsScala.startsWith('2.13.') ? '2.13' :
+  '3'
+
+if ( versions["baseScala"] == '2.12' && versions["streamsBaseScala"] != '2.12' ) {
+  throw new GradleException("core Scala version and Streams Scala version are incompatible!")
 }
 
 // mockito >= 5.5 is required for Java 21 and mockito 5.x requires at least Java 11
@@ -253,6 +277,10 @@ libs += [
   scalaCollectionCompat: "org.scala-lang.modules:scala-collection-compat_$versions.baseScala:$versions.scalaCollectionCompat",
   scalaJava8Compat: "org.scala-lang.modules:scala-java8-compat_$versions.baseScala:$versions.scalaJava8Compat",
   scalaLibrary: "org.scala-lang:scala-library:$versions.scala",
+  streamsScalaLibrary:
+    versions.streamsBaseScala == '3' ?
+      "org.scala-lang:scala3-library_$versions.streamsBaseScala:$versions.streamsScala" :
+      "org.scala-lang:scala-library:$versions.streamsScala",
   scalaLogging: "com.typesafe.scala-logging:scala-logging_$versions.baseScala:$versions.scalaLogging",
   scalaReflect: "org.scala-lang:scala-reflect:$versions.scala",
   slf4jApi: "org.slf4j:slf4j-api:$versions.slf4j",

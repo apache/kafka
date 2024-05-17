@@ -316,7 +316,7 @@ def sanitize_input(input_msg: str) -> str:
     """
     input_from_user = input(input_msg)
     return input_from_user.strip()
-     
+
 
 def command_release_announcement_email():
     tags = cmd_output('git tag').split()
@@ -651,6 +651,8 @@ cmd("Creating source archive", "git archive --format tar.gz --prefix kafka-%(rel
 
 cmd("Building artifacts", "./gradlew clean && ./gradlewAll releaseTarGz", cwd=kafka_dir, env=jdk8_env, shell=True)
 cmd("Copying artifacts", "cp %s/core/build/distributions/* %s" % (kafka_dir, artifacts_dir), shell=True)
+cmd("Building kafka-streams-scala_3", "./gradlew clean && ./gradlew -PstreamsScalaVersion=3 :streams:streams-scala:assemble")
+cmd("Copying kafka-streams-scala_3", f"cp ./streams/streams-scala/build/libs/kafka-streams-scala_3-{release_version}.jar {artifacts_dir}", shell=True)
 cmd("Building docs", "./gradlew clean aggregatedJavadoc", cwd=kafka_dir, env=jdk17_env)
 cmd("Copying docs", "cp -R %s/build/docs/javadoc %s" % (kafka_dir, artifacts_dir))
 
@@ -682,6 +684,7 @@ with open(os.path.expanduser("~/.gradle/gradle.properties")) as f:
 if not user_ok("Going to build and upload mvn artifacts based on these settings:\n" + contents + '\nOK (y/n)?: '):
     fail("Retry again later")
 cmd("Building and uploading archives", "./gradlewAll publish", cwd=kafka_dir, env=jdk8_env, shell=True)
+cmd("Building and uploading kafka-streams-scala_3", "./gradlew -PstreamsScalaVersion=3 :streams:streams-scala:publish", cwd=kafka_dir, env=jdk8_env, shell=True)
 cmd("Building and uploading archives", "mvn deploy -Pgpg-signing", cwd=streams_quickstart_dir, env=jdk8_env, shell=True)
 
 release_notification_props = { 'release_version': release_version,
