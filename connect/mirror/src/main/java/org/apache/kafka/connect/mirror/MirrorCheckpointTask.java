@@ -86,6 +86,8 @@ public class MirrorCheckpointTask extends SourceTask {
         this.idleConsumerGroupsOffset = idleConsumerGroupsOffset;
         this.checkpointsStore = checkpointsStore;
         this.topicFilter = topic -> true;
+        this.interval = Duration.ofNanos(1);
+        this.pollTimeout = Duration.ofNanos(1);
     }
 
     @Override
@@ -172,8 +174,8 @@ public class MirrorCheckpointTask extends SourceTask {
         }
     }
 
-
-    private List<SourceRecord> sourceRecordsForGroup(String group) throws InterruptedException {
+    // visible for testing
+    List<SourceRecord> sourceRecordsForGroup(String group) throws InterruptedException {
         try {
             long timestamp = System.currentTimeMillis();
             Map<TopicPartition, OffsetAndMetadata> upstreamGroupOffsets = listConsumerGroupOffsets(group);

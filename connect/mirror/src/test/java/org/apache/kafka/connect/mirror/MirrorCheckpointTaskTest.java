@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.mirror;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Collections;
 import java.util.Optional;
@@ -33,7 +34,11 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class MirrorCheckpointTaskTest {
 
@@ -351,5 +356,30 @@ public class MirrorCheckpointTaskTest {
         assertNotNull(cp);
         assertEquals(400, cp.upstreamOffset());
         assertEquals(376, cp.downstreamOffset());
+    }
+    
+    @Test
+    public void testCheckpointStoreInitialized() throws InterruptedException {
+        CheckpointsStore checkpointsStore = mock(CheckpointsStore.class);
+
+        MirrorCheckpointTask task = new MirrorCheckpointTask("source1", "target2",
+                new DefaultReplicationPolicy(),
+                new OffsetSyncStoreTest.FakeOffsetSyncStore(),
+                Collections.singleton("group"),
+                Collections.emptyMap(),
+                checkpointsStore) {
+
+            @Override
+            List<SourceRecord> sourceRecordsForGroup(String group) throws InterruptedException {
+                SourceRecord sr = new SourceRecord(Collections.emptyMap(), Collections.emptyMap(), "", 0, null, null);
+                return Collections.singletonList(sr);
+            }
+        };
+
+        assertNull(task.poll());
+
+        when(checkpointsStore.isInitialized()).thenReturn(true);
+        List<SourceRecord> polled = task.poll();
+        assertEquals(1, polled.size());
     }
 }
