@@ -79,7 +79,7 @@ public interface PartitionWriter {
      * @param tp                The partition to write records to.
      * @param verificationGuard The verification guard.
      * @param records           The MemoryRecords.
-     * @return
+     * @return The log end offset right after the written records.
      */
     long append(
         TopicPartition tp,
