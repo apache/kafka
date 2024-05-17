@@ -23,7 +23,7 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
-import org.apache.kafka.connect.runtime.distributed.WorkerCoordinator;
+import org.apache.kafka.connect.runtime.distributed.DistributedHerder;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
 import org.apache.kafka.connect.runtime.rest.resources.ConnectorsResource;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
@@ -860,7 +860,7 @@ public class ConnectWorkerIntegrationTest {
         // This is a fabricated test to ensure that a poll timeout expiry happens. The tick thread awaits on
         // task#stop method which is blocked. The timeouts have been set accordingly
         workerProps.put(REBALANCE_TIMEOUT_MS_CONFIG, Long.toString(TimeUnit.SECONDS.toMillis(20)));
-        workerProps.put(TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG, Long.toString(TimeUnit.SECONDS.toMillis(40)));
+        workerProps.put(TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG, Long.toString(TimeUnit.SECONDS.toMillis(30)));
         connect = connectBuilder
             .numBrokers(1)
             .numWorkers(1)
@@ -881,13 +881,13 @@ public class ConnectWorkerIntegrationTest {
             CONNECTOR_NAME, 1, "connector and tasks did not start in time"
         );
 
-        try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(WorkerCoordinator.class)) {
+        try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(DistributedHerder.class)) {
             connect.restartTask(CONNECTOR_NAME, 0);
             TestUtils.waitForCondition(() -> logCaptureAppender.getEvents().stream().anyMatch(e -> e.getLevel().equals("WARN")) &&
                     logCaptureAppender.getEvents().stream().anyMatch(e ->
                         // Ensure that the tick thread is blocked on the stage which we expect it to be, i.e restarting the task.
                         e.getMessage().contains("worker poll timeout has expired") &&
-                        e.getMessage().contains("The last known stage executing on the tick thread is : restarting task " + CONNECTOR_NAME + "-0")
+                        e.getMessage().contains("The last known action being performed by the worker is : restarting task " + CONNECTOR_NAME + "-0")
                     ),
                 "Coordinator did not poll for rebalance.timeout.ms");
             // This clean up ensures that the test ends quickly as o/w we will wait for task#stop.

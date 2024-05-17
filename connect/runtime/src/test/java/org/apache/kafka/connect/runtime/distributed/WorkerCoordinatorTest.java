@@ -35,13 +35,11 @@ import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.KafkaConfigBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -95,12 +93,11 @@ public class WorkerCoordinatorTest {
     private final ConnectorTaskId taskId3x0 = new ConnectorTaskId(connectorId3, 0);
 
     private final String groupId = "test-group";
-    private final int sessionTimeoutMs = 30;
+    private final int sessionTimeoutMs = 10;
     private final int rebalanceTimeoutMs = 60;
     private final int heartbeatIntervalMs = 2;
     private final long retryBackoffMs = 100;
     private final long retryBackoffMaxMs = 1000;
-    private final LogContext logContext = new LogContext();
     private MockTime time;
     private MockClient client;
     private Node node;
@@ -134,6 +131,8 @@ public class WorkerCoordinatorTest {
 
     @Before
     public void setup() {
+        LogContext logContext = new LogContext();
+
         this.time = new MockTime();
         this.metadata = new Metadata(0, 0, Long.MAX_VALUE, logContext, new ClusterResourceListeners());
         this.client = new MockClient(time, metadata);
@@ -534,54 +533,6 @@ public class WorkerCoordinatorTest {
         verify(configStorage).snapshot();
     }
 
-    @Test
-    public void testPollTimeoutExpiry() throws InterruptedException {
-        // We will create a new WorkerCoordinator object with a rebalance timeout smaller
-        // than session timeout. This might not happen in the real world but it makes testing
-        // easier and the test not flaky.
-        int smallRebalanceTimeout = 20;
-        this.rebalanceConfig = new GroupRebalanceConfig(sessionTimeoutMs,
-            smallRebalanceTimeout,
-            heartbeatIntervalMs,
-            groupId,
-            Optional.empty(),
-            retryBackoffMs,
-            retryBackoffMaxMs,
-            true);
-        this.coordinator = new WorkerCoordinator(rebalanceConfig,
-            logContext,
-            consumerClient,
-            new Metrics(time),
-            "consumer" + groupId,
-            time,
-            LEADER_URL,
-            configStorage,
-            rebalanceListener,
-            compatibility,
-            0);
-
-        when(configStorage.snapshot()).thenReturn(configState1);
-
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node));
-        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
-
-        client.prepareResponse(joinGroupFollowerResponse(1, "member", "leader", Errors.NONE));
-        client.prepareResponse(syncGroupResponse(ConnectProtocol.Assignment.NO_ERROR, "leader", configState1.offset(), Collections.emptyList(),
-            Collections.singletonList(taskId1x0), Errors.NONE));
-
-        try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(WorkerCoordinator.class)) {
-            coordinator.ensureActiveGroup();
-            coordinator.poll(0, () -> null);
-
-            time.sleep(smallRebalanceTimeout + 1);
-
-            // Rebalance timeout elapses while poll is never invoked causing a poll timeout expiry
-            TestUtils.waitForCondition(() -> logCaptureAppender.getEvents().stream().anyMatch(e -> e.getLevel().equals("WARN")) &&
-                logCaptureAppender.getEvents().stream().anyMatch(e -> e.getMessage().startsWith("worker poll timeout has expired")),
-                "Coordinator did not poll for rebalance.timeout.ms");
-        }
-    }
-
     private JoinGroupResponse joinGroupLeaderResponse(int generationId, String memberId,
                                                       Map<String, Long> configOffsets, Errors error) {
         List<JoinGroupResponseData.JoinGroupResponseMember> metadata = new ArrayList<>();
@@ -655,5 +606,8 @@ public class WorkerCoordinatorTest {
             this.revokedTasks = tasks;
             revokedCount++;
         }
+
+        @Override
+        public void onPollTimeoutExpiry() {}
     }
 }

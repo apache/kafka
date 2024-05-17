@@ -2705,8 +2705,12 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
 
         @Override
-        public Stage onPollTimeoutExpiry() {
-            return tickThreadStage;
+        public void onPollTimeoutExpiry() {
+            log.warn("worker poll timeout has expired. The last known action being performed by the worker is : {} and may contribute to the timeout. " +
+                "Please review the last action (if known) for any corrective actions. " +
+                "One of the ways of addressing this can be increasing the rebalance.timeout.ms configuration value. Please note that " +
+                "rebalance.timeout.ms also controls the maximum allowed time for each worker to join the group once a " +
+                "rebalance has begun so the set value should not be very high", tickThreadStage == null ? "not known" : tickThreadStage.description());
         }
 
         private void resetActiveTopics(Collection<String> connectors, Collection<ConnectorTaskId> tasks) {
