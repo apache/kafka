@@ -23,6 +23,7 @@ import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.ConsumerProtocolAssignment;
 import org.apache.kafka.common.message.ConsumerProtocolSubscription;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
@@ -85,6 +86,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
+import static org.apache.kafka.coordinator.group.Assertions.assertSyncGroupResponseEquals;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.EMPTY_RESULT;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupHeartbeatKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupRebalanceTimeoutKey;
@@ -1264,6 +1266,62 @@ public class GroupMetadataManagerTestContext {
                 .setGroupState(DEAD.toString())
             ),
             describedGroups
+        );
+    }
+
+    public void verifyClassicGroupSyncToConsumerGroup(
+        String groupId,
+        String memberId,
+        int generationId,
+        String protocolName,
+        String protocolType,
+        List<TopicPartition> topicPartitionList,
+        short version
+    ) throws Exception {
+        GroupMetadataManagerTestContext.SyncResult syncResult = sendClassicGroupSync(
+            new GroupMetadataManagerTestContext.SyncGroupRequestBuilder()
+                .withGroupId(groupId)
+                .withMemberId(memberId)
+                .withGenerationId(generationId)
+                .withProtocolName(protocolName)
+                .withProtocolType(protocolType)
+                .build()
+        );
+        assertEquals(Collections.emptyList(), syncResult.records);
+        assertFalse(syncResult.syncFuture.isDone());
+
+        // Simulate a successful write to log.
+        syncResult.appendFuture.complete(null);
+        assertSyncGroupResponseEquals(
+            new SyncGroupResponseData()
+                .setProtocolType(protocolType)
+                .setProtocolName(protocolName)
+                .setAssignment(ConsumerProtocol.serializeAssignment(
+                    new ConsumerPartitionAssignor.Assignment(topicPartitionList),
+                    version
+                ).array()),
+            syncResult.syncFuture.get()
+        );
+        assertSessionTimeout(groupId, memberId, 5000);
+        assertNoSyncTimeout(groupId, memberId);
+    }
+
+    public void verifyClassicGroupSyncToConsumerGroup(
+        String groupId,
+        String memberId,
+        int generationId,
+        String protocolName,
+        String protocolType,
+        List<TopicPartition> topicPartitionList
+    ) throws Exception {
+        verifyClassicGroupSyncToConsumerGroup(
+            groupId,
+            memberId,
+            generationId,
+            protocolName,
+            protocolType,
+            topicPartitionList,
+            ConsumerProtocolAssignment.HIGHEST_SUPPORTED_VERSION
         );
     }
 
