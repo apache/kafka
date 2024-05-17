@@ -39,12 +39,9 @@ public class OffsetSyncStoreTest {
             super();
         }
 
-        public void setLoadingMustReadToEnd(boolean b) {
-            this.initializationMustReadToEnd =  false;
-        }
-
-        public void readToEnd() {
-            this.readToEnd = true;
+        @Override
+        void backingStoreStart() {
+            // do not start KafkaBasedLog
         }
 
         void sync(TopicPartition topicPartition, long upstreamOffset, long downstreamOffset) {
@@ -59,7 +56,7 @@ public class OffsetSyncStoreTest {
     @Test
     public void testOffsetTranslation() {
         try (FakeOffsetSyncStore store = new FakeOffsetSyncStore()) {
-            store.readToEnd();
+            store.start(true);
 
             // Emit synced downstream offset without dead-reckoning
             store.sync(tp, 100, 200);
@@ -97,7 +94,7 @@ public class OffsetSyncStoreTest {
             assertEquals(OptionalLong.empty(), store.translateDownstream(null, tp, 200));
 
             // After the store is started all offsets are visible
-            store.readToEnd();
+            store.start(true);
             assertEquals(OptionalLong.of(-1), store.translateDownstream(null, tp, 0));
             assertEquals(OptionalLong.of(200), store.translateDownstream(null, tp, 100));
             assertEquals(OptionalLong.of(201), store.translateDownstream(null, tp, 200));
@@ -107,7 +104,7 @@ public class OffsetSyncStoreTest {
     @Test
     public void testNoTranslationIfNoOffsetSync() {
         try (FakeOffsetSyncStore store = new FakeOffsetSyncStore()) {
-            store.readToEnd();
+            store.start(true);
             assertEquals(OptionalLong.empty(), store.translateDownstream(null, tp, 0));
         }
     }
@@ -121,7 +118,7 @@ public class OffsetSyncStoreTest {
                 store.sync(tp, offset, offset);
                 assertSparseSyncInvariant(store, tp);
             }
-            store.readToEnd();
+            store.start(true);
 
             // After starting but before seeing new offsets, only the latest startup offset can be translated
             assertSparseSync(store, 1000, -1);
@@ -160,50 +157,53 @@ public class OffsetSyncStoreTest {
     // this test has been wriiten knowing the exact offsets syncs stored
     @Test
     public void testPastOffsetTranslationWithoutInitializationReadToEnd() {
-        try (FakeOffsetSyncStore store = new FakeOffsetSyncStore()) {
-            int maxOffsetLag = 10;
-            int offset = 0;
-            store.setLoadingMustReadToEnd(false);
-            for (; offset <= 1000; offset += maxOffsetLag) {
-                store.sync(tp, offset, offset);
-                assertSparseSyncInvariant(store, tp);
+        final int maxOffsetLag = 10;
+
+        FakeOffsetSyncStore store = new FakeOffsetSyncStore() {
+            @Override
+            void backingStoreStart() {
+                for (int offset = 0; offset <= 1000; offset += maxOffsetLag) {
+                    sync(tp, offset, offset);
+                    assertSparseSyncInvariant(this, tp);
+                }
             }
-            store.readToEnd();
+        };
 
-            // After starting but before seeing new offsets
-            assertTranslationsNearby(store, 400, 480, 0);
-            assertTranslationsNearby(store, 500, 720, 480);
-            assertTranslationsNearby(store, 1000, 1000, 990);
+        store.start(false);
 
-            for (; offset <= 10000; offset += maxOffsetLag) {
-                store.sync(tp, offset, offset);
-                assertSparseSyncInvariant(store, tp);
-            }
+        // After starting but before seeing new offsets
+        assertTranslationsNearby(store, 400, 480, 0);
+        assertTranslationsNearby(store, 500, 720, 480);
+        assertTranslationsNearby(store, 1000, 1000, 990);
 
-            // After seeing new offsets, 1000 was kicked out of the store, so
-            // 1000 can only be traslated to 1, only previously stored offset is 0
-            assertTranslationsNearby(store, 1000, 3840, 0);
-
-            // We can translate offsets between the latest startup offset and the latest offset with variable precision
-            // Older offsets are less precise and translation ends up farther apart
-            assertTranslationsNearby(store, 3840, 3840, 0);
-            assertTranslationsNearby(store, 7680, 7680, 3840);
-            assertTranslationsNearby(store, 8640, 8640, 7680);
-            assertTranslationsNearby(store, 9120, 9120, 8640);
-            assertTranslationsNearby(store, 9600, 9600, 9120);
-            assertTranslationsNearby(store, 9840, 9840, 9600);
-            assertTranslationsNearby(store, 9900, 9900, 9840);
-            assertTranslationsNearby(store, 9960, 9960, 9900);
-            assertTranslationsNearby(store, 9990, 9990, 9960);
-            assertTranslationsNearby(store, 10000, 10000, 9990);
-
-            // Rewinding upstream offsets should clear all historical syncs
-            store.sync(tp, 1500, 11000);
+        for (int offset = 1000; offset <= 10000; offset += maxOffsetLag) {
+            store.sync(tp, offset, offset);
             assertSparseSyncInvariant(store, tp);
-            assertEquals(OptionalLong.of(-1), store.translateDownstream(null, tp, 1499));
-            assertEquals(OptionalLong.of(11000), store.translateDownstream(null, tp, 1500));
-            assertEquals(OptionalLong.of(11001), store.translateDownstream(null, tp, 2000));
         }
+
+        // After seeing new offsets, 1000 was kicked out of the store, so
+        // 1000 can only be traslated to 1, only previously stored offset is 0
+        assertTranslationsNearby(store, 1000, 3840, 0);
+
+        // We can translate offsets between the latest startup offset and the latest offset with variable precision
+        // Older offsets are less precise and translation ends up farther apart
+        assertTranslationsNearby(store, 3840, 3840, 0);
+        assertTranslationsNearby(store, 7680, 7680, 3840);
+        assertTranslationsNearby(store, 8640, 8640, 7680);
+        assertTranslationsNearby(store, 9120, 9120, 8640);
+        assertTranslationsNearby(store, 9600, 9600, 9120);
+        assertTranslationsNearby(store, 9840, 9840, 9600);
+        assertTranslationsNearby(store, 9900, 9900, 9840);
+        assertTranslationsNearby(store, 9960, 9960, 9900);
+        assertTranslationsNearby(store, 9990, 9990, 9960);
+        assertTranslationsNearby(store, 10000, 10000, 9990);
+
+        // Rewinding upstream offsets should clear all historical syncs
+        store.sync(tp, 1500, 11000);
+        assertSparseSyncInvariant(store, tp);
+        assertEquals(OptionalLong.of(-1), store.translateDownstream(null, tp, 1499));
+        assertEquals(OptionalLong.of(11000), store.translateDownstream(null, tp, 1500));
+        assertEquals(OptionalLong.of(11001), store.translateDownstream(null, tp, 2000));
     }
 
     @Test
@@ -266,7 +266,7 @@ public class OffsetSyncStoreTest {
      */
     private void assertSyncSpacingHasBoundedExpirations(long firstOffset, LongStream steps, int maximumExpirations) {
         try (FakeOffsetSyncStore store = new FakeOffsetSyncStore()) {
-            store.readToEnd();
+            store.start(true);
             store.sync(tp, firstOffset, firstOffset);
             PrimitiveIterator.OfLong iterator = steps.iterator();
             long offset = firstOffset;

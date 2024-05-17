@@ -75,9 +75,9 @@ public class MirrorCheckpointTask extends SourceTask {
 
     // for testing
     MirrorCheckpointTask(String sourceClusterAlias, String targetClusterAlias,
-             ReplicationPolicy replicationPolicy, OffsetSyncStore offsetSyncStore, Set<String> consumerGroups,
-             Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset,
-             CheckpointsStore checkpointsStore) {
+            ReplicationPolicy replicationPolicy, OffsetSyncStore offsetSyncStore, Set<String> consumerGroups,
+            Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset,
+            CheckpointsStore checkpointsStore) {
         this.sourceClusterAlias = sourceClusterAlias;
         this.targetClusterAlias = targetClusterAlias;
         this.replicationPolicy = replicationPolicy;
@@ -110,8 +110,8 @@ public class MirrorCheckpointTask extends SourceTask {
         scheduler.execute(() -> {
             // loading the stores are potentially long running operations, so they run asynchronously
             // to avoid blocking task::start (until a task has completed starting it cannot be stopped)
-            checkpointsStore.start();
-            offsetSyncStore.start(!checkpointsStore.loadSuccess());
+            boolean checkpointsReadOk = checkpointsStore.start();
+            offsetSyncStore.start(!checkpointsReadOk);
             scheduler.scheduleRepeating(this::refreshIdleConsumerGroupOffset, config.syncGroupOffsetsInterval(),
                     "refreshing idle consumers group offsets at target cluster");
             scheduler.scheduleRepeatingDelayed(this::syncGroupOffset, config.syncGroupOffsetsInterval(),
@@ -178,8 +178,7 @@ public class MirrorCheckpointTask extends SourceTask {
             long timestamp = System.currentTimeMillis();
             Map<TopicPartition, OffsetAndMetadata> upstreamGroupOffsets = listConsumerGroupOffsets(group);
             Map<TopicPartition, Checkpoint> newCheckpoints = checkpointsForGroup(upstreamGroupOffsets, group);
-            Map<TopicPartition, Checkpoint> oldCheckpoints = checkpointsStore.contents().computeIfAbsent(group, ignored -> new HashMap<>());
-            oldCheckpoints.putAll(newCheckpoints);
+            checkpointsStore.update(group, newCheckpoints);
             return newCheckpoints.values().stream()
                 .map(x -> checkpointRecord(x, timestamp))
                 .collect(Collectors.toList());
@@ -201,7 +200,7 @@ public class MirrorCheckpointTask extends SourceTask {
     }
 
     private boolean checkpointIsMoreRecent(Checkpoint checkpoint) {
-        Map<TopicPartition, Checkpoint> checkpoints = checkpointsStore.contents().get(checkpoint.consumerGroupId());
+        Map<TopicPartition, Checkpoint> checkpoints = checkpointsStore.get(checkpoint.consumerGroupId());
         if (checkpoints == null) {
             log.trace("Emitting {} (first for this group)", checkpoint);
             return true;
@@ -320,7 +319,7 @@ public class MirrorCheckpointTask extends SourceTask {
         Map<String, Map<TopicPartition, OffsetAndMetadata>> offsetToSyncAll = new HashMap<>();
 
         // first, sync offsets for the idle consumers at target
-        for (Entry<String, Map<TopicPartition, OffsetAndMetadata>> group : getConvertedUpstreamOffset().entrySet()) {
+        for (Entry<String, Map<TopicPartition, OffsetAndMetadata>> group : checkpointsStore.computeConvertedUpstreamOffset().entrySet()) {
             String consumerGroupId = group.getKey();
             // for each idle consumer at target, read the checkpoints (converted upstream offset)
             // from the pre-populated map
@@ -396,19 +395,5 @@ public class MirrorCheckpointTask extends SourceTask {
                     () -> String.format("alter offsets for consumer group %s on %s cluster", consumerGroupId, targetClusterAlias)
             );
         }
-    }
-
-    Map<String, Map<TopicPartition, OffsetAndMetadata>> getConvertedUpstreamOffset() {
-        Map<String, Map<TopicPartition, OffsetAndMetadata>> result = new HashMap<>();
-
-        for (Entry<String, Map<TopicPartition, Checkpoint>> entry : checkpointsStore.contents().entrySet()) {
-            String consumerId = entry.getKey();
-            Map<TopicPartition, OffsetAndMetadata> convertedUpstreamOffset = new HashMap<>();
-            for (Checkpoint checkpoint : entry.getValue().values()) {
-                convertedUpstreamOffset.put(checkpoint.topicPartition(), checkpoint.offsetAndMetadata());
-            }
-            result.put(consumerId, convertedUpstreamOffset);
-        }
-        return result;
     }
 }

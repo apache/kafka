@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.protocol.types.SchemaException;
@@ -28,6 +29,7 @@ import org.apache.kafka.connect.util.TopicAdmin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -37,9 +39,12 @@ import static org.apache.kafka.connect.mirror.MirrorCheckpointConfig.CHECKPOINTS
 
 /**
  * Reads once the Kafka log for checkpoints and populates a map of
- * checkpoints per consumer group
+ * checkpoints per consumer group.
+ *
+ * The Kafka log is closed after the initial load and only the in memory map is
+ * used after start.
  */
-public class CheckpointsStore implements AutoCloseable {
+class CheckpointsStore implements AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(CheckpointsStore.class);
 
@@ -48,48 +53,68 @@ public class CheckpointsStore implements AutoCloseable {
 
     private TopicAdmin cpAdmin = null;
     private KafkaBasedLog<byte[], byte[]> backingStore = null;
-    private Map<String, Map<TopicPartition, Checkpoint>> checkpointsPerConsumerGroup;
+    // accessible for testing
+    Map<String, Map<TopicPartition, Checkpoint>> checkpointsPerConsumerGroup;
 
     private volatile boolean loadSuccess = false;
     private volatile boolean isInitialized = false;
 
-    public CheckpointsStore(MirrorCheckpointTaskConfig config, Set<String> consumerGroups) {
+    CheckpointsStore(MirrorCheckpointTaskConfig config, Set<String> consumerGroups) {
         this.config = config;
         this.consumerGroups = new HashSet<>(consumerGroups);
     }
 
-    // for testing
+    // constructor for testing only
     CheckpointsStore(Map<String, Map<TopicPartition, Checkpoint>> checkpointsPerConsumerGroup) {
-        this.config = null;
-        this.consumerGroups = null;
+        this.config = null; //ignored by tests
+        this.consumerGroups = null; //ignored by tests
         this.checkpointsPerConsumerGroup = checkpointsPerConsumerGroup;
         isInitialized = true;
         loadSuccess =  true;
     }
 
     // potentially long running
-    public void start()  {
+    boolean start()  {
         checkpointsPerConsumerGroup = readCheckpoints();
         isInitialized = true;
-        log.trace("Checkpoints store content : {}", checkpointsPerConsumerGroup);
-    }
-
-    public boolean loadSuccess() {
+        log.trace("CheckpointsStore started, load success={}, map={}", loadSuccess, checkpointsPerConsumerGroup);
         return loadSuccess;
     }
 
-    public boolean isInitialized() {
+    boolean isInitialized() {
         return isInitialized;
     }
 
+    void update(String group, Map<TopicPartition, Checkpoint> newCheckpoints) {
+        Map<TopicPartition, Checkpoint> oldCheckpoints = checkpointsPerConsumerGroup.computeIfAbsent(group, ignored -> new HashMap<>());
+        oldCheckpoints.putAll(newCheckpoints);
+    }
 
-    // return a mutable map - it is expected to be mutated by the Task
-    public Map<String, Map<TopicPartition, Checkpoint>> contents() {
-        return checkpointsPerConsumerGroup;
+    Map<TopicPartition, Checkpoint> get(String group) {
+        Map<TopicPartition, Checkpoint> result = checkpointsPerConsumerGroup.get(group);
+        return result == null ? null : Collections.unmodifiableMap(result);
+    }
+
+    Map<String, Map<TopicPartition, OffsetAndMetadata>> computeConvertedUpstreamOffset() {
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> result = new HashMap<>();
+
+        for (Map.Entry<String, Map<TopicPartition, Checkpoint>> entry : checkpointsPerConsumerGroup.entrySet()) {
+            String consumerId = entry.getKey();
+            Map<TopicPartition, OffsetAndMetadata> convertedUpstreamOffset = new HashMap<>();
+            for (Checkpoint checkpoint : entry.getValue().values()) {
+                convertedUpstreamOffset.put(checkpoint.topicPartition(), checkpoint.offsetAndMetadata());
+            }
+            result.put(consumerId, convertedUpstreamOffset);
+        }
+        return result;
     }
 
     @Override
     public void close() {
+        releaseResources();
+    }
+
+    private void releaseResources() {
         Utils.closeQuietly(backingStore != null ? backingStore::stop : null, "backing store for previous Checkpoints");
         Utils.closeQuietly(cpAdmin, "admin client for previous Checkpoints");
         cpAdmin = null;
@@ -100,45 +125,48 @@ public class CheckpointsStore implements AutoCloseable {
     // the callback may only handle errors thrown by consumer.poll in KafkaBasedLog
     // e.g. unauthorized to read from topic (non-retriable)
     // if any are encountered, treat the loading of Checkpoints as failed.
-    public Map<String, Map<TopicPartition, Checkpoint>> readCheckpoints() {
+    Map<String, Map<TopicPartition, Checkpoint>> readCheckpoints() {
         Map<String, Map<TopicPartition, Checkpoint>> checkpoints = new HashMap<>();
-        Callback<ConsumerRecord<byte[], byte[]>> consumedCallback = new Callback<ConsumerRecord<byte[], byte[]>>() {
-            @Override
-            public void onCompletion(Throwable error, ConsumerRecord<byte[], byte[]> cpRecord) {
-                if (error != null) {
-                    // if there is no authorization to READ from the topic, we must throw an error
-                    // to stop the KafkaBasedLog forever looping attempting to read to end
-                    checkpoints.clear();
-                    if (error instanceof RuntimeException) {
-                        throw (RuntimeException) error;
-                    } else {
-                        throw new RuntimeException(error);
-                    }
+        Callback<ConsumerRecord<byte[], byte[]>> consumedCallback = (error, cpRecord) -> {
+            if (error != null) {
+                // if there is no authorization to READ from the topic, we must throw an error
+                // to stop the KafkaBasedLog forever looping attempting to read to end
+                checkpoints.clear();
+                if (error instanceof RuntimeException) {
+                    throw (RuntimeException) error;
                 } else {
-                    try {
-                        Checkpoint cp = Checkpoint.deserializeRecord(cpRecord);
-                        if (consumerGroups.contains(cp.consumerGroupId())) {
-                            Map<TopicPartition, Checkpoint> cps = checkpoints.computeIfAbsent(cp.consumerGroupId(), ignored1 -> new HashMap<>());
-                            cps.put(cp.topicPartition(), cp);
-                        }
-                    } catch (SchemaException ex) {
-                        log.warn("Ignored invalid checkpoint record at offset {}", cpRecord.offset(), ex);
+                    throw new RuntimeException(error);
+                }
+            } else {
+                try {
+                    Checkpoint cp = Checkpoint.deserializeRecord(cpRecord);
+                    if (consumerGroups.contains(cp.consumerGroupId())) {
+                        Map<TopicPartition, Checkpoint> cps = checkpoints.computeIfAbsent(cp.consumerGroupId(), ignored1 -> new HashMap<>());
+                        cps.put(cp.topicPartition(), cp);
                     }
+                } catch (SchemaException ex) {
+                    log.warn("Ignored invalid checkpoint record at offset {}", cpRecord.offset(), ex);
                 }
             }
         };
 
-        long startTime = System.currentTimeMillis();
         try {
+            long startTime = System.currentTimeMillis();
             readCheckpointsImpl(config, consumedCallback);
-            log.info("Loading Checkpoints topic took {}ms", System.currentTimeMillis() - startTime);
+            log.debug("starting+stopping KafkaBasedLog took {}ms", System.currentTimeMillis() - startTime);
             loadSuccess = true;
         } catch (Exception error) {
             loadSuccess = false;
             if (error instanceof AuthorizationException) {
-                log.warn("Not authorized to access checkpoints topic {} - this will degrade offset translation as fewer checkpoints may be emitted", config.checkpointsTopic(), error);
+                log.warn("Not authorized to access checkpoints topic {} - " +
+                        "this may degrade offset translation as only checkpoints " +
+                        "for offsets which were mirrored after the task started will be emitted",
+                        config.checkpointsTopic(), error);
             } else {
-                log.info("Exception encountered loading Checkpoint topic {} - this will degrade offset translation as fewer checkpoints may be emitted", config.checkpointsTopic(), error);
+                log.info("Exception encountered loading checkpoints topic {} - " +
+                        "this may degrade offset translation as only checkpoints " +
+                        "for offsets which were mirrored after the task started will be emitted",
+                        config.checkpointsTopic(), error);
             }
         }
         return checkpoints;
@@ -165,9 +193,7 @@ public class CheckpointsStore implements AutoCloseable {
             backingStore.start(true);
             backingStore.stop();
         } finally {
-            // closing early to free resources
-            close();
+            releaseResources();
         }
     }
-
 }

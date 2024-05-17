@@ -41,7 +41,7 @@ public class MirrorCheckpointTaskTest {
     public void testDownstreamTopicRenaming() {
         MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source1", "target2",
             new DefaultReplicationPolicy(), null, Collections.emptySet(), Collections.emptyMap(),
-                new CheckpointsStore(Collections.emptyMap()));
+            new CheckpointsStore(Collections.emptyMap()));
         assertEquals(new TopicPartition("source1.topic3", 4),
             mirrorCheckpointTask.renameTopicPartition(new TopicPartition("topic3", 4)),
                 "Renaming source1.topic3 failed");
@@ -60,10 +60,10 @@ public class MirrorCheckpointTaskTest {
         long t2UpstreamOffset = 7L;
         long t2DownstreamOffset = 8L;
         OffsetSyncStoreTest.FakeOffsetSyncStore offsetSyncStore = new OffsetSyncStoreTest.FakeOffsetSyncStore();
-        offsetSyncStore.readToEnd();
+        offsetSyncStore.start(true);
         MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source1", "target2",
-            new DefaultReplicationPolicy(), offsetSyncStore, Collections.emptySet(), Collections.emptyMap(),
-                new CheckpointsStore(Collections.emptyMap()));
+            new DefaultReplicationPolicy(), offsetSyncStore, Collections.emptySet(),
+            Collections.emptyMap(), new CheckpointsStore(Collections.emptyMap()));
         offsetSyncStore.sync(new TopicPartition("topic1", 2), t1UpstreamOffset, t1DownstreamOffset);
         offsetSyncStore.sync(new TopicPartition("target2.topic5", 6), t2UpstreamOffset, t2DownstreamOffset);
         Optional<Checkpoint> optionalCheckpoint1 = mirrorCheckpointTask.checkpoint("group9", new TopicPartition("topic1", 2),
@@ -164,7 +164,7 @@ public class MirrorCheckpointTaskTest {
 
         MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source1", "target2",
             new DefaultReplicationPolicy(), null, Collections.emptySet(), idleConsumerGroupsOffset,
-                new CheckpointsStore(checkpointsPerConsumerGroup));
+            new CheckpointsStore(checkpointsPerConsumerGroup));
 
         Map<String, Map<TopicPartition, OffsetAndMetadata>> output = mirrorCheckpointTask.syncGroupOffset();
 
@@ -205,7 +205,7 @@ public class MirrorCheckpointTaskTest {
     @Test
     public void testNoCheckpointForTopicWithoutOffsetSyncs() {
         OffsetSyncStoreTest.FakeOffsetSyncStore offsetSyncStore = new OffsetSyncStoreTest.FakeOffsetSyncStore();
-        offsetSyncStore.readToEnd();
+        offsetSyncStore.start(true);
         MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source1", "target2",
                 new DefaultReplicationPolicy(), offsetSyncStore, Collections.emptySet(), Collections.emptyMap(),
                 new CheckpointsStore(Collections.emptyMap()));
@@ -222,10 +222,10 @@ public class MirrorCheckpointTaskTest {
     @Test
     public void testNoCheckpointForTopicWithNullOffsetAndMetadata() {
         OffsetSyncStoreTest.FakeOffsetSyncStore offsetSyncStore = new OffsetSyncStoreTest.FakeOffsetSyncStore();
-        offsetSyncStore.readToEnd();
+        offsetSyncStore.start(true);
         MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source1", "target2",
             new DefaultReplicationPolicy(), offsetSyncStore, Collections.emptySet(), Collections.emptyMap(),
-                new CheckpointsStore(Collections.emptyMap()));
+            new CheckpointsStore(Collections.emptyMap()));
         offsetSyncStore.sync(new TopicPartition("topic1", 0), 1L, 3L);
         Optional<Checkpoint> checkpoint = mirrorCheckpointTask.checkpoint("g1", new TopicPartition("topic1", 0), null);
         assertFalse(checkpoint.isPresent());
@@ -234,7 +234,7 @@ public class MirrorCheckpointTaskTest {
     @Test
     public void testCheckpointRecordsMonotonicIfStoreRewinds() {
         OffsetSyncStoreTest.FakeOffsetSyncStore offsetSyncStore = new OffsetSyncStoreTest.FakeOffsetSyncStore();
-        offsetSyncStore.readToEnd();
+        offsetSyncStore.start(true);
         Map<String, Map<TopicPartition, Checkpoint>> checkpointsPerConsumerGroup = new HashMap<>();
         MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source1", "target2",
                 new DefaultReplicationPolicy(), offsetSyncStore, Collections.emptySet(), Collections.emptyMap(),
@@ -284,13 +284,17 @@ public class MirrorCheckpointTaskTest {
     public void testCheckpointsTaskRestartUsesExistingCheckpoints() {
         TopicPartition t1p0 = new TopicPartition("t1", 0);
         TopicPartition sourceT1p0 = new TopicPartition("source1.t1", 0);
-        OffsetSyncStoreTest.FakeOffsetSyncStore offsetSyncStore = new OffsetSyncStoreTest.FakeOffsetSyncStore();
-        offsetSyncStore.setLoadingMustReadToEnd(false);
-        // OffsetSyncStore contains entries for: 100->100, 200->200, 300->300
-        for (int i = 100; i <= 300; i += 100) {
-            offsetSyncStore.sync(t1p0, i, i);
-        }
-        offsetSyncStore.readToEnd();
+        OffsetSyncStoreTest.FakeOffsetSyncStore offsetSyncStore = new OffsetSyncStoreTest.FakeOffsetSyncStore() {
+            @Override
+            void backingStoreStart() {
+                // OffsetSyncStore contains entries for: 100->100, 200->200, 300->300
+                for (int i = 100; i <= 300; i += 100) {
+                    sync(t1p0, i, i);
+                }
+            }
+        };
+        offsetSyncStore.start(false);
+
         MirrorCheckpointTask mirrorCheckpointTask = new MirrorCheckpointTask("source1", "target2",
                 new DefaultReplicationPolicy(), offsetSyncStore, Collections.emptySet(), Collections.emptyMap(),
                 new CheckpointsStore(Collections.emptyMap()));
@@ -310,12 +314,15 @@ public class MirrorCheckpointTaskTest {
         // Simulate task restart, during which more offsets are added to the sync topic, and thus the
         // corresponding OffsetSyncStore no longer has a mapping for 100->100
         // Now OffsetSyncStore contains entries for: 175->175, 375->375, 475->475
-        offsetSyncStore = new OffsetSyncStoreTest.FakeOffsetSyncStore();
-        offsetSyncStore.setLoadingMustReadToEnd(false);
-        for (int i = 175; i <= 475; i += 100) {
-            offsetSyncStore.sync(t1p0, i, i);
-        }
-        offsetSyncStore.readToEnd();
+        offsetSyncStore = new OffsetSyncStoreTest.FakeOffsetSyncStore() {
+            @Override
+            void backingStoreStart() {
+                for (int i = 175; i <= 475; i += 100) {
+                    sync(t1p0, i, i);
+                }
+            }
+        };
+        offsetSyncStore.start(false);
 
         // Simulate loading existing checkpoints into checkpointsPerConsumerGroup (250->201)
         Map<String, Map<TopicPartition, Checkpoint>> checkpointsPerConsumerGroup = new HashMap<>();

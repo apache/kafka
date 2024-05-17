@@ -108,7 +108,6 @@ public class KafkaBasedLog<K, V> {
     private final Queue<Callback<Void>> readLogEndOffsetCallbacks;
     private final java.util.function.Consumer<TopicAdmin> initializer;
     // initialized as false for backward compatibility
-    // TODO make the reportErrorsToCallback=true a default in Kafka 4.0 ?
     private volatile boolean reportErrorsToCallback = false;
 
     /**
@@ -248,6 +247,7 @@ public class KafkaBasedLog<K, V> {
     public void start() {
         start(false);
     }
+
     public void start(boolean reportErrorsToCallback) {
         this.reportErrorsToCallback = reportErrorsToCallback;
         log.info("Starting KafkaBasedLog with topic {} reportErrorsToCallback={}", topic, reportErrorsToCallback);

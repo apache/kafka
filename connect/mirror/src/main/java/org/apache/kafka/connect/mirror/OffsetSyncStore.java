@@ -108,10 +108,14 @@ class OffsetSyncStore implements AutoCloseable {
      */
     public void start(boolean initializationMustReadToEnd) {
         this.initializationMustReadToEnd = initializationMustReadToEnd;
-        log.info("OffsetSyncStore initializationMustReadToEnd:{}{}", initializationMustReadToEnd,
-                initializationMustReadToEnd ? " - fewer checkpoints may be emitted" : "");
-        backingStore.start();
+        log.debug("OffsetSyncStore starting - must read to OffsetSync end = ", initializationMustReadToEnd);
+        backingStoreStart();
         readToEnd = true;
+    }
+
+    // overridable for testing
+    void backingStoreStart() {
+        backingStore.start(false);
     }
 
     OptionalLong translateDownstream(String group, TopicPartition sourceTopicPartition, long upstreamOffset) {

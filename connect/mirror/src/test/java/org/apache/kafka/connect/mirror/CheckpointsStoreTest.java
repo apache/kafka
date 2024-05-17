@@ -56,18 +56,15 @@ public class CheckpointsStoreTest {
                 consumedCallback.onCompletion(null, newCheckpointRecord("group1", "t1", 0, 1, 1));
             }
         };
-        assertFalse(store.loadSuccess());
         assertFalse(store.isInitialized());
 
-        store.start();
-
-        assertTrue(store.loadSuccess());
+        assertTrue(store.start(), "expected start to return success");
         assertTrue(store.isInitialized());
 
         Map<String, Map<TopicPartition, Checkpoint>> expected = new HashMap<>();
         expected.put("group1", Collections.singletonMap(new TopicPartition("t1", 0),
                 new Checkpoint("group1", new TopicPartition("t1", 0), 1, 1, "")));
-        assertEquals(expected, store.contents());
+        assertEquals(expected, store.checkpointsPerConsumerGroup);
     }
 
     @Test
@@ -86,15 +83,13 @@ public class CheckpointsStoreTest {
             }
         };
 
-        store.start();
-        assertFalse(store.loadSuccess());
+        assertFalse(store.start(), "expected start to return failure");
         assertTrue(store.isInitialized());
-        assertTrue(store.contents().isEmpty());
+        assertTrue(store.checkpointsPerConsumerGroup.isEmpty());
     }
 
     ConsumerRecord<byte[], byte[]> newCheckpointRecord(String gid, String topic, int partition, long upo, long dwo) {
         Checkpoint cp = new Checkpoint(gid, new TopicPartition(topic, partition), upo, dwo, "");
         return new ConsumerRecord<>("checkpoint.topic", 0, 0L, cp.recordKey(), cp.recordValue());
     }
-
 }
