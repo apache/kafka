@@ -109,7 +109,7 @@ public class ConsumerTestBuilder implements Closeable {
         this.time = enableAutoTick ? new MockTime(1) : new MockTime();
         this.applicationEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventQueue = new LinkedBlockingQueue<>();
-        this.backgroundEventHandler = spy(new BackgroundEventHandler(logContext, backgroundEventQueue));
+        this.backgroundEventHandler = spy(new BackgroundEventHandler(backgroundEventQueue));
         this.offsetCommitCallbackInvoker = mock(OffsetCommitCallbackInvoker.class);
         GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(
             100,
