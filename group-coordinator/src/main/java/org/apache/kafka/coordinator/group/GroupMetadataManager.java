@@ -2078,6 +2078,39 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Fences a member from a consumer group. Returns an empty CoordinatorResult
+     * if the group or the member doesn't exist.
+     *
+     * @param groupId   The group id.
+     * @param memberId  The member id.
+     * @param reason    The reason for fencing the member.
+     *
+     * @return The CoordinatorResult to be applied.
+     */
+    private <T> CoordinatorResult<T, CoordinatorRecord> consumerGroupFenceMemberOperation(
+        String groupId,
+        String memberId,
+        String reason
+    ) {
+        try {
+            ConsumerGroup group = consumerGroup(groupId);
+            ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
+            log.info("[GroupId {}] Member {} fenced from the group because {}.",
+                groupId, memberId, reason);
+
+            return consumerGroupFenceMember(group, member, null);
+        } catch (GroupIdNotFoundException ex) {
+            log.debug("[GroupId {}] Could not fence {} because the group does not exist.",
+                groupId, memberId);
+        } catch (UnknownMemberIdException ex) {
+            log.debug("[GroupId {}] Could not fence {} because the member does not exist.",
+                groupId, memberId);
+        }
+
+        return new CoordinatorResult<>(Collections.emptyList());
+    }
+
+    /**
      * Schedules (or reschedules) the session timeout for the member.
      *
      * @param groupId           The group id.
@@ -2089,25 +2122,13 @@ public class GroupMetadataManager {
         String memberId,
         int sessionTimeoutMs
     ) {
-        String key = consumerGroupSessionTimeoutKey(groupId, memberId);
-        timer.schedule(key, sessionTimeoutMs, TimeUnit.MILLISECONDS, true, () -> {
-            try {
-                ConsumerGroup group = consumerGroup(groupId);
-                ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
-                log.info("[GroupId {}] Member {} fenced from the group because its session expired.",
-                    groupId, memberId);
-
-                return consumerGroupFenceMember(group, member, null);
-            } catch (GroupIdNotFoundException ex) {
-                log.debug("[GroupId {}] Could not fence {} because the group does not exist.",
-                    groupId, memberId);
-            } catch (UnknownMemberIdException ex) {
-                log.debug("[GroupId {}] Could not fence {} because the member does not exist.",
-                    groupId, memberId);
-            }
-
-            return new CoordinatorResult<>(Collections.emptyList());
-        });
+        timer.schedule(
+            consumerGroupSessionTimeoutKey(groupId, memberId),
+            sessionTimeoutMs,
+            TimeUnit.MILLISECONDS,
+            true,
+            () -> consumerGroupFenceMemberOperation(groupId, memberId, "the member session expires.")
+        );
     }
 
     /**
@@ -2180,6 +2201,40 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Schedules a join timeout for the member.
+     *
+     * @param groupId               The group id.
+     * @param memberId              The member id.
+     * @param rebalanceTimeoutMs    The rebalance timeout.
+     */
+    private void scheduleConsumerGroupJoinTimeout(
+        String groupId,
+        String memberId,
+        int rebalanceTimeoutMs
+    ) {
+        timer.schedule(
+            consumerGroupJoinKey(groupId, memberId),
+            rebalanceTimeoutMs,
+            TimeUnit.MILLISECONDS,
+            true,
+            () -> consumerGroupFenceMemberOperation(groupId, memberId, "the member failed to join within timeout.")
+        );
+    }
+
+    /**
+     * Cancels the sync timeout of the member.
+     *
+     * @param groupId       The group id.
+     * @param memberId      The member id.
+     */
+    private void cancelConsumerGroupJoinTimeout(
+        String groupId,
+        String memberId
+    ) {
+        timer.cancel(consumerGroupJoinKey(groupId, memberId));
+    }
+
+    /**
      * Schedules a sync timeout for the member.
      *
      * @param groupId               The group id.
@@ -2191,25 +2246,13 @@ public class GroupMetadataManager {
         String memberId,
         int rebalanceTimeoutMs
     ) {
-        String key = consumerGroupSyncKey(groupId, memberId);
-        timer.schedule(key, rebalanceTimeoutMs, TimeUnit.MILLISECONDS, true, () -> {
-            try {
-                ConsumerGroup group = consumerGroup(groupId);
-                ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
-                log.info("[GroupId {}] Member {} fenced from the group because its session expired.",
-                    groupId, memberId);
-
-                return consumerGroupFenceMember(group, member, null);
-            } catch (GroupIdNotFoundException ex) {
-                log.debug("[GroupId {}] Could not fence {} because the group does not exist.",
-                    groupId, memberId);
-            } catch (UnknownMemberIdException ex) {
-                log.debug("[GroupId {}] Could not fence {} because the member does not exist.",
-                    groupId, memberId);
-            }
-
-            return new CoordinatorResult<>(Collections.emptyList());
-        });
+        timer.schedule(
+            consumerGroupSyncKey(groupId, memberId),
+            rebalanceTimeoutMs,
+            TimeUnit.MILLISECONDS,
+            true,
+            () -> consumerGroupFenceMemberOperation(groupId, memberId, "the member failed to sync within timeout.")
+        );
     }
 
     /**
@@ -4327,6 +4370,7 @@ public class GroupMetadataManager {
             member.state() == MemberState.UNRELEASED_PARTITIONS ||
             (member.state() == MemberState.UNRELEASED_PARTITIONS && !group.hasUnreleasedPartitions(member))) {
             error = Errors.REBALANCE_IN_PROGRESS;
+            scheduleConsumerGroupSyncTimeout(groupId, memberId, member.rebalanceTimeoutMs());
         }
 
         return new CoordinatorResult<>(
@@ -4672,6 +4716,20 @@ public class GroupMetadataManager {
      */
     static String classicGroupSyncKey(String groupId) {
         return "sync-" + groupId;
+    }
+
+    /**
+     * Generate a consumer group join key for the timer.
+     *
+     * Package private for testing.
+     *
+     * @param groupId   The group id.
+     * @param memberId  The member id.
+     *
+     * @return the sync key.
+     */
+    static String consumerGroupJoinKey(String groupId, String memberId) {
+        return "join-" + groupId + "-" + memberId;
     }
 
     /**
