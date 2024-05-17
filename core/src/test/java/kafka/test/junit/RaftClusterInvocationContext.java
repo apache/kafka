@@ -120,13 +120,6 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         }
 
         @Override
-        public Collection<SocketServer> brokerSocketServers() {
-            return brokers()
-                    .map(BrokerServer::socketServer)
-                    .collect(Collectors.toList());
-        }
-
-        @Override
         public ListenerName clientListener() {
             return ListenerName.normalised("EXTERNAL");
         }
@@ -228,23 +221,17 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
             }
         }
 
-        private BrokerServer findBrokerOrThrow(int brokerId) {
-            return Optional.ofNullable(clusterReference.get().brokers().get(brokerId))
-                .orElseThrow(() -> new IllegalArgumentException("Unknown brokerId " + brokerId));
-        }
 
         @Override
         public Map<Integer, KafkaBroker> brokers() {
-            return clusterReference.get().brokers().entrySet()
+            return clusterTestKit.brokers().entrySet()
                     .stream()
                     .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
         }
 
         @Override
         public Map<Integer, ControllerServer> controllers() {
-            return Collections.unmodifiableMap(clusterReference.get().controllers());
-        public Stream<ControllerServer> controllers() {
-            return clusterTestKit.controllers().values().stream();
+            return Collections.unmodifiableMap(clusterTestKit.controllers());
         }
 
         public void format() throws Exception {
