@@ -462,7 +462,7 @@ public final class Utils {
             return constructor.newInstance(args);
         } catch (NoSuchMethodException e) {
             throw new ClassNotFoundException(String.format("Failed to find " +
-                "constructor with %s for %s", Utils.join(argTypes, ", "), className), e);
+                "constructor with %s for %s", Arrays.stream(argTypes).map(Object::toString).collect(Collectors.joining(", ")), className), e);
         } catch (InstantiationException e) {
             throw new ClassNotFoundException(String.format("Failed to instantiate " +
                 "%s", className), e);
@@ -563,7 +563,7 @@ public final class Utils {
     }
 
     /**
-     * Formats a byte number as a human readable String ("3.2 MB")
+     * Formats a byte number as a human-readable String ("3.2 MB")
      * @param bytes some size in bytes
      * @return
      */
@@ -582,46 +582,6 @@ public final class Utils {
             //huge number?
             return String.valueOf(asDouble);
         }
-    }
-
-    /**
-     * Create a string representation of an array joined by the given separator
-     * @param strs The array of items
-     * @param separator The separator
-     * @return The string representation.
-     */
-    public static <T> String join(T[] strs, String separator) {
-        return join(Arrays.asList(strs), separator);
-    }
-
-    /**
-     * Create a string representation of a collection joined by the given separator
-     * @param collection The list of items
-     * @param separator The separator
-     * @return The string representation.
-     */
-    public static <T> String join(Collection<T> collection, String separator) {
-        Objects.requireNonNull(collection);
-        return mkString(collection.stream(), "", "", separator);
-    }
-
-    /**
-     * Create a string representation of a stream surrounded by `begin` and `end` and joined by `separator`.
-     *
-     * @return The string representation.
-     */
-    public static <T> String mkString(Stream<T> stream, String begin, String end, String separator) {
-        Objects.requireNonNull(stream);
-        StringBuilder sb = new StringBuilder();
-        sb.append(begin);
-        Iterator<T> iter = stream.iterator();
-        while (iter.hasNext()) {
-            sb.append(iter.next());
-            if (iter.hasNext())
-                sb.append(separator);
-        }
-        sb.append(end);
-        return sb.toString();
     }
 
     /**

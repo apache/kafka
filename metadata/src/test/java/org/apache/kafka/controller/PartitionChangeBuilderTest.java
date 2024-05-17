@@ -137,19 +137,13 @@ public class PartitionChangeBuilderTest {
                 0,
                 r -> r != 3,
                 metadataVersion,
-                2)
-                .setDefaultDirProvider(DEFAULT_DIR_PROVIDER);
+                2).
+                setEligibleLeaderReplicasEnabled(metadataVersion.isElrSupported()).
+                setDefaultDirProvider(DEFAULT_DIR_PROVIDER);
     }
 
-    private static PartitionChangeBuilder createFooBuilder(short version) {
-        return new PartitionChangeBuilder(FOO,
-                FOO_ID,
-                0,
-                r -> r != 3,
-                metadataVersionForPartitionChangeRecordVersion(version), 
-                2).
-                setEligibleLeaderReplicasEnabled(isElrEnabled(version)).
-                setDefaultDirProvider(DEFAULT_DIR_PROVIDER);
+    private static PartitionChangeBuilder createFooBuilder(short partitionChangeRecordVersion) {
+        return createFooBuilder(metadataVersionForPartitionChangeRecordVersion(partitionChangeRecordVersion));
     }
 
     private static final PartitionRegistration BAR = new PartitionRegistration.Builder().
@@ -295,102 +289,145 @@ public class PartitionChangeBuilderTest {
         assertElectLeaderEquals(createBazBuilder(version).setElection(Election.UNCLEAN), 3, false);
     }
 
-    private static void testTriggerLeaderEpochBumpIfNeededLeader(PartitionChangeBuilder builder,
-                                                                 PartitionChangeRecord record,
-                                                                 int expectedLeader) {
-        builder.triggerLeaderEpochBumpIfNeeded(record);
+    private static void testTriggerLeaderEpochBumpIfNeeded(
+        PartitionChangeBuilder builder,
+        PartitionChangeRecord record,
+        int expectedLeader
+    ) {
+        builder.triggerLeaderEpochBumpForReplicaReassignmentIfNeeded(record);
+        record.setIsr(builder.targetIsr());
+        builder.triggerLeaderEpochBumpForIsrShrinkIfNeeded(record);
         assertEquals(expectedLeader, record.leader());
     }
 
     @ParameterizedTest
     @MethodSource("partitionChangeRecordVersions")
-    public void testTriggerLeaderEpochBumpIfNeeded(short version) {
-        testTriggerLeaderEpochBumpIfNeededLeader(createFooBuilder(version),
-            new PartitionChangeRecord(), NO_LEADER_CHANGE);
-        // Shrinking the ISR doesn't increase the leader epoch
-        testTriggerLeaderEpochBumpIfNeededLeader(
-            createFooBuilder(version).setTargetIsrWithBrokerStates(
-                AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(2, 1))
-            ),
+    public void testNoLeaderEpochBumpIfNothingChanged(short version) {
+        testTriggerLeaderEpochBumpIfNeeded(createFooBuilder(version),
             new PartitionChangeRecord(),
-            NO_LEADER_CHANGE
-        );
-        // Expanding the ISR doesn't increase the leader epoch
-        testTriggerLeaderEpochBumpIfNeededLeader(
-            createFooBuilder(version).setTargetIsrWithBrokerStates(
-                AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(2, 1, 3, 4))
-            ),
-            new PartitionChangeRecord(),
-            NO_LEADER_CHANGE
-        );
-        // Expanding the ISR during migration doesn't increase leader epoch
-        testTriggerLeaderEpochBumpIfNeededLeader(
-            createFooBuilder(version)
-                .setTargetIsrWithBrokerStates(
-                    AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(2, 1, 3, 4)))
-                .setZkMigrationEnabled(true),
-            new PartitionChangeRecord(),
-            NO_LEADER_CHANGE
-        );
-        testTriggerLeaderEpochBumpIfNeededLeader(createFooBuilder(version).
-            setTargetReplicas(Arrays.asList(2, 1, 3, 4)), new PartitionChangeRecord(),
             NO_LEADER_CHANGE);
-        testTriggerLeaderEpochBumpIfNeededLeader(createFooBuilder(version).
-            setTargetReplicas(Arrays.asList(2, 1, 3, 4)),
-            new PartitionChangeRecord().setLeader(2), 2);
-
-        // Check that the leader epoch is bump if the ISR shrinks and isSkipLeaderEpochBumpSupported is not supported.
-        // See KAFKA-15021 for details.
-        testTriggerLeaderEpochBumpIfNeededLeader(
-            new PartitionChangeBuilder(FOO, FOO_ID, 0, r -> r != 3, MetadataVersion.IBP_3_5_IV2, 2)
-                .setTargetIsrWithBrokerStates(
-                    AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(2, 1))
-                ),
-            new PartitionChangeRecord(),
-            1
-        );
     }
 
+    /**
+     * Test that shrinking the ISR doesn't increase the leader epoch in later MVs.
+     */
     @ParameterizedTest
-    @MethodSource("partitionChangeRecordVersions")
-    public void testLeaderEpochBumpZkMigration(short version) {
-        // KAFKA-15109: Shrinking the ISR while in ZK migration mode requires a leader epoch bump
-        testTriggerLeaderEpochBumpIfNeededLeader(
-            createFooBuilder(version)
-                .setTargetIsrWithBrokerStates(
-                    AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(2, 1)))
-                .setZkMigrationEnabled(true),
+    @ValueSource(strings = {"3.6-IV0", "3.7-IV4"})
+    public void testNoLeaderEpochBumpOnIsrShrink(String metadataVersionString) {
+        MetadataVersion metadataVersion = MetadataVersion.fromVersionString(metadataVersionString);
+        testTriggerLeaderEpochBumpIfNeeded(
+            createFooBuilder(metadataVersion).setTargetIsrWithBrokerStates(
+                AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(2, 1))),
             new PartitionChangeRecord(),
-            1
-        );
+            NO_LEADER_CHANGE);
+    }
 
-        testTriggerLeaderEpochBumpIfNeededLeader(
-            createFooBuilder(version)
-                .setTargetIsrWithBrokerStates(
-                    AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(2, 1)))
-                .setZkMigrationEnabled(false),
+    /**
+     * Test that shrinking the ISR does increase the leader epoch in earlier MVs.
+     * See KAFKA-15021 for details.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"3.4-IV0", "3.5-IV2"})
+    public void testLeaderEpochBumpOnIsrShrink(String metadataVersionString) {
+        MetadataVersion metadataVersion = MetadataVersion.fromVersionString(metadataVersionString);
+        testTriggerLeaderEpochBumpIfNeeded(
+            createFooBuilder(metadataVersion).setTargetIsrWithBrokerStates(
+                AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(2, 1))),
             new PartitionChangeRecord(),
-            NO_LEADER_CHANGE
-        );
+            1);
+    }
 
-        // For older MV, always expect the epoch to increase regardless of ZK migration
-        testTriggerLeaderEpochBumpIfNeededLeader(
-            createFooBuilder(MetadataVersion.IBP_3_5_IV2)
-                .setTargetIsrWithBrokerStates(
-                    AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(2, 1)))
-                .setZkMigrationEnabled(true),
+    /**
+     * Test that shrinking the ISR does increase the leader epoch in later MVs when ZK migration is on.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"3.6-IV0", "3.7-IV4"})
+    public void testLeaderEpochBumpOnIsrShrinkWithZkMigration(String metadataVersionString) {
+        MetadataVersion metadataVersion = MetadataVersion.fromVersionString(metadataVersionString);
+        testTriggerLeaderEpochBumpIfNeeded(
+            createFooBuilder(metadataVersion).
+                setZkMigrationEnabled(true).
+                setTargetIsrWithBrokerStates(
+                    AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(2, 1))),
             new PartitionChangeRecord(),
-            1
-        );
+            1);
+    }
 
-        testTriggerLeaderEpochBumpIfNeededLeader(
-            createFooBuilder(MetadataVersion.IBP_3_5_IV2)
-                .setTargetIsrWithBrokerStates(
-                    AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(2, 1)))
-                .setZkMigrationEnabled(false),
+    /**
+     * Test that expanding the ISR doesn't increase the leader epoch.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"3.4-IV0", "3.5-IV2", "3.6-IV0", "3.7-IV4"})
+    public void testNoLeaderEpochBumpOnIsrExpansion(String metadataVersionString) {
+        MetadataVersion metadataVersion = MetadataVersion.fromVersionString(metadataVersionString);
+        testTriggerLeaderEpochBumpIfNeeded(
+            createFooBuilder(metadataVersion).setTargetIsrWithBrokerStates(
+                AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(2, 1, 3, 4))),
             new PartitionChangeRecord(),
-            1
-        );
+            NO_LEADER_CHANGE);
+    }
+
+    /**
+     * Test that expanding the ISR doesn't increase the leader epoch during ZK migration.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"3.4-IV0", "3.5-IV2", "3.6-IV0", "3.7-IV4"})
+    public void testNoLeaderEpochBumpOnIsrExpansionDuringMigration(String metadataVersionString) {
+        MetadataVersion metadataVersion = MetadataVersion.fromVersionString(metadataVersionString);
+        testTriggerLeaderEpochBumpIfNeeded(
+            createFooBuilder(metadataVersion).
+                setZkMigrationEnabled(true).
+                setTargetIsrWithBrokerStates(
+                    AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(Arrays.asList(2, 1, 3, 4))),
+            new PartitionChangeRecord(),
+            NO_LEADER_CHANGE);
+    }
+
+    /**
+     * Test that changing the replica set such that not all the old replicas remain
+     * always results in a leader epoch increase.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"3.4-IV0", "3.5-IV2", "3.6-IV0", "3.7-IV4"})
+    public void testLeaderEpochBumpOnNewReplicaSetDisjoint(String metadataVersionString) {
+        MetadataVersion metadataVersion = MetadataVersion.fromVersionString(metadataVersionString);
+        testTriggerLeaderEpochBumpIfNeeded(
+            createFooBuilder(metadataVersion).setTargetReplicas(Arrays.asList(2, 1, 4)),
+            new PartitionChangeRecord(),
+            1);
+    }
+
+    /**
+     * Regression test for KAFKA-16624. Tests that when targetIsr is the empty list, but we
+     * cannot actually change the ISR, triggerLeaderEpochBumpForIsrShrinkIfNeeded does not engage.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"3.4-IV0", "3.5-IV2", "3.6-IV0", "3.7-IV4"})
+    public void testNoLeaderEpochBumpOnEmptyTargetIsr(String metadataVersionString) {
+        MetadataVersion metadataVersion = MetadataVersion.fromVersionString(metadataVersionString);
+        PartitionRegistration partition = new PartitionRegistration.Builder().
+            setReplicas(new int[] {2}).
+            setDirectories(new Uuid[]{
+                Uuid.fromString("dpdvA5AZSWySmnPFTnu5Kw")
+            }).
+            setIsr(new int[] {2}).
+            setLeader(2).
+            setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
+            setLeaderEpoch(100).
+            setPartitionEpoch(200).
+            build();
+        PartitionChangeBuilder builder = new PartitionChangeBuilder(partition,
+            FOO_ID,
+            0,
+            r -> true,
+            metadataVersion,
+            2).
+            setEligibleLeaderReplicasEnabled(metadataVersion.isElrSupported()).
+            setDefaultDirProvider(DEFAULT_DIR_PROVIDER).
+            setTargetReplicas(Arrays.asList());
+        PartitionChangeRecord record = new PartitionChangeRecord();
+        builder.triggerLeaderEpochBumpForIsrShrinkIfNeeded(record);
+        assertEquals(NO_LEADER_CHANGE, record.leader());
     }
 
     @ParameterizedTest

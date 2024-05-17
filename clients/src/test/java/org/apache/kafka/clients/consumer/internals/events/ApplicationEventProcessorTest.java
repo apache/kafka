@@ -47,16 +47,9 @@ import static org.mockito.Mockito.when;
 
 public class ApplicationEventProcessorTest {
     private final Time time = new MockTime(1);
+    private final BlockingQueue applicationEventQueue = mock(BlockingQueue.class);
+    private final ConsumerMetadata metadata = mock(ConsumerMetadata.class);
     private ApplicationEventProcessor processor;
-    private BlockingQueue applicationEventQueue = mock(BlockingQueue.class);
-    private RequestManagers requestManagers;
-    private ConsumerMetadata metadata = mock(ConsumerMetadata.class);
-    private NetworkClientDelegate networkClientDelegate = mock(NetworkClientDelegate.class);
-    private OffsetsRequestManager offsetRequestManager;
-    private OffsetsRequestManager offsetsRequestManager;
-    private TopicMetadataRequestManager topicMetadataRequestManager;
-    private FetchRequestManager fetchRequestManager;
-    private CoordinatorRequestManager coordinatorRequestManager;
     private CommitRequestManager commitRequestManager;
     private HeartbeatRequestManager heartbeatRequestManager;
     private MembershipManager membershipManager;
@@ -65,15 +58,14 @@ public class ApplicationEventProcessorTest {
     @SuppressWarnings("unchecked")
     public void setup() {
         LogContext logContext = new LogContext();
-        offsetRequestManager = mock(OffsetsRequestManager.class);
-        offsetsRequestManager = mock(OffsetsRequestManager.class);
-        topicMetadataRequestManager = mock(TopicMetadataRequestManager.class);
-        fetchRequestManager = mock(FetchRequestManager.class);
-        coordinatorRequestManager = mock(CoordinatorRequestManager.class);
+        OffsetsRequestManager offsetsRequestManager = mock(OffsetsRequestManager.class);
+        TopicMetadataRequestManager topicMetadataRequestManager = mock(TopicMetadataRequestManager.class);
+        FetchRequestManager fetchRequestManager = mock(FetchRequestManager.class);
+        CoordinatorRequestManager coordinatorRequestManager = mock(CoordinatorRequestManager.class);
         commitRequestManager = mock(CommitRequestManager.class);
         heartbeatRequestManager = mock(HeartbeatRequestManager.class);
         membershipManager = mock(MembershipManager.class);
-        requestManagers = new RequestManagers(
+        RequestManagers requestManagers = new RequestManagers(
             logContext,
             offsetsRequestManager,
             topicMetadataRequestManager,

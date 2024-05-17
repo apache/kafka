@@ -17,37 +17,35 @@
 
 package kafka.server
 
+import java.net.InetSocketAddress
+import java.util
+import java.util.{Collections, Properties}
 import kafka.cluster.EndPoint
 import kafka.security.authorizer.AclAuthorizer
 import kafka.utils.TestUtils.assertBadConfigContainingMessage
 import kafka.utils.{CoreUtils, TestUtils}
+import org.apache.kafka.common.Node
 import org.apache.kafka.common.config.{ConfigException, TopicConfig}
 import org.apache.kafka.common.metrics.Sensor
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.record.{CompressionType, Records}
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.raft.QuorumConfig
-import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Test
-
-import java.net.InetSocketAddress
-import java.util
-import java.util.{Collections, Properties}
-import org.apache.kafka.common.Node
 import org.apache.kafka.coordinator.group.ConsumerGroupMigrationPolicy
 import org.apache.kafka.coordinator.group.Group.GroupType
-import org.apache.kafka.coordinator.transaction.{TransactionLogConfigs, TransactionStateManagerConfigs}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
-import org.apache.kafka.security.PasswordEncoderConfigs
+import org.apache.kafka.coordinator.transaction.{TransactionLogConfigs, TransactionStateManagerConfigs}
 import org.apache.kafka.network.SocketServerConfigs
+import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.security.PasswordEncoderConfigs
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_8_2, IBP_3_0_IV1}
 import org.apache.kafka.server.config.{KRaftConfigs, KafkaSecurityConfigs, QuotaConfigs, ReplicationConfigs, ServerLogConfigs, ServerTopicConfigSynonyms, ZkConfigs}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.MetricConfigs
 import org.apache.kafka.storage.internals.log.CleanerConfig
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.function.Executable
-
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
@@ -1341,29 +1339,31 @@ class KafkaConfigTest {
   }
 
   @Test
-  def testValidQuorumVotersConfig(): Unit = {
-    val expected = new util.HashMap[Integer, QuorumConfig.AddressSpec]()
-    assertValidQuorumVoters("", expected)
-
-    expected.put(1, new QuorumConfig.InetAddressSpec(new InetSocketAddress("127.0.0.1", 9092)))
-    assertValidQuorumVoters("1@127.0.0.1:9092", expected)
-
-    expected.clear()
-    expected.put(1, QuorumConfig.UNKNOWN_ADDRESS_SPEC_INSTANCE)
-    assertValidQuorumVoters("1@0.0.0.0:0", expected)
-
-    expected.clear()
-    expected.put(1, new QuorumConfig.InetAddressSpec(new InetSocketAddress("kafka1", 9092)))
-    expected.put(2, new QuorumConfig.InetAddressSpec(new InetSocketAddress("kafka2", 9092)))
-    expected.put(3, new QuorumConfig.InetAddressSpec(new InetSocketAddress("kafka3", 9092)))
-    assertValidQuorumVoters("1@kafka1:9092,2@kafka2:9092,3@kafka3:9092", expected)
+  def testValidEmptyQuorumVotersParsing(): Unit = {
+    assertValidQuorumVoters(new util.HashMap[Integer, InetSocketAddress](), "")
   }
 
-  private def assertValidQuorumVoters(value: String, expectedVoters: util.Map[Integer, QuorumConfig.AddressSpec]): Unit = {
+  @Test
+  def testValidQuorumVotersParsingWithIpAddress(): Unit = {
+    val expected = new util.HashMap[Integer, InetSocketAddress]()
+    expected.put(1, new InetSocketAddress("127.0.0.1", 9092))
+    assertValidQuorumVoters(expected, "1@127.0.0.1:9092")
+  }
+
+  @Test
+  def testValidQuorumVotersParsingWithMultipleHost(): Unit = {
+    val expected = new util.HashMap[Integer, InetSocketAddress]()
+    expected.put(1, new InetSocketAddress("kafka1", 9092))
+    expected.put(2, new InetSocketAddress("kafka2", 9092))
+    expected.put(3, new InetSocketAddress("kafka3", 9092))
+    assertValidQuorumVoters(expected, "1@kafka1:9092,2@kafka2:9092,3@kafka3:9092")
+  }
+
+  private def assertValidQuorumVoters(expectedVoters: util.Map[Integer, InetSocketAddress], value: String): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, value)
-    val raftConfig = new QuorumConfig(KafkaConfig.fromProps(props))
-    assertEquals(expectedVoters, raftConfig.quorumVoterConnections())
+    val addresses = QuorumConfig.parseVoterConnections(KafkaConfig.fromProps(props).quorumVoters)
+    assertEquals(expectedVoters, addresses)
   }
 
   @Test

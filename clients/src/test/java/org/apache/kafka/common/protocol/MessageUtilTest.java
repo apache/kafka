@@ -101,7 +101,7 @@ public final class MessageUtilTest {
 
         JsonNode textNode = mapper.readTree(writer.toString());
 
-        assertTrue(textNode.isTextual(), String.format("Expected a JSON string but was: %s", textNode.toString()));
+        assertTrue(textNode.isTextual(), String.format("Expected a JSON string but was: %s", textNode));
         byte[] actual = MessageUtil.jsonNodeToBinary(textNode, "Test base64 JSON string");
         assertArrayEquals(expected, actual);
     }

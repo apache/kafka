@@ -128,14 +128,14 @@ public abstract class SslSelectorTest extends SelectorTest {
 
         TestUtils.waitForCondition(() -> cipherMetrics(metrics).size() == 1,
             "Waiting for cipher metrics to be created.");
-        assertEquals(Integer.valueOf(1), cipherMetrics(metrics).get(0).metricValue());
+        assertEquals(1, cipherMetrics(metrics).get(0).metricValue());
         assertNotNull(selector.channel(node).channelMetadataRegistry().cipherInformation());
 
         selector.close(node);
         super.verifySelectorEmpty(selector);
 
         assertEquals(1, cipherMetrics(metrics).size());
-        assertEquals(Integer.valueOf(0), cipherMetrics(metrics).get(0).metricValue());
+        assertEquals(0, cipherMetrics(metrics).get(0).metricValue());
 
         Security.removeProvider(testProviderCreator.getProvider().getName());
         selector.close();
@@ -349,8 +349,7 @@ public abstract class SslSelectorTest extends SelectorTest {
                                                         ChannelMetadataRegistry metadataRegistry) {
             SocketChannel socketChannel = (SocketChannel) key.channel();
             SSLEngine sslEngine = sslFactory.createSslEngine(socketChannel.socket());
-            TestSslTransportLayer transportLayer = new TestSslTransportLayer(id, key, sslEngine, metadataRegistry);
-            return transportLayer;
+            return new TestSslTransportLayer(id, key, sslEngine, metadataRegistry);
         }
 
         /*

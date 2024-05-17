@@ -22,11 +22,12 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
-import org.apache.kafka.common.metrics.stats.Min;
+import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorRuntime.CoordinatorState;
 
 import java.util.Arrays;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 
@@ -77,7 +78,7 @@ public class GroupCoordinatorRuntimeMetrics implements CoordinatorRuntimeMetrics
     /**
      * The thread idle sensor.
      */
-    private final Sensor threadIdleRatioSensor;
+    private final Sensor threadIdleSensor;
 
     public GroupCoordinatorRuntimeMetrics(Metrics metrics) {
         this.metrics = Objects.requireNonNull(metrics);
@@ -95,7 +96,7 @@ public class GroupCoordinatorRuntimeMetrics implements CoordinatorRuntimeMetrics
         );
 
         this.numPartitionsFailed = kafkaMetricName(
-            NUM_PARTITIONS_METRIC_NAME,
+        NUM_PARTITIONS_METRIC_NAME,
             "The number of partitions in Failed state.",
             "state", "failed"
         );
@@ -120,19 +121,13 @@ public class GroupCoordinatorRuntimeMetrics implements CoordinatorRuntimeMetrics
                 "The average time it took to load the partitions in the last 30 sec."
             ), new Avg());
 
-        this.threadIdleRatioSensor = metrics.sensor("ThreadIdleRatio");
-        this.threadIdleRatioSensor.add(
-            metrics.metricName(
-                "thread-idle-ratio-min",
-                METRICS_GROUP,
-                "The minimum thread idle ratio over the last 30 seconds."
-            ), new Min());
-        this.threadIdleRatioSensor.add(
-            metrics.metricName(
-                "thread-idle-ratio-avg",
-                METRICS_GROUP,
-                "The average thread idle ratio over the last 30 seconds."
-            ), new Avg());
+        this.threadIdleSensor = metrics.sensor("ThreadIdleRatio");
+        this.threadIdleSensor.add(metrics.metricName(
+            "thread-idle-ratio-avg",
+            METRICS_GROUP,
+            "The fraction of time the threads spent waiting for an event. This is an average across " +
+                "all coordinator event processor threads."),
+            new Rate(TimeUnit.MILLISECONDS));
     }
 
     /**
@@ -156,7 +151,7 @@ public class GroupCoordinatorRuntimeMetrics implements CoordinatorRuntimeMetrics
         ).forEach(metrics::removeMetric);
 
         metrics.removeSensor(partitionLoadSensor.name());
-        metrics.removeSensor(threadIdleRatioSensor.name());
+        metrics.removeSensor(threadIdleSensor.name());
     }
 
     /**
@@ -208,8 +203,8 @@ public class GroupCoordinatorRuntimeMetrics implements CoordinatorRuntimeMetrics
     public void recordEventQueueProcessingTime(long durationMs) { }
 
     @Override
-    public void recordThreadIdleRatio(double ratio) {
-        threadIdleRatioSensor.record(ratio);
+    public void recordThreadIdleTime(long idleTimeMs) {
+        threadIdleSensor.record(idleTimeMs);
     }
 
     @Override

@@ -852,9 +852,12 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     /**
      * Asynchronously send a record to a topic and invoke the provided callback when the send has been acknowledged.
      * <p>
-     * The send is asynchronous and this method will return immediately once the record has been stored in the buffer of
-     * records waiting to be sent. This allows sending many records in parallel without blocking to wait for the
-     * response after each one.
+     * The send is asynchronous and this method will return immediately (except for rare cases described below)
+     * once the record has been stored in the buffer of records waiting to be sent.
+     * This allows sending many records in parallel without blocking to wait for the response after each one.
+     * Can block for the following cases: 1) For the first record being sent to 
+     * the cluster by this client for the given topic. In this case it will block for up to {@code max.block.ms} milliseconds if 
+     * Kafka cluster is unreachable; 2) Allocating a buffer if buffer pool doesn't have any free buffers.
      * <p>
      * The result of the send is a {@link RecordMetadata} specifying the partition the record was sent to, the offset
      * it was assigned and the timestamp of the record. If the producer is configured with acks = 0, the {@link RecordMetadata}

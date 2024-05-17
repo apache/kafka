@@ -47,13 +47,11 @@ import static java.lang.Math.min;
  * <li> Balance:          Ensure partitions are distributed equally among all members.
  *                        The difference in assignments sizes between any two members
  *                        should not exceed one partition. </li>
- * <li> Rack Matching:    When feasible, aim to assign partitions to members
- *                        located on the same rack thus avoiding cross-zone traffic. </li>
  * <li> Stickiness:       Minimize partition movements among members by retaining
  *                        as much of the existing assignment as possible. </li>
  *
  * The assignment builder prioritizes the properties in the following order:
- *      Balance > Rack Matching > Stickiness.
+ *      Balance > Stickiness.
  */
 public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignmentBuilder {
     private static final Logger LOG = LoggerFactory.getLogger(OptimizedUniformAssignmentBuilder.class);
@@ -72,11 +70,6 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
      * The set of topic Ids that the consumer group is subscribed to.
      */
     private final Set<Uuid> subscribedTopicIds;
-
-    /**
-     * Rack information and helper methods.
-     */
-    private final RackInfo rackInfo;
 
     /**
      * The number of members to receive an extra partition beyond the minimum quota.
@@ -103,22 +96,12 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
      */
     private final Map<String, MemberAssignment> targetAssignment;
 
-    /**
-     * Tracks the existing owner of each partition.
-     * Only populated when the rack awareness strategy is used.
-     */
-    private final Map<TopicIdPartition, String> currentPartitionOwners;
-
     OptimizedUniformAssignmentBuilder(AssignmentSpec assignmentSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
         this.assignmentSpec = assignmentSpec;
         this.subscribedTopicDescriber = subscribedTopicDescriber;
         this.subscribedTopicIds = new HashSet<>(assignmentSpec.members().values().iterator().next().subscribedTopicIds());
-        this.rackInfo = new RackInfo(assignmentSpec, subscribedTopicDescriber, subscribedTopicIds);
         this.potentiallyUnfilledMembers = new HashMap<>();
         this.targetAssignment = new HashMap<>();
-        // Without rack-aware strategy, tracking current owners of unassigned partitions is unnecessary
-        // as all sticky partitions are retained until a member meets its quota.
-        this.currentPartitionOwners = rackInfo.useRackStrategy ? new HashMap<>() : Collections.emptyMap();
     }
 
     /**
@@ -127,13 +110,10 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
      * <li> Compute the quotas of partitions for each member based on the total partitions and member count.</li>
      * <li> Initialize unassigned partitions to all the topic partitions and
      *      remove partitions from the list as and when they are assigned.</li>
-     * <li> For existing assignments, retain partitions based on the determined quota and member's rack compatibility.</li>
-     * <li> If a partition's rack mismatches with its owner, track it for future use.</li>
+     * <li> For existing assignments, retain partitions based on the determined quota.</li>
      * <li> Identify members that haven't fulfilled their partition quota or are eligible to receive extra partitions.</li>
-     * <li> Proceed with a round-robin assignment adhering to rack awareness.
+     * <li> Proceed with a round-robin assignment according to quotas.
      *      For each unassigned partition, locate the first compatible member from the potentially unfilled list.</li>
-     * <li> If no rack-compatible member is found, revert to the tracked current owner.
-     *      If that member can't accommodate the partition due to quota limits, resort to a generic round-robin assignment.</li>
      */
     @Override
     protected GroupAssignment buildAssignment() throws PartitionAssignorException {
@@ -168,7 +148,6 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
         unassignedPartitions = topicIdPartitions(subscribedTopicIds, subscribedTopicDescriber);
         potentiallyUnfilledMembers = assignStickyPartitions(minQuota);
 
-        if (rackInfo.useRackStrategy) rackAwarePartitionAssignment();
         unassignedPartitionsRoundRobinAssignment();
 
         if (!unassignedPartitions.isEmpty()) {
@@ -181,13 +160,10 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
     /**
      * Retains a set of partitions from the existing assignment and includes them in the target assignment.
      * Only relevant partitions that exist in the current topic metadata and subscriptions are considered.
-     * In addition, if rack awareness is enabled, it is ensured that a partition's rack matches the member's rack.
      *
      * <p> For each member:
      * <ol>
-     *     <li> Find the valid current assignment considering topic subscriptions, metadata and rack information.</li>
-     *     <li> When rack aware strategy is used, only partitions with their rack matching their current
-     *          owner's rack are returned in the valid assignment.</li>
+     *     <li> Find the valid current assignment considering topic subscriptions and metadata</li>
      *     <li> If the current assignment exists, retain partitions up to the minimum quota.</li>
      *     <li> If the current assignment size is greater than the minimum quota and
      *          there are members that could get an extra partition, assign the next partition as well.</li>
@@ -205,7 +181,6 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
 
         assignmentSpec.members().forEach((memberId, assignmentMemberSpec) -> {
             List<TopicIdPartition> validCurrentMemberAssignment = validCurrentMemberAssignment(
-                memberId,
                 assignmentMemberSpec.assignedPartitions()
             );
 
@@ -252,16 +227,12 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
      * Filters the current assignment of partitions for a given member based on certain criteria.
      *
      * Any partition that still belongs to the member's subscribed topics list is considered valid.
-     * If rack aware strategy can be used: Only partitions with matching rack are valid and non-matching partitions are
-     * tracked with their current owner for future use.
      *
-     * @param memberId                      The Id of the member whose assignment is being validated.
      * @param currentMemberAssignment       The map of topics to partitions currently assigned to the member.
      *
      * @return List of valid partitions after applying the filters.
      */
     private List<TopicIdPartition> validCurrentMemberAssignment(
-        String memberId,
         Map<Uuid, Set<Integer>> currentMemberAssignment
     ) {
         List<TopicIdPartition> validCurrentAssignmentList = new ArrayList<>();
@@ -269,11 +240,7 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
             if (subscribedTopicIds.contains(topicId)) {
                 partitions.forEach(partition -> {
                     TopicIdPartition topicIdPartition = new TopicIdPartition(topicId, partition);
-                    if (rackInfo.useRackStrategy && rackInfo.racksMismatch(memberId, topicIdPartition)) {
-                        currentPartitionOwners.put(topicIdPartition, memberId);
-                    } else {
-                        validCurrentAssignmentList.add(topicIdPartition);
-                    }
+                    validCurrentAssignmentList.add(topicIdPartition);
                 });
             } else {
                 LOG.debug("The topic " + topicId + " is no longer present in the subscribed topics list");
@@ -284,36 +251,7 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
     }
 
     /**
-     * Allocates the unassigned partitions to unfilled members present in the same rack.
-     * Partitions with the least number of potential members in the same rack are allotted first.
-     * Members in the same rack with the least number of partitions in the target assignment
-     * are assigned partitions first.
-     */
-    private void rackAwarePartitionAssignment() {
-        // Sort partitions in ascending order by number of potential members with matching racks.
-        // Partitions with no potential members in the same rack aren't included in this list.
-        List<TopicIdPartition> sortedPartitions = rackInfo.sortPartitionsByRackMembers(unassignedPartitions);
-
-        sortedPartitions.forEach(partition -> {
-            List<String> sortedMembersWithMatchingRack = rackInfo.getSortedMembersWithMatchingRack(partition, targetAssignment);
-
-            for (String memberId : sortedMembersWithMatchingRack) {
-                if (potentiallyUnfilledMembers.containsKey(memberId) && maybeAssignPartitionToMember(memberId, partition)) {
-                    unassignedPartitions.remove(partition);
-                    break;
-                }
-            }
-        });
-    }
-
-    /**
      * Allocates the unassigned partitions to unfilled members in a round-robin fashion.
-     *
-     * If the rack-aware strategy is enabled, partitions are attempted to be assigned back to their current owners first.
-     * This is because pure stickiness without rack matching is not considered initially.
-     *
-     * If a partition couldn't be assigned to its current owner due to the quotas OR
-     * if the rack-aware strategy is not enabled, the partitions are allocated to the unfilled members.
      */
     private void unassignedPartitionsRoundRobinAssignment() {
         Queue<String> roundRobinMembers = new LinkedList<>(potentiallyUnfilledMembers.keySet());
@@ -326,16 +264,6 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
 
         for (TopicIdPartition topicIdPartition : sortedPartitionsList) {
             boolean assigned = false;
-
-            if (rackInfo.useRackStrategy && currentPartitionOwners.containsKey(topicIdPartition)) {
-                String currentOwner = currentPartitionOwners.get(topicIdPartition);
-                if (potentiallyUnfilledMembers.containsKey(currentOwner)) {
-                    assigned = maybeAssignPartitionToMember(currentOwner, topicIdPartition);
-                    if (!potentiallyUnfilledMembers.containsKey(currentOwner)) {
-                        roundRobinMembers.remove(currentOwner);
-                    }
-                }
-            }
 
             for (int i = 0; i < roundRobinMembers.size() && !assigned; i++) {
                 String memberId = roundRobinMembers.poll();

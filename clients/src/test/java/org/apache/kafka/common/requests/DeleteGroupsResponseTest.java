@@ -34,47 +34,44 @@ public class DeleteGroupsResponseTest {
     private static final String GROUP_ID_1 = "groupId1";
     private static final String GROUP_ID_2 = "groupId2";
     private static final int THROTTLE_TIME_MS = 10;
-    private static DeleteGroupsResponse deleteGroupsResponse;
-
-    static {
-        deleteGroupsResponse = new DeleteGroupsResponse(
-            new DeleteGroupsResponseData()
-                .setResults(
-                    new DeletableGroupResultCollection(Arrays.asList(
-                        new DeletableGroupResult()
-                            .setGroupId(GROUP_ID_1)
-                            .setErrorCode(Errors.NONE.code()),
-                        new DeletableGroupResult()
-                            .setGroupId(GROUP_ID_2)
-                            .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code())).iterator()
-                    )
+    private static final DeleteGroupsResponse DELETE_GROUPS_RESPONSE = new DeleteGroupsResponse(
+        new DeleteGroupsResponseData()
+            .setResults(
+                new DeletableGroupResultCollection(Arrays.asList(
+                    new DeletableGroupResult()
+                        .setGroupId(GROUP_ID_1)
+                        .setErrorCode(Errors.NONE.code()),
+                    new DeletableGroupResult()
+                        .setGroupId(GROUP_ID_2)
+                        .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code())).iterator()
                 )
-                .setThrottleTimeMs(THROTTLE_TIME_MS));
-    }
+            )
+            .setThrottleTimeMs(THROTTLE_TIME_MS));
+
 
     @Test
     public void testGetErrorWithExistingGroupIds() {
-        assertEquals(Errors.NONE, deleteGroupsResponse.get(GROUP_ID_1));
-        assertEquals(Errors.GROUP_AUTHORIZATION_FAILED, deleteGroupsResponse.get(GROUP_ID_2));
+        assertEquals(Errors.NONE, DELETE_GROUPS_RESPONSE.get(GROUP_ID_1));
+        assertEquals(Errors.GROUP_AUTHORIZATION_FAILED, DELETE_GROUPS_RESPONSE.get(GROUP_ID_2));
 
         Map<String, Errors> expectedErrors = new HashMap<>();
         expectedErrors.put(GROUP_ID_1, Errors.NONE);
         expectedErrors.put(GROUP_ID_2, Errors.GROUP_AUTHORIZATION_FAILED);
-        assertEquals(expectedErrors, deleteGroupsResponse.errors());
+        assertEquals(expectedErrors, DELETE_GROUPS_RESPONSE.errors());
 
         Map<Errors, Integer> expectedErrorCounts = new HashMap<>();
         expectedErrorCounts.put(Errors.NONE, 1);
         expectedErrorCounts.put(Errors.GROUP_AUTHORIZATION_FAILED, 1);
-        assertEquals(expectedErrorCounts, deleteGroupsResponse.errorCounts());
+        assertEquals(expectedErrorCounts, DELETE_GROUPS_RESPONSE.errorCounts());
     }
 
     @Test
     public void testGetErrorWithInvalidGroupId() {
-        assertThrows(IllegalArgumentException.class, () -> deleteGroupsResponse.get("invalid-group-id"));
+        assertThrows(IllegalArgumentException.class, () -> DELETE_GROUPS_RESPONSE.get("invalid-group-id"));
     }
 
     @Test
     public void testGetThrottleTimeMs() {
-        assertEquals(THROTTLE_TIME_MS, deleteGroupsResponse.throttleTimeMs());
+        assertEquals(THROTTLE_TIME_MS, DELETE_GROUPS_RESPONSE.throttleTimeMs());
     }
 }

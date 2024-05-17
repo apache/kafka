@@ -17,7 +17,6 @@
 package kafka.admin;
 
 import kafka.cluster.Broker;
-import kafka.utils.TestUtils;
 import kafka.zk.AdminZkClient;
 import kafka.zk.KafkaZkClient;
 import org.apache.kafka.clients.admin.Admin;
@@ -36,7 +35,6 @@ import org.apache.kafka.clients.admin.DescribeConfigsResult;
 import org.apache.kafka.clients.admin.DescribeUserScramCredentialsOptions;
 import org.apache.kafka.clients.admin.DescribeUserScramCredentialsResult;
 import org.apache.kafka.clients.admin.MockAdminClient;
-import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
@@ -47,32 +45,43 @@ import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.quota.ClientQuotaFilterComponent;
 import org.apache.kafka.common.security.scram.ScramCredential;
 import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Sanitizer;
 import org.apache.kafka.server.config.ConfigType;
 import org.apache.kafka.server.config.ZooKeeperInternals;
+import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import scala.collection.JavaConverters;
 import scala.collection.Seq;
 
 import java.io.File;
+import java.io.IOException;
+import java.util.AbstractMap.SimpleImmutableEntry;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -145,33 +154,52 @@ public class ConfigCommandTest {
             "--describe");
     }
 
+    public static void assertNonZeroStatusExit(String... args) {
+        AtomicReference<Integer> exitStatus = new AtomicReference<>();
+        Exit.setExitProcedure((status, __) -> {
+            exitStatus.set(status);
+            throw new RuntimeException();
+        });
+
+        try {
+            ConfigCommand.main(args);
+        } catch (RuntimeException e) {
+            // do nothing.
+        } finally {
+            Exit.resetExitProcedure();
+        }
+
+        assertNotNull(exitStatus.get());
+        assertEquals(1, exitStatus.get());
+    }
+
     @Test
     public void shouldFailParseArgumentsForClientsEntityTypeUsingZookeeper() {
         assertThrows(IllegalArgumentException.class, () -> testArgumentParse(ZOOKEEPER_BOOTSTRAP, "clients"));
     }
 
     @Test
-    public void shouldParseArgumentsForClientsEntityTypeWithBrokerBootstrap() throws Exception {
+    public void shouldParseArgumentsForClientsEntityTypeWithBrokerBootstrap() {
         testArgumentParse(BROKER_BOOTSTRAP, "clients");
     }
 
     @Test
-    public void shouldParseArgumentsForClientsEntityTypeWithControllerBootstrap() throws Exception {
+    public void shouldParseArgumentsForClientsEntityTypeWithControllerBootstrap() {
         testArgumentParse(CONTROLLER_BOOTSTRAP, "clients");
     }
 
     @Test
-    public void shouldParseArgumentsForUsersEntityTypeUsingZookeeper() throws Exception {
+    public void shouldParseArgumentsForUsersEntityTypeUsingZookeeper() {
         testArgumentParse(ZOOKEEPER_BOOTSTRAP, "users");
     }
 
     @Test
-    public void shouldParseArgumentsForUsersEntityTypeWithBrokerBootstrap() throws Exception {
+    public void shouldParseArgumentsForUsersEntityTypeWithBrokerBootstrap() {
         testArgumentParse(BROKER_BOOTSTRAP, "users");
     }
 
     @Test
-    public void shouldParseArgumentsForUsersEntityTypeWithControllerBootstrap() throws Exception {
+    public void shouldParseArgumentsForUsersEntityTypeWithControllerBootstrap() {
         testArgumentParse(CONTROLLER_BOOTSTRAP, "users");
     }
 
@@ -181,37 +209,37 @@ public class ConfigCommandTest {
     }
 
     @Test
-    public void shouldParseArgumentsForTopicsEntityTypeWithBrokerBootstrap() throws Exception {
+    public void shouldParseArgumentsForTopicsEntityTypeWithBrokerBootstrap() {
         testArgumentParse(BROKER_BOOTSTRAP, "topics");
     }
 
     @Test
-    public void shouldParseArgumentsForTopicsEntityTypeWithControllerBootstrap() throws Exception {
+    public void shouldParseArgumentsForTopicsEntityTypeWithControllerBootstrap() {
         testArgumentParse(CONTROLLER_BOOTSTRAP, "topics");
     }
 
     @Test
-    public void shouldParseArgumentsForBrokersEntityTypeUsingZookeeper() throws Exception {
+    public void shouldParseArgumentsForBrokersEntityTypeUsingZookeeper() {
         testArgumentParse(ZOOKEEPER_BOOTSTRAP, "brokers");
     }
 
     @Test
-    public void shouldParseArgumentsForBrokersEntityTypeWithBrokerBootstrap() throws Exception {
+    public void shouldParseArgumentsForBrokersEntityTypeWithBrokerBootstrap() {
         testArgumentParse(BROKER_BOOTSTRAP, "brokers");
     }
 
     @Test
-    public void shouldParseArgumentsForBrokersEntityTypeWithControllerBootstrap() throws Exception {
+    public void shouldParseArgumentsForBrokersEntityTypeWithControllerBootstrap() {
         testArgumentParse(CONTROLLER_BOOTSTRAP, "brokers");
     }
 
     @Test
-    public void shouldParseArgumentsForBrokerLoggersEntityTypeWithBrokerBootstrap() throws Exception {
+    public void shouldParseArgumentsForBrokerLoggersEntityTypeWithBrokerBootstrap() {
         testArgumentParse(BROKER_BOOTSTRAP, "broker-loggers");
     }
 
     @Test
-    public void shouldParseArgumentsForBrokerLoggersEntityTypeWithControllerBootstrap() throws Exception {
+    public void shouldParseArgumentsForBrokerLoggersEntityTypeWithControllerBootstrap() {
         testArgumentParse(CONTROLLER_BOOTSTRAP, "broker-loggers");
     }
 
@@ -221,74 +249,75 @@ public class ConfigCommandTest {
     }
 
     @Test
-    public void shouldParseArgumentsForIpEntityTypeWithBrokerBootstrap() throws Exception {
+    public void shouldParseArgumentsForIpEntityTypeWithBrokerBootstrap() {
         testArgumentParse(BROKER_BOOTSTRAP, "ips");
     }
 
     @Test
-    public void shouldParseArgumentsForIpEntityTypeWithControllerBootstrap() throws Exception {
+    public void shouldParseArgumentsForIpEntityTypeWithControllerBootstrap() {
         testArgumentParse(CONTROLLER_BOOTSTRAP, "ips");
     }
 
-    public void testArgumentParse(List<String> bootstrapArguments, String entityType) throws Exception {
+    public void testArgumentParse(List<String> bootstrapArguments, String entityType) {
         String shortFlag = "--" + entityType.substring(0, entityType.length() - 1);
-        Tuple2<String, String> connectOpts = new Tuple2<>(bootstrapArguments.get(0), bootstrapArguments.get(1));
+        String connectOpts1 = bootstrapArguments.get(0);
+        String connectOpts2 = bootstrapArguments.get(1);
 
         // Should parse correctly
-        ConfigCommandOptions createOpts = new ConfigCommandOptions(toArray(connectOpts.v1, connectOpts.v2,
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
             "--entity-name", "1",
             "--entity-type", entityType,
             "--describe"));
         createOpts.checkArgs();
 
-        createOpts = new ConfigCommandOptions(toArray(connectOpts.v1, connectOpts.v2,
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
             shortFlag, "1",
             "--describe"));
         createOpts.checkArgs();
 
         // For --alter and added config
-        createOpts = new ConfigCommandOptions(toArray(connectOpts.v1, connectOpts.v2,
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
             "--entity-name", "1",
             "--entity-type", entityType,
             "--alter",
             "--add-config", "a=b,c=d"));
         createOpts.checkArgs();
 
-        createOpts = new ConfigCommandOptions(toArray(connectOpts.v1, connectOpts.v2,
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
             "--entity-name", "1",
             "--entity-type", entityType,
             "--alter",
             "--add-config-file", "/tmp/new.properties"));
         createOpts.checkArgs();
 
-        createOpts = new ConfigCommandOptions(toArray(connectOpts.v1, connectOpts.v2,
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
             shortFlag, "1",
             "--alter",
             "--add-config", "a=b,c=d"));
         createOpts.checkArgs();
 
-        createOpts = new ConfigCommandOptions(toArray(connectOpts.v1, connectOpts.v2,
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
             shortFlag, "1",
             "--alter",
             "--add-config-file", "/tmp/new.properties"));
         createOpts.checkArgs();
 
         // For alter and deleted config
-        createOpts = new ConfigCommandOptions(toArray(connectOpts.v1, connectOpts.v2,
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
             "--entity-name", "1",
             "--entity-type", entityType,
             "--alter",
             "--delete-config", "a,b,c"));
         createOpts.checkArgs();
 
-        createOpts = new ConfigCommandOptions(toArray(connectOpts.v1, connectOpts.v2,
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
             shortFlag, "1",
             "--alter",
             "--delete-config", "a,b,c"));
         createOpts.checkArgs();
 
         // For alter and both added, deleted config
-        createOpts = new ConfigCommandOptions(toArray(connectOpts.v1, connectOpts.v2,
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
             "--entity-name", "1",
             "--entity-type", entityType,
             "--alter",
@@ -296,7 +325,7 @@ public class ConfigCommandTest {
             "--delete-config", "a"));
         createOpts.checkArgs();
 
-        createOpts = new ConfigCommandOptions(toArray(connectOpts.v1, connectOpts.v2,
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
             shortFlag, "1",
             "--alter",
             "--add-config", "a=b,c=d",
@@ -308,18 +337,18 @@ public class ConfigCommandTest {
         assertEquals("b", addedProps.getProperty("a"));
         assertEquals("d", addedProps.getProperty("c"));
 
-        List<String> deletedProps = ConfigCommand.parseConfigsToBeDeleted(createOpts);
+        Seq<String> deletedProps = ConfigCommand.parseConfigsToBeDeleted(createOpts);
         assertEquals(1, deletedProps.size());
-        assertEquals("a", deletedProps.get(0));
+        assertEquals("a", deletedProps.apply(0));
 
-        createOpts = new ConfigCommandOptions(toArray(connectOpts.v1, connectOpts.v2,
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
             "--entity-name", "1",
             "--entity-type", entityType,
             "--alter",
             "--add-config", "a=b,c=,d=e,f="));
         createOpts.checkArgs();
 
-        createOpts = new ConfigCommandOptions(toArray(connectOpts.v1, connectOpts.v2,
+        createOpts = new ConfigCommand.ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
             shortFlag, "1",
             "--alter",
             "--add-config", "a._-c=b,c=,d=e,f="));
@@ -332,7 +361,7 @@ public class ConfigCommandTest {
         assertTrue(addedProps2.getProperty("c").isEmpty());
         assertTrue(addedProps2.getProperty("f").isEmpty());
 
-        ConfigCommandOptions inValidCreateOpts = new ConfigCommandOptions(toArray(connectOpts.v1, connectOpts.v2,
+        ConfigCommand.ConfigCommandOptions inValidCreateOpts = new ConfigCommand.ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
             shortFlag, "1",
             "--alter",
             "--add-config", "a;c=b"));
@@ -340,7 +369,7 @@ public class ConfigCommandTest {
         assertThrows(IllegalArgumentException.class,
             () -> ConfigCommand.parseConfigsToBeAdded(inValidCreateOpts));
 
-        ConfigCommandOptions inValidCreateOpts2 = new ConfigCommandOptions(toArray(connectOpts.v1, connectOpts.v2,
+        ConfigCommand.ConfigCommandOptions inValidCreateOpts2 = new ConfigCommand.ConfigCommandOptions(toArray(connectOpts1, connectOpts2,
             shortFlag, "1",
             "--alter",
             "--add-config", "a,=b"));
@@ -352,7 +381,7 @@ public class ConfigCommandTest {
     @Test
     public void shouldFailIfAddAndAddFile() {
         // Should not parse correctly
-        ConfigCommandOptions createOpts = new ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
             "--entity-name", "1",
             "--entity-type", "brokers",
             "--alter",
@@ -363,7 +392,7 @@ public class ConfigCommandTest {
     }
 
     @Test
-    public void testParseConfigsToBeAddedForAddConfigFile() throws Exception {
+    public void testParseConfigsToBeAddedForAddConfigFile() throws IOException {
         String fileContents =
             "a=b\n" +
             "c = d\n" +
@@ -374,7 +403,7 @@ public class ConfigCommandTest {
 
         List<String> addConfigFileArgs = Arrays.asList("--add-config-file", file.getPath());
 
-        ConfigCommandOptions createOpts = new ConfigCommandOptions(toArray(Arrays.asList("--bootstrap-server", "localhost:9092",
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray(Arrays.asList("--bootstrap-server", "localhost:9092",
                 "--entity-name", "1",
                 "--entity-type", "brokers",
                 "--alter"),
@@ -389,17 +418,17 @@ public class ConfigCommandTest {
         assertEquals("[[1, 2], [3, 4]]", addedProps.getProperty("nested"));
     }
 
-    public void testExpectedEntityTypeNames(List<String> expectedTypes, List<String> expectedNames, Tuple2<String, String> connectOpts, String...args) {
-        ConfigCommandOptions createOpts = new ConfigCommandOptions(toArray(Arrays.asList(connectOpts.v1, connectOpts.v2, "--describe"), Arrays.asList(args)));
+    public void testExpectedEntityTypeNames(List<String> expectedTypes, List<String> expectedNames, List<String> connectOpts, String...args) {
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray(Arrays.asList(connectOpts.get(0), connectOpts.get(1), "--describe"), Arrays.asList(args)));
         createOpts.checkArgs();
-        assertEquals(createOpts.entityTypes(), expectedTypes);
-        assertEquals(createOpts.entityNames(), expectedNames);
+        assertEquals(createOpts.entityTypes().toSeq(), ConfigCommandIntegrationTest.seq(expectedTypes));
+        assertEquals(createOpts.entityNames().toSeq(), ConfigCommandIntegrationTest.seq(expectedNames));
     }
 
     public void doTestOptionEntityTypeNames(boolean zkConfig) {
-        Tuple2<String, String> connectOpts = zkConfig
-            ? new Tuple2<>("--zookeeper", ZK_CONNECT)
-            : new Tuple2<>("--bootstrap-server", "localhost:9092");
+        List<String> connectOpts = zkConfig
+            ? Arrays.asList("--zookeeper", ZK_CONNECT)
+            : Arrays.asList("--bootstrap-server", "localhost:9092");
 
         // zookeeper config only supports "users" and "brokers" entity type
         if (!zkConfig) {
@@ -437,91 +466,91 @@ public class ConfigCommandTest {
 
     @Test
     public void shouldFailIfUnrecognisedEntityTypeUsingZookeeper() {
-        ConfigCommandOptions createOpts = new ConfigCommandOptions(new String[]{"--zookeeper", ZK_CONNECT,
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(new String[]{"--zookeeper", ZK_CONNECT,
             "--entity-name", "client", "--entity-type", "not-recognised", "--alter", "--add-config", "a=b,c=d"});
         assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfigWithZk(null, createOpts, DUMMY_ADMIN_ZK_CLIENT));
     }
 
     @Test
     public void shouldFailIfUnrecognisedEntityType() {
-        ConfigCommandOptions createOpts = new ConfigCommandOptions(new String[]{"--bootstrap-server", "localhost:9092",
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(new String[]{"--bootstrap-server", "localhost:9092",
             "--entity-name", "client", "--entity-type", "not-recognised", "--alter", "--add-config", "a=b,c=d"});
         assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfig(new DummyAdminClient(new Node(1, "localhost", 9092)), createOpts));
     }
 
     @Test
     public void shouldFailIfBrokerEntityTypeIsNotAnIntegerUsingZookeeper() {
-        ConfigCommandOptions createOpts = new ConfigCommandOptions(new String[]{"--zookeeper", ZK_CONNECT,
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(new String[]{"--zookeeper", ZK_CONNECT,
             "--entity-name", "A", "--entity-type", "brokers", "--alter", "--add-config", "a=b,c=d"});
         assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfigWithZk(null, createOpts, DUMMY_ADMIN_ZK_CLIENT));
     }
 
     @Test
     public void shouldFailIfBrokerEntityTypeIsNotAnInteger() {
-        ConfigCommandOptions createOpts = new ConfigCommandOptions(new String[]{"--bootstrap-server", "localhost:9092",
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(new String[]{"--bootstrap-server", "localhost:9092",
             "--entity-name", "A", "--entity-type", "brokers", "--alter", "--add-config", "a=b,c=d"});
         assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfig(new DummyAdminClient(new Node(1, "localhost", 9092)), createOpts));
     }
 
     @Test
     public void shouldFailIfShortBrokerEntityTypeIsNotAnIntegerUsingZookeeper() {
-        ConfigCommandOptions createOpts = new ConfigCommandOptions(new String[]{"--zookeeper", ZK_CONNECT,
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(new String[]{"--zookeeper", ZK_CONNECT,
             "--broker", "A", "--alter", "--add-config", "a=b,c=d"});
         assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfigWithZk(null, createOpts, DUMMY_ADMIN_ZK_CLIENT));
     }
 
     @Test
     public void shouldFailIfShortBrokerEntityTypeIsNotAnInteger() {
-        ConfigCommandOptions createOpts = new ConfigCommandOptions(new String[]{"--bootstrap-server", "localhost:9092",
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(new String[]{"--bootstrap-server", "localhost:9092",
             "--broker", "A", "--alter", "--add-config", "a=b,c=d"});
         assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfig(new DummyAdminClient(new Node(1, "localhost", 9092)), createOpts));
     }
 
     @Test
     public void shouldFailIfMixedEntityTypeFlagsUsingZookeeper() {
-        ConfigCommandOptions createOpts = new ConfigCommandOptions(new String[]{"--zookeeper", ZK_CONNECT,
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(new String[]{"--zookeeper", ZK_CONNECT,
             "--entity-name", "A", "--entity-type", "users", "--client", "B", "--describe"});
         assertThrows(IllegalArgumentException.class, createOpts::checkArgs);
     }
 
     @Test
     public void shouldFailIfMixedEntityTypeFlags() {
-        ConfigCommandOptions createOpts = new ConfigCommandOptions(new String[]{"--bootstrap-server", "localhost:9092",
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(new String[]{"--bootstrap-server", "localhost:9092",
             "--entity-name", "A", "--entity-type", "users", "--client", "B", "--describe"});
         assertThrows(IllegalArgumentException.class, createOpts::checkArgs);
     }
 
     @Test
     public void shouldFailIfInvalidHost() {
-        ConfigCommandOptions createOpts = new ConfigCommandOptions(new String[]{"--bootstrap-server", "localhost:9092",
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(new String[]{"--bootstrap-server", "localhost:9092",
             "--entity-name", "A,B", "--entity-type", "ips", "--describe"});
         assertThrows(IllegalArgumentException.class, createOpts::checkArgs);
     }
 
     @Test
     public void shouldFailIfInvalidHostUsingZookeeper() {
-        ConfigCommandOptions createOpts = new ConfigCommandOptions(new String[]{"--zookeeper", ZK_CONNECT,
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(new String[]{"--zookeeper", ZK_CONNECT,
             "--entity-name", "A,B", "--entity-type", "ips", "--describe"});
         assertThrows(IllegalArgumentException.class, createOpts::checkArgs);
     }
 
     @Test
     public void shouldFailIfUnresolvableHost() {
-        ConfigCommandOptions createOpts = new ConfigCommandOptions(new String[]{"--bootstrap-server", "localhost:9092",
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(new String[]{"--bootstrap-server", "localhost:9092",
             "--entity-name", "RFC2606.invalid", "--entity-type", "ips", "--describe"});
         assertThrows(IllegalArgumentException.class, createOpts::checkArgs);
     }
 
     @Test
     public void shouldFailIfUnresolvableHostUsingZookeeper() {
-        ConfigCommandOptions createOpts = new ConfigCommandOptions(new String[]{"--zookeeper", ZK_CONNECT,
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(new String[]{"--zookeeper", ZK_CONNECT,
             "--entity-name", "RFC2606.invalid", "--entity-type", "ips", "--describe"});
         assertThrows(IllegalArgumentException.class, createOpts::checkArgs);
     }
 
     @Test
-    public void shouldAddClientConfigUsingZookeeper() throws Exception {
-        ConfigCommandOptions createOpts = new ConfigCommandOptions(new String[]{"--zookeeper", ZK_CONNECT,
+    public void shouldAddClientConfigUsingZookeeper() {
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(new String[]{"--zookeeper", ZK_CONNECT,
             "--entity-name", "my-client-id",
             "--entity-type", "clients",
             "--alter",
@@ -543,12 +572,13 @@ public class ConfigCommandTest {
             }
         }
 
+        // Changing USER configs don't use `KafkaZkClient` so it safe to pass `null`.
         ConfigCommand.alterConfigWithZk(null, createOpts, new TestAdminZkClient(zkClient));
     }
 
     @Test
-    public void shouldAddIpConfigsUsingZookeeper() throws Exception {
-        ConfigCommandOptions createOpts = new ConfigCommandOptions(new String[]{"--zookeeper", ZK_CONNECT,
+    public void shouldAddIpConfigsUsingZookeeper() {
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(new String[]{"--zookeeper", ZK_CONNECT,
             "--entity-name", "1.2.3.4",
             "--entity-type", "ips",
             "--alter",
@@ -570,10 +600,11 @@ public class ConfigCommandTest {
             }
         }
 
+        // Changing USER configs don't use `KafkaZkClient` so it safe to pass `null`.
         ConfigCommand.alterConfigWithZk(null, createOpts, new TestAdminZkClient(zkClient));
     }
 
-    private Tuple2<List<String>, Map<String, String>> toValues(Optional<String> entityName, String entityType) {
+    private Entry<List<String>, Map<String, String>> argsAndExpectedEntity(Optional<String> entityName, String entityType) {
         String command;
         switch (entityType) {
             case ClientQuotaEntity.USER:
@@ -591,14 +622,14 @@ public class ConfigCommandTest {
 
         return entityName.map(name -> {
             if (name.isEmpty())
-                return new Tuple2<>(Arrays.asList("--entity-type", command, "--entity-default"), Collections.singletonMap(entityType, (String) null));
-            return new Tuple2<>(Arrays.asList("--entity-type", command, "--entity-name", name), Collections.singletonMap(entityType, name));
-        }).orElse(new Tuple2<>(Collections.emptyList(), Collections.emptyMap()));
+                return new SimpleImmutableEntry<>(Arrays.asList("--entity-type", command, "--entity-default"), Collections.singletonMap(entityType, (String) null));
+            return new SimpleImmutableEntry<>(Arrays.asList("--entity-type", command, "--entity-name", name), Collections.singletonMap(entityType, name));
+        }).orElse(new SimpleImmutableEntry<>(Collections.emptyList(), Collections.emptyMap()));
     }
 
     private void verifyAlterCommandFails(String expectedErrorMessage, List<String> alterOpts) {
         Admin mockAdminClient = mock(Admin.class);
-        ConfigCommandOptions opts = new ConfigCommandOptions(toArray(Arrays.asList("--bootstrap-server", "localhost:9092",
+        ConfigCommand.ConfigCommandOptions opts = new ConfigCommand.ConfigCommandOptions(toArray(Arrays.asList("--bootstrap-server", "localhost:9092",
             "--alter"), alterOpts));
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfig(mockAdminClient, opts));
         assertTrue(e.getMessage().contains(expectedErrorMessage), "Unexpected exception: " + e);
@@ -616,8 +647,8 @@ public class ConfigCommandTest {
         verifyAlterCommandFails(invalidProp, concat(ipEntityOpts, Arrays.asList("--delete-config", "some_config=10")));
     }
 
-    private void verifyDescribeQuotas(List<String> describeArgs, ClientQuotaFilter expectedFilter) throws Exception {
-        ConfigCommandOptions describeOpts = new ConfigCommandOptions(toArray(Arrays.asList("--bootstrap-server", "localhost:9092",
+    private void verifyDescribeQuotas(List<String> describeArgs, ClientQuotaFilter expectedFilter) {
+        ConfigCommand.ConfigCommandOptions describeOpts = new ConfigCommand.ConfigCommandOptions(toArray(Arrays.asList("--bootstrap-server", "localhost:9092",
             "--describe"), describeArgs));
         KafkaFutureImpl<Map<ClientQuotaEntity, Map<String, Double>>> describeFuture = new KafkaFutureImpl<>();
         describeFuture.complete(Collections.emptyMap());
@@ -640,7 +671,7 @@ public class ConfigCommandTest {
     }
 
     @Test
-    public void testDescribeIpConfigs() throws Exception {
+    public void testDescribeIpConfigs() {
         String entityType = ClientQuotaEntity.IP;
         String knownHost = "1.2.3.4";
         ClientQuotaFilter defaultIpFilter = ClientQuotaFilter.containsOnly(Collections.singletonList(ClientQuotaFilterComponent.ofDefaultEntity(entityType)));
@@ -654,8 +685,8 @@ public class ConfigCommandTest {
     }
 
     public void verifyAlterQuotas(List<String> alterOpts, ClientQuotaEntity expectedAlterEntity,
-                          Map<String, Double> expectedProps, Set<ClientQuotaAlteration.Op> expectedAlterOps) throws Exception {
-        ConfigCommandOptions createOpts = new ConfigCommandOptions(toArray(Arrays.asList("--bootstrap-server", "localhost:9092",
+                                  Map<String, Double> expectedProps, Set<ClientQuotaAlteration.Op> expectedAlterOps) {
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray(Arrays.asList("--bootstrap-server", "localhost:9092",
             "--alter"), alterOpts));
 
         AtomicBoolean describedConfigs = new AtomicBoolean();
@@ -706,15 +737,10 @@ public class ConfigCommandTest {
     }
 
     @Test
-    public void testAlterIpConfig() throws Exception {
-        Tuple2<List<String>, Map<String, String>> t = toValues(Optional.of("1.2.3.4"), ClientQuotaEntity.IP);
-        List<String> singleIpArgs = t.v1;
-        Map<String, String> singleIpEntry = t.v2;
-        ClientQuotaEntity singleIpEntity = new ClientQuotaEntity(singleIpEntry);
-        t = toValues(Optional.of(""), ClientQuotaEntity.IP);
-        List<String> defaultIpArgs = t.v1;
-        Map<String, String> defaultIpEntry = t.v2;
-        ClientQuotaEntity defaultIpEntity = new ClientQuotaEntity(defaultIpEntry);
+    public void testAlterIpConfig() {
+        Entry<List<String>, Map<String, String>> singleIpArgsAndEntity = argsAndExpectedEntity(Optional.of("1.2.3.4"), ClientQuotaEntity.IP);
+        Entry<List<String>, Map<String, String>> defaultIpArgsAndEntity = argsAndExpectedEntity(Optional.of(""), ClientQuotaEntity.IP);
+
 
         List<String> deleteArgs = Arrays.asList("--delete-config", "connection_creation_rate");
         Set<ClientQuotaAlteration.Op> deleteAlterationOps = new HashSet<>(Collections.singletonList(new ClientQuotaAlteration.Op("connection_creation_rate", null)));
@@ -723,14 +749,29 @@ public class ConfigCommandTest {
         List<String> addArgs = Arrays.asList("--add-config", "connection_creation_rate=100");
         Set<ClientQuotaAlteration.Op> addAlterationOps = new HashSet<>(Collections.singletonList(new ClientQuotaAlteration.Op("connection_creation_rate", 100.0)));
 
-        verifyAlterQuotas(concat(singleIpArgs, deleteArgs), singleIpEntity, propsToDelete, deleteAlterationOps);
-        verifyAlterQuotas(concat(singleIpArgs, addArgs), singleIpEntity, Collections.emptyMap(), addAlterationOps);
-        verifyAlterQuotas(concat(defaultIpArgs, deleteArgs), defaultIpEntity, propsToDelete, deleteAlterationOps);
-        verifyAlterQuotas(concat(defaultIpArgs, addArgs), defaultIpEntity, Collections.emptyMap(), addAlterationOps);
+        verifyAlterQuotas(
+            concat(singleIpArgsAndEntity.getKey(), deleteArgs),
+            new ClientQuotaEntity(singleIpArgsAndEntity.getValue()),
+            propsToDelete,
+            deleteAlterationOps);
+        verifyAlterQuotas(
+            concat(singleIpArgsAndEntity.getKey(), addArgs),
+            new ClientQuotaEntity(singleIpArgsAndEntity.getValue()),
+            Collections.emptyMap(),
+            addAlterationOps);
+        verifyAlterQuotas(
+            concat(defaultIpArgsAndEntity.getKey(), deleteArgs),
+            new ClientQuotaEntity(defaultIpArgsAndEntity.getValue()),
+            propsToDelete,
+            deleteAlterationOps);
+        verifyAlterQuotas(
+            concat(defaultIpArgsAndEntity.getKey(), addArgs),
+            new ClientQuotaEntity(defaultIpArgsAndEntity.getValue()),
+            Collections.emptyMap(),
+            addAlterationOps);
     }
 
-    @Test
-    public void shouldAddClientConfig() {
+    private void verifyAlterUserClientQuotas(String user, String client) {
         List<String> alterArgs = Arrays.asList("--add-config", "consumer_byte_rate=20000,producer_byte_rate=10000",
             "--delete-config", "request_percentage");
         Map<String, Double> propsToDelete = Collections.singletonMap("request_percentage", 50.0);
@@ -741,31 +782,26 @@ public class ConfigCommandTest {
             new ClientQuotaAlteration.Op("request_percentage", null)
         ));
 
-        KafkaFuture.BiConsumer<Optional<String>, Optional<String>> verifyAlterUserClientQuotas = (userOpt, clientOpt) -> {
-            Tuple2<List<String>, Map<String, String>> t = toValues(userOpt, ClientQuotaEntity.USER);
-            List<String> userArgs = t.v1;
-            Map<String, String> userEntry = t.v2;
-            t = toValues(clientOpt, ClientQuotaEntity.CLIENT_ID);
-            List<String> clientArgs = t.v1;
-            Map<String, String> clientEntry = t.v2;
+        Entry<List<String>, Map<String, String>> userArgsAndEntity = argsAndExpectedEntity(Optional.ofNullable(user), ClientQuotaEntity.USER);
+        Entry<List<String>, Map<String, String>> clientArgsAndEntry = argsAndExpectedEntity(Optional.ofNullable(client), ClientQuotaEntity.CLIENT_ID);
 
-            List<String> commandArgs = concat(alterArgs, userArgs, clientArgs);
-            ClientQuotaEntity clientQuotaEntity = new ClientQuotaEntity(concat(userEntry, clientEntry));
-            try {
-                verifyAlterQuotas(commandArgs, clientQuotaEntity, propsToDelete, alterationOps);
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        };
+        verifyAlterQuotas(
+            concat(alterArgs, userArgsAndEntity.getKey(), clientArgsAndEntry.getKey()),
+            new ClientQuotaEntity(concat(userArgsAndEntity.getValue(), clientArgsAndEntry.getValue())),
+            propsToDelete,
+            alterationOps);
+    }
 
-        verifyAlterUserClientQuotas.accept(Optional.of("test-user-1"), Optional.of("test-client-1"));
-        verifyAlterUserClientQuotas.accept(Optional.of("test-user-2"), Optional.of(""));
-        verifyAlterUserClientQuotas.accept(Optional.of("test-user-3"), Optional.empty());
-        verifyAlterUserClientQuotas.accept(Optional.of(""), Optional.of("test-client-2"));
-        verifyAlterUserClientQuotas.accept(Optional.of(""), Optional.of(""));
-        verifyAlterUserClientQuotas.accept(Optional.of(""), Optional.empty());
-        verifyAlterUserClientQuotas.accept(Optional.empty(), Optional.of("test-client-3"));
-        verifyAlterUserClientQuotas.accept(Optional.empty(), Optional.of(""));
+    @Test
+    public void shouldAddClientConfig() {
+        verifyAlterUserClientQuotas("test-user-1", "test-client-1");
+        verifyAlterUserClientQuotas("test-user-2", "");
+        verifyAlterUserClientQuotas("test-user-3", null);
+        verifyAlterUserClientQuotas("", "test-client-2");
+        verifyAlterUserClientQuotas("", "");
+        verifyAlterUserClientQuotas("", null);
+        verifyAlterUserClientQuotas(null, "test-client-3");
+        verifyAlterUserClientQuotas(null, "");
     }
 
     private final List<String> userEntityOpts = Arrays.asList("--entity-type", "users", "--entity-name", "admin");
@@ -822,7 +858,7 @@ public class ConfigCommandTest {
         verifyAlterCommandFails(expectedErrorMessage, concat(secondUserEntityOpts, addQuotaOpts, userEntityOpts, deleteScramOpts));
     }
 
-    public void verifyUserScramCredentialsNotDescribed(List<String> requestOpts) throws Exception {
+    public void verifyUserScramCredentialsNotDescribed(List<String> requestOpts) {
         // User SCRAM credentials should not be described when specifying
         // --describe --entity-type users --entity-default (or --user-defaults) with --bootstrap-server
         KafkaFutureImpl<Map<ClientQuotaEntity, Map<String, Double>>> describeFuture = new KafkaFutureImpl<>();
@@ -841,12 +877,12 @@ public class ConfigCommandTest {
                 throw new IllegalStateException("Incorrectly described SCRAM credentials when specifying --entity-default with --bootstrap-server");
             }
         };
-        ConfigCommandOptions opts = new ConfigCommandOptions(toArray(Arrays.asList("--bootstrap-server", "localhost:9092", "--describe"), requestOpts));
+        ConfigCommand.ConfigCommandOptions opts = new ConfigCommand.ConfigCommandOptions(toArray(Arrays.asList("--bootstrap-server", "localhost:9092", "--describe"), requestOpts));
         ConfigCommand.describeConfig(mockAdminClient, opts); // fails if describeUserScramCredentials() is invoked
     }
 
     @Test
-    public void shouldNotDescribeUserScramCredentialsWithEntityDefaultUsingBootstrapServer() throws Exception {
+    public void shouldNotDescribeUserScramCredentialsWithEntityDefaultUsingBootstrapServer() {
         String expectedMsg = "The use of --entity-default or --user-defaults is not allowed with User SCRAM Credentials using --bootstrap-server.";
         List<String> defaultUserOpt = Collections.singletonList("--user-defaults");
         List<String> verboseDefaultUserOpts = Arrays.asList("--entity-type", "users", "--entity-default");
@@ -859,8 +895,8 @@ public class ConfigCommandTest {
     }
 
     @Test
-    public void shouldAddTopicConfigUsingZookeeper() throws Exception {
-        ConfigCommandOptions createOpts = new ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
+    public void shouldAddTopicConfigUsingZookeeper() {
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
             "--entity-name", "my-topic",
             "--entity-type", "topics",
             "--alter",
@@ -879,33 +915,21 @@ public class ConfigCommandTest {
         });
     }
 
-    @Test
-    public void shouldAlterTopicConfig() throws Exception {
-        doShouldAlterTopicConfig(false);
-    }
-
-    @Test
-    public void shouldAlterTopicConfigFile() throws Exception {
-        doShouldAlterTopicConfig(true);
-    }
-
-    public ConfigEntry newConfigEntry(String name, String value) {
-        return ConfigTest.newConfigEntry(name, value, ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG, false, false, Collections.emptyList());
-    }
-
     @SuppressWarnings("deprecation") // Added for Scala 2.12 compatibility for usages of JavaConverters
-    public void doShouldAlterTopicConfig(boolean file) throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void shouldAlterTopicConfig(boolean file) {
         String filePath = "";
         Map<String, String> addedConfigs = new HashMap<>();
         addedConfigs.put("delete.retention.ms", "1000000");
         addedConfigs.put("min.insync.replicas", "2");
         if (file) {
-            File f = TestUtils.tempPropertiesFile(JavaConverters.mapAsScalaMap(addedConfigs));
+            File f = kafka.utils.TestUtils.tempPropertiesFile(JavaConverters.mapAsScalaMap(addedConfigs));
             filePath = f.getPath();
         }
 
         String resourceName = "my-topic";
-        ConfigCommandOptions alterOpts = new ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+        ConfigCommand.ConfigCommandOptions alterOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
             "--entity-name", resourceName,
             "--entity-type", "topics",
             "--alter",
@@ -970,10 +994,14 @@ public class ConfigCommandTest {
         verify(describeResult).all();
     }
 
+    public ConfigEntry newConfigEntry(String name, String value) {
+        return ConfigTest.newConfigEntry(name, value, ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG, false, false, Collections.emptyList());
+    }
+
     @Test
-    public void shouldDescribeConfigSynonyms() throws Exception {
+    public void shouldDescribeConfigSynonyms() {
         String resourceName = "my-topic";
-        ConfigCommandOptions describeOpts = new ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+        ConfigCommand.ConfigCommandOptions describeOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
             "--entity-name", resourceName,
             "--entity-type", "topics",
             "--describe",
@@ -1000,7 +1028,7 @@ public class ConfigCommandTest {
 
     @Test
     public void shouldNotAllowAddBrokerQuotaConfigWhileBrokerUpUsingZookeeper() {
-        ConfigCommandOptions alterOpts = new ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
+        ConfigCommand.ConfigCommandOptions alterOpts = new ConfigCommand.ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
             "--entity-name", "1",
             "--entity-type", "brokers",
             "--alter",
@@ -1016,7 +1044,7 @@ public class ConfigCommandTest {
 
     @Test
     public void shouldNotAllowDescribeBrokerWhileBrokerUpUsingZookeeper() {
-        ConfigCommandOptions describeOpts = new ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
+        ConfigCommand.ConfigCommandOptions describeOpts = new ConfigCommand.ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
             "--entity-name", "1",
             "--entity-type", "brokers",
             "--describe"));
@@ -1031,7 +1059,7 @@ public class ConfigCommandTest {
 
     @Test
     public void shouldSupportDescribeBrokerBeforeBrokerUpUsingZookeeper() {
-        ConfigCommandOptions describeOpts = new ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
+        ConfigCommand.ConfigCommandOptions describeOpts = new ConfigCommand.ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
             "--entity-name", "1",
             "--entity-type", "brokers",
             "--describe"));
@@ -1057,7 +1085,7 @@ public class ConfigCommandTest {
     }
 
     @Test
-    public void shouldAddBrokerLoggerConfig() throws Exception {
+    public void shouldAddBrokerLoggerConfig() {
         Node node = new Node(1, "localhost", 9092);
         verifyAlterBrokerLoggerConfig(node, "1", "1", Arrays.asList(
             new ConfigEntry("kafka.log.LogCleaner", "INFO"),
@@ -1073,7 +1101,7 @@ public class ConfigCommandTest {
             "--describe"
         };
 
-        new ConfigCommandOptions(optsList).checkArgs();
+        new ConfigCommand.ConfigCommandOptions(optsList).checkArgs();
     }
 
     @Test
@@ -1083,7 +1111,7 @@ public class ConfigCommandTest {
             "--describe"
         };
 
-        new ConfigCommandOptions(optsList).checkArgs();
+        new ConfigCommand.ConfigCommandOptions(optsList).checkArgs();
     }
 
     @Test
@@ -1094,7 +1122,7 @@ public class ConfigCommandTest {
             "--describe",
             "--all"};
 
-        new ConfigCommandOptions(optsList).checkArgs();
+        new ConfigCommand.ConfigCommandOptions(optsList).checkArgs();
     }
 
     @Test
@@ -1105,7 +1133,7 @@ public class ConfigCommandTest {
             "--describe",
             "--all"};
 
-        new ConfigCommandOptions(optsList).checkArgs();
+        new ConfigCommand.ConfigCommandOptions(optsList).checkArgs();
     }
 
     @Test
@@ -1116,30 +1144,30 @@ public class ConfigCommandTest {
             "--describe",
             "--all"};
 
-        assertThrows(IllegalArgumentException.class, () -> new ConfigCommandOptions(optsList).checkArgs());
+        assertThrows(IllegalArgumentException.class, () -> new ConfigCommand.ConfigCommandOptions(optsList).checkArgs());
     }
 
     @Test
     public void testEntityDefaultOptionWithDescribeBrokerLoggerIsNotAllowed() {
         String[] optsList = new String[]{"--bootstrap-server", "localhost:9092",
-            "--entity-type", ConfigCommand.BROKER_LOGGER_CONFIG_TYPE,
+            "--entity-type", ConfigCommand.BrokerLoggerConfigType(),
             "--entity-default",
             "--describe"
         };
 
-        assertThrows(IllegalArgumentException.class, () -> new ConfigCommandOptions(optsList).checkArgs());
+        assertThrows(IllegalArgumentException.class, () -> new ConfigCommand.ConfigCommandOptions(optsList).checkArgs());
     }
 
     @Test
     public void testEntityDefaultOptionWithAlterBrokerLoggerIsNotAllowed() {
         String[] optsList = new String[]{"--bootstrap-server", "localhost:9092",
-            "--entity-type", ConfigCommand.BROKER_LOGGER_CONFIG_TYPE,
+            "--entity-type", ConfigCommand.BrokerLoggerConfigType(),
             "--entity-default",
             "--alter",
             "--add-config", "kafka.log.LogCleaner=DEBUG"
         };
 
-        assertThrows(IllegalArgumentException.class, () -> new ConfigCommandOptions(optsList).checkArgs());
+        assertThrows(IllegalArgumentException.class, () -> new ConfigCommand.ConfigCommandOptions(optsList).checkArgs());
     }
 
     @Test
@@ -1153,23 +1181,23 @@ public class ConfigCommandTest {
     }
 
     @Test
-    public void shouldAddDefaultBrokerDynamicConfig() throws Exception {
+    public void shouldAddDefaultBrokerDynamicConfig() {
         Node node = new Node(1, "localhost", 9092);
         verifyAlterBrokerConfig(node, "", Collections.singletonList("--entity-default"));
     }
 
     @Test
-    public void shouldAddBrokerDynamicConfig() throws Exception {
+    public void shouldAddBrokerDynamicConfig() {
         Node node = new Node(1, "localhost", 9092);
         verifyAlterBrokerConfig(node, "1", Arrays.asList("--entity-name", "1"));
     }
 
-    public void verifyAlterBrokerConfig(Node node, String resourceName, List<String> resourceOpts) throws Exception {
+    public void verifyAlterBrokerConfig(Node node, String resourceName, List<String> resourceOpts) {
         String[] optsList = toArray(Arrays.asList("--bootstrap-server", "localhost:9092",
             "--entity-type", "brokers",
             "--alter",
             "--add-config", "message.max.bytes=10,leader.replication.throttled.rate=10"), resourceOpts);
-        ConfigCommandOptions alterOpts = new ConfigCommandOptions(optsList);
+        ConfigCommand.ConfigCommandOptions alterOpts = new ConfigCommand.ConfigCommandOptions(optsList);
         Map<String, String> brokerConfigs = new HashMap<>();
         brokerConfigs.put("num.io.threads", "5");
 
@@ -1217,8 +1245,8 @@ public class ConfigCommandTest {
     }
 
     @Test
-    public void shouldDescribeConfigBrokerWithoutEntityName() throws Exception {
-        ConfigCommandOptions describeOpts = new ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+    public void shouldDescribeConfigBrokerWithoutEntityName() {
+        ConfigCommand.ConfigCommandOptions describeOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
             "--entity-type", "brokers",
             "--describe"));
 
@@ -1252,14 +1280,14 @@ public class ConfigCommandTest {
     }
 
     private void verifyAlterBrokerLoggerConfig(Node node, String resourceName, String entityName,
-                                               List<ConfigEntry> describeConfigEntries) throws Exception {
+                                               List<ConfigEntry> describeConfigEntries) {
         String[] optsList = toArray("--bootstrap-server", "localhost:9092",
-            "--entity-type", ConfigCommand.BROKER_LOGGER_CONFIG_TYPE,
+            "--entity-type", ConfigCommand.BrokerLoggerConfigType(),
             "--alter",
             "--entity-name", entityName,
             "--add-config", "kafka.log.LogCleaner=DEBUG",
             "--delete-config", "kafka.server.ReplicaManager,kafka.server.KafkaApi");
-        ConfigCommandOptions alterOpts = new ConfigCommandOptions(optsList);
+        ConfigCommand.ConfigCommandOptions alterOpts = new ConfigCommand.ConfigCommandOptions(optsList);
         AtomicBoolean alteredConfigs = new AtomicBoolean();
 
         ConfigResource resource = new ConfigResource(ConfigResource.Type.BROKER_LOGGER, resourceName);
@@ -1297,7 +1325,11 @@ public class ConfigCommandTest {
                     new AlterConfigOp(new ConfigEntry("kafka.server.ReplicaManager", ""), AlterConfigOp.OpType.DELETE),
                     new AlterConfigOp(new ConfigEntry("kafka.server.KafkaApi", ""), AlterConfigOp.OpType.DELETE)
                 );
-                assertEquals(expectedConfigOps, alterConfigOps);
+                assertEquals(expectedConfigOps.size(), alterConfigOps.size());
+                Iterator<AlterConfigOp> alterConfigOpsIter = alterConfigOps.iterator();
+                for (AlterConfigOp expectedConfigOp : expectedConfigOps) {
+                    assertEquals(expectedConfigOp, alterConfigOpsIter.next());
+                }
                 alteredConfigs.set(true);
                 return alterResult;
             }
@@ -1308,8 +1340,8 @@ public class ConfigCommandTest {
     }
 
     @Test
-    public void shouldSupportCommaSeparatedValuesUsingZookeeper() throws Exception {
-        ConfigCommandOptions createOpts = new ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
+    public void shouldSupportCommaSeparatedValuesUsingZookeeper() {
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
             "--entity-name", "my-topic",
             "--entity-type", "topics",
             "--alter",
@@ -1337,7 +1369,7 @@ public class ConfigCommandTest {
 
     @Test
     public void shouldNotUpdateBrokerConfigIfMalformedEntityNameUsingZookeeper() {
-        ConfigCommandOptions createOpts = new ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
             "--entity-name", "1,2,3", //Don't support multiple brokers currently
             "--entity-type", "brokers",
             "--alter",
@@ -1347,7 +1379,7 @@ public class ConfigCommandTest {
 
     @Test
     public void shouldNotUpdateBrokerConfigIfMalformedEntityName() {
-        ConfigCommandOptions createOpts = new ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
             "--entity-name", "1,2,3", //Don't support multiple brokers currently
             "--entity-type", "brokers",
             "--alter",
@@ -1357,7 +1389,7 @@ public class ConfigCommandTest {
 
     @Test
     public void shouldNotUpdateBrokerConfigIfMalformedConfigUsingZookeeper() {
-        ConfigCommandOptions createOpts = new ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
             "--entity-name", "1",
             "--entity-type", "brokers",
             "--alter",
@@ -1367,7 +1399,7 @@ public class ConfigCommandTest {
 
     @Test
     public void shouldNotUpdateBrokerConfigIfMalformedConfig() {
-        ConfigCommandOptions createOpts = new ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
             "--entity-name", "1",
             "--entity-type", "brokers",
             "--alter",
@@ -1377,7 +1409,7 @@ public class ConfigCommandTest {
 
     @Test
     public void shouldNotUpdateBrokerConfigIfMalformedBracketConfigUsingZookeeper() {
-        ConfigCommandOptions createOpts = new ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
             "--entity-name", "1",
             "--entity-type", "brokers",
             "--alter",
@@ -1387,7 +1419,7 @@ public class ConfigCommandTest {
 
     @Test
     public void shouldNotUpdateBrokerConfigIfMalformedBracketConfig() {
-        ConfigCommandOptions createOpts = new ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
             "--entity-name", "1",
             "--entity-type", "brokers",
             "--alter",
@@ -1397,7 +1429,7 @@ public class ConfigCommandTest {
 
     @Test
     public void shouldNotUpdateConfigIfNonExistingConfigIsDeletedUsingZookeeper() {
-        ConfigCommandOptions createOpts = new ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
             "--entity-name", "my-topic",
             "--entity-type", "topics",
             "--alter",
@@ -1408,7 +1440,7 @@ public class ConfigCommandTest {
     @Test
     public void shouldNotUpdateConfigIfNonExistingConfigIsDeleted() {
         String resourceName = "my-topic";
-        ConfigCommandOptions createOpts = new ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
             "--entity-name", resourceName,
             "--entity-type", "topics",
             "--alter",
@@ -1439,7 +1471,7 @@ public class ConfigCommandTest {
 
     @Test
     public void shouldNotDeleteBrokerConfigWhileBrokerUpUsingZookeeper() {
-        ConfigCommandOptions createOpts = new ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
+        ConfigCommand.ConfigCommandOptions createOpts = new ConfigCommand.ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
             "--entity-name", "1",
             "--entity-type", "brokers",
             "--alter",
@@ -1473,16 +1505,16 @@ public class ConfigCommandTest {
         assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfigWithZk(mockZkClient, createOpts, new TestAdminZkClient(null)));
     }
 
-    private ConfigCommandOptions createOpts(String user, String config) {
-        return new ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
+    private ConfigCommand.ConfigCommandOptions createOpts(String user, String config) {
+        return new ConfigCommand.ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
             "--entity-name", user,
             "--entity-type", "users",
             "--alter",
             "--add-config", config));
     }
 
-    private ConfigCommandOptions deleteOpts(String user, String mechanism) {
-        return new ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
+    private ConfigCommand.ConfigCommandOptions deleteOpts(String user, String mechanism) {
+        return new ConfigCommand.ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
             "--entity-name", user,
             "--entity-type", "users",
             "--alter",
@@ -1490,7 +1522,7 @@ public class ConfigCommandTest {
     }
 
     @Test
-    public void testScramCredentials() throws Exception {
+    public void testScramCredentials() {
         Map<String, Properties> credentials = new HashMap<>();
         class CredentialChange extends AdminZkClient {
             private final String user;
@@ -1524,14 +1556,14 @@ public class ConfigCommandTest {
                 }
             }
         }
-        ConfigCommandOptions optsA = createOpts("userA", "SCRAM-SHA-256=[iterations=8192,password=abc, def]");
+        ConfigCommand.ConfigCommandOptions optsA = createOpts("userA", "SCRAM-SHA-256=[iterations=8192,password=abc, def]");
         ConfigCommand.alterConfigWithZk(null, optsA, new CredentialChange("userA", Collections.singleton("SCRAM-SHA-256"), 8192));
-        ConfigCommandOptions optsB = createOpts("userB", "SCRAM-SHA-256=[iterations=4096,password=abc, def],SCRAM-SHA-512=[password=1234=abc]");
+        ConfigCommand.ConfigCommandOptions optsB = createOpts("userB", "SCRAM-SHA-256=[iterations=4096,password=abc, def],SCRAM-SHA-512=[password=1234=abc]");
         ConfigCommand.alterConfigWithZk(null, optsB, new CredentialChange("userB", new HashSet<>(Arrays.asList("SCRAM-SHA-256", "SCRAM-SHA-512")), 4096));
 
-        ConfigCommandOptions del256 = deleteOpts("userB", "SCRAM-SHA-256");
+        ConfigCommand.ConfigCommandOptions del256 = deleteOpts("userB", "SCRAM-SHA-256");
         ConfigCommand.alterConfigWithZk(null, del256, new CredentialChange("userB", Collections.singleton("SCRAM-SHA-512"), 4096));
-        ConfigCommandOptions del512 = deleteOpts("userB", "SCRAM-SHA-512");
+        ConfigCommand.ConfigCommandOptions del512 = deleteOpts("userB", "SCRAM-SHA-512");
         ConfigCommand.alterConfigWithZk(null, del512, new CredentialChange("userB", Collections.emptySet(), 4096));
     }
 
@@ -1540,39 +1572,39 @@ public class ConfigCommandTest {
         assertThrows(IllegalArgumentException.class, () -> doTestQuotaConfigEntity(true));
     }
 
-    private Tuple2<String, String> connectOpts;
+    private List<String> connectOpts;
 
-    private ConfigCommandOptions createOpts(String entityType, Optional<String> entityName, List<String> otherArgs) {
-        List<String> optArray = Arrays.asList(connectOpts.v1, connectOpts.v2, "--entity-type", entityType);
+    private ConfigCommand.ConfigCommandOptions createOpts(String entityType, Optional<String> entityName, List<String> otherArgs) {
+        List<String> optArray = Arrays.asList(connectOpts.get(0), connectOpts.get(1), "--entity-type", entityType);
         List<String> nameArray = entityName
             .map(s -> Arrays.asList("--entity-name", s))
             .orElse(Collections.emptyList());
-        return new ConfigCommandOptions(toArray(optArray, nameArray, otherArgs));
+        return new ConfigCommand.ConfigCommandOptions(toArray(optArray, nameArray, otherArgs));
     }
 
     private void checkEntity(String entityType, Optional<String> entityName, String expectedEntityName, List<String> otherArgs) {
-        ConfigCommandOptions opts = createOpts(entityType, entityName, otherArgs);
+        ConfigCommand.ConfigCommandOptions opts = createOpts(entityType, entityName, otherArgs);
         opts.checkArgs();
-        ConfigEntity entity = ConfigCommand.parseEntity(opts);
-        assertEquals(entityType, entity.root.entityType);
+        ConfigCommand.ConfigEntity entity = ConfigCommand.parseEntity(opts);
+        assertEquals(entityType, entity.root().entityType());
         assertEquals(expectedEntityName, entity.fullSanitizedName());
     }
 
     private void checkInvalidArgs(String entityType, Optional<String> entityName, List<String> otherArgs) {
-        ConfigCommandOptions opts = createOpts(entityType, entityName, otherArgs);
+        ConfigCommand.ConfigCommandOptions opts = createOpts(entityType, entityName, otherArgs);
         assertThrows(IllegalArgumentException.class, opts::checkArgs);
     }
 
     private void checkInvalidEntity(String entityType, Optional<String> entityName, List<String> otherArgs) {
-        ConfigCommandOptions opts = createOpts(entityType, entityName, otherArgs);
+        ConfigCommand.ConfigCommandOptions opts = createOpts(entityType, entityName, otherArgs);
         opts.checkArgs();
         assertThrows(IllegalArgumentException.class, () -> ConfigCommand.parseEntity(opts));
     }
 
     public void doTestQuotaConfigEntity(boolean zkConfig) {
         connectOpts = zkConfig
-            ? new Tuple2<>("--zookeeper", ZK_CONNECT)
-            : new Tuple2<>("--bootstrap-server", "localhost:9092");
+            ? Arrays.asList("--zookeeper", ZK_CONNECT)
+            : Arrays.asList("--bootstrap-server", "localhost:9092");
 
         List<String> describeOpts = Collections.singletonList("--describe");
         List<String> alterOpts = Arrays.asList("--alter", "--add-config", "a=b,c=d");
@@ -1625,17 +1657,17 @@ public class ConfigCommandTest {
     }
 
     private void checkEntity(String expectedEntityType, String expectedEntityName, String...args) {
-        ConfigCommandOptions opts = new ConfigCommandOptions(toArray(Arrays.asList(connectOpts.v1, connectOpts.v2), Arrays.asList(args)));
+        ConfigCommand.ConfigCommandOptions opts = new ConfigCommand.ConfigCommandOptions(toArray(connectOpts, Arrays.asList(args)));
         opts.checkArgs();
-        ConfigEntity entity = ConfigCommand.parseEntity(opts);
-        assertEquals(expectedEntityType, entity.root.entityType);
+        ConfigCommand.ConfigEntity entity = ConfigCommand.parseEntity(opts);
+        assertEquals(expectedEntityType, entity.root().entityType());
         assertEquals(expectedEntityName, entity.fullSanitizedName());
     }
 
     private void doTestUserClientQuotaOpts(boolean zkConfig) {
         connectOpts = zkConfig
-            ? new Tuple2<>("--zookeeper", ZK_CONNECT)
-            : new Tuple2<>("--bootstrap-server", "localhost:9092");
+            ? Arrays.asList("--zookeeper", ZK_CONNECT)
+            : Arrays.asList("--bootstrap-server", "localhost:9092");
 
         // <default> is a valid user principal and client-id (can be handled with URL-encoding),
         checkEntity("users", Sanitizer.sanitize("<default>"),
@@ -1676,13 +1708,18 @@ public class ConfigCommandTest {
     private final KafkaZkClient zkClient = mock(KafkaZkClient.class);
 
     public void checkEntities(List<String> opts, Map<String, List<String>> expectedFetches, List<String> expectedEntityNames) {
-        ConfigEntity entity = ConfigCommand.parseEntity(new ConfigCommandOptions(toArray(opts, Collections.singletonList("--describe"))));
+        ConfigCommand.ConfigEntity entity = ConfigCommand.parseEntity(new ConfigCommand.ConfigCommandOptions(toArray(opts, Collections.singletonList("--describe"))));
         expectedFetches.forEach((name, values) ->
             when(zkClient.getAllEntitiesWithConfig(name)).thenReturn(ConfigCommandIntegrationTest.seq(values)));
-        List<ConfigEntity> entities = entity.getAllEntities(zkClient);
+        Seq<ConfigCommand.ConfigEntity> entities0 = entity.getAllEntities(zkClient);
+        List<ConfigCommand.ConfigEntity> entities = new ArrayList<>();
+        entities0.foreach(e -> {
+            entities.add(e);
+            return null;
+        });
         assertEquals(
             expectedEntityNames,
-            entities.stream().map(ConfigEntity::fullSanitizedName).collect(Collectors.toList()));
+            entities.stream().map(ConfigCommand.ConfigEntity::fullSanitizedName).collect(Collectors.toList()));
     }
 
     @Test
@@ -1735,19 +1772,19 @@ public class ConfigCommandTest {
     }
 
     @Test
-    public void shouldAlterClientMetricsConfig() throws Exception {
+    public void shouldAlterClientMetricsConfig() {
         Node node = new Node(1, "localhost", 9092);
         verifyAlterClientMetricsConfig(node, "1", Arrays.asList("--entity-name", "1"));
     }
 
-    private void verifyAlterClientMetricsConfig(Node node, String resourceName, List<String> resourceOpts) throws Exception {
+    private void verifyAlterClientMetricsConfig(Node node, String resourceName, List<String> resourceOpts) {
         List<String> optsList = concat(Arrays.asList("--bootstrap-server", "localhost:9092",
             "--entity-type", "client-metrics",
             "--alter",
             "--delete-config", "interval.ms",
             "--add-config", "metrics=org.apache.kafka.consumer.," +
                 "match=[client_software_name=kafka.python,client_software_version=1\\.2\\..*]"), resourceOpts);
-        ConfigCommandOptions alterOpts = new ConfigCommandOptions(toArray(optsList));
+        ConfigCommand.ConfigCommandOptions alterOpts = new ConfigCommand.ConfigCommandOptions(toArray(optsList));
 
         ConfigResource resource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, resourceName);
         List<ConfigEntry> configEntries = Collections.singletonList(new ConfigEntry("interval.ms", "1000",
@@ -1788,7 +1825,11 @@ public class ConfigCommandTest {
                     new AlterConfigOp(new ConfigEntry("metrics", "org.apache.kafka.consumer."), AlterConfigOp.OpType.SET),
                     new AlterConfigOp(new ConfigEntry("interval.ms", ""), AlterConfigOp.OpType.DELETE)
                 );
-                assertEquals(expectedConfigOps, alterConfigOps);
+                assertEquals(expectedConfigOps.size(), alterConfigOps.size());
+                Iterator<AlterConfigOp> alterConfigOpsIter = alterConfigOps.iterator();
+                for (AlterConfigOp expectedConfigOp : expectedConfigOps) {
+                    assertEquals(expectedConfigOp, alterConfigOpsIter.next());
+                }
                 return alterResult;
             }
         };
@@ -1798,8 +1839,8 @@ public class ConfigCommandTest {
     }
 
     @Test
-    public void shouldDescribeClientMetricsConfigWithoutEntityName() throws Exception {
-        ConfigCommandOptions describeOpts = new ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+    public void shouldDescribeClientMetricsConfigWithoutEntityName() {
+        ConfigCommand.ConfigCommandOptions describeOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
             "--entity-type", "client-metrics",
             "--describe"));
 
@@ -1830,7 +1871,7 @@ public class ConfigCommandTest {
 
     @Test
     public void shouldNotAlterClientMetricsConfigWithoutEntityName() {
-        ConfigCommandOptions alterOpts = new ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
+        ConfigCommand.ConfigCommandOptions alterOpts = new ConfigCommand.ConfigCommandOptions(toArray("--bootstrap-server", "localhost:9092",
             "--entity-type", "client-metrics",
             "--alter",
             "--add-config", "interval.ms=1000"));
@@ -1841,7 +1882,7 @@ public class ConfigCommandTest {
 
     @Test
     public void shouldNotSupportAlterClientMetricsWithZookeeperArg() {
-        ConfigCommandOptions alterOpts = new ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
+        ConfigCommand.ConfigCommandOptions alterOpts = new ConfigCommand.ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
             "--entity-name", "sub",
             "--entity-type", "client-metrics",
             "--alter",
@@ -1853,7 +1894,7 @@ public class ConfigCommandTest {
 
     @Test
     public void shouldNotSupportDescribeClientMetricsWithZookeeperArg() {
-        ConfigCommandOptions describeOpts = new ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
+        ConfigCommand.ConfigCommandOptions describeOpts = new ConfigCommand.ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
             "--entity-name", "sub",
             "--entity-type", "client-metrics",
             "--describe"));
@@ -1864,7 +1905,7 @@ public class ConfigCommandTest {
 
     @Test
     public void shouldNotSupportAlterClientMetricsWithZookeeper() {
-        ConfigCommandOptions alterOpts = new ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
+        ConfigCommand.ConfigCommandOptions alterOpts = new ConfigCommand.ConfigCommandOptions(toArray("--zookeeper", ZK_CONNECT,
             "--entity-name", "sub",
             "--entity-type", "client-metrics",
             "--alter",
@@ -1872,10 +1913,6 @@ public class ConfigCommandTest {
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> ConfigCommand.alterConfigWithZk(null, alterOpts, DUMMY_ADMIN_ZK_CLIENT));
         assertEquals("client-metrics is not a known entityType. Should be one of List(topics, clients, users, brokers, ips)", exception.getMessage());
-    }
-
-    public static void assertNonZeroStatusExit(String...args) {
-        ConfigCommandIntegrationTest.assertNonZeroStatusExit(Arrays.stream(args), msg -> { });
     }
 
     public static String[] toArray(String... first) {

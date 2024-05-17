@@ -773,6 +773,43 @@ public class ConnectWorkerIntegrationTest {
         connect.assertions().assertConnectorDoesNotExist(CONNECTOR_NAME, "Connector wasn't deleted in time");
     }
 
+    @Test
+    public void testPatchConnectorConfig() throws Exception {
+        connect = connectBuilder.build();
+        // start the clusters
+        connect.start();
+
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
+                "Initial group of workers did not start in time.");
+
+        connect.kafka().createTopic(TOPIC_NAME);
+
+        Map<String, String> props = defaultSinkConnectorProps(TOPIC_NAME);
+        props.put("unaffected-key", "unaffected-value");
+        props.put("to-be-deleted-key", "value");
+        props.put(TASKS_MAX_CONFIG, "2");
+
+        Map<String, String> patch = new HashMap<>();
+        patch.put(TASKS_MAX_CONFIG, "3");  // this plays as a value to be changed
+        patch.put("to-be-added-key", "value");
+        patch.put("to-be-deleted-key", null);
+
+        connect.configureConnector(CONNECTOR_NAME, props);
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(CONNECTOR_NAME, 2,
+                "connector and tasks did not start in time");
+
+        connect.patchConnectorConfig(CONNECTOR_NAME, patch);
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(CONNECTOR_NAME, 3,
+                "connector and tasks did not reconfigure and restart in time");
+
+        Map<String, String> expectedConfig = new HashMap<>(props);
+        expectedConfig.put("name", CONNECTOR_NAME);
+        expectedConfig.put("to-be-added-key", "value");
+        expectedConfig.put(TASKS_MAX_CONFIG, "3");
+        expectedConfig.remove("to-be-deleted-key");
+        assertEquals(expectedConfig, connect.connectorInfo(CONNECTOR_NAME).config());
+    }
+
     private Map<String, String> defaultSinkConnectorProps(String topics) {
         // setup props for the sink connector
         Map<String, String> props = new HashMap<>();

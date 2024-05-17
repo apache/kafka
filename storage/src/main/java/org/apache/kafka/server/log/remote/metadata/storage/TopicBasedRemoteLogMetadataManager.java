@@ -55,6 +55,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 /**
@@ -89,14 +91,24 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
     private volatile RemoteLogMetadataTopicPartitioner rlmTopicPartitioner;
     private final Set<TopicIdPartition> pendingAssignPartitions = Collections.synchronizedSet(new HashSet<>());
     private volatile boolean initializationFailed;
+    private final Supplier<RemotePartitionMetadataStore> remoteLogMetadataManagerSupplier;
+    private final Function<Integer, RemoteLogMetadataTopicPartitioner> remoteLogMetadataTopicPartitionerFunction;
 
+    /**
+     * The default constructor delegates to the internal one, starting the consumer thread and
+     * supplying an instance of RemoteLogMetadataTopicPartitioner and RemotePartitionMetadataStore by default.
+     */
     public TopicBasedRemoteLogMetadataManager() {
-        this(true);
+        this(true, RemoteLogMetadataTopicPartitioner::new, RemotePartitionMetadataStore::new);
     }
 
-    // Visible for testing.
-    public TopicBasedRemoteLogMetadataManager(boolean startConsumerThread) {
+    /**
+     * Used in tests to dynamically configure the instance.
+     */
+    TopicBasedRemoteLogMetadataManager(boolean startConsumerThread, Function<Integer, RemoteLogMetadataTopicPartitioner> remoteLogMetadataTopicPartitionerFunction, Supplier<RemotePartitionMetadataStore> remoteLogMetadataManagerSupplier) {
         this.startConsumerThread = startConsumerThread;
+        this.remoteLogMetadataManagerSupplier = remoteLogMetadataManagerSupplier;
+        this.remoteLogMetadataTopicPartitionerFunction = remoteLogMetadataTopicPartitionerFunction;
     }
 
     @Override
@@ -357,8 +369,8 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
             log.info("Started configuring topic-based RLMM with configs: {}", configs);
 
             rlmmConfig = new TopicBasedRemoteLogMetadataManagerConfig(configs);
-            rlmTopicPartitioner = new RemoteLogMetadataTopicPartitioner(rlmmConfig.metadataTopicPartitionsCount());
-            remotePartitionMetadataStore = new RemotePartitionMetadataStore();
+            rlmTopicPartitioner = remoteLogMetadataTopicPartitionerFunction.apply(rlmmConfig.metadataTopicPartitionsCount());
+            remotePartitionMetadataStore = remoteLogMetadataManagerSupplier.get();
             configured = true;
             log.info("Successfully configured topic-based RLMM with config: {}", rlmmConfig);
 
@@ -548,11 +560,6 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
     // Visible for testing.
     public TopicBasedRemoteLogMetadataManagerConfig config() {
         return rlmmConfig;
-    }
-
-    // Visible for testing.
-    void setRlmTopicPartitioner(RemoteLogMetadataTopicPartitioner rlmTopicPartitioner) {
-        this.rlmTopicPartitioner = Objects.requireNonNull(rlmTopicPartitioner);
     }
 
     @Override
