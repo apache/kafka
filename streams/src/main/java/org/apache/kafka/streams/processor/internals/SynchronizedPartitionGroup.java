@@ -16,10 +16,11 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.Set;
-import java.util.function.Function;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+
+import java.util.Set;
+import java.util.function.Function;
 
 class SynchronizedPartitionGroup extends AbstractPartitionGroup {
 
@@ -67,6 +68,11 @@ class SynchronizedPartitionGroup extends AbstractPartitionGroup {
     @Override
     synchronized Long headRecordOffset(final TopicPartition partition) {
         return wrapped.headRecordOffset(partition);
+    }
+
+    @Override
+    ConsumerRecord<byte[], byte[]> rawHeadRecord() {
+        return wrapped.rawHeadRecord();
     }
 
     @Override

@@ -22,11 +22,10 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
-import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.processor.internals.metrics.TopicMetrics;
-
 import org.slf4j.Logger;
 
 import java.util.ArrayDeque;
@@ -51,6 +50,8 @@ public class RecordQueue {
     private final ArrayDeque<ConsumerRecord<byte[], byte[]>> fifoQueue;
 
     private StampedRecord headRecord = null;
+    private ConsumerRecord<byte[], byte[]> rawHeadRecord;
+
     private long partitionTime = UNKNOWN;
 
     private final Sensor droppedRecordsSensor;
@@ -115,6 +116,15 @@ public class RecordQueue {
     }
 
     /**
+     * Returns the head record of the queue
+     *
+     * @return ConsumerRecord
+     */
+    public ConsumerRecord<byte[], byte[]> rawHeadRecord() {
+        return rawHeadRecord;
+    }
+
+    /**
      * Add a batch of {@link ConsumerRecord} into the queue
      *
      * @param rawRecords the raw records
@@ -142,6 +152,7 @@ public class RecordQueue {
 
         headRecord = null;
         headRecordSizeInBytes = 0L;
+        rawHeadRecord = null;
         partitionTime = Math.max(partitionTime, recordToReturn.timestamp);
 
         updateHead();
@@ -188,6 +199,7 @@ public class RecordQueue {
         fifoQueue.clear();
         headRecord = null;
         headRecordSizeInBytes = 0L;
+        rawHeadRecord = null;
         partitionTime = UNKNOWN;
     }
 
@@ -230,14 +242,16 @@ public class RecordQueue {
                 droppedRecordsSensor.record();
                 continue;
             }
-            headRecord = new StampedRecord(deserialized, timestamp, raw);
+            headRecord = new StampedRecord(deserialized, timestamp);
             headRecordSizeInBytes = consumerRecordSizeInBytes(raw);
+            rawHeadRecord = raw;
         }
 
         // if all records in the FIFO queue are corrupted, make the last one the headRecord
         // This record is used to update the offsets. See KAFKA-6502 for more details.
         if (headRecord == null && lastCorruptedRecord != null) {
             headRecord = new CorruptedRecord(lastCorruptedRecord);
+            rawHeadRecord = lastCorruptedRecord;
         }
     }
 
