@@ -66,7 +66,7 @@ public class ClusterTestExtensionsTest {
     static List<ClusterConfig> generate1() {
         Map<String, String> serverProperties = new HashMap<>();
         serverProperties.put("foo", "bar");
-        return Arrays.asList(ClusterConfig.defaultBuilder()
+        return Collections.singletonList(ClusterConfig.defaultBuilder()
                 .setTypes(Collections.singleton(Type.ZK))
                 .setServerProperties(serverProperties)
                 .setTags(Collections.singletonList("Generated Test"))
