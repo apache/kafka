@@ -13,12 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService, quorum
+from kafkatest.services.kafka.quorum import isolated_kraft
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.verifiable_producer import VerifiableProducer
+from kafkatest.services.transactional_message_copier import TransactionalMessageCopier
 from kafkatest.utils import is_int
 from kafkatest.utils.transactions_utils import create_and_start_copiers
+from kafkatest.version import LATEST_3_1, LATEST_3_2, LATEST_3_3, LATEST_3_4, LATEST_3_5, \
+    DEV_BRANCH, KafkaVersion, LATEST_METADATA_VERSION
 
 from ducktape.tests.test import Test
 from ducktape.mark import matrix
@@ -27,47 +30,34 @@ from ducktape.utils.util import wait_until
 
 import time
 
-class TransactionsTest(Test):
+class TransactionsUpgradeTest(Test):
     """Tests transactions by transactionally copying data from a source topic to
-    a destination topic and killing the copy process as well as the broker
-    randomly through the process. In the end we verify that the final output
+    a destination topic while upgrading the cluster. In the end we verify that the final output
     topic contains exactly one committed copy of each message in the input
     topic.
     """
     def __init__(self, test_context):
         """:type test_context: ducktape.tests.test.TestContext"""
-        super(TransactionsTest, self).__init__(test_context=test_context)
+        super(TransactionsUpgradeTest, self).__init__(test_context=test_context)
 
         self.input_topic = "input-topic"
         self.output_topic = "output-topic"
 
         self.num_brokers = 3
 
+        self.replication_factor = 3
+
         # Test parameters
-        self.num_input_partitions = 2
+        self.num_input_partitions = 3
         self.num_output_partitions = 3
-        self.num_seed_messages = 100000
-        self.transaction_size = 750
+        self.num_seed_messages = 1000
+        self.transaction_size = 5
 
         # The transaction timeout should be lower than the progress timeout, but at
-        # least as high as the request timeout (which is 30s by default). When the
-        # client is hard-bounced, progress may depend on the previous transaction
-        # being aborted. When the broker is hard-bounced, we may have to wait as
-        # long as the request timeout to get a `Produce` response and we do not
-        # want the coordinator timing out the transaction.
+        # least as high as the request timeout (which is 30s by default).
         self.transaction_timeout = 40000
         self.progress_timeout_sec = 60
         self.consumer_group = "transactions-test-consumer-group"
-
-        self.zk = ZookeeperService(test_context, num_nodes=1) if quorum.for_test(test_context) == quorum.zk else None
-        self.kafka = KafkaService(test_context,
-                                  num_nodes=self.num_brokers,
-                                  zk=self.zk,
-                                  controller_num_nodes_override=1)
-
-    def setUp(self):
-        if self.zk:
-            self.zk.start()
 
     def seed_messages(self, topic, num_seed_messages):
         seed_timeout_sec = 10000
@@ -88,38 +78,6 @@ class TransactionsTest(Test):
     def get_messages_from_topic(self, topic, num_messages):
         consumer = self.start_consumer(topic, group_id="verifying_consumer")
         return self.drain_consumer(consumer, num_messages)
-
-    def bounce_brokers(self, clean_shutdown):
-       for node in self.kafka.nodes:
-            if clean_shutdown:
-                self.kafka.restart_node(node, clean_shutdown = True)
-            else:
-                self.kafka.stop_node(node, clean_shutdown = False)
-                gracePeriodSecs = 5
-                if self.zk:
-                    wait_until(lambda: not self.kafka.pids(node) and not self.kafka.is_registered(node),
-                               timeout_sec=self.kafka.zk_session_timeout + gracePeriodSecs,
-                               err_msg="Failed to see timely deregistration of hard-killed broker %s" % str(node.account))
-                else:
-                    brokerSessionTimeoutSecs = 18
-                    wait_until(lambda: not self.kafka.pids(node),
-                               timeout_sec=brokerSessionTimeoutSecs + gracePeriodSecs,
-                               err_msg="Failed to see timely disappearance of process for hard-killed broker %s" % str(node.account))
-                    time.sleep(brokerSessionTimeoutSecs + gracePeriodSecs)
-                self.kafka.start_node(node)
-
-            self.kafka.await_no_under_replicated_partitions()
-
-    def bounce_copiers(self, copiers, clean_shutdown):
-        for _ in range(3):
-            for copier in copiers:
-                wait_until(lambda: copier.progress_percent() >= 20.0,
-                           timeout_sec=self.progress_timeout_sec,
-                           err_msg="%s : Message copier didn't make enough progress in %ds. Current progress: %s" \
-                           % (copier.transactional_id, self.progress_timeout_sec, str(copier.progress_percent())))
-                self.logger.info("%s - progress: %s" % (copier.transactional_id,
-                                                        str(copier.progress_percent())))
-                copier.restart(clean_shutdown)
 
     def start_consumer(self, topic_to_read, group_id):
         consumer = ConsoleConsumer(context=self.test_context,
@@ -153,19 +111,49 @@ class TransactionsTest(Test):
         consumer.stop()
         return consumer.messages_consumed[1]
 
-    def copy_messages_transactionally(self, failure_mode, bounce_target,
-                                      input_topic, output_topic,
-                                      num_copiers, num_messages_to_copy,
-                                      use_group_metadata):
+    def wait_until_rejoin(self):
+        for partition in range(0, self.num_input_partitions):
+            wait_until(lambda: len(self.kafka.isr_idx_list(self.input_topic, partition)) == self.replication_factor, timeout_sec=60,
+                    backoff_sec=1, err_msg="Replicas did not rejoin the ISR in a reasonable amount of time")
+
+        for partition in range(0, self.num_output_partitions):
+            wait_until(lambda: len(self.kafka.isr_idx_list(self.output_topic, partition)) == self.replication_factor, timeout_sec=60,
+                    backoff_sec=1, err_msg="Replicas did not rejoin the ISR in a reasonable amount of time")
+
+    def perform_upgrade(self, from_kafka_version):
+        self.logger.info("Performing rolling upgrade.")
+        for node in self.kafka.controller_quorum.nodes:
+            self.logger.info("Stopping controller node %s" % node.account.hostname)
+            self.kafka.controller_quorum.stop_node(node)
+            node.version = DEV_BRANCH
+            self.logger.info("Restarting controller node %s" % node.account.hostname)
+            self.kafka.controller_quorum.start_node(node)
+            self.wait_until_rejoin()
+            self.logger.info("Successfully restarted controller node %s" % node.account.hostname)
+        for node in self.kafka.nodes:
+            self.logger.info("Stopping broker node %s" % node.account.hostname)
+            self.kafka.stop_node(node)
+            node.version = DEV_BRANCH
+            self.logger.info("Restarting broker node %s" % node.account.hostname)
+            self.kafka.start_node(node)
+            self.wait_until_rejoin()
+            self.logger.info("Successfully restarted broker node %s" % node.account.hostname)
+        self.logger.info("Changing metadata.version to %s" % LATEST_METADATA_VERSION)
+        self.kafka.upgrade_metadata_version(LATEST_METADATA_VERSION)
+
+    def copy_messages_transactionally_during_upgrade(self, input_topic, output_topic,
+                                                     num_copiers, num_messages_to_copy,
+                                                     use_group_metadata, from_kafka_version):
         """Copies messages transactionally from the seeded input topic to the
-        output topic, either bouncing brokers or clients in a hard and soft
-        way as it goes.
+        output topic while an rolling upgrade occurs.
 
         This method also consumes messages in read_committed mode from the
-        output topic while the bounces and copy is going on.
+        output topic.
 
         It returns the concurrently consumed messages.
         """
+        self.perform_upgrade(from_kafka_version)
+
         copiers = create_and_start_copiers(test_context=self.test_context,
                                            kafka=self.kafka,
                                            consumer_group=self.consumer_group,
@@ -177,14 +165,6 @@ class TransactionsTest(Test):
                                            use_group_metadata=use_group_metadata)
         concurrent_consumer = self.start_consumer(output_topic,
                                                   group_id="concurrent_consumer")
-        clean_shutdown = False
-        if failure_mode == "clean_bounce":
-            clean_shutdown = True
-
-        if bounce_target == "brokers":
-            self.bounce_brokers(clean_shutdown)
-        elif bounce_target == "clients":
-            self.bounce_copiers(copiers, clean_shutdown)
 
         copier_timeout_sec = 120
         for copier in copiers:
@@ -200,50 +180,47 @@ class TransactionsTest(Test):
         self.kafka.topics = {
             self.input_topic: {
                 "partitions": self.num_input_partitions,
-                "replication-factor": 3,
+                "replication-factor": self.replication_factor,
                 "configs": {
                     "min.insync.replicas": 2
                 }
             },
             self.output_topic: {
                 "partitions": self.num_output_partitions,
-                "replication-factor": 3,
+                "replication-factor": self.replication_factor,
                 "configs": {
                     "min.insync.replicas": 2
                 }
             }
         }
 
-    @cluster(num_nodes=9)
-    @matrix(failure_mode=["hard_bounce", "clean_bounce"],
-            bounce_target=["brokers", "clients"],
-            check_order=[True, False],
-            use_group_metadata=[True, False])
-    def test_transactions(self, failure_mode, bounce_target, check_order, use_group_metadata, metadata_quorum=quorum.all):
+    @cluster(num_nodes=10)
+    @matrix(
+        from_kafka_version=[str(LATEST_3_5), str(LATEST_3_4), str(LATEST_3_3), str(LATEST_3_2), str(LATEST_3_1)],
+        metadata_quorum=[isolated_kraft]
+    )
+    def test_transactions_upgrade(self, from_kafka_version, metadata_quorum=quorum.isolated_kraft):
+        fromKafkaVersion = KafkaVersion(from_kafka_version)
+        self.kafka = KafkaService(self.test_context,
+                                  num_nodes=self.num_brokers,
+                                  zk=None,
+                                  version=fromKafkaVersion,
+                                  controller_num_nodes_override=1)
+
         security_protocol = 'PLAINTEXT'
         self.kafka.security_protocol = security_protocol
         self.kafka.interbroker_security_protocol = security_protocol
         self.kafka.logs["kafka_data_1"]["collect_default"] = True
         self.kafka.logs["kafka_data_2"]["collect_default"] = True
         self.kafka.logs["kafka_operational_logs_debug"]["collect_default"] = True
-        if check_order:
-            # To check ordering, we simply create input and output topics
-            # with a single partition.
-            # We reduce the number of seed messages to copy to account for the fewer output
-            # partitions, and thus lower parallelism. This helps keep the test
-            # time shorter.
-            self.num_seed_messages = self.num_seed_messages // 3
-            self.num_input_partitions = 1
-            self.num_output_partitions = 1
 
         self.setup_topics()
         self.kafka.start()
 
         input_messages = self.seed_messages(self.input_topic, self.num_seed_messages)
-        concurrently_consumed_messages = self.copy_messages_transactionally(
-            failure_mode, bounce_target, input_topic=self.input_topic,
-            output_topic=self.output_topic, num_copiers=self.num_input_partitions,
-            num_messages_to_copy=self.num_seed_messages, use_group_metadata=use_group_metadata)
+        concurrently_consumed_messages = self.copy_messages_transactionally_during_upgrade(
+            input_topic=self.input_topic, output_topic=self.output_topic, num_copiers=self.num_input_partitions,
+            num_messages_to_copy=self.num_seed_messages, use_group_metadata=True, from_kafka_version=from_kafka_version)
         output_messages = self.get_messages_from_topic(self.output_topic, self.num_seed_messages)
 
         concurrently_consumed_message_set = set(concurrently_consumed_messages)
@@ -261,7 +238,3 @@ class TransactionsTest(Test):
         assert input_message_set == concurrently_consumed_message_set, \
             "Input and concurrently consumed output message sets are not equal. Num input messages: %d. Num concurrently_consumed_messages: %d" %\
             (len(input_message_set), len(concurrently_consumed_message_set))
-        if check_order:
-            assert input_messages == sorted(input_messages), "The seed messages themselves were not in order"
-            assert output_messages == input_messages, "Output messages are not in order"
-            assert concurrently_consumed_messages == output_messages, "Concurrently consumed messages are not in order"
