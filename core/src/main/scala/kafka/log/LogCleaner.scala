@@ -131,7 +131,7 @@ class LogCleaner(initialConfig: CleanerConfig,
   /**
    * Activate metrics
    */
-  private def activateMetrics():Unit = {
+  private def activateMetrics(): Unit = {
     /* a metric to track the maximum utilization of any thread's buffer in the last cleaning */
     metricsGroup.newGauge(MaxBufferUtilizationPercentMetricName,
       () => maxOverCleanerThreads(_.lastStats.bufferUtilization) * 100)
@@ -164,7 +164,7 @@ class LogCleaner(initialConfig: CleanerConfig,
       cleaners += cleaner
       cleaner.start()
     }
-    activateMetrics();
+    activateMetrics()
   }
 
   /**
