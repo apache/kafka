@@ -32,6 +32,7 @@ import java.util.TreeMap;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.assertAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
+import static org.apache.kafka.coordinator.group.AssignmentTestUtil.partitionAssignments;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpersTest.mkMapOfPartitionRacks;
 import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HETEROGENEOUS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -629,35 +630,5 @@ public class GeneralUniformAssignmentBuilderTest {
         ));
 
         assertAssignment(expectedAssignment, computedAssignment);
-    }
-
-    /**
-     * Generate a map of partition assignments from the given member spec.
-     *
-     * @param memberSpec        A map where the key is the member Id and the value is an
-     *                          AssignmentMemberSpec object containing the member's partition assignments.
-     * @return Map of topic partition to member assignments.
-     */
-    public Map<Uuid, Map<Integer, String>> partitionAssignments(
-        Map<String, AssignmentMemberSpec> memberSpec
-    ) {
-        Map<Uuid, Map<Integer, String>> partitionAssignments = new HashMap<>();
-        for (Map.Entry<String, AssignmentMemberSpec> memberEntry : memberSpec.entrySet()) {
-            String memberId = memberEntry.getKey();
-            Map<Uuid, Set<Integer>> topicsAndPartitions = memberEntry.getValue().assignedPartitions();
-
-            for (Map.Entry<Uuid, Set<Integer>> topicEntry : topicsAndPartitions.entrySet()) {
-                Uuid topicId = topicEntry.getKey();
-                Set<Integer> partitions = topicEntry.getValue();
-
-                partitionAssignments.putIfAbsent(topicId, new HashMap<>());
-                Map<Integer, String> partitionMap = partitionAssignments.get(topicId);
-
-                for (Integer partitionId : partitions) {
-                    partitionMap.put(partitionId, memberId);
-                }
-            }
-        }
-        return partitionAssignments;
     }
 }

@@ -63,7 +63,7 @@ public class UniformAssignor implements PartitionAssignor {
      */
     @Override
     public GroupAssignment assign(
-        GroupSpecImpl groupSpec,
+        GroupSpec groupSpec,
         SubscribedTopicDescriber subscribedTopicDescriber
     ) throws PartitionAssignorException {
         AbstractUniformAssignmentBuilder assignmentBuilder;

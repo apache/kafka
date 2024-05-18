@@ -39,5 +39,4 @@ public interface GroupSpec {
      *         False, otherwise.
      */
     boolean isPartitionAssigned(Uuid topicId, int partitionId);
-
 }

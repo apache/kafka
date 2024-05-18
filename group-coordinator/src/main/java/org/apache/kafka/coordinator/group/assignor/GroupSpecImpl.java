@@ -67,6 +67,8 @@ public class GroupSpecImpl implements GroupSpec {
     }
 
     /**
+     * Returns whether the partition is currently assigned or not.
+     *
      * @param topicId           The topic Id.
      * @param partitionId       The partition Id.
      * @return True if the partition is currently assigned, false otherwise.

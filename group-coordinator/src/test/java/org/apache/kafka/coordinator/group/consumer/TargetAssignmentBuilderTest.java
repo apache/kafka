@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.AssignmentTestUtil;
 import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
@@ -201,8 +202,11 @@ public class TargetAssignmentBuilderTest {
             SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadataMap);
             SubscriptionType subscriptionType = HOMOGENEOUS;
 
+            // Prepare the member assignments per topic partition.
+            Map<Uuid, Map<Integer, String>> partitionAssignments = AssignmentTestUtil.partitionAssignments(memberSpecs);
+
             // Prepare the expected assignment spec.
-            GroupSpecImpl groupSpec = new GroupSpecImpl(memberSpecs, subscriptionType, Collections.emptyMap());
+            GroupSpecImpl groupSpec = new GroupSpecImpl(memberSpecs, subscriptionType, partitionAssignments);
 
             // We use `any` here to always return an assignment but use `verify` later on
             // to ensure that the input was correct.
@@ -215,7 +219,8 @@ public class TargetAssignmentBuilderTest {
                 .withStaticMembers(staticMembers)
                 .withSubscriptionMetadata(subscriptionMetadata)
                 .withSubscriptionType(subscriptionType)
-                .withTargetAssignment(targetAssignment);
+                .withTargetAssignment(targetAssignment)
+                .withPartitionAssignments(partitionAssignments);
 
             // Add the updated members or delete the deleted members.
             updatedMembers.forEach((memberId, updatedMemberOrNull) -> {

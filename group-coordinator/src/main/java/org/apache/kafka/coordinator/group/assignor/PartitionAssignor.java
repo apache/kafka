@@ -39,7 +39,7 @@ public interface PartitionAssignor {
      * @return The new assignment for the group.
      */
     GroupAssignment assign(
-        GroupSpecImpl groupSpec,
+        GroupSpec groupSpec,
         SubscribedTopicDescriber subscribedTopicDescriber
     ) throws PartitionAssignorException;
 }

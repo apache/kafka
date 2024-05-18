@@ -799,6 +799,44 @@ public class ConsumerGroupTest {
     }
 
     @Test
+    public void testUpdatePartitionAssignments() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        GroupCoordinatorMetricsShard metricsShard = mock(GroupCoordinatorMetricsShard.class);
+        ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, "test-group", metricsShard);
+        Uuid topicId = Uuid.randomUuid();
+        String memberId1 = "member1";
+        String memberId2 = "member2";
+
+        // Initial assignment for member1
+        Assignment initialAssignment = new Assignment(Collections.singletonMap(
+            topicId,
+            new HashSet<>(Collections.singletonList(0))
+        ));
+        consumerGroup.updateTargetAssignment(memberId1, initialAssignment);
+
+        // New assignment for member1;
+        Assignment newAssignment = new Assignment(Collections.singletonMap(
+            topicId,
+            new HashSet<>(Collections.singletonList(1))
+        ));
+        consumerGroup.updatePartitionAssignments(memberId1, initialAssignment, newAssignment);
+
+        // Verify that partition 0 is no longer assigned and partition 1 is assigned to member1
+        assertFalse(consumerGroup.partitionAssignments().get(topicId).containsKey(0));
+        assertEquals(memberId1, consumerGroup.partitionAssignments().get(topicId).get(1));
+
+        // New assignment for member2
+        newAssignment = new Assignment(Collections.singletonMap(
+            topicId,
+            new HashSet<>(Collections.singletonList(2))
+        ));
+        consumerGroup.updatePartitionAssignments(memberId2, Assignment.EMPTY, newAssignment);
+
+        // Verify that partition 2 is assigned to member2
+        assertEquals(memberId2, consumerGroup.partitionAssignments().get(topicId).get(2));
+    }
+
+    @Test
     public void testMetadataRefreshDeadline() {
         MockTime time = new MockTime();
         ConsumerGroup group = createConsumerGroup("group-foo");

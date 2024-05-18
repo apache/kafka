@@ -148,11 +148,6 @@ public class ConsumerGroup implements Group {
     private final TimelineHashMap<String, Integer> subscribedTopicNames;
 
     /**
-     * Partition assignments per topic.
-     */
-    private final TimelineHashMap<Uuid, TimelineHashMap<Integer, String>> partitionAssignments;
-
-    /**
      * The metadata associated with each subscribed topic name.
      */
     private final TimelineHashMap<String, TopicMetadata> subscribedTopicMetadata;
@@ -174,6 +169,11 @@ public class ConsumerGroup implements Group {
      * The target assignment per member id.
      */
     private final TimelineHashMap<String, Assignment> targetAssignment;
+
+    /**
+     * Partition assignments per topic.
+     */
+    private final TimelineHashMap<Uuid, TimelineHashMap<Integer, String>> partitionAssignments;
 
     /**
      * The current partition epoch maps each topic-partitions to their current epoch where
@@ -222,11 +222,11 @@ public class ConsumerGroup implements Group {
         this.staticMembers = new TimelineHashMap<>(snapshotRegistry, 0);
         this.serverAssignors = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedTopicNames = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.partitionAssignments = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedTopicMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscriptionType = new TimelineObject<>(snapshotRegistry, HOMOGENEOUS);
         this.targetAssignmentEpoch = new TimelineInteger(snapshotRegistry);
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.partitionAssignments = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentPartitionEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
         this.metrics = Objects.requireNonNull(metrics);
         this.numClassicProtocolMembers = new TimelineInteger(snapshotRegistry);
@@ -494,14 +494,6 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * @return An immutable map containing all the topic partitions
-     *         with their current member assignments.
-     */
-    public Map<Uuid, Map<Integer, String>> partitionAssignments() {
-        return Collections.unmodifiableMap(partitionAssignments);
-    }
-
-    /**
      * Returns true if the consumer group is actively subscribed to the topic.
      *
      * @param topic  The topic name.
@@ -531,6 +523,14 @@ public class ConsumerGroup implements Group {
     }
 
     /**
+     * @return An immutable map containing all the topic partitions
+     *         with their current member assignments.
+     */
+    public Map<Uuid, Map<Integer, String>> partitionAssignments() {
+        return Collections.unmodifiableMap(partitionAssignments);
+    }
+
+    /**
      * Updates target assignment of a member.
      *
      * @param memberId              The member id.
@@ -551,8 +551,10 @@ public class ConsumerGroup implements Group {
      * @param memberId              The member Id.
      * @param oldTargetAssignment   The old target assignment.
      * @param newTargetAssignment   The new target assignment.
+     *
+     * Package private for testing.
      */
-    public void updatePartitionAssignments(
+    void updatePartitionAssignments(
         String memberId,
         Assignment oldTargetAssignment,
         Assignment newTargetAssignment
