@@ -31,12 +31,16 @@ public class TopicConfig {
     public static final String SEGMENT_BYTES_CONFIG = "segment.bytes";
     public static final String SEGMENT_BYTES_DOC = "This configuration controls the segment file size for " +
         "the log. Retention and cleaning is always done a file at a time so a larger segment size means " +
-        "fewer files but less granular control over retention.";
+        "fewer files but less granular control over retention. Additionally, this configuration " +
+        "operates independently of \"retention.ms\",\"retention.bytes\", \"log.retention.ms\", \"log.retention.minutes\", " +
+        "\"log.retention.hours\" and \"log.retention.bytes\" configurations.";
 
     public static final String SEGMENT_MS_CONFIG = "segment.ms";
     public static final String SEGMENT_MS_DOC = "This configuration controls the period of time after " +
         "which Kafka will force the log to roll even if the segment file isn't full to ensure that retention " +
-        "can delete or compact old data.";
+        "can delete or compact old data. Additionally, this configuration " +
+        "operates independently of \"retention.ms\",\"retention.bytes\", \"log.retention.ms\", \"log.retention.minutes\", " +
+        "\"log.retention.hours\" and \"log.retention.bytes\" configurations.";
 
     public static final String SEGMENT_JITTER_MS_CONFIG = "segment.jitter.ms";
     public static final String SEGMENT_JITTER_MS_DOC = "The maximum random jitter subtracted from the scheduled " +
@@ -68,7 +72,7 @@ public class TopicConfig {
         "are using the \"delete\" retention policy. By default there is no size limit only a time limit. " +
         "Since this limit is enforced at the partition level, multiply it by the number of partitions to compute " +
         "the topic retention in bytes. Additionally, retention.bytes configuration " +
-        "operates independently of \"segment.ms\" and \"segment.bytes\" configurations. " +
+        "operates independently of \"segment.ms\", \"segment.bytes\", \"log.roll.ms\", \"log.roll.hours\" and \"log.segment.bytes\" configurations. " +
         "Moreover, it triggers the rolling of new segment if the retention.bytes is configured to zero.";
 
     public static final String RETENTION_MS_CONFIG = "retention.ms";
@@ -76,7 +80,7 @@ public class TopicConfig {
         "log before we will discard old log segments to free up space if we are using the " +
         "\"delete\" retention policy. This represents an SLA on how soon consumers must read " +
         "their data. If set to -1, no time limit is applied. Additionally, retention.ms configuration " +
-        "operates independently of \"segment.ms\" and \"segment.bytes\" configurations. " +
+        "operates independently of \"segment.ms\", \"segment.bytes\", \"log.roll.ms\", \"log.roll.hours\" and \"log.segment.bytes\" configurations. " +
         "Moreover, it triggers the rolling of new segment if the retention.ms condition is satisfied.";
 
     public static final String REMOTE_LOG_STORAGE_ENABLE_CONFIG = "remote.storage.enable";
