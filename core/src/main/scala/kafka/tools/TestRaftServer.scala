@@ -19,6 +19,7 @@ package kafka.tools
 
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 import java.util.concurrent.{CompletableFuture, CountDownLatch, LinkedBlockingDeque, TimeUnit}
+import java.util.stream.Collectors
 import joptsimple.{OptionException, OptionSpec}
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.{KafkaRaftManager, RaftManager}
@@ -95,6 +96,10 @@ class TestRaftServer(
       metrics,
       Some(threadNamePrefix),
       CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumVoters)),
+      config.quorumBootstrapServers
+        .stream
+        .map(QuorumConfig.parseBootstrapServer)
+        .collect(Collectors.toList()),
       new ProcessTerminatingFaultHandler.Builder().build()
     )
 

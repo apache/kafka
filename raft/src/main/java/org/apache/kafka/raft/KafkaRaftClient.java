@@ -162,7 +162,6 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
     private final Time time;
     private final int fetchMaxWaitMs;
     private final String clusterId;
-    private final Collection<InetSocketAddress> bootstrapServers;
     private final NetworkChannel channel;
     private final ReplicatedLog log;
     private final Random random;
@@ -263,12 +262,36 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         this.appendPurgatory = new ThresholdPurgatory<>(expirationService);
         this.time = time;
         this.clusterId = clusterId;
-        this.bootstrapServers = bootstrapServers;
         this.fetchMaxWaitMs = fetchMaxWaitMs;
         this.logger = logContext.logger(KafkaRaftClient.class);
         this.random = random;
         this.quorumConfig = quorumConfig;
         this.snapshotCleaner = new RaftMetadataLogCleanerManager(logger, time, 60000, log::maybeClean);
+
+
+        if (!bootstrapServers.isEmpty()) {
+            // generate Node objects from network addresses by using decreasing negative ids
+            AtomicInteger id = new AtomicInteger(-2);
+            List<Node> bootstrapNodes = bootstrapServers
+                .stream()
+                .map(address ->
+                    new Node(
+                        id.getAndDecrement(),
+                        address.getHostString(),
+                        address.getPort()
+                    )
+                )
+                .collect(Collectors.toList());
+
+            logger.info("Staring request manager with bootstrap servers: {}", bootstrapNodes);
+
+            requestManager = new RequestManager(
+                bootstrapNodes,
+                quorumConfig.retryBackoffMs(),
+                quorumConfig.requestTimeoutMs(),
+                random
+            );
+        }
     }
 
     private void updateFollowerHighWatermark(
@@ -400,11 +423,10 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         logger.info("Reading KRaft snapshot and log as part of the initialization");
         partitionState.updateState();
 
-        final List<Node> bootstrapNodes;
-        if (bootstrapServers.isEmpty()) {
-            // the bootstrap servers configuration was not use;
-            // default back to the voters configuration
-            bootstrapNodes = voterAddresses
+        if (requestManager == null) {
+            // The request manager wasn't created using the bootstrap servers
+            // create it using the voters static configuration
+            List<Node> bootstrapNodes = voterAddresses
                 .entrySet()
                 .stream()
                 .map(entry ->
@@ -415,26 +437,16 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
                     )
                 )
                 .collect(Collectors.toList());
-        } else {
-            // generate Node objects from network addresses by using decreasing negative ids
-            AtomicInteger id = new AtomicInteger(-2);
-            bootstrapNodes = bootstrapServers
-                .stream()
-                .map(address ->
-                    new Node(
-                        id.getAndDecrement(),
-                        address.getHostString(),
-                        address.getPort()
-                    )
-                )
-                .collect(Collectors.toList());
+
+            logger.info("Staring request manager with bootstrap servers: {}", bootstrapNodes);
+
+            requestManager = new RequestManager(
+                bootstrapNodes,
+                quorumConfig.retryBackoffMs(),
+                quorumConfig.requestTimeoutMs(),
+                random
+            );
         }
-        requestManager = new RequestManager(
-            bootstrapNodes,
-            quorumConfig.retryBackoffMs(),
-            quorumConfig.requestTimeoutMs(),
-            random
-        );
 
         quorum = new QuorumState(
             nodeId,

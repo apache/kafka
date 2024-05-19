@@ -21,6 +21,7 @@ import java.nio.channels.OverlappingFileLockException
 import java.nio.file.{Files, Path, StandardOpenOption}
 import java.util.Properties
 import java.util.concurrent.CompletableFuture
+import java.util.stream.Collectors
 import kafka.log.LogManager
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
@@ -118,6 +119,10 @@ class RaftManagerTest {
       new Metrics(Time.SYSTEM),
       Option.empty,
       CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumVoters)),
+      config.quorumBootstrapServers
+        .stream
+        .map(QuorumConfig.parseBootstrapServer)
+        .collect(Collectors.toList()),
       mock(classOf[FaultHandler])
     )
   }

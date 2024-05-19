@@ -70,9 +70,10 @@ import java.net.{InetAddress, SocketTimeoutException}
 import java.nio.file.{Files, Paths}
 import java.time.Duration
 import java.util
-import java.util.{Optional, OptionalInt, OptionalLong}
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
+import java.util.stream.Collectors
+import java.util.{Optional, OptionalInt, OptionalLong}
 import scala.collection.{Map, Seq}
 import scala.compat.java8.OptionConverters.RichOptionForJava8
 import scala.jdk.CollectionConverters._
@@ -444,6 +445,10 @@ class KafkaServer(
             metrics,
             threadNamePrefix,
             CompletableFuture.completedFuture(quorumVoters),
+            config.quorumBootstrapServers
+              .stream
+              .map(QuorumConfig.parseBootstrapServer)
+              .collect(Collectors.toList()),
             fatalFaultHandler = new LoggingFaultHandler("raftManager", () => shutdown())
           )
           val controllerNodes = QuorumConfig.voterConnectionsToNodes(quorumVoters).asScala

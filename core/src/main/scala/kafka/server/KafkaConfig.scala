@@ -1355,15 +1355,6 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
         throw new ConfigException(s"If using ${KRaftConfigs.PROCESS_ROLES_CONFIG}, ${QuorumConfig.QUORUM_VOTERS_CONFIG} must contain a parseable set of voters.")
       }
     }
-    def validateQuorumVotersOrBootstrapServers(): Unit = {
-      if (voterIds.isEmpty() && quorumBootstrapServers.isEmpty()) {
-        throw new ConfigException(
-          s"""If using ${KRaftConfigs.PROCESS_ROLES_CONFIG}, ${QuorumConfig.QUORUM_VOTERS_CONFIG}
-          | must contain a parseable set of voters or ${QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG}
-          | must contain a set of bootstrap servers""".stripMargin
-        )
-      }
-    }
     def validateNonEmptyQuorumVotersForMigration(): Unit = {
       if (voterIds.isEmpty) {
         throw new ConfigException(s"If using ${KRaftConfigs.MIGRATION_ENABLED_CONFIG}, ${QuorumConfig.QUORUM_VOTERS_CONFIG} must contain a parseable set of voters.")
@@ -1398,7 +1389,6 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     if (processRoles == Set(ProcessRole.BrokerRole)) {
       // KRaft broker-only
       validateNonEmptyQuorumVotersForKRaft()
-      validateQuorumVotersOrBootstrapServers()
       validateControlPlaneListenerEmptyForKRaft()
       validateAdvertisedListenersDoesNotContainControllerListenersForKRaftBroker()
       // nodeId must not appear in controller.quorum.voters
@@ -1426,7 +1416,6 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     } else if (processRoles == Set(ProcessRole.ControllerRole)) {
       // KRaft controller-only
       validateNonEmptyQuorumVotersForKRaft()
-      validateQuorumVotersOrBootstrapServers()
       validateControlPlaneListenerEmptyForKRaft()
       // advertised listeners must be empty when only the controller is configured
       require(
@@ -1444,7 +1433,6 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     } else if (isKRaftCombinedMode) {
       // KRaft combined broker and controller
       validateNonEmptyQuorumVotersForKRaft()
-      validateQuorumVotersOrBootstrapServers()
       validateControlPlaneListenerEmptyForKRaft()
       validateAdvertisedListenersDoesNotContainControllerListenersForKRaftBroker()
       validateControllerQuorumVotersMustContainNodeIdForKRaftController()

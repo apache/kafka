@@ -1379,8 +1379,7 @@ class KafkaConfigTest {
     props.setProperty(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, "kafka1:9092,kafka2:9092")
 
 
-    val addresses = KafkaConfig
-      .fromProps(props)
+    val addresses = KafkaConfig.fromProps(props)
       .quorumBootstrapServers
       .stream
       .map(QuorumConfig.parseBootstrapServer)

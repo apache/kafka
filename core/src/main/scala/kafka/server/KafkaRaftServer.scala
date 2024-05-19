@@ -18,6 +18,7 @@ package kafka.server
 
 import java.io.File
 import java.util.concurrent.CompletableFuture
+import java.util.stream.Collectors
 import kafka.log.UnifiedLog
 import kafka.metrics.KafkaMetricsReporter
 import kafka.utils.{CoreUtils, Logging, Mx4jLoader, VerifiableProperties}
@@ -71,6 +72,10 @@ class KafkaRaftServer(
     time,
     metrics,
     CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumVoters)),
+    config.quorumBootstrapServers
+      .stream
+      .map(QuorumConfig.parseBootstrapServer)
+      .collect(Collectors.toList()),
     new StandardFaultHandlerFactory(),
   )
 
