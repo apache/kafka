@@ -268,7 +268,6 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         this.quorumConfig = quorumConfig;
         this.snapshotCleaner = new RaftMetadataLogCleanerManager(logger, time, 60000, log::maybeClean);
 
-
         if (!bootstrapServers.isEmpty()) {
             // generate Node objects from network addresses by using decreasing negative ids
             AtomicInteger id = new AtomicInteger(-2);
@@ -695,7 +694,6 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         RaftResponse.Inbound responseMetadata,
         long currentTimeMs
     ) {
-        // TODO: check that record grant vote and reject grant vote fail with invalid id
         int remoteNodeId = responseMetadata.source().id();
         VoteResponseData response = (VoteResponseData) responseMetadata.data();
         Errors topLevelError = Errors.forCode(response.errorCode());
@@ -2104,7 +2102,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
             currentTimeMs,
             partitionState
                 .lastVoterSet()
-                .voterNodes(state.unackedVoters(), channel.listenerName()),
+                .voterNodes(state.unackedVoters().stream(), channel.listenerName()),
             () -> buildEndQuorumEpochRequest(state)
         );
 
@@ -2143,7 +2141,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
             currentTimeMs,
             partitionState
                 .lastVoterSet()
-                .voterNodes(state.nonAcknowledgingVoters(), channel.listenerName()),
+                .voterNodes(state.nonAcknowledgingVoters().stream(), channel.listenerName()),
             this::buildBeginQuorumEpochRequest
         );
 
@@ -2160,7 +2158,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
                 currentTimeMs,
                 partitionState
                     .lastVoterSet()
-                    .voterNodes(state.unrecordedVoters(), channel.listenerName()),
+                    .voterNodes(state.unrecordedVoters().stream(), channel.listenerName()),
                 this::buildVoteRequest
             );
         }

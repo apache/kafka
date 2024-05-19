@@ -55,7 +55,10 @@ public class QuorumConfig {
     public static final List<String> DEFAULT_QUORUM_VOTERS = Collections.emptyList();
 
     public static final String QUORUM_BOOTSTRAP_SERVERS_CONFIG = QUORUM_PREFIX + "bootstrap.servers";
-    public static final String QUORUM_BOOTSTRAP_SERVERS_DOC = "TODO";
+    public static final String QUORUM_BOOTSTRAP_SERVERS_DOC = "List of endpoints to use for " +
+        "bootstrapping the cluster metadata. The endpoints are specified in comma-separated list " +
+        "of <code>{host}:{port}</code> entries. For example: " +
+        "<code>localhost:9092,localhost:9093,localhost:9094</code>.";
     public static final List<String> DEFAULT_QUORUM_BOOTSTRAP_SERVERS = Collections.emptyList();
 
     public static final String QUORUM_ELECTION_TIMEOUT_MS_CONFIG = QUORUM_PREFIX + "election.timeout.ms";

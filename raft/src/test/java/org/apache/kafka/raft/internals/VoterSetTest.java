@@ -31,6 +31,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -52,6 +53,26 @@ final public class VoterSetTest {
         );
         assertEquals(Optional.empty(), voterSet.voterNode(1, ListenerName.normalised("MISSING")));
         assertEquals(Optional.empty(), voterSet.voterNode(4, DEFAULT_LISTENER_NAME));
+    }
+
+    @Test
+    void testVoterNodes() {
+        VoterSet voterSet = new VoterSet(voterMap(IntStream.of(1, 2, 3), true));
+
+        assertEquals(
+            Utils.mkSet(new Node(1, "replica-1", 1234), new Node(2, "replica-2", 1234)),
+            voterSet.voterNodes(IntStream.of(1, 2).boxed(), DEFAULT_LISTENER_NAME)
+        );
+
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> voterSet.voterNodes(IntStream.of(1, 2).boxed(), ListenerName.normalised("MISSING"))
+        );
+
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> voterSet.voterNodes(IntStream.of(1, 4).boxed(), DEFAULT_LISTENER_NAME)
+        );
     }
 
     @Test

@@ -200,8 +200,10 @@ public class QuorumState {
                 logContext
             );
         } else if (election.hasLeader()) {
-            // TODO: document that this is going to get implemented differently in the future
-            // TODO: figure out the KAFKA jira for this
+            /* KAFKA-16529 is going to change this so that the leader is not required to be in the set
+             * of voters. In other words, don't throw an IllegalStateException if the leader is not in
+             * the set of voters.
+             */
             Node leader = latestVoterSet
                 .get()
                 .voterNode(election.leaderId(), listenerName)

@@ -37,7 +37,9 @@ public interface NetworkChannel extends AutoCloseable {
     void send(RaftRequest.Outbound request);
 
     /**
-     * TODO: write java doc
+     * The name of listener used when sending requests.
+     *
+     * @return the name of the listener
      */
     ListenerName listenerName();
 

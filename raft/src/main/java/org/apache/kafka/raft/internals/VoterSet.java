@@ -56,28 +56,40 @@ final public class VoterSet {
     }
 
     /**
-     * Returns the socket address for a given voter at a given listener.
+     * Returns the node information for all the given voter ids and listener.
      *
-     * @param voter the id of the voter
-     * @param listener the name of the listener
-     * @return the socket address if it exists, otherwise {@code Optional.empty()}
+     * @param voterIds the id of the voters
+     * @param listenerName the name of the listener
+     * @return the node information for all of the voter ids
+     * @throws IllegalArgumentException if there are missing endpoints
      */
-    // TODO: fix java doc
-    public Set<Node> voterNodes(Set<Integer> voterIds, ListenerName listenerName) {
+    public Set<Node> voterNodes(Stream<Integer> voterIds, ListenerName listenerName) {
         return voterIds
-            .stream()
-            .flatMap(voterId -> {
+            .map(voterId -> {
                 Optional<Node> voterNode = voterNode(voterId, listenerName);
                 if (voterNode.isPresent()) {
-                    return Stream.of(voterNode.get());
+                    return voterNode.get();
                 } else {
-                    return Stream.empty();
+                    throw new IllegalArgumentException(
+                        String.format(
+                            "Unable to find endpoint for voter %d and listener %s in %s",
+                            voterId,
+                            listenerName,
+                            voters
+                        )
+                    );
                 }
             })
             .collect(Collectors.toSet());
     }
 
-    // TODO: write java doc
+    /**
+     * Returns the node information for a given voter id and listener.
+     *
+     * @param voterId the id of the voter
+     * @param listenerName the name of the listener
+     * @return the node information if it exists, otherwise {@code Optional.empty()}
+     */
     public Optional<Node> voterNode(int voterId, ListenerName listenerName) {
         Optional<InetSocketAddress> endpoint = Optional
             .ofNullable(voters.get(voterId))

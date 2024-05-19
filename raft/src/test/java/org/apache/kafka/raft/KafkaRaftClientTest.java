@@ -74,7 +74,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-// TODO: replace mockNode with the actual node in the request
 public class KafkaRaftClientTest {
 
     @Test
