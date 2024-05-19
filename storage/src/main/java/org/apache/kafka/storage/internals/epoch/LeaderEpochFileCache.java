@@ -18,6 +18,7 @@ package org.apache.kafka.storage.internals.epoch;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.server.util.Scheduler;
 import org.apache.kafka.storage.internals.log.EpochEntry;
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpoint;
 import org.slf4j.Logger;
@@ -42,10 +43,15 @@ import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UND
  * <p>
  * Leader Epoch = epoch assigned to each leader by the controller.
  * Offset = offset of the first message in each epoch.
+ * <p>
+ * Note that {@link #truncateFromStart},{@link #truncateFromEnd} flushes the epoch-entry changes to checkpoint asynchronously.
+ * Hence, it is instantiater's responsibility to ensure restoring the cache to the correct state after instantiating
+ * this class from checkpoint (which might contain stale epoch entries right after instantiation).
  */
 public class LeaderEpochFileCache {
     private final TopicPartition topicPartition;
     private final LeaderEpochCheckpoint checkpoint;
+    private final Scheduler scheduler;
     private final Logger log;
 
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
@@ -55,14 +61,38 @@ public class LeaderEpochFileCache {
     /**
      * @param topicPartition the associated topic partition
      * @param checkpoint     the checkpoint file
+     * @param scheduler      the scheduler to use for async I/O operations
      */
     @SuppressWarnings("this-escape")
-    public LeaderEpochFileCache(TopicPartition topicPartition, LeaderEpochCheckpoint checkpoint) {
+    public LeaderEpochFileCache(TopicPartition topicPartition, LeaderEpochCheckpoint checkpoint, Scheduler scheduler) {
         this.checkpoint = checkpoint;
         this.topicPartition = topicPartition;
+        this.scheduler = scheduler;
         LogContext logContext = new LogContext("[LeaderEpochCache " + topicPartition + "] ");
         log = logContext.logger(LeaderEpochFileCache.class);
         checkpoint.read().forEach(this::assign);
+    }
+
+    /**
+     * Instantiates a new LeaderEpochFileCache with replacing checkpoint with given one
+     * without restoring the cache from the checkpoint, with retaining the current epoch entries.
+     * @param epochEntries the current epoch entries
+     * @param topicPartition the associated topic partition
+     * @param checkpoint the checkpoint file
+     * @param scheduler the scheduler to use for async I/O operations
+     */
+    private LeaderEpochFileCache(List<EpochEntry> epochEntries,
+                                 TopicPartition topicPartition,
+                                 LeaderEpochCheckpoint checkpoint,
+                                 Scheduler scheduler) {
+        this.checkpoint = checkpoint;
+        this.topicPartition = topicPartition;
+        this.scheduler = scheduler;
+        LogContext logContext = new LogContext("[LeaderEpochCache " + topicPartition + "] ");
+        log = logContext.logger(LeaderEpochFileCache.class);
+        for (EpochEntry entry : epochEntries) {
+            epochs.put(entry.epoch, entry);
+        }
     }
 
     /**
@@ -73,7 +103,7 @@ public class LeaderEpochFileCache {
         EpochEntry entry = new EpochEntry(epoch, startOffset);
         if (assign(entry)) {
             log.debug("Appended new epoch entry {}. Cache now contains {} entries.", entry, epochs.size());
-            writeToFile(true);
+            writeToFile();
         }
     }
 
@@ -83,7 +113,7 @@ public class LeaderEpochFileCache {
                 log.debug("Appended new epoch entry {}. Cache now contains {} entries.", entry, epochs.size());
             }
         });
-        if (!entries.isEmpty()) writeToFile(true);
+        if (!entries.isEmpty()) writeToFile();
     }
 
     private boolean isUpdateNeeded(EpochEntry entry) {
@@ -305,6 +335,8 @@ public class LeaderEpochFileCache {
 
     /**
      * Removes all epoch entries from the store with start offsets greater than or equal to the passed offset.
+     * <p>
+     * Checkpoint-flushing is done asynchronously.
      */
     public void truncateFromEnd(long endOffset) {
         lock.writeLock().lock();
@@ -313,14 +345,14 @@ public class LeaderEpochFileCache {
             if (endOffset >= 0 && epochEntry.isPresent() && epochEntry.get().startOffset >= endOffset) {
                 List<EpochEntry> removedEntries = removeFromEnd(x -> x.startOffset >= endOffset);
 
-                // We intentionally don't force flushing change to the device here because:
+                // We flush the change to the device in the background because:
                 // - To avoid fsync latency
                 //   * fsync latency could be huge on a disk glitch, which is not rare in spinning drives
                 //   * This method is called by ReplicaFetcher threads, which could block replica fetching
                 //     then causing ISR shrink or high produce response time degradation in remote scope on high fsync latency.
                 // - Even when stale epochs remained in LeaderEpoch file due to the unclean shutdown, it will be handled by
                 //   another truncateFromEnd call on log loading procedure so it won't be a problem
-                writeToFile(false);
+                scheduler.scheduleOnce("leader-epoch-cache-flush-" + topicPartition, this::writeToFile);
 
                 log.debug("Cleared entries {} from epoch cache after truncating to end offset {}, leaving {} entries in the cache.", removedEntries, endOffset, epochs.size());
             }
@@ -334,6 +366,8 @@ public class LeaderEpochFileCache {
      * be offset, then clears any previous epoch entries.
      * <p>
      * This method is exclusive: so truncateFromStart(6) will retain an entry at offset 6.
+     * <p>
+     * Checkpoint-flushing is done asynchronously.
      *
      * @param startOffset the offset to clear up to
      */
@@ -347,14 +381,14 @@ public class LeaderEpochFileCache {
                 EpochEntry updatedFirstEntry = new EpochEntry(firstBeforeStartOffset.epoch, startOffset);
                 epochs.put(updatedFirstEntry.epoch, updatedFirstEntry);
 
-                // We intentionally don't force flushing change to the device here because:
+                // We flush the change to the device in the background because:
                 // - To avoid fsync latency
                 //   * fsync latency could be huge on a disk glitch, which is not rare in spinning drives
                 //   * This method is called as part of deleteRecords with holding UnifiedLog#lock.
                 //      - Meanwhile all produces against the partition will be blocked, which causes req-handlers to exhaust
                 // - Even when stale epochs remained in LeaderEpoch file due to the unclean shutdown, it will be recovered by
                 //   another truncateFromStart call on log loading procedure so it won't be a problem
-                writeToFile(false);
+                scheduler.scheduleOnce("leader-epoch-cache-flush-" + topicPartition, this::writeToFile);
 
                 log.debug("Cleared entries {} and rewrote first entry {} after truncating to start offset {}, leaving {} in the cache.", removedEntries, updatedFirstEntry, startOffset, epochs.size());
             }
@@ -390,7 +424,27 @@ public class LeaderEpochFileCache {
         lock.readLock().lock();
         try {
             leaderEpochCheckpoint.write(epochEntries());
-            return new LeaderEpochFileCache(topicPartition, leaderEpochCheckpoint);
+            // We instantiate LeaderEpochFileCache after writing leaderEpochCheckpoint,
+            // hence it is guaranteed that the new cache is consistent with the latest epoch entries.
+            return new LeaderEpochFileCache(topicPartition, leaderEpochCheckpoint, scheduler);
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    /**
+     * Returns a new LeaderEpochFileCache which contains same
+     * epoch entries with replacing backing checkpoint
+     * @param leaderEpochCheckpoint the new checkpoint
+     * @return a new LeaderEpochFileCache instance
+     */
+    public LeaderEpochFileCache withCheckpoint(LeaderEpochCheckpoint leaderEpochCheckpoint) {
+        lock.readLock().lock();
+        try {
+            return new LeaderEpochFileCache(epochEntries(),
+                                            topicPartition,
+                                            leaderEpochCheckpoint,
+                                            scheduler);
         } finally {
             lock.readLock().unlock();
         }
@@ -403,7 +457,7 @@ public class LeaderEpochFileCache {
         lock.writeLock().lock();
         try {
             epochs.clear();
-            writeToFile(true);
+            writeToFile();
         } finally {
             lock.writeLock().unlock();
         }
@@ -440,10 +494,10 @@ public class LeaderEpochFileCache {
         }
     }
 
-    private void writeToFile(boolean sync) {
+    private void writeToFile() {
         lock.readLock().lock();
         try {
-            checkpoint.write(epochs.values(), sync);
+            checkpoint.write(epochs.values());
         } finally {
             lock.readLock().unlock();
         }

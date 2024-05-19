@@ -57,6 +57,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteStorageManager;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
+import org.apache.kafka.server.util.MockScheduler;
 import org.apache.kafka.storage.internals.checkpoint.InMemoryLeaderEpochCheckpoint;
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpoint;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
@@ -189,7 +190,7 @@ public class RemoteLogManagerTest {
         List<EpochEntry> epochs = Collections.emptyList();
 
         @Override
-        public void write(Collection<EpochEntry> epochs, boolean ignored) {
+        public void write(Collection<EpochEntry> epochs) {
             this.epochs = new ArrayList<>(epochs);
         }
 
@@ -201,6 +202,8 @@ public class RemoteLogManagerTest {
     private final AtomicLong currentLogStartOffset = new AtomicLong(0L);
 
     private final UnifiedLog mockLog = mock(UnifiedLog.class);
+
+    private final MockScheduler scheduler = new MockScheduler(time);
 
     @BeforeEach
     void setUp() throws Exception {
@@ -241,7 +244,7 @@ public class RemoteLogManagerTest {
     @Test
     void testGetLeaderEpochCheckpoint() {
         checkpoint.write(totalEpochEntries);
-        LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint, scheduler);
         when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
         InMemoryLeaderEpochCheckpoint inMemoryCheckpoint = remoteLogManager.getLeaderEpochCheckpoint(mockLog, 0, 300);
         assertEquals(totalEpochEntries, inMemoryCheckpoint.read());
@@ -259,7 +262,7 @@ public class RemoteLogManagerTest {
                 new EpochEntry(1, 500)
         );
         checkpoint.write(totalEpochEntries);
-        LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint, scheduler);
         when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
         TopicIdPartition tpId = new TopicIdPartition(Uuid.randomUuid(), tp);
         OffsetAndEpoch offsetAndEpoch = remoteLogManager.findHighestRemoteOffset(tpId, mockLog);
@@ -273,7 +276,7 @@ public class RemoteLogManagerTest {
                 new EpochEntry(1, 500)
         );
         checkpoint.write(totalEpochEntries);
-        LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint, scheduler);
         when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
         TopicIdPartition tpId = new TopicIdPartition(Uuid.randomUuid(), tp);
         when(remoteLogMetadataManager.highestOffsetForEpoch(eq(tpId), anyInt())).thenAnswer(ans -> {
@@ -296,7 +299,7 @@ public class RemoteLogManagerTest {
                 new EpochEntry(2, 300)
         );
         checkpoint.write(totalEpochEntries);
-        LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint, scheduler);
         when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
         TopicIdPartition tpId = new TopicIdPartition(Uuid.randomUuid(), tp);
         when(remoteLogMetadataManager.highestOffsetForEpoch(eq(tpId), anyInt())).thenAnswer(ans -> {
@@ -457,7 +460,7 @@ public class RemoteLogManagerTest {
 
         // leader epoch preparation
         checkpoint.write(totalEpochEntries);
-        LeaderEpochFileCache cache = new LeaderEpochFileCache(leaderTopicIdPartition.topicPartition(), checkpoint);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(leaderTopicIdPartition.topicPartition(), checkpoint, scheduler);
         when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
         when(remoteLogMetadataManager.highestOffsetForEpoch(any(TopicIdPartition.class), anyInt())).thenReturn(Optional.of(-1L));
 
@@ -571,7 +574,7 @@ public class RemoteLogManagerTest {
 
         // leader epoch preparation
         checkpoint.write(totalEpochEntries);
-        LeaderEpochFileCache cache = new LeaderEpochFileCache(leaderTopicIdPartition.topicPartition(), checkpoint);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(leaderTopicIdPartition.topicPartition(), checkpoint, scheduler);
         when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
         when(remoteLogMetadataManager.highestOffsetForEpoch(any(TopicIdPartition.class), anyInt())).thenReturn(Optional.of(-1L));
 
@@ -661,7 +664,7 @@ public class RemoteLogManagerTest {
 
         // leader epoch preparation
         checkpoint.write(totalEpochEntries);
-        LeaderEpochFileCache cache = new LeaderEpochFileCache(leaderTopicIdPartition.topicPartition(), checkpoint);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(leaderTopicIdPartition.topicPartition(), checkpoint, scheduler);
         when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
         when(remoteLogMetadataManager.highestOffsetForEpoch(any(TopicIdPartition.class), anyInt())).thenReturn(Optional.of(0L));
 
@@ -778,7 +781,7 @@ public class RemoteLogManagerTest {
 
         // leader epoch preparation
         checkpoint.write(totalEpochEntries);
-        LeaderEpochFileCache cache = new LeaderEpochFileCache(leaderTopicIdPartition.topicPartition(), checkpoint);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(leaderTopicIdPartition.topicPartition(), checkpoint, scheduler);
         when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
         when(remoteLogMetadataManager.highestOffsetForEpoch(any(TopicIdPartition.class), anyInt())).thenReturn(Optional.of(0L));
 
@@ -928,7 +931,7 @@ public class RemoteLogManagerTest {
 
         // leader epoch preparation
         checkpoint.write(totalEpochEntries);
-        LeaderEpochFileCache cache = new LeaderEpochFileCache(leaderTopicIdPartition.topicPartition(), checkpoint);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(leaderTopicIdPartition.topicPartition(), checkpoint, scheduler);
         when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
         when(remoteLogMetadataManager.highestOffsetForEpoch(any(TopicIdPartition.class), anyInt())).thenReturn(Optional.of(0L));
 
@@ -1001,7 +1004,7 @@ public class RemoteLogManagerTest {
 
         // leader epoch preparation
         checkpoint.write(totalEpochEntries);
-        LeaderEpochFileCache cache = new LeaderEpochFileCache(leaderTopicIdPartition.topicPartition(), checkpoint);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(leaderTopicIdPartition.topicPartition(), checkpoint, scheduler);
         when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
         when(remoteLogMetadataManager.highestOffsetForEpoch(any(TopicIdPartition.class), anyInt())).thenReturn(Optional.of(0L));
 
@@ -1037,7 +1040,7 @@ public class RemoteLogManagerTest {
 
         // leader epoch preparation
         checkpoint.write(totalEpochEntries);
-        LeaderEpochFileCache cache = new LeaderEpochFileCache(leaderTopicIdPartition.topicPartition(), checkpoint);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(leaderTopicIdPartition.topicPartition(), checkpoint, scheduler);
         when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
 
         // Throw a retryable exception so indicate that the remote log metadata manager is not initialized yet
@@ -1236,7 +1239,7 @@ public class RemoteLogManagerTest {
         TreeMap<Integer, Long> validSegmentEpochs = new TreeMap<>();
         validSegmentEpochs.put(targetLeaderEpoch, startOffset);
 
-        LeaderEpochFileCache leaderEpochFileCache = new LeaderEpochFileCache(tp, checkpoint);
+        LeaderEpochFileCache leaderEpochFileCache = new LeaderEpochFileCache(tp, checkpoint, scheduler);
         leaderEpochFileCache.assign(4, 99L);
         leaderEpochFileCache.assign(5, 99L);
         leaderEpochFileCache.assign(targetLeaderEpoch, startOffset);
@@ -1270,7 +1273,7 @@ public class RemoteLogManagerTest {
         validSegmentEpochs.put(targetLeaderEpoch - 1, startOffset - 1); // invalid epochs not aligning with leader epoch cache
         validSegmentEpochs.put(targetLeaderEpoch, startOffset);
 
-        LeaderEpochFileCache leaderEpochFileCache = new LeaderEpochFileCache(tp, checkpoint);
+        LeaderEpochFileCache leaderEpochFileCache = new LeaderEpochFileCache(tp, checkpoint, scheduler);
         leaderEpochFileCache.assign(4, 99L);
         leaderEpochFileCache.assign(5, 99L);
         leaderEpochFileCache.assign(targetLeaderEpoch, startOffset);
@@ -1300,7 +1303,7 @@ public class RemoteLogManagerTest {
         TreeMap<Integer, Long> validSegmentEpochs = new TreeMap<>();
         validSegmentEpochs.put(targetLeaderEpoch, startOffset);
 
-        LeaderEpochFileCache leaderEpochFileCache = new LeaderEpochFileCache(tp, checkpoint);
+        LeaderEpochFileCache leaderEpochFileCache = new LeaderEpochFileCache(tp, checkpoint, scheduler);
         leaderEpochFileCache.assign(4, 99L);
         leaderEpochFileCache.assign(5, 99L);
         leaderEpochFileCache.assign(targetLeaderEpoch, startOffset);
@@ -1708,7 +1711,7 @@ public class RemoteLogManagerTest {
         epochEntries.add(new EpochEntry(2, 550L));
         checkpoint.write(epochEntries);
 
-        LeaderEpochFileCache cache = new LeaderEpochFileCache(leaderTopicIdPartition.topicPartition(), checkpoint);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(leaderTopicIdPartition.topicPartition(), checkpoint, scheduler);
         when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
 
         long timestamp = time.milliseconds();
@@ -1746,7 +1749,7 @@ public class RemoteLogManagerTest {
         epochEntries.add(new EpochEntry(2, 550L));
         checkpoint.write(epochEntries);
 
-        LeaderEpochFileCache cache = new LeaderEpochFileCache(leaderTopicIdPartition.topicPartition(), checkpoint);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(leaderTopicIdPartition.topicPartition(), checkpoint, scheduler);
         when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
         when(mockLog.localLogStartOffset()).thenReturn(250L);
         when(remoteLogMetadataManager.listRemoteLogSegments(eq(leaderTopicIdPartition), anyInt()))
@@ -1771,7 +1774,7 @@ public class RemoteLogManagerTest {
         epochEntries.add(new EpochEntry(2, 550L));
         checkpoint.write(epochEntries);
 
-        LeaderEpochFileCache cache = new LeaderEpochFileCache(leaderTopicIdPartition.topicPartition(), checkpoint);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(leaderTopicIdPartition.topicPartition(), checkpoint, scheduler);
         when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
 
         RemoteLogSegmentMetadata metadata = mock(RemoteLogSegmentMetadata.class);
@@ -1814,7 +1817,7 @@ public class RemoteLogManagerTest {
 
         List<EpochEntry> epochEntries = Collections.singletonList(epochEntry0);
         checkpoint.write(epochEntries);
-        LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint, scheduler);
         when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
 
         when(mockLog.topicPartition()).thenReturn(leaderTopicIdPartition.topicPartition());
@@ -1867,7 +1870,7 @@ public class RemoteLogManagerTest {
 
         List<EpochEntry> epochEntries = Collections.singletonList(epochEntry0);
         checkpoint.write(epochEntries);
-        LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint, scheduler);
         when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
 
         when(mockLog.topicPartition()).thenReturn(leaderTopicIdPartition.topicPartition());
@@ -1938,7 +1941,7 @@ public class RemoteLogManagerTest {
                 .thenAnswer(ans -> metadataList.iterator());
 
         checkpoint.write(epochEntries);
-        LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint, scheduler);
         when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
 
         Map<String, Long> logProps = new HashMap<>();
@@ -2000,7 +2003,7 @@ public class RemoteLogManagerTest {
 
         List<EpochEntry> epochEntries = Collections.singletonList(epochEntry0);
         checkpoint.write(epochEntries);
-        LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint, scheduler);
         when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
 
         when(mockLog.topicPartition()).thenReturn(leaderTopicIdPartition.topicPartition());
@@ -2053,7 +2056,7 @@ public class RemoteLogManagerTest {
                 new EpochEntry(4, 100L)
         );
         checkpoint.write(epochEntries);
-        LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint, scheduler);
         int currentLeaderEpoch = epochEntries.get(epochEntries.size() - 1).epoch;
 
         long localLogSegmentsSize = 512L;
@@ -2091,7 +2094,7 @@ public class RemoteLogManagerTest {
                 new EpochEntry(4, 100L)
         );
         checkpoint.write(epochEntries);
-        LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint, scheduler);
         int currentLeaderEpoch = epochEntries.get(epochEntries.size() - 1).epoch;
 
         long localLogSegmentsSize = 512L;
@@ -2178,7 +2181,7 @@ public class RemoteLogManagerTest {
                     .thenReturn(remoteLogSegmentMetadatas.iterator());
 
             checkpoint.write(epochEntries);
-            LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint);
+            LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint, scheduler);
             when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
 
             Map<String, Long> logProps = new HashMap<>();
@@ -2255,7 +2258,7 @@ public class RemoteLogManagerTest {
                                                           Long endOffset) {
         InMemoryLeaderEpochCheckpoint myCheckpoint = new InMemoryLeaderEpochCheckpoint();
         myCheckpoint.write(entries);
-        LeaderEpochFileCache cache = new LeaderEpochFileCache(null, myCheckpoint);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(null, myCheckpoint, scheduler);
         cache.truncateFromStart(startOffset);
         cache.truncateFromEnd(endOffset);
         return myCheckpoint.read().stream().collect(Collectors.toMap(e -> e.epoch, e -> e.startOffset));

@@ -23,6 +23,7 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{MockTime, Time, Utils}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
+import org.apache.kafka.server.util.MockScheduler
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpoint
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.storage.internals.log._
@@ -405,14 +406,14 @@ class LogSegmentTest {
     val checkpoint: LeaderEpochCheckpoint = new LeaderEpochCheckpoint {
       private var epochs = Seq.empty[EpochEntry]
 
-      override def write(epochs: util.Collection[EpochEntry], ignored: Boolean): Unit = {
+      override def write(epochs: util.Collection[EpochEntry]): Unit = {
         this.epochs = epochs.asScala.toSeq
       }
 
       override def read(): java.util.List[EpochEntry] = this.epochs.asJava
     }
 
-    val cache = new LeaderEpochFileCache(topicPartition, checkpoint)
+    val cache = new LeaderEpochFileCache(topicPartition, checkpoint, new MockScheduler(new MockTime()))
     seg.append(105L, RecordBatch.NO_TIMESTAMP, 104L, MemoryRecords.withRecords(104L, CompressionType.NONE, 0,
         new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
 

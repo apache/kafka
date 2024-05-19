@@ -20,6 +20,7 @@ package kafka.server.epoch
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
+import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.checkpoint.{LeaderEpochCheckpoint, LeaderEpochCheckpointFile}
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.storage.internals.log.{EpochEntry, LogDirFailureChannel}
@@ -27,7 +28,7 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
 import java.io.File
-import java.util.{Collections, OptionalInt, Optional}
+import java.util.{Collections, Optional, OptionalInt}
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
@@ -38,11 +39,11 @@ class LeaderEpochFileCacheTest {
   val tp = new TopicPartition("TestTopic", 5)
   private val checkpoint: LeaderEpochCheckpoint = new LeaderEpochCheckpoint {
     private var epochs: Seq[EpochEntry] = Seq()
-    override def write(epochs: java.util.Collection[EpochEntry], ignored: Boolean): Unit = this.epochs = epochs.asScala.toSeq
+    override def write(epochs: java.util.Collection[EpochEntry]): Unit = this.epochs = epochs.asScala.toSeq
     override def read(): java.util.List[EpochEntry] = this.epochs.asJava
   }
 
-  private val cache = new LeaderEpochFileCache(tp, checkpoint)
+  private val cache = new LeaderEpochFileCache(tp, checkpoint, new MockTime().scheduler)
 
   @Test
   def testPreviousEpoch(): Unit = {
@@ -245,12 +246,12 @@ class LeaderEpochFileCacheTest {
     val checkpoint = new LeaderEpochCheckpointFile(new File(checkpointPath), new LogDirFailureChannel(1))
 
     //Given
-    val cache = new LeaderEpochFileCache(tp, checkpoint)
+    val cache = new LeaderEpochFileCache(tp, checkpoint, new MockTime().scheduler)
     cache.assign(2, 6)
 
     //When
     val checkpoint2 = new LeaderEpochCheckpointFile(new File(checkpointPath), new LogDirFailureChannel(1))
-    val cache2 = new LeaderEpochFileCache(tp, checkpoint2)
+    val cache2 = new LeaderEpochFileCache(tp, checkpoint2, new MockTime().scheduler)
 
     //Then
     assertEquals(1, cache2.epochEntries.size)

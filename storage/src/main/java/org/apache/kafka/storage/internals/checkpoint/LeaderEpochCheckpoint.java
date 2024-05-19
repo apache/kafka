@@ -22,13 +22,7 @@ import java.util.Collection;
 import java.util.List;
 
 public interface LeaderEpochCheckpoint {
-    // in file-backed checkpoint implementation, the content should be
-    // synced to the device if `sync` is true
-    void write(Collection<EpochEntry> epochs, boolean sync);
-
-    default void write(Collection<EpochEntry> epochs) {
-        write(epochs, true);
-    }
+    void write(Collection<EpochEntry> epochs);
 
     List<EpochEntry> read();
 }
