@@ -59,12 +59,12 @@ public class FeatureControlManager {
         private ClusterFeatureSupportDescriber clusterSupportDescriber = new ClusterFeatureSupportDescriber() {
             @Override
             public Iterator<Entry<Integer, Map<String, VersionRange>>> brokerSupported() {
-                return Collections.<Integer, Map<String, VersionRange>>emptyMap().entrySet().iterator();
+                return Collections.emptyIterator();
             }
 
             @Override
             public Iterator<Entry<Integer, Map<String, VersionRange>>> controllerSupported() {
-                return Collections.<Integer, Map<String, VersionRange>>emptyMap().entrySet().iterator();
+                return Collections.emptyIterator();
             }
         };
 
