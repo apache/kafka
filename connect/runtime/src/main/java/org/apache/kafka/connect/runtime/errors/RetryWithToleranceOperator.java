@@ -279,7 +279,7 @@ public class RetryWithToleranceOperator<T> implements AutoCloseable {
             case ALL:
                 return true;
             default:
-                throw new ConfigException("Unknown tolerance type: {}", errorToleranceType);
+                throw new ConfigException("errorToleranceType", errorToleranceType, "Unknown tolerance type");
         }
     }
 

@@ -216,7 +216,7 @@ public class QuorumConfig {
         @Override
         public void ensureValid(String name, Object value) {
             if (value == null) {
-                throw new ConfigException(name, null);
+                throw new ConfigException(name, null, null);
             }
 
             @SuppressWarnings("unchecked")
