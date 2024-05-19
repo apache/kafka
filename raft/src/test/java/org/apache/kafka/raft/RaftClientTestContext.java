@@ -147,6 +147,7 @@ public final class RaftClientTestContext {
         private int electionTimeoutMs = DEFAULT_ELECTION_TIMEOUT_MS;
         private int appendLingerMs = DEFAULT_APPEND_LINGER_MS;
         private MemoryPool memoryPool = MemoryPool.NONE;
+        private List<InetSocketAddress> bootstrapServers = Collections.emptyList();
 
         public Builder(int localId, Set<Integer> voters) {
             this(OptionalInt.of(localId), voters);
@@ -241,6 +242,11 @@ public final class RaftClientTestContext {
             return this;
         }
 
+        Builder withBootstrapServers(List<InetSocketAddress> bootstrapServers) {
+            this.bootstrapServers = bootstrapServers;
+            return this;
+        }
+
         public RaftClientTestContext build() throws IOException {
             Metrics metrics = new Metrics(time);
             MockNetworkChannel channel = new MockNetworkChannel();
@@ -270,6 +276,7 @@ public final class RaftClientTestContext {
                 new MockExpirationService(time),
                 FETCH_MAX_WAIT_MS,
                 clusterId.toString(),
+                bootstrapServers,
                 logContext,
                 random,
                 quorumConfig

@@ -46,6 +46,7 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -769,6 +770,7 @@ public class RaftEventSimulationTest {
                 new MockExpirationService(time),
                 FETCH_MAX_WAIT_MS,
                 clusterId.toString(),
+                Collections.emptyList(),
                 logContext,
                 random,
                 quorumConfig

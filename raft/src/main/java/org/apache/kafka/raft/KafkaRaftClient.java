@@ -84,6 +84,7 @@ import org.apache.kafka.snapshot.SnapshotWriter;
 import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
@@ -99,6 +100,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -160,6 +162,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
     private final Time time;
     private final int fetchMaxWaitMs;
     private final String clusterId;
+    private final Collection<InetSocketAddress> bootstrapServers;
     private final NetworkChannel channel;
     private final ReplicatedLog log;
     private final Random random;
@@ -209,6 +212,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         ExpirationService expirationService,
         LogContext logContext,
         String clusterId,
+        Collection<InetSocketAddress> bootstrapServers,
         QuorumConfig quorumConfig
     ) {
         this(
@@ -223,6 +227,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
             expirationService,
             MAX_FETCH_WAIT_MS,
             clusterId,
+            bootstrapServers,
             logContext,
             new Random(),
             quorumConfig
@@ -241,6 +246,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         ExpirationService expirationService,
         int fetchMaxWaitMs,
         String clusterId,
+        Collection<InetSocketAddress> bootstrapServers,
         LogContext logContext,
         Random random,
         QuorumConfig quorumConfig
@@ -257,6 +263,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         this.appendPurgatory = new ThresholdPurgatory<>(expirationService);
         this.time = time;
         this.clusterId = clusterId;
+        this.bootstrapServers = bootstrapServers;
         this.fetchMaxWaitMs = fetchMaxWaitMs;
         this.logger = logContext.logger(KafkaRaftClient.class);
         this.random = random;
@@ -393,15 +400,37 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         logger.info("Reading KRaft snapshot and log as part of the initialization");
         partitionState.updateState();
 
-        // TODO: introduce the bootstrap server configuration; ids must be decreasing negative values
-        List<Node> bootstrapServers = partitionState
-            .lastVoterSet()
-            .voterIds()
-            .stream()
-            .map(id -> partitionState.lastVoterSet().voterNode(id, channel.listenerName()).get())
-            .collect(Collectors.toList());
+        final List<Node> bootstrapNodes;
+        if (bootstrapServers.isEmpty()) {
+            // the bootstrap servers configuration was not use;
+            // default back to the voters configuration
+            bootstrapNodes = voterAddresses
+                .entrySet()
+                .stream()
+                .map(entry ->
+                    new Node(
+                        entry.getKey(),
+                        entry.getValue().getHostString(),
+                        entry.getValue().getPort()
+                    )
+                )
+                .collect(Collectors.toList());
+        } else {
+            // generate Node objects from network addresses by using decreasing negative ids
+            AtomicInteger id = new AtomicInteger(-2);
+            bootstrapNodes = bootstrapServers
+                .stream()
+                .map(address ->
+                    new Node(
+                        id.getAndDecrement(),
+                        address.getHostString(),
+                        address.getPort()
+                    )
+                )
+                .collect(Collectors.toList());
+        }
         requestManager = new RequestManager(
-            bootstrapServers,
+            bootstrapNodes,
             quorumConfig.retryBackoffMs(),
             quorumConfig.requestTimeoutMs(),
             random

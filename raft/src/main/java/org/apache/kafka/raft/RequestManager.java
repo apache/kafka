@@ -64,7 +64,7 @@ public class RequestManager {
     }
 
     public long backoffBeforeAvailableBootstrapServer(long currentTimeMs) {
-        long minBackoffMs = Long.MAX_VALUE;
+        long minBackoffMs = Math.max(retryBackoffMs, requestTimeoutMs);
         for (Node node : bootstrapServers) {
             if (isReady(node, currentTimeMs)) {
                 return 0L;

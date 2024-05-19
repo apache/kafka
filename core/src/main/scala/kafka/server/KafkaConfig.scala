@@ -539,6 +539,7 @@ object KafkaConfig {
 
       /** ********* Raft Quorum Configuration *********/
       .define(QuorumConfig.QUORUM_VOTERS_CONFIG, LIST, QuorumConfig.DEFAULT_QUORUM_VOTERS, new QuorumConfig.ControllerQuorumVotersValidator(), HIGH, QuorumConfig.QUORUM_VOTERS_DOC)
+      .define(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, LIST, QuorumConfig.DEFAULT_QUORUM_BOOTSTRAP_SERVERS, new QuorumConfig.ControllerQuorumBootstrapServersValidator(), HIGH, QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_DOC)
       .define(QuorumConfig.QUORUM_ELECTION_TIMEOUT_MS_CONFIG, INT, QuorumConfig.DEFAULT_QUORUM_ELECTION_TIMEOUT_MS, null, HIGH, QuorumConfig.QUORUM_ELECTION_TIMEOUT_MS_DOC)
       .define(QuorumConfig.QUORUM_FETCH_TIMEOUT_MS_CONFIG, INT, QuorumConfig.DEFAULT_QUORUM_FETCH_TIMEOUT_MS, null, HIGH, QuorumConfig.QUORUM_FETCH_TIMEOUT_MS_DOC)
       .define(QuorumConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG, INT, QuorumConfig.DEFAULT_QUORUM_ELECTION_BACKOFF_MAX_MS, null, HIGH, QuorumConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_DOC)
@@ -1146,6 +1147,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
 
   /** ********* Raft Quorum Configuration *********/
   val quorumVoters = getList(QuorumConfig.QUORUM_VOTERS_CONFIG)
+  val quorumBootstrapServers = getList(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG)
   val quorumElectionTimeoutMs = getInt(QuorumConfig.QUORUM_ELECTION_TIMEOUT_MS_CONFIG)
   val quorumFetchTimeoutMs = getInt(QuorumConfig.QUORUM_FETCH_TIMEOUT_MS_CONFIG)
   val quorumElectionBackoffMs = getInt(QuorumConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG)
@@ -1353,6 +1355,15 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
         throw new ConfigException(s"If using ${KRaftConfigs.PROCESS_ROLES_CONFIG}, ${QuorumConfig.QUORUM_VOTERS_CONFIG} must contain a parseable set of voters.")
       }
     }
+    def validateQuorumVotersOrBootstrapServers(): Unit = {
+      if (voterIds.isEmpty() && quorumBootstrapServers.isEmpty()) {
+        throw new ConfigException(
+          s"""If using ${KRaftConfigs.PROCESS_ROLES_CONFIG}, ${QuorumConfig.QUORUM_VOTERS_CONFIG}
+          | must contain a parseable set of voters or ${QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG}
+          | must contain a set of bootstrap servers""".stripMargin
+        )
+      }
+    }
     def validateNonEmptyQuorumVotersForMigration(): Unit = {
       if (voterIds.isEmpty) {
         throw new ConfigException(s"If using ${KRaftConfigs.MIGRATION_ENABLED_CONFIG}, ${QuorumConfig.QUORUM_VOTERS_CONFIG} must contain a parseable set of voters.")
@@ -1387,6 +1398,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     if (processRoles == Set(ProcessRole.BrokerRole)) {
       // KRaft broker-only
       validateNonEmptyQuorumVotersForKRaft()
+      validateQuorumVotersOrBootstrapServers()
       validateControlPlaneListenerEmptyForKRaft()
       validateAdvertisedListenersDoesNotContainControllerListenersForKRaftBroker()
       // nodeId must not appear in controller.quorum.voters
@@ -1414,6 +1426,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     } else if (processRoles == Set(ProcessRole.ControllerRole)) {
       // KRaft controller-only
       validateNonEmptyQuorumVotersForKRaft()
+      validateQuorumVotersOrBootstrapServers()
       validateControlPlaneListenerEmptyForKRaft()
       // advertised listeners must be empty when only the controller is configured
       require(
@@ -1431,6 +1444,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     } else if (isKRaftCombinedMode) {
       // KRaft combined broker and controller
       validateNonEmptyQuorumVotersForKRaft()
+      validateQuorumVotersOrBootstrapServers()
       validateControlPlaneListenerEmptyForKRaft()
       validateAdvertisedListenersDoesNotContainControllerListenersForKRaftBroker()
       validateControllerQuorumVotersMustContainNodeIdForKRaftController()

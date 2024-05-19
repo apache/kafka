@@ -19,7 +19,8 @@ package kafka.server
 
 import java.net.InetSocketAddress
 import java.util
-import java.util.{Collections, Properties}
+import java.util.stream.Collectors
+import java.util.{Arrays, Collections, Properties}
 import kafka.cluster.EndPoint
 import kafka.security.authorizer.AclAuthorizer
 import kafka.utils.TestUtils.assertBadConfigContainingMessage
@@ -1002,6 +1003,7 @@ class KafkaConfigTest {
 
         // Raft Quorum Configs
         case QuorumConfig.QUORUM_VOTERS_CONFIG => // ignore string
+        case QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG => // ignore string
         case QuorumConfig.QUORUM_ELECTION_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case QuorumConfig.QUORUM_FETCH_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case QuorumConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
@@ -1364,6 +1366,27 @@ class KafkaConfigTest {
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, value)
     val addresses = QuorumConfig.parseVoterConnections(KafkaConfig.fromProps(props).quorumVoters)
     assertEquals(expectedVoters, addresses)
+  }
+
+  @Test
+  def testParseQuorumBootstrapServers(): Unit = {
+    val expected = Arrays.asList(
+      InetSocketAddress.createUnresolved("kafka1", 9092),
+      InetSocketAddress.createUnresolved("kafka2", 9092)
+    )
+
+    val props = TestUtils.createBrokerConfig(0, null)
+    props.setProperty(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, "kafka1:9092,kafka2:9092")
+
+
+    val addresses = KafkaConfig
+      .fromProps(props)
+      .quorumBootstrapServers
+      .stream
+      .map(QuorumConfig.parseBootstrapServer)
+      .collect(Collectors.toList())
+
+    assertEquals(expected, addresses)
   }
 
   @Test

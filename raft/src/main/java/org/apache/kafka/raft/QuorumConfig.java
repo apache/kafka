@@ -54,6 +54,10 @@ public class QuorumConfig {
         "For example: <code>1@localhost:9092,2@localhost:9093,3@localhost:9094</code>";
     public static final List<String> DEFAULT_QUORUM_VOTERS = Collections.emptyList();
 
+    public static final String QUORUM_BOOTSTRAP_SERVERS_CONFIG = QUORUM_PREFIX + "bootstrap.servers";
+    public static final String QUORUM_BOOTSTRAP_SERVERS_DOC = "TODO";
+    public static final List<String> DEFAULT_QUORUM_BOOTSTRAP_SERVERS = Collections.emptyList();
+
     public static final String QUORUM_ELECTION_TIMEOUT_MS_CONFIG = QUORUM_PREFIX + "election.timeout.ms";
     public static final String QUORUM_ELECTION_TIMEOUT_MS_DOC = "Maximum time in milliseconds to wait " +
         "without being able to fetch from the leader before triggering a new election";
@@ -163,7 +167,7 @@ public class QuorumConfig {
         List<String> voterEntries,
         boolean requireRoutableAddresses
     ) {
-        Map<Integer, InetSocketAddress> voterMap = new HashMap<>();
+        Map<Integer, InetSocketAddress> voterMap = new HashMap<>(voterEntries.size());
         for (String voterMapEntry : voterEntries) {
             String[] idAndAddress = voterMapEntry.split("@");
             if (idAndAddress.length != 2) {
@@ -199,6 +203,34 @@ public class QuorumConfig {
         return voterMap;
     }
 
+    public static InetSocketAddress parseBootstrapServer(String bootstrapServer) {
+        String host = Utils.getHost(bootstrapServer);
+        if (host == null) {
+            throw new ConfigException(
+                String.format(
+                    "Failed to parse host name from {} for the configuration {}. Each " +
+                    "entry should be in the form \"{host}:{port}\"",
+                    bootstrapServer,
+                    QUORUM_BOOTSTRAP_SERVERS_CONFIG
+                )
+            );
+        }
+
+        Integer port = Utils.getPort(bootstrapServer);
+        if (port == null) {
+            throw new ConfigException(
+                String.format(
+                    "Failed to parse host port from {} for the configuration {}. Each " +
+                    "entry should be in the form \"{host}:{port}\"",
+                    bootstrapServer,
+                    QUORUM_BOOTSTRAP_SERVERS_CONFIG
+                )
+            );
+        }
+
+        return InetSocketAddress.createUnresolved(host, port);
+    }
+
     public static List<Node> quorumVoterStringsToNodes(List<String> voters) {
         return voterConnectionsToNodes(parseVoterConnections(voters));
     }
@@ -224,6 +256,28 @@ public class QuorumConfig {
 
             // Attempt to parse the connect strings
             parseVoterConnections(voterStrings, false);
+        }
+
+        @Override
+        public String toString() {
+            return "non-empty list";
+        }
+    }
+
+    public static class ControllerQuorumBootstrapServersValidator implements ConfigDef.Validator {
+        @Override
+        public void ensureValid(String name, Object value) {
+            if (value == null) {
+                throw new ConfigException(name, null);
+            }
+
+            @SuppressWarnings("unchecked")
+            List<String> entries = (List<String>) value;
+
+            // Attempt to parse the connect strings
+            for (String entry : entries) {
+                QuorumConfig.parseBootstrapServer(entry);
+            }
         }
 
         @Override
