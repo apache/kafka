@@ -37,13 +37,14 @@ import scala.jdk.CollectionConverters._
   */
 class LeaderEpochFileCacheTest {
   val tp = new TopicPartition("TestTopic", 5)
+  val mockTime = new MockTime()
   private val checkpoint: LeaderEpochCheckpoint = new LeaderEpochCheckpoint {
     private var epochs: Seq[EpochEntry] = Seq()
     override def write(epochs: java.util.Collection[EpochEntry]): Unit = this.epochs = epochs.asScala.toSeq
     override def read(): java.util.List[EpochEntry] = this.epochs.asJava
   }
 
-  private val cache = new LeaderEpochFileCache(tp, checkpoint, new MockTime().scheduler)
+  private val cache = new LeaderEpochFileCache(tp, checkpoint, mockTime.scheduler)
 
   @Test
   def testPreviousEpoch(): Unit = {
@@ -659,4 +660,15 @@ class LeaderEpochFileCacheTest {
     assertEquals(OptionalInt.empty(), cache.epochForOffset(5))
   }
 
+  @Test
+  def shouldWriteCheckpointOnTruncation(): Unit = {
+    cache.assign(2, 6)
+    cache.assign(3, 8)
+    cache.assign(4, 11)
+
+    cache.truncateFromEnd(11)
+    cache.truncateFromStart(8)
+
+    assertEquals(List(new EpochEntry(3, 8)).asJava, checkpoint.read())
+  }
 }
