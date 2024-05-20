@@ -16,6 +16,7 @@
  */
 package kafka.raft
 
+import java.net.InetSocketAddress
 import java.nio.channels.FileChannel
 import java.nio.channels.OverlappingFileLockException
 import java.nio.file.{Files, Path, StandardOpenOption}
@@ -121,7 +122,7 @@ class RaftManagerTest {
       CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumVoters)),
       config.quorumBootstrapServers
         .stream
-        .map(QuorumConfig.parseBootstrapServer)
+        .map[InetSocketAddress](QuorumConfig.parseBootstrapServer)
         .collect(Collectors.toList()),
       mock(classOf[FaultHandler])
     )

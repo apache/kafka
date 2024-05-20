@@ -17,6 +17,7 @@
 package kafka.server
 
 import java.io.File
+import java.net.InetSocketAddress
 import java.util.concurrent.CompletableFuture
 import java.util.stream.Collectors
 import kafka.log.UnifiedLog
@@ -74,7 +75,7 @@ class KafkaRaftServer(
     CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumVoters)),
     config.quorumBootstrapServers
       .stream
-      .map(QuorumConfig.parseBootstrapServer)
+      .map[InetSocketAddress](QuorumConfig.parseBootstrapServer)
       .collect(Collectors.toList()),
     new StandardFaultHandlerFactory(),
   )

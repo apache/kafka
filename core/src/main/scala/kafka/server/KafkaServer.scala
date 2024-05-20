@@ -66,7 +66,7 @@ import org.apache.kafka.storage.internals.log.LogDirFailureChannel
 import org.apache.zookeeper.client.ZKClientConfig
 
 import java.io.{File, IOException}
-import java.net.{InetAddress, SocketTimeoutException}
+import java.net.{InetAddress, InetSocketAddress, SocketTimeoutException}
 import java.nio.file.{Files, Paths}
 import java.time.Duration
 import java.util
@@ -447,7 +447,7 @@ class KafkaServer(
             CompletableFuture.completedFuture(quorumVoters),
             config.quorumBootstrapServers
               .stream
-              .map(QuorumConfig.parseBootstrapServer)
+              .map[InetSocketAddress](QuorumConfig.parseBootstrapServer)
               .collect(Collectors.toList()),
             fatalFaultHandler = new LoggingFaultHandler("raftManager", () => shutdown())
           )

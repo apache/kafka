@@ -17,6 +17,7 @@
 
 package kafka.tools
 
+import java.net.InetSocketAddress
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 import java.util.concurrent.{CompletableFuture, CountDownLatch, LinkedBlockingDeque, TimeUnit}
 import java.util.stream.Collectors
@@ -98,7 +99,7 @@ class TestRaftServer(
       CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumVoters)),
       config.quorumBootstrapServers
         .stream
-        .map(QuorumConfig.parseBootstrapServer)
+        .map[InetSocketAddress](QuorumConfig.parseBootstrapServer)
         .collect(Collectors.toList()),
       new ProcessTerminatingFaultHandler.Builder().build()
     )

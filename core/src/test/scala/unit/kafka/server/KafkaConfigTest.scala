@@ -1382,7 +1382,7 @@ class KafkaConfigTest {
     val addresses = KafkaConfig.fromProps(props)
       .quorumBootstrapServers
       .stream
-      .map(QuorumConfig.parseBootstrapServer)
+      .map[InetSocketAddress](QuorumConfig.parseBootstrapServer)
       .collect(Collectors.toList())
 
     assertEquals(expected, addresses)
