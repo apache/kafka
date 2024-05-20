@@ -512,18 +512,22 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         }
 
         final Set<TopicPartition> sourceTopicPartitions = new HashSet<>();
-        sourcePartitionsForTask.forEach((taskId, partitions) -> {
-            sourceTopicPartitions.addAll(partitions);
-        });
-        final Set<TopicPartition> changelogTopicPartitions = new HashSet<>();
-        changelogPartitionsForTask.forEach((taskId, partitions) -> {
-            changelogTopicPartitions.addAll(partitions);
-        });
+        final Set<TopicPartition> nonSourceChangelogTopicPartitions = new HashSet<>();
+        for (final Map.Entry<TaskId, Set<TopicPartition>> entry : sourcePartitionsForTask.entrySet()) {
+            final TaskId taskId = entry.getKey();
+            final Set<TopicPartition> taskSourcePartitions = entry.getValue();
+            final Set<TopicPartition> taskChangelogPartitions = changelogPartitionsForTask.get(taskId);
+            final Set<TopicPartition> taskNonSourceChangelogPartitions = new HashSet<>(taskChangelogPartitions);
+            taskNonSourceChangelogPartitions.removeAll(taskSourcePartitions);
+
+            sourceTopicPartitions.addAll(taskSourcePartitions);
+            nonSourceChangelogTopicPartitions.addAll(taskNonSourceChangelogPartitions);
+        }
 
         final Map<TopicPartition, Set<String>> racksForSourcePartitions = RackUtils.getRacksForTopicPartition(
             cluster, internalTopicManager, sourceTopicPartitions, false);
         final Map<TopicPartition, Set<String>> racksForChangelogPartitions = RackUtils.getRacksForTopicPartition(
-            cluster, internalTopicManager, changelogTopicPartitions, true);
+            cluster, internalTopicManager, nonSourceChangelogTopicPartitions, true);
 
         final Set<TaskId> logicalTaskIds = unmodifiableSet(sourcePartitionsForTask.keySet());
         final Set<TaskInfo> logicalTasks = logicalTaskIds.stream().map(taskId -> {
@@ -537,7 +541,11 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 racksForTaskPartition.put(topicPartition, racksForSourcePartitions.get(topicPartition));
             });
             changelogPartitions.forEach(topicPartition -> {
-                racksForTaskPartition.put(topicPartition, racksForChangelogPartitions.get(topicPartition));
+                if (racksForSourcePartitions.containsKey(topicPartition)) {
+                    racksForTaskPartition.put(topicPartition, racksForSourcePartitions.get(topicPartition));
+                } else {
+                    racksForTaskPartition.put(topicPartition, racksForChangelogPartitions.get(topicPartition));
+                }
             });
 
             return new DefaultTaskInfo(
