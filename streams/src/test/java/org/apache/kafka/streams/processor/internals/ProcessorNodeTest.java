@@ -139,7 +139,7 @@ public class ProcessorNodeTest {
             final TestInputTopic<String, String> topic = testDriver.createInputTopic("streams-plaintext-input", new StringSerializer(), new StringSerializer());
 
             final StreamsException se = assertThrows(StreamsException.class, () -> topic.pipeInput("a-key", "a value"));
-            final String msg = se.getMessage();
+            final String msg = se.getCause().getMessage();
             assertTrue("Error about class cast with serdes", msg.contains("ClassCastException"));
             assertTrue("Error about class cast with serdes", msg.contains("Serdes"));
         }

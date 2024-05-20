@@ -301,8 +301,11 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
             // prevent parent nodes to throw exception
             if (!processingExceptionOccurred) {
                 processingExceptionOccurred = true;
+                final byte[] rawKey = streamTask.rawRecord() != null ? streamTask.rawRecord().key() : null;
+                final byte[] rawValue = streamTask.rawRecord() != null ? streamTask.rawRecord().value() : null;
+
                 final ErrorHandlerContext errorHandlerContext = new ErrorHandlerContextImpl(null, topic(),
-                        partition(), offset(), headers(), streamTask.rawRecord().key(), streamTask.rawRecord().value(),
+                        partition(), offset(), headers(), rawKey, rawValue,
                         child.name(), taskId());
                 final ProcessingExceptionHandler.ProcessingHandlerResponse response = processingExceptionHandler
                         .handle(errorHandlerContext, record, e);
