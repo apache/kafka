@@ -99,14 +99,12 @@ object RaftControllerNodeProvider {
   def apply(
     raftManager: RaftManager[ApiMessageAndVersion],
     config: KafkaConfig,
-    controllerQuorumVoterNodes: Seq[Node]
   ): RaftControllerNodeProvider = {
     val controllerListenerName = new ListenerName(config.controllerListenerNames.head)
     val controllerSecurityProtocol = config.effectiveListenerSecurityProtocolMap.getOrElse(controllerListenerName, SecurityProtocol.forName(controllerListenerName.value()))
     val controllerSaslMechanism = config.saslMechanismControllerProtocol
     new RaftControllerNodeProvider(
       raftManager,
-      controllerQuorumVoterNodes,
       controllerListenerName,
       controllerSecurityProtocol,
       controllerSaslMechanism
@@ -120,15 +118,15 @@ object RaftControllerNodeProvider {
  */
 class RaftControllerNodeProvider(
   val raftManager: RaftManager[ApiMessageAndVersion],
-  controllerQuorumVoterNodes: Seq[Node],
   val listenerName: ListenerName,
   val securityProtocol: SecurityProtocol,
   val saslMechanism: String
 ) extends ControllerNodeProvider with Logging {
-  private val idToNode = controllerQuorumVoterNodes.map(node => node.id() -> node).toMap
+
+  private def idToNode(id: Int): Option[Node] = raftManager.voterNode(id, listenerName.value())
 
   override def getControllerInfo(): ControllerInformation =
-    ControllerInformation(raftManager.leaderAndEpoch.leaderId.asScala.map(idToNode),
+    ControllerInformation(raftManager.leaderAndEpoch.leaderId.asScala.flatMap(idToNode),
       listenerName, securityProtocol, saslMechanism, isZkController = false)
 }
 
