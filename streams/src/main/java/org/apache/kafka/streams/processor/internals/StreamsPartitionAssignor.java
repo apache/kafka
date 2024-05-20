@@ -38,6 +38,8 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.ApplicationState;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
+import org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment;
 import org.apache.kafka.streams.processor.internals.assignment.ApplicationStateImpl;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.TopicsInfo;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
@@ -491,6 +493,15 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             statelessTasks,
             clientMetadataMap
         );
+    }
+
+    private static void processStreamsPartitionAssignment(final Map<UUID, ClientMetadata> clientMetadataMap,
+                                                          final TaskAssignment taskAssignment) {
+        taskAssignment.assignment().forEach(kafkaStreamsAssignment -> {
+            final ProcessId processId = kafkaStreamsAssignment.processId();
+            final ClientMetadata clientMetadata = clientMetadataMap.get(processId.id());
+            clientMetadata.state.setAssignedTasks(kafkaStreamsAssignment);
+        });
     }
 
     /**
