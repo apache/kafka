@@ -63,10 +63,7 @@ import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
 object ZkMigrationIntegrationTest {
-
-  // FIXME: test times from 8 to 25?
   def zkClustersForAllMigrationVersions(): java.util.List[ClusterConfig] = {
-    val ret : java.util.List[ClusterConfig] = new java.util.ArrayList[ClusterConfig]()
     Seq(
       MetadataVersion.IBP_3_4_IV0,
       MetadataVersion.IBP_3_5_IV2,
@@ -76,20 +73,19 @@ object ZkMigrationIntegrationTest {
       MetadataVersion.IBP_3_7_IV2,
       MetadataVersion.IBP_3_7_IV4,
       MetadataVersion.IBP_3_8_IV0
-    ).foreach { mv =>
+    ).map { mv =>
       val serverProperties = new util.HashMap[String, String]()
       serverProperties.put("inter.broker.listener.name", "EXTERNAL")
       serverProperties.put("listeners", "PLAINTEXT://localhost:0,EXTERNAL://localhost:0")
       serverProperties.put("advertised.listeners", "PLAINTEXT://localhost:0,EXTERNAL://localhost:0")
       serverProperties.put("listener.security.protocol.map", "EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
-      ret.add(ClusterConfig.defaultBuilder()
+      ClusterConfig.defaultBuilder()
         .setMetadataVersion(mv)
         .setBrokers(3)
         .setServerProperties(serverProperties)
         .setTypes(Set(Type.ZK).asJava)
-        .build())
-    }
-    ret
+        .build()
+    }.asJava
   }
 }
 
