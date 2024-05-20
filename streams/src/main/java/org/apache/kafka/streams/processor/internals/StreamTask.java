@@ -107,6 +107,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     protected final InternalProcessorContext processorContext;
 
     private StampedRecord record;
+    private ConsumerRecord<byte[], byte[]> rawRecord;
+
     private boolean commitNeeded = false;
     private boolean commitRequested = false;
     private boolean hasPendingTxCommit = false;
@@ -764,6 +766,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             // get the next record to process
             record = partitionGroup.nextRecord(recordInfo, wallClockTime);
+            rawRecord = partitionGroup.rawHeadRecord();
 
             // if there is no record to process, return immediately
             if (record == null) {
@@ -1315,7 +1318,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     }
 
     ConsumerRecord<byte[], byte[]> rawRecord() {
-        return record.rawRecord();
+        return rawRecord;
     }
 
     private class RecordQueueCreator {

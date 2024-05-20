@@ -60,6 +60,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
     private final ProcessorStateManager stateManager;
     private final boolean consistencyEnabled;
 
+    private final ProcessingExceptionHandler processingExceptionHandler;
     private boolean processingExceptionOccurred;
 
     final Map<String, DirtyEntryFlushListener> cacheNameToFlushListener = new HashMap<>();
@@ -76,7 +77,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
                 appConfigs(),
                 IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
                 false);
-
+        processingExceptionHandler = config.processingExceptionHandler();
     }
 
     @Override
@@ -297,13 +298,13 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
         try {
             child.process(record);
         } catch (final Exception e) {
+            // prevent parent nodes to throw exception
             if (!processingExceptionOccurred) {
                 processingExceptionOccurred = true;
                 final ErrorHandlerContext errorHandlerContext = new ErrorHandlerContextImpl(null, topic(),
                         partition(), offset(), headers(), streamTask.rawRecord().key(), streamTask.rawRecord().value(),
                         child.name(), taskId());
-                final ProcessingExceptionHandler.ProcessingHandlerResponse response = streamTask.config
-                        .processingExceptionHandler
+                final ProcessingExceptionHandler.ProcessingHandlerResponse response = processingExceptionHandler
                         .handle(errorHandlerContext, record, e);
 
                 if (response == ProcessingExceptionHandler.ProcessingHandlerResponse.FAIL) {

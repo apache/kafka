@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
@@ -23,13 +24,18 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
+import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.ErrorHandlerContext;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.query.Position;
@@ -63,6 +69,7 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextImpl.BYTEARRAY_VALUE_SERIALIZER;
 import static org.apache.kafka.streams.processor.internals.ProcessorContextImpl.BYTES_KEY_SERIALIZER;
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
@@ -595,6 +602,123 @@ public class ProcessorContextImplTest {
         assertEquals(100L, context.processorMetadataForKey("key2").longValue());
 
         assertThrows(NullPointerException.class, () -> context.setProcessorMetadata(null));
+    }
+
+    @Test
+    public void shouldContinueOnProcessingExceptions() {
+        when(streamsConfig.processingExceptionHandler()).thenReturn(new ProcessingExceptionHandler() {
+            @Override
+            public ProcessingHandlerResponse handle(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
+                assertArrayEquals(new byte[] {107, 101, 121}, context.sourceRawKey());
+                assertArrayEquals(new byte[] {118, 97, 108, 117, 101}, context.sourceRawValue());
+                assertEquals("fakeChild", context.processorNodeId());
+                assertEquals("key", record.key());
+                assertEquals("value", record.value());
+                assertEquals("Exception should be handled by processing exception handler", exception.getMessage());
+
+                return ProcessingHandlerResponse.CONTINUE;
+            }
+
+            @Override
+            public void configure(final Map<String, ?> configs) {
+                // No-op
+            }
+        });
+
+        context = new ProcessorContextImpl(
+            mock(TaskId.class),
+            streamsConfig,
+            stateManager,
+            mock(StreamsMetricsImpl.class),
+            mock(ThreadCache.class)
+        );
+
+        final StreamTask task = mock(StreamTask.class);
+        when(task.streamTime()).thenReturn(STREAM_TIME);
+        when(task.rawRecord()).thenReturn(new ConsumerRecord<>("topic", 0, 0, "key".getBytes(), "value".getBytes()));
+        context.transitionToActive(task, null, null);
+
+        final ProcessorNode<String, Long, Object, Object> processorNode = new ProcessorNode<>(
+            "fake",
+            (org.apache.kafka.streams.processor.api.Processor<String, Long, Object, Object>) null,
+            Collections.emptySet()
+        );
+
+        final ProcessorNode<Object, Object, Object, Object> childProcessorNode = new ProcessorNode<>(
+            "fakeChild",
+            (Processor<Object, Object, Object, Object>) record -> {
+                throw new RuntimeException("Exception should be handled by processing exception handler");
+            },
+            Collections.emptySet()
+        );
+
+        processorNode.init(context);
+        childProcessorNode.init(context);
+        processorNode.addChild(childProcessorNode);
+
+        context.setCurrentNode(processorNode);
+
+        context.forward("key", "value");
+    }
+
+    @Test
+    public void shouldFailOnProcessingExceptions() {
+        when(streamsConfig.processingExceptionHandler()).thenReturn(new ProcessingExceptionHandler() {
+            @Override
+            public ProcessingHandlerResponse handle(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
+                assertArrayEquals(new byte[] {107, 101, 121}, context.sourceRawKey());
+                assertArrayEquals(new byte[] {118, 97, 108, 117, 101}, context.sourceRawValue());
+                assertEquals("fakeChild", context.processorNodeId());
+                assertEquals("key", record.key());
+                assertEquals("value", record.value());
+                assertEquals("Exception should be handled by processing exception handler", exception.getMessage());
+
+                return ProcessingHandlerResponse.FAIL;
+            }
+
+            @Override
+            public void configure(final Map<String, ?> configs) {
+                // No-op
+            }
+        });
+
+        context = new ProcessorContextImpl(
+            mock(TaskId.class),
+            streamsConfig,
+            stateManager,
+            mock(StreamsMetricsImpl.class),
+            mock(ThreadCache.class)
+        );
+
+        final StreamTask task = mock(StreamTask.class);
+        when(task.streamTime()).thenReturn(STREAM_TIME);
+        when(task.rawRecord()).thenReturn(new ConsumerRecord<>("topic", 0, 0, "key".getBytes(), "value".getBytes()));
+        context.transitionToActive(task, null, null);
+
+        final ProcessorNode<String, Long, Object, Object> processorNode = new ProcessorNode<>(
+            "fake",
+            (org.apache.kafka.streams.processor.api.Processor<String, Long, Object, Object>) null,
+            Collections.emptySet()
+        );
+
+        final ProcessorNode<Object, Object, Object, Object> childProcessorNode = new ProcessorNode<>(
+            "fakeChild",
+            (Processor<Object, Object, Object, Object>) record -> {
+                throw new RuntimeException("Exception should be handled by processing exception handler");
+            },
+            Collections.emptySet()
+        );
+
+        processorNode.init(context);
+        childProcessorNode.init(context);
+        processorNode.addChild(childProcessorNode);
+
+        context.setCurrentNode(processorNode);
+
+        final StreamsException exception = assertThrows(StreamsException.class, () -> context.forward("key", "value"));
+        assertEquals("Processing exception handler is set to fail upon a processing error. "
+            + "If you would rather have the streaming pipeline continue after a processing error, "
+            + "please set the processing.exception.handler appropriately.", exception.getMessage());
     }
 
     @SuppressWarnings("unchecked")

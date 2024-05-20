@@ -71,6 +71,7 @@ class PartitionGroup extends AbstractPartitionGroup {
     private boolean allBuffered;
     private final Map<TopicPartition, Long> idlePartitionDeadlines = new HashMap<>();
     private final Map<TopicPartition, Long> fetchedLags = new HashMap<>();
+    private ConsumerRecord<byte[], byte[]> rawHeadRecord;
 
     PartitionGroup(final LogContext logContext,
                    final Map<TopicPartition, RecordQueue> partitionQueues,
@@ -249,6 +250,7 @@ class PartitionGroup extends AbstractPartitionGroup {
         if (queue != null) {
             // get the first record from this queue.
             record = queue.poll(wallClockTime);
+            rawHeadRecord = queue.rawHeadRecord();
 
             if (record != null) {
                 --totalBuffered;
@@ -319,6 +321,16 @@ class PartitionGroup extends AbstractPartitionGroup {
         }
 
         return recordQueue.headRecordOffset();
+    }
+
+    /**
+     * Returns the raw head record
+     *
+     * @return the raw head record
+     */
+    @Override
+    ConsumerRecord<byte[], byte[]> rawHeadRecord() {
+        return rawHeadRecord;
     }
 
     /**
