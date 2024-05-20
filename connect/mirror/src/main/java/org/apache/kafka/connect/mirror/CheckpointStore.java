@@ -44,9 +44,9 @@ import static org.apache.kafka.connect.mirror.MirrorCheckpointConfig.CHECKPOINTS
  * The Kafka log is closed after the initial load and only the in memory map is
  * used after start.
  */
-class CheckpointsStore implements AutoCloseable {
+class CheckpointStore implements AutoCloseable {
 
-    private static final Logger log = LoggerFactory.getLogger(CheckpointsStore.class);
+    private static final Logger log = LoggerFactory.getLogger(CheckpointStore.class);
 
     private final MirrorCheckpointTaskConfig config;
     private final Set<String> consumerGroups;
@@ -59,13 +59,13 @@ class CheckpointsStore implements AutoCloseable {
     private volatile boolean loadSuccess = false;
     private volatile boolean isInitialized = false;
 
-    CheckpointsStore(MirrorCheckpointTaskConfig config, Set<String> consumerGroups) {
+    CheckpointStore(MirrorCheckpointTaskConfig config, Set<String> consumerGroups) {
         this.config = config;
         this.consumerGroups = new HashSet<>(consumerGroups);
     }
 
     // constructor for testing only
-    CheckpointsStore(Map<String, Map<TopicPartition, Checkpoint>> checkpointsPerConsumerGroup) {
+    CheckpointStore(Map<String, Map<TopicPartition, Checkpoint>> checkpointsPerConsumerGroup) {
         this.config = null; //ignored by tests
         this.consumerGroups = null; //ignored by tests
         this.checkpointsPerConsumerGroup = checkpointsPerConsumerGroup;
@@ -77,7 +77,11 @@ class CheckpointsStore implements AutoCloseable {
     boolean start()  {
         checkpointsPerConsumerGroup = readCheckpoints();
         isInitialized = true;
-        log.trace("CheckpointsStore started, load success={}, map={}", loadSuccess, checkpointsPerConsumerGroup);
+        if (log.isTraceEnabled()) {
+            log.trace("CheckpointStore started, load success={}, map={}", loadSuccess, checkpointsPerConsumerGroup);
+        } else {
+            log.debug("CheckpointStore started, load success={}, map.size={}", loadSuccess, checkpointsPerConsumerGroup.size());
+        }
         return loadSuccess;
     }
 

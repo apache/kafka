@@ -34,7 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public class CheckpointsStoreTest {
+public class CheckpointStoreTest {
 
     @Test
     public void testReadCheckpointsTopic() {
@@ -44,7 +44,7 @@ public class CheckpointsStoreTest {
         MirrorCheckpointTaskConfig config = mock(MirrorCheckpointTaskConfig.class);
         when(config.checkpointsTopic()).thenReturn("checkpoint.topic");
 
-        CheckpointsStore store = new CheckpointsStore(config, consumerGroups) {
+        CheckpointStore store = new CheckpointStore(config, consumerGroups) {
             @Override
             void readCheckpointsImpl(MirrorCheckpointTaskConfig config, Callback<ConsumerRecord<byte[], byte[]>> consumedCallback) {
                 consumedCallback.onCompletion(null, newCheckpointRecord("group1", "t1", 0, 0, 0));
@@ -75,7 +75,7 @@ public class CheckpointsStoreTest {
         MirrorCheckpointTaskConfig config = mock(MirrorCheckpointTaskConfig.class);
         when(config.checkpointsTopic()).thenReturn("checkpoint.topic");
 
-        CheckpointsStore store = new CheckpointsStore(config, consumerGroups) {
+        CheckpointStore store = new CheckpointStore(config, consumerGroups) {
             @Override
             void readCheckpointsImpl(MirrorCheckpointTaskConfig config, Callback<ConsumerRecord<byte[], byte[]>> consumedCallback) {
                 consumedCallback.onCompletion(null, newCheckpointRecord("group1", "t1", 0, 0, 0));

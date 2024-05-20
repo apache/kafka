@@ -69,7 +69,7 @@ public class MirrorCheckpointTask extends SourceTask {
     private MirrorCheckpointMetrics metrics;
     private Scheduler scheduler;
     private Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset;
-    private CheckpointsStore checkpointsStore;
+    private CheckpointStore checkpointStore;
 
     public MirrorCheckpointTask() {}
 
@@ -77,14 +77,14 @@ public class MirrorCheckpointTask extends SourceTask {
     MirrorCheckpointTask(String sourceClusterAlias, String targetClusterAlias,
             ReplicationPolicy replicationPolicy, OffsetSyncStore offsetSyncStore, Set<String> consumerGroups,
             Map<String, Map<TopicPartition, OffsetAndMetadata>> idleConsumerGroupsOffset,
-            CheckpointsStore checkpointsStore) {
+            CheckpointStore checkpointStore) {
         this.sourceClusterAlias = sourceClusterAlias;
         this.targetClusterAlias = targetClusterAlias;
         this.replicationPolicy = replicationPolicy;
         this.offsetSyncStore = offsetSyncStore;
         this.consumerGroups = consumerGroups;
         this.idleConsumerGroupsOffset = idleConsumerGroupsOffset;
-        this.checkpointsStore = checkpointsStore;
+        this.checkpointStore = checkpointStore;
         this.topicFilter = topic -> true;
         this.interval = Duration.ofNanos(1);
         this.pollTimeout = Duration.ofNanos(1);
@@ -107,12 +107,12 @@ public class MirrorCheckpointTask extends SourceTask {
         targetAdminClient = config.forwardingAdmin(config.targetAdminConfig("checkpoint-target-admin"));
         metrics = config.metrics();
         idleConsumerGroupsOffset = new HashMap<>();
-        checkpointsStore = new CheckpointsStore(config, consumerGroups);
+        checkpointStore = new CheckpointStore(config, consumerGroups);
         scheduler = new Scheduler(getClass(), config.entityLabel(), config.adminTimeout());
         scheduler.execute(() -> {
             // loading the stores are potentially long running operations, so they run asynchronously
             // to avoid blocking task::start (until a task has completed starting it cannot be stopped)
-            boolean checkpointsReadOk = checkpointsStore.start();
+            boolean checkpointsReadOk = checkpointStore.start();
             offsetSyncStore.start(!checkpointsReadOk);
             scheduler.scheduleRepeating(this::refreshIdleConsumerGroupOffset, config.syncGroupOffsetsInterval(),
                     "refreshing idle consumers group offsets at target cluster");
@@ -133,7 +133,7 @@ public class MirrorCheckpointTask extends SourceTask {
         long start = System.currentTimeMillis();
         stopping = true;
         Utils.closeQuietly(topicFilter, "topic filter");
-        Utils.closeQuietly(checkpointsStore, "checkpoints store");
+        Utils.closeQuietly(checkpointStore, "checkpoints store");
         Utils.closeQuietly(offsetSyncStore, "offset sync store");
         Utils.closeQuietly(sourceAdminClient, "source admin client");
         Utils.closeQuietly(targetAdminClient, "target admin client");
@@ -154,7 +154,7 @@ public class MirrorCheckpointTask extends SourceTask {
             while (!stopping && System.currentTimeMillis() < deadline) {
                 Thread.sleep(pollTimeout.toMillis());
             }
-            if (stopping || !checkpointsStore.isInitialized()) {
+            if (stopping || !checkpointStore.isInitialized()) {
                 // we are stopping, or not fully initialized, return early.
                 return null;
             }
@@ -180,7 +180,7 @@ public class MirrorCheckpointTask extends SourceTask {
             long timestamp = System.currentTimeMillis();
             Map<TopicPartition, OffsetAndMetadata> upstreamGroupOffsets = listConsumerGroupOffsets(group);
             Map<TopicPartition, Checkpoint> newCheckpoints = checkpointsForGroup(upstreamGroupOffsets, group);
-            checkpointsStore.update(group, newCheckpoints);
+            checkpointStore.update(group, newCheckpoints);
             return newCheckpoints.values().stream()
                 .map(x -> checkpointRecord(x, timestamp))
                 .collect(Collectors.toList());
@@ -202,7 +202,7 @@ public class MirrorCheckpointTask extends SourceTask {
     }
 
     private boolean checkpointIsMoreRecent(Checkpoint checkpoint) {
-        Map<TopicPartition, Checkpoint> checkpoints = checkpointsStore.get(checkpoint.consumerGroupId());
+        Map<TopicPartition, Checkpoint> checkpoints = checkpointStore.get(checkpoint.consumerGroupId());
         if (checkpoints == null) {
             log.trace("Emitting {} (first for this group)", checkpoint);
             return true;
@@ -321,7 +321,7 @@ public class MirrorCheckpointTask extends SourceTask {
         Map<String, Map<TopicPartition, OffsetAndMetadata>> offsetToSyncAll = new HashMap<>();
 
         // first, sync offsets for the idle consumers at target
-        for (Entry<String, Map<TopicPartition, OffsetAndMetadata>> group : checkpointsStore.computeConvertedUpstreamOffset().entrySet()) {
+        for (Entry<String, Map<TopicPartition, OffsetAndMetadata>> group : checkpointStore.computeConvertedUpstreamOffset().entrySet()) {
             String consumerGroupId = group.getKey();
             // for each idle consumer at target, read the checkpoints (converted upstream offset)
             // from the pre-populated map
