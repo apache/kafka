@@ -17,6 +17,7 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
@@ -2546,6 +2547,10 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         } else {
             return OptionalLong.empty();
         }
+    }
+
+    public Optional<Node> voterNode(int id, String listener) {
+        return partitionState.lastVoterSet().voterNode(id, listener);
     }
 
     // Visible only for test
