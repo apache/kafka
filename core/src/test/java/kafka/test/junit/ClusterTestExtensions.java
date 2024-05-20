@@ -19,25 +19,28 @@ package kafka.test.junit;
 
 import kafka.test.ClusterConfig;
 import kafka.test.ClusterGenerator;
-import kafka.test.annotation.AutoStart;
-import kafka.test.annotation.ClusterTestDefaults;
-import kafka.test.annotation.ClusterConfigProperty;
-import kafka.test.annotation.ClusterTemplate;
 import kafka.test.annotation.ClusterTest;
+import kafka.test.annotation.ClusterTestDefaults;
 import kafka.test.annotation.ClusterTests;
+import kafka.test.annotation.ClusterTemplate;
+import kafka.test.annotation.ClusterConfigProperty;
 import kafka.test.annotation.Type;
+import kafka.test.annotation.AutoStart;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContextProvider;
 import org.junit.platform.commons.util.ReflectionUtils;
 
 import java.lang.reflect.Method;
+import java.util.function.Consumer;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -129,7 +132,11 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         generateClusterConfigurations(context, annot.value(), generatedClusterConfigs::add);
 
         String baseDisplayName = context.getRequiredTestMethod().getName();
-        generatedClusterConfigs.forEach(config -> config.clusterType().invocationContexts(baseDisplayName, config, testInvocations));
+        generatedClusterConfigs.forEach(config -> {
+            for (Type type: config.clusterTypes()) {
+                type.invocationContexts(baseDisplayName, config, testInvocations);
+            }
+        });
     }
 
     private void generateClusterConfigurations(ExtensionContext context, String generateClustersMethods, ClusterGenerator generator) {
@@ -140,28 +147,31 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
 
     private void processClusterTest(ExtensionContext context, ClusterTest annot, ClusterTestDefaults defaults,
                                     Consumer<TestTemplateInvocationContext> testInvocations) {
-        Type type = annot.clusterType() == Type.DEFAULT ? defaults.clusterType() : annot.clusterType();
+        Type[] types = annot.types().length == 0 ? defaults.types() : annot.types();
+        Map<String, String> serverProperties = Stream.concat(Arrays.stream(defaults.serverProperties()), Arrays.stream(annot.serverProperties()))
+                .filter(e -> e.id() == -1)
+                .collect(Collectors.toMap(ClusterConfigProperty::key, ClusterConfigProperty::value, (a, b) -> b));
 
-        Map<String, String> serverProperties = new HashMap<>();
-        for (ClusterConfigProperty property : defaults.serverProperties()) {
-            serverProperties.put(property.key(), property.value());
-        }
-        for (ClusterConfigProperty property : annot.serverProperties()) {
-            serverProperties.put(property.key(), property.value());
-        }
+        Map<Integer, Map<String, String>> perServerProperties = Stream.concat(Arrays.stream(defaults.serverProperties()), Arrays.stream(annot.serverProperties()))
+                .filter(e -> e.id() != -1)
+                .collect(Collectors.groupingBy(ClusterConfigProperty::id, Collectors.mapping(Function.identity(),
+                        Collectors.toMap(ClusterConfigProperty::key, ClusterConfigProperty::value, (a, b) -> b))));
         ClusterConfig config = ClusterConfig.builder()
-                .setType(type)
+                .setTypes(new HashSet<>(Arrays.asList(types)))
                 .setBrokers(annot.brokers() == 0 ? defaults.brokers() : annot.brokers())
                 .setControllers(annot.controllers() == 0 ? defaults.controllers() : annot.controllers())
                 .setDisksPerBroker(annot.disksPerBroker() == 0 ? defaults.disksPerBroker() : annot.disksPerBroker())
                 .setAutoStart(annot.autoStart() == AutoStart.DEFAULT ? defaults.autoStart() : annot.autoStart() == AutoStart.YES)
-                .setName(annot.name().trim().isEmpty() ? null : annot.name())
                 .setListenerName(annot.listener().trim().isEmpty() ? null : annot.listener())
                 .setServerProperties(serverProperties)
+                .setPerServerProperties(perServerProperties)
                 .setSecurityProtocol(annot.securityProtocol())
                 .setMetadataVersion(annot.metadataVersion())
+                .setTags(Arrays.asList(annot.tags()))
                 .build();
-        type.invocationContexts(context.getRequiredTestMethod().getName(), config, testInvocations);
+        for (Type type : types) {
+            type.invocationContexts(context.getRequiredTestMethod().getName(), config, testInvocations);
+        }
     }
 
     private ClusterTestDefaults getClusterTestDefaults(Class<?> testClass) {

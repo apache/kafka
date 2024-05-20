@@ -17,8 +17,6 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
-import org.apache.kafka.common.utils.LogContext;
-import org.slf4j.Logger;
 
 import java.util.Objects;
 import java.util.Queue;
@@ -31,11 +29,9 @@ import java.util.Queue;
 
 public class BackgroundEventHandler {
 
-    private final Logger log;
     private final Queue<BackgroundEvent> backgroundEventQueue;
 
-    public BackgroundEventHandler(final LogContext logContext, final Queue<BackgroundEvent> backgroundEventQueue) {
-        this.log = logContext.logger(BackgroundEventHandler.class);
+    public BackgroundEventHandler(final Queue<BackgroundEvent> backgroundEventQueue) {
         this.backgroundEventQueue = backgroundEventQueue;
     }
 
@@ -47,6 +43,5 @@ public class BackgroundEventHandler {
     public void add(BackgroundEvent event) {
         Objects.requireNonNull(event, "BackgroundEvent provided to add must be non-null");
         backgroundEventQueue.add(event);
-        log.trace("Enqueued event: {}", event);
     }
 }

@@ -402,7 +402,7 @@ class KRaftClusterTest {
     val nodes = new TestKitNodes.Builder()
       .setNumControllerNodes(1)
       .setNumBrokerNodes(3)
-      .setPerBrokerProperties(brokerPropertyOverrides)
+      .setPerServerProperties(brokerPropertyOverrides)
       .build()
 
     doOnStartedKafkaCluster(nodes) { implicit cluster =>
@@ -430,7 +430,7 @@ class KRaftClusterTest {
       .setNumControllerNodes(1)
       .setNumBrokerNodes(3)
       .setNumDisksPerBroker(1)
-      .setPerBrokerProperties(brokerPropertyOverrides)
+      .setPerServerProperties(brokerPropertyOverrides)
       .build()
 
     doOnStartedKafkaCluster(nodes) { implicit cluster =>

@@ -24,9 +24,11 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.log4j.Appender;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
 import org.apache.log4j.helpers.LogLog;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -48,6 +50,17 @@ public class KafkaLog4jAppenderTest {
     @BeforeEach
     public void setup() {
         LogLog.setInternalDebugging(true);
+    }
+
+    @AfterEach
+    public void cleanup() {
+        Logger rootLogger = Logger.getRootLogger();
+        Appender appender = rootLogger.getAppender("KAFKA");
+        if (appender != null) {
+            // Tests which do not call PropertyConfigurator.configure don't create an appender to remove.
+            rootLogger.removeAppender(appender);
+            appender.close();
+        }
     }
 
     @Test

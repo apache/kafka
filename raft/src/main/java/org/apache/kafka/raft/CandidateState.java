@@ -16,19 +16,22 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Timer;
-import org.slf4j.Logger;
-
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.raft.internals.ReplicaKey;
+import org.apache.kafka.raft.internals.VoterSet;
+import org.slf4j.Logger;
 
 public class CandidateState implements EpochState {
     private final int localId;
+    private final Uuid localDirectoryId;
     private final int epoch;
     private final int retries;
     private final Map<Integer, State> voteStates = new HashMap<>();
@@ -39,7 +42,7 @@ public class CandidateState implements EpochState {
     private final Logger log;
 
     /**
-     * The lifetime of a candidate state is the following:
+     * The lifetime of a candidate state is the following.
      *
      *  1. Once started, it would keep record of the received votes.
      *  2. If majority votes granted, it can then end its life and will be replaced by a leader state;
@@ -51,14 +54,27 @@ public class CandidateState implements EpochState {
     protected CandidateState(
         Time time,
         int localId,
+        Uuid localDirectoryId,
         int epoch,
-        Set<Integer> voters,
+        VoterSet voters,
         Optional<LogOffsetMetadata> highWatermark,
         int retries,
         int electionTimeoutMs,
         LogContext logContext
     ) {
+        if (!voters.isVoter(ReplicaKey.of(localId, Optional.of(localDirectoryId)))) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Local replica (%d, %s) must be in the set of voters %s",
+                    localId,
+                    localDirectoryId,
+                    voters
+                )
+            );
+        }
+
         this.localId = localId;
+        this.localDirectoryId = localDirectoryId;
         this.epoch = epoch;
         this.highWatermark = highWatermark;
         this.retries = retries;
@@ -68,7 +84,7 @@ public class CandidateState implements EpochState {
         this.backoffTimer = time.timer(0);
         this.log = logContext.logger(CandidateState.class);
 
-        for (Integer voterId : voters) {
+        for (Integer voterId : voters.voterIds()) {
             voteStates.put(voterId, State.UNRECORDED);
         }
         voteStates.put(localId, State.GRANTED);
@@ -227,7 +243,11 @@ public class CandidateState implements EpochState {
 
     @Override
     public ElectionState election() {
-        return ElectionState.withVotedCandidate(epoch, localId, voteStates.keySet());
+        return ElectionState.withVotedCandidate(
+            epoch,
+            ReplicaKey.of(localId, Optional.of(localDirectoryId)),
+            voteStates.keySet()
+        );
     }
 
     @Override
@@ -241,24 +261,33 @@ public class CandidateState implements EpochState {
     }
 
     @Override
-    public boolean canGrantVote(int candidateId, boolean isLogUpToDate) {
+    public boolean canGrantVote(
+        ReplicaKey candidateKey,
+        boolean isLogUpToDate
+    ) {
         // Still reject vote request even candidateId = localId, Although the candidate votes for
         // itself, this vote is implicit and not "granted".
-        log.debug("Rejecting vote request from candidate {} since we are already candidate in epoch {}",
-            candidateId, epoch);
+        log.debug(
+            "Rejecting vote request from candidate ({}) since we are already candidate in epoch {}",
+            candidateKey,
+            epoch
+        );
         return false;
     }
 
     @Override
     public String toString() {
-        return "CandidateState(" +
-            "localId=" + localId +
-            ", epoch=" + epoch +
-            ", retries=" + retries +
-            ", voteStates=" + voteStates +
-            ", highWatermark=" + highWatermark +
-            ", electionTimeoutMs=" + electionTimeoutMs +
-            ')';
+        return String.format(
+            "CandidateState(localId=%d, localDirectoryId=%s,epoch=%d, retries=%d, voteStates=%s, " +
+            "highWatermark=%s, electionTimeoutMs=%d)",
+            localId,
+            localDirectoryId,
+            epoch,
+            retries,
+            voteStates,
+            highWatermark,
+            electionTimeoutMs
+        );
     }
 
     @Override

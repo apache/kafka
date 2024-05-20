@@ -230,7 +230,7 @@ public class BatchAccumulator<T> implements Closeable {
                     forceDrain();
                     MemoryRecords memoryRecords = valueCreator.create(nextOffset, epoch, buffer);
 
-                    int numberOfRecords = validateMemoryRecordAndReturnCount(memoryRecords);
+                    int numberOfRecords = validateMemoryRecordsAndReturnCount(memoryRecords);
 
                     completed.add(
                         new CompletedBatch<>(
@@ -255,9 +255,9 @@ public class BatchAccumulator<T> implements Closeable {
         }
     }
 
-    private int validateMemoryRecordAndReturnCount(MemoryRecords memoryRecord) {
-        // Confirm that it is at most one batch and it is a control record
-        Iterator<MutableRecordBatch> batches = memoryRecord.batches().iterator();
+    private int validateMemoryRecordsAndReturnCount(MemoryRecords memoryRecords) {
+        // Confirm that it is one control batch and it is at least one control record
+        Iterator<MutableRecordBatch> batches = memoryRecords.batches().iterator();
         if (!batches.hasNext()) {
             throw new IllegalArgumentException("valueCreator didn't create a batch");
         }
@@ -265,11 +265,11 @@ public class BatchAccumulator<T> implements Closeable {
         MutableRecordBatch batch = batches.next();
         Integer numberOfRecords = batch.countOrNull();
         if (!batch.isControlBatch()) {
-            throw new IllegalArgumentException("valueCreator didn't creatte a control batch");
+            throw new IllegalArgumentException("valueCreator didn't create a control batch");
         } else if (batch.baseOffset() != nextOffset) {
             throw new IllegalArgumentException(
                 String.format(
-                    "Expected a base offset of {} but got {}",
+                    "Expected a base offset of %d but got %d",
                     nextOffset,
                     batch.baseOffset()
                 )
@@ -277,13 +277,15 @@ public class BatchAccumulator<T> implements Closeable {
         } else if (batch.partitionLeaderEpoch() != epoch) {
             throw new IllegalArgumentException(
                 String.format(
-                    "Expected a partition leader epoch of {} but got {}",
+                    "Expected a partition leader epoch of %d but got %d",
                     epoch,
                     batch.partitionLeaderEpoch()
                 )
             );
         } else if (numberOfRecords == null) {
             throw new IllegalArgumentException("valueCreator didn't create a batch with the count");
+        } else if (numberOfRecords < 1) {
+            throw new IllegalArgumentException("valueCreator didn't create at least one control record");
         } else if (batches.hasNext()) {
             throw new IllegalArgumentException("valueCreator created more than one batch");
         }

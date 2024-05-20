@@ -44,7 +44,6 @@ import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.KafkaBasedLog;
-import org.apache.kafka.connect.util.SharedTopicAdmin;
 import org.apache.kafka.connect.util.Table;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.slf4j.Logger;
@@ -139,13 +138,7 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
     private String statusTopic;
     private KafkaBasedLog<String, byte[]> kafkaLog;
     private int generation;
-    private SharedTopicAdmin ownTopicAdmin;
     private ExecutorService sendRetryExecutor;
-
-    @Deprecated
-    public KafkaStatusBackingStore(Time time, Converter converter) {
-        this(time, converter, null, "connect-distributed-");
-    }
 
     public KafkaStatusBackingStore(Time time, Converter converter, Supplier<TopicAdmin> topicAdminSupplier, String clientIdBase) {
         this.time = time;
@@ -158,8 +151,9 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
     }
 
     // visible for testing
-    KafkaStatusBackingStore(Time time, Converter converter, String statusTopic, KafkaBasedLog<String, byte[]> kafkaLog) {
-        this(time, converter);
+    KafkaStatusBackingStore(Time time, Converter converter, String statusTopic, Supplier<TopicAdmin> topicAdminSupplier,
+        KafkaBasedLog<String, byte[]> kafkaLog) {
+        this(time, converter, null, "connect-distributed-");
         this.kafkaLog = kafkaLog;
         this.statusTopic = statusTopic;
         sendRetryExecutor = Executors.newSingleThreadExecutor(
@@ -199,14 +193,6 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
         Map<String, Object> adminProps = new HashMap<>(originals);
         adminProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
         ConnectUtils.addMetricsContextProperties(adminProps, config, clusterId);
-        Supplier<TopicAdmin> adminSupplier;
-        if (topicAdminSupplier != null) {
-            adminSupplier = topicAdminSupplier;
-        } else {
-            // Create our own topic admin supplier that we'll close when we're stopped
-            ownTopicAdmin = new SharedTopicAdmin(adminProps);
-            adminSupplier = ownTopicAdmin;
-        }
 
         Map<String, Object> topicSettings = config instanceof DistributedConfig
                                             ? ((DistributedConfig) config).statusStorageTopicSettings()
@@ -219,7 +205,7 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
                 .build();
 
         Callback<ConsumerRecord<String, byte[]>> readCallback = (error, record) -> read(record);
-        this.kafkaLog = createKafkaBasedLog(statusTopic, producerProps, consumerProps, readCallback, topicDescription, adminSupplier, config, time);
+        this.kafkaLog = createKafkaBasedLog(statusTopic, producerProps, consumerProps, readCallback, topicDescription, topicAdminSupplier, config, time);
     }
 
     @Override
@@ -236,9 +222,6 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
             kafkaLog.stop();
         } finally {
             ThreadUtils.shutdownExecutorServiceQuietly(sendRetryExecutor, 10, TimeUnit.SECONDS);
-            if (ownTopicAdmin != null) {
-                ownTopicAdmin.close();
-            }
         }
     }
 

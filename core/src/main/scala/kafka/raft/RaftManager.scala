@@ -41,7 +41,7 @@ import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
-import org.apache.kafka.raft.{FileBasedStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, LeaderAndEpoch, RaftClient, QuorumConfig, ReplicatedLog}
+import org.apache.kafka.raft.{FileQuorumStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, LeaderAndEpoch, RaftClient, QuorumConfig, ReplicatedLog}
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.server.util.KafkaScheduler
@@ -138,6 +138,7 @@ trait RaftManager[T] {
 class KafkaRaftManager[T](
   clusterId: String,
   config: KafkaConfig,
+  metadataLogDirUuid: Uuid,
   recordSerde: RecordSerde[T],
   topicPartition: TopicPartition,
   topicId: Uuid,
@@ -184,7 +185,7 @@ class KafkaRaftManager[T](
     client.initialize(
       controllerQuorumVotersFuture.get(),
       config.controllerListenerNames.head,
-      new FileBasedStateStore(new File(dataDir, FileBasedStateStore.DEFAULT_FILE_NAME)),
+      new FileQuorumStateStore(new File(dataDir, FileQuorumStateStore.DEFAULT_FILE_NAME)),
       metrics
     )
     netChannel.start()
@@ -218,6 +219,7 @@ class KafkaRaftManager[T](
   private def buildRaftClient(): KafkaRaftClient[T] = {
     val client = new KafkaRaftClient(
       OptionalInt.of(config.nodeId),
+      metadataLogDirUuid,
       recordSerde,
       netChannel,
       replicatedLog,

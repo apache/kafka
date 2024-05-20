@@ -44,7 +44,7 @@ public class OAuthBearerValidationUtilsTest {
                 appendCommaJsonText(sb, "sub", "principalName");
                 if (useErrorValue)
                     appendCommaJsonText(sb, claimName, 1);
-                else if (exists != null && exists.booleanValue())
+                else if (exists)
                     appendCommaJsonText(sb, claimName, claimName);
                 sb.append("}");
                 String compactSerialization = HEADER_COMPACT_SERIALIZATION + Base64.getUrlEncoder().withoutPadding()
@@ -52,7 +52,7 @@ public class OAuthBearerValidationUtilsTest {
                 OAuthBearerUnsecuredJws testJwt = new OAuthBearerUnsecuredJws(compactSerialization, "sub", "scope");
                 OAuthBearerValidationResult result = OAuthBearerValidationUtils
                         .validateClaimForExistenceAndType(testJwt, required, claimName, String.class);
-                if (useErrorValue || required && !exists.booleanValue())
+                if (useErrorValue || required && !exists)
                     assertTrue(isFailureWithMessageAndNoFailureScope(result));
                 else
                     assertTrue(isSuccess(result));

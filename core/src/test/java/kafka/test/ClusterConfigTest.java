@@ -46,12 +46,12 @@ public class ClusterConfigTest {
         File trustStoreFile = TestUtils.tempFile();
 
         ClusterConfig clusterConfig = ClusterConfig.builder()
-                .setType(Type.KRAFT)
+                .setTypes(Collections.singleton(Type.KRAFT))
                 .setBrokers(3)
                 .setControllers(2)
                 .setDisksPerBroker(1)
-                .setName("builder-test")
                 .setAutoStart(true)
+                .setTags(Arrays.asList("name", "Generated Test"))
                 .setSecurityProtocol(SecurityProtocol.PLAINTEXT)
                 .setListenerName("EXTERNAL")
                 .setTrustStoreFile(trustStoreFile)
@@ -62,7 +62,7 @@ public class ClusterConfigTest {
                 .setAdminClientProperties(Collections.singletonMap("admin_client", "admin_client_value"))
                 .setSaslClientProperties(Collections.singletonMap("sasl_client", "sasl_client_value"))
                 .setSaslServerProperties(Collections.singletonMap("sasl_server", "sasl_server_value"))
-                .setPerBrokerProperties(Collections.singletonMap(0, Collections.singletonMap("broker_0", "broker_0_value")))
+                .setPerServerProperties(Collections.singletonMap(0, Collections.singletonMap("broker_0", "broker_0_value")))
                 .build();
 
         Map<String, Object> clusterConfigFields = fields(clusterConfig);
