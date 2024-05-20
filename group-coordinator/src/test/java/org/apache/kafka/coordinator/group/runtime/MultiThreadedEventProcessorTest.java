@@ -62,9 +62,7 @@ public class MultiThreadedEventProcessorTest {
         @Override
         public CoordinatorEvent take() {
             CoordinatorEvent event = super.take();
-            if (event != null) {
-                time.sleep(takeDelayMs);
-            }
+            time.sleep(takeDelayMs);
             return event;
         }
     }
