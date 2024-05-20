@@ -43,7 +43,7 @@ import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 
 /**
- * Serializer/Deserializer for {@link Record}. The format is defined below:
+ * Serializer/Deserializer for {@link CoordinatorRecord}. The format is defined below:
  * <pre>
  *     record_key   = [record_type key_message]
  *     record_value = [value_version value_message]
@@ -56,9 +56,9 @@ import java.nio.ByteBuffer;
  *     value_message   : The serialized message of the value {@link ApiMessageAndVersion} object.
  * </pre>
  */
-public class RecordSerde implements PartitionWriter.Serializer<Record>, CoordinatorLoader.Deserializer<Record> {
+public class CoordinatorRecordSerde implements PartitionWriter.Serializer<CoordinatorRecord>, CoordinatorLoader.Deserializer<CoordinatorRecord> {
     @Override
-    public byte[] serializeKey(Record record) {
+    public byte[] serializeKey(CoordinatorRecord record) {
         // Record does not accept a null key.
         return MessageUtil.toVersionPrefixedBytes(
             record.key().version(),
@@ -67,7 +67,7 @@ public class RecordSerde implements PartitionWriter.Serializer<Record>, Coordina
     }
 
     @Override
-    public byte[] serializeValue(Record record) {
+    public byte[] serializeValue(CoordinatorRecord record) {
         // Tombstone is represented with a null value.
         if (record.value() == null) {
             return null;
@@ -80,7 +80,7 @@ public class RecordSerde implements PartitionWriter.Serializer<Record>, Coordina
     }
 
     @Override
-    public Record deserialize(
+    public CoordinatorRecord deserialize(
         ByteBuffer keyBuffer,
         ByteBuffer valueBuffer
     ) throws RuntimeException {
@@ -89,14 +89,14 @@ public class RecordSerde implements PartitionWriter.Serializer<Record>, Coordina
         readMessage(keyMessage, keyBuffer, recordType, "key");
 
         if (valueBuffer == null) {
-            return new Record(new ApiMessageAndVersion(keyMessage, recordType), null);
+            return new CoordinatorRecord(new ApiMessageAndVersion(keyMessage, recordType), null);
         }
 
         final ApiMessage valueMessage = apiMessageValueFor(recordType);
         final short valueVersion = readVersion(valueBuffer, "value");
         readMessage(valueMessage, valueBuffer, valueVersion, "value");
 
-        return new Record(
+        return new CoordinatorRecord(
             new ApiMessageAndVersion(keyMessage, recordType),
             new ApiMessageAndVersion(valueMessage, valueVersion)
         );

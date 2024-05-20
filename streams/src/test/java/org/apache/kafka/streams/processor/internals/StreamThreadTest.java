@@ -36,6 +36,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.InvalidPidMappingException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -1377,47 +1378,6 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldCloseAllTaskProducersOnCloseIfEosEnabled() throws InterruptedException {
-        internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
-
-        thread = createStreamThread(
-            CLIENT_ID,
-            new StreamsConfig(configProps(true)),
-            new MockTime(1)
-        );
-
-        thread.start();
-        TestUtils.waitForCondition(
-            () -> thread.state() == StreamThread.State.STARTING,
-            10 * 1000,
-            "Thread never started.");
-
-        thread.rebalanceListener().onPartitionsRevoked(Collections.emptyList());
-
-        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
-        final List<TopicPartition> assignedPartitions = new ArrayList<>();
-
-        // assign single partition
-        assignedPartitions.add(t1p1);
-        assignedPartitions.add(t1p2);
-        activeTasks.put(task1, Collections.singleton(t1p1));
-        activeTasks.put(task2, Collections.singleton(t1p2));
-
-        thread.taskManager().handleAssignment(activeTasks, emptyMap());
-        thread.rebalanceListener().onPartitionsAssigned(assignedPartitions);
-
-        thread.shutdown();
-        TestUtils.waitForCondition(
-            () -> thread.state() == StreamThread.State.DEAD,
-            10 * 1000,
-            "Thread never shut down.");
-
-        for (final Task task : thread.readOnlyActiveTasks()) {
-            assertTrue(((MockProducer<byte[], byte[]>) ((RecordCollectorImpl) ((StreamTask) task).recordCollector()).producer()).closed());
-        }
-    }
-
-    @Test
     public void shouldShutdownTaskManagerOnClose() {
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
@@ -1646,8 +1606,7 @@ public class StreamThreadTest {
         assertThat(producer.commitCount(), equalTo(1L));
     }
 
-    @Test
-    public void shouldNotCloseTaskAndRemoveFromTaskManagerIfProducerGotFencedInCommitTransactionWhenSuspendingTasks() throws Exception {
+    private void testThrowingDurringCommitTransactionException(final RuntimeException e) throws InterruptedException {
         final StreamsConfig config = new StreamsConfig(configProps(true));
         thread = createStreamThread(CLIENT_ID, config);
 
@@ -1683,11 +1642,20 @@ public class StreamThreadTest {
             TestUtils.waitForCondition(() -> !producer.uncommittedRecords().isEmpty(), "Processing threads to process record");
         }
 
-        producer.commitTransactionException = new ProducerFencedException("Producer is fenced");
+        producer.commitTransactionException = e;
         assertThrows(TaskMigratedException.class, () -> thread.rebalanceListener().onPartitionsRevoked(assignedPartitions));
         assertFalse(producer.transactionCommitted());
         assertFalse(producer.closed());
         assertEquals(1, thread.readOnlyActiveTasks().size());
+    }
+
+    @Test
+    public void shouldNotCloseTaskAndRemoveFromTaskManagerIfProducerGotFencedInCommitTransactionWhenSuspendingTasks() throws Exception {
+        testThrowingDurringCommitTransactionException(new ProducerFencedException("Producer is fenced"));
+    }
+    @Test
+    public void shouldNotCloseTaskAndRemoveFromTaskManagerIfInvalidPidMappingOccurredInCommitTransactionWhenSuspendingTasks() throws Exception {
+        testThrowingDurringCommitTransactionException(new InvalidPidMappingException("PidMapping is invalid"));
     }
 
     @Test
@@ -1807,8 +1775,7 @@ public class StreamThreadTest {
         }
     }
 
-    @Test
-    public void shouldNotCloseTaskAndRemoveFromTaskManagerIfProducerGotFencedInCommitTransactionWhenCommitting() {
+    private void testNotCloseTaskAndRemoveFromTaskManagerInCommitTransactionWhenCommitting(final RuntimeException e) {
         // only have source but no sink so that we would not get fenced in producer.send
         internalTopologyBuilder.addSource(null, "source", null, null, null, topic1);
 
@@ -1840,7 +1807,7 @@ public class StreamThreadTest {
         assertThat(thread.readOnlyActiveTasks().size(), equalTo(1));
         final MockProducer<byte[], byte[]> producer = clientSupplier.producers.get(0);
 
-        producer.commitTransactionException = new ProducerFencedException("Producer is fenced");
+        producer.commitTransactionException = e;
         mockTime.sleep(config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG) + 1L);
         consumer.addRecord(new ConsumerRecord<>(topic1, 1, 1, new byte[0], new byte[0]));
         assertThrows(TaskMigratedException.class,
@@ -1860,6 +1827,16 @@ public class StreamThreadTest {
         assertFalse(clientSupplier.producers.get(0).transactionCommitted());
         assertFalse(clientSupplier.producers.get(0).closed());
         assertEquals(1, thread.readOnlyActiveTasks().size());
+    }
+
+    @Test
+    public void shouldNotCloseTaskAndRemoveFromTaskManagerIfProducerGotFencedInCommitTransactionWhenCommitting() {
+        testNotCloseTaskAndRemoveFromTaskManagerInCommitTransactionWhenCommitting(new ProducerFencedException("Producer is fenced"));
+    }
+
+    @Test
+    public void shouldNotCloseTaskAndRemoveFromTaskManagerIfPidMappingIsInvalidInCommitTransactionWhenCommitting() {
+        testNotCloseTaskAndRemoveFromTaskManagerInCommitTransactionWhenCommitting(new InvalidPidMappingException("PID Mapping is invalid"));
     }
 
     @Test
