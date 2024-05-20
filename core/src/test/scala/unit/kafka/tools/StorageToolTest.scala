@@ -21,7 +21,7 @@ import java.io.{ByteArrayOutputStream, PrintStream}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
 import java.util
-import java.util.{Collections, Optional, Properties}
+import java.util.{Collections, Properties}
 import org.apache.kafka.common.{DirectoryId, KafkaException}
 import kafka.server.KafkaConfig
 import kafka.utils.Exit
@@ -369,7 +369,7 @@ Found problem:
       allFeatures
     )
 
-    val featureLevel = Features.TEST_VERSION.defaultValue(Optional.of(metadataVersion))
+    val featureLevel = Features.TEST_VERSION.defaultValue(metadataVersion)
     if (featureLevel > 0) {
       assertEquals(List(generateRecord(TestFeatureVersion.FEATURE_NAME, featureLevel)), records)
     }

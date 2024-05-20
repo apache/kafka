@@ -138,7 +138,7 @@ object StorageTool extends Logging {
         Features.validateVersion(feature, metadataVersion, featuresMap)
         // Only set feature records for levels greater than 0. 0 is assumed if there is no record.
         if (feature.featureLevel > 0) {
-          metadataRecords.addOne(new ApiMessageAndVersion(new FeatureLevelRecord().
+          metadataRecords.append(new ApiMessageAndVersion(new FeatureLevelRecord().
             setName(feature.featureName).
             setFeatureLevel(feature.featureLevel), 0.toShort))
         }
