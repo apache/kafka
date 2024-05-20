@@ -96,14 +96,14 @@ public class RecordCollectorImpl implements RecordCollector {
         for (final String topic : topology.sinkTopics()) {
             final String processorNodeId = topology.sink(topic).name();
             producedSensorByTopic.put(
-                topic,
-                TopicMetrics.producedSensor(
-                    threadId,
-                    taskId.toString(),
-                    processorNodeId,
                     topic,
-                    streamsMetrics
-                ));
+                    TopicMetrics.producedSensor(
+                            threadId,
+                            taskId.toString(),
+                            processorNodeId,
+                            topic,
+                            streamsMetrics
+                    ));
         }
 
         this.offsets = new HashMap<>();
@@ -117,7 +117,7 @@ public class RecordCollectorImpl implements RecordCollector {
     }
 
     /**
-     * @throws StreamsException fatal error that should cause the thread to die
+     * @throws StreamsException      fatal error that should cause the thread to die
      * @throws TaskMigratedException recoverable error that would cause the task to be removed
      */
     @Override
@@ -145,8 +145,8 @@ public class RecordCollectorImpl implements RecordCollector {
                 // here we cannot drop the message on the floor even if it is a transient timeout exception,
                 // so we treat everything the same as a fatal exception
                 throw new StreamsException("Could not determine the number of partitions for topic '" + topic +
-                    "' for task " + taskId + " due to " + fatal,
-                    fatal
+                        "' for task " + taskId + " due to " + fatal,
+                        fatal
                 );
             }
             if (partitions.size() > 0) {
@@ -162,14 +162,14 @@ public class RecordCollectorImpl implements RecordCollector {
                                 + "topic=[{}]", topic);
                         droppedRecordsSensor.record();
                     } else {
-                        for (final int multicastPartition: multicastPartitions) {
+                        for (final int multicastPartition : multicastPartitions) {
                             send(topic, key, value, headers, multicastPartition, timestamp, keySerializer, valueSerializer, processorNodeId, context);
                         }
                     }
                 }
             } else {
                 throw new StreamsException("Could not get partition information for topic " + topic + " for task " + taskId +
-                    ". This can happen if the topic does not exist.");
+                        ". This can happen if the topic does not exist.");
             }
         } else {
             send(topic, key, value, headers, null, timestamp, keySerializer, valueSerializer, processorNodeId, context);
@@ -190,71 +190,22 @@ public class RecordCollectorImpl implements RecordCollector {
                             final InternalProcessorContext<Void, Void> context) {
         checkForException();
 
-        final byte[] keyBytes;
-        final byte[] valBytes;
+        byte[] keyBytes = null;
+        byte[] valBytes = null;
         try {
             keyBytes = keySerializer.serialize(topic, headers, key);
+        } catch (final ClassCastException exception) {
+            this.manageClassCastException(topic, key, value, keySerializer, valueSerializer, exception);
+        } catch (final Exception exception) {
+            this.manageOtherExceptions(topic, key, value, headers, partition, timestamp, processorNodeId, context, exception, ProductionExceptionHandler.SerializationExceptionOrigin.KEY);
+            return;
+        }
+        try {
             valBytes = valueSerializer.serialize(topic, headers, value);
         } catch (final ClassCastException exception) {
-            final String keyClass = key == null ? "unknown because key is null" : key.getClass().getName();
-            final String valueClass = value == null ? "unknown because value is null" : value.getClass().getName();
-            throw new StreamsException(
-                String.format(
-                    "ClassCastException while producing data to topic %s. " +
-                        "A serializer (key: %s / value: %s) is not compatible to the actual key or value type " +
-                        "(key type: %s / value type: %s). " +
-                        "Change the default Serdes in StreamConfig or provide correct Serdes via method parameters " +
-                        "(for example if using the DSL, `#to(String topic, Produced<K, V> produced)` with " +
-                        "`Produced.keySerde(WindowedSerdes.timeWindowedSerdeFrom(String.class))`).",
-                    topic,
-                    keySerializer.getClass().getName(),
-                    valueSerializer.getClass().getName(),
-                    keyClass,
-                    valueClass),
-                exception);
+            this.manageClassCastException(topic, key, value, keySerializer, valueSerializer, exception);
         } catch (final Exception exception) {
-            final ProducerRecord<K, V> record = new ProducerRecord<>(topic, partition, timestamp, key, value, headers);
-            final ProductionExceptionHandler.ProductionExceptionHandlerResponse response;
-
-            log.debug(String.format("Error serializing record to topic %s", topic), exception);
-
-            try {
-                final ErrorHandlerContextImpl errorHandlerContext = new ErrorHandlerContextImpl(
-                        context,
-                        record.topic(),
-                        record.partition(),
-                        context.offset(),
-                        record.headers(),
-                        null,
-                        null,
-                        processorNodeId,
-                        taskId);
-                response = productionExceptionHandler.handleSerializationException(errorHandlerContext, record, exception, ProductionExceptionHandler.SerializationExceptionOrigin.VALUE);
-            } catch (final Exception e) {
-                log.error("Fatal when handling serialization exception", e);
-                recordSendError(topic, e, null, context, processorNodeId);
-                return;
-            }
-
-            if (response == ProductionExceptionHandlerResponse.FAIL) {
-                throw new StreamsException(
-                    String.format(
-                        "Unable to serialize record. ProducerRecord(topic=[%s], partition=[%d], timestamp=[%d]",
-                        topic,
-                        partition,
-                        timestamp),
-                    exception
-                );
-            }
-
-            log.warn("Unable to serialize record, continue processing. " +
-                            "ProducerRecord(topic=[{}], partition=[{}], timestamp=[{}])",
-                    topic,
-                    partition,
-                    timestamp);
-
-            droppedRecordsSensor.record();
-
+            this.manageOtherExceptions(topic, key, value, headers, partition, timestamp, processorNodeId, context, exception, ProductionExceptionHandler.SerializationExceptionOrigin.VALUE);
             return;
         }
 
@@ -278,14 +229,14 @@ public class RecordCollectorImpl implements RecordCollector {
                     // we may not have created a sensor during initialization if the node uses dynamic topic routing,
                     // as all topics are not known up front, so create the sensor for this topic if absent
                     final Sensor topicProducedSensor = producedSensorByTopic.computeIfAbsent(
-                        topic,
-                        t -> TopicMetrics.producedSensor(
-                            Thread.currentThread().getName(),
-                            taskId.toString(),
-                            processorNodeId,
                             topic,
-                            context.metrics()
-                        )
+                            t -> TopicMetrics.producedSensor(
+                                    Thread.currentThread().getName(),
+                                    taskId.toString(),
+                                    processorNodeId,
+                                    topic,
+                                    context.metrics()
+                            )
                     );
                     final long bytesProduced = producerRecordSizeInBytes(serializedRecord);
                     topicProducedSensor.record(bytesProduced, context.currentSystemTimeMs());
@@ -299,6 +250,84 @@ public class RecordCollectorImpl implements RecordCollector {
         });
     }
 
+    private <K, V> void manageClassCastException(final String topic,
+                                                 final K key,
+                                                 final V value,
+                                                 final Serializer<K> keySerializer,
+                                                 final Serializer<V> valueSerializer,
+                                                 final ClassCastException exception) {
+        final String keyClass = key == null ? "unknown because key is null" : key.getClass().getName();
+        final String valueClass = value == null ? "unknown because value is null" : value.getClass().getName();
+        throw new StreamsException(
+                String.format(
+                        "ClassCastException while producing data to topic %s. " +
+                                "A serializer (key: %s / value: %s) is not compatible to the actual key or value type " +
+                                "(key type: %s / value type: %s). " +
+                                "Change the default Serdes in StreamConfig or provide correct Serdes via method parameters " +
+                                "(for example if using the DSL, `#to(String topic, Produced<K, V> produced)` with " +
+                                "`Produced.keySerde(WindowedSerdes.timeWindowedSerdeFrom(String.class))`).",
+                        topic,
+                        keySerializer.getClass().getName(),
+                        valueSerializer.getClass().getName(),
+                        keyClass,
+                        valueClass),
+                exception);
+    }
+
+    private <K, V> void manageOtherExceptions(final String topic,
+                                              final K key,
+                                              final V value,
+                                              final Headers headers,
+                                              final Integer partition,
+                                              final Long timestamp,
+                                              final String processorNodeId,
+                                              final InternalProcessorContext<Void, Void> context,
+                                              final Exception exception,
+                                              final ProductionExceptionHandler.SerializationExceptionOrigin origin) {
+        final ProducerRecord<K, V> record = new ProducerRecord<>(topic, partition, timestamp, key, value, headers);
+        final ProductionExceptionHandler.ProductionExceptionHandlerResponse response;
+
+        log.debug(String.format("Error serializing record to topic %s", topic), exception);
+
+        try {
+            final ErrorHandlerContextImpl errorHandlerContext = new ErrorHandlerContextImpl(
+                    context,
+                    record.topic(),
+                    record.partition(),
+                    context.offset(),
+                    record.headers(),
+                    null,
+                    null,
+                    processorNodeId,
+                    taskId);
+            response = productionExceptionHandler.handleSerializationException(errorHandlerContext, record, exception, origin);
+        } catch (final Exception e) {
+            log.error("Fatal when handling serialization exception", e);
+            recordSendError(topic, e, null, context, processorNodeId);
+            return;
+        }
+
+        if (response == ProductionExceptionHandlerResponse.FAIL) {
+            throw new StreamsException(
+                    String.format(
+                            "Unable to serialize record. ProducerRecord(topic=[%s], partition=[%d], timestamp=[%d]",
+                            topic,
+                            partition,
+                            timestamp),
+                    exception
+            );
+        }
+
+        log.warn("Unable to serialize record, continue processing. " +
+                        "ProducerRecord(topic=[{}], partition=[{}], timestamp=[{}])",
+                topic,
+                partition,
+                timestamp);
+
+        droppedRecordsSensor.record();
+
+    }
+
     private void recordSendError(final String topic, final Exception exception, final ProducerRecord<byte[], byte[]> serializedRecord,
                                  final InternalProcessorContext<Void, Void> context, final String processorNodeId) {
         String errorMessage = String.format(SEND_EXCEPTION_MESSAGE, topic, taskId, exception.toString());
@@ -310,21 +339,21 @@ public class RecordCollectorImpl implements RecordCollector {
                 exception instanceof InvalidProducerEpochException ||
                 exception instanceof OutOfOrderSequenceException) {
             errorMessage += "\nWritten offsets would not be recorded and no more records would be sent since the producer is fenced, " +
-                "indicating the task may be migrated out";
+                    "indicating the task may be migrated out";
             sendException.set(new TaskMigratedException(errorMessage, exception));
         } else {
             if (exception instanceof RetriableException) {
                 errorMessage += "\nThe broker is either slow or in bad state (like not having enough replicas) in responding the request, " +
-                    "or the connection to broker was interrupted sending the request or receiving the response. " +
-                    "\nConsider overwriting `max.block.ms` and /or " +
-                    "`delivery.timeout.ms` to a larger value to wait longer for such scenarios and avoid timeout errors";
+                        "or the connection to broker was interrupted sending the request or receiving the response. " +
+                        "\nConsider overwriting `max.block.ms` and /or " +
+                        "`delivery.timeout.ms` to a larger value to wait longer for such scenarios and avoid timeout errors";
                 sendException.set(new TaskCorruptedException(Collections.singleton(taskId)));
             } else {
                 final ErrorHandlerContextImpl errorHandlerContext = new ErrorHandlerContextImpl(
-                        context,
+                        null,
                         serializedRecord.topic(),
                         serializedRecord.partition(),
-                        context.offset(),
+                        context != null ? context.offset() : -1,
                         serializedRecord.headers(),
                         null,
                         null,
@@ -346,20 +375,20 @@ public class RecordCollectorImpl implements RecordCollector {
 
     private boolean isFatalException(final Exception exception) {
         final boolean securityException = exception instanceof AuthenticationException ||
-            exception instanceof AuthorizationException ||
-            exception instanceof SecurityDisabledException;
+                exception instanceof AuthorizationException ||
+                exception instanceof SecurityDisabledException;
 
         final boolean communicationException = exception instanceof InvalidTopicException ||
-            exception instanceof UnknownServerException ||
-            exception instanceof SerializationException ||
-            exception instanceof OffsetMetadataTooLarge ||
-            exception instanceof IllegalStateException;
+                exception instanceof UnknownServerException ||
+                exception instanceof SerializationException ||
+                exception instanceof OffsetMetadataTooLarge ||
+                exception instanceof IllegalStateException;
 
         return securityException || communicationException;
     }
 
     /**
-     * @throws StreamsException fatal error that should cause the thread to die
+     * @throws StreamsException      fatal error that should cause the thread to die
      * @throws TaskMigratedException recoverable error that would cause the task to be removed
      */
     @Override
@@ -370,7 +399,7 @@ public class RecordCollectorImpl implements RecordCollector {
     }
 
     /**
-     * @throws StreamsException fatal error that should cause the thread to die
+     * @throws StreamsException      fatal error that should cause the thread to die
      * @throws TaskMigratedException recoverable error that would cause the task to be removed
      */
     @Override
@@ -387,7 +416,7 @@ public class RecordCollectorImpl implements RecordCollector {
     }
 
     /**
-     * @throws StreamsException fatal error that should cause the thread to die
+     * @throws StreamsException      fatal error that should cause the thread to die
      * @throws TaskMigratedException recoverable error that would cause the task to be removed
      */
     @Override
