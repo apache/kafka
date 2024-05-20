@@ -62,7 +62,7 @@ class LogOffsetMetadataTest {
     void testMessageOffsetOnly() {
         LogOffsetMetadata metadata1 = new LogOffsetMetadata(1L);
         LogOffsetMetadata metadata2 = new LogOffsetMetadata(1L, 0L, 1);
-        assertFalse(UNKNOWN_OFFSET_METADATA.messageOffsetOnly());
+        assertTrue(UNKNOWN_OFFSET_METADATA.messageOffsetOnly());
         assertFalse(metadata2.messageOffsetOnly());
         assertTrue(metadata1.messageOffsetOnly());
     }

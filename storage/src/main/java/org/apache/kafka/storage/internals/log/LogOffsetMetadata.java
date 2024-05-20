@@ -28,10 +28,9 @@ public final class LogOffsetMetadata {
 
     //TODO KAFKA-14484 remove once UnifiedLog has been moved to the storage module
     private static final long UNIFIED_LOG_UNKNOWN_OFFSET = -1L;
-
-    public static final LogOffsetMetadata UNKNOWN_OFFSET_METADATA = new LogOffsetMetadata(-1L, 0L, 0);
-
     private static final int UNKNOWN_FILE_POSITION = -1;
+
+    public static final LogOffsetMetadata UNKNOWN_OFFSET_METADATA = new LogOffsetMetadata(-1L, UNIFIED_LOG_UNKNOWN_OFFSET, UNKNOWN_FILE_POSITION);
 
     public final long messageOffset;
     public final long segmentBaseOffset;
