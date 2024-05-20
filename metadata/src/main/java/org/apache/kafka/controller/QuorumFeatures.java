@@ -19,7 +19,7 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.metadata.ControllerRegistration;
 import org.apache.kafka.metadata.VersionRange;
-import org.apache.kafka.server.common.FeatureVersion;
+import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.ArrayList;
@@ -62,7 +62,7 @@ public final class QuorumFeatures {
                 enableUnstable ?
                     MetadataVersion.latestTesting().featureLevel() :
                     MetadataVersion.latestProduction().featureLevel()));
-        for (FeatureVersion feature : FeatureVersion.PRODUCTION_FEATURES) {
+        for (Features feature : Features.PRODUCTION_FEATURES) {
             features.put(feature.featureName(), VersionRange.of(
                 0,
                 feature.defaultValue(Optional.empty())

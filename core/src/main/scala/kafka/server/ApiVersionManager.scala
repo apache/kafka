@@ -23,7 +23,7 @@ import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.ApiVersionsResponse
 import org.apache.kafka.server.ClientMetricsManager
-import org.apache.kafka.server.common.Features
+import org.apache.kafka.server.common.FinalizedFeatures
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
@@ -40,7 +40,7 @@ trait ApiVersionManager {
   }
   def newRequestMetrics: RequestChannel.Metrics = new network.RequestChannel.Metrics(enabledApis)
 
-  def features: Features
+  def features: FinalizedFeatures
 }
 
 object ApiVersionManager {
@@ -80,14 +80,14 @@ class SimpleApiVersionManager(
   brokerFeatures: org.apache.kafka.common.feature.Features[SupportedVersionRange],
   val enableUnstableLastVersion: Boolean,
   val zkMigrationEnabled: Boolean,
-  val featuresProvider: () => Features
+  val featuresProvider: () => FinalizedFeatures
 ) extends ApiVersionManager {
 
   def this(
     listenerType: ListenerType,
     enableUnstableLastVersion: Boolean,
     zkMigrationEnabled: Boolean,
-    featuresProvider: () => Features
+    featuresProvider: () => FinalizedFeatures
   ) = {
     this(
       listenerType,
@@ -113,7 +113,7 @@ class SimpleApiVersionManager(
     )
   }
 
-  override def features: Features = featuresProvider.apply()
+  override def features: FinalizedFeatures = featuresProvider.apply()
 }
 
 /**
@@ -164,5 +164,5 @@ class DefaultApiVersionManager(
     )
   }
 
-  override def features: Features = metadataCache.features()
+  override def features: FinalizedFeatures = metadataCache.features()
 }

@@ -28,7 +28,7 @@ import net.sourceforge.argparse4j.inf.Namespace
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
-import org.apache.kafka.server.common.{ApiMessageAndVersion, FeatureVersion, MetadataVersion}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, Features, MetadataVersion}
 import org.apache.kafka.common.metadata.FeatureLevelRecord
 import org.apache.kafka.common.metadata.UserScramCredentialRecord
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
@@ -36,7 +36,7 @@ import org.apache.kafka.common.security.scram.internals.ScramFormatter
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
-import org.apache.kafka.server.common.FeatureVersionUtils.FeatureVersionImpl
+import org.apache.kafka.server.common.FeatureVersion
 
 import java.util
 import java.util.{Base64, Collections, Optional}
@@ -72,7 +72,7 @@ object StorageTool extends Logging {
             Option(config.get.originals.get(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG)).map(_.toString))
           validateMetadataVersion(metadataVersion, config)
           // Get all other features, validate, and create records for them
-          generateFeatureRecords(metadataRecords, metadataVersion, featureNamesAndLevelsMap, FeatureVersion.PRODUCTION_FEATURES.asScala.toList)
+          generateFeatureRecords(metadataRecords, metadataVersion, featureNamesAndLevelsMap, Features.PRODUCTION_FEATURES.asScala.toList)
           getUserScramCredentialRecords(namespace).foreach(userScramCredentialRecords => {
             if (!metadataVersion.isScramSupported) {
               throw new TerseFailure(s"SCRAM is only supported in metadata.version ${MetadataVersion.IBP_3_5_IV2} or later.")
@@ -121,21 +121,21 @@ object StorageTool extends Logging {
   private[tools] def generateFeatureRecords(metadataRecords: ArrayBuffer[ApiMessageAndVersion],
                                      metadataVersion: MetadataVersion,
                                      specifiedFeatures: Map[String, java.lang.Short],
-                                     allFeatures: List[FeatureVersion]): Unit = {
+                                     allFeatures: List[Features]): Unit = {
     // If we are using --version-default, the default is based on the metadata version.
     val metadataVersionOpt: Optional[MetadataVersion] = if (specifiedFeatures.isEmpty) Optional.of(metadataVersion) else Optional.empty[MetadataVersion]
 
-    val allFeaturesAndLevels: List[FeatureVersionImpl] = allFeatures.map { feature =>
+    val allFeaturesAndLevels: List[FeatureVersion] = allFeatures.map { feature =>
       val level: java.lang.Short = specifiedFeatures.getOrElse(feature.featureName, feature.defaultValue(metadataVersionOpt))
       feature.fromFeatureLevel(level)
     }
-    val featuresMap = FeatureVersionImpl.featureImplsToMap(allFeaturesAndLevels.asJava)
+    val featuresMap = FeatureVersion.featureImplsToMap(allFeaturesAndLevels.asJava)
     featuresMap.put(MetadataVersion.FEATURE_NAME, metadataVersion.featureLevel)
 
     try {
       for (feature <- allFeaturesAndLevels) {
         // In order to validate, we need all feature versions set.
-        FeatureVersion.validateVersion(feature, metadataVersion, featuresMap)
+        Features.validateVersion(feature, metadataVersion, featuresMap)
         // Only set feature records for levels greater than 0. 0 is assumed if there is no record.
         if (feature.featureLevel > 0) {
           metadataRecords.addOne(new ApiMessageAndVersion(new FeatureLevelRecord().

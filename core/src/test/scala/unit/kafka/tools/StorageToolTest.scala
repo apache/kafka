@@ -29,7 +29,7 @@ import kafka.utils.TestUtils
 import net.sourceforge.argparse4j.inf.Namespace
 import org.apache.commons.io.output.NullOutputStream
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.server.common.{ApiMessageAndVersion, FeatureVersion, MetadataVersion, TestFeatureVersion}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, Features, MetadataVersion, TestFeatureVersion}
 import org.apache.kafka.common.metadata.{FeatureLevelRecord, UserScramCredentialRecord}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.apache.kafka.raft.QuorumConfig
@@ -56,7 +56,7 @@ class StorageToolTest {
     properties
   }
 
-  val allFeatures = FeatureVersion.FEATURES.toList
+  val allFeatures = Features.FEATURES.toList
 
   @Test
   def testConfigToLogDirectories(): Unit = {
@@ -369,7 +369,7 @@ Found problem:
       allFeatures
     )
 
-    val featureLevel = FeatureVersion.TEST_VERSION.defaultValue(Optional.of(metadataVersion))
+    val featureLevel = Features.TEST_VERSION.defaultValue(Optional.of(metadataVersion))
     if (featureLevel > 0) {
       assertEquals(List(generateRecord(TestFeatureVersion.FEATURE_NAME, featureLevel)), records)
     }

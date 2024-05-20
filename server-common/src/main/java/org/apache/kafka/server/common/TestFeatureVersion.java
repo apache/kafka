@@ -19,7 +19,7 @@ package org.apache.kafka.server.common;
 import java.util.Collections;
 import java.util.Map;
 
-public enum TestFeatureVersion implements FeatureVersionUtils.FeatureVersionImpl {
+public enum TestFeatureVersion implements FeatureVersion {
 
     TEST_0(0, MetadataVersion.IBP_3_3_IV0, Collections.emptyMap()),
     TEST_1(1, MetadataVersion.IBP_3_7_IV0, Collections.emptyMap()),

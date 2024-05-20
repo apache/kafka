@@ -14,37 +14,87 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.server.common;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.Collections;
+import java.util.Optional;
 
-import static org.apache.kafka.server.common.MetadataVersion.FEATURE_NAME;
-import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_KRAFT_VERSION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
-class FeaturesTest {
-    @Test
-    public void testKRaftModeFeatures() {
-        Features features = new Features(MINIMUM_KRAFT_VERSION,
-                Collections.singletonMap("foo", (short) 2), 123, true);
-        assertEquals(MINIMUM_KRAFT_VERSION.featureLevel(),
-                features.finalizedFeatures().get(FEATURE_NAME));
-        assertEquals((short) 2,
-                features.finalizedFeatures().get("foo"));
-        assertEquals(2, features.finalizedFeatures().size());
+public class FeaturesTest {
+
+    @ParameterizedTest
+    @EnumSource(Features.class)
+    public void testFromFeatureLevelAllFeatures(Features feature) {
+        FeatureVersion[] featureImplementations = feature.features();
+        int numFeatures = featureImplementations.length;
+        for (short i = 0; i < numFeatures; i++) {
+            assertEquals(featureImplementations[i], feature.fromFeatureLevel(i));
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(Features.class)
+    public void testValidateVersionAllFeatures(Features feature) {
+        for (FeatureVersion featureImpl : feature.features()) {
+            // Ensure that the feature is valid given the typical metadataVersionMapping and the dependencies.
+            // Note: Other metadata versions are valid, but this one should always be valid.
+            Features.validateVersion(featureImpl, featureImpl.metadataVersionMapping(), featureImpl.dependencies());
+        }
     }
 
     @Test
-    public void testZkModeFeatures() {
-        Features features = new Features(MINIMUM_KRAFT_VERSION,
-                Collections.singletonMap("foo", (short) 2), 123, false);
-        assertNull(features.finalizedFeatures().get(FEATURE_NAME));
-        assertEquals((short) 2,
-                features.finalizedFeatures().get("foo"));
-        assertEquals(1, features.finalizedFeatures().size());
+    public void testInvalidValidateVersion() {
+        // Using too low of a MetadataVersion is invalid
+        assertThrows(IllegalArgumentException.class,
+            () -> Features.validateVersion(
+                TestFeatureVersion.TEST_1,
+                MetadataVersion.IBP_2_8_IV0,
+                Collections.emptyMap()
+            )
+        );
+
+        // Using a version that is lower than the dependency will fail.
+        assertThrows(IllegalArgumentException.class,
+             () -> Features.validateVersion(
+                 TestFeatureVersion.TEST_2,
+                 MetadataVersion.MINIMUM_BOOTSTRAP_VERSION,
+                 Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_7_IV0.featureLevel())
+             )
+        );
+    }
+
+    @ParameterizedTest
+    @EnumSource(Features.class)
+    public void testDefaultValueAllFeatures(Features feature) {
+        for (FeatureVersion featureImpl : feature.features()) {
+            assertEquals(feature.defaultValue(Optional.of(featureImpl.metadataVersionMapping())), featureImpl.featureLevel(),
+                    "Failed to get the correct default for " + featureImpl);
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(MetadataVersion.class)
+    public void testDefaultTestVersion(MetadataVersion metadataVersion) {
+        short expectedVersion;
+        if (!metadataVersion.isLessThan(MetadataVersion.IBP_3_8_IV0)) {
+            expectedVersion = 2;
+        } else if (!metadataVersion.isLessThan(MetadataVersion.IBP_3_7_IV0)) {
+            expectedVersion = 1;
+        } else {
+            expectedVersion = 0;
+        }
+        assertEquals(expectedVersion, Features.TEST_VERSION.defaultValue(Optional.of(metadataVersion)));
+    }
+
+    @Test
+    public void testEmptyDefaultUsesLatestProduction() {
+        assertEquals(Features.TEST_VERSION.defaultValue(Optional.empty()),
+                Features.TEST_VERSION.defaultValue(Optional.of(MetadataVersion.LATEST_PRODUCTION)));
     }
 }

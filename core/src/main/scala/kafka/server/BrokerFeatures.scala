@@ -19,7 +19,7 @@ package kafka.server
 
 import kafka.utils.Logging
 import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
-import org.apache.kafka.server.common.{FeatureVersion, MetadataVersion}
+import org.apache.kafka.server.common.MetadataVersion
 
 import java.util
 import java.util.Optional
@@ -85,7 +85,7 @@ object BrokerFeatures extends Logging {
           } else {
             MetadataVersion.latestProduction.featureLevel
           }))
-      FeatureVersion.PRODUCTION_FEATURES.forEach { feature =>
+    org.apache.kafka.server.common.Features.PRODUCTION_FEATURES.forEach { feature =>
         features.put(feature.featureName, new SupportedVersionRange(0, feature.defaultValue(Optional.empty())))
       }
     Features.supportedFeatures(features)
