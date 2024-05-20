@@ -174,9 +174,9 @@ class DelayedFetchTest {
     assertEquals(Errors.NONE, fetchResult.error)
   }
 
-  @ParameterizedTest(name = "testDelayedFetchWithInvalidHighWatermark minBytes={0}")
-  @ValueSource(ints = Array(1, 2))
-  def testDelayedFetchWithInvalidHighWatermark(minBytes: Int): Unit = {
+  @ParameterizedTest(name = "testDelayedFetchWithInvalidHighWatermark endOffset={0}")
+  @ValueSource(longs = Array(0, 500))
+  def testDelayedFetchWithInvalidHighWatermark(endOffset: Long): Unit = {
     val topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), 0, "topic")
     val fetchOffset = 450L
     val logStartOffset = 5L
@@ -186,7 +186,7 @@ class DelayedFetchTest {
     val fetchStatus = FetchPartitionStatus(
       startOffsetMetadata = new LogOffsetMetadata(fetchOffset),
       fetchInfo = new FetchRequest.PartitionData(topicIdPartition.topicId, fetchOffset, logStartOffset, maxBytes, currentLeaderEpoch))
-    val fetchParams = buildFollowerFetchParams(replicaId, maxWaitMs = 500, minBytes = minBytes)
+    val fetchParams = buildFollowerFetchParams(replicaId, maxWaitMs = 500)
 
     var fetchResultOpt: Option[FetchPartitionData] = None
     def callback(responses: Seq[(TopicIdPartition, FetchPartitionData)]): Unit = {
@@ -203,8 +203,8 @@ class DelayedFetchTest {
 
     val partition: Partition = mock(classOf[Partition])
     when(replicaManager.getPartitionOrException(topicIdPartition.topicPartition)).thenReturn(partition)
-    // high-watermark is lesser than the log-start-offset
-    val endOffsetMetadata = new LogOffsetMetadata(0L, 0L, 0)
+    // Note that the high-watermark does not contains the complete metadata
+    val endOffsetMetadata = new LogOffsetMetadata(endOffset, -1L, -1)
     when(partition.fetchOffsetSnapshot(
       currentLeaderEpoch,
       fetchOnlyFromLeader = true))
@@ -212,7 +212,7 @@ class DelayedFetchTest {
     when(replicaManager.isAddingReplica(any(), anyInt())).thenReturn(false)
     expectReadFromReplica(fetchParams, topicIdPartition, fetchStatus.fetchInfo, Errors.NONE)
 
-    val expected = minBytes == 1
+    val expected = endOffset == 500
     assertEquals(expected, delayedFetch.tryComplete())
     assertEquals(expected, delayedFetch.isCompleted)
     assertEquals(expected, fetchResultOpt.isDefined)

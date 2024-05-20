@@ -94,8 +94,11 @@ class DelayedFetch(
             if (endOffset.messageOffset != fetchOffset.messageOffset) {
               if (endOffset.messageOffsetOnly() || fetchOffset.messageOffsetOnly()) {
                 // If we don't know the position of the offset on log segments, just pessimistically assume that we
-                // only gained 1 byte. This can happen when the high watermark is stale, but should be rare.
-                accumulatedSize += 1
+                // only gained 1 byte when fetchOffset < endOffset, otherwise do nothing. This can happen when the
+                // high-watermark is stale, but should be rare.
+                if (fetchOffset.messageOffset < endOffset.messageOffset) {
+                  accumulatedSize += 1
+                }
               } else if (endOffset.onOlderSegment(fetchOffset)) {
                 // Case F, this can happen when the new fetch operation is on a truncated leader
                 debug(s"Satisfying fetch $this since it is fetching later segments of partition $topicIdPartition.")
