@@ -235,7 +235,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         }
 
         public void format() throws Exception {
-            if (formated.compareAndSet(false,true)) {
+            if (formated.compareAndSet(false, true)) {
                 safeBuildCluster();
                 this.clusterTestKit.format();
             }
