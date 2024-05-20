@@ -65,7 +65,7 @@ public final class QuorumFeatures {
         for (Features feature : Features.PRODUCTION_FEATURES) {
             features.put(feature.featureName(), VersionRange.of(
                 0,
-                feature.defaultValue(Optional.empty())
+                feature.defaultValue(MetadataVersion.LATEST_PRODUCTION)
             ));
         }
         return features;

@@ -20,7 +20,6 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -122,16 +121,15 @@ public enum Features {
      * Every time a new feature is added, it should create a mapping from metadata version to feature version
      * with {@link FeatureVersion#metadataVersionMapping()}
      *
-     * @param metadataVersionOpt the metadata version we want to use to set the default, or None if the latest production version is desired
+     * @param metadataVersion the metadata version we want to use to set the default
      * @return the default version level for the feature and potential metadata version
      */
-    public short defaultValue(Optional<MetadataVersion> metadataVersionOpt) {
-        MetadataVersion mv = metadataVersionOpt.orElse(MetadataVersion.LATEST_PRODUCTION);
+    public short defaultValue(MetadataVersion metadataVersion) {
         short level = 0;
 
         for (Iterator<FeatureVersion> it = Arrays.stream(features).iterator(); it.hasNext(); ) {
             FeatureVersion feature = it.next();
-            if (feature.metadataVersionMapping().isLessThan(mv) || feature.metadataVersionMapping().equals(mv))
+            if (feature.metadataVersionMapping().isLessThan(metadataVersion) || feature.metadataVersionMapping().equals(metadataVersion))
                 level = feature.featureLevel();
             else
                 return level;

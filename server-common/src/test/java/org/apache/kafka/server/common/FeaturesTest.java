@@ -21,7 +21,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.Collections;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -73,7 +72,7 @@ public class FeaturesTest {
     @EnumSource(Features.class)
     public void testDefaultValueAllFeatures(Features feature) {
         for (FeatureVersion featureImpl : feature.features()) {
-            assertEquals(feature.defaultValue(Optional.of(featureImpl.metadataVersionMapping())), featureImpl.featureLevel(),
+            assertEquals(feature.defaultValue(featureImpl.metadataVersionMapping()), featureImpl.featureLevel(),
                     "Failed to get the correct default for " + featureImpl);
         }
     }
@@ -89,12 +88,6 @@ public class FeaturesTest {
         } else {
             expectedVersion = 0;
         }
-        assertEquals(expectedVersion, Features.TEST_VERSION.defaultValue(Optional.of(metadataVersion)));
-    }
-
-    @Test
-    public void testEmptyDefaultUsesLatestProduction() {
-        assertEquals(Features.TEST_VERSION.defaultValue(Optional.empty()),
-                Features.TEST_VERSION.defaultValue(Optional.of(MetadataVersion.LATEST_PRODUCTION)));
+        assertEquals(expectedVersion, Features.TEST_VERSION.defaultValue(metadataVersion));
     }
 }
