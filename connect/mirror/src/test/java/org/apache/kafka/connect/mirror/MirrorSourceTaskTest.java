@@ -75,7 +75,7 @@ public class MirrorSourceTaskTest {
         @SuppressWarnings("unchecked")
         KafkaProducer<byte[], byte[]> producer = mock(KafkaProducer.class);
         MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(null, null, "cluster7",
-                new DefaultReplicationPolicy(), 50, producer, null, null, null);
+                new DefaultReplicationPolicy(), 50, producer, null, null, null, true);
         SourceRecord sourceRecord = mirrorSourceTask.convertRecord(consumerRecord);
         assertEquals("cluster7.topic1", sourceRecord.topic(),
                 "Failure on cluster7.topic1 consumerRecord serde");
@@ -196,7 +196,7 @@ public class MirrorSourceTaskTest {
         String sourceClusterName = "cluster1";
         ReplicationPolicy replicationPolicy = new DefaultReplicationPolicy();
         MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(consumer, metrics, sourceClusterName,
-                replicationPolicy, 50, producer, null, null, null);
+                replicationPolicy, 50, producer, null, null, null, true);
         List<SourceRecord> sourceRecords = mirrorSourceTask.poll();
 
         assertEquals(2, sourceRecords.size());
@@ -256,7 +256,7 @@ public class MirrorSourceTaskTest {
         });
 
         MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(mockConsumer, null, null,
-                new DefaultReplicationPolicy(), 50, null, null, null, null);
+                new DefaultReplicationPolicy(), 50, null, null, null, null, true);
         mirrorSourceTask.initialize(mockSourceTaskContext);
 
         // Call test subject
@@ -297,7 +297,7 @@ public class MirrorSourceTaskTest {
         String sourceClusterName = "cluster1";
         ReplicationPolicy replicationPolicy = new DefaultReplicationPolicy();
         MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(consumer, metrics, sourceClusterName,
-                replicationPolicy, 50, producer, null, null, null);
+                replicationPolicy, 50, producer, null, null, null, true);
 
         SourceRecord sourceRecord = mirrorSourceTask.convertRecord(new ConsumerRecord<>(topicName, 0, 0, System.currentTimeMillis(),
                 TimestampType.CREATE_TIME, key1.length, value1.length, key1, value1, headers, Optional.empty()));
@@ -331,7 +331,7 @@ public class MirrorSourceTaskTest {
         Map<TopicPartition, PartitionState> partitionStates = new HashMap<>();
 
         MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(consumer, metrics, sourceClusterName,
-                replicationPolicy, maxOffsetLag, producer, outstandingOffsetSyncs, partitionStates, topicName);
+                replicationPolicy, maxOffsetLag, producer, outstandingOffsetSyncs, partitionStates, topicName, true);
 
         SourceRecord sourceRecord = mirrorSourceTask.convertRecord(new ConsumerRecord<>(topicName, recordPartition,
                 recordOffset, System.currentTimeMillis(), TimestampType.CREATE_TIME, recordKey.length,
@@ -435,6 +435,55 @@ public class MirrorSourceTaskTest {
         mirrorSourceTask.commit();
         // No more syncs should take place; we've been able to publish all of them so far
         verify(producer, times(5)).send(any(), any());
+    }
+
+    @Test
+    public void testDisableEmitOffsetSync() {
+        byte[] recordKey = "key".getBytes();
+        byte[] recordValue = "value".getBytes();
+        int maxOffsetLag = 50;
+        int recordPartition = 0;
+        int recordOffset = 0;
+        int metadataOffset = 100;
+        String topicName = "topic";
+        String sourceClusterName = "sourceCluster";
+
+        RecordHeaders headers = new RecordHeaders();
+        ReplicationPolicy replicationPolicy = new DefaultReplicationPolicy();
+
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> consumer = mock(KafkaConsumer.class);
+        @SuppressWarnings("unchecked")
+        KafkaProducer<byte[], byte[]> producer = mock(KafkaProducer.class);
+        MirrorSourceMetrics metrics = mock(MirrorSourceMetrics.class);
+        Semaphore outstandingOffsetSyncs = new Semaphore(1);
+        PartitionState partitionState = new PartitionState(maxOffsetLag);
+        Map<TopicPartition, PartitionState> partitionStates = new HashMap<>();
+
+        MirrorSourceTask mirrorSourceTask = new MirrorSourceTask(consumer, metrics, sourceClusterName,
+                replicationPolicy, maxOffsetLag, producer, outstandingOffsetSyncs, partitionStates, topicName, false);
+
+        SourceRecord sourceRecord = mirrorSourceTask.convertRecord(new ConsumerRecord<>(topicName, recordPartition,
+                recordOffset, System.currentTimeMillis(), TimestampType.CREATE_TIME, recordKey.length,
+                recordValue.length, recordKey, recordValue, headers, Optional.empty()));
+
+        TopicPartition sourceTopicPartition = MirrorUtils.unwrapPartition(sourceRecord.sourcePartition());
+        partitionStates.put(sourceTopicPartition, partitionState);
+        RecordMetadata recordMetadata = new RecordMetadata(sourceTopicPartition, metadataOffset, 0, 0, 0, recordPartition);
+
+        ArgumentCaptor<Callback> producerCallback = ArgumentCaptor.forClass(Callback.class);
+        when(producer.send(any(), producerCallback.capture())).thenAnswer(mockInvocation -> {
+            producerCallback.getValue().onCompletion(null, null);
+            return null;
+        });
+
+        mirrorSourceTask.commitRecord(sourceRecord, recordMetadata);
+        // No more syncs should take place; we've disabled emit offset-syncs
+        verifyNoInteractions(producer);
+
+        mirrorSourceTask.commit();
+        // No more syncs should take place; we've disabled emit offset-syncs
+        verifyNoInteractions(producer);
     }
 
     private void compareHeaders(List<Header> expectedHeaders, List<org.apache.kafka.connect.header.Header> taskHeaders) {

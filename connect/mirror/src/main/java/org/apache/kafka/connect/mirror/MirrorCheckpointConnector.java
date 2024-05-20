@@ -20,7 +20,9 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ConsumerGroupListing;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Task;
@@ -36,6 +38,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
@@ -105,6 +108,27 @@ public class MirrorCheckpointConnector extends SourceConnector {
         Utils.closeQuietly(targetAdminClient, "target admin client");
     }
 
+    @Override
+    public Config validate(Map<String, String> props) {
+        List<ConfigValue> configValues = super.validate(props).configValues();
+        String emitCheckpointsValue = Optional.ofNullable(props.get(MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED)).orElse(Boolean.toString(MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED_DEFAULT));
+        String syncGroupOffsetsValue = Optional.ofNullable(props.get(MirrorCheckpointConfig.SYNC_GROUP_OFFSETS_ENABLED)).orElse(Boolean.toString(MirrorCheckpointConfig.SYNC_GROUP_OFFSETS_ENABLED_DEFAULT));
+        String emitOffsetSyncsValue = Optional.ofNullable(props.get(MirrorSourceConfig.EMIT_OFFSET_SYNCS_ENABLED)).orElse(Boolean.toString(MirrorSourceConfig.EMIT_OFFSET_SYNCS_ENABLED_DEFAULT));
+
+        if ("false".equals(emitOffsetSyncsValue) && ("true".equals(emitCheckpointsValue) || "true".equals(syncGroupOffsetsValue))) {
+            ConfigValue emitOffsetSyncs = configValues.stream().filter(prop -> MirrorSourceConfig.EMIT_OFFSET_SYNCS_ENABLED.equals(prop.name()))
+                    .findAny()
+                    .orElseGet(() -> {
+                        ConfigValue result = new ConfigValue(MirrorSourceConfig.EMIT_OFFSET_SYNCS_ENABLED);
+                        configValues.add(result);
+                        return result;
+                    });
+
+            emitOffsetSyncs.addErrorMessage("MirrorCheckpointConnector can't run while MirrorSourceConnector configured with" +
+                    MirrorSourceConfig.EMIT_OFFSET_SYNCS_ENABLED + "set to false");
+        }
+        return new Config(configValues);
+    }
     @Override
     public Class<? extends Task> taskClass() {
         return MirrorCheckpointTask.class;

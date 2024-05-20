@@ -251,7 +251,13 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
                         ConfigDef.Type.CLASS,
                         TOPIC_FILTER_CLASS_DEFAULT,
                         ConfigDef.Importance.LOW,
-                        TOPIC_FILTER_CLASS_DOC);
+                        TOPIC_FILTER_CLASS_DOC)
+                .define(
+                        MirrorSourceConfig.EMIT_OFFSET_SYNCS_ENABLED,
+                        ConfigDef.Type.BOOLEAN,
+                        MirrorSourceConfig.EMIT_OFFSET_SYNCS_ENABLED_DEFAULT,
+                        ConfigDef.Importance.LOW,
+                        MirrorSourceConfig.EMIT_OFFSET_SYNCS_ENABLED_DOC);
     }
 
     protected final static ConfigDef CONNECTOR_CONFIG_DEF = defineCheckpointConfig(new ConfigDef(BASE_CONNECTOR_CONFIG_DEF));

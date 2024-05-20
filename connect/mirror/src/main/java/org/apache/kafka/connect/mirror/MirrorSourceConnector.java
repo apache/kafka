@@ -73,6 +73,8 @@ import java.util.concurrent.ExecutionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static org.apache.kafka.connect.mirror.MirrorConnectorConfig.OFFSET_SYNCS_TOPIC_CONFIG_PREFIX;
+import static org.apache.kafka.connect.mirror.MirrorSourceConfig.OFFSET_SYNCS_CLIENT_ROLE_PREFIX;
 import static org.apache.kafka.connect.mirror.MirrorSourceConfig.SYNC_TOPIC_ACLS_ENABLED;
 import static org.apache.kafka.connect.mirror.MirrorUtils.SOURCE_CLUSTER_KEY;
 import static org.apache.kafka.connect.mirror.MirrorUtils.TOPIC_KEY;
@@ -257,6 +259,22 @@ public class MirrorSourceConnector extends SourceConnector {
                 );
             }
         }
+        boolean offsetSyncsConfigured = configValues.stream()
+                .anyMatch(config -> config.name().startsWith(OFFSET_SYNCS_CLIENT_ROLE_PREFIX) || config.name().startsWith(OFFSET_SYNCS_TOPIC_CONFIG_PREFIX));
+        String emitOffsetSyncsValue = Optional.ofNullable(props.get(MirrorSourceConfig.EMIT_OFFSET_SYNCS_ENABLED)).orElse(Boolean.toString(MirrorSourceConfig.EMIT_OFFSET_SYNCS_ENABLED_DEFAULT));
+
+        if ("false".equals(emitOffsetSyncsValue) && offsetSyncsConfigured) {
+            ConfigValue emitOffsetSyncs = configValues.stream().filter(prop -> MirrorSourceConfig.EMIT_OFFSET_SYNCS_ENABLED.equals(prop.name()))
+                    .findAny()
+                    .orElseGet(() -> {
+                        ConfigValue result = new ConfigValue(MirrorSourceConfig.EMIT_OFFSET_SYNCS_ENABLED);
+                        configValues.add(result);
+                        return result;
+                    });
+            emitOffsetSyncs.addErrorMessage("MirrorSourceConnector can't setup offset-syncs feature while" +
+                    MirrorSourceConfig.EMIT_OFFSET_SYNCS_ENABLED + "set to false");
+        }
+
         return new org.apache.kafka.common.config.Config(configValues);
     }
 
@@ -431,11 +449,13 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     private void createOffsetSyncsTopic() {
-        MirrorUtils.createSinglePartitionCompactedTopic(
-                config.offsetSyncsTopic(),
-                config.offsetSyncsTopicReplicationFactor(),
-                offsetSyncsAdminClient
-        );
+        if (config.emitOffsetSyncEnabled()) {
+            MirrorUtils.createSinglePartitionCompactedTopic(
+                    config.offsetSyncsTopic(),
+                    config.offsetSyncsTopicReplicationFactor(),
+                    offsetSyncsAdminClient
+            );
+        }
     }
 
     void computeAndCreateTopicPartitions() throws ExecutionException, InterruptedException {

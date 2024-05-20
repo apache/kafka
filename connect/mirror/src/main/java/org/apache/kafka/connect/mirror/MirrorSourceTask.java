@@ -68,6 +68,7 @@ public class MirrorSourceTask extends SourceTask {
     private final Map<TopicPartition, OffsetSync> pendingOffsetSyncs = new LinkedHashMap<>();
     private Semaphore outstandingOffsetSyncs;
     private Semaphore consumerAccess;
+    private boolean emitOffsetSyncEnabled;
 
     public MirrorSourceTask() {}
 
@@ -75,7 +76,7 @@ public class MirrorSourceTask extends SourceTask {
     MirrorSourceTask(KafkaConsumer<byte[], byte[]> consumer, MirrorSourceMetrics metrics, String sourceClusterAlias,
                      ReplicationPolicy replicationPolicy, long maxOffsetLag, KafkaProducer<byte[], byte[]> producer,
                      Semaphore outstandingOffsetSyncs, Map<TopicPartition, PartitionState> partitionStates,
-                     String offsetSyncsTopic) {
+                     String offsetSyncsTopic, boolean emitOffsetSyncEnabled) {
         this.consumer = consumer;
         this.metrics = metrics;
         this.sourceClusterAlias = sourceClusterAlias;
@@ -86,11 +87,13 @@ public class MirrorSourceTask extends SourceTask {
         this.outstandingOffsetSyncs = outstandingOffsetSyncs;
         this.partitionStates = partitionStates;
         this.offsetSyncsTopic = offsetSyncsTopic;
+        this.emitOffsetSyncEnabled = emitOffsetSyncEnabled;
     }
 
     @Override
     public void start(Map<String, String> props) {
         MirrorSourceTaskConfig config = new MirrorSourceTaskConfig(props);
+        emitOffsetSyncEnabled = config.emitOffsetSyncEnabled();
         pendingOffsetSyncs.clear();
         outstandingOffsetSyncs = new Semaphore(MAX_OUTSTANDING_OFFSET_SYNCS);
         consumerAccess = new Semaphore(1);  // let one thread at a time access the consumer
@@ -112,12 +115,15 @@ public class MirrorSourceTask extends SourceTask {
 
     @Override
     public void commit() {
-        // Offset syncs which were not emitted immediately due to their offset spacing should be sent periodically
-        // This ensures that low-volume topics aren't left with persistent lag at the end of the topic
-        promoteDelayedOffsetSyncs();
-        // Publish any offset syncs that we've queued up, but have not yet been able to publish
-        // (likely because we previously reached our limit for number of outstanding syncs)
-        firePendingOffsetSyncs();
+        // Handle delayed and pending offset syncs only when emit.offset-syncs.enabled set to true
+        if (emitOffsetSyncEnabled) {
+            // Offset syncs which were not emitted immediately due to their offset spacing should be sent periodically
+            // This ensures that low-volume topics aren't left with persistent lag at the end of the topic
+            promoteDelayedOffsetSyncs();
+            // Publish any offset syncs that we've queued up, but have not yet been able to publish
+            // (likely because we previously reached our limit for number of outstanding syncs)
+            firePendingOffsetSyncs();
+        }
     }
 
     @Override
@@ -197,12 +203,15 @@ public class MirrorSourceTask extends SourceTask {
         long latency = System.currentTimeMillis() - record.timestamp();
         metrics.countRecord(topicPartition);
         metrics.replicationLatency(topicPartition, latency);
-        TopicPartition sourceTopicPartition = MirrorUtils.unwrapPartition(record.sourcePartition());
-        long upstreamOffset = MirrorUtils.unwrapOffset(record.sourceOffset());
-        long downstreamOffset = metadata.offset();
-        maybeQueueOffsetSyncs(sourceTopicPartition, upstreamOffset, downstreamOffset);
-        // We may be able to immediately publish an offset sync that we've queued up here
-        firePendingOffsetSyncs();
+        // Queue offset syncs only when emit.offset-syncs.enabled set to true
+        if (emitOffsetSyncEnabled) {
+            TopicPartition sourceTopicPartition = MirrorUtils.unwrapPartition(record.sourcePartition());
+            long upstreamOffset = MirrorUtils.unwrapOffset(record.sourceOffset());
+            long downstreamOffset = metadata.offset();
+            maybeQueueOffsetSyncs(sourceTopicPartition, upstreamOffset, downstreamOffset);
+            // We may be able to immediately publish an offset sync that we've queued up here
+            firePendingOffsetSyncs();
+        }
     }
 
     // updates partition state and queues up OffsetSync if necessary
