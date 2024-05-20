@@ -27,7 +27,6 @@ import java.util.Map;
  */
 public class AlwaysContinueProductionExceptionHandler implements ProductionExceptionHandler {
     @Override
-    @Deprecated
     public ProductionExceptionHandlerResponse handle(final ErrorHandlerContext context,
                                                      final ProducerRecord<byte[], byte[]> record,
                                                      final Exception exception) {
@@ -35,7 +34,6 @@ public class AlwaysContinueProductionExceptionHandler implements ProductionExcep
     }
 
     @Override
-    @Deprecated
     public ProductionExceptionHandlerResponse handleSerializationException(final ErrorHandlerContext context,
                                                                            final ProducerRecord record,
                                                                            final Exception exception,
