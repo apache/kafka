@@ -32,8 +32,11 @@ import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class RackUtils {
+public final class RackUtils {
+
     private static final Logger LOG = LoggerFactory.getLogger(RackUtils.class);
+
+    private RackUtils() { }
 
     public static Map<TopicPartition, Set<String>> getRacksForTopicPartition(final Cluster cluster,
                                                                              final InternalTopicManager internalTopicManager,
@@ -44,7 +47,7 @@ public class RackUtils {
             topicsToDescribe.addAll(topicPartitions.stream().map(TopicPartition::topic).collect(
                 Collectors.toSet()));
         } else {
-            topicsToDescribe.addAll(topicsWithStaleMetadata(cluster, topicPartitions));
+            topicsToDescribe.addAll(topicsWithMissingMetadata(cluster, topicPartitions));
         }
 
         final Set<TopicPartition> topicsWithUpToDateMetadata = topicPartitions.stream()
@@ -56,26 +59,26 @@ public class RackUtils {
         final Map<String, List<TopicPartitionInfo>> freshTopicPartitionInfo =
             describeTopics(internalTopicManager, topicsToDescribe);
         freshTopicPartitionInfo.forEach((topic, partitionInfos) -> {
-            partitionInfos.forEach(partitionInfo -> {
+            for (final TopicPartitionInfo partitionInfo : partitionInfos) {
                 final int partition = partitionInfo.partition();
                 final TopicPartition topicPartition = new TopicPartition(topic, partition);
                 final List<Node> replicas = partitionInfo.replicas();
                 if (replicas == null || replicas.isEmpty()) {
                     LOG.error("No replicas found for topic partition {}: {}", topic, partition);
-                    return;
+                    continue;
                 }
 
                 final Set<String> racks = replicas.stream().filter(Node::hasRack).map(Node::rack).collect(
                     Collectors.toSet());
                 racksForTopicPartition.computeIfAbsent(topicPartition, k -> new HashSet<>());
                 racksForTopicPartition.get(topicPartition).addAll(racks);
-            });
+            }
         });
 
         return racksForTopicPartition;
     }
 
-    public static Set<String> topicsWithStaleMetadata(final Cluster cluster, final Set<TopicPartition> topicPartitions) {
+    public static Set<String> topicsWithMissingMetadata(final Cluster cluster, final Set<TopicPartition> topicPartitions) {
         final Set<String> topicsWithStaleMetadata = new HashSet<>();
         for (final TopicPartition topicPartition : topicPartitions) {
             final PartitionInfo partitionInfo = cluster.partition(topicPartition);
@@ -116,6 +119,10 @@ public class RackUtils {
 
     private static Map<String, List<TopicPartitionInfo>> describeTopics(final InternalTopicManager internalTopicManager,
                                                                         final Set<String> topicsToDescribe) {
+        if (topicsToDescribe.isEmpty()) {
+            return new HashMap<>();
+        }
+
         try {
             final Map<String, List<TopicPartitionInfo>> topicPartitionInfo = internalTopicManager.getTopicPartitionInfo(topicsToDescribe);
             if (topicsToDescribe.size() > topicPartitionInfo.size()) {

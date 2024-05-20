@@ -30,15 +30,43 @@ import org.apache.kafka.streams.processor.TaskId;
  * in the task.
  */
 public interface TaskInfo {
+
+    /**
+     *
+     * @return The {@code TaskId} of the underlying task.
+     */
     TaskId id();
 
+    /**
+     *
+     * @return true if the underlying task is stateful, and false otherwise.
+     */
     boolean isStateful();
 
+    /**
+     *
+     * @return the set of state store names that this task makes use of. In the case of stateless tasks,
+     *         this set will be empty as no state stores are used.
+     */
     Set<String> stateStoreNames();
 
+    /**
+     *
+     * @return the set of source topic partitions. This set will include both changelog and non-changelog
+     *         topic partitions.
+     */
     Set<TopicPartition> sourceTopicPartitions();
 
+    /**
+     *
+     * @return the set of changelog topic partitions. This set will include both source and non-source
+     *         topic partitions.
+     */
     Set<TopicPartition> changelogTopicPartitions();
 
+    /**
+     *
+     * @return the mapping of {@code TopicPartition} to set of rack ids that this partition resides on.
+     */
     Map<TopicPartition, Set<String>> partitionToRackIds();
 }

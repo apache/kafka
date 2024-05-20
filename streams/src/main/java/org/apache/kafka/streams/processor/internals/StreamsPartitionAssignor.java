@@ -83,6 +83,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import static java.util.Collections.unmodifiableSet;
 import static java.util.Map.Entry.comparingByKey;
 import static java.util.UUID.randomUUID;
 import static org.apache.kafka.common.utils.Utils.filterMap;
@@ -493,8 +494,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final Map<Subtopology, Set<String>> changelogTopicsByGroup = new HashMap<>();
         for (final Map.Entry<Subtopology, TopicsInfo> entry : topicGroups.entrySet()) {
             final Set<String> sourceTopics = entry.getValue().sourceTopics;
-            final Set<String> changelogTopics = entry.getValue().stateChangelogTopics()
-                .stream().map(t -> t.name).collect(Collectors.toSet());
+            final Set<String> changelogTopics = entry.getValue().changelogTopics();
             sourceTopicsByGroup.put(entry.getKey(), sourceTopics);
             changelogTopicsByGroup.put(entry.getKey(), changelogTopics);
         }
@@ -504,15 +504,19 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask =
             partitionGrouper.partitionGroups(changelogTopicsByGroup, cluster);
 
-        final Set<TaskId> logicalTaskIds = new HashSet<>();
+        if (!sourcePartitionsForTask.keySet().equals(changelogPartitionsForTask.keySet())) {
+            log.error("Partition grouper returned {} tasks for source topics but {} tasks for changelog topics",
+                sourcePartitionsForTask.size(), changelogPartitionsForTask.size());
+            throw new TaskAssignmentException("Partition grouper returned conflicting information about the "
+                                              + "tasks for source topics vs changelog topics.");
+        }
+
         final Set<TopicPartition> sourceTopicPartitions = new HashSet<>();
         sourcePartitionsForTask.forEach((taskId, partitions) -> {
-            logicalTaskIds.add(taskId);
             sourceTopicPartitions.addAll(partitions);
         });
         final Set<TopicPartition> changelogTopicPartitions = new HashSet<>();
         changelogPartitionsForTask.forEach((taskId, partitions) -> {
-            logicalTaskIds.add(taskId);
             changelogTopicPartitions.addAll(partitions);
         });
 
@@ -521,8 +525,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final Map<TopicPartition, Set<String>> racksForChangelogPartitions = RackUtils.getRacksForTopicPartition(
             cluster, internalTopicManager, changelogTopicPartitions, true);
 
-        final Set<TaskInfo> logicalTasks = new HashSet<>();
-        logicalTaskIds.forEach(taskId -> {
+        final Set<TaskId> logicalTaskIds = unmodifiableSet(sourcePartitionsForTask.keySet());
+        final Set<TaskInfo> logicalTasks = logicalTaskIds.stream().map(taskId -> {
             final Set<String> stateStoreNames = topologyMetadata
                 .stateStoreNameToSourceTopicsForTopology(taskId.topologyName())
                 .keySet();
@@ -536,7 +540,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 racksForTaskPartition.put(topicPartition, racksForChangelogPartitions.get(topicPartition));
             });
 
-            final TaskInfo task = new DefaultTaskInfo(
+            return new DefaultTaskInfo(
                 taskId,
                 !stateStoreNames.isEmpty(),
                 racksForTaskPartition,
@@ -544,8 +548,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 sourcePartitions,
                 changelogPartitions
             );
-            logicalTasks.add(task);
-        });
+        }).collect(Collectors.toSet());
 
         return new ApplicationStateImpl(
             assignmentConfigs.toPublicAssignmentConfigs(),
