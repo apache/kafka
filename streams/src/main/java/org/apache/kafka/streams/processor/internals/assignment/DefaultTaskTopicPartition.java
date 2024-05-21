@@ -19,7 +19,7 @@ package org.apache.kafka.streams.processor.internals.assignment;
 import java.util.Optional;
 import java.util.Set;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.streams.processor.assignment.TopicPartitionAssignmentInfo;
+import org.apache.kafka.streams.processor.assignment.TaskTopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,18 +29,18 @@ import org.slf4j.LoggerFactory;
  * looking at, and the rack information of the partition, this container class should have
  * everything necessary to make informed task assignment decisions.
  */
-public class DefaultTopicPartitionAssignmentInfo implements TopicPartitionAssignmentInfo {
-    private static final Logger LOG = LoggerFactory.getLogger(DefaultTopicPartitionAssignmentInfo.class);
+public class DefaultTaskTopicPartition implements TaskTopicPartition {
+    private static final Logger LOG = LoggerFactory.getLogger(DefaultTaskTopicPartition.class);
 
     private final TopicPartition topicPartition;
     private final boolean isSourceTopic;
     private final boolean isChangelogTopic;
     private final Optional<Set<String>> rackIds;
 
-    public DefaultTopicPartitionAssignmentInfo(final TopicPartition topicPartition,
-                                               final boolean isSourceTopic,
-                                               final boolean isChangelogTopic,
-                                               final Set<String> rackIds) {
+    public DefaultTaskTopicPartition(final TopicPartition topicPartition,
+                                     final boolean isSourceTopic,
+                                     final boolean isChangelogTopic,
+                                     final Set<String> rackIds) {
         this.topicPartition = topicPartition;
         this.isSourceTopic = isSourceTopic;
         this.isChangelogTopic = isChangelogTopic;
@@ -48,13 +48,8 @@ public class DefaultTopicPartitionAssignmentInfo implements TopicPartitionAssign
     }
 
     @Override
-    public String topic() {
-        return topicPartition.topic();
-    }
-
-    @Override
-    public int partition() {
-        return topicPartition.partition();
+    public TopicPartition topicPartition() {
+        return topicPartition;
     }
 
     @Override

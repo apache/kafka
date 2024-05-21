@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.assignment;
 
 import java.util.Optional;
 import java.util.Set;
+import org.apache.kafka.common.TopicPartition;
 
 /**
  * This is a simple container class used during the assignment process to distinguish
@@ -25,18 +26,12 @@ import java.util.Set;
  * looking at, and the rack information of the partition, this container class should have
  * everything necessary to make informed task assignment decisions.
  */
-public interface TopicPartitionAssignmentInfo {
+public interface TaskTopicPartition {
     /**
      *
-     * @return the string name of the topic.
+     * @return the {@code TopicPartition} for this task.
      */
-    String topic();
-
-    /**
-     *
-     * @return the partition id of this topic partition.
-     */
-    int partition();
+    TopicPartition topicPartition();
 
     /**
      *
