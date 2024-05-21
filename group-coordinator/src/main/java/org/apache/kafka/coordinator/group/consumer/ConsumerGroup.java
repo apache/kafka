@@ -532,13 +532,13 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * Updates target assignment of a member.
+     * Updates the target assignment of a member.
      *
      * @param memberId              The member id.
      * @param newTargetAssignment   The new target assignment.
      */
     public void updateTargetAssignment(String memberId, Assignment newTargetAssignment) {
-        updatePartitionAssignments(
+        updateInvertedTargetAssignment(
             memberId,
             targetAssignment.getOrDefault(memberId, new Assignment(Collections.emptyMap())),
             newTargetAssignment
@@ -547,15 +547,13 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * Updates partition assignments of the topics.
+     * Updates the reverse lookup map of the target assignment.
      *
      * @param memberId              The member Id.
      * @param oldTargetAssignment   The old target assignment.
      * @param newTargetAssignment   The new target assignment.
-     *
-     * Package private for testing.
      */
-    void updatePartitionAssignments(
+    private void updateInvertedTargetAssignment(
         String memberId,
         Assignment oldTargetAssignment,
         Assignment newTargetAssignment
@@ -573,7 +571,10 @@ public class ConsumerGroup implements Group {
                 topicId, k -> new TimelineHashMap<>(snapshotRegistry, Math.max(oldPartitions.size(), newPartitions.size()))
             );
 
-            // Remove partitions that aren't present in the new assignment.
+            // Remove partitions that aren't present in the new assignment only if the partition is currently
+            // still assigned to the member in question.
+            // If p0 was moved from A to B, and the target assignment map was updated for B first, we don't want to
+            // remove the key p0 from the inverted map and undo the action when A eventually tries to update its assignment.
             for (Integer partition : oldPartitions) {
                 if (!newPartitions.contains(partition) && memberId.equals(topicPartitionAssignment.get(partition))) {
                     topicPartitionAssignment.remove(partition);

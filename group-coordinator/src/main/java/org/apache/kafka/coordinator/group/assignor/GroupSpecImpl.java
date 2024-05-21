@@ -53,25 +53,21 @@ public class GroupSpecImpl implements GroupSpec {
     }
 
     /**
-     * @return Member metadata keyed by member Id.
+     * {@inheritDoc}
      */
     public Map<String, AssignmentMemberSpec> members() {
         return members;
     }
 
     /**
-     * @return The group's subscription type.
+     * {@inheritDoc}
      */
     public SubscriptionType subscriptionType() {
         return subscriptionType;
     }
 
     /**
-     * Returns whether the partition is currently assigned or not.
-     *
-     * @param topicId           The topic Id.
-     * @param partitionId       The partition Id.
-     * @return True if the partition is currently assigned, false otherwise.
+     * {@inheritDoc}
      */
     @Override
     public boolean isPartitionAssigned(Uuid topicId, int partitionId) {

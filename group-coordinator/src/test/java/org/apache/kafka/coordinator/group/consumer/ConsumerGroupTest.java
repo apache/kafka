@@ -799,7 +799,7 @@ public class ConsumerGroupTest {
     }
 
     @Test
-    public void testUpdatePartitionAssignments() {
+    public void testUpdateInvertedAssignment() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         GroupCoordinatorMetricsShard metricsShard = mock(GroupCoordinatorMetricsShard.class);
         ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, "test-group", metricsShard);
@@ -819,21 +819,32 @@ public class ConsumerGroupTest {
             topicId,
             new HashSet<>(Collections.singletonList(1))
         ));
-        consumerGroup.updatePartitionAssignments(memberId1, initialAssignment, newAssignment);
+        consumerGroup.updateTargetAssignment(memberId1, newAssignment);
 
         // Verify that partition 0 is no longer assigned and partition 1 is assigned to member1
         assertFalse(consumerGroup.invertedTargetAssignment().get(topicId).containsKey(0));
         assertEquals(memberId1, consumerGroup.invertedTargetAssignment().get(topicId).get(1));
 
-        // New assignment for member2
-        newAssignment = new Assignment(Collections.singletonMap(
+        // New assignment for member2 add p1;
+        Assignment newAssignment2 = new Assignment(Collections.singletonMap(
             topicId,
-            new HashSet<>(Collections.singletonList(2))
+            new HashSet<>(Collections.singletonList(1))
         ));
-        consumerGroup.updatePartitionAssignments(memberId2, Assignment.EMPTY, newAssignment);
+        consumerGroup.updateTargetAssignment(memberId2, newAssignment2);
 
-        // Verify that partition 2 is assigned to member2
-        assertEquals(memberId2, consumerGroup.invertedTargetAssignment().get(topicId).get(2));
+        // Verify that partition 1 is assigned to member2
+        assertEquals(memberId2, consumerGroup.invertedTargetAssignment().get(topicId).get(1));
+
+        // New assignment for member1 revoke p1;
+        Assignment newAssignment1 = new Assignment(Collections.singletonMap(
+            topicId,
+            new HashSet<>(Collections.singletonList(0))
+        ));
+        consumerGroup.updateTargetAssignment(memberId1, newAssignment1);
+
+        // Verify that partition 1 is still assigned to member2 and the entry is not removed.
+        assertTrue(consumerGroup.invertedTargetAssignment().get(topicId).containsKey(1));
+        assertEquals(memberId2, consumerGroup.invertedTargetAssignment().get(topicId).get(1));
     }
 
     @Test

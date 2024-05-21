@@ -21,7 +21,7 @@ import org.apache.kafka.common.Uuid;
 import java.util.Map;
 
 /**
- * The assignment specifications for a consumer group.
+ * The group metadata specifications required to compute the target assignment.
  */
 public interface GroupSpec {
     /**
