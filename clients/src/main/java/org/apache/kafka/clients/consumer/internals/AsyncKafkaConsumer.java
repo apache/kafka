@@ -1501,7 +1501,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 log.info("Unsubscribing all topics or patterns and assigned partitions");
 
                 try {
-                    processBackgroundEvents(backgroundEventProcessor, unsubscribeEvent.future(), timer);
+                    processBackgroundEvents(unsubscribeEvent.future(), timer);
                     log.info("Unsubscribed all topics or patterns and assigned partitions");
                 } catch (TimeoutException e) {
                     log.error("Failed while waiting for the unsubscribe event to complete");
@@ -1695,7 +1695,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         maybeThrowFencedInstanceException();
         offsetCommitCallbackInvoker.executeCallbacks();
         maybeUpdateSubscriptionMetadata();
-        processBackgroundEvents(backgroundEventProcessor);
+        processBackgroundEvents();
 
         return updateFetchPositions(timer);
     }
@@ -1827,7 +1827,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * could occur when processing the events. In such cases, the processor will take a reference to the first
      * error, continue to process the remaining events, and then throw the first error that occurred.
      */
-    private boolean processBackgroundEvents(EventProcessor<BackgroundEvent> processor) {
+    private boolean processBackgroundEvents() {
         AtomicReference<KafkaException> firstError = new AtomicReference<>();
 
         LinkedList<BackgroundEvent> events = new LinkedList<>();
@@ -1838,7 +1838,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 if (event instanceof CompletableEvent)
                     backgroundEventReaper.add((CompletableEvent<?>) event);
 
-                processor.process(event);
+                backgroundEventProcessor.process(event);
             } catch (Throwable t) {
                 KafkaException e = ConsumerUtils.maybeWrapAsKafkaException(t);
 
@@ -1888,18 +1888,15 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * execution of the rebalancing logic. The rebalancing logic cannot complete until the
      * {@link ConsumerRebalanceListener} callback is performed.
      *
-     * @param eventProcessor Event processor that contains the queue of events to process
      * @param future         Event that contains a {@link CompletableFuture}; it is on this future that the
      *                       application thread will wait for completion
      * @param timer          Overall timer that bounds how long to wait for the event to complete
      * @return {@code true} if the event completed within the timeout, {@code false} otherwise
      */
     // Visible for testing
-    <T> T processBackgroundEvents(EventProcessor<BackgroundEvent> eventProcessor,
-                                  Future<T> future,
-                                  Timer timer) {
+    <T> T processBackgroundEvents(Future<T> future, Timer timer) {
         do {
-            boolean hadEvents = processBackgroundEvents(eventProcessor);
+            boolean hadEvents = processBackgroundEvents();
 
             try {
                 if (future.isDone()) {
