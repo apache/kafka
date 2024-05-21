@@ -964,36 +964,33 @@ public class KafkaConfigBackingStoreMockitoTest {
 
     @Test
     public void testPutTaskConfigsZeroTasks() throws Exception {
-        expectStart(Collections.emptyList(), Collections.emptyMap());
-        // Task configs should read to end, write to the log, read to end, write root.
-        expectPartitionCount(1);
+        when(configLog.partitionCount()).thenReturn(1);
 
         configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
         verifyConfigure();
         configStorage.start();
-        verify(configLog).start();
+
+        // Bootstrap as if we had already added the connector, but no tasks had been added yet
+        whiteboxAddConnector(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0), Collections.emptyList());
 
         // Null before writing
         ClusterConfigState configState = configStorage.snapshot();
         assertEquals(-1, configState.offset());
-        LinkedHashMap<String, byte[]> serializedConfigs = new LinkedHashMap<>();
-        serializedConfigs.put(COMMIT_TASKS_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(0));
-        // Records to be read by consumer as it reads to the end of the log
-        doAnswer(expectReadToEnd(serializedConfigs)).when(configLog).readToEnd();
+
+        // Task configs should read to end, write to the log, read to end, write root.
         doAnswer(expectReadToEnd(new LinkedHashMap<>())).when(configLog).readToEnd();
+
         expectConvertWriteRead(
                 COMMIT_TASKS_CONFIG_KEYS.get(0), KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0, CONFIGS_SERIALIZED.get(0),
                 "tasks", 0); // We have 0 tasks
-        // Bootstrap as if we had already added the connector, but no tasks had been added yet
-        whiteboxAddConnector(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0), Collections.emptyList());
 
-        // Validate root config by listing all connectors and tasks
-        configState = configStorage.snapshot();
         List<Map<String, String>> taskConfigs = Collections.emptyList();
         configStorage.putTaskConfigs("connector1", taskConfigs);
 
         // As soon as root is rewritten, we should see a callback notifying us that we reconfigured some tasks
         configUpdateListener.onTaskConfigUpdate(Collections.emptyList());
+        // Validate root config by listing all connectors and tasks
+        configState = configStorage.snapshot();
         String connectorName = CONNECTOR_IDS.get(0);
         assertEquals(Arrays.asList(connectorName), new ArrayList<>(configState.connectors()));
         assertEquals(Collections.emptyList(), configState.tasks(connectorName));
@@ -1178,16 +1175,13 @@ public class KafkaConfigBackingStoreMockitoTest {
 
     // Manually insert a connector into config storage, updating the task configs, connector config, and root config
     private void whiteboxAddConnector(String connectorName, Map<String, String> connectorConfig, List<Map<String, String>> taskConfigs) {
-//        Map<ConnectorTaskId, Map<String, String>> storageTaskConfigs = Whitebox.getInternalState(configStorage, "taskConfigs");
         Map<ConnectorTaskId, Map<String, String>> storageTaskConfigs = configStorage.taskConfigs;
         for (int i = 0; i < taskConfigs.size(); i++)
             storageTaskConfigs.put(new ConnectorTaskId(connectorName, i), taskConfigs.get(i));
 
-//        Map<String, Map<String, String>> connectorConfigs = Whitebox.getInternalState(configStorage, "connectorConfigs");
         Map<String, Map<String, String>> connectorConfigs = configStorage.connectorConfigs;
         connectorConfigs.put(connectorName, connectorConfig);
 
-//        Whitebox.<Map<String, Integer>>getInternalState(configStorage, "connectorTaskCounts").put(connectorName, taskConfigs.size());
         configStorage.connectorTaskCounts.put(connectorName, taskConfigs.size());
     }
 
