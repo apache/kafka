@@ -35,6 +35,7 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, Produce
 import org.apache.kafka.common.{ClusterResource, ClusterResourceListener, Reconfigurable}
 import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.config.SslConfigs._
+import org.apache.kafka.common.config.provider.FileConfigProvider
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.errors.{AuthenticationException, InvalidRequestException}
 import org.apache.kafka.common.internals.Topic
@@ -51,7 +52,8 @@ import org.apache.kafka.server.util.ShutdownableThread
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 
-import java.io.Closeable
+import java.io.{Closeable, IOException, Reader, StringReader}
+import java.nio.file.Path
 import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
@@ -624,5 +626,12 @@ class TestMetricsReporter extends MetricsReporter with Reconfigurable with Close
     assertTrue(matchingMetrics.nonEmpty, "Metric not found")
     val total = matchingMetrics.foldLeft(0.0)((total, metric) => total + metric.metricValue.asInstanceOf[Double])
     assertTrue(total > 0.0, "Invalid metric value")
+  }
+}
+
+class MockFileConfigProvider extends FileConfigProvider {
+  @throws(classOf[IOException])
+  override def reader(path: Path): Reader = {
+    new StringReader("key=testKey\npassword=ServerPassword\ninterval=1000\nupdinterval=2000\nstoretype=JKS")
   }
 }
