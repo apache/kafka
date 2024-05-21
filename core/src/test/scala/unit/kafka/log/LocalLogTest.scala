@@ -388,7 +388,7 @@ class LocalLogTest {
     assertEquals(new LogOffsetMetadata(3, 2L, 69), fetchDataInfo.fetchOffsetMetadata)
 
     // case-1: `startOffset` == `maxOffsetMetadata.offset`
-     fetchDataInfo = readRecords(startOffset = 4L, maxOffsetMetadata = new LogOffsetMetadata(4L, 4L, 0))
+    fetchDataInfo = readRecords(startOffset = 4L, maxOffsetMetadata = new LogOffsetMetadata(4L, 4L, 0))
     assertTrue(fetchDataInfo.records.records.asScala.isEmpty)
     assertEquals(new LogOffsetMetadata(4L, 4L, 0), fetchDataInfo.fetchOffsetMetadata)
 
