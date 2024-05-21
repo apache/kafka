@@ -127,8 +127,12 @@ public class ReproduceHeartbeatFailTest {
             protocol.name,
             emptyMap());
 
-        return new KafkaConsumer<String, String>(configs);
-
+        return ConsumerGroupCommandTestUtils.buildConsumers(
+            1,
+            false,
+            topicName,
+            () -> new KafkaConsumer<String, String>(configs)
+        );
     }
 
     private boolean checkGroupState(ConsumerGroupCommand.ConsumerGroupService service, String groupId, ConsumerGroupState
