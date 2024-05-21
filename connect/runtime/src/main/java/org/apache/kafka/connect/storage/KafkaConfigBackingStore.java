@@ -575,7 +575,8 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
      * @param connector the connector to write task configuration
      * @param configs list of task configurations for the connector
      * @param configHash a {@link org.apache.kafka.connect.util.ConnectUtils#configHash(Map)  hash}
-     *                   of the most recent config for the connector
+     *                   of the most recent config for the connector. <strong>NOTE: this value should never be
+     *                   logged above TRACE level</strong>
      * @throws ConnectException if the task configurations do not resolve inconsistencies found in the existing root
      *                          and task configurations.
      * @throws IllegalStateException if {@link #claimWritePrivileges()} is required, but was not successfully invoked before

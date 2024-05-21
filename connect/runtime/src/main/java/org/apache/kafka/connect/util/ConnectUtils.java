@@ -253,6 +253,9 @@ public final class ConnectUtils {
     /**
      * Generate a deterministic hash of the supplied config. For configurations
      * with identical key-value pairs, this hash will always be the same.
+     * <p>
+     * <strong>NOTE: hashes of connector configs should never be logged above
+     * TRACE level</strong>.
      * @param config the config to hash; may be null
      * @return a hash of the config
      */

@@ -72,7 +72,8 @@ public interface ConfigBackingStore {
      * @param connector name of the connector
      * @param configs the new task configs for the connector
      * @param configHash a {@link org.apache.kafka.connect.util.ConnectUtils#configHash(Map)  hash}
-     *                   of the most recent config for the connector
+     *                   of the most recent config for the connector. <strong>NOTE: this value should never be
+     *                   logged above TRACE level</strong>
      */
     void putTaskConfigs(String connector, List<Map<String, String>> configs, int configHash);
 

@@ -1051,7 +1051,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             log.debug("Connector {} task count changed from {} to {}", connName, currentNumTasks, taskProps.size());
             result = true;
         } else {
-            for (int index = 0; index < currentNumTasks && !result; index++) {
+            for (int index = 0; index < currentNumTasks; index++) {
                 ConnectorTaskId taskId = new ConnectorTaskId(connName, index);
                 if (!taskProps.get(index).equals(configState.taskConfig(taskId))) {
                     log.debug("Connector {} has change in configuration for task {}-{}", connName, connName, index);
@@ -1066,9 +1066,10 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 if (storedConnectorConfigHash == null) {
                     log.debug("Connector {} has no config hash stored for its existing tasks", connName);
                 } else if (storedConnectorConfigHash != connectorConfigHash) {
-                    log.debug(
-                            "Connector {} has change in config hash ({}) for tasks ({})",
-                            connName, connectorConfigHash, storedConnectorConfigHash
+                    log.debug("Connector {} has change in config hash for tasks", connName);
+                    log.trace(
+                            "Connector {} previous config hash: {} new config hash: {}",
+                            connName, storedConnectorConfigHash, connectorConfigHash
                     );
                     result = true;
                 }
