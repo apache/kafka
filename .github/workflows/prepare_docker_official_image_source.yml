@@ -23,9 +23,6 @@ on:
         description: Docker image type to build and test
         options: 
           - "jvm"
-      kafka_url:
-        description: URL for the Kafka distribution GZIP TAR
-        required: true
       kafka_version:
         description: Kafka version for which the source for docker official image is to be built
         required: true
@@ -45,7 +42,7 @@ jobs:
     - name: Build New Artifact
       working-directory: ./docker
       run: |
-        python prepare_docker_official_image_source.py -type=${{ github.event.inputs.image_type }} -u=${{ github.event.inputs.kafka_url }} -v=${{ github.event.inputs.kafka_version }}
+        python prepare_docker_official_image_source.py -type=${{ github.event.inputs.image_type }} -v=${{ github.event.inputs.kafka_version }}
     - name: Upload Artifact Folder
       if: success()
       uses: actions/upload-artifact@v3
