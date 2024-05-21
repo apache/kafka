@@ -47,7 +47,7 @@ jobs:
       run: |
         python prepare_docker_official_image_source.py -type=${{ github.event.inputs.image_type }} -u=${{ github.event.inputs.kafka_url }} -v=${{ github.event.inputs.kafka_version }}
     - name: Upload Artifact Folder
-      if: always()
+      if: success()
       uses: actions/upload-artifact@v3
       with:
         name: ${{ github.event.inputs.kafka_version }}
