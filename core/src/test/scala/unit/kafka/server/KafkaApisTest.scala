@@ -2830,7 +2830,7 @@ class KafkaApisTest extends Logging {
 
     val authorizer: Authorizer = mock(classOf[Authorizer])
     val clusterResource = new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL)
-    val alterActions = Collections.singletonList(new Action(AclOperation.ALTER, clusterResource, 1, true, true))
+    val alterActions = Collections.singletonList(new Action(AclOperation.ALTER, clusterResource, 1, true, false))
     val clusterActions = Collections.singletonList(new Action(AclOperation.CLUSTER_ACTION, clusterResource, 1, true, true))
     val deniedList = Collections.singletonList(AuthorizationResult.DENIED)
     when(authorizer.authorize(
@@ -3074,7 +3074,13 @@ class KafkaApisTest extends Logging {
     // Allowing WriteTxnMarkers API with the help of allowedAclOperation parameter.
     val authorizer: Authorizer = mock(classOf[Authorizer])
     val clusterResource = new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL)
-    val allowedAction = Collections.singletonList(new Action(AclOperation.fromString(allowedAclOperation), clusterResource, 1, true, true))
+    val allowedAction = Collections.singletonList(new Action(
+      AclOperation.fromString(allowedAclOperation),
+      clusterResource,
+      1,
+      true,
+      allowedAclOperation.equals("CLUSTER_ACTION")
+    ))
     val deniedList = Collections.singletonList(AuthorizationResult.DENIED)
     val allowedList = Collections.singletonList(AuthorizationResult.ALLOWED)
     when(authorizer.authorize(
