@@ -65,21 +65,18 @@ final public class VoterSet {
      */
     public Set<Node> voterNodes(Stream<Integer> voterIds, ListenerName listenerName) {
         return voterIds
-            .map(voterId -> {
-                Optional<Node> voterNode = voterNode(voterId, listenerName);
-                if (voterNode.isPresent()) {
-                    return voterNode.get();
-                } else {
-                    throw new IllegalArgumentException(
+            .map(voterId ->
+                voterNode(voterId, listenerName).orElseThrow(() ->
+                    new IllegalArgumentException(
                         String.format(
                             "Unable to find endpoint for voter %d and listener %s in %s",
                             voterId,
                             listenerName,
                             voters
                         )
-                    );
-                }
-            })
+                    )
+                )
+            )
             .collect(Collectors.toSet());
     }
 
@@ -91,14 +88,9 @@ final public class VoterSet {
      * @return the node information if it exists, otherwise {@code Optional.empty()}
      */
     public Optional<Node> voterNode(int voterId, ListenerName listenerName) {
-        Optional<InetSocketAddress> endpoint = Optional
-            .ofNullable(voters.get(voterId))
-            .flatMap(voterNode -> voterNode.address(listenerName));
-        if (endpoint.isPresent()) {
-            return Optional.of(new Node(voterId, endpoint.get().getHostString(), endpoint.get().getPort()));
-        } else {
-            return Optional.empty();
-        }
+        return Optional.ofNullable(voters.get(voterId))
+            .flatMap(voterNode -> voterNode.address(listenerName))
+            .map(address -> new Node(voterId, address.getHostString(), address.getPort()));
     }
 
     /**

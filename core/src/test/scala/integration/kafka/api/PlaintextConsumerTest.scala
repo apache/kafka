@@ -30,9 +30,9 @@ import org.apache.kafka.common.{KafkaException, MetricName, TopicPartition}
 import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor}
 import org.apache.log4j.Level
 import org.apache.log4j.LogManager
-import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, MethodSource}
@@ -44,15 +44,6 @@ import scala.jdk.CollectionConverters._
 
 @Timeout(600)
 class PlaintextConsumerTest extends BaseConsumerTest {
-  @BeforeEach
-  def beforeEach() {
-    LogManager.getLogger("org.apache.kafka.raft").setLevel(Level.TRACE)
-  }
-
-  @AfterEach
-  def afterEach() {
-    LogManager.getLogger("org.apache.kafka.raft").setLevel(Level.ERROR)
-  }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
@@ -945,5 +936,17 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     awaitRebalance(consumer, listener)
     assertEquals(1, listener.callsToAssigned)
     assertEquals(0, listener.callsToRevoked)
+  }
+}
+
+object PlaintextConsumerTest {
+  @BeforeAll
+  def beforeAll() {
+    LogManager.getLogger("org.apache.kafka.raft").setLevel(Level.TRACE)
+  }
+
+  @AfterAll
+  def afterAll() {
+    LogManager.getLogger("org.apache.kafka.raft").setLevel(Level.ERROR)
   }
 }
