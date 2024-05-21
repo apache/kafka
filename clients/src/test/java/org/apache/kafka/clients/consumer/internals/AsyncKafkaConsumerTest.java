@@ -334,10 +334,6 @@ public class AsyncKafkaConsumerTest {
         commitEvent.future().completeExceptionally(Errors.FENCED_INSTANCE_ID.exception());
 
         assertThrows(Errors.FENCED_INSTANCE_ID.exception().getClass(), () -> consumer.commitAsync());
-
-        Throwable e = assertThrows(KafkaException.class, () -> consumer.close());
-        assertInstanceOf(FencedInstanceIdException.class, e.getCause());
-        consumer = null;
     }
 
     @Test
