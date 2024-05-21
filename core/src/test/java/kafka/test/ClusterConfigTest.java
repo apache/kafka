@@ -46,11 +46,12 @@ public class ClusterConfigTest {
         File trustStoreFile = TestUtils.tempFile();
 
         ClusterConfig clusterConfig = ClusterConfig.builder()
-                .setType(Type.KRAFT)
+                .setTypes(Collections.singleton(Type.KRAFT))
                 .setBrokers(3)
                 .setControllers(2)
-                .setName("builder-test")
+                .setDisksPerBroker(1)
                 .setAutoStart(true)
+                .setTags(Arrays.asList("name", "Generated Test"))
                 .setSecurityProtocol(SecurityProtocol.PLAINTEXT)
                 .setListenerName("EXTERNAL")
                 .setTrustStoreFile(trustStoreFile)
@@ -61,15 +62,38 @@ public class ClusterConfigTest {
                 .setAdminClientProperties(Collections.singletonMap("admin_client", "admin_client_value"))
                 .setSaslClientProperties(Collections.singletonMap("sasl_client", "sasl_client_value"))
                 .setSaslServerProperties(Collections.singletonMap("sasl_server", "sasl_server_value"))
-                .setPerBrokerProperties(Collections.singletonMap(0, Collections.singletonMap("broker_0", "broker_0_value")))
+                .setPerServerProperties(Collections.singletonMap(0, Collections.singletonMap("broker_0", "broker_0_value")))
                 .build();
-
-        ClusterConfig copy = ClusterConfig.builder(clusterConfig).build();
-        Assertions.assertEquals(clusterConfig, copy);
-        Assertions.assertEquals(clusterConfig.hashCode(), copy.hashCode());
 
         Map<String, Object> clusterConfigFields = fields(clusterConfig);
         Map<String, Object> copyFields = fields(clusterConfig);
         Assertions.assertEquals(clusterConfigFields, copyFields);
+    }
+
+    @Test
+    public void testBrokerLessThanZero() {
+        Assertions.assertThrows(IllegalArgumentException.class, () -> ClusterConfig.builder()
+                .setBrokers(-1)
+                .setControllers(1)
+                .setDisksPerBroker(1)
+                .build());
+    }
+
+    @Test
+    public void testControllersLessThanZero() {
+        Assertions.assertThrows(IllegalArgumentException.class, () -> ClusterConfig.builder()
+                .setBrokers(1)
+                .setControllers(-1)
+                .setDisksPerBroker(1)
+                .build());
+    }
+
+    @Test
+    public void testDisksPerBrokerIsZero() {
+        Assertions.assertThrows(IllegalArgumentException.class, () -> ClusterConfig.builder()
+                .setBrokers(1)
+                .setControllers(1)
+                .setDisksPerBroker(0)
+                .build());
     }
 }

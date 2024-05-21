@@ -80,7 +80,7 @@ public class KafkaStatusBackingStoreTest {
 
     @Before
     public void setup() {
-        store = new KafkaStatusBackingStore(new MockTime(), converter, STATUS_TOPIC, kafkaBasedLog);
+        store = new KafkaStatusBackingStore(new MockTime(), converter, STATUS_TOPIC, () -> null, kafkaBasedLog);
     }
 
     @Test

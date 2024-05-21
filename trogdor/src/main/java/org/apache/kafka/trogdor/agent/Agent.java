@@ -27,7 +27,6 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Scheduler;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.common.Node;
 import org.apache.kafka.trogdor.common.Platform;
@@ -175,7 +174,7 @@ public final class Agent {
         Set<String> nodes = controller.targetNodes(platform.topology());
         if (!nodes.contains(platform.curNode().name())) {
             out.println("This task is not configured to run on this node.  It runs on node(s): " +
-                Utils.join(nodes, ", ") + ", whereas this node is " +
+                String.join(", ", nodes) + ", whereas this node is " +
                 platform.curNode().name());
             return false;
         }

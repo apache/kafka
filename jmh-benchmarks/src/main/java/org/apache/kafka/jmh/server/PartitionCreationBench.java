@@ -144,7 +144,7 @@ public class PartitionCreationBench {
             build();
         scheduler.startup();
         this.quotaManagers = QuotaFactory.instantiate(this.brokerProperties, this.metrics, this.time, "");
-        this.zkClient = new KafkaZkClient(null, false, Time.SYSTEM) {
+        this.zkClient = new KafkaZkClient(null, false, Time.SYSTEM, false) {
             @Override
             public Properties getEntityConfigs(String rootEntityType, String sanitizedEntityName) {
                 return new Properties();

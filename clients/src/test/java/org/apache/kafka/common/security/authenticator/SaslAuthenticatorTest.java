@@ -158,8 +158,6 @@ public class SaslAuthenticatorTest {
     private NioEchoServer server;
     private Selector selector;
     private ChannelBuilder channelBuilder;
-    private CertStores serverCertStores;
-    private CertStores clientCertStores;
     private Map<String, Object> saslClientConfigs;
     private Map<String, Object> saslServerConfigs;
     private CredentialCache credentialCache;
@@ -169,8 +167,8 @@ public class SaslAuthenticatorTest {
     public void setup() throws Exception {
         LoginManager.closeAll();
         time = Time.SYSTEM;
-        serverCertStores = new CertStores(true, "localhost");
-        clientCertStores = new CertStores(false, "localhost");
+        CertStores serverCertStores = new CertStores(true, "localhost");
+        CertStores clientCertStores = new CertStores(false, "localhost");
         saslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
         saslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
         credentialCache = new CredentialCache();
@@ -661,10 +659,9 @@ public class SaslAuthenticatorTest {
             @Override
             public TokenInformation token(String tokenId) {
                 TokenInformation baseTokenInfo = super.token(tokenId);
-                long thisLifetimeMs = System.currentTimeMillis() + tokenLifetime.apply(++callNum).longValue();
-                TokenInformation retvalTokenInfo = new TokenInformation(baseTokenInfo.tokenId(), baseTokenInfo.owner(),
+                long thisLifetimeMs = System.currentTimeMillis() + tokenLifetime.apply(++callNum);
+                return new TokenInformation(baseTokenInfo.tokenId(), baseTokenInfo.owner(),
                         baseTokenInfo.renewers(), baseTokenInfo.issueTimestamp(), thisLifetimeMs, thisLifetimeMs);
-                return retvalTokenInfo;
             }
         };
         server = createEchoServer(ListenerName.forSecurityProtocol(securityProtocol), securityProtocol, tokenCache);
@@ -1092,7 +1089,7 @@ public class SaslAuthenticatorTest {
     public void testServerAuthenticateCallbackHandler() throws Exception {
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
         TestJaasConfig jaasConfig = configureMechanisms("PLAIN", Collections.singletonList("PLAIN"));
-        jaasConfig.createOrUpdateEntry(TestJaasConfig.LOGIN_CONTEXT_SERVER, PlainLoginModule.class.getName(), new HashMap<String, Object>());
+        jaasConfig.createOrUpdateEntry(TestJaasConfig.LOGIN_CONTEXT_SERVER, PlainLoginModule.class.getName(), new HashMap<>());
         String callbackPrefix = ListenerName.forSecurityProtocol(securityProtocol).saslMechanismConfigPrefix("PLAIN");
         saslServerConfigs.put(callbackPrefix + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS,
                 TestServerCallbackHandler.class.getName());
@@ -2199,7 +2196,7 @@ public class SaslAuthenticatorTest {
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
     }
 
-    private void closeClientConnectionIfNecessary() throws Exception {
+    private void closeClientConnectionIfNecessary() {
         if (selector != null) {
             selector.close();
             selector = null;
@@ -2232,8 +2229,7 @@ public class SaslAuthenticatorTest {
             throws Exception {
         try {
             createClientConnection(securityProtocol, node);
-            ChannelState finalState = NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.AUTHENTICATION_FAILED);
-            return finalState;
+            return NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.AUTHENTICATION_FAILED);
         } finally {
             closeClientConnectionIfNecessary();
         }

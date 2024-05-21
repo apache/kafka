@@ -125,8 +125,6 @@ public class FenceProducersHandlerTest {
         String transactionalId,
         Errors error
     ) {
-        int brokerId = 1;
-
         CoordinatorKey key = CoordinatorKey.byTransactionalId(transactionalId);
         Set<CoordinatorKey> keys = mkSet(key);
 

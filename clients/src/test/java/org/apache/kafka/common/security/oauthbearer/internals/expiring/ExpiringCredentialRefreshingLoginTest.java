@@ -347,7 +347,7 @@ public class ExpiringCredentialRefreshingLoginTest {
                 for (int i = 0; i < numExpectedRefreshes; ++i) {
                     KafkaFutureImpl<Long> waiter = waiters.get(i);
                     assertTrue(waiter.isDone());
-                    assertEquals((i + 1) * 1000 * 60 * refreshEveryMinutes, waiter.get().longValue() - startMs);
+                    assertEquals((i + 1) * 1000 * 60 * refreshEveryMinutes, waiter.get() - startMs);
                 }
                 assertFalse(waiters.get(numExpectedRefreshes).isDone());
 
@@ -438,7 +438,7 @@ public class ExpiringCredentialRefreshingLoginTest {
         for (int i = 0; i < numExpectedRefreshes; ++i) {
             KafkaFutureImpl<Long> waiter = waiters.get(i);
             assertTrue(waiter.isDone());
-            assertEquals((i + 1) * 1000 * 60 * refreshEveryMinutes, waiter.get().longValue() - startMs);
+            assertEquals((i + 1) * 1000 * 60 * refreshEveryMinutes, waiter.get() - startMs);
         }
         assertFalse(waiters.get(numExpectedRefreshes).isDone());
 
@@ -522,7 +522,7 @@ public class ExpiringCredentialRefreshingLoginTest {
         for (int i = 0; i < numExpectedRefreshes; ++i) {
             KafkaFutureImpl<Long> waiter = waiters.get(i);
             assertTrue(waiter.isDone());
-            assertEquals((i + 1) * 1000 * 60 * refreshEveryMinutes, waiter.get().longValue() - startMs);
+            assertEquals((i + 1) * 1000 * 60 * refreshEveryMinutes, waiter.get() - startMs);
         }
         assertFalse(waiters.get(numExpectedRefreshes).isDone());
 
@@ -603,7 +603,7 @@ public class ExpiringCredentialRefreshingLoginTest {
             KafkaFutureImpl<Long> waiter = waiters.get(i);
             assertTrue(waiter.isDone());
             assertEquals((i + 1) * 1000 * (60 * refreshEveryMinutes + bufferIntrusionSeconds),
-                    waiter.get().longValue() - startMs);
+                    waiter.get() - startMs);
         }
         assertFalse(waiters.get(numExpectedRefreshes).isDone());
 
@@ -683,7 +683,7 @@ public class ExpiringCredentialRefreshingLoginTest {
             KafkaFutureImpl<Long> waiter = waiters.get(i);
             assertTrue(waiter.isDone());
             assertEquals((i + 1) * 1000 * (60 * refreshEveryMinutes - bufferIntrusionSeconds),
-                    waiter.get().longValue() - startMs);
+                    waiter.get() - startMs);
         }
         assertFalse(waiters.get(numExpectedRefreshes).isDone());
 

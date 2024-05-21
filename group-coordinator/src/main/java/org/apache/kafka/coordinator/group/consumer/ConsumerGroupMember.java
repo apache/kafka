@@ -200,20 +200,6 @@ public class ConsumerGroupMember {
             return this;
         }
 
-        public Builder setSupportedClassicProtocols(JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols) {
-            List<ConsumerGroupMemberMetadataValue.ClassicProtocol> newSupportedProtocols = new ArrayList<>();
-            protocols.forEach(protocol ->
-                newSupportedProtocols.add(
-                    new ConsumerGroupMemberMetadataValue.ClassicProtocol()
-                        .setName(protocol.name())
-                        .setMetadata(protocol.metadata())
-                )
-            );
-            this.classicMemberMetadata = new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
-                .setSupportedProtocols(newSupportedProtocols);
-            return this;
-        }
-
         public Builder updateWith(ConsumerGroupMemberMetadataValue record) {
             setInstanceId(record.instanceId());
             setRackId(record.rackId());
@@ -496,6 +482,17 @@ public class ConsumerGroupMember {
     }
 
     /**
+     * @return The session timeout if the member uses the classic protocol.
+     */
+    public Optional<Integer> classicProtocolSessionTimeout() {
+        if (useClassicProtocol()) {
+            return Optional.ofNullable(classicMemberMetadata.sessionTimeoutMs());
+        } else {
+            return Optional.empty();
+        }
+    }
+
+    /**
      * @return The classicMemberMetadata if the consumer uses the classic protocol.
      */
     public Optional<ConsumerGroupMemberMetadataValue.ClassicMemberMetadata> classicMemberMetadata() {
@@ -567,6 +564,26 @@ public class ConsumerGroupMember {
         } else {
             return null;
         }
+    }
+
+    /**
+     * Converts the JoinGroupRequestProtocolCollection to a list of ClassicProtocol.
+     *
+     * @param protocols The JoinGroupRequestProtocolCollection.
+     * @return The converted list of ClassicProtocol.
+     */
+    public static List<ConsumerGroupMemberMetadataValue.ClassicProtocol> classicProtocolListFromJoinRequestProtocolCollection(
+        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols
+    ) {
+        List<ConsumerGroupMemberMetadataValue.ClassicProtocol> newSupportedProtocols = new ArrayList<>();
+        protocols.forEach(protocol ->
+            newSupportedProtocols.add(
+                new ConsumerGroupMemberMetadataValue.ClassicProtocol()
+                    .setName(protocol.name())
+                    .setMetadata(protocol.metadata())
+            )
+        );
+        return newSupportedProtocols;
     }
 
     /**
