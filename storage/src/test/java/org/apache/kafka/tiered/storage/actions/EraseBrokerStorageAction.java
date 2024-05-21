@@ -48,6 +48,7 @@ public final class EraseBrokerStorageAction implements TieredStorageTestAction {
 
     @Override
     public void describe(PrintStream output) {
-        output.println("erase-broker-storage: " + brokerId + ", isStopped: " + isStopped);
+        output.println("erase-broker-storage: " + brokerId + ", isStopped: " + isStopped +
+                ", filenameFilter: " + filenameFilter);
     }
 }
