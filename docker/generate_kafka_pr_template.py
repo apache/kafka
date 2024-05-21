@@ -37,6 +37,7 @@ def main():
 
 Maintainers: The Apache Kafka Project <dev@kafka.apache.org> (@ApacheKafka)
 GitRepo: https://github.com/apache/kafka.git
+
 """
     print(header)
 
@@ -63,6 +64,7 @@ Tags: {tags}
 Architectures: amd64,arm64v8
 GitCommit: {commit}
 Directory: ./docker/docker_official_images/{version}/jvm
+
 """
         print(info.strip())
 
