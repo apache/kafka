@@ -369,7 +369,7 @@ public class ConsumerGroupTest {
     }
 
     @Test
-    public void testHasUnreleasedPartitions() {
+    public void testWaitingOnUnreleasedPartition() {
         Uuid fooTopicId = Uuid.randomUuid();
         Uuid barTopicId = Uuid.randomUuid();
         Uuid zarTopicId = Uuid.randomUuid();
@@ -392,7 +392,7 @@ public class ConsumerGroupTest {
             .build();
         consumerGroup.updateMember(member1);
 
-        assertFalse(consumerGroup.hasUnreleasedPartitions(member1));
+        assertFalse(consumerGroup.waitingOnUnreleasedPartition(member1));
 
         ConsumerGroupMember member2 = new ConsumerGroupMember.Builder(memberId2)
             .setMemberEpoch(10)
@@ -401,7 +401,7 @@ public class ConsumerGroupTest {
             .build();
         consumerGroup.updateMember(member2);
 
-        assertTrue(consumerGroup.hasUnreleasedPartitions(member1));
+        assertTrue(consumerGroup.waitingOnUnreleasedPartition(member1));
     }
 
     @Test

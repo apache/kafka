@@ -116,6 +116,7 @@ import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.appendGroupMetadataErrorToResponseError;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupJoinKey;
+import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupJoinKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupRebalanceTimeoutKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupSessionTimeoutKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.EMPTY_RESULT;
@@ -11726,6 +11727,18 @@ public class GroupMetadataManagerTest {
                 .setTopicPartitions(Collections.emptyList())
         );
 
+        // Member 1 heartbeats to be notified to rejoin.
+        assertEquals(
+            Errors.REBALANCE_IN_PROGRESS.code(),
+            context.sendClassicGroupHeartbeat(
+                new HeartbeatRequestData()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId1)
+                    .setGenerationId(joinResponse1.generationId())
+            ).response().errorCode()
+        );
+        context.assertJoinTimeout(groupId, memberId1, 500);
+
         // Member 1 rejoins to transition from UNRELEASED_PARTITIONS to STABLE.
         GroupMetadataManagerTestContext.JoinResult joinResult2 = context.sendClassicGroupJoin(request);
         ConsumerGroupMember expectedMember2 = new ConsumerGroupMember.Builder(expectedMember1)
@@ -11743,6 +11756,7 @@ public class GroupMetadataManagerTest {
         assertEquals(expectedMember2.state(), group.getOrMaybeCreateMember(memberId1, false).state());
 
         joinResult2.appendFuture.complete(null);
+        context.assertNoJoinTimeout(groupId, memberId1);
         JoinGroupResponseData joinResponse2 = joinResult2.joinFuture.get();
         assertEquals(
             new JoinGroupResponseData()
@@ -11943,6 +11957,18 @@ public class GroupMetadataManagerTest {
             Collections.singletonList(new TopicPartition(fooTopicName, 0))
         );
 
+        // Member 1 heartbeats to be notified to rejoin.
+        assertEquals(
+            Errors.REBALANCE_IN_PROGRESS.code(),
+            context.sendClassicGroupHeartbeat(
+                new HeartbeatRequestData()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId1)
+                    .setGenerationId(joinResponse1.generationId())
+            ).response().errorCode()
+        );
+        context.assertJoinTimeout(groupId, memberId1, 500);
+
         // Member 1 rejoins to transition from UNREVOKED_PARTITIONS to UNRELEASED_PARTITIONS.
         JoinGroupRequestData request2 = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
             .withGroupId(groupId)
@@ -11983,6 +12009,7 @@ public class GroupMetadataManagerTest {
         assertEquals(expectedMember2.state(), group.getOrMaybeCreateMember(memberId1, false).state());
 
         joinResult2.appendFuture.complete(null);
+        context.assertNoJoinTimeout(groupId, memberId1);
         JoinGroupResponseData joinResponse2 = joinResult2.joinFuture.get();
         assertEquals(
             new JoinGroupResponseData()
@@ -12016,6 +12043,18 @@ public class GroupMetadataManagerTest {
                 .setMemberEpoch(10)
                 .setTopicPartitions(Collections.emptyList())
         );
+
+        // Member 1 heartbeats to be notified to rejoin.
+        assertEquals(
+            Errors.REBALANCE_IN_PROGRESS.code(),
+            context.sendClassicGroupHeartbeat(
+                new HeartbeatRequestData()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId1)
+                    .setGenerationId(joinResponse2.generationId())
+            ).response().errorCode()
+        );
+        context.assertJoinTimeout(groupId, memberId1, 500);
 
         // Member 1 rejoins to transition from UNRELEASED_PARTITIONS to STABLE.
         JoinGroupRequestData request3 = new GroupMetadataManagerTestContext.JoinGroupRequestBuilder()
@@ -12056,6 +12095,7 @@ public class GroupMetadataManagerTest {
         assertEquals(expectedMember3.state(), group.getOrMaybeCreateMember(memberId1, false).state());
 
         joinResult3.appendFuture.complete(null);
+        context.assertNoJoinTimeout(groupId, memberId1);
         JoinGroupResponseData joinResponse3 = joinResult3.joinFuture.get();
         assertEquals(
             new JoinGroupResponseData()
@@ -12377,6 +12417,7 @@ public class GroupMetadataManagerTest {
             .withAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
             .withConsumerGroup(new ConsumerGroupBuilder(groupId, 11)
                 .withMember(new ConsumerGroupMember.Builder(memberId)
+                    .setRebalanceTimeoutMs(10000)
                     .setClassicMemberMetadata(
                         new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                             .setSessionTimeoutMs(5000)
@@ -12395,6 +12436,7 @@ public class GroupMetadataManagerTest {
                 .withProtocolName("range")
                 .build())
         );
+        context.assertJoinTimeout(groupId, memberId, 10000);
     }
 
     @Test
@@ -12630,6 +12672,127 @@ public class GroupMetadataManagerTest {
                 .setMemberId(memberId)
                 .setGenerationId(10)
         ));
+    }
+
+    @Test
+    public void testConsumerGroupMemberUsingClassicProtocolFencedWhenSessionTimeout() {
+        String groupId = "group-id";
+        String memberId = Uuid.randomUuid().toString();
+        int sessionTimeout = 5000;
+
+        List<ConsumerGroupMemberMetadataValue.ClassicProtocol> protocols = Collections.singletonList(
+            new ConsumerGroupMemberMetadataValue.ClassicProtocol()
+                .setName("range")
+                .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(
+                    new ConsumerPartitionAssignor.Subscription(
+                        Arrays.asList("foo"),
+                        null,
+                        Collections.emptyList()
+                    )
+                )))
+        );
+
+        // Consumer group with a member using the classic protocol.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(new ConsumerGroupMember.Builder(memberId)
+                    .setClassicMemberMetadata(
+                        new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                            .setSessionTimeoutMs(sessionTimeout)
+                            .setSupportedProtocols(protocols)
+                    )
+                    .setMemberEpoch(10)
+                    .build()))
+            .build();
+
+        // Heartbeat to schedule the session timeout.
+        HeartbeatRequestData request = new HeartbeatRequestData()
+            .setGroupId(groupId)
+            .setMemberId(memberId)
+            .setGenerationId(10);
+        context.sendClassicGroupHeartbeat(request);
+        context.assertSessionTimeout(groupId, memberId, sessionTimeout);
+
+        // Advance clock by session timeout + 1.
+        List<MockCoordinatorTimer.ExpiredTimeout<Void, CoordinatorRecord>> timeouts = context.sleep(sessionTimeout + 1);
+
+        // The member is fenced from the group.
+        assertEquals(1, timeouts.size());
+        MockCoordinatorTimer.ExpiredTimeout<Void, CoordinatorRecord> timeout = timeouts.get(0);
+        assertEquals(consumerGroupSessionTimeoutKey(groupId, memberId), timeout.key);
+        assertRecordsEquals(
+            Arrays.asList(
+                CoordinatorRecordHelpers.newCurrentAssignmentTombstoneRecord(groupId, memberId),
+                CoordinatorRecordHelpers.newTargetAssignmentTombstoneRecord(groupId, memberId),
+                CoordinatorRecordHelpers.newMemberSubscriptionTombstoneRecord(groupId, memberId),
+                CoordinatorRecordHelpers.newGroupEpochRecord(groupId, 11)
+            ),
+            timeout.result.records()
+        );
+    }
+
+    @Test
+    public void testConsumerGroupMemberUsingClassicProtocolFencedWhenJoinTimeout() {
+        String groupId = "group-id";
+        String memberId = Uuid.randomUuid().toString();
+        int rebalanceTimeout = 500;
+
+        List<ConsumerGroupMemberMetadataValue.ClassicProtocol> protocols = Collections.singletonList(
+            new ConsumerGroupMemberMetadataValue.ClassicProtocol()
+                .setName("range")
+                .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(
+                    new ConsumerPartitionAssignor.Subscription(
+                        Arrays.asList("foo"),
+                        null,
+                        Collections.emptyList()
+                    )
+                )))
+        );
+
+        // Consumer group with a member using the classic protocol whose member epoch is smaller than the group epoch.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(new ConsumerGroupMember.Builder(memberId)
+                    .setRebalanceTimeoutMs(rebalanceTimeout)
+                    .setClassicMemberMetadata(
+                        new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                            .setSessionTimeoutMs(5000)
+                            .setSupportedProtocols(protocols)
+                    )
+                    .setMemberEpoch(9)
+                    .build()))
+            .build();
+
+        // Heartbeat to schedule the join timeout.
+        HeartbeatRequestData request = new HeartbeatRequestData()
+            .setGroupId(groupId)
+            .setMemberId(memberId)
+            .setGenerationId(9);
+        assertEquals(
+            Errors.REBALANCE_IN_PROGRESS.code(),
+            context.sendClassicGroupHeartbeat(request).response().errorCode()
+        );
+        context.assertSessionTimeout(groupId, memberId, 5000);
+        context.assertJoinTimeout(groupId, memberId, rebalanceTimeout);
+
+        // Advance clock by rebalance timeout + 1.
+        List<MockCoordinatorTimer.ExpiredTimeout<Void, CoordinatorRecord>> timeouts = context.sleep(rebalanceTimeout + 1);
+
+        // The member is fenced from the group.
+        assertEquals(1, timeouts.size());
+        MockCoordinatorTimer.ExpiredTimeout<Void, CoordinatorRecord> timeout = timeouts.get(0);
+        assertEquals(consumerGroupJoinKey(groupId, memberId), timeout.key);
+        assertRecordsEquals(
+            Arrays.asList(
+                CoordinatorRecordHelpers.newCurrentAssignmentTombstoneRecord(groupId, memberId),
+                CoordinatorRecordHelpers.newTargetAssignmentTombstoneRecord(groupId, memberId),
+                CoordinatorRecordHelpers.newMemberSubscriptionTombstoneRecord(groupId, memberId),
+                CoordinatorRecordHelpers.newGroupEpochRecord(groupId, 11)
+            ),
+            timeout.result.records()
+        );
     }
 
     private static void checkJoinGroupResponse(

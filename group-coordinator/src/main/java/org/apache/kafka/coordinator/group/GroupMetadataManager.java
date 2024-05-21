@@ -1273,6 +1273,7 @@ public class GroupMetadataManager {
         // member has already rejoined, so it needs to first finish revoking the partitions and the reconciliation,
         // and then the next rejoin will be triggered automatically if needed.
         if (group.groupEpoch() > member.memberEpoch() && !member.state().equals(MemberState.UNREVOKED_PARTITIONS)) {
+            scheduleConsumerGroupJoinTimeoutIfAbsent(group.groupId(), member.memberId(), member.rebalanceTimeoutMs());
             throw Errors.REBALANCE_IN_PROGRESS.exception(
                 String.format("A new rebalance is triggered in group %s and member %s should rejoin to catch up.",
                     group.groupId(), member.memberId())
@@ -2128,7 +2129,7 @@ public class GroupMetadataManager {
             sessionTimeoutMs,
             TimeUnit.MILLISECONDS,
             true,
-            () -> consumerGroupFenceMemberOperation(groupId, memberId, "the member session expires.")
+            () -> consumerGroupFenceMemberOperation(groupId, memberId, "the member session expired.")
         );
     }
 
@@ -2202,23 +2203,23 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Schedules a join timeout for the member.
+     * Schedules a join timeout for the member if there's not a join timeout.
      *
      * @param groupId               The group id.
      * @param memberId              The member id.
      * @param rebalanceTimeoutMs    The rebalance timeout.
      */
-    private void scheduleConsumerGroupJoinTimeout(
+    private void scheduleConsumerGroupJoinTimeoutIfAbsent(
         String groupId,
         String memberId,
         int rebalanceTimeoutMs
     ) {
-        timer.schedule(
+        timer.scheduleIfAbsent(
             consumerGroupJoinKey(groupId, memberId),
             rebalanceTimeoutMs,
             TimeUnit.MILLISECONDS,
             true,
-            () -> consumerGroupFenceMemberOperation(groupId, memberId, "the member failed to join within timeout.")
+            () -> consumerGroupFenceMemberOperation(groupId, memberId, "the classic member failed to join within the rebalance timeout.")
         );
     }
 
@@ -4370,11 +4371,15 @@ public class GroupMetadataManager {
         scheduleConsumerGroupSessionTimeout(groupId, memberId, member.classicProtocolSessionTimeout().get());
 
         Errors error = Errors.NONE;
+        // The member should rejoin if any of the following conditions is met.
+        // 1) The group epoch is bumped so the member need to rejoin to catch up.
+        // 2) The member needs to revoke some partitions and rejoin to reconcile with the new epoch.
+        // 3) The member's partitions pending assignment are free, so it can rejoin to get the complete assignment.
         if (member.memberEpoch() < group.groupEpoch() ||
             member.state() == MemberState.UNREVOKED_PARTITIONS ||
-            (member.state() == MemberState.UNRELEASED_PARTITIONS && !group.hasUnreleasedPartitions(member))) {
+            (member.state() == MemberState.UNRELEASED_PARTITIONS && !group.waitingOnUnreleasedPartition(member))) {
             error = Errors.REBALANCE_IN_PROGRESS;
-            scheduleConsumerGroupJoinTimeout(groupId, memberId, member.rebalanceTimeoutMs());
+            scheduleConsumerGroupJoinTimeoutIfAbsent(groupId, memberId, member.rebalanceTimeoutMs());
         }
 
         return new CoordinatorResult<>(
