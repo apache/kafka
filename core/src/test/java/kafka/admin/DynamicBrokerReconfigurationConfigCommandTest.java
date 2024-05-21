@@ -66,7 +66,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class DynamicBrokerReconfigurationUnitTest extends AbstractDynamicBrokerReconfigurationTest {
+public class DynamicBrokerReconfigurationConfigCommandTest extends AbstractDynamicBrokerReconfigurationTest {
     private void verifyConfig(String configName, ConfigEntry configEntry, boolean isSensitive, boolean isReadOnly,
                              Properties expectedProps) {
         if (isSensitive) {
