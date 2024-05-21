@@ -45,8 +45,7 @@ if __name__ == '__main__':
     new_dir = os.path.join(
         current_dir, f'docker_official_images', args.kafka_version)
     os.makedirs(new_dir, exist_ok=True)
-    jvm_dir = os.path.join(new_dir, 'jvm')
-    os.makedirs(jvm_dir, exist_ok=True)
-    copy_tree(f"{current_dir}/jvm", jvm_dir)
-    copy_tree(f"{current_dir}/resources", os.path.join(jvm_dir, 'resources'))
-    remove_args_and_hardcode_values(os.path.join(jvm_dir, 'Dockerfile'), kafka_url)
+    copy_tree(f"{current_dir}/jvm", os.path.join(new_dir, args.kafka_version, 'jvm'))
+    copy_tree(f"{current_dir}/resources", os.path.join(new_dir, args.kafka_version, 'jvm/resources'))
+    remove_args_and_hardcode_values(
+        os.path.join(new_dir, args.kafka_version, 'jvm/Dockerfile'), kafka_url)
