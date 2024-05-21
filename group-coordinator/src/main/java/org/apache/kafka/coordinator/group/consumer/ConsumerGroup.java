@@ -29,10 +29,11 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
-import org.apache.kafka.coordinator.group.Record;
-import org.apache.kafka.coordinator.group.RecordHelpers;
+import org.apache.kafka.coordinator.group.CoordinatorRecord;
+import org.apache.kafka.coordinator.group.CoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.TopicImage;
@@ -781,22 +782,22 @@ public class ConsumerGroup implements Group {
      * @param records The list of records.
      */
     @Override
-    public void createGroupTombstoneRecords(List<Record> records) {
+    public void createGroupTombstoneRecords(List<CoordinatorRecord> records) {
         members().forEach((memberId, member) ->
-            records.add(RecordHelpers.newCurrentAssignmentTombstoneRecord(groupId(), memberId))
+            records.add(CoordinatorRecordHelpers.newCurrentAssignmentTombstoneRecord(groupId(), memberId))
         );
 
         members().forEach((memberId, member) ->
-            records.add(RecordHelpers.newTargetAssignmentTombstoneRecord(groupId(), memberId))
+            records.add(CoordinatorRecordHelpers.newTargetAssignmentTombstoneRecord(groupId(), memberId))
         );
-        records.add(RecordHelpers.newTargetAssignmentEpochTombstoneRecord(groupId()));
+        records.add(CoordinatorRecordHelpers.newTargetAssignmentEpochTombstoneRecord(groupId()));
 
         members().forEach((memberId, member) ->
-            records.add(RecordHelpers.newMemberSubscriptionTombstoneRecord(groupId(), memberId))
+            records.add(CoordinatorRecordHelpers.newMemberSubscriptionTombstoneRecord(groupId(), memberId))
         );
 
-        records.add(RecordHelpers.newGroupSubscriptionMetadataTombstoneRecord(groupId()));
-        records.add(RecordHelpers.newGroupEpochTombstoneRecord(groupId()));
+        records.add(CoordinatorRecordHelpers.newGroupSubscriptionMetadataTombstoneRecord(groupId()));
+        records.add(CoordinatorRecordHelpers.newGroupEpochTombstoneRecord(groupId()));
     }
 
     @Override
@@ -1203,7 +1204,13 @@ public class ConsumerGroup implements Group {
                 .setClientHost(classicGroupMember.clientHost())
                 .setSubscribedTopicNames(subscription.topics())
                 .setAssignedPartitions(partitions)
-                .setSupportedClassicProtocols(classicGroupMember.supportedProtocols())
+                .setClassicMemberMetadata(
+                    new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
+                        .setSessionTimeoutMs(classicGroupMember.sessionTimeoutMs())
+                        .setSupportedProtocols(ConsumerGroupMember.classicProtocolListFromJoinRequestProtocolCollection(
+                            classicGroupMember.supportedProtocols()
+                        ))
+                )
                 .build();
             consumerGroup.updateTargetAssignment(newMember.memberId(), new Assignment(partitions));
             consumerGroup.updateMember(newMember);
@@ -1218,26 +1225,26 @@ public class ConsumerGroup implements Group {
      * @param records The list to which the new records are added.
      */
     public void createConsumerGroupRecords(
-        List<Record> records
+        List<CoordinatorRecord> records
     ) {
         members().forEach((__, consumerGroupMember) ->
-            records.add(RecordHelpers.newMemberSubscriptionRecord(groupId(), consumerGroupMember))
+            records.add(CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId(), consumerGroupMember))
         );
 
-        records.add(RecordHelpers.newGroupEpochRecord(groupId(), groupEpoch()));
+        records.add(CoordinatorRecordHelpers.newGroupEpochRecord(groupId(), groupEpoch()));
 
         members().forEach((consumerGroupMemberId, consumerGroupMember) ->
-            records.add(RecordHelpers.newTargetAssignmentRecord(
+            records.add(CoordinatorRecordHelpers.newTargetAssignmentRecord(
                 groupId(),
                 consumerGroupMemberId,
                 targetAssignment(consumerGroupMemberId).partitions()
             ))
         );
 
-        records.add(RecordHelpers.newTargetAssignmentEpochRecord(groupId(), groupEpoch()));
+        records.add(CoordinatorRecordHelpers.newTargetAssignmentEpochRecord(groupId(), groupEpoch()));
 
         members().forEach((__, consumerGroupMember) ->
-            records.add(RecordHelpers.newCurrentAssignmentRecord(groupId(), consumerGroupMember))
+            records.add(CoordinatorRecordHelpers.newCurrentAssignmentRecord(groupId(), consumerGroupMember))
         );
     }
 

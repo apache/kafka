@@ -145,7 +145,7 @@ public interface Group {
      *
      * @param records The list of records.
      */
-    void createGroupTombstoneRecords(List<Record> records);
+    void createGroupTombstoneRecords(List<CoordinatorRecord> records);
 
     /**
      * @return Whether the group is in Empty state.

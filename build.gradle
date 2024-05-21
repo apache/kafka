@@ -651,7 +651,7 @@ subprojects {
     scalaCompileOptions.keepAliveMode = userKeepAliveMode
 
     scalaCompileOptions.additionalParameters = [
-      "-deprecation",
+      "-deprecation:false",
       "-unchecked",
       "-encoding", "utf8",
       "-Xlog-reflective-calls",

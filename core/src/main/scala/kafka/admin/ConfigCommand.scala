@@ -253,7 +253,7 @@ object ConfigCommand extends Logging {
     }
   }
 
-  private[admin] def describeConfigWithZk(zkClient: KafkaZkClient, opts: ConfigCommandOptions, adminZkClient: AdminZkClient): Unit = {
+  def describeConfigWithZk(zkClient: KafkaZkClient, opts: ConfigCommandOptions, adminZkClient: AdminZkClient): Unit = {
     val configEntity = parseEntity(opts)
     val entityType = configEntity.root.entityType
     val describeAllUsers = entityType == ConfigType.USER && configEntity.root.sanitizedName.isEmpty && configEntity.child.isEmpty

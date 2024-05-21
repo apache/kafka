@@ -23,6 +23,7 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
+import org.apache.kafka.connect.runtime.distributed.DistributedHerder;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
 import org.apache.kafka.connect.runtime.rest.resources.ConnectorsResource;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
@@ -32,6 +33,7 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.WorkerHandle;
 import org.apache.kafka.test.IntegrationTest;
+import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -54,6 +56,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static javax.ws.rs.core.Response.Status.INTERNAL_SERVER_ERROR;
 import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
+import static org.apache.kafka.connect.integration.BlockingConnectorTest.TASK_STOP;
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX;
@@ -67,8 +70,10 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CO
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.CONNECTOR_CLIENT_POLICY_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG;
+import static org.apache.kafka.connect.runtime.WorkerConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONFIG_TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.REBALANCE_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.connect.runtime.rest.RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS;
 import static org.apache.kafka.connect.util.clusters.ConnectAssertions.CONNECTOR_SETUP_DURATION_MS;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
@@ -885,6 +890,46 @@ public class ConnectWorkerIntegrationTest {
                 () -> connect.configureConnector(CONNECTOR_NAME, connectorConfig1),
                 "removing the config for connector " + CONNECTOR_NAME + " from the config topic"
         );
+    }
+
+    @Test
+    public void testPollTimeoutExpiry() throws Exception {
+        // This is a fabricated test to ensure that a poll timeout expiry happens. The tick thread awaits on
+        // task#stop method which is blocked. The timeouts have been set accordingly
+        workerProps.put(REBALANCE_TIMEOUT_MS_CONFIG, Long.toString(TimeUnit.SECONDS.toMillis(20)));
+        workerProps.put(TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG, Long.toString(TimeUnit.SECONDS.toMillis(30)));
+        connect = connectBuilder
+            .numBrokers(1)
+            .numWorkers(1)
+            .build();
+
+        connect.start();
+
+        connect.assertions().assertExactlyNumWorkersAreUp(1, "Worker not brought up in time");
+
+        Map<String, String> connectorWithBlockingTaskStopConfig = new HashMap<>();
+        connectorWithBlockingTaskStopConfig.put(CONNECTOR_CLASS_CONFIG, BlockingConnectorTest.BlockingSourceConnector.class.getName());
+        connectorWithBlockingTaskStopConfig.put(TASKS_MAX_CONFIG, "1");
+        connectorWithBlockingTaskStopConfig.put(BlockingConnectorTest.Block.BLOCK_CONFIG, Objects.requireNonNull(TASK_STOP));
+
+        connect.configureConnector(CONNECTOR_NAME, connectorWithBlockingTaskStopConfig);
+
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+            CONNECTOR_NAME, 1, "connector and tasks did not start in time"
+        );
+
+        try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(DistributedHerder.class)) {
+            connect.restartTask(CONNECTOR_NAME, 0);
+            TestUtils.waitForCondition(() -> logCaptureAppender.getEvents().stream().anyMatch(e -> e.getLevel().equals("WARN")) &&
+                    logCaptureAppender.getEvents().stream().anyMatch(e ->
+                        // Ensure that the tick thread is blocked on the stage which we expect it to be, i.e restarting the task.
+                        e.getMessage().contains("worker poll timeout has expired") &&
+                        e.getMessage().contains("The last known action being performed by the worker is : restarting task " + CONNECTOR_NAME + "-0")
+                    ),
+                "Coordinator did not poll for rebalance.timeout.ms");
+            // This clean up ensures that the test ends quickly as o/w we will wait for task#stop.
+            BlockingConnectorTest.Block.reset();
+        }
     }
 
     private void assertTimeoutException(Runnable operation, String expectedStageDescription) throws InterruptedException {

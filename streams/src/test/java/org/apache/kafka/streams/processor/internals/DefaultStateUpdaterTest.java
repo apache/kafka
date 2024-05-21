@@ -440,7 +440,7 @@ class DefaultStateUpdaterTest {
             .thenReturn(false);
         stateUpdater.start();
         stateUpdater.add(task);
-        stateUpdater.removeWithFuture(task.id()).get();
+        stateUpdater.remove(task.id()).get();
         verifyRestoredActiveTasks();
         verifyUpdatingTasks();
         verifyExceptionsAndFailedTasks();
@@ -707,8 +707,8 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(standbyTask);
         verifyUpdatingTasks(activeTask1, activeTask2, standbyTask);
 
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future1 = stateUpdater.removeWithFuture(activeTask1.id());
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future2 = stateUpdater.removeWithFuture(activeTask2.id());
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future1 = stateUpdater.remove(activeTask1.id());
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future2 = stateUpdater.remove(activeTask2.id());
         CompletableFuture.allOf(future1, future2).get();
 
         final InOrder orderVerifier = inOrder(changelogReader);
@@ -727,7 +727,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(standbyTask2);
         verifyUpdatingTasks(standbyTask1, standbyTask2);
 
-        stateUpdater.removeWithFuture(standbyTask2.id()).get();
+        stateUpdater.remove(standbyTask2.id()).get();
 
         verify(changelogReader).transitToUpdateStandby();
     }
@@ -751,7 +751,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(task);
         verifyUpdatingTasks(task);
 
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.removeWithFuture(task.id());
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id());
 
         assertEquals(new StateUpdater.RemovedTaskResult(task), future.get());
         verifyCheckpointTasks(true, task);
@@ -768,7 +768,7 @@ class DefaultStateUpdaterTest {
         final StreamsException streamsException = new StreamsException("Something happened", task.id());
         setupShouldThrowIfRemovingUpdatingStatefulTaskFailsWithException(task, streamsException);
 
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.removeWithFuture(task.id());
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id());
 
         verifyRemovingUpdatingStatefulTaskFails(future, task, streamsException, true);
 
@@ -780,7 +780,7 @@ class DefaultStateUpdaterTest {
         final RuntimeException runtimeException = new RuntimeException("Something happened");
         setupShouldThrowIfRemovingUpdatingStatefulTaskFailsWithException(task, runtimeException);
 
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.removeWithFuture(task.id());
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id());
 
         verifyRemovingUpdatingStatefulTaskFails(future, task, runtimeException, false);
     }
@@ -791,7 +791,7 @@ class DefaultStateUpdaterTest {
         final StreamsException streamsException = new StreamsException("Something happened", task.id());
         setupShouldThrowIfRemovingUpdatingStatefulTaskFailsWithException(task, streamsException);
 
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.removeWithFuture(task.id());
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id());
 
         verifyRemovingUpdatingStatefulTaskFails(future, task, streamsException, true);
     }
@@ -802,7 +802,7 @@ class DefaultStateUpdaterTest {
         final RuntimeException runtimeException = new RuntimeException("Something happened");
         setupShouldThrowIfRemovingUpdatingStatefulTaskFailsWithException(task, runtimeException);
 
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.removeWithFuture(task.id());
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id());
 
         verifyRemovingUpdatingStatefulTaskFails(future, task, runtimeException, false);
     }
@@ -843,8 +843,8 @@ class DefaultStateUpdaterTest {
         verifyPausedTasks(statefulTask, standbyTask);
         verifyUpdatingTasks();
 
-        final CompletableFuture<StateUpdater.RemovedTaskResult> futureOfStatefulTask = stateUpdater.removeWithFuture(statefulTask.id());
-        final CompletableFuture<StateUpdater.RemovedTaskResult> futureOfStandbyTask = stateUpdater.removeWithFuture(standbyTask.id());
+        final CompletableFuture<StateUpdater.RemovedTaskResult> futureOfStatefulTask = stateUpdater.remove(statefulTask.id());
+        final CompletableFuture<StateUpdater.RemovedTaskResult> futureOfStandbyTask = stateUpdater.remove(standbyTask.id());
 
         assertEquals(new StateUpdater.RemovedTaskResult(statefulTask), futureOfStatefulTask.get());
         assertEquals(new StateUpdater.RemovedTaskResult(standbyTask), futureOfStandbyTask.get());
@@ -869,7 +869,7 @@ class DefaultStateUpdaterTest {
         verifyPausedTasks(statefulTask);
         verifyUpdatingTasks();
 
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.removeWithFuture(statefulTask.id());
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(statefulTask.id());
 
         final ExecutionException executionException = assertThrows(ExecutionException.class, future::get);
         assertInstanceOf(StreamsException.class, executionException.getCause());
@@ -899,7 +899,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(task);
         verifyRestoredActiveTasks(task);
 
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.removeWithFuture(task.id());
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id());
         future.get();
 
         assertEquals(new StateUpdater.RemovedTaskResult(task), future.get());
@@ -935,7 +935,7 @@ class DefaultStateUpdaterTest {
         final ExceptionAndTask expectedExceptionAndTasks = new ExceptionAndTask(streamsException, task);
         verifyExceptionsAndFailedTasks(expectedExceptionAndTasks);
 
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.removeWithFuture(task.id());
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(task.id());
 
         assertEquals(new StateUpdater.RemovedTaskResult(task, streamsException), future.get());
         verifyPausedTasks();
@@ -965,7 +965,7 @@ class DefaultStateUpdaterTest {
         verifyUpdatingTasks(updatingTask);
         verifyPausedTasks();
 
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.removeWithFuture(TASK_1_0);
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(TASK_1_0);
 
         assertNull(future.get());
         verifyRestoredActiveTasks(restoredTask);
@@ -978,7 +978,7 @@ class DefaultStateUpdaterTest {
     public void shouldCompleteWithNullIfNoTasks() throws Exception {
         stateUpdater.start();
 
-        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.removeWithFuture(TASK_0_1);
+        final CompletableFuture<StateUpdater.RemovedTaskResult> future = stateUpdater.remove(TASK_0_1);
 
         assertNull(future.get());
         assertTrue(stateUpdater.isRunning());
@@ -1475,7 +1475,7 @@ class DefaultStateUpdaterTest {
         stateUpdater.add(activeTask1);
         stateUpdater.add(standbyTask1);
         stateUpdater.add(standbyTask2);
-        stateUpdater.removeWithFuture(TASK_0_0);
+        stateUpdater.remove(TASK_0_0);
         stateUpdater.add(activeTask2);
         stateUpdater.add(standbyTask3);
 

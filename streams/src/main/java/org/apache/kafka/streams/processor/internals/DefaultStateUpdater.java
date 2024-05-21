@@ -852,7 +852,7 @@ public class DefaultStateUpdater implements StateUpdater {
     }
 
     @Override
-    public CompletableFuture<RemovedTaskResult> removeWithFuture(final TaskId taskId) {
+    public CompletableFuture<RemovedTaskResult> remove(final TaskId taskId) {
         final CompletableFuture<RemovedTaskResult> future = new CompletableFuture<>();
         tasksAndActionsLock.lock();
         try {
@@ -862,17 +862,6 @@ public class DefaultStateUpdater implements StateUpdater {
             tasksAndActionsLock.unlock();
         }
         return future;
-    }
-
-    @Override
-    public void remove(final TaskId taskId) {
-        tasksAndActionsLock.lock();
-        try {
-            tasksAndActions.add(TaskAndAction.createRemoveTask(taskId));
-            tasksAndActionsCondition.signalAll();
-        } finally {
-            tasksAndActionsLock.unlock();
-        }
     }
 
     @Override
@@ -912,17 +901,6 @@ public class DefaultStateUpdater implements StateUpdater {
         } catch (final InterruptedException ignored) {
         }
         return result;
-    }
-
-    @Override
-    public Set<Task> drainRemovedTasks() {
-        final List<Task> result = new ArrayList<>();
-        removedTasks.drainTo(result);
-        return new HashSet<>(result);
-    }
-
-    public boolean hasRemovedTasks() {
-        return !removedTasks.isEmpty();
     }
 
     @Override

@@ -452,7 +452,7 @@ public class OffsetMetadataManager {
      * @return A Result containing the OffsetCommitResponseData response and
      *         a list of records to update the state machine.
      */
-    public CoordinatorResult<OffsetCommitResponseData, Record> commitOffset(
+    public CoordinatorResult<OffsetCommitResponseData, CoordinatorRecord> commitOffset(
         RequestContext context,
         OffsetCommitRequestData request
     ) throws ApiException {
@@ -471,7 +471,7 @@ public class OffsetMetadataManager {
         }
 
         final OffsetCommitResponseData response = new OffsetCommitResponseData();
-        final List<Record> records = new ArrayList<>();
+        final List<CoordinatorRecord> records = new ArrayList<>();
         final long currentTimeMs = time.milliseconds();
         final OptionalLong expireTimestampMs = expireTimestampMs(request.retentionTimeMs(), currentTimeMs);
 
@@ -499,7 +499,7 @@ public class OffsetMetadataManager {
                         expireTimestampMs
                     );
 
-                    records.add(RecordHelpers.newOffsetCommitRecord(
+                    records.add(CoordinatorRecordHelpers.newOffsetCommitRecord(
                         request.groupId(),
                         topic.name(),
                         partition.partitionIndex(),
@@ -526,14 +526,14 @@ public class OffsetMetadataManager {
      * @return A Result containing the TxnOffsetCommitResponseData response and
      *         a list of records to update the state machine.
      */
-    public CoordinatorResult<TxnOffsetCommitResponseData, Record> commitTransactionalOffset(
+    public CoordinatorResult<TxnOffsetCommitResponseData, CoordinatorRecord> commitTransactionalOffset(
         RequestContext context,
         TxnOffsetCommitRequestData request
     ) throws ApiException {
         validateTransactionalOffsetCommit(request);
 
         final TxnOffsetCommitResponseData response = new TxnOffsetCommitResponseData();
-        final List<Record> records = new ArrayList<>();
+        final List<CoordinatorRecord> records = new ArrayList<>();
         final long currentTimeMs = time.milliseconds();
 
         request.topics().forEach(topic -> {
@@ -559,7 +559,7 @@ public class OffsetMetadataManager {
                         currentTimeMs
                     );
 
-                    records.add(RecordHelpers.newOffsetCommitRecord(
+                    records.add(CoordinatorRecordHelpers.newOffsetCommitRecord(
                         request.groupId(),
                         topic.name(),
                         partition.partitionIndex(),
@@ -585,11 +585,11 @@ public class OffsetMetadataManager {
      * @return A Result containing the OffsetDeleteResponseData response and
      *         a list of records to update the state machine.
      */
-    public CoordinatorResult<OffsetDeleteResponseData, Record> deleteOffsets(
+    public CoordinatorResult<OffsetDeleteResponseData, CoordinatorRecord> deleteOffsets(
         OffsetDeleteRequestData request
     ) throws ApiException {
         final Group group = validateOffsetDelete(request);
-        final List<Record> records = new ArrayList<>();
+        final List<CoordinatorRecord> records = new ArrayList<>();
         final OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection responseTopicCollection =
             new OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection();
 
@@ -615,7 +615,7 @@ public class OffsetMetadataManager {
                     // if a pending transactional offset exists.
                     if (hasCommittedOffset(request.groupId(), topic.name(), partition.partitionIndex()) ||
                         hasPendingTransactionalOffsets(request.groupId(), topic.name(), partition.partitionIndex())) {
-                        records.add(RecordHelpers.newOffsetCommitTombstoneRecord(
+                        records.add(CoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(
                             request.groupId(),
                             topic.name(),
                             partition.partitionIndex()
@@ -649,7 +649,7 @@ public class OffsetMetadataManager {
      */
     public int deleteAllOffsets(
         String groupId,
-        List<Record> records
+        List<CoordinatorRecord> records
     ) {
         TimelineHashMap<String, TimelineHashMap<Integer, OffsetAndMetadata>> offsetsByTopic = offsets.offsetsByGroup.get(groupId);
         AtomicInteger numDeletedOffsets = new AtomicInteger();
@@ -658,7 +658,7 @@ public class OffsetMetadataManager {
         if (offsetsByTopic != null) {
             offsetsByTopic.forEach((topic, offsetsByPartition) ->
                 offsetsByPartition.keySet().forEach(partition -> {
-                    records.add(RecordHelpers.newOffsetCommitTombstoneRecord(groupId, topic, partition));
+                    records.add(CoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(groupId, topic, partition));
                     numDeletedOffsets.getAndIncrement();
                 })
             );
@@ -678,7 +678,7 @@ public class OffsetMetadataManager {
                         pendingGroupOffsets.forEach((topic, offsetsByPartition) -> {
                             offsetsByPartition.keySet().forEach(partition -> {
                                 if (!hasCommittedOffset(groupId, topic, partition)) {
-                                    records.add(RecordHelpers.newOffsetCommitTombstoneRecord(groupId, topic, partition));
+                                    records.add(CoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(groupId, topic, partition));
                                     numDeletedOffsets.getAndIncrement();
                                 }
                             });
@@ -864,7 +864,7 @@ public class OffsetMetadataManager {
      *
      * @return True if no offsets exist or if all offsets expired, false otherwise.
      */
-    public boolean cleanupExpiredOffsets(String groupId, List<Record> records) {
+    public boolean cleanupExpiredOffsets(String groupId, List<CoordinatorRecord> records) {
         TimelineHashMap<String, TimelineHashMap<Integer, OffsetAndMetadata>> offsetsByTopic =
             offsets.offsetsByGroup.get(groupId);
         if (offsetsByTopic == null) {
@@ -912,10 +912,10 @@ public class OffsetMetadataManager {
      * @param topicPartitions   The partitions that have been deleted.
      * @return The list of tombstones (offset commit) to append.
      */
-    public List<Record> onPartitionsDeleted(
+    public List<CoordinatorRecord> onPartitionsDeleted(
         List<TopicPartition> topicPartitions
     ) {
-        List<Record> records = new ArrayList<>();
+        List<CoordinatorRecord> records = new ArrayList<>();
 
         Map<String, List<Integer>> partitionsByTopic = new HashMap<>();
         topicPartitions.forEach(tp -> partitionsByTopic
@@ -959,9 +959,9 @@ public class OffsetMetadataManager {
         String groupId,
         String topic,
         int partition, 
-        List<Record> records
+        List<CoordinatorRecord> records
     ) {
-        records.add(RecordHelpers.newOffsetCommitTombstoneRecord(groupId, topic, partition));
+        records.add(CoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(groupId, topic, partition));
         TopicPartition tp = new TopicPartition(topic, partition);
         log.trace("[GroupId {}] Removing expired offset and metadata for {}", groupId, tp);
         return tp;
