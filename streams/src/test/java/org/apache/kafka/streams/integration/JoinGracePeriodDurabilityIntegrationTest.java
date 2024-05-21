@@ -54,6 +54,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
@@ -205,9 +206,9 @@ public class JoinGracePeriodDurabilityIntegrationTest {
             // flush those recovered buffered events out.
             produceSynchronouslyToPartitionZero(
                 streamInput,
-                asList(
-                    new KeyValueTimestamp<>("k6", "v6", scaledTime(20L))
-                )
+                    Collections.singletonList(
+                            new KeyValueTimestamp<>("k6", "v6", scaledTime(20L))
+                    )
             );
             verifyOutput(
                 output,

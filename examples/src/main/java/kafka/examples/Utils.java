@@ -39,7 +39,7 @@ public class Utils {
     }
 
     public static void printHelp(String message, Object... args) {
-        System.out.println(format(message, args));
+        System.out.printf(message + "%n", args);
     }
 
     public static void printOut(String message, Object... args) {

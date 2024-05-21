@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -122,7 +123,7 @@ public class BoundedListTest {
         list.remove("a");
         assertEquals(Arrays.asList("a", "c"), list);
         list.remove(0);
-        assertEquals(Arrays.asList("c"), list);
+        assertEquals(Collections.singletonList("c"), list);
     }
 
     @Test
@@ -132,7 +133,7 @@ public class BoundedListTest {
         list.add("a");
         list.add("c");
         list.clear();
-        assertEquals(Arrays.asList(), list);
+        assertEquals(Collections.emptyList(), list);
         assertTrue(list.isEmpty());
     }
 
@@ -205,7 +206,7 @@ public class BoundedListTest {
         list.add(1);
         list.add(2);
         list.add(3);
-        assertEquals(Arrays.asList(2), list.subList(1, 2));
+        assertEquals(Collections.singletonList(2), list.subList(1, 2));
         assertThrows(UnsupportedOperationException.class,
             () -> list.subList(1, 2).remove(2));
     }

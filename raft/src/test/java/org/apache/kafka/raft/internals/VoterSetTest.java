@@ -111,7 +111,7 @@ final public class VoterSetTest {
 
     @Test
     void testIsOnlyVoterInStandalone() {
-        Map<Integer, VoterSet.VoterNode> aVoterMap = voterMap(Arrays.asList(1), true);
+        Map<Integer, VoterSet.VoterNode> aVoterMap = voterMap(Collections.singletonList(1), true);
         VoterSet voterSet = new VoterSet(new HashMap<>(aVoterMap));
 
         assertTrue(voterSet.isOnlyVoter(aVoterMap.get(1).voterKey()));

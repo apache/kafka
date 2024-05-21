@@ -1005,10 +1005,10 @@ public class KStreamImplTest {
         final NullPointerException exception = assertThrows(
             NullPointerException.class,
             () -> testStream.outerJoin(
-                testStream,
-                MockValueJoiner.TOSTRING_JOINER,
-                JoinWindows.of(ofMillis(10)),
-                (StreamJoined<String, String, String>) null));
+                    testStream,
+                    MockValueJoiner.TOSTRING_JOINER,
+                    JoinWindows.of(ofMillis(10)),
+                    null));
         assertThat(exception.getMessage(), equalTo("streamJoined can't be null"));
     }
 
@@ -1524,7 +1524,7 @@ public class KStreamImplTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final String input = "topic";
         final KStream<String, String> stream = builder.stream(input, stringConsumed);
-        stream.to((key, value, context) -> context.topic() + "-" + key + "-" + value.substring(0, 1),
+        stream.to((key, value, context) -> context.topic() + "-" + key + "-" + value.charAt(0),
             Produced.with(Serdes.String(), Serdes.String()));
         builder.stream(input + "-a-v", stringConsumed).process(processorSupplier);
         builder.stream(input + "-b-v", stringConsumed).process(processorSupplier);

@@ -73,13 +73,13 @@ public class SessionStoreFetchTest {
     private static final long WINDOW_SIZE = 500L;
     private static final long RETENTION_MS = 10000L;
 
-    private StoreType storeType;
-    private boolean enableLogging;
-    private boolean enableCaching;
-    private boolean forward;
+    private final StoreType storeType;
+    private final boolean enableLogging;
+    private final boolean enableCaching;
+    private final boolean forward;
 
-    private LinkedList<KeyValue<Windowed<String>, Long>> expectedRecords;
-    private LinkedList<KeyValue<String, String>> records;
+    private final LinkedList<KeyValue<Windowed<String>, Long>> expectedRecords;
+    private final LinkedList<KeyValue<String, String>> records;
     private Properties streamsConfig;
     private String low;
     private String high;

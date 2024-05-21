@@ -113,7 +113,7 @@ public final class AclsDelta {
     public String toString() {
         return "AclsDelta(" +
             ", changes=" + changes.entrySet().stream().
-                map(e -> "" + e.getKey() + "=" + e.getValue()).
+                map(e -> e.getKey() + "=" + e.getValue()).
                 collect(Collectors.joining(", ")) + ")";
     }
 }

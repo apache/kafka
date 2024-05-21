@@ -38,7 +38,6 @@ import scala.collection.Seq;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -168,7 +167,7 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
     }
 
     SimpleConsumerGroupExecutor addSimpleGroupExecutor(String group) {
-        return addSimpleGroupExecutor(Arrays.asList(new TopicPartition(TOPIC, 0)), group);
+        return addSimpleGroupExecutor(Collections.singletonList(new TopicPartition(TOPIC, 0)), group);
     }
 
     SimpleConsumerGroupExecutor addSimpleGroupExecutor(Collection<TopicPartition> partitions, String group) {

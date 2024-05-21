@@ -30,12 +30,12 @@ import java.util.Properties;
 
 public class StaticMemberTestClient {
 
-    private static String testName = "StaticMemberTestClient";
+    private static final String TEST_NAME = "StaticMemberTestClient";
 
     @SuppressWarnings("unchecked")
     public static void main(final String[] args) throws Exception {
         if (args.length < 1) {
-            System.err.println(testName + " requires one argument (properties-file) but none provided: ");
+            System.err.println(TEST_NAME + " requires one argument (properties-file) but none provided: ");
         }
 
         System.out.println("StreamsTest instance started");
@@ -46,7 +46,7 @@ public class StaticMemberTestClient {
 
         final String groupInstanceId = Objects.requireNonNull(streamsProperties.getProperty(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG));
 
-        System.out.println(testName + " instance started with group.instance.id " + groupInstanceId);
+        System.out.println(TEST_NAME + " instance started with group.instance.id " + groupInstanceId);
         System.out.println("props=" + streamsProperties);
         System.out.flush();
 
@@ -54,10 +54,10 @@ public class StaticMemberTestClient {
         final String inputTopic = (String) (Objects.requireNonNull(streamsProperties.remove("input.topic")));
 
         final KStream<String, String> dataStream = builder.stream(inputTopic);
-        dataStream.peek((k, v) ->  System.out.println(String.format("PROCESSED key=%s value=%s", k, v)));
+        dataStream.peek((k, v) ->  System.out.printf("PROCESSED key=%s value=%s%n", k, v));
 
         final Properties config = new Properties();
-        config.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, testName);
+        config.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, TEST_NAME);
         config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
         config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);

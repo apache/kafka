@@ -765,7 +765,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
 
         private final Map<String, List<List<Integer>>> topics = new HashMap<>(); {
             topics.put("foo", asList(asList(0, 1, 2), asList(1, 2, 3)));
-            topics.put("bar", asList(asList(3, 2, 1)));
+            topics.put("bar", singletonList(asList(3, 2, 1)));
             topics.put("baz", asList(asList(1, 0, 2), asList(2, 0, 1), asList(0, 2, 1)));
         }
 

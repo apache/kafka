@@ -18,6 +18,7 @@
 package org.apache.kafka.server.network;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -47,7 +48,7 @@ final public class EndpointReadyFuturesTest {
         1,
         Arrays.asList(EXTERNAL, INTERNAL),
         INTERNAL,
-        Arrays.asList("INTERNAL"));
+            Collections.singletonList("INTERNAL"));
 
     static void assertComplete(
             EndpointReadyFutures readyFutures,

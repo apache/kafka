@@ -205,38 +205,38 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-left");
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
-            null,
-            null,
-            null,
-            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null, 4L)),
-            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null, 5L)),
-            Arrays.asList(
-                new TestRecord<>(ANY_UNIQUE_KEY, "A-b", null, 6L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null, 6L)),
-            null,
-            null,
-            Arrays.asList(
-                new TestRecord<>(ANY_UNIQUE_KEY, "C-a", null, 9L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "C-b", null, 9L)),
-            Arrays.asList(
-                new TestRecord<>(ANY_UNIQUE_KEY, "A-c", null, 10L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "B-c", null, 10L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null, 10L)),
-            null,
-            null,
-            null,
-            Arrays.asList(
-                new TestRecord<>(ANY_UNIQUE_KEY, "A-d", null, 14L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "B-d", null, 14L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "C-d", null, 14L)),
-            Arrays.asList(
-                new TestRecord<>(ANY_UNIQUE_KEY, "D-a", null, 15L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "D-b", null, 15L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "D-c", null, 15L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L)),
-            Arrays.asList(
-                new TestRecord<>(null, "E-null", null, 16L)),
-            null
+                null,
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null, 4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null, 5L)),
+                Arrays.asList(
+                        new TestRecord<>(ANY_UNIQUE_KEY, "A-b", null, 6L),
+                        new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null, 6L)),
+                null,
+                null,
+                Arrays.asList(
+                        new TestRecord<>(ANY_UNIQUE_KEY, "C-a", null, 9L),
+                        new TestRecord<>(ANY_UNIQUE_KEY, "C-b", null, 9L)),
+                Arrays.asList(
+                        new TestRecord<>(ANY_UNIQUE_KEY, "A-c", null, 10L),
+                        new TestRecord<>(ANY_UNIQUE_KEY, "B-c", null, 10L),
+                        new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null, 10L)),
+                null,
+                null,
+                null,
+                Arrays.asList(
+                        new TestRecord<>(ANY_UNIQUE_KEY, "A-d", null, 14L),
+                        new TestRecord<>(ANY_UNIQUE_KEY, "B-d", null, 14L),
+                        new TestRecord<>(ANY_UNIQUE_KEY, "C-d", null, 14L)),
+                Arrays.asList(
+                        new TestRecord<>(ANY_UNIQUE_KEY, "D-a", null, 15L),
+                        new TestRecord<>(ANY_UNIQUE_KEY, "D-b", null, 15L),
+                        new TestRecord<>(ANY_UNIQUE_KEY, "D-c", null, 15L),
+                        new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L)),
+                Collections.singletonList(
+                        new TestRecord<>(null, "E-null", null, 16L)),
+                null
         );
 
         leftStream.leftJoin(
@@ -253,38 +253,38 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-left-repartitioned");
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
-            null,
-            null,
-            null,
-            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null, 4L)),
-            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null, 5L)),
-            Arrays.asList(
-                new TestRecord<>(ANY_UNIQUE_KEY, "A-b", null, 6L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null, 6L)),
-            null,
-            null,
-            Arrays.asList(
-                new TestRecord<>(ANY_UNIQUE_KEY, "C-a", null, 9L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "C-b", null, 9L)),
-            Arrays.asList(
-                new TestRecord<>(ANY_UNIQUE_KEY, "A-c", null, 10L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "B-c", null, 10L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null, 10L)),
-            null,
-            null,
-            null,
-            Arrays.asList(
-                new TestRecord<>(ANY_UNIQUE_KEY, "A-d", null, 14L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "B-d", null, 14L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "C-d", null, 14L)),
-            Arrays.asList(
-                new TestRecord<>(ANY_UNIQUE_KEY, "D-a", null, 15L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "D-b", null, 15L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "D-c", null, 15L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L)),
-            Arrays.asList(
-                new TestRecord<>(null, "E-null", null, 16L)),
-            null
+                null,
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null, 4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null, 5L)),
+                Arrays.asList(
+                        new TestRecord<>(ANY_UNIQUE_KEY, "A-b", null, 6L),
+                        new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null, 6L)),
+                null,
+                null,
+                Arrays.asList(
+                        new TestRecord<>(ANY_UNIQUE_KEY, "C-a", null, 9L),
+                        new TestRecord<>(ANY_UNIQUE_KEY, "C-b", null, 9L)),
+                Arrays.asList(
+                        new TestRecord<>(ANY_UNIQUE_KEY, "A-c", null, 10L),
+                        new TestRecord<>(ANY_UNIQUE_KEY, "B-c", null, 10L),
+                        new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null, 10L)),
+                null,
+                null,
+                null,
+                Arrays.asList(
+                        new TestRecord<>(ANY_UNIQUE_KEY, "A-d", null, 14L),
+                        new TestRecord<>(ANY_UNIQUE_KEY, "B-d", null, 14L),
+                        new TestRecord<>(ANY_UNIQUE_KEY, "C-d", null, 14L)),
+                Arrays.asList(
+                        new TestRecord<>(ANY_UNIQUE_KEY, "D-a", null, 15L),
+                        new TestRecord<>(ANY_UNIQUE_KEY, "D-b", null, 15L),
+                        new TestRecord<>(ANY_UNIQUE_KEY, "D-c", null, 15L),
+                        new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L)),
+                Collections.singletonList(
+                        new TestRecord<>(null, "E-null", null, 16L)),
+                null
         );
 
         leftStream.map(MockMapper.noOpKeyValueMapper())
@@ -303,39 +303,39 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-outer");
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
-            null,
-            null,
-            null,
-            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null, 4L)),
-            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null, 5L)),
-            Arrays.asList(
-                new TestRecord<>(ANY_UNIQUE_KEY, "A-b", null, 6L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null, 6L)),
-            null,
-            null,
-            Arrays.asList(
-                new TestRecord<>(ANY_UNIQUE_KEY, "C-a", null, 9L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "C-b", null, 9L)),
-            Arrays.asList(
-                new TestRecord<>(ANY_UNIQUE_KEY, "A-c", null, 10L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "B-c", null, 10L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null, 10L)),
-            null,
-            null,
-            null,
-            Arrays.asList(
-                new TestRecord<>(ANY_UNIQUE_KEY, "A-d", null, 14L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "B-d", null, 14L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "C-d", null, 14L)),
-            Arrays.asList(
-                new TestRecord<>(ANY_UNIQUE_KEY, "D-a", null, 15L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "D-b", null, 15L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "D-c", null, 15L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L)),
-            Arrays.asList(
-                new TestRecord<>(null, "E-null", null, 16L)),
-            Arrays.asList(
-                new TestRecord<>(null, "null-e", null, 17L))
+                null,
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null, 4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null, 5L)),
+                Arrays.asList(
+                        new TestRecord<>(ANY_UNIQUE_KEY, "A-b", null, 6L),
+                        new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null, 6L)),
+                null,
+                null,
+                Arrays.asList(
+                        new TestRecord<>(ANY_UNIQUE_KEY, "C-a", null, 9L),
+                        new TestRecord<>(ANY_UNIQUE_KEY, "C-b", null, 9L)),
+                Arrays.asList(
+                        new TestRecord<>(ANY_UNIQUE_KEY, "A-c", null, 10L),
+                        new TestRecord<>(ANY_UNIQUE_KEY, "B-c", null, 10L),
+                        new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null, 10L)),
+                null,
+                null,
+                null,
+                Arrays.asList(
+                        new TestRecord<>(ANY_UNIQUE_KEY, "A-d", null, 14L),
+                        new TestRecord<>(ANY_UNIQUE_KEY, "B-d", null, 14L),
+                        new TestRecord<>(ANY_UNIQUE_KEY, "C-d", null, 14L)),
+                Arrays.asList(
+                        new TestRecord<>(ANY_UNIQUE_KEY, "D-a", null, 15L),
+                        new TestRecord<>(ANY_UNIQUE_KEY, "D-b", null, 15L),
+                        new TestRecord<>(ANY_UNIQUE_KEY, "D-c", null, 15L),
+                        new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L)),
+                Collections.singletonList(
+                        new TestRecord<>(null, "E-null", null, 16L)),
+                Collections.singletonList(
+                        new TestRecord<>(null, "null-e", null, 17L))
         );
 
         leftStream.outerJoin(
@@ -352,39 +352,39 @@ public class StreamStreamJoinIntegrationTest extends AbstractJoinIntegrationTest
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appID + "-outer");
 
         final List<List<TestRecord<Long, String>>> expectedResult = Arrays.asList(
-            null,
-            null,
-            null,
-            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null, 4L)),
-            Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null, 5L)),
-            Arrays.asList(
-                new TestRecord<>(ANY_UNIQUE_KEY, "A-b", null, 6L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null, 6L)),
-            null,
-            null,
-            Arrays.asList(
-                new TestRecord<>(ANY_UNIQUE_KEY, "C-a", null, 9L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "C-b", null, 9L)),
-            Arrays.asList(
-                new TestRecord<>(ANY_UNIQUE_KEY, "A-c", null, 10L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "B-c", null, 10L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null, 10L)),
-            null,
-            null,
-            null,
-            Arrays.asList(
-                new TestRecord<>(ANY_UNIQUE_KEY, "A-d", null, 14L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "B-d", null, 14L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "C-d", null, 14L)),
-            Arrays.asList(
-                new TestRecord<>(ANY_UNIQUE_KEY, "D-a", null, 15L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "D-b", null, 15L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "D-c", null, 15L),
-                new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L)),
-            Arrays.asList(
-                new TestRecord<>(null, "E-null", null, 16L)),
-            Arrays.asList(
-                new TestRecord<>(null, "null-e", null, 17L))
+                null,
+                null,
+                null,
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "A-a", null, 4L)),
+                Collections.singletonList(new TestRecord<>(ANY_UNIQUE_KEY, "B-a", null, 5L)),
+                Arrays.asList(
+                        new TestRecord<>(ANY_UNIQUE_KEY, "A-b", null, 6L),
+                        new TestRecord<>(ANY_UNIQUE_KEY, "B-b", null, 6L)),
+                null,
+                null,
+                Arrays.asList(
+                        new TestRecord<>(ANY_UNIQUE_KEY, "C-a", null, 9L),
+                        new TestRecord<>(ANY_UNIQUE_KEY, "C-b", null, 9L)),
+                Arrays.asList(
+                        new TestRecord<>(ANY_UNIQUE_KEY, "A-c", null, 10L),
+                        new TestRecord<>(ANY_UNIQUE_KEY, "B-c", null, 10L),
+                        new TestRecord<>(ANY_UNIQUE_KEY, "C-c", null, 10L)),
+                null,
+                null,
+                null,
+                Arrays.asList(
+                        new TestRecord<>(ANY_UNIQUE_KEY, "A-d", null, 14L),
+                        new TestRecord<>(ANY_UNIQUE_KEY, "B-d", null, 14L),
+                        new TestRecord<>(ANY_UNIQUE_KEY, "C-d", null, 14L)),
+                Arrays.asList(
+                        new TestRecord<>(ANY_UNIQUE_KEY, "D-a", null, 15L),
+                        new TestRecord<>(ANY_UNIQUE_KEY, "D-b", null, 15L),
+                        new TestRecord<>(ANY_UNIQUE_KEY, "D-c", null, 15L),
+                        new TestRecord<>(ANY_UNIQUE_KEY, "D-d", null, 15L)),
+                Collections.singletonList(
+                        new TestRecord<>(null, "E-null", null, 16L)),
+                Collections.singletonList(
+                        new TestRecord<>(null, "null-e", null, 17L))
         );
 
         leftStream.map(MockMapper.noOpKeyValueMapper())

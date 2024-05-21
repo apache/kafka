@@ -930,7 +930,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         fullyReplicatedReplicaAssignmentMap.put(0, JavaConverters.asScalaBufferConverter(Arrays.asList((Object) 1, (Object) 2, (Object) 3)).asScala().toSeq());
 
         scala.collection.mutable.HashMap<Object, Seq<Object>> offlineReplicaAssignmentMap = new scala.collection.mutable.HashMap<>();
-        offlineReplicaAssignmentMap.put(0, JavaConverters.asScalaBufferConverter(Arrays.asList((Object) 0)).asScala().toSeq());
+        offlineReplicaAssignmentMap.put(0, JavaConverters.asScalaBufferConverter(Collections.singletonList((Object) 0)).asScala().toSeq());
 
         Properties topicConfig = new Properties();
         topicConfig.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "6");

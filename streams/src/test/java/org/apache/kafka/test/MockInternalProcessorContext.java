@@ -51,7 +51,7 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     private ProcessorNode currentNode;
     private RecordCollector recordCollector;
     private long currentSystemTimeMs;
-    private TaskType taskType = TaskType.ACTIVE;
+    private final TaskType taskType = TaskType.ACTIVE;
     private ProcessorMetadata processorMetadata;
 
     public MockInternalProcessorContext() {

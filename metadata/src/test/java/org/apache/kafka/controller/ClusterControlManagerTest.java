@@ -327,19 +327,19 @@ public class ClusterControlManagerTest {
         short expectedVersion = metadataVersion.registerBrokerRecordVersion();
 
         assertEquals(
-            asList(new ApiMessageAndVersion(new RegisterBrokerRecord().
-                setBrokerEpoch(123L).
-                setBrokerId(0).
-                setRack(null).
-                setIncarnationId(Uuid.fromString("0H4fUu1xQEKXFYwB1aBjhg")).
-                setFenced(true).
-                setLogDirs(logDirs).
-                setFeatures(new RegisterBrokerRecord.BrokerFeatureCollection(asList(
-                    new RegisterBrokerRecord.BrokerFeature().
-                        setName(MetadataVersion.FEATURE_NAME).
-                        setMinSupportedVersion((short) 1).
-                        setMaxSupportedVersion((short) 1)).iterator())).
-                setInControlledShutdown(false), expectedVersion)),
+                Collections.singletonList(new ApiMessageAndVersion(new RegisterBrokerRecord().
+                        setBrokerEpoch(123L).
+                        setBrokerId(0).
+                        setRack(null).
+                        setIncarnationId(Uuid.fromString("0H4fUu1xQEKXFYwB1aBjhg")).
+                        setFenced(true).
+                        setLogDirs(logDirs).
+                        setFeatures(new RegisterBrokerRecord.BrokerFeatureCollection(Collections.singletonList(
+                                new RegisterBrokerRecord.BrokerFeature().
+                                        setName(MetadataVersion.FEATURE_NAME).
+                                        setMinSupportedVersion((short) 1).
+                                        setMaxSupportedVersion((short) 1)).iterator())).
+                        setInControlledShutdown(false), expectedVersion)),
             result.records());
     }
 
@@ -673,7 +673,7 @@ public class ClusterControlManagerTest {
         RegisterBrokerRecord brokerRecord = new RegisterBrokerRecord().setBrokerEpoch(100).setBrokerId(1).setLogDirs(Collections.emptyList());
         brokerRecord.endPoints().add(new BrokerEndpoint().setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).setPort((short) 9092).setName("PLAINTEXT").setHost("127.0.0.1"));
         clusterControl.replay(brokerRecord, 100L);
-        registerNewBrokerWithDirs(clusterControl, 2, asList(Uuid.fromString("singleOnlineDirectoryA")));
+        registerNewBrokerWithDirs(clusterControl, 2, Collections.singletonList(Uuid.fromString("singleOnlineDirectoryA")));
         registerNewBrokerWithDirs(clusterControl, 3, asList(Uuid.fromString("s4fRmyNFSH6J0vI8AVA5ew"), Uuid.fromString("UbtxBcqYSnKUEMcnTyZFWw")));
         assertEquals(DirectoryId.MIGRATING, clusterControl.defaultDir(1));
         assertEquals(Uuid.fromString("singleOnlineDirectoryA"), clusterControl.defaultDir(2));

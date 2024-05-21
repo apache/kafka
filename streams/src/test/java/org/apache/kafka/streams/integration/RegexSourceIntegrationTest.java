@@ -122,12 +122,12 @@ public class RegexSourceIntegrationTest {
     private Properties streamsConfiguration;
     private static final String STREAM_TASKS_NOT_UPDATED = "Stream tasks not updated";
     private KafkaStreams streams;
-    private static volatile AtomicInteger topicSuffixGenerator = new AtomicInteger(0);
+    private static final AtomicInteger TOPIC_SUFFIX_GENERATOR = new AtomicInteger(0);
     private String outputTopic;
 
     @BeforeEach
     public void setUp(final TestInfo testInfo) throws InterruptedException {
-        outputTopic = createTopic(topicSuffixGenerator.incrementAndGet());
+        outputTopic = createTopic(TOPIC_SUFFIX_GENERATOR.incrementAndGet());
         final Properties properties = new Properties();
         properties.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);

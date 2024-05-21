@@ -71,12 +71,12 @@ public class KTableEfficientRangeQueryTest {
     private static final String TABLE_NAME = "mytable";
     private static final int DATA_SIZE = 5;
 
-    private StoreType storeType;
-    private boolean enableLogging;
-    private boolean enableCaching;
-    private boolean forward;
+    private final StoreType storeType;
+    private final boolean enableLogging;
+    private final boolean enableCaching;
+    private final boolean forward;
 
-    private LinkedList<KeyValue<String, String>> records;
+    private final LinkedList<KeyValue<String, String>> records;
     private String low;
     private String high;
     private String middle;

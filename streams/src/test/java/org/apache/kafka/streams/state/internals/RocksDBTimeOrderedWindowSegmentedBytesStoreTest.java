@@ -40,8 +40,8 @@ public class RocksDBTimeOrderedWindowSegmentedBytesStoreTest
         SessionSchemaWithoutIndex
     }
 
-    private boolean hasIndex;
-    private SchemaType schemaType;
+    private final boolean hasIndex;
+    private final SchemaType schemaType;
 
     @Parameterized.Parameters(name = "{0}")
     public static Collection<Object[]> getKeySchema() {

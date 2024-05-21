@@ -19,8 +19,8 @@ package org.apache.kafka.connect.runtime.rest.entities;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.junit.Test;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class PluginInfoTest {
 
@@ -29,9 +29,9 @@ public class PluginInfoTest {
         PluginInfo.NoVersionFilter filter = new PluginInfo.NoVersionFilter();
         // We intentionally refrain from using assertEquals and assertNotEquals
         // here to ensure that the filter's equals() method is used
-        assertFalse(filter.equals("1.0"));
-        assertFalse(filter.equals(new Object()));
-        assertFalse(filter.equals(null));
-        assertTrue(filter.equals(PluginDesc.UNDEFINED_VERSION));
+        assertNotEquals("1.0", filter);
+        assertNotEquals(filter, new Object());
+        assertNotEquals(null, filter);
+        assertEquals(PluginDesc.UNDEFINED_VERSION, filter);
     }
 }

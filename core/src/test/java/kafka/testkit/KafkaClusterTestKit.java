@@ -147,9 +147,9 @@ public class KafkaClusterTestKit implements AutoCloseable {
     }
 
     public static class Builder {
-        private TestKitNodes nodes;
-        private Map<String, String> configProps = new HashMap<>();
-        private SimpleFaultHandlerFactory faultHandlerFactory = new SimpleFaultHandlerFactory();
+        private final TestKitNodes nodes;
+        private final Map<String, String> configProps = new HashMap<>();
+        private final SimpleFaultHandlerFactory faultHandlerFactory = new SimpleFaultHandlerFactory();
 
         public Builder(TestKitNodes nodes) {
             this.nodes = nodes;
@@ -473,7 +473,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
     }
 
     public class ClientPropertiesBuilder {
-        private Properties properties;
+        private final Properties properties;
         private boolean usingBootstrapControllers = false;
 
         public ClientPropertiesBuilder() {

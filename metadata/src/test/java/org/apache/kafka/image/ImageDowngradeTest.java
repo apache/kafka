@@ -83,8 +83,8 @@ public class ImageDowngradeTest {
     @Test
     public void testPremodernVersion() {
         writeWithExpectedLosses(MetadataVersion.IBP_3_2_IV0,
-            Arrays.asList(
-                "feature flag(s): foo.feature"),
+                Collections.singletonList(
+                        "feature flag(s): foo.feature"),
             Arrays.asList(
                 metadataVersionRecord(MetadataVersion.IBP_3_3_IV0),
                 TEST_RECORDS.get(0),
@@ -103,7 +103,7 @@ public class ImageDowngradeTest {
     @Test
     public void testPreControlledShutdownStateVersion() {
         writeWithExpectedLosses(MetadataVersion.IBP_3_3_IV2,
-                Arrays.asList(
+                Collections.singletonList(
                         "the inControlledShutdown state of one or more brokers"),
                 Arrays.asList(
                         metadataVersionRecord(MetadataVersion.IBP_3_3_IV3),
@@ -134,8 +134,8 @@ public class ImageDowngradeTest {
     @Test
     public void testPreZkMigrationSupportVersion() {
         writeWithExpectedLosses(MetadataVersion.IBP_3_3_IV3,
-            Arrays.asList(
-                "the isMigratingZkBroker state of one or more brokers"),
+                Collections.singletonList(
+                        "the isMigratingZkBroker state of one or more brokers"),
             Arrays.asList(
                 metadataVersionRecord(MetadataVersion.IBP_3_4_IV0),
                 new ApiMessageAndVersion(new RegisterBrokerRecord().

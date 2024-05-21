@@ -136,10 +136,10 @@ public class SelfJoinUpgradeIntegrationTest {
 
         final long currentTime = CLUSTER.time.milliseconds();
         processKeyValueAndVerifyCount(
-            "1",
-            "A",
-            currentTime + 42L,
-            asList(new KeyValueTimestamp<>("1", "AA", currentTime + 42L))
+                "1",
+                "A",
+                currentTime + 42L,
+                singletonList(new KeyValueTimestamp<>("1", "AA", currentTime + 42L))
         );
 
         processKeyValueAndVerifyCount(
@@ -201,10 +201,10 @@ public class SelfJoinUpgradeIntegrationTest {
 
         final long currentTime = CLUSTER.time.milliseconds();
         processKeyValueAndVerifyCount(
-            "1",
-            "A",
-            currentTime + 42L,
-            asList(new KeyValueTimestamp<>("1", "AA", currentTime + 42L))
+                "1",
+                "A",
+                currentTime + 42L,
+                singletonList(new KeyValueTimestamp<>("1", "AA", currentTime + 42L))
         );
 
         processKeyValueAndVerifyCount(

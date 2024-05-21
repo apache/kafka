@@ -984,7 +984,7 @@ public abstract class TopicCommand {
                 CommandLineUtils.checkRequiredArgs(parser, options, topicOpt);
             if (has(alterOpt)) {
                 Set<OptionSpec<?>> usedOptions = new HashSet<>(Arrays.asList(bootstrapServerOpt, configOpt));
-                Set<OptionSpec<?>> invalidOptions = new HashSet<>(Arrays.asList(alterOpt));
+                Set<OptionSpec<?>> invalidOptions = new HashSet<>(Collections.singletonList(alterOpt));
                 CommandLineUtils.checkInvalidArgsSet(parser, options, usedOptions, invalidOptions, Optional.of(KAFKA_CONFIGS_CLI_SUPPORTS_ALTERING_TOPIC_CONFIGS_WITH_A_BOOTSTRAP_SERVER));
                 CommandLineUtils.checkRequiredArgs(parser, options, partitionsOpt);
             }
@@ -994,9 +994,9 @@ public abstract class TopicCommand {
             // check invalid args
             CommandLineUtils.checkInvalidArgs(parser, options, configOpt, invalidOptions(Arrays.asList(alterOpt, createOpt)));
             CommandLineUtils.checkInvalidArgs(parser, options, deleteConfigOpt,
-                invalidOptions(new HashSet<>(Arrays.asList(bootstrapServerOpt)), Arrays.asList(alterOpt)));
+                invalidOptions(new HashSet<>(Collections.singletonList(bootstrapServerOpt)), Collections.singletonList(alterOpt)));
             CommandLineUtils.checkInvalidArgs(parser, options, partitionsOpt, invalidOptions(Arrays.asList(alterOpt, createOpt)));
-            CommandLineUtils.checkInvalidArgs(parser, options, replicationFactorOpt, invalidOptions(Arrays.asList(createOpt)));
+            CommandLineUtils.checkInvalidArgs(parser, options, replicationFactorOpt, invalidOptions(Collections.singletonList(createOpt)));
             CommandLineUtils.checkInvalidArgs(parser, options, replicaAssignmentOpt, invalidOptions(Arrays.asList(alterOpt, createOpt)));
             if (options.has(createOpt)) {
                 CommandLineUtils.checkInvalidArgs(parser, options, replicaAssignmentOpt, partitionsOpt, replicationFactorOpt);
@@ -1012,10 +1012,10 @@ public abstract class TopicCommand {
             CommandLineUtils.checkInvalidArgs(parser, options, reportUnavailablePartitionsOpt,
                 invalidOptions(Collections.singleton(topicsWithOverridesOpt), Arrays.asList(describeOpt, reportUnavailablePartitionsOpt)));
             CommandLineUtils.checkInvalidArgs(parser, options, topicsWithOverridesOpt,
-                invalidOptions(new HashSet<>(allReplicationReportOpts), Arrays.asList(describeOpt)));
+                invalidOptions(new HashSet<>(allReplicationReportOpts), Collections.singletonList(describeOpt)));
             CommandLineUtils.checkInvalidArgs(parser, options, ifExistsOpt,
                 invalidOptions(Arrays.asList(alterOpt, deleteOpt, describeOpt)));
-            CommandLineUtils.checkInvalidArgs(parser, options, ifNotExistsOpt, invalidOptions(Arrays.asList(createOpt)));
+            CommandLineUtils.checkInvalidArgs(parser, options, ifNotExistsOpt, invalidOptions(Collections.singletonList(createOpt)));
             CommandLineUtils.checkInvalidArgs(parser, options, excludeInternalTopicOpt, invalidOptions(Arrays.asList(listOpt, describeOpt)));
         }
 

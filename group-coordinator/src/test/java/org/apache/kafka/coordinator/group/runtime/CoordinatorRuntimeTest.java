@@ -145,7 +145,7 @@ public class CoordinatorRuntimeTest {
      * when poll() is called.
      */
     private static class ManualEventProcessor implements CoordinatorEventProcessor {
-        private Deque<CoordinatorEvent> queue = new LinkedList<>();
+        private final Deque<CoordinatorEvent> queue = new LinkedList<>();
 
         @Override
         public void enqueueLast(CoordinatorEvent event) throws RejectedExecutionException {
@@ -984,13 +984,13 @@ public class CoordinatorRuntimeTest {
         // Records have been replayed to the coordinator.
         assertEquals(mkSet("record1", "record2"), ctx.coordinator.coordinator().records());
         // Records have been written to the log.
-        assertEquals(Arrays.asList(
-            records(timer.time().milliseconds(), "record1", "record2")
+        assertEquals(Collections.singletonList(
+                records(timer.time().milliseconds(), "record1", "record2")
         ), writer.entries(TP));
 
         // Write #2.
         CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, DEFAULT_WRITE_TIMEOUT,
-            state -> new CoordinatorResult<>(Arrays.asList("record3"), "response2"));
+            state -> new CoordinatorResult<>(Collections.singletonList("record3"), "response2"));
 
         // Verify that the write is not committed yet.
         assertFalse(write2.isDone());
@@ -1538,8 +1538,8 @@ public class CoordinatorRuntimeTest {
             100L
         ));
         // Records have been written to the log.
-        assertEquals(Arrays.asList(
-            transactionalRecords(100L, (short) 5, timer.time().milliseconds(), "record1", "record2")
+        assertEquals(Collections.singletonList(
+                transactionalRecords(100L, (short) 5, timer.time().milliseconds(), "record1", "record2")
         ), writer.entries(TP));
 
         // Complete transaction #1.
@@ -1783,8 +1783,8 @@ public class CoordinatorRuntimeTest {
         assertEquals(Arrays.asList(0L, 2L), ctx.coordinator.snapshotRegistry().epochsList());
         assertEquals(mkSet("record1", "record2"), ctx.coordinator.coordinator().pendingRecords(100L));
         assertEquals(Collections.emptySet(), ctx.coordinator.coordinator().records());
-        assertEquals(Arrays.asList(
-            transactionalRecords(100L, (short) 5, timer.time().milliseconds(), "record1", "record2")
+        assertEquals(Collections.singletonList(
+                transactionalRecords(100L, (short) 5, timer.time().milliseconds(), "record1", "record2")
         ), writer.entries(TP));
 
         // Complete transaction #1. It should fail.
@@ -1805,8 +1805,8 @@ public class CoordinatorRuntimeTest {
         assertEquals(Arrays.asList(0L, 2L), ctx.coordinator.snapshotRegistry().epochsList());
         assertEquals(mkSet("record1", "record2"), ctx.coordinator.coordinator().pendingRecords(100L));
         assertEquals(Collections.emptySet(), ctx.coordinator.coordinator().records());
-        assertEquals(Arrays.asList(
-            transactionalRecords(100L, (short) 5, timer.time().milliseconds(), "record1", "record2")
+        assertEquals(Collections.singletonList(
+                transactionalRecords(100L, (short) 5, timer.time().milliseconds(), "record1", "record2")
         ), writer.entries(TP));
     }
 

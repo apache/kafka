@@ -31,7 +31,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -118,7 +117,7 @@ public class SnapshotGeneratorTest {
             assertEquals(Collections.emptyList(), emitter.images());
             emitter.setReady();
         }
-        assertEquals(Arrays.asList(TEST_IMAGE), emitter.images());
+        assertEquals(Collections.singletonList(TEST_IMAGE), emitter.images());
         faultHandler.maybeRethrowFirstException();
     }
 
@@ -163,7 +162,7 @@ public class SnapshotGeneratorTest {
             // so this does not trigger a new snapshot.
             generator.publishLogDelta(TEST_DELTA, TEST_IMAGE, logDeltaManifestBuilder().numBytes(150).build());
         }
-        assertEquals(Arrays.asList(TEST_IMAGE), emitter.images());
+        assertEquals(Collections.singletonList(TEST_IMAGE), emitter.images());
         faultHandler.maybeRethrowFirstException();
     }
 

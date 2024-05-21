@@ -1125,9 +1125,7 @@ public class Values {
             }
             if (knownType == null) {
                 knownType = schema.type();
-            } else if (knownType != schema.type()) {
-                return false;
-            }
+            } else return knownType == schema.type();
             return true;
         }
 

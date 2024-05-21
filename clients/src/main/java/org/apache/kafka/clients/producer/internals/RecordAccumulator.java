@@ -855,13 +855,12 @@ public class RecordAccumulator {
             }
 
             int firstInFlightSequence = transactionManager.firstInFlightSequence(first.topicPartition);
-            if (firstInFlightSequence != RecordBatch.NO_SEQUENCE && first.hasSequence()
-                && first.baseSequence() != firstInFlightSequence)
-                // If the queued batch already has an assigned sequence, then it is being retried.
-                // In this case, we wait until the next immediate batch is ready and drain that.
-                // We only move on when the next in line batch is complete (either successfully or due to
-                // a fatal broker error). This effectively reduces our in flight request count to 1.
-                return true;
+            // If the queued batch already has an assigned sequence, then it is being retried.
+            // In this case, we wait until the next immediate batch is ready and drain that.
+            // We only move on when the next in line batch is complete (either successfully or due to
+            // a fatal broker error). This effectively reduces our in flight request count to 1.
+            return firstInFlightSequence != RecordBatch.NO_SEQUENCE && first.hasSequence()
+                    && first.baseSequence() != firstInFlightSequence;
         }
         return false;
     }

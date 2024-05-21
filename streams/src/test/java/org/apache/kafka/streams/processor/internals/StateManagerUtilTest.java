@@ -65,7 +65,7 @@ public class StateManagerUtilTest {
     @Mock
     private InternalProcessorContext processorContext;
 
-    private Logger logger = new LogContext("test").logger(AbstractTask.class);
+    private final Logger logger = new LogContext("test").logger(AbstractTask.class);
 
     private final TaskId taskId = new TaskId(0, 0);
 

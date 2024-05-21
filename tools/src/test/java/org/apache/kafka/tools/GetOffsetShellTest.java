@@ -40,6 +40,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Properties;
@@ -325,7 +326,7 @@ public class GetOffsetShellTest {
 
         List<Row> offsets = executeAndParse("--topic-partitions", "__.*:0");
 
-        assertEquals(Arrays.asList(new Row("__consumer_offsets", 0, 0L)), offsets);
+        assertEquals(Collections.singletonList(new Row("__consumer_offsets", 0, 0L)), offsets);
     }
 
     @ClusterTest

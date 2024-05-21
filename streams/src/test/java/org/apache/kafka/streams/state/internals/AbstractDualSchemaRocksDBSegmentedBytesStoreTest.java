@@ -413,8 +413,8 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(
             null, Bytes.wrap(keyA.getBytes()), startEdgeTime, endEdgeTime - 1L)) {
 
-            final List<KeyValue<Windowed<String>, Long>> expected = asList(
-                KeyValue.pair(new Windowed<>(keyA, startEdgeWindow), 10L)
+            final List<KeyValue<Windowed<String>, Long>> expected = Collections.singletonList(
+                    KeyValue.pair(new Windowed<>(keyA, startEdgeWindow), 10L)
             );
 
             assertEquals(expected, toList(values));
@@ -423,8 +423,8 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(
             Bytes.wrap(keyB.getBytes()), null, startEdgeTime + 1, endEdgeTime)) {
 
-            final List<KeyValue<Windowed<String>, Long>> expected = asList(
-                KeyValue.pair(new Windowed<>(keyB, endEdgeWindow), 150L)
+            final List<KeyValue<Windowed<String>, Long>> expected = Collections.singletonList(
+                    KeyValue.pair(new Windowed<>(keyB, endEdgeWindow), 150L)
             );
 
             assertEquals(expected, toList(values));
@@ -593,8 +593,8 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.backwardFetch(
             null, Bytes.wrap(keyA.getBytes()), startEdgeTime, endEdgeTime - 1L)) {
 
-            final List<KeyValue<Windowed<String>, Long>> expected = asList(
-                KeyValue.pair(new Windowed<>(keyA, startEdgeWindow), 10L)
+            final List<KeyValue<Windowed<String>, Long>> expected = Collections.singletonList(
+                    KeyValue.pair(new Windowed<>(keyA, startEdgeWindow), 10L)
             );
 
             assertEquals(expected, toList(values));
@@ -603,8 +603,8 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.backwardFetch(
             Bytes.wrap(keyB.getBytes()), null, startEdgeTime + 1, endEdgeTime)) {
 
-            final List<KeyValue<Windowed<String>, Long>> expected = asList(
-                KeyValue.pair(new Windowed<>(keyB, endEdgeWindow), 150L)
+            final List<KeyValue<Windowed<String>, Long>> expected = Collections.singletonList(
+                    KeyValue.pair(new Windowed<>(keyB, endEdgeWindow), 150L)
             );
 
             assertEquals(expected, toList(values));
@@ -671,8 +671,8 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.fetch(
             Bytes.wrap(keyA.getBytes()), 0, Long.MAX_VALUE)) {
 
-            final List<KeyValue<Windowed<String>, Long>> expected = asList(
-                KeyValue.pair(new Windowed<>(keyA, maxWindow), 10L)
+            final List<KeyValue<Windowed<String>, Long>> expected = Collections.singletonList(
+                    KeyValue.pair(new Windowed<>(keyA, maxWindow), 10L)
             );
 
             assertEquals(expected, toList(values));
@@ -754,8 +754,8 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
         try (final KeyValueIterator<Bytes, byte[]> values = bytesStore.backwardFetch(
             Bytes.wrap(keyA.getBytes()), 0, Long.MAX_VALUE)) {
 
-            final List<KeyValue<Windowed<String>, Long>> expected = asList(
-                KeyValue.pair(new Windowed<>(keyA, maxWindow), 10L)
+            final List<KeyValue<Windowed<String>, Long>> expected = Collections.singletonList(
+                    KeyValue.pair(new Windowed<>(keyA, maxWindow), 10L)
             );
 
             assertEquals(expected, toList(values));

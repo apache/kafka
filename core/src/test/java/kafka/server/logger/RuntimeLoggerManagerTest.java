@@ -29,7 +29,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Arrays;
+import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -40,18 +40,18 @@ public class RuntimeLoggerManagerTest {
 
     @Test
     public void testValidateSetLogLevelConfig() {
-        MANAGER.validateLogLevelConfigs(Arrays.asList(new AlterableConfig().
-            setName(LOG.getName()).
-            setConfigOperation(OpType.SET.id()).
-            setValue("TRACE")));
+        MANAGER.validateLogLevelConfigs(Collections.singletonList(new AlterableConfig().
+                setName(LOG.getName()).
+                setConfigOperation(OpType.SET.id()).
+                setValue("TRACE")));
     }
 
     @Test
     public void testValidateDeleteLogLevelConfig() {
-        MANAGER.validateLogLevelConfigs(Arrays.asList(new AlterableConfig().
-            setName(LOG.getName()).
-            setConfigOperation(OpType.DELETE.id()).
-            setValue("")));
+        MANAGER.validateLogLevelConfigs(Collections.singletonList(new AlterableConfig().
+                setName(LOG.getName()).
+                setConfigOperation(OpType.DELETE.id()).
+                setValue("")));
     }
 
     @ParameterizedTest
@@ -60,10 +60,10 @@ public class RuntimeLoggerManagerTest {
         OpType opType = AlterConfigOp.OpType.forId(id);
         assertEquals(opType + " operation is not allowed for the BROKER_LOGGER resource",
             Assertions.assertThrows(InvalidRequestException.class,
-                () -> MANAGER.validateLogLevelConfigs(Arrays.asList(new AlterableConfig().
-                    setName(LOG.getName()).
-                    setConfigOperation(id).
-                    setValue("TRACE")))).getMessage());
+                () -> MANAGER.validateLogLevelConfigs(Collections.singletonList(new AlterableConfig().
+                        setName(LOG.getName()).
+                        setConfigOperation(id).
+                        setValue("TRACE")))).getMessage());
     }
 
     @Test
@@ -71,15 +71,15 @@ public class RuntimeLoggerManagerTest {
         assertEquals("Cannot set the log level of " + LOG.getName() + " to BOGUS as it is not " +
             "a supported log level. Valid log levels are DEBUG, ERROR, FATAL, INFO, TRACE, WARN",
             Assertions.assertThrows(InvalidConfigurationException.class,
-                () -> MANAGER.validateLogLevelConfigs(Arrays.asList(new AlterableConfig().
-                    setName(LOG.getName()).
-                    setConfigOperation(OpType.SET.id()).
-                    setValue("BOGUS")))).getMessage());
+                () -> MANAGER.validateLogLevelConfigs(Collections.singletonList(new AlterableConfig().
+                        setName(LOG.getName()).
+                        setConfigOperation(OpType.SET.id()).
+                        setValue("BOGUS")))).getMessage());
     }
 
     @Test
     public void testValidateSetRootLogLevelConfig() {
-        MANAGER.validateLogLevelConfigs(Arrays.asList(new AlterableConfig().
+        MANAGER.validateLogLevelConfigs(Collections.singletonList(new AlterableConfig().
                 setName(Log4jController.ROOT_LOGGER()).
                 setConfigOperation(OpType.SET.id()).
                 setValue("TRACE")));
@@ -90,9 +90,9 @@ public class RuntimeLoggerManagerTest {
         assertEquals("Removing the log level of the " + Log4jController.ROOT_LOGGER() +
             " logger is not allowed",
             Assertions.assertThrows(InvalidRequestException.class,
-                () -> MANAGER.validateLogLevelConfigs(Arrays.asList(new AlterableConfig().
-                    setName(Log4jController.ROOT_LOGGER()).
-                    setConfigOperation(OpType.DELETE.id()).
-                    setValue("")))).getMessage());
+                () -> MANAGER.validateLogLevelConfigs(Collections.singletonList(new AlterableConfig().
+                        setName(Log4jController.ROOT_LOGGER()).
+                        setConfigOperation(OpType.DELETE.id()).
+                        setValue("")))).getMessage());
     }
 }

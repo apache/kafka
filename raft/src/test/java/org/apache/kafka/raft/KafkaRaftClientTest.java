@@ -456,7 +456,7 @@ public class KafkaRaftClientTest {
         context.client.poll();
 
         // Ensure we are still leader even after expiration of the election timeout.
-        context.time.sleep(context.electionTimeoutMs() * 2);
+        context.time.sleep(context.electionTimeoutMs() * 2L);
         context.client.poll();
         context.assertElectedLeader(currentEpoch, localId);
     }
@@ -598,7 +598,7 @@ public class KafkaRaftClientTest {
             resignedEpoch, OptionalInt.of(localId));
 
         // After the election timer, we should become a candidate.
-        context.time.sleep(2 * context.electionTimeoutMs());
+        context.time.sleep(2L * context.electionTimeoutMs());
         context.pollUntil(context.client.quorum()::isCandidate);
         assertEquals(resignedEpoch + 1, context.currentEpoch());
         assertEquals(new LeaderAndEpoch(OptionalInt.empty(), resignedEpoch + 1),
@@ -681,7 +681,7 @@ public class KafkaRaftClientTest {
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
 
         context.assertUnknownLeader(0);
-        context.time.sleep(2 * context.electionTimeoutMs());
+        context.time.sleep(2L * context.electionTimeoutMs());
 
         context.pollUntilRequest();
         context.assertVotedCandidate(1, localId);
@@ -721,7 +721,7 @@ public class KafkaRaftClientTest {
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
 
         context.assertUnknownLeader(0);
-        context.time.sleep(2 * context.electionTimeoutMs());
+        context.time.sleep(2L * context.electionTimeoutMs());
 
         context.pollUntilRequest();
         context.assertVotedCandidate(1, localId);
@@ -1098,7 +1098,7 @@ public class KafkaRaftClientTest {
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
         context.assertUnknownLeader(0);
 
-        context.time.sleep(2 * context.electionTimeoutMs());
+        context.time.sleep(2L * context.electionTimeoutMs());
         context.pollUntilRequest();
         context.assertVotedCandidate(epoch, localId);
 
@@ -1333,7 +1333,7 @@ public class KafkaRaftClientTest {
 
         context.assertUnknownLeader(0);
 
-        context.time.sleep(2 * context.electionTimeoutMs());
+        context.time.sleep(2L * context.electionTimeoutMs());
         context.pollUntilRequest();
         context.assertVotedCandidate(epoch, localId);
 
@@ -1894,7 +1894,7 @@ public class KafkaRaftClientTest {
         context.assertUnknownLeader(epoch - 1);
 
         // Sleep a little to ensure that we become a candidate
-        context.time.sleep(context.electionTimeoutMs() * 2);
+        context.time.sleep(context.electionTimeoutMs() * 2L);
 
         // Wait until the vote requests are inflight
         context.pollUntilRequest();
@@ -2446,7 +2446,7 @@ public class KafkaRaftClientTest {
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .appendToLog(lastEpoch, Arrays.asList("foo", "bar"))
-            .appendToLog(lastEpoch, Arrays.asList("baz"))
+            .appendToLog(lastEpoch, singletonList("baz"))
             .build();
 
         context.assertElectedLeader(epoch, otherNodeId);
@@ -2573,7 +2573,7 @@ public class KafkaRaftClientTest {
             .build();
 
         // Sleep a little to ensure that we become a candidate
-        context.time.sleep(context.electionTimeoutMs() * 2);
+        context.time.sleep(context.electionTimeoutMs() * 2L);
         context.pollUntilRequest();
         context.assertVotedCandidate(epoch, localId);
 
@@ -2926,7 +2926,7 @@ public class KafkaRaftClientTest {
 
         // Timeout the election and become candidate
         int candidateEpoch = epoch + 2;
-        context.time.sleep(context.electionTimeoutMs() * 2);
+        context.time.sleep(context.electionTimeoutMs() * 2L);
         context.client.poll();
         context.assertVotedCandidate(candidateEpoch, localId);
 

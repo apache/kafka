@@ -45,7 +45,7 @@ public class RemoteLogMetadataManagerTest {
 
     private final Time time = new MockTime(1);
 
-    private RemoteLogMetadataManager remoteLogMetadataManager = new TopicBasedRemoteLogMetadataManagerWrapperWithHarness();
+    private final RemoteLogMetadataManager remoteLogMetadataManager = new TopicBasedRemoteLogMetadataManagerWrapperWithHarness();
 
     @Test
     public void testFetchSegments() throws Exception {

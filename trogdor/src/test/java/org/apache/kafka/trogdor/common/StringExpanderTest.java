@@ -45,8 +45,8 @@ public class StringExpanderTest {
         ));
         assertEquals(expected1, StringExpander.expand("foo[1-3]"));
 
-        HashSet<String> expected2 = new HashSet<>(Arrays.asList(
-            "foo bar baz 0"
+        HashSet<String> expected2 = new HashSet<>(Collections.singletonList(
+                "foo bar baz 0"
         ));
         assertEquals(expected2, StringExpander.expand("foo bar baz [0-0]"));
 

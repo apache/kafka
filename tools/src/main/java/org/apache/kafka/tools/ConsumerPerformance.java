@@ -219,8 +219,8 @@ public class ConsumerPerformance {
     }
 
     public static class ConsumerPerfRebListener implements ConsumerRebalanceListener {
-        private AtomicLong joinTimeMs;
-        private AtomicLong joinTimeMsInSingleRound;
+        private final AtomicLong joinTimeMs;
+        private final AtomicLong joinTimeMsInSingleRound;
         private long joinStartMs;
 
         public ConsumerPerfRebListener(AtomicLong joinTimeMs, long joinStartMs, AtomicLong joinTimeMsInSingleRound) {

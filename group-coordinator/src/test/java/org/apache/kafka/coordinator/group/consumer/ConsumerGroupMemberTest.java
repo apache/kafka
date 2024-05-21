@@ -175,7 +175,7 @@ public class ConsumerGroupMemberTest {
             .maybeUpdateRackId(Optional.of("new-rack-id"))
             .maybeUpdateInstanceId(Optional.of("new-instance-id"))
             .maybeUpdateServerAssignorName(Optional.of("new-assignor"))
-            .maybeUpdateSubscribedTopicNames(Optional.of(Arrays.asList("zar")))
+            .maybeUpdateSubscribedTopicNames(Optional.of(Collections.singletonList("zar")))
             .maybeUpdateSubscribedTopicRegex(Optional.of("new-regex"))
             .maybeUpdateRebalanceTimeoutMs(OptionalInt.of(6000))
             .build();
@@ -183,7 +183,7 @@ public class ConsumerGroupMemberTest {
         assertEquals("new-instance-id", updatedMember.instanceId());
         assertEquals("new-rack-id", updatedMember.rackId());
         // Names are sorted.
-        assertEquals(Arrays.asList("zar"), updatedMember.subscribedTopicNames());
+        assertEquals(Collections.singletonList("zar"), updatedMember.subscribedTopicNames());
         assertEquals("new-regex", updatedMember.subscribedTopicRegex());
         assertEquals("new-assignor", updatedMember.serverAssignorName().get());
     }
@@ -356,11 +356,11 @@ public class ConsumerGroupMemberTest {
     @Test
     public void testClassicProtocolListFromJoinRequestProtocolCollection() {
         JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestData.JoinGroupRequestProtocolCollection();
-        protocols.addAll(Arrays.asList(
-            new JoinGroupRequestData.JoinGroupRequestProtocol()
-                .setName("range")
-                .setMetadata(new byte[]{1, 2, 3})
-        ));
+        protocols.add(
+                new JoinGroupRequestData.JoinGroupRequestProtocol()
+                        .setName("range")
+                        .setMetadata(new byte[]{1, 2, 3})
+        );
 
         assertEquals(
             toClassicProtocolCollection("range"),

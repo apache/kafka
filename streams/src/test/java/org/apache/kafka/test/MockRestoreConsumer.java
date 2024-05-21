@@ -39,7 +39,7 @@ public class MockRestoreConsumer<K, V> extends MockConsumer<byte[], byte[]> {
     private long endOffset = 0L;
     private long currentOffset = 0L;
 
-    private ArrayList<ConsumerRecord<byte[], byte[]>> recordBuffer = new ArrayList<>();
+    private final ArrayList<ConsumerRecord<byte[], byte[]>> recordBuffer = new ArrayList<>();
 
     @SuppressWarnings("this-escape")
     public MockRestoreConsumer(final Serializer<K> keySerializer, final Serializer<V> valueSerializer) {

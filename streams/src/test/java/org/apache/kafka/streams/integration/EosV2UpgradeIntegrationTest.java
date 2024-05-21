@@ -161,7 +161,7 @@ public class EosV2UpgradeIntegrationTest {
     private final AtomicInteger commitRequested = new AtomicInteger(0);
 
     private int testNumber = 0;
-    private Map<String, Integer> exceptionCounts = new HashMap<String, Integer>() {
+    private final Map<String, Integer> exceptionCounts = new HashMap<String, Integer>() {
         {
             put(APP_DIR_1, 0);
             put(APP_DIR_2, 0);

@@ -50,7 +50,6 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -220,15 +219,15 @@ public class BootstrapControllersIntegrationTest {
             ConfigResource nodeResource = new ConfigResource(BROKER, "" + nodeId);
             ConfigResource defaultResource = new ConfigResource(BROKER, "");
             Map<ConfigResource, Collection<AlterConfigOp>> alterations = new HashMap<>();
-            alterations.put(nodeResource, Arrays.asList(
-                new AlterConfigOp(new ConfigEntry("my.custom.config", "foo"),
-                    AlterConfigOp.OpType.SET)));
-            alterations.put(defaultResource, Arrays.asList(
-                new AlterConfigOp(new ConfigEntry("my.custom.config", "bar"),
-                    AlterConfigOp.OpType.SET)));
+            alterations.put(nodeResource, Collections.singletonList(
+                    new AlterConfigOp(new ConfigEntry("my.custom.config", "foo"),
+                            AlterConfigOp.OpType.SET)));
+            alterations.put(defaultResource, Collections.singletonList(
+                    new AlterConfigOp(new ConfigEntry("my.custom.config", "bar"),
+                            AlterConfigOp.OpType.SET)));
             admin.incrementalAlterConfigs(alterations).all().get(1, TimeUnit.MINUTES);
             TestUtils.retryOnExceptionWithTimeout(30_000, () -> {
-                Config config = admin.describeConfigs(Arrays.asList(nodeResource)).
+                Config config = admin.describeConfigs(Collections.singletonList(nodeResource)).
                     all().get(1, TimeUnit.MINUTES).get(nodeResource);
                 ConfigEntry entry = config.entries().stream().
                     filter(e -> e.name().equals("my.custom.config")).

@@ -391,7 +391,7 @@ public final class RaftClientTestContext {
 
     public void becomeLeader() throws Exception {
         int currentEpoch = currentEpoch();
-        time.sleep(electionTimeoutMs * 2);
+        time.sleep(electionTimeoutMs * 2L);
         expectAndGrantVotes(currentEpoch + 1);
         expectBeginEpoch(currentEpoch + 1);
     }
