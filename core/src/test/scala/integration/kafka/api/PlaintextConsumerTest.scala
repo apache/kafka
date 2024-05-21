@@ -21,14 +21,18 @@ import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.{NewPartitions, NewTopic}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
-import org.apache.kafka.common.{KafkaException, MetricName, TopicPartition}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.{InvalidGroupIdException, InvalidTopicException, TimeoutException, WakeupException}
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.record.{CompressionType, TimestampType}
 import org.apache.kafka.common.serialization._
+import org.apache.kafka.common.{KafkaException, MetricName, TopicPartition}
 import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor}
+import org.apache.log4j.Level
+import org.apache.log4j.LogManager
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, MethodSource}
@@ -36,8 +40,19 @@ import org.junit.jupiter.params.provider.{CsvSource, MethodSource}
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 import scala.jdk.CollectionConverters._
 
+// TODO: change logging so that we log at info and enable request logging
+
 @Timeout(600)
 class PlaintextConsumerTest extends BaseConsumerTest {
+  @BeforeEach
+  def beforeEach() {
+    LogManager.getLogger("org.apache.kafka.raft").setLevel(Level.TRACE)
+  }
+
+  @AfterEach
+  def afterEach() {
+    LogManager.getLogger("org.apache.kafka.raft").setLevel(Level.ERROR)
+  }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))

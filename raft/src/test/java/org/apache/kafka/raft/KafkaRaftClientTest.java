@@ -1546,6 +1546,51 @@ public class KafkaRaftClientTest {
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
     }
 
+    // TODO: fix this after I better under the error
+    @Test
+    public void testObserverHandleRetryFetchResponse() throws Exception {
+        int localId = 0;
+        int leaderId = 1;
+        int otherNodeId = 2;
+        int epoch = 5;
+        Set<Integer> voters = Utils.mkSet(leaderId, otherNodeId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
+
+        context.pollUntilRequest();
+        RaftRequest.Outbound firstFetchRequest = context.assertSentFetchRequest();
+        assertTrue(voters.contains(firstFetchRequest.destination().id()));
+        context.assertFetchRequestData(firstFetchRequest, 0, 0L, 0);
+
+        context.time.sleep(context.fetchTimeoutMs);
+
+        context.pollUntilRequest();
+        RaftRequest.Outbound retryFetchRequest = context.assertSentFetchRequest();
+        assertTrue(voters.contains(retryFetchRequest.destination().id()));
+        context.assertFetchRequestData(retryFetchRequest, 0, 0L, 0);
+
+        // Deliver the delayed responses
+        Records records = context.buildBatch(0L, 3, Arrays.asList("a", "b"));
+        context.deliverResponse(
+            firstFetchRequest.correlationId(),
+            firstFetchRequest.destination(),
+            context.fetchResponse(epoch, leaderId, records, 0L, Errors.NONE)
+        );
+
+        context.client.poll();
+
+        records = context.buildBatch(0L, 3, Arrays.asList("a", "b"));
+        context.deliverResponse(
+            retryFetchRequest.correlationId(),
+            retryFetchRequest.destination(),
+            context.fetchResponse(epoch, leaderId, records, 0L, Errors.NONE)
+        );
+
+        context.client.poll();
+        context.assertElectedLeader(epoch, leaderId);
+        assertTrue(false);
+    }
+
     @Test
     public void testInvalidFetchRequest() throws Exception {
         int localId = 0;
