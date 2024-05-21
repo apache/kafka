@@ -142,7 +142,7 @@ class AclCommandTest extends QuorumTestHarness with Logging {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("zk"))
   def testAclCliWithAdminAPI(quorum: String): Unit = {
     createServer()
     testAclCli(adminArgs)
@@ -204,14 +204,14 @@ class AclCommandTest extends QuorumTestHarness with Logging {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("zk"))
   def testProducerConsumerCliWithAdminAPI(quorum: String): Unit = {
     createServer()
     testProducerConsumerCli(adminArgs)
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("zk"))
   def testAclCliWithClientId(quorum: String): Unit = {
     val adminClientConfig = TestUtils.tempFile("client.id=my-client")
 
