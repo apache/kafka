@@ -264,7 +264,7 @@ public class MirrorCheckpointTaskTest {
         offsetSyncStore.sync(tp, upstream++, downstream++);
         offsetSyncStore.sync(tp, upstream++, downstream++);
         offsetSyncStore.sync(tp, upstream++, downstream++);
-        offsetSyncStore.sync(tp, upstream++, downstream++);
+        offsetSyncStore.sync(tp, upstream, downstream);
         // The OffsetSyncStore will change its translation of the same offset
         assertNotEquals(OptionalLong.of(expectedDownstreamOffset), offsetSyncStore.translateDownstream("g1", tp, consumerGroupOffset));
         // But the task will filter this out and not emit a checkpoint
@@ -360,7 +360,7 @@ public class MirrorCheckpointTaskTest {
                 checkpointStore) {
 
             @Override
-            List<SourceRecord> sourceRecordsForGroup(String group) throws InterruptedException {
+            List<SourceRecord> sourceRecordsForGroup(String group) {
                 SourceRecord sr = new SourceRecord(Collections.emptyMap(), Collections.emptyMap(), "", 0, null, null);
                 return Collections.singletonList(sr);
             }
