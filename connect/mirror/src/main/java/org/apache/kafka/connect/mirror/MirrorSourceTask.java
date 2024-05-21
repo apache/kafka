@@ -25,7 +25,6 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
@@ -36,8 +35,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.List;
@@ -51,23 +48,15 @@ import java.time.Duration;
 public class MirrorSourceTask extends SourceTask {
 
     private static final Logger log = LoggerFactory.getLogger(MirrorSourceTask.class);
-
-    private static final int MAX_OUTSTANDING_OFFSET_SYNCS = 10;
-
     private KafkaConsumer<byte[], byte[]> consumer;
-    private KafkaProducer<byte[], byte[]> offsetProducer;
     private String sourceClusterAlias;
-    private String offsetSyncsTopic;
     private Duration pollTimeout;
-    private long maxOffsetLag;
     private Map<TopicPartition, PartitionState> partitionStates;
     private ReplicationPolicy replicationPolicy;
     private MirrorSourceMetrics metrics;
     private boolean stopping = false;
-    private final Map<TopicPartition, OffsetSync> delayedOffsetSyncs = new LinkedHashMap<>();
-    private final Map<TopicPartition, OffsetSync> pendingOffsetSyncs = new LinkedHashMap<>();
-    private Semaphore outstandingOffsetSyncs;
     private Semaphore consumerAccess;
+    private OffsetSyncWriter offsetSyncWriter;
     private boolean emitOffsetSyncEnabled;
 
     public MirrorSourceTask() {}
@@ -81,33 +70,28 @@ public class MirrorSourceTask extends SourceTask {
         this.metrics = metrics;
         this.sourceClusterAlias = sourceClusterAlias;
         this.replicationPolicy = replicationPolicy;
-        this.maxOffsetLag = maxOffsetLag;
         consumerAccess = new Semaphore(1);
         if (emitOffsetSyncEnabled) {
-            this.offsetProducer = producer;
-            this.offsetSyncsTopic = offsetSyncsTopic;
+            this.offsetSyncWriter = new OffsetSyncWriter(producer, offsetSyncsTopic, outstandingOffsetSyncs, maxOffsetLag);
+            offsetSyncWriter.clearPendingOffsetSyncs();
         }
-        this.outstandingOffsetSyncs = outstandingOffsetSyncs;
-        this.partitionStates = partitionStates;
         this.emitOffsetSyncEnabled = emitOffsetSyncEnabled;
+        this.partitionStates = partitionStates;
     }
 
     @Override
     public void start(Map<String, String> props) {
         MirrorSourceTaskConfig config = new MirrorSourceTaskConfig(props);
         emitOffsetSyncEnabled = config.emitOffsetSyncEnabled();
-        pendingOffsetSyncs.clear();
-        outstandingOffsetSyncs = new Semaphore(MAX_OUTSTANDING_OFFSET_SYNCS);
         consumerAccess = new Semaphore(1);  // let one thread at a time access the consumer
         sourceClusterAlias = config.sourceClusterAlias();
         metrics = config.metrics();
         pollTimeout = config.consumerPollTimeout();
-        maxOffsetLag = config.maxOffsetLag();
         replicationPolicy = config.replicationPolicy();
         partitionStates = new HashMap<>();
         if (this.emitOffsetSyncEnabled) {
-            offsetSyncsTopic = config.offsetSyncsTopic();
-            offsetProducer = MirrorUtils.newProducer(config.offsetSyncsTopicProducerConfig());
+            offsetSyncWriter = new OffsetSyncWriter(config);
+            offsetSyncWriter.clearPendingOffsetSyncs();
         }
         consumer = MirrorUtils.newConsumer(config.sourceConsumerConfig("replication-consumer"));
         Set<TopicPartition> taskTopicPartitions = config.taskTopicPartitions();
@@ -123,10 +107,10 @@ public class MirrorSourceTask extends SourceTask {
         if (emitOffsetSyncEnabled) {
             // Offset syncs which were not emitted immediately due to their offset spacing should be sent periodically
             // This ensures that low-volume topics aren't left with persistent lag at the end of the topic
-            promoteDelayedOffsetSyncs();
+            offsetSyncWriter.promoteDelayedOffsetSyncs();
             // Publish any offset syncs that we've queued up, but have not yet been able to publish
             // (likely because we previously reached our limit for number of outstanding syncs)
-            firePendingOffsetSyncs();
+            offsetSyncWriter.firePendingOffsetSyncs();
         }
     }
 
@@ -141,7 +125,7 @@ public class MirrorSourceTask extends SourceTask {
             log.warn("Interrupted waiting for access to consumer. Will try closing anyway."); 
         }
         Utils.closeQuietly(consumer, "source consumer");
-        Utils.closeQuietly(offsetProducer, "offset producer");
+        Utils.closeQuietly(offsetSyncWriter, "offset producer");
         Utils.closeQuietly(metrics, "metrics");
         log.info("Stopping {} took {} ms.", Thread.currentThread().getName(), System.currentTimeMillis() - start);
     }
@@ -212,76 +196,12 @@ public class MirrorSourceTask extends SourceTask {
             TopicPartition sourceTopicPartition = MirrorUtils.unwrapPartition(record.sourcePartition());
             long upstreamOffset = MirrorUtils.unwrapOffset(record.sourceOffset());
             long downstreamOffset = metadata.offset();
-            maybeQueueOffsetSyncs(sourceTopicPartition, upstreamOffset, downstreamOffset);
+            MirrorSourceTask.PartitionState partitionState =
+                    partitionStates.computeIfAbsent(topicPartition, x -> new MirrorSourceTask.PartitionState(offsetSyncWriter.maxOffsetLag));
+            offsetSyncWriter.maybeQueueOffsetSyncs(partitionState, sourceTopicPartition, upstreamOffset, downstreamOffset);
             // We may be able to immediately publish an offset sync that we've queued up here
-            firePendingOffsetSyncs();
+            offsetSyncWriter.firePendingOffsetSyncs();
         }
-    }
-
-    // updates partition state and queues up OffsetSync if necessary
-    private void maybeQueueOffsetSyncs(TopicPartition topicPartition, long upstreamOffset,
-                                       long downstreamOffset) {
-        PartitionState partitionState =
-            partitionStates.computeIfAbsent(topicPartition, x -> new PartitionState(maxOffsetLag));
-        OffsetSync offsetSync = new OffsetSync(topicPartition, upstreamOffset, downstreamOffset);
-        if (partitionState.update(upstreamOffset, downstreamOffset)) {
-            // Queue this sync for an immediate send, as downstream state is sufficiently stale
-            synchronized (this) {
-                delayedOffsetSyncs.remove(topicPartition);
-                pendingOffsetSyncs.put(topicPartition, offsetSync);
-            }
-            partitionState.reset();
-        } else {
-            // Queue this sync to be delayed until the next periodic offset commit
-            synchronized (this) {
-                delayedOffsetSyncs.put(topicPartition, offsetSync);
-            }
-        }
-    }
-
-    private synchronized void promoteDelayedOffsetSyncs() {
-        pendingOffsetSyncs.putAll(delayedOffsetSyncs);
-        delayedOffsetSyncs.clear();
-    }
-
-    private void firePendingOffsetSyncs() {
-        while (true) {
-            OffsetSync pendingOffsetSync;
-            synchronized (this) {
-                Iterator<OffsetSync> syncIterator = pendingOffsetSyncs.values().iterator();
-                if (!syncIterator.hasNext()) {
-                    // Nothing to sync
-                    log.trace("No more pending offset syncs");
-                    return;
-                }
-                pendingOffsetSync = syncIterator.next();
-                if (!outstandingOffsetSyncs.tryAcquire()) {
-                    // Too many outstanding syncs
-                    log.trace("Too many in-flight offset syncs; will try to send remaining offset syncs later");
-                    return;
-                }
-                syncIterator.remove();
-            }
-            // Publish offset sync outside of synchronized block; we may have to
-            // wait for producer metadata to update before Producer::send returns
-            sendOffsetSync(pendingOffsetSync);
-            log.trace("Dispatched offset sync for {}", pendingOffsetSync.topicPartition());
-        }
-    }
-
-    // sends OffsetSync record to internal offsets topic
-    private void sendOffsetSync(OffsetSync offsetSync) {
-        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(offsetSyncsTopic, 0,
-                offsetSync.recordKey(), offsetSync.recordValue());
-        offsetProducer.send(record, (x, e) -> {
-            if (e != null) {
-                log.error("Failure sending offset sync.", e);
-            } else {
-                log.trace("Sync'd offsets for {}: {}=={}", offsetSync.topicPartition(),
-                    offsetSync.upstreamOffset(), offsetSync.downstreamOffset());
-            }
-            outstandingOffsetSyncs.release();
-        });
     }
  
     private Map<TopicPartition, Long> loadOffsets(Set<TopicPartition> topicPartitions) {
