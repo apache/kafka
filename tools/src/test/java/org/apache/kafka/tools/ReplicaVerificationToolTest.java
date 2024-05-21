@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.tools;
 
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.message.FetchResponseData;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.TopicPartition;
@@ -50,7 +50,7 @@ public class ReplicaVerificationToolTest {
                     .toArray(SimpleRecord[]::new);
 
                 long initialOffset = 4L;
-                MemoryRecords memoryRecords = MemoryRecords.withRecords(initialOffset, CompressionType.NONE, records);
+                MemoryRecords memoryRecords = MemoryRecords.withRecords(initialOffset, Compression.NONE, records);
                 FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
                     .setPartitionIndex(tp.partition())
                     .setHighWatermark(20)

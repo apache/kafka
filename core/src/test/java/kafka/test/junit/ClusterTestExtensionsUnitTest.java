@@ -22,27 +22,24 @@ import kafka.test.annotation.ClusterTemplate;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.extension.ExtensionContext;
-import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
-import java.util.function.Consumer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class ClusterTestExtensionsUnitTest {
     @Test
-    @SuppressWarnings("unchecked")
     void testProcessClusterTemplate() {
         ClusterTestExtensions ext = new ClusterTestExtensions();
         ExtensionContext context = mock(ExtensionContext.class);
-        Consumer<TestTemplateInvocationContext> testInvocations = mock(Consumer.class);
+
         ClusterTemplate annot = mock(ClusterTemplate.class);
         when(annot.value()).thenReturn("").thenReturn(" ");
 
         Assertions.assertThrows(IllegalStateException.class, () ->
-                ext.processClusterTemplate(context, annot, testInvocations)
+                ext.processClusterTemplate(context, annot)
         );
 
         Assertions.assertThrows(IllegalStateException.class, () ->
-                ext.processClusterTemplate(context, annot, testInvocations)
+                ext.processClusterTemplate(context, annot)
         );
     }
 }
