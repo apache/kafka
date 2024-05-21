@@ -83,10 +83,12 @@ public class MirrorSourceTask extends SourceTask {
         this.replicationPolicy = replicationPolicy;
         this.maxOffsetLag = maxOffsetLag;
         consumerAccess = new Semaphore(1);
-        this.offsetProducer = producer;
+        if (emitOffsetSyncEnabled) {
+            this.offsetProducer = producer;
+            this.offsetSyncsTopic = offsetSyncsTopic;
+        }
         this.outstandingOffsetSyncs = outstandingOffsetSyncs;
         this.partitionStates = partitionStates;
-        this.offsetSyncsTopic = offsetSyncsTopic;
         this.emitOffsetSyncEnabled = emitOffsetSyncEnabled;
     }
 
@@ -103,9 +105,11 @@ public class MirrorSourceTask extends SourceTask {
         maxOffsetLag = config.maxOffsetLag();
         replicationPolicy = config.replicationPolicy();
         partitionStates = new HashMap<>();
-        offsetSyncsTopic = config.offsetSyncsTopic();
+        if (this.emitOffsetSyncEnabled) {
+            offsetSyncsTopic = config.offsetSyncsTopic();
+            offsetProducer = MirrorUtils.newProducer(config.offsetSyncsTopicProducerConfig());
+        }
         consumer = MirrorUtils.newConsumer(config.sourceConsumerConfig("replication-consumer"));
-        offsetProducer = MirrorUtils.newProducer(config.offsetSyncsTopicProducerConfig());
         Set<TopicPartition> taskTopicPartitions = config.taskTopicPartitions();
         initializeConsumer(taskTopicPartitions);
 

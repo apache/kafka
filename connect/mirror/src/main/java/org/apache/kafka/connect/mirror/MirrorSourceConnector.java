@@ -164,7 +164,9 @@ public class MirrorSourceConnector extends SourceConnector {
         sourceAdminClient = config.forwardingAdmin(config.sourceAdminConfig("replication-source-admin"));
         targetAdminClient = config.forwardingAdmin(config.targetAdminConfig("replication-target-admin"));
         useIncrementalAlterConfigs =  !config.useIncrementalAlterConfigs().equals(MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIGS);
-        offsetSyncsAdminClient = config.forwardingAdmin(config.offsetSyncsTopicAdminConfig());
+        if (config.emitOffsetSyncEnabled()) {
+            offsetSyncsAdminClient = config.forwardingAdmin(config.offsetSyncsTopicAdminConfig());
+        }
         scheduler = new Scheduler(getClass(), config.entityLabel(), config.adminTimeout());
         scheduler.execute(this::createOffsetSyncsTopic, "creating upstream offset-syncs topic");
         scheduler.execute(this::loadTopicPartitions, "loading initial set of topic-partitions");

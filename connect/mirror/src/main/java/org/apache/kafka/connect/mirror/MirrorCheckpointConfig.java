@@ -73,10 +73,10 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
     public static final String GROUP_FILTER_CLASS = "group.filter.class";
     private static final String GROUP_FILTER_CLASS_DOC = "GroupFilter to use. Selects consumer groups to replicate.";
     public static final Class<?> GROUP_FILTER_CLASS_DEFAULT = DefaultGroupFilter.class;
-    public static final String OFFSET_SYNCS_SOURCE_CONSUMER_ROLE = "offset-syncs-source-consumer";
-    public static final String OFFSET_SYNCS_TARGET_CONSUMER_ROLE = "offset-syncs-target-consumer";
-    public static final String OFFSET_SYNCS_SOURCE_ADMIN_ROLE = "offset-syncs-source-admin";
-    public static final String OFFSET_SYNCS_TARGET_ADMIN_ROLE = "offset-syncs-target-admin";
+    public static final String OFFSET_SYNCS_SOURCE_CONSUMER_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "source-consumer";
+    public static final String OFFSET_SYNCS_TARGET_CONSUMER_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "target-consumer";
+    public static final String OFFSET_SYNCS_SOURCE_ADMIN_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "source-admin";
+    public static final String OFFSET_SYNCS_TARGET_ADMIN_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "target-admin";
 
     public MirrorCheckpointConfig(Map<String, String> props) {
         super(CONNECTOR_CONFIG_DEF, ConfigUtils.translateDeprecatedConfigs(props, new String[][]{

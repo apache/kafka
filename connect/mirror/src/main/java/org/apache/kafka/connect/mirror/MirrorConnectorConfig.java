@@ -120,6 +120,8 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
             MirrorCheckpointConfig.SYNC_GROUP_OFFSETS_ENABLED + " are enabled while " + EMIT_OFFSET_SYNCS_ENABLED + " are disabled.";
     public static final boolean EMIT_OFFSET_SYNCS_ENABLED_DEFAULT = true;
 
+    public static final String OFFSET_SYNCS_CLIENT_ROLE_PREFIX = "offset-syncs-";
+
     public static final String TASK_INDEX = "task.index";
 
     private final ReplicationPolicy replicationPolicy;
