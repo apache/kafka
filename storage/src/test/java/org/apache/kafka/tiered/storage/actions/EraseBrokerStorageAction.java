@@ -22,33 +22,32 @@ import org.apache.kafka.tiered.storage.TieredStorageTestContext;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.util.Collections;
-import java.util.List;
 
 public final class EraseBrokerStorageAction implements TieredStorageTestAction {
 
     private final int brokerId;
-    private final List<String> files;
+    private final FilenameFilter filenameFilter;
     private final boolean isStopped;
 
     public EraseBrokerStorageAction(int brokerId) {
-        this(brokerId, Collections.emptyList(), false);
+        this(brokerId, (dir, name) -> true, false);
     }
 
-    public EraseBrokerStorageAction(int brokerId, List<String> files, boolean isStopped) {
+    public EraseBrokerStorageAction(int brokerId,
+                                    FilenameFilter filenameFilter,
+                                    boolean isStopped) {
         this.brokerId = brokerId;
-        this.files = files;
+        this.filenameFilter = filenameFilter;
         this.isStopped = isStopped;
     }
 
     @Override
     public void doExecute(TieredStorageTestContext context) throws IOException {
-        FilenameFilter filter = (dir, name) -> files.isEmpty() || files.contains(name);
-        context.eraseBrokerStorage(brokerId, filter, isStopped);
+        context.eraseBrokerStorage(brokerId, filenameFilter, isStopped);
     }
 
     @Override
     public void describe(PrintStream output) {
-        output.println("erase-broker-storage: " + brokerId + ", files: " + files + ", isStopped: " + isStopped);
+        output.println("erase-broker-storage: " + brokerId + ", isStopped: " + isStopped);
     }
 }

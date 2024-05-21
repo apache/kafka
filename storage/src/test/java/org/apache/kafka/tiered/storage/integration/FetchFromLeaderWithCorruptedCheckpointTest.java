@@ -68,7 +68,7 @@ public class FetchFromLeaderWithCorruptedCheckpointTest extends TieredStorageTes
                 .stop(broker1)
                 .stop(broker0)
                 // delete the checkpoint files
-                .eraseBrokerStorage(broker0, checkpointFiles, true)
+                .eraseBrokerStorage(broker0, (dir, name) -> checkpointFiles.contains(name), true)
                 // start the broker first whose checkpoint files were deleted.
                 .start(broker0)
                 .start(broker1)
