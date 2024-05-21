@@ -3,7 +3,7 @@ import subprocess
 from git import Repo
 from pathlib import Path
 
-repo = Repo('.')
+repo = Repo('../')
 current_branch = repo.active_branch.name
 if current_branch != "trunk":
     print("This script can only be run from the trunk branch.")

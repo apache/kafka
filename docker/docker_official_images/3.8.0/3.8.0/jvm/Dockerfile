@@ -21,7 +21,7 @@ FROM eclipse-temurin:21-jre-alpine AS build-jsa
 USER root
 
 # Get kafka from https://archive.apache.org/dist/kafka and pass the url through build arguments
-ENV kafka_url https://downloads.apache.org/kafka/3.7.0/kafka_2.13-3.7.0.tgz
+ENV kafka_url https://downloads.apache.org/kafka/3.8.0/kafka_2.13-3.8.0.tgz
 
 COPY jsa_launch /etc/kafka/docker/jsa_launch
 
@@ -49,7 +49,7 @@ EXPOSE 9092
 USER root
 
 # Get kafka from https://archive.apache.org/dist/kafka and pass the url through build arguments
-ENV kafka_url https://downloads.apache.org/kafka/3.7.0/kafka_2.13-3.7.0.tgz
+ENV kafka_url https://downloads.apache.org/kafka/3.8.0/kafka_2.13-3.8.0.tgz
 ENV build_date 2024-05-21
 
 
