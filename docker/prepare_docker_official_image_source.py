@@ -19,6 +19,8 @@ from datetime import date
 import argparse
 from distutils.dir_util import copy_tree
 import os
+import re
+import sys
 
 
 def remove_args_and_hardcode_values(file_path, kafka_url):
@@ -40,6 +42,11 @@ if __name__ == '__main__':
     parser.add_argument("--kafka-version", "-v", dest="kafka_version",
                         help="Kafka version for which the source for docker official image is to be built")
     args = parser.parse_args()
+    version_pattern = re.compile(rf"{re.escape(args.kafka_version)}")
+    
+    if not version_pattern.search(args.kafka_url):
+        raise ValueError(f"Error: The Kafka URL '{args.kafka_url}' does not match the specified version '{args.kafka_version}'")
+    
     current_dir = os.path.dirname(os.path.realpath(__file__))
     new_dir = os.path.join(
         current_dir, f'docker_official_images',  args.kafka_version)

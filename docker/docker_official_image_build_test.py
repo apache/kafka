@@ -40,6 +40,8 @@ from test.docker_sanity_test import run_tests
 from common import execute, jvm_image
 import tempfile
 import os
+import re
+import sys
 
 
 def set_executable_permissions(directory):
@@ -116,6 +118,11 @@ if __name__ == '__main__':
     parser.add_argument("--test", "-t", action="store_true", dest="test_only",
                         default=False, help="Only run the tests, don't build the image")
     args = parser.parse_args()
+
+    version_pattern = re.compile(rf"{re.escape(args.kafka_version)}")
+    if not version_pattern.search(args.kafka_url):
+        raise ValueError(f"Error: The Kafka URL '{args.kafka_url}' does not match the specified version '{args.kafka_version}'")
+
 
     if args.image_type == "jvm" and (args.build_only or not (args.build_only or args.test_only)):
         if args.kafka_url and args.kafka_version:
