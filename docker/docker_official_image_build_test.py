@@ -123,7 +123,6 @@ if __name__ == '__main__':
     if not version_pattern.search(args.kafka_url):
         raise ValueError(f"Error: The Kafka URL '{args.kafka_url}' does not match the specified version '{args.kafka_version}'")
 
-
     if args.image_type == "jvm" and (args.build_only or not (args.build_only or args.test_only)):
         if args.kafka_url and args.kafka_version:
             build_jvm(args.image, args.tag, args.kafka_version)
