@@ -290,6 +290,11 @@ public final class TieredStorageTestBuilder {
         return this;
     }
 
+    public TieredStorageTestBuilder eraseBrokerStorage(Integer brokerId, List<String> files, boolean isStopped) {
+        actions.add(new EraseBrokerStorageAction(brokerId, files, isStopped));
+        return this;
+    }
+
     public TieredStorageTestBuilder expectEmptyRemoteStorage(String topic,
                                                              Integer partition) {
         TopicPartition topicPartition = new TopicPartition(topic, partition);

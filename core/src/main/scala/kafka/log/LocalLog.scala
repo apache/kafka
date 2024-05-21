@@ -374,12 +374,12 @@ class LocalLog(@volatile private var _dir: File,
         emptyFetchDataInfo(maxOffsetMetadata, includeAbortedTxns)
       } else if (startOffset > maxOffsetMetadata.messageOffset ||
         maxOffsetMetadata.messageOffsetOnly() ||
-        maxOffsetMetadata.segmentBaseOffset < segmentOpt.get().baseOffset()) {
+        maxOffsetMetadata.segmentBaseOffset < segmentOpt.get.baseOffset) {
         // We need to be careful before reading the segment as `maxOffsetMetadata` may not be a complete metadata:
         // 1. If maxOffsetMetadata is message-offset-only, then return empty fetchDataInfo since
         // maxOffsetMetadata.offset is not on local log segments.
         // 2. If maxOffsetMetadata.segmentBaseOffset is smaller than segment.baseOffset, then return empty fetchDataInfo.
-        emptyFetchDataInfo(new LogOffsetMetadata(startOffset), includeAbortedTxns)
+        emptyFetchDataInfo(convertToOffsetMetadataOrThrow(startOffset), includeAbortedTxns)
       } else {
         // Do the read on the segment with a base offset less than the target offset
         // but if that segment doesn't contain any messages with an offset greater than that

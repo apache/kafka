@@ -395,18 +395,18 @@ class LocalLogTest {
     // case-2: `startOffset` > `maxOffsetMetadata.offset`
     fetchDataInfo = readRecords(startOffset = 5L, maxOffsetMetadata = new LogOffsetMetadata(4L, 4L, 0))
     assertTrue(fetchDataInfo.records.records.asScala.isEmpty)
-    assertEquals(new LogOffsetMetadata(5L, -1L, -1), fetchDataInfo.fetchOffsetMetadata)
+    assertEquals(new LogOffsetMetadata(5L, 4L, 69), fetchDataInfo.fetchOffsetMetadata)
 
     // case-3: `startOffset` < `maxMessageOffset.offset` but `maxMessageOffset.messageOnlyOffset` is true
     fetchDataInfo = readRecords(startOffset = 3L, maxOffsetMetadata = new LogOffsetMetadata(4L, -1L, -1))
     assertTrue(fetchDataInfo.records.records.asScala.isEmpty)
-    assertEquals(new LogOffsetMetadata(3L, -1L, -1), fetchDataInfo.fetchOffsetMetadata)
+    assertEquals(new LogOffsetMetadata(3L, 2L, 69), fetchDataInfo.fetchOffsetMetadata)
 
     // case-4: `startOffset` < `maxMessageOffset.offset`, `maxMessageOffset.messageOnlyOffset` is false, but
     // `maxOffsetMetadata.segmentBaseOffset` < `startOffset.segmentBaseOffset`
     fetchDataInfo = readRecords(startOffset = 3L, maxOffsetMetadata = new LogOffsetMetadata(4L, 0L, 40))
     assertTrue(fetchDataInfo.records.records.asScala.isEmpty)
-    assertEquals(new LogOffsetMetadata(3L, -1L, -1), fetchDataInfo.fetchOffsetMetadata)
+    assertEquals(new LogOffsetMetadata(3L, 2L, 69), fetchDataInfo.fetchOffsetMetadata)
   }
 
   @Test

@@ -342,10 +342,7 @@ class UnifiedLogTest {
     assertValidLogOffsetMetadata(log, readInfo.fetchOffsetMetadata)
   }
 
-  private def assertEmptyFetch(log: UnifiedLog,
-                               offset: Long,
-                               isolation: FetchIsolation,
-                               messageOffsetOnly: Boolean = false): Unit = {
+  private def assertEmptyFetch(log: UnifiedLog, offset: Long, isolation: FetchIsolation): Unit = {
     val readInfo = log.read(startOffset = offset,
       maxLength = Int.MaxValue,
       isolation = isolation,
@@ -353,11 +350,7 @@ class UnifiedLogTest {
     assertFalse(readInfo.firstEntryIncomplete)
     assertEquals(0, readInfo.records.sizeInBytes)
     assertEquals(offset, readInfo.fetchOffsetMetadata.messageOffset)
-    if (messageOffsetOnly) {
-      assertTrue(readInfo.fetchOffsetMetadata.messageOffsetOnly())
-    } else {
-      assertValidLogOffsetMetadata(log, readInfo.fetchOffsetMetadata)
-    }
+    assertValidLogOffsetMetadata(log, readInfo.fetchOffsetMetadata)
   }
 
   @Test
@@ -400,10 +393,8 @@ class UnifiedLogTest {
         assertNonEmptyFetch(log, offset, FetchIsolation.HIGH_WATERMARK)
       }
 
-      assertEmptyFetch(log, log.highWatermark, FetchIsolation.HIGH_WATERMARK)
-
-      (log.highWatermark + 1 to log.logEndOffset).foreach { offset =>
-        assertEmptyFetch(log, offset, FetchIsolation.HIGH_WATERMARK, messageOffsetOnly = true)
+      (log.highWatermark to log.logEndOffset).foreach { offset =>
+        assertEmptyFetch(log, offset, FetchIsolation.HIGH_WATERMARK)
       }
     }
 
@@ -498,10 +489,8 @@ class UnifiedLogTest {
         assertNonEmptyFetch(log, offset, FetchIsolation.TXN_COMMITTED)
       }
 
-      assertEmptyFetch(log, log.lastStableOffset, FetchIsolation.TXN_COMMITTED)
-
-      (log.lastStableOffset + 1 to log.logEndOffset).foreach { offset =>
-        assertEmptyFetch(log, offset, FetchIsolation.TXN_COMMITTED, messageOffsetOnly = true)
+      (log.lastStableOffset to log.logEndOffset).foreach { offset =>
+        assertEmptyFetch(log, offset, FetchIsolation.TXN_COMMITTED)
       }
     }
 
