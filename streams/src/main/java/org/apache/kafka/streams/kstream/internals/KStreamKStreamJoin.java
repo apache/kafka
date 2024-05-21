@@ -173,9 +173,8 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
 
         protected abstract VOther getOtherValue(final LeftOrRightValue<? extends VLeft, ? extends VRight> leftOrRightValue);
 
-        private void emitNonJoinedOuterRecords(
-            final KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<VLeft, VRight>> store,
-            final Record<K, ?> record) {
+        private void emitNonJoinedOuterRecords(final KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<VLeft, VRight>> store,
+                                               final Record<K, VThis> record) {
 
             // calling `store.all()` creates an iterator what is an expensive operation on RocksDB;
             // to reduce runtime cost, we try to avoid paying those cost
@@ -226,7 +225,8 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
                         continue;
                     }
 
-                    forwardNonJoinedOuterRecords(record, nextKeyValue);
+                    final LeftOrRightValue<VLeft, VRight> leftOrRightValue = nextKeyValue.value;
+                    forwardNonJoinedOuterRecords(record, timestampedKeyAndJoinSide, leftOrRightValue);
 
                     if (prevKey != null && !prevKey.equals(timestampedKeyAndJoinSide)) {
                         // blind-delete the previous key from the outer window store now it is emitted;
@@ -246,11 +246,11 @@ abstract class KStreamKStreamJoin<K, VLeft, VRight, VOut, VThis, VOther> impleme
             }
         }
 
-        private void forwardNonJoinedOuterRecords(final Record<K, ?> record, final KeyValue<? extends TimestampedKeyAndJoinSide<K>, ? extends LeftOrRightValue<VLeft, VRight>> nextKeyValue) {
-            final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide = nextKeyValue.key;
+        private void forwardNonJoinedOuterRecords(final Record<K, VThis> record,
+                                                  final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide,
+                                                  final LeftOrRightValue<VLeft, VRight> leftOrRightValue) {
             final K key = timestampedKeyAndJoinSide.getKey();
             final long timestamp = timestampedKeyAndJoinSide.getTimestamp();
-            final LeftOrRightValue<VLeft, VRight> leftOrRightValue = nextKeyValue.value;
             final VThis thisValue = getThisValue(leftOrRightValue);
             final VOther otherValue = getOtherValue(leftOrRightValue);
             final VOut nullJoinedValue = joiner.apply(key, thisValue, otherValue);

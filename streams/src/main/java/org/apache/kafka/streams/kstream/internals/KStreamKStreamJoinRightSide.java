@@ -24,9 +24,9 @@ import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSide;
 
 import java.util.Optional;
 
-class KStreamKStreamRightJoinSide<K, VLeft, VRight, VOut> extends KStreamKStreamJoin<K, VLeft, VRight, VOut, VRight, VLeft> {
+class KStreamKStreamJoinRightSide<K, VLeft, VRight, VOut> extends KStreamKStreamJoin<K, VLeft, VRight, VOut, VRight, VLeft> {
 
-    KStreamKStreamRightJoinSide(final String otherWindowName,
+    KStreamKStreamJoinRightSide(final String otherWindowName,
                                 final JoinWindowsInternal windows,
                                 final ValueJoinerWithKey<? super K, ? super VRight, ? super VLeft, ? extends VOut> joiner,
                                 final boolean outer,
