@@ -44,7 +44,7 @@ import static org.apache.kafka.connect.mirror.MirrorCheckpointConfig.CHECKPOINTS
  * The Kafka log is closed after the initial load and only the in memory map is
  * used after start.
  */
-class CheckpointStore implements AutoCloseable {
+public class CheckpointStore implements AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(CheckpointStore.class);
 
@@ -59,7 +59,7 @@ class CheckpointStore implements AutoCloseable {
     private volatile boolean loadSuccess = false;
     private volatile boolean isInitialized = false;
 
-    CheckpointStore(MirrorCheckpointTaskConfig config, Set<String> consumerGroups) {
+    public CheckpointStore(MirrorCheckpointTaskConfig config, Set<String> consumerGroups) {
         this.config = config;
         this.consumerGroups = new HashSet<>(consumerGroups);
     }
@@ -74,7 +74,7 @@ class CheckpointStore implements AutoCloseable {
     }
 
     // potentially long running
-    boolean start()  {
+    public boolean start()  {
         checkpointsPerConsumerGroup = readCheckpoints();
         isInitialized = true;
         if (log.isTraceEnabled()) {
@@ -85,21 +85,21 @@ class CheckpointStore implements AutoCloseable {
         return loadSuccess;
     }
 
-    boolean isInitialized() {
+    public boolean isInitialized() {
         return isInitialized;
     }
 
-    void update(String group, Map<TopicPartition, Checkpoint> newCheckpoints) {
+    public void update(String group, Map<TopicPartition, Checkpoint> newCheckpoints) {
         Map<TopicPartition, Checkpoint> oldCheckpoints = checkpointsPerConsumerGroup.computeIfAbsent(group, ignored -> new HashMap<>());
         oldCheckpoints.putAll(newCheckpoints);
     }
 
-    Map<TopicPartition, Checkpoint> get(String group) {
+    public Map<TopicPartition, Checkpoint> get(String group) {
         Map<TopicPartition, Checkpoint> result = checkpointsPerConsumerGroup.get(group);
         return result == null ? null : Collections.unmodifiableMap(result);
     }
 
-    Map<String, Map<TopicPartition, OffsetAndMetadata>> computeConvertedUpstreamOffset() {
+    public Map<String, Map<TopicPartition, OffsetAndMetadata>> computeConvertedUpstreamOffset() {
         Map<String, Map<TopicPartition, OffsetAndMetadata>> result = new HashMap<>();
 
         for (Map.Entry<String, Map<TopicPartition, Checkpoint>> entry : checkpointsPerConsumerGroup.entrySet()) {
@@ -129,7 +129,7 @@ class CheckpointStore implements AutoCloseable {
     // the callback may only handle errors thrown by consumer.poll in KafkaBasedLog
     // e.g. unauthorized to read from topic (non-retriable)
     // if any are encountered, treat the loading of Checkpoints as failed.
-    Map<String, Map<TopicPartition, Checkpoint>> readCheckpoints() {
+    private Map<String, Map<TopicPartition, Checkpoint>> readCheckpoints() {
         Map<String, Map<TopicPartition, Checkpoint>> checkpoints = new HashMap<>();
         Callback<ConsumerRecord<byte[], byte[]>> consumedCallback = (error, cpRecord) -> {
             if (error != null) {

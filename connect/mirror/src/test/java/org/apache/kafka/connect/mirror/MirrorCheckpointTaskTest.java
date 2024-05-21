@@ -33,7 +33,6 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -308,18 +307,14 @@ public class MirrorCheckpointTaskTest {
         // (as nearest mapping in OffsetSyncStore is 200->200)
         Map<TopicPartition, OffsetAndMetadata> upstreamGroupOffsets = new HashMap<>();
         upstreamGroupOffsets.put(t1p0, new OffsetAndMetadata(250));
-        Map<TopicPartition, Checkpoint> result = mirrorCheckpointTask.checkpointsForGroup(upstreamGroupOffsets, "group1");
-
-        assertEquals(1, result.size());
-        Checkpoint cp = result.get(sourceT1p0);
-        assertNotNull(cp);
-        assertEquals(250, cp.upstreamOffset());
-        assertEquals(201, cp.downstreamOffset());
+        Map<TopicPartition, Checkpoint> checkpoints = mirrorCheckpointTask.checkpointsForGroup(upstreamGroupOffsets, "group1");
+        assertEquals(1, checkpoints.size());
+        assertEquals(new Checkpoint("group1", sourceT1p0, 250, 201, ""), checkpoints.get(sourceT1p0));
 
         // Simulate task restart, during which more offsets are added to the sync topic, and thus the
         // corresponding OffsetSyncStore no longer has a mapping for 100->100
         // Now OffsetSyncStore contains entries for: 175->175, 375->375, 475->475
-        offsetSyncStore = new OffsetSyncStoreTest.FakeOffsetSyncStore() {
+        OffsetSyncStoreTest.FakeOffsetSyncStore offsetSyncStore2 = new OffsetSyncStoreTest.FakeOffsetSyncStore() {
             @Override
             void backingStoreStart() {
                 for (int i = 175; i <= 475; i += 100) {
@@ -327,35 +322,30 @@ public class MirrorCheckpointTaskTest {
                 }
             }
         };
-        offsetSyncStore.start(false);
+        offsetSyncStore2.start(false);
 
         // Simulate loading existing checkpoints into checkpointsPerConsumerGroup (250->201)
         Map<String, Map<TopicPartition, Checkpoint>> checkpointsPerConsumerGroup = new HashMap<>();
-        checkpointsPerConsumerGroup.put("group1", result);
-        mirrorCheckpointTask = new MirrorCheckpointTask("source1", "target2",
-                new DefaultReplicationPolicy(), offsetSyncStore, Collections.emptySet(), Collections.emptyMap(),
+        checkpointsPerConsumerGroup.put("group1", checkpoints);
+        MirrorCheckpointTask mirrorCheckpointTask2 = new MirrorCheckpointTask("source1", "target2",
+                new DefaultReplicationPolicy(), offsetSyncStore2, Collections.emptySet(), Collections.emptyMap(),
                 new CheckpointStore(checkpointsPerConsumerGroup));
 
         // Upstream offsets 250 and 370 now have the closest downstream value of 176, but this is
         // earlier than the downstream value of the last checkpoint (201) - so they are not emitted.
-        assertEquals(OptionalLong.of(176), offsetSyncStore.translateDownstream(null, t1p0, 250));
-        assertEquals(OptionalLong.of(176), offsetSyncStore.translateDownstream(null, t1p0, 370));
+        assertEquals(OptionalLong.of(176), offsetSyncStore2.translateDownstream(null, t1p0, 250));
+        assertEquals(OptionalLong.of(176), offsetSyncStore2.translateDownstream(null, t1p0, 370));
         upstreamGroupOffsets.put(t1p0, new OffsetAndMetadata(250));
-        result = mirrorCheckpointTask.checkpointsForGroup(upstreamGroupOffsets, "group1");
-        assertEquals(0, result.size());
+        assertTrue(mirrorCheckpointTask2.checkpointsForGroup(upstreamGroupOffsets, "group1").isEmpty());
         upstreamGroupOffsets.put(t1p0, new OffsetAndMetadata(370));
-        result = mirrorCheckpointTask.checkpointsForGroup(upstreamGroupOffsets, "group1");
-        assertEquals(0, result.size());
+        assertTrue(mirrorCheckpointTask2.checkpointsForGroup(upstreamGroupOffsets, "group1").isEmpty());
 
         // Upstream offset 400 has a closes downstream value of 376, and is emitted because it has
         // a later downstream offset than the last checkpoint's downstream (201)
         upstreamGroupOffsets.put(t1p0, new OffsetAndMetadata(400));
-        result = mirrorCheckpointTask.checkpointsForGroup(upstreamGroupOffsets, "group1");
-        assertEquals(1, result.size());
-        cp = result.get(sourceT1p0);
-        assertNotNull(cp);
-        assertEquals(400, cp.upstreamOffset());
-        assertEquals(376, cp.downstreamOffset());
+        Map<TopicPartition, Checkpoint> checkpoints2 = mirrorCheckpointTask2.checkpointsForGroup(upstreamGroupOffsets, "group1");
+        assertEquals(1, checkpoints2.size());
+        assertEquals(new Checkpoint("group1", sourceT1p0, 400, 376, ""), checkpoints2.get(sourceT1p0));
     }
     
     @Test

@@ -54,7 +54,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * started after the position of the consumer group, or if relevant offset syncs for the topic were potentially used as
  * for translation in an earlier generation of the sync store.
  */
-class OffsetSyncStore implements AutoCloseable {
+public class OffsetSyncStore implements AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(OffsetSyncStore.class);
     // Store one offset sync for each bit of the topic offset.
@@ -66,7 +66,7 @@ class OffsetSyncStore implements AutoCloseable {
     protected volatile boolean initializationMustReadToEnd = true;
     protected volatile boolean readToEnd = false;
 
-    OffsetSyncStore(MirrorCheckpointConfig config) {
+    public OffsetSyncStore(MirrorCheckpointConfig config) {
         Consumer<byte[], byte[]> consumer = null;
         TopicAdmin admin = null;
         KafkaBasedLog<byte[], byte[]> store;
@@ -118,7 +118,7 @@ class OffsetSyncStore implements AutoCloseable {
         backingStore.start(false);
     }
 
-    OptionalLong translateDownstream(String group, TopicPartition sourceTopicPartition, long upstreamOffset) {
+    public OptionalLong translateDownstream(String group, TopicPartition sourceTopicPartition, long upstreamOffset) {
         if (!readToEnd) {
             // If we have not read to the end of the syncs topic at least once, decline to translate any offsets.
             // This prevents emitting stale offsets while initially reading the offset syncs topic.
