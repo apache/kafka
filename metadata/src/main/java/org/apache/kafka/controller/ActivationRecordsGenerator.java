@@ -164,6 +164,8 @@ public class ActivationRecordsGenerator {
                     if (zkMigrationEnabled) {
                         throw new RuntimeException("Should not have ZK migrations enabled on a cluster that was " +
                             "created in KRaft mode.");
+                    } else {
+                        logMessageBuilder.append("This is a de-novo KRaft cluster with ZooKeeper migrations disabled.");
                     }
                     break;
                 case PRE_MIGRATION:
