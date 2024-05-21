@@ -30,15 +30,14 @@ def main():
 
     os.chdir(docker_official_images_dir)
 
-
     highest_version = ""
 
     # Output header information
-    header = f"""# This file is generated via https://github.com/apache/kafka/blob/{file_commit(str(script_dir / self))}/docker/generate_kafka_pr_template.sh
+    header = f"""# This file is generated via https://github.com/apache/kafka/blob/{file_commit(str(script_dir / self))}/docker/generate_kafka_pr_template.py
 
-                Maintainers: The Apache Kafka Project <dev@kafka.apache.org> (@ApacheKafka)
-                GitRepo: https://github.com/apache/kafka.git
-            """
+Maintainers: The Apache Kafka Project <dev@kafka.apache.org> (@ApacheKafka)
+GitRepo: https://github.com/apache/kafka.git
+"""
     print(header)
 
     dirs = sorted([d for d in docker_official_images_dir.iterdir() if d.is_dir()], reverse=True)
@@ -60,11 +59,11 @@ def main():
         commit = dir_commit(dir / "jvm")
 
         info = f"""
-                Tags: {tags}
-                Architectures: amd64,arm64v8
-                GitCommit: {commit}
-                Directory: ./docker/docker_official_images/{version}/jvm
-                """
+Tags: {tags}
+Architectures: amd64,arm64v8
+GitCommit: {commit}
+Directory: ./docker/docker_official_images/{version}/jvm
+"""
         print(info.strip())
 
 if __name__ == "__main__":
