@@ -46,7 +46,6 @@ class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerReconfigurat
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testConfigDescribeUsingAdminClient(quorum: String): Unit = {
-
     def verifyConfig(configName: String, configEntry: ConfigEntry, isSensitive: Boolean, isReadOnly: Boolean,
                      expectedProps: Properties): Unit = {
       if (isSensitive) {
@@ -71,7 +70,6 @@ class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerReconfigurat
 
     def verifySynonyms(configName: String, synonyms: util.List[ConfigSynonym], isSensitive: Boolean,
                        prefix: String, defaultValue: Option[String]): Unit = {
-
       val overrideCount = if (prefix.isEmpty) 0 else 2
       assertEquals(1 + overrideCount + defaultValue.size, synonyms.size, s"Wrong synonyms for $configName: $synonyms")
       if (overrideCount > 0) {
@@ -350,5 +348,4 @@ class DynamicBrokerReconfigurationTest extends AbstractDynamicBrokerReconfigurat
   }
 
   private def tempPropertiesFile(properties: Properties): File = TestUtils.tempPropertiesFile(properties.asScala)
-
 }
