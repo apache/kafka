@@ -681,7 +681,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     val log2 = servers.head.logManager.getLog(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0))
       .getOrElse(throw new IllegalStateException("Log not found"))
     assertFalse(log2.config.delete, "Overridden clean up policy should not be updated")
-    assertEquals(BrokerCompressionType.PRODUCER.name, log2.config.compressionType)
+    assertEquals(BrokerCompressionType.PRODUCER, log2.config.compressionType)
 
     // Verify that we can alter subset of log configs
     props.clear()
