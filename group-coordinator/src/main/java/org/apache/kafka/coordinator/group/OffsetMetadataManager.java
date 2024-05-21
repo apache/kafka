@@ -675,14 +675,14 @@ public class OffsetMetadataManager {
                     TimelineHashMap<String, TimelineHashMap<Integer, OffsetAndMetadata>> pendingGroupOffsets =
                         pendingOffsets.offsetsByGroup.get(groupId);
                     if (pendingGroupOffsets != null) {
-                        pendingGroupOffsets.forEach((topic, offsetsByPartition) -> {
+                        pendingGroupOffsets.forEach((topic, offsetsByPartition) ->
                             offsetsByPartition.keySet().forEach(partition -> {
                                 if (!hasCommittedOffset(groupId, topic, partition)) {
                                     records.add(CoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(groupId, topic, partition));
                                     numDeletedOffsets.getAndIncrement();
                                 }
-                            });
-                        });
+                            })
+                        );
                     }
                 }
             });
@@ -923,8 +923,8 @@ public class OffsetMetadataManager {
             .add(tp.partition())
         );
 
-        Consumer<Offsets> delete = offsetsToClean -> {
-            offsetsToClean.offsetsByGroup.forEach((groupId, topicOffsets) -> {
+        Consumer<Offsets> delete = offsetsToClean ->
+            offsetsToClean.offsetsByGroup.forEach((groupId, topicOffsets) ->
                 topicOffsets.forEach((topic, partitionOffsets) -> {
                     if (partitionsByTopic.containsKey(topic)) {
                         partitionsByTopic.get(topic).forEach(partition -> {
@@ -933,9 +933,8 @@ public class OffsetMetadataManager {
                             }
                         });
                     }
-                });
-            });
-        };
+                })
+            );
 
         // Delete the partitions from the main storage.
         delete.accept(offsets);
@@ -1078,8 +1077,8 @@ public class OffsetMetadataManager {
         if (result == TransactionResult.COMMIT) {
             log.debug("Committed transactional offset commits for producer id {}.", producerId);
 
-            pendingOffsets.offsetsByGroup.forEach((groupId, topicOffsets) -> {
-                topicOffsets.forEach((topicName, partitionOffsets) -> {
+            pendingOffsets.offsetsByGroup.forEach((groupId, topicOffsets) ->
+                topicOffsets.forEach((topicName, partitionOffsets) ->
                     partitionOffsets.forEach((partitionId, offsetAndMetadata) -> {
                         OffsetAndMetadata existingOffsetAndMetadata = offsets.get(
                             groupId,
@@ -1108,9 +1107,9 @@ public class OffsetMetadataManager {
                                 "partition {} since its record offset {} is smaller than the record offset {} of the last committed offset.",
                                 offsetAndMetadata, producerId, groupId, topicName, partitionId, offsetAndMetadata.recordOffset, existingOffsetAndMetadata.recordOffset);
                         }
-                    });
-                });
-            });
+                    })
+                )
+            );
         } else {
             log.debug("Aborted transactional offset commits for producer id {}.", producerId);
         }

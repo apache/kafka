@@ -153,7 +153,7 @@ public class EventAccumulatorTest {
         accumulator.addLast(event2);
         assertEquals(3, accumulator.size());
 
-        MockEvent event = null;
+        MockEvent event;
 
         // Poll event0.
         event = accumulator.poll();

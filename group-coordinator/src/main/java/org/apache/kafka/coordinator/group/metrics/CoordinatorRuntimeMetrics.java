@@ -27,29 +27,29 @@ public interface CoordinatorRuntimeMetrics extends AutoCloseable {
 
     /**
      * Called when the partition state changes.
-     * @param oldState The old state.
-     * @param newState The new state to transition to.
+     * @param oldState      The old state.
+     * @param newState      The new state to transition to.
      */
     void recordPartitionStateChange(CoordinatorState oldState, CoordinatorState newState);
 
     /**
      * Record the partition load metric.
-     * @param startTimeMs The partition load start time.
-     * @param endTimeMs   The partition load end time.
+     * @param startTimeMs       The partition load start time.
+     * @param endTimeMs         The partition load end time.
      */
     void recordPartitionLoadSensor(long startTimeMs, long endTimeMs);
 
     /**
      * Update the event queue time.
      *
-     * @param durationMs The queue time.
+     * @param durationMs      The queue time.
      */
     void recordEventQueueTime(long durationMs);
 
     /**
      * Update the event queue processing time.
      *
-     * @param durationMs The event processing time.
+     * @param durationMs      The event processing time.
      */
     void recordEventQueueProcessingTime(long durationMs);
 
@@ -62,7 +62,7 @@ public interface CoordinatorRuntimeMetrics extends AutoCloseable {
     /**
      * Register the event queue size gauge.
      *
-     * @param sizeSupplier The size supplier.
+     * @param sizeSupplier     The size supplier.
      */
     void registerEventQueueSizeGauge(Supplier<Integer> sizeSupplier);
 }

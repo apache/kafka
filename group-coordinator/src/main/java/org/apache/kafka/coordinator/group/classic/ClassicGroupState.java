@@ -135,7 +135,7 @@ public enum ClassicGroupState {
     }
 
     /**
-     * @return valid previous states a group must be in to transition to this state.
+     * @return Valid previous states a group must be in to transition to this state.
      */
     public Set<ClassicGroupState> validPreviousStates() {
         return this.validPreviousStates;

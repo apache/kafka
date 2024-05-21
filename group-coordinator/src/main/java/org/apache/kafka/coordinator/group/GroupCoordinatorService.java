@@ -231,7 +231,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
     private volatile int numPartitions = -1;
 
     /**
-     *
      * @param logContext                The log context.
      * @param config                    The group coordinator config.
      * @param runtime                   The runtime.

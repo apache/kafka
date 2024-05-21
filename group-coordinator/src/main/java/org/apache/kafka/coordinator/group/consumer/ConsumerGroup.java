@@ -122,7 +122,7 @@ public class ConsumerGroup implements Group {
 
     /**
      * The group epoch. The epoch is incremented whenever the subscriptions
-     * are updated and it will trigger the computation of a new assignment
+     * are updated, and it will trigger the computation of a new assignment
      * for the group.
      */
     private final TimelineInteger groupEpoch;
@@ -236,7 +236,7 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * @return The current state as a String.
+     * {@inheritDoc}
      */
     @Override
     public String stateAsString() {
@@ -244,14 +244,14 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * @return The current state as a String with given committedOffset.
+     * {@inheritDoc}
      */
     public String stateAsString(long committedOffset) {
         return state.get(committedOffset).toString();
     }
 
     /**
-     * @return the group formatted as a list group response based on the committed offset.
+     * @return The group formatted as a list group response based on the committed offset.
      */
     public ListGroupsResponseData.ListedGroup asListedGroup(long committedOffset) {
         return new ListGroupsResponseData.ListedGroup()
@@ -262,7 +262,7 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * @return The group id.
+     * {@inheritDoc}
      */
     @Override
     public String groupId() {
@@ -565,7 +565,7 @@ public class ConsumerGroup implements Group {
     /**
      * Compute the preferred (server side) assignor for the group while
      * taking into account the updated member. The computation relies
-     * on {{@link ConsumerGroup#serverAssignors}} persisted structure
+     * on {{@link ConsumerGroup#serverAssignors}} persisted structure,
      * but it does not update it.
      *
      * @param oldMember The old member.
@@ -710,13 +710,7 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * Validates the OffsetCommit request.
-     *
-     * @param memberId          The member id.
-     * @param groupInstanceId   The group instance id.
-     * @param memberEpoch       The member epoch.
-     * @param isTransactional   Whether the offset commit is transactional or not. It has no
-     *                          impact when a consumer group is used.
+     * {@inheritDoc}
      */
     @Override
     public void validateOffsetCommit(
@@ -735,11 +729,7 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * Validates the OffsetFetch request.
-     *
-     * @param memberId              The member id for consumer groups.
-     * @param memberEpoch           The member epoch for consumer groups.
-     * @param lastCommittedOffset   The last committed offsets in the timeline.
+     * {@inheritDoc}
      */
     @Override
     public void validateOffsetFetch(
@@ -761,13 +751,13 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * Validates the OffsetDelete request.
+     * {@inheritDoc}
      */
     @Override
     public void validateOffsetDelete() {}
 
     /**
-     * Validates the DeleteGroups request.
+     * {@inheritDoc}
      */
     @Override
     public void validateDeleteGroup() throws ApiException {
@@ -777,9 +767,7 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * Populates the list of records with tombstone(s) for deleting the group.
-     *
-     * @param records The list of records.
+     * {@inheritDoc}
      */
     @Override
     public void createGroupTombstoneRecords(List<CoordinatorRecord> records) {
@@ -1066,7 +1054,7 @@ public class ConsumerGroup implements Group {
         Map<Uuid, Set<Integer>> assignment,
         int expectedEpoch
     ) {
-        assignment.forEach((topicId, assignedPartitions) -> {
+        assignment.forEach((topicId, assignedPartitions) ->
             currentPartitionEpoch.compute(topicId, (__, partitionsOrNull) -> {
                 if (partitionsOrNull != null) {
                     assignedPartitions.forEach(partitionId -> {
@@ -1087,8 +1075,8 @@ public class ConsumerGroup implements Group {
                         String.format("Cannot remove the epoch %d from %s because it does not have any epoch",
                             expectedEpoch, topicId));
                 }
-            });
-        });
+            })
+        );
     }
 
     /**
@@ -1103,7 +1091,7 @@ public class ConsumerGroup implements Group {
         Map<Uuid, Set<Integer>> assignment,
         int epoch
     ) {
-        assignment.forEach((topicId, assignedPartitions) -> {
+        assignment.forEach((topicId, assignedPartitions) ->
             currentPartitionEpoch.compute(topicId, (__, partitionsOrNull) -> {
                 if (partitionsOrNull == null) {
                     partitionsOrNull = new TimelineHashMap<>(snapshotRegistry, assignedPartitions.size());
@@ -1117,8 +1105,8 @@ public class ConsumerGroup implements Group {
                     }
                 }
                 return partitionsOrNull;
-            });
-        });
+            })
+        );
     }
 
     /**

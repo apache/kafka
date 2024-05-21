@@ -73,33 +73,33 @@ public interface Group {
     GroupType type();
 
     /**
-     * @return The {{@link GroupType}}'s String representation.
+     * @return String representation of the group's current state.
      */
     String stateAsString();
 
     /**
-     * @return The {{@link GroupType}}'s String representation based on the committed offset.
+     * @return String representation of the group's current state based on the committed offset.
      */
     String stateAsString(long committedOffset);
 
     /**
-     * @return the group formatted as a list group response based on the committed offset.
+     * @return The group formatted as a list group response based on the committed offset.
      */
     ListGroupsResponseData.ListedGroup asListedGroup(long committedOffset);
 
     /**
-     * @return The group id.
+     * @return The group Id.
      */
     String groupId();
 
     /**
      * Validates the OffsetCommit request.
      *
-     * @param memberId                  The member id.
-     * @param groupInstanceId           The group instance id.
-     * @param generationIdOrMemberEpoch The generation id for genetic groups or the member epoch
-     *                                  for consumer groups.
-     * @param isTransactional           Whether the offset commit is transactional or not.
+     * @param memberId                      The member Id.
+     * @param groupInstanceId               The group instance Id.
+     * @param generationIdOrMemberEpoch     The generation Id for genetic groups or the member epoch
+     *                                      for consumer groups.
+     * @param isTransactional               Whether the offset commit is transactional or not.
      */
     void validateOffsetCommit(
         String memberId,
@@ -111,7 +111,7 @@ public interface Group {
     /**
      * Validates the OffsetFetch request.
      *
-     * @param memberId              The member id for consumer groups.
+     * @param memberId              The member Id for consumer groups.
      * @param memberEpoch           The member epoch for consumer groups.
      * @param lastCommittedOffset   The last committed offsets in the timeline.
      */
@@ -162,7 +162,7 @@ public interface Group {
     /**
      * Returns true if the statesFilter contains the current state with given committedOffset.
      *
-     * @param statesFilter The states to filter, which must be lowercase.
+     * @param statesFilter      The states to filter, which must be lowercase.
      * @return true if the state includes, false otherwise.
      */
     boolean isInStates(Set<String> statesFilter, long committedOffset);

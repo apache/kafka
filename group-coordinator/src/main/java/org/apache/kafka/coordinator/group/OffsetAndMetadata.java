@@ -57,7 +57,7 @@ public class OffsetAndMetadata {
     public final long commitTimestampMs;
 
     /**
-     * The expire timestamp in milliseconds.
+     * The expiry timestamp in milliseconds.
      */
     public final OptionalLong expireTimestampMs;
 

@@ -165,21 +165,21 @@ public class ClassicGroupMember {
     }
 
     /**
-     * @return true if the member is utilizing static membership, false otherwise.
+     * @return True if the member is utilizing static membership, false otherwise.
      */
     public boolean isStaticMember() {
         return groupInstanceId.isPresent();
     }
 
     /**
-     * @return whether the member is awaiting join.
+     * @return Whether the member is awaiting join.
      */
     public boolean isAwaitingJoin() {
         return awaitingJoinFuture != null;
     }
 
     /**
-     * @return whether the member is awaiting sync.
+     * @return Whether the member is awaiting sync.
      */
     public boolean isAwaitingSync() {
         return awaitingSyncFuture != null;
@@ -203,7 +203,7 @@ public class ClassicGroupMember {
      * The heartbeat is always considered satisfied when an existing member has made a
      * successful join/sync group request during a rebalance.
      *
-     * @return true if heartbeat was satisfied; false otherwise.
+     * @return True if heartbeat was satisfied; false otherwise.
      */
     public boolean hasSatisfiedHeartbeat() {
         if (isNew) {
@@ -218,8 +218,8 @@ public class ClassicGroupMember {
     /**
      * Compare the given list of protocols with the member's supported protocols.
      *
-     * @param protocols list of protocols to match.
-     * @return true if the given list matches the member's list of supported protocols,
+     * @param protocols         List of protocols to match.
+     * @return True if the given list matches the member's list of supported protocols,
      *         false otherwise.
      */
     public boolean matches(JoinGroupRequestProtocolCollection protocols) {
@@ -230,8 +230,8 @@ public class ClassicGroupMember {
      * Vote for one of the potential group protocols. This takes into account the protocol preference as
      * indicated by the order of supported protocols and returns the first one also contained in the set
      *
-     * @param candidates The protocol names that this member can vote for
-     * @return the first supported protocol that matches one of the candidates
+     * @param candidates        The protocol names that this member can vote for.
+     * @return The first supported protocol that matches one of the candidates
      */
     public String vote(Set<String> candidates) {
         for (JoinGroupRequestProtocol protocol : supportedProtocols) {
@@ -246,7 +246,7 @@ public class ClassicGroupMember {
     /**
      * Transform protocols into their respective names.
      *
-     * @param supportedProtocols list of supported protocols.
+     * @param supportedProtocols        List of supported protocols.
      * @return a set of protocol names from the given list of supported protocols.
      */
     public static Set<String> plainProtocolSet(
@@ -260,91 +260,91 @@ public class ClassicGroupMember {
     }
 
     /**
-     * @return whether the member has an assignment set.
+     * @return Whether the member has an assignment set.
      */
     public boolean hasAssignment() {
         return assignment != null && assignment.length > 0;
     }
 
     /**
-     * @return the member id.
+     * @return The member id.
      */
     public String memberId() {
         return memberId;
     }
 
     /**
-     * @return the group instance id.
+     * @return The group instance id.
      */
     public Optional<String> groupInstanceId() {
         return groupInstanceId;
     }
 
     /**
-     * @return the client id.
+     * @return The client id.
      */
     public String clientId() {
         return clientId;
     }
 
     /**
-     * @return the client host.
+     * @return The client host.
      */
     public String clientHost() {
         return clientHost;
     }
 
     /**
-     * @return the rebalance timeout in milliseconds.
+     * @return The rebalance timeout in milliseconds.
      */
     public int rebalanceTimeoutMs() {
         return rebalanceTimeoutMs;
     }
 
     /**
-     * @return the session timeout in milliseconds.
+     * @return The session timeout in milliseconds.
      */
     public int sessionTimeoutMs() {
         return sessionTimeoutMs;
     }
 
     /**
-     * @return the protocol type.
+     * @return The protocol type.
      */
     public String protocolType() {
         return protocolType;
     }
 
     /**
-     * @return the list of supported protocols.
+     * @return The list of supported protocols.
      */
     public JoinGroupRequestProtocolCollection supportedProtocols() {
         return supportedProtocols;
     }
 
     /**
-     * @return the member's assignment.
+     * @return The member's assignment.
      */
     public byte[] assignment() {
         return assignment;
     }
 
     /**
-     * @return the awaiting join future.
+     * @return The awaiting join future.
      */
     public CompletableFuture<JoinGroupResponseData> awaitingJoinFuture() {
         return awaitingJoinFuture;
     }
 
     /**
-     * @return the awaiting sync future.
+     * @return The awaiting sync future.
      */
     public CompletableFuture<SyncGroupResponseData> awaitingSyncFuture() {
         return awaitingSyncFuture;
     }
 
     /**
-     * @return true if the member is new, false otherwise.
+     * @return True if the member is new, false otherwise.
      */
     public boolean isNew() {
         return isNew;
@@ -370,49 +370,49 @@ public class ClassicGroupMember {
     }
 
     /**
-     * @param value the new rebalance timeout in milliseconds.
+     * @param value  The new rebalance timeout in milliseconds.
      */
     public void setRebalanceTimeoutMs(int value) {
         this.rebalanceTimeoutMs = value;
     }
 
     /**
-     * @param value the new session timeout in milliseconds.
+     * @param value  The new session timeout in milliseconds.
      */
     public void setSessionTimeoutMs(int value) {
         this.sessionTimeoutMs = value;
     }
 
     /**
-     * @param value the new list of supported protocols.
+     * @param value  The new list of supported protocols.
      */
     public void setSupportedProtocols(JoinGroupRequestProtocolCollection value) {
         this.supportedProtocols = value;
     }
 
     /**
-     * @param value the new assignment.
+     * @param value   The new assignment.
      */
     public void setAssignment(byte[] value) {
         this.assignment = value;
     }
 
     /**
-     * @param value the updated join future.
+     * @param value   The updated join future.
      */
     public void setAwaitingJoinFuture(CompletableFuture<JoinGroupResponseData> value) {
         this.awaitingJoinFuture = value;
     }
 
     /**
-     * @param value the updated sync future.
+     * @param value   The updated sync future.
      */
     public void setAwaitingSyncFuture(CompletableFuture<SyncGroupResponseData> value) {
         this.awaitingSyncFuture = value;
     }
 
     /**
-     * @param value true if the member is new, false otherwise.
+     * @param value   True if the member is new, false otherwise.
      */
     public void setIsNew(boolean value) {
         this.isNew = value;

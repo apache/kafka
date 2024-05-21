@@ -249,9 +249,7 @@ public class ClassicGroup implements Group {
     }
 
     /**
-     * The state of this group.
-     *
-     * @return The current state as a String.
+     * {@inheritDoc}
      */
     @Override
     public String stateAsString() {
@@ -259,9 +257,7 @@ public class ClassicGroup implements Group {
     }
 
     /**
-     * The state of this group based on the committed offset.
-     *
-     * @return The current state as a String.
+     * {@inheritDoc}
      */
     @Override
     public String stateAsString(long committedOffset) {
@@ -269,35 +265,35 @@ public class ClassicGroup implements Group {
     }
 
     /**
-     * @return the group id.
+     * @return The group id.
      */
     public String groupId() {
         return this.groupId;
     }
 
     /**
-     * @return the generation id.
+     * @return The generation id.
      */
     public int generationId() {
         return this.generationId;
     }
 
     /**
-     * @return the protocol name.
+     * @return The protocol name.
      */
     public Optional<String> protocolName() {
         return this.protocolName;
     }
 
     /**
-     * @return the protocol type.
+     * @return The protocol type.
      */
     public Optional<String> protocolType() {
         return this.protocolType;
     }
 
     /**
-     * @return the current group state.
+     * @return The current group state.
      */
     public ClassicGroupState currentState() {
         return this.state;
@@ -308,7 +304,7 @@ public class ClassicGroup implements Group {
     }
 
     /**
-     * @return true if a new member was added.
+     * @return True if a new member was added.
      */
     public boolean newMemberAdded() {
         return this.newMemberAdded;
@@ -317,8 +313,8 @@ public class ClassicGroup implements Group {
     /**
      * Compares the group's current state with the given state.
      *
-     * @param groupState the state to match against.
-     * @return true if the state matches, false otherwise.
+     * @param groupState    The state to match against.
+     * @return True if the state matches, false otherwise.
      */
     public boolean isInState(ClassicGroupState groupState) {
         return this.state == groupState;
@@ -327,8 +323,8 @@ public class ClassicGroup implements Group {
     /**
      * To identify whether the given member id is part of this group.
      *
-     * @param memberId the given member id.
-     * @return true if the member is part of this group, false otherwise.
+     * @param memberId      The given member id.
+     * @return True if the member is part of this group, false otherwise.
      */
     public boolean hasMemberId(String memberId) {
         return members.containsKey(memberId);
@@ -337,15 +333,15 @@ public class ClassicGroup implements Group {
     /**
      * Get the member metadata associated with the provided member id.
      *
-     * @param memberId the member id.
-     * @return the member metadata if it exists, null otherwise.
+     * @param memberId      The member id.
+     * @return The member metadata if it exists, null otherwise.
      */
     public ClassicGroupMember member(String memberId) {
         return members.get(memberId);
     }
 
     /**
-     * @return the total number of members in this group.
+     * @return The total number of members in this group.
      */
     public int size() {
         return members.size();
@@ -354,22 +350,22 @@ public class ClassicGroup implements Group {
     /**
      * Used to identify whether the given member is the leader of this group.
      *
-     * @param memberId the member id.
-     * @return true if the member is the leader, false otherwise.
+     * @param memberId      The member id.
+     * @return True if the member is the leader, false otherwise.
      */
     public boolean isLeader(String memberId) {
         return leaderId.map(id -> id.equals(memberId)).orElse(false);
     }
 
     /**
-     * @return the leader id or null if a leader does not exist.
+     * @return The leader id or null if a leader does not exist.
      */
     public String leaderOrNull() {
         return leaderId.orElse(null);
     }
 
     /**
-     * @return the current state timestamp.
+     * @return The current state timestamp.
      */
     public long currentStateTimestampOrDefault() {
         return currentStateTimestamp.orElse(-1L);
@@ -385,7 +381,7 @@ public class ClassicGroup implements Group {
     /**
      * Sets newMemberAdded.
      *
-     * @param value the value to set.
+     * @param value     The value to set.
      */
     public void setNewMemberAdded(boolean value) {
         this.newMemberAdded = value;
@@ -394,7 +390,7 @@ public class ClassicGroup implements Group {
     /**
      * Sets subscribedTopics.
      *
-     * @param subscribedTopics the value to set.
+     * @param subscribedTopics      The subscribed topics set.
      */
     public void setSubscribedTopics(Optional<Set<String>> subscribedTopics) {
         this.subscribedTopics = subscribedTopics;
@@ -403,14 +399,14 @@ public class ClassicGroup implements Group {
     /**
      * Sets protocolName.
      *
-     * @param protocolName the value to set.
+     * @param protocolName The value to set.
      */
     public void setProtocolName(Optional<String> protocolName) {
         this.protocolName = protocolName;
     }
 
     /**
-     * @return whether the group is using the consumer protocol.
+     * @return Whether the group is using the consumer protocol.
      */
     public boolean usesConsumerGroupProtocol() {
         return protocolType.map(type ->
@@ -421,7 +417,7 @@ public class ClassicGroup implements Group {
     /**
      * Add a member to this group.
      *
-     * @param member  the member to add.
+     * @param member  The member to add.
      */
     public void add(ClassicGroupMember member) {
         add(member, null);
@@ -430,8 +426,8 @@ public class ClassicGroup implements Group {
     /**
      * Add a member to this group.
      *
-     * @param member  the member to add.
-     * @param future  the future to complete once the join group phase completes.
+     * @param member    The member to add.
+     * @param future    The future to complete once the join group phase completes.
      */
     public void add(ClassicGroupMember member, CompletableFuture<JoinGroupResponseData> future) {
         member.groupInstanceId().ifPresent(instanceId -> {
@@ -473,7 +469,7 @@ public class ClassicGroup implements Group {
     /**
      * Remove a member from the group.
      *
-     * @param memberId the member id to remove.
+     * @param memberId      The member id to remove.
      */
     public void remove(String memberId) {
         ClassicGroupMember removedMember = members.remove(memberId);
@@ -501,10 +497,10 @@ public class ClassicGroup implements Group {
      * new leader from one of the joined members.
      *
      * Return false if
-     *   1. the group is currently empty (has no designated leader)
-     *   2. no member rejoined
+     *   1. The group is currently empty (has no designated leader)
+     *   2. No member rejoined
      *
-     * @return true if a new leader was elected or the existing
+     * @return True if a new leader was elected or the existing
      *         leader rejoined, false otherwise.
      */
     public boolean maybeElectNewJoinedLeader() {
@@ -542,10 +538,10 @@ public class ClassicGroup implements Group {
      * [For static members only]: Replace the old member id with the new one,
      * keep everything else unchanged and return the updated member.
      *
-     * @param groupInstanceId  the group instance id.
-     * @param oldMemberId      the old member id.
-     * @param newMemberId      the new member id that will replace the old member id.
-     * @return the member with the new id.
+     * @param groupInstanceId       The group instance id.
+     * @param oldMemberId           The old member id.
+     * @param newMemberId           The new member id that will replace the old member id.
+     * @return The member with the new id.
      */
     public ClassicGroupMember replaceStaticMember(
         String groupInstanceId,
@@ -600,8 +596,8 @@ public class ClassicGroup implements Group {
     /**
      * Check whether a member has joined the group.
      *
-     * @param memberId the member id.
-     * @return true if the member has yet to join, false otherwise.
+     * @param memberId      The member id.
+     * @return True if the member has yet to join, false otherwise.
      */
     public boolean isPendingMember(String memberId) {
         return pendingJoinMembers.contains(memberId);
@@ -610,8 +606,8 @@ public class ClassicGroup implements Group {
     /**
      * Add a pending member.
      *
-     * @param memberId the member id.
-     * @return true if the group did not already have the pending member,
+     * @param memberId      The member id.
+     * @return True if the group did not already have the pending member,
      *         false otherwise.
      */
     public boolean addPendingMember(String memberId) {
@@ -623,7 +619,7 @@ public class ClassicGroup implements Group {
     }
 
     /**
-     * @return number of members that are pending join.
+     * @return Number of members that are pending join.
      */
     public int numPendingJoinMembers() {
         return pendingJoinMembers.size();
@@ -632,8 +628,8 @@ public class ClassicGroup implements Group {
     /**
      * Add a pending sync member.
      *
-     * @param memberId the member id.
-     * @return true if the group did not already have the pending sync member,
+     * @param memberId      The member id.
+     * @return True if the group did not already have the pending sync member,
      *         false otherwise.
      */
     public boolean addPendingSyncMember(String memberId) {
@@ -648,8 +644,8 @@ public class ClassicGroup implements Group {
     /**
      * Remove a member that has not yet synced.
      *
-     * @param memberId the member id.
-     * @return true if the group did store this member, false otherwise.
+     * @param memberId      The member id.
+     * @return True if the group did store this member, false otherwise.
      */
     public boolean removePendingSyncMember(String memberId) {
         if (!hasMemberId(memberId)) {
@@ -660,7 +656,7 @@ public class ClassicGroup implements Group {
     }
 
     /**
-     * @return true if all members have sent sync group requests,
+     * @return True if all members have sent sync group requests,
      *         false otherwise.
      */
     public boolean hasReceivedSyncFromAllMembers() {
@@ -668,7 +664,7 @@ public class ClassicGroup implements Group {
     }
 
     /**
-     * @return members that have yet to sync.
+     * @return Members that have yet to sync.
      */
     public Set<String> allPendingSyncMembers() {
         return pendingSyncMembers;
@@ -685,8 +681,8 @@ public class ClassicGroup implements Group {
      * Checks whether the given group instance id exists as
      * a static member.
      *
-     * @param groupInstanceId the group instance id.
-     * @return true if a static member with the group instance id exists,
+     * @param groupInstanceId       The group instance id.
+     * @return True if a static member with the group instance id exists,
      *         false otherwise.
      */
     public boolean hasStaticMember(String groupInstanceId) {
@@ -697,15 +693,15 @@ public class ClassicGroup implements Group {
      * Get member id of a static member that matches the given group
      * instance id.
      *
-     * @param groupInstanceId the group instance id.
-     * @return the static member if it exists.
+     * @param groupInstanceId       The group instance id.
+     * @return The static member if it exists.
      */
     public String staticMemberId(String groupInstanceId) {
         return staticMembers.get(groupInstanceId);
     }
 
     /**
-     * @return members who have yet to rejoin during the
+     * @return Members who have yet to rejoin during the
      *         join group phase.
      */
     public Map<String, ClassicGroupMember> notYetRejoinedMembers() {
@@ -719,21 +715,21 @@ public class ClassicGroup implements Group {
     }
 
     /**
-     * @return whether all members have joined.
+     * @return Whether all members have joined.
      */
     public boolean hasAllMembersJoined() {
         return members.size() == numMembersAwaitingJoinResponse && pendingJoinMembers.isEmpty();
     }
 
     /**
-     * @return the ids of all members in the group.
+     * @return The ids of all members in the group.
      */
     public Set<String> allMemberIds() {
         return members.keySet();
     }
 
     /**
-     * @return the ids of all static members in the group.
+     * @return The ids of all static members in the group.
      */
     public Set<String> allStaticMemberIds() {
         return new HashSet<>(staticMembers.values());
@@ -747,21 +743,21 @@ public class ClassicGroup implements Group {
     }
 
     /**
-     * @return number of members waiting for a join group response.
+     * @return Number of members waiting for a join group response.
      */
     public int numAwaitingJoinResponse() {
         return numMembersAwaitingJoinResponse;
     }
 
     /**
-     * @return all members.
+     * @return All members.
      */
     public Collection<ClassicGroupMember> allMembers() {
         return members.values();
     }
 
     /**
-     * @return the group's rebalance timeout in milliseconds.
+     * @return The group's rebalance timeout in milliseconds.
      *         It is the max of all members' rebalance timeout.
      */
     public int rebalanceTimeoutMs() {
@@ -775,8 +771,8 @@ public class ClassicGroup implements Group {
     /**
      * Generate a member id from the given client and group instance ids.
      *
-     * @param clientId         the client id.
-     * @param groupInstanceId  the group instance id.
+     * @param clientId              The client id.
+     * @param groupInstanceId       The group instance id.
      * @return the generated id.
      */
     public String generateMemberId(String clientId, Optional<String> groupInstanceId) {
@@ -818,12 +814,7 @@ public class ClassicGroup implements Group {
     }
 
     /**
-     * Validates the OffsetCommit request.
-     *
-     * @param memberId          The member id.
-     * @param groupInstanceId   The group instance id.
-     * @param generationId      The generation id.
-     * @param isTransactional   Whether the offset commit is transactional or not.
+     * {@inheritDoc}
      */
     @Override
     public void validateOffsetCommit(
@@ -869,11 +860,7 @@ public class ClassicGroup implements Group {
     }
 
     /**
-     * Validates the OffsetFetch request.
-     *
-     * @param memberId              The member id. This is not provided for classic groups.
-     * @param memberEpoch           The member epoch for consumer groups. This is not provided for classic groups.
-     * @param lastCommittedOffset   The last committed offsets in the timeline.
+     * {@inheritDoc}
      */
     @Override
     public void validateOffsetFetch(
@@ -887,7 +874,7 @@ public class ClassicGroup implements Group {
     }
 
     /**
-     * Validates the OffsetDelete request.
+     * {@inheritDoc}
      */
     @Override
     public void validateOffsetDelete() throws ApiException {
@@ -906,7 +893,7 @@ public class ClassicGroup implements Group {
     }
 
     /**
-     * Validates the DeleteGroups request.
+     * {@inheritDoc}
      */
     @Override
     public void validateDeleteGroup() throws ApiException {
@@ -922,9 +909,7 @@ public class ClassicGroup implements Group {
     }
 
     /**
-     * Populates the list of records with tombstone(s) for deleting the group.
-     *
-     * @param records The list of records.
+     * {@inheritDoc}
      */
     @Override
     public void createGroupTombstoneRecords(List<CoordinatorRecord> records) {
@@ -977,13 +962,13 @@ public class ClassicGroup implements Group {
     }
 
     /**
-     * Verify the member id is up to date for static members. Return true if both conditions met:
-     *   1. given member is a known static member to group
-     *   2. group stored member id doesn't match with given member id
+     * Verify the member id is up-to-date for static members. Return true if both conditions met:
+     *   1. Given member is a known static member to group
+     *   2. Group stored member id doesn't match with given member id
      *
-     * @param groupInstanceId  the group instance id.
-     * @param memberId         the member id.
-     * @return whether the static member is fenced based on the condition above.
+     * @param groupInstanceId       The group instance id.
+     * @param memberId              The member id.
+     * @return Whether the static member is fenced based on the condition above.
      */
     public boolean isStaticMemberFenced(
         String groupInstanceId,
@@ -994,7 +979,7 @@ public class ClassicGroup implements Group {
     }
 
     /**
-     * @return whether the group can rebalance.
+     * @return Whether the group can rebalance.
      */
     public boolean canRebalance() {
         return PREPARING_REBALANCE.validPreviousStates().contains(state);
@@ -1002,7 +987,7 @@ public class ClassicGroup implements Group {
 
     /**
      * Transition to a group state.
-     * @param groupState the group state.
+     * @param groupState    The group state.
      */
     public void transitionTo(ClassicGroupState groupState) {
         assertValidTransition(groupState);
@@ -1018,7 +1003,7 @@ public class ClassicGroup implements Group {
      * be selected. Only a protocol that is supported by all members
      * can be selected.
      *
-     * @return the name of the selected protocol.
+     * @return The name of the selected protocol.
      */
     public String selectProtocol() {
         if (members.isEmpty()) {
@@ -1043,10 +1028,10 @@ public class ClassicGroup implements Group {
     }
 
     /**
-     * Increment the protocol count for all of the member's
+     * Increment the protocol count for all the member's
      * supported protocols.
      *
-     * @param member the member.
+     * @param member    The classic member.
      */
     private void incrementSupportedProtocols(ClassicGroupMember member) {
         member.supportedProtocols().forEach(protocol -> {
@@ -1056,10 +1041,10 @@ public class ClassicGroup implements Group {
     }
 
     /**
-     * Decrement the protocol count for all of the member's
+     * Decrement the protocol count for all the member's
      * supported protocols.
      *
-     * @param member the member.
+     * @param member    The classic member.
      */
     private void decrementSupportedProtocols(ClassicGroupMember member) {
         member.supportedProtocols().forEach(protocol -> {
@@ -1071,11 +1056,11 @@ public class ClassicGroup implements Group {
     /**
      * A candidate protocol must be supported by all members.
      *
-     * @return a set of candidate protocols that can be chosen as the protocol
+     * @return A set of candidate protocols that can be chosen as the protocol
      *         for the group.
      */
     private Set<String> candidateProtocols() {
-        // get the set of protocols that are commonly supported by all members
+        // Get the set of protocols that are commonly supported by all members
         return supportedProtocols.entrySet().stream()
             .filter(protocol -> protocol.getValue() == members.size())
             .map(Map.Entry::getKey).collect(Collectors.toSet());
@@ -1085,9 +1070,9 @@ public class ClassicGroup implements Group {
      * Checks whether at least one of the given protocols can be supported. A
      * protocol can be supported if it is supported by all members.
      *
-     * @param member               the member to check.
+     * @param member               The classic member to check.
      *
-     * @return a boolean based on the condition mentioned above.
+     * @return A boolean based on the condition mentioned above.
      */
     public boolean supportsProtocols(ClassicGroupMember member) {
         return supportsProtocols(
@@ -1097,13 +1082,13 @@ public class ClassicGroup implements Group {
     }
 
     /**
-     * Checks whether at least one of the given protocols can be supported. A
-     * protocol can be supported if it is supported by all members.
+     * Checks whether at least one of the given protocols can be supported.
+     * A protocol can be supported if it is supported by all members.
      *
-     * @param memberProtocolType  the member protocol type.
-     * @param memberProtocols     the set of protocol names.
+     * @param memberProtocolType    The member protocol type.
+     * @param memberProtocols       The set of protocol names.
      *
-     * @return a boolean based on the condition mentioned above.
+     * @return A boolean based on the condition mentioned above.
      */
     public boolean supportsProtocols(
         String memberProtocolType,
@@ -1119,10 +1104,10 @@ public class ClassicGroup implements Group {
      * Checks whether at least one of the given protocols can be supported. A
      * protocol can be supported if it is supported by all members.
      *
-     * @param memberProtocolType  the member protocol type.
-     * @param memberProtocols     the set of protocol names.
+     * @param memberProtocolType    The member protocol type.
+     * @param memberProtocols       The set of protocol names.
      *
-     * @return a boolean based on the condition mentioned above.
+     * @return A boolean based on the condition mentioned above.
      */
     public boolean supportsProtocols(String memberProtocolType, Set<String> memberProtocols) {
         if (isInState(EMPTY)) {
@@ -1135,7 +1120,7 @@ public class ClassicGroup implements Group {
     }
 
     /**
-     * @return the topics that the group is subscribed to.
+     * @return The topics that the group is subscribed to.
      */
     public Optional<Set<String>> subscribedTopics() {
         return subscribedTopics;
@@ -1147,9 +1132,9 @@ public class ClassicGroup implements Group {
      * consider the group not subscribed to the topic if the group is not using any protocol or not using the
      * consumer group protocol.
      *
-     * @param topic  The topic name.
+     * @param topic    The topic name.
      *
-     * @return whether the group is subscribed to the topic.
+     * @return Whether the group is subscribed to the topic.
      */
     public boolean isSubscribedToTopic(String topic) {
         return subscribedTopics.map(topics -> topics.contains(topic))
@@ -1158,12 +1143,12 @@ public class ClassicGroup implements Group {
 
     /**
      * Collects the set of topics that the members are subscribed to when the Protocol Type is equal
-     * to 'consumer'. Empty is returned if
-     * - the protocol type is not equal to 'consumer';
-     * - the protocol is not defined yet; or
-     * - the protocol metadata does not comply with the schema.
+     * to 'consumer'. Empty is returned if :
+     * - The protocol type is not equal to 'consumer';
+     * - The protocol is not defined yet; or
+     * - The protocol metadata does not comply with the schema.
      *
-     * @return the subscribed topics or Empty based on the condition above.
+     * @return The subscribed topics or Empty based on the condition above.
      */
     public Optional<Set<String>> computeSubscribedTopics() {
         if (!protocolType.isPresent()) {
@@ -1204,11 +1189,11 @@ public class ClassicGroup implements Group {
     /**
      * Update a member.
      *
-     * @param member              the member.
-     * @param protocols           the list of protocols.
-     * @param rebalanceTimeoutMs  the rebalance timeout in milliseconds.
-     * @param sessionTimeoutMs    the session timeout in milliseconds.
-     * @param future              the future that is invoked once the join phase is complete.
+     * @param member                The member.
+     * @param protocols             The list of protocols.
+     * @param rebalanceTimeoutMs    The rebalance timeout in milliseconds.
+     * @param sessionTimeoutMs      The session timeout in milliseconds.
+     * @param future                The future that is invoked once the join phase is complete.
      */
     public void updateMember(
         ClassicGroupMember member,
@@ -1234,8 +1219,8 @@ public class ClassicGroup implements Group {
     /**
      * Complete the join future.
      *
-     * @param member    the member.
-     * @param response  the join response to complete the future with.
+     * @param member        The classic member.
+     * @param response      The join response to complete the future with.
      * @return true if a join future actually completes.
      */
     public boolean completeJoinFuture(
@@ -1270,8 +1255,8 @@ public class ClassicGroup implements Group {
     /**
      * Complete a member's sync future.
      *
-     * @param member    the member.
-     * @param response  the sync response to complete the future with.
+     * @param member        The classic member.
+     * @param response      The sync response to complete the future with.
      * @return true if a sync future actually completes.
      */
     public boolean completeSyncFuture(
@@ -1321,7 +1306,7 @@ public class ClassicGroup implements Group {
     /**
      * Get all members formatted as a join response.
      *
-     * @return the members.
+     * @return The members.
      */
     public List<JoinGroupResponseMember> currentClassicGroupMembers() {
         if (isInState(DEAD) || isInState(PREPARING_REBALANCE)) {
@@ -1338,7 +1323,7 @@ public class ClassicGroup implements Group {
     }
 
     /**
-     * @return the group formatted as a list group response based on the committed offset.
+     * @return The group formatted as a list group response based on the committed offset.
      */
     public ListGroupsResponseData.ListedGroup asListedGroup(long committedOffset) {
         return new ListGroupsResponseData.ListedGroup()
@@ -1468,7 +1453,7 @@ public class ClassicGroup implements Group {
     /**
      * Checks whether the transition to the target state is valid.
      *
-     * @param targetState the target state to transition to.
+     * @param targetState   The target state to transition to.
      */
     private void assertValidTransition(ClassicGroupState targetState) {
         if (!targetState.validPreviousStates().contains(state)) {

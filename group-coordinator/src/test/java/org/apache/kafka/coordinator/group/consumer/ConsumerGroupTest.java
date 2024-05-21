@@ -474,7 +474,7 @@ public class ConsumerGroupTest {
             consumerGroup.preferredServerAssignor()
         );
 
-        // Member 1 has got an updated assignor but this is not reflected in the group yet so
+        // Member 1 has got an updated assignor but this is not reflected in the group yet, so
         // we pass the updated member. The assignor should be range.
         assertEquals(
             Optional.of("range"),
@@ -490,14 +490,14 @@ public class ConsumerGroupTest {
             consumerGroup.preferredServerAssignor()
         );
 
-        // Member 1 has been removed but this is not reflected in the group yet so
+        // Member 1 has been removed but this is not reflected in the group yet, so
         // we pass the removed member. The assignor should be range.
         assertEquals(
             Optional.empty(),
             consumerGroup.computePreferredServerAssignor(member1, null)
         );
 
-        // Member 2 has got an updated assignor but this is not reflected in the group yet so
+        // Member 2 has got an updated assignor but this is not reflected in the group yet, so
         // we pass the updated member. The assignor should be range.
         assertEquals(
             Optional.of("range"),
@@ -533,7 +533,7 @@ public class ConsumerGroupTest {
             .setServerAssignorName(null)
             .build();
 
-        // Member 1 has removed it assignor but this is not reflected in the group yet so
+        // Member 1 has removed it assignor but this is not reflected in the group yet, so
         // we pass the updated member. The assignor should be range or uniform.
         Optional<String> assignor = consumerGroup.computePreferredServerAssignor(member1, updatedMember1);
         assertTrue(assignor.equals(Optional.of("range")) || assignor.equals(Optional.of("uniform")));
@@ -541,7 +541,7 @@ public class ConsumerGroupTest {
         // Update the group.
         consumerGroup.updateMember(updatedMember1);
 
-        // Member 2 has removed it assignor but this is not reflected in the group yet so
+        // Member 2 has removed it assignor but this is not reflected in the group yet, so
         // we pass the updated member. The assignor should be range or uniform.
         assertEquals(
             Optional.of("uniform"),
@@ -557,7 +557,7 @@ public class ConsumerGroupTest {
             consumerGroup.preferredServerAssignor()
         );
 
-        // Member 3 has removed it assignor but this is not reflected in the group yet so
+        // Member 3 has removed it assignor but this is not reflected in the group yet, so
         // we pass the updated member. The assignor should be empty.
         assertEquals(
             Optional.empty(),

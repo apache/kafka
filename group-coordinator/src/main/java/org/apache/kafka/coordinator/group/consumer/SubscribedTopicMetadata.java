@@ -50,11 +50,7 @@ public class SubscribedTopicMetadata implements SubscribedTopicDescriber {
     }
 
     /**
-     * The number of partitions for the given topic Id.
-     *
-     * @param topicId   Uuid corresponding to the topic.
-     * @return The number of partitions corresponding to the given topic Id,
-     *         or -1 if the topic Id does not exist.
+     * {@inheritDoc}
      */
     @Override
     public int numPartitions(Uuid topicId) {
@@ -63,12 +59,7 @@ public class SubscribedTopicMetadata implements SubscribedTopicDescriber {
     }
 
     /**
-     * Returns all the available racks associated with the replicas of the given partition.
-     *
-     * @param topicId       Uuid corresponding to the partition's topic.
-     * @param partition     Partition Id within the topic.
-     * @return The set of racks corresponding to the replicas of the topics partition.
-     *         If the topic Id does not exist or no partition rack information is available, an empty set is returned.
+     * {@inheritDoc}
      */
     @Override
     public Set<String> racksForPartition(Uuid topicId, int partition) {

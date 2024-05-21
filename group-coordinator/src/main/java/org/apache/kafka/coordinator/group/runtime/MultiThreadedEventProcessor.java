@@ -225,7 +225,7 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
 
         log.info("Shutting down event processor.");
         // The accumulator must be closed first to ensure that new events are
-        // rejected before threads are notified to shutdown and start to drain
+        // rejected before threads are notified to shut down and start to drain
         // the accumulator.
         accumulator.close();
         shuttingDown = true;

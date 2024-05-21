@@ -991,7 +991,7 @@ public class CoordinatorRuntimeTest {
 
         // Write #2.
         CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, DEFAULT_WRITE_TIMEOUT,
-            state -> new CoordinatorResult<>(Arrays.asList("record3"), "response2"));
+            state -> new CoordinatorResult<>(Collections.singletonList("record3"), "response2"));
 
         // Verify that the write is not committed yet.
         assertFalse(write2.isDone());
