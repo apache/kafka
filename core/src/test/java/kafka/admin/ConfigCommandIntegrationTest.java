@@ -61,6 +61,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@SuppressWarnings("deprecation") // Added for Scala 2.12 compatibility for usages of JavaConverters
 @ExtendWith(value = ClusterTestExtensions.class)
 @Tag("integration")
 public class ConfigCommandIntegrationTest {
