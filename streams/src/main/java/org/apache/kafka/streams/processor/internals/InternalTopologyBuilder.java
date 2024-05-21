@@ -1980,7 +1980,7 @@ public class InternalTopologyBuilder {
          * source changelog topics.
          */
         public Set<String> changelogTopics() {
-            return Collections.unmodifiableSet(new HashSet<>(stateChangelogTopics.keySet()));
+            return Collections.unmodifiableSet(stateChangelogTopics.keySet());
         }
 
         /**
