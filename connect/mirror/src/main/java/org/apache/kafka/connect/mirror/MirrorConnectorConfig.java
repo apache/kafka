@@ -113,6 +113,13 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
     public static final String OFFSET_SYNCS_TOPIC_LOCATION = OFFSET_SYNCS_TOPIC_CONFIG_PREFIX + "location";
     public static final String OFFSET_SYNCS_TOPIC_LOCATION_DEFAULT = SOURCE_CLUSTER_ALIAS_DEFAULT;
     public static final String OFFSET_SYNCS_TOPIC_LOCATION_DOC = "The location (source/target) of the offset-syncs topic.";
+
+    public static final String EMIT_OFFSET_SYNCS_ENABLED = "emit.offset-syncs" + MirrorCheckpointConfig.ENABLED_SUFFIX;
+    public static final String EMIT_OFFSET_SYNCS_ENABLED_DOC = "Whether to store the new offset of the replicated records in offset-syncs topic or not. " +
+            "MirrorCheckpointConnector will fail to start if " + MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED + " and/or " +
+            MirrorCheckpointConfig.SYNC_GROUP_OFFSETS_ENABLED + " are enabled while " + EMIT_OFFSET_SYNCS_ENABLED + " are disabled.";
+    public static final boolean EMIT_OFFSET_SYNCS_ENABLED_DEFAULT = true;
+
     public static final String TASK_INDEX = "task.index";
 
     private final ReplicationPolicy replicationPolicy;

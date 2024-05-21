@@ -113,19 +113,41 @@ public class MirrorCheckpointConnector extends SourceConnector {
         List<ConfigValue> configValues = super.validate(props).configValues();
         String emitCheckpointsValue = Optional.ofNullable(props.get(MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED)).orElse(Boolean.toString(MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED_DEFAULT));
         String syncGroupOffsetsValue = Optional.ofNullable(props.get(MirrorCheckpointConfig.SYNC_GROUP_OFFSETS_ENABLED)).orElse(Boolean.toString(MirrorCheckpointConfig.SYNC_GROUP_OFFSETS_ENABLED_DEFAULT));
-        String emitOffsetSyncsValue = Optional.ofNullable(props.get(MirrorSourceConfig.EMIT_OFFSET_SYNCS_ENABLED)).orElse(Boolean.toString(MirrorSourceConfig.EMIT_OFFSET_SYNCS_ENABLED_DEFAULT));
+        String emitOffsetSyncsValue = Optional.ofNullable(props.get(MirrorConnectorConfig.EMIT_OFFSET_SYNCS_ENABLED)).orElse(Boolean.toString(MirrorConnectorConfig.EMIT_OFFSET_SYNCS_ENABLED_DEFAULT));
 
-        if ("false".equals(emitOffsetSyncsValue) && ("true".equals(emitCheckpointsValue) || "true".equals(syncGroupOffsetsValue))) {
-            ConfigValue emitOffsetSyncs = configValues.stream().filter(prop -> MirrorSourceConfig.EMIT_OFFSET_SYNCS_ENABLED.equals(prop.name()))
+        if ("false".equals(emitCheckpointsValue) && "false".equals(syncGroupOffsetsValue)) {
+            ConfigValue syncGroupOffsets = configValues.stream().filter(prop -> MirrorCheckpointConfig.SYNC_GROUP_OFFSETS_ENABLED.equals(prop.name()))
                     .findAny()
                     .orElseGet(() -> {
-                        ConfigValue result = new ConfigValue(MirrorSourceConfig.EMIT_OFFSET_SYNCS_ENABLED);
+                        ConfigValue result = new ConfigValue(MirrorCheckpointConfig.SYNC_GROUP_OFFSETS_ENABLED);
+                        configValues.add(result);
+                        return result;
+                    });
+
+            ConfigValue emitCheckpoints = configValues.stream().filter(prop -> MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED.equals(prop.name()))
+                    .findAny()
+                    .orElseGet(() -> {
+                        ConfigValue result = new ConfigValue(MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED);
+                        configValues.add(result);
+                        return result;
+                    });
+
+            String errorMessage = "MirrorCheckpointConnector can't run with both" +
+                    MirrorCheckpointConfig.SYNC_GROUP_OFFSETS_ENABLED + ", " + MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED + "set to false";
+            syncGroupOffsets.addErrorMessage(errorMessage);
+            emitCheckpoints.addErrorMessage(errorMessage);
+        }
+        if ("false".equals(emitOffsetSyncsValue) && ("true".equals(emitCheckpointsValue) || "true".equals(syncGroupOffsetsValue))) {
+            ConfigValue emitOffsetSyncs = configValues.stream().filter(prop -> MirrorConnectorConfig.EMIT_OFFSET_SYNCS_ENABLED.equals(prop.name()))
+                    .findAny()
+                    .orElseGet(() -> {
+                        ConfigValue result = new ConfigValue(MirrorConnectorConfig.EMIT_OFFSET_SYNCS_ENABLED);
                         configValues.add(result);
                         return result;
                     });
 
             emitOffsetSyncs.addErrorMessage("MirrorCheckpointConnector can't run while MirrorSourceConnector configured with" +
-                    MirrorSourceConfig.EMIT_OFFSET_SYNCS_ENABLED + "set to false");
+                    MirrorConnectorConfig.EMIT_OFFSET_SYNCS_ENABLED + "set to false");
         }
         return new Config(configValues);
     }

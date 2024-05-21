@@ -51,11 +51,28 @@ public class MirrorCheckpointConnectorTest {
     private static final Map<String, ?> SOURCE_OFFSET = MirrorUtils.wrapOffset(0);
 
     @Test
+    public void testEmitCheckpointsAndSyncGroupOffsetsBothDisabled() {
+        // disable the checkpoint emission
+        MirrorCheckpointConfig config = new MirrorCheckpointConfig(
+                makeProps("emit.checkpoints.enabled", "false",
+                        "sync.group.offsets.enabled", "false"));
+
+        Set<String> knownConsumerGroups = new HashSet<>();
+        knownConsumerGroups.add(CONSUMER_GROUP);
+        // MirrorCheckpointConnector as minimum to run taskConfig()
+        MirrorCheckpointConnector connector = new MirrorCheckpointConnector(knownConsumerGroups,
+                config);
+        List<Map<String, String>> output = connector.taskConfigs(1);
+        // expect no task will be created
+        assertEquals(0, output.size(), "MirrorCheckpointConnector not disabled");
+    }
+
+    @Test
     public void testEmitOffsetSyncsDisabled() {
         // disable the checkpoint emission
         MirrorCheckpointConfig config = new MirrorCheckpointConfig(
                 makeProps("emit.checkpoints.enabled", "false",
-                        MirrorSourceConfig.EMIT_OFFSET_SYNCS_ENABLED, "false"));
+                        MirrorConnectorConfig.EMIT_OFFSET_SYNCS_ENABLED, "false"));
 
         Set<String> knownConsumerGroups = new HashSet<>();
         knownConsumerGroups.add(CONSUMER_GROUP);

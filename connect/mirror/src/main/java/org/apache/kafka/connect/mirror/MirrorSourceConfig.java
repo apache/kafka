@@ -115,12 +115,6 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
     public static final String OFFSET_SYNCS_SOURCE_ADMIN_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "source-admin";
     public static final String OFFSET_SYNCS_TARGET_ADMIN_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "target-admin";
 
-    public static final String EMIT_OFFSET_SYNCS_ENABLED = "emit.offset-syncs" + MirrorCheckpointConfig.ENABLED_SUFFIX;
-    public static final String EMIT_OFFSET_SYNCS_ENABLED_DOC = "Whether to store the new offset of the replicated records in offset-syncs topic or not. " +
-            "MirrorCheckpointConnector will fail to start if " + MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED + " and/or " +
-            MirrorCheckpointConfig.SYNC_GROUP_OFFSETS_ENABLED + " are enabled while " + EMIT_OFFSET_SYNCS_ENABLED + " are disabled.";
-    public static final boolean EMIT_OFFSET_SYNCS_ENABLED_DEFAULT = true;
-
     public MirrorSourceConfig(Map<String, String> props) {
         super(CONNECTOR_CONFIG_DEF, ConfigUtils.translateDeprecatedConfigs(props, new String[][]{
                 {TOPICS_EXCLUDE, TOPICS_EXCLUDE_ALIAS},

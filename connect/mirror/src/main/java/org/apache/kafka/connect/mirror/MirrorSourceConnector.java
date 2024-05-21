@@ -261,18 +261,18 @@ public class MirrorSourceConnector extends SourceConnector {
         }
         boolean offsetSyncsConfigured = configValues.stream()
                 .anyMatch(config -> config.name().startsWith(OFFSET_SYNCS_CLIENT_ROLE_PREFIX) || config.name().startsWith(OFFSET_SYNCS_TOPIC_CONFIG_PREFIX));
-        String emitOffsetSyncsValue = Optional.ofNullable(props.get(MirrorSourceConfig.EMIT_OFFSET_SYNCS_ENABLED)).orElse(Boolean.toString(MirrorSourceConfig.EMIT_OFFSET_SYNCS_ENABLED_DEFAULT));
+        String emitOffsetSyncsValue = Optional.ofNullable(props.get(MirrorConnectorConfig.EMIT_OFFSET_SYNCS_ENABLED)).orElse(Boolean.toString(MirrorSourceConfig.EMIT_OFFSET_SYNCS_ENABLED_DEFAULT));
 
         if ("false".equals(emitOffsetSyncsValue) && offsetSyncsConfigured) {
-            ConfigValue emitOffsetSyncs = configValues.stream().filter(prop -> MirrorSourceConfig.EMIT_OFFSET_SYNCS_ENABLED.equals(prop.name()))
+            ConfigValue emitOffsetSyncs = configValues.stream().filter(prop -> MirrorConnectorConfig.EMIT_OFFSET_SYNCS_ENABLED.equals(prop.name()))
                     .findAny()
                     .orElseGet(() -> {
-                        ConfigValue result = new ConfigValue(MirrorSourceConfig.EMIT_OFFSET_SYNCS_ENABLED);
+                        ConfigValue result = new ConfigValue(MirrorConnectorConfig.EMIT_OFFSET_SYNCS_ENABLED);
                         configValues.add(result);
                         return result;
                     });
             emitOffsetSyncs.addErrorMessage("MirrorSourceConnector can't setup offset-syncs feature while" +
-                    MirrorSourceConfig.EMIT_OFFSET_SYNCS_ENABLED + "set to false");
+                    MirrorConnectorConfig.EMIT_OFFSET_SYNCS_ENABLED + "set to false");
         }
 
         return new org.apache.kafka.common.config.Config(configValues);
