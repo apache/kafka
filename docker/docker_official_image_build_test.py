@@ -37,11 +37,9 @@ import argparse
 from distutils.dir_util import copy_tree
 import shutil
 from test.docker_sanity_test import run_tests
-from common import execute, jvm_image
+from common import execute
 import tempfile
 import os
-import re
-import sys
 
 
 def set_executable_permissions(directory):
@@ -109,8 +107,6 @@ if __name__ == '__main__':
                         dest="tag", help="Image tag that you want to add to the image")
     parser.add_argument("--image-type", "-type", choices=[
                         "jvm"], default="jvm", dest="image_type", help="Image type you want to build")
-    parser.add_argument("--kafka-url", "-u", dest="kafka_url",
-                        help="Kafka url to be used to download kafka binary tarball in the docker image")
     parser.add_argument("--kafka-version", "-v", dest="kafka_version",
                         help="Kafka version for which the source for docker official image is to be built")
     parser.add_argument("--build", "-b", action="store_true", dest="build_only",
@@ -119,16 +115,14 @@ if __name__ == '__main__':
                         default=False, help="Only run the tests, don't build the image")
     args = parser.parse_args()
 
-    version_pattern = re.compile(rf"{re.escape(args.kafka_version)}")
-    if not version_pattern.search(args.kafka_url):
-        raise ValueError(f"Error: The Kafka URL '{args.kafka_url}' does not match the specified version '{args.kafka_version}'")
+    kafka_url = f"https://downloads.apache.org/kafka/{args.kafka_version}/kafka_2.13-{args.kafka_version}.tgz"
 
     if args.image_type == "jvm" and (args.build_only or not (args.build_only or args.test_only)):
-        if args.kafka_url and args.kafka_version:
+        if args.kafka_version:
             build_jvm(args.image, args.tag, args.kafka_version)
         else:
             raise ValueError(
-                "--kafka-url and --kafka-version are required argument for jvm docker official image image")
+                "--kafka-version are required argument for jvm docker official image image")
 
     if args.image_type == "jvm" and (args.test_only or not (args.build_only or args.test_only)):
-        run_jvm_tests(args.image, args.tag, args.kafka_url)
+        run_jvm_tests(args.image, args.tag, kafka_url)
