@@ -96,7 +96,7 @@ public class CompletableEventReaper {
         // First, complete (exceptionally) any events that have passed their deadline AND aren't already complete.
         tracked.stream()
             .filter(e -> !e.future().isDone())
-            .filter(e -> currentTimeMs > e.deadlineMs())
+            .filter(e -> currentTimeMs >= e.deadlineMs())
             .forEach(expireEvent);
         // Second, remove any events that are already complete, just to make sure we don't hold references. This will
         // include any events that finished successfully as well as any events we just completed exceptionally above.
