@@ -44,7 +44,7 @@ public class CheckpointStoreTest {
         MirrorCheckpointTaskConfig config = mock(MirrorCheckpointTaskConfig.class);
         when(config.checkpointsTopic()).thenReturn("checkpoint.topic");
 
-        CheckpointStore store = new CheckpointStore(config, consumerGroups) {
+        try (CheckpointStore store = new CheckpointStore(config, consumerGroups) {
             @Override
             void readCheckpointsImpl(MirrorCheckpointTaskConfig config, Callback<ConsumerRecord<byte[], byte[]>> consumedCallback) {
                 consumedCallback.onCompletion(null, newCheckpointRecord("group1", "t1", 0, 0, 0));
@@ -55,16 +55,17 @@ public class CheckpointStoreTest {
                         new ConsumerRecord<>("checkpoint.topic", 0, 0L, new byte[0], new byte[0]));
                 consumedCallback.onCompletion(null, newCheckpointRecord("group1", "t1", 0, 1, 1));
             }
-        };
-        assertFalse(store.isInitialized());
+        }) {
+            assertFalse(store.isInitialized());
 
-        assertTrue(store.start(), "expected start to return success");
-        assertTrue(store.isInitialized());
+            assertTrue(store.start(), "expected start to return success");
+            assertTrue(store.isInitialized());
 
-        Map<String, Map<TopicPartition, Checkpoint>> expected = new HashMap<>();
-        expected.put("group1", Collections.singletonMap(new TopicPartition("t1", 0),
-                new Checkpoint("group1", new TopicPartition("t1", 0), 1, 1, "")));
-        assertEquals(expected, store.checkpointsPerConsumerGroup);
+            Map<String, Map<TopicPartition, Checkpoint>> expected = new HashMap<>();
+            expected.put("group1", Collections.singletonMap(new TopicPartition("t1", 0),
+                    new Checkpoint("group1", new TopicPartition("t1", 0), 1, 1, "")));
+            assertEquals(expected, store.checkpointsPerConsumerGroup);
+        }
     }
 
     @Test
@@ -75,17 +76,18 @@ public class CheckpointStoreTest {
         MirrorCheckpointTaskConfig config = mock(MirrorCheckpointTaskConfig.class);
         when(config.checkpointsTopic()).thenReturn("checkpoint.topic");
 
-        CheckpointStore store = new CheckpointStore(config, consumerGroups) {
+        try (CheckpointStore store = new CheckpointStore(config, consumerGroups) {
             @Override
             void readCheckpointsImpl(MirrorCheckpointTaskConfig config, Callback<ConsumerRecord<byte[], byte[]>> consumedCallback) {
-                consumedCallback.onCompletion(null, newCheckpointRecord("group1", "t1", 0, 0, 0));
+                consumedCallback.onCompletion(null, newCheckpointRecord("group1", "topic", 1, 0, 0));
                 consumedCallback.onCompletion(new TopicAuthorizationException("test"), null);
             }
-        };
+        }) {
 
-        assertFalse(store.start(), "expected start to return failure");
-        assertTrue(store.isInitialized());
-        assertTrue(store.checkpointsPerConsumerGroup.isEmpty());
+            assertFalse(store.start(), "expected start to return failure");
+            assertTrue(store.isInitialized());
+            assertTrue(store.checkpointsPerConsumerGroup.isEmpty());
+        }
     }
 
     ConsumerRecord<byte[], byte[]> newCheckpointRecord(String gid, String topic, int partition, long upo, long dwo) {
