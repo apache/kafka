@@ -18,6 +18,7 @@
 package org.apache.kafka.controller;
 
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -139,15 +140,19 @@ public class QuorumControllerIntegrationTestUtils {
         if (brokers.isEmpty()) {
             return;
         }
+        List<CompletableFuture<BrokerHeartbeatReply>> replies = new ArrayList<>();
         for (Integer brokerId : brokers) {
-            BrokerHeartbeatReply reply = controller.processBrokerHeartbeat(ANONYMOUS_CONTEXT,
+            CompletableFuture<BrokerHeartbeatReply> reply = controller.processBrokerHeartbeat(ANONYMOUS_CONTEXT,
                 new BrokerHeartbeatRequestData()
                     .setWantFence(false)
                     .setBrokerEpoch(brokerEpochs.get(brokerId))
                     .setBrokerId(brokerId)
                     .setCurrentMetadataOffset(100000)
-            ).get();
-            assertEquals(new BrokerHeartbeatReply(true, false, false, false), reply);
+            );
+            replies.add(reply);
+        }
+        for (CompletableFuture<BrokerHeartbeatReply> reply : replies) {
+            assertEquals(new BrokerHeartbeatReply(true, false, false, false), reply.get());
         }
     }
 
