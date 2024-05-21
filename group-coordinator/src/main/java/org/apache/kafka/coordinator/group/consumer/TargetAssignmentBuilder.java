@@ -128,9 +128,10 @@ public class TargetAssignmentBuilder {
     private Map<String, Assignment> targetAssignment = Collections.emptyMap();
 
     /**
-     * The map of partitions and their member assignments per topic.
+     * Reverse lookup map representing topic partitions with
+     * their current member assignments.
      */
-    private Map<Uuid, Map<Integer, String>> partitionAssignments = Collections.emptyMap();
+    private Map<Uuid, Map<Integer, String>> invertedTargetAssignment = Collections.emptyMap();
 
     /**
      * The members which have been updated or deleted. Deleted members
@@ -228,13 +229,13 @@ public class TargetAssignmentBuilder {
     /**
      * Adds the existing topic partition assignments.
      *
-     * @param partitionAssignments   The existing partition assignment.
+     * @param invertedTargetAssignment   The reverse lookup map of the current target assignment.
      * @return This object.
      */
-    public TargetAssignmentBuilder withPartitionAssignments(
-        Map<Uuid, Map<Integer, String>> partitionAssignments
+    public TargetAssignmentBuilder withInvertedTargetAssignment(
+        Map<Uuid, Map<Integer, String>> invertedTargetAssignment
     ) {
-        this.partitionAssignments = partitionAssignments;
+        this.invertedTargetAssignment = invertedTargetAssignment;
         return this;
     }
 
@@ -321,7 +322,7 @@ public class TargetAssignmentBuilder {
             new GroupSpecImpl(
                 Collections.unmodifiableMap(memberSpecs),
                 subscriptionType,
-                partitionAssignments
+                invertedTargetAssignment
             ),
             new SubscribedTopicMetadata(topicMetadataMap)
         );

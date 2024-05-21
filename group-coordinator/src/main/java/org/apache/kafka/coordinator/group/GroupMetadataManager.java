@@ -1797,7 +1797,7 @@ public class GroupMetadataManager {
                     .withSubscriptionMetadata(subscriptionMetadata)
                     .withSubscriptionType(subscriptionType)
                     .withTargetAssignment(group.targetAssignment())
-                    .withPartitionAssignments(group.partitionAssignments())
+                    .withInvertedTargetAssignment(group.invertedTargetAssignment())
                     .addOrUpdateMember(updatedMember.memberId(), updatedMember);
             TargetAssignmentBuilder.TargetAssignmentResult assignmentResult;
             // A new static member is replacing an older one with the same subscriptions.

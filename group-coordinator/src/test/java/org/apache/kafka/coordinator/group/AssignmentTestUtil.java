@@ -85,16 +85,16 @@ public class AssignmentTestUtil {
     }
 
     /**
-     * Generate a map of partition assignments from the given member spec.
+     * Generate a reverse look up map of partition to member target assignments from the given member spec.
      *
      * @param memberSpec        A map where the key is the member Id and the value is an
      *                          AssignmentMemberSpec object containing the member's partition assignments.
      * @return Map of topic partition to member assignments.
      */
-    public static Map<Uuid, Map<Integer, String>> partitionAssignments(
+    public static Map<Uuid, Map<Integer, String>> invertedTargetAssignment(
         Map<String, AssignmentMemberSpec> memberSpec
     ) {
-        Map<Uuid, Map<Integer, String>> partitionAssignments = new HashMap<>();
+        Map<Uuid, Map<Integer, String>> invertedTargetAssignment = new HashMap<>();
         for (Map.Entry<String, AssignmentMemberSpec> memberEntry : memberSpec.entrySet()) {
             String memberId = memberEntry.getKey();
             Map<Uuid, Set<Integer>> topicsAndPartitions = memberEntry.getValue().assignedPartitions();
@@ -103,14 +103,14 @@ public class AssignmentTestUtil {
                 Uuid topicId = topicEntry.getKey();
                 Set<Integer> partitions = topicEntry.getValue();
 
-                partitionAssignments.putIfAbsent(topicId, new HashMap<>());
-                Map<Integer, String> partitionMap = partitionAssignments.get(topicId);
+                invertedTargetAssignment.putIfAbsent(topicId, new HashMap<>());
+                Map<Integer, String> partitionMap = invertedTargetAssignment.get(topicId);
 
                 for (Integer partitionId : partitions) {
                     partitionMap.put(partitionId, memberId);
                 }
             }
         }
-        return partitionAssignments;
+        return invertedTargetAssignment;
     }
 }

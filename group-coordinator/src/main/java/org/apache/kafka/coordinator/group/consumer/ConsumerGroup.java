@@ -171,9 +171,10 @@ public class ConsumerGroup implements Group {
     private final TimelineHashMap<String, Assignment> targetAssignment;
 
     /**
-     * Partition assignments per topic.
+     * Reverse lookup map representing topic partitions with
+     * their current member assignments.
      */
-    private final TimelineHashMap<Uuid, TimelineHashMap<Integer, String>> partitionAssignments;
+    private final TimelineHashMap<Uuid, TimelineHashMap<Integer, String>> invertedTargetAssignment;
 
     /**
      * The current partition epoch maps each topic-partitions to their current epoch where
@@ -226,7 +227,7 @@ public class ConsumerGroup implements Group {
         this.subscriptionType = new TimelineObject<>(snapshotRegistry, HOMOGENEOUS);
         this.targetAssignmentEpoch = new TimelineInteger(snapshotRegistry);
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.partitionAssignments = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.invertedTargetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentPartitionEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
         this.metrics = Objects.requireNonNull(metrics);
         this.numClassicProtocolMembers = new TimelineInteger(snapshotRegistry);
@@ -526,8 +527,8 @@ public class ConsumerGroup implements Group {
      * @return An immutable map containing all the topic partitions
      *         with their current member assignments.
      */
-    public Map<Uuid, Map<Integer, String>> partitionAssignments() {
-        return Collections.unmodifiableMap(partitionAssignments);
+    public Map<Uuid, Map<Integer, String>> invertedTargetAssignment() {
+        return Collections.unmodifiableMap(invertedTargetAssignment);
     }
 
     /**
@@ -568,7 +569,7 @@ public class ConsumerGroup implements Group {
             Set<Integer> oldPartitions = oldTargetAssignment.partitions().getOrDefault(topicId, Collections.emptySet());
             Set<Integer> newPartitions = newTargetAssignment.partitions().getOrDefault(topicId, Collections.emptySet());
 
-            TimelineHashMap<Integer, String> topicPartitionAssignment = partitionAssignments.computeIfAbsent(
+            TimelineHashMap<Integer, String> topicPartitionAssignment = invertedTargetAssignment.computeIfAbsent(
                 topicId, k -> new TimelineHashMap<>(snapshotRegistry, Math.max(oldPartitions.size(), newPartitions.size()))
             );
 
@@ -587,9 +588,9 @@ public class ConsumerGroup implements Group {
             }
 
             if (topicPartitionAssignment.isEmpty()) {
-                partitionAssignments.remove(topicId);
+                invertedTargetAssignment.remove(topicId);
             } else {
-                partitionAssignments.put(topicId, topicPartitionAssignment);
+                invertedTargetAssignment.put(topicId, topicPartitionAssignment);
             }
         }
     }

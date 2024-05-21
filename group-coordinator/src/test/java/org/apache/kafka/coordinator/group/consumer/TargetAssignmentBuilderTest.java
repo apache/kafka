@@ -203,10 +203,10 @@ public class TargetAssignmentBuilderTest {
             SubscriptionType subscriptionType = HOMOGENEOUS;
 
             // Prepare the member assignments per topic partition.
-            Map<Uuid, Map<Integer, String>> partitionAssignments = AssignmentTestUtil.partitionAssignments(memberSpecs);
+            Map<Uuid, Map<Integer, String>> invertedTargetAssignment = AssignmentTestUtil.invertedTargetAssignment(memberSpecs);
 
             // Prepare the expected assignment spec.
-            GroupSpecImpl groupSpec = new GroupSpecImpl(memberSpecs, subscriptionType, partitionAssignments);
+            GroupSpecImpl groupSpec = new GroupSpecImpl(memberSpecs, subscriptionType, invertedTargetAssignment);
 
             // We use `any` here to always return an assignment but use `verify` later on
             // to ensure that the input was correct.
@@ -220,7 +220,7 @@ public class TargetAssignmentBuilderTest {
                 .withSubscriptionMetadata(subscriptionMetadata)
                 .withSubscriptionType(subscriptionType)
                 .withTargetAssignment(targetAssignment)
-                .withPartitionAssignments(partitionAssignments);
+                .withInvertedTargetAssignment(invertedTargetAssignment);
 
             // Add the updated members or delete the deleted members.
             updatedMembers.forEach((memberId, updatedMemberOrNull) -> {

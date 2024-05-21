@@ -36,20 +36,20 @@ public class GroupSpecImpl implements GroupSpec {
     private final SubscriptionType subscriptionType;
 
     /**
-     * Reverse lookup map representing partitions per topic and
-     * their member assignment.
+     * Reverse lookup map representing topic partitions with
+     * their current member assignments.
      */
-    Map<Uuid, Map<Integer, String>> partitionAssignments;
+    private final Map<Uuid, Map<Integer, String>> invertedTargetAssignment;
 
     public GroupSpecImpl(
         Map<String, AssignmentMemberSpec> members,
         SubscriptionType subscriptionType,
-        Map<Uuid, Map<Integer, String>> partitionAssignments
+        Map<Uuid, Map<Integer, String>> invertedTargetAssignment
     ) {
         Objects.requireNonNull(members);
         this.members = members;
         this.subscriptionType = subscriptionType;
-        this.partitionAssignments = partitionAssignments;
+        this.invertedTargetAssignment = invertedTargetAssignment;
     }
 
     /**
@@ -75,7 +75,7 @@ public class GroupSpecImpl implements GroupSpec {
      */
     @Override
     public boolean isPartitionAssigned(Uuid topicId, int partitionId) {
-        Map<Integer, String> partitionMap = partitionAssignments.get(topicId);
+        Map<Integer, String> partitionMap = invertedTargetAssignment.get(topicId);
         if (partitionMap == null) {
             return false;
         }
@@ -88,15 +88,22 @@ public class GroupSpecImpl implements GroupSpec {
         if (o == null || getClass() != o.getClass()) return false;
         GroupSpecImpl that = (GroupSpecImpl) o;
         return subscriptionType == that.subscriptionType &&
-            members.equals(that.members);
+            members.equals(that.members) &&
+            invertedTargetAssignment.equals(that.invertedTargetAssignment);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(members, subscriptionType);
+        int result = members.hashCode();
+        result = 31 * result + subscriptionType.hashCode();
+        result = 31 * result + invertedTargetAssignment.hashCode();
+        return result;
     }
 
     public String toString() {
-        return "AssignmentSpec(members=" + members + ", subscriptionType=" + subscriptionType.toString() + ')';
+        return "GroupSpec(members=" + members +
+            ", subscriptionType=" + subscriptionType.toString() +
+            ", invertedTargetAssignment=" + invertedTargetAssignment +
+            ')';
     }
 }

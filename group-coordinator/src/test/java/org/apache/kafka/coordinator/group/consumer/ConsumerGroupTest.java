@@ -822,8 +822,8 @@ public class ConsumerGroupTest {
         consumerGroup.updatePartitionAssignments(memberId1, initialAssignment, newAssignment);
 
         // Verify that partition 0 is no longer assigned and partition 1 is assigned to member1
-        assertFalse(consumerGroup.partitionAssignments().get(topicId).containsKey(0));
-        assertEquals(memberId1, consumerGroup.partitionAssignments().get(topicId).get(1));
+        assertFalse(consumerGroup.invertedTargetAssignment().get(topicId).containsKey(0));
+        assertEquals(memberId1, consumerGroup.invertedTargetAssignment().get(topicId).get(1));
 
         // New assignment for member2
         newAssignment = new Assignment(Collections.singletonMap(
@@ -833,7 +833,7 @@ public class ConsumerGroupTest {
         consumerGroup.updatePartitionAssignments(memberId2, Assignment.EMPTY, newAssignment);
 
         // Verify that partition 2 is assigned to member2
-        assertEquals(memberId2, consumerGroup.partitionAssignments().get(topicId).get(2));
+        assertEquals(memberId2, consumerGroup.invertedTargetAssignment().get(topicId).get(2));
     }
 
     @Test

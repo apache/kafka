@@ -32,7 +32,7 @@ import java.util.TreeMap;
 
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
-import static org.apache.kafka.coordinator.group.AssignmentTestUtil.partitionAssignments;
+import static org.apache.kafka.coordinator.group.AssignmentTestUtil.invertedTargetAssignment;
 import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HETEROGENEOUS;
 import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOGENEOUS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -372,7 +372,7 @@ public class RangeAssignorTest {
         GroupSpecImpl groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
-            partitionAssignments(members)
+            invertedTargetAssignment(members)
         );
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
@@ -440,7 +440,7 @@ public class RangeAssignorTest {
         GroupSpecImpl groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
-            partitionAssignments(members)
+            invertedTargetAssignment(members)
         );
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
@@ -513,7 +513,7 @@ public class RangeAssignorTest {
         GroupSpecImpl groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
-            partitionAssignments(members)
+            invertedTargetAssignment(members)
         );
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
@@ -591,7 +591,7 @@ public class RangeAssignorTest {
         GroupSpecImpl groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
-            partitionAssignments(members)
+            invertedTargetAssignment(members)
         );
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
@@ -649,7 +649,7 @@ public class RangeAssignorTest {
         GroupSpecImpl groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
-            partitionAssignments(members)
+            invertedTargetAssignment(members)
         );
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
@@ -728,7 +728,7 @@ public class RangeAssignorTest {
         GroupSpecImpl groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
-            partitionAssignments(members)
+            invertedTargetAssignment(members)
         );
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
