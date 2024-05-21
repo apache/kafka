@@ -1270,7 +1270,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             return;
 
         if (autoCommitEnabled)
-            maybeAutoCommitSync(timer);
+            autoCommitSync(timer);
 
         applicationEventHandler.add(new CommitOnCloseEvent());
         completeQuietly(
@@ -1282,7 +1282,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     // Visible for testing
-    void maybeAutoCommitSync(final Timer timer) {
+    void autoCommitSync(final Timer timer) {
         Map<TopicPartition, OffsetAndMetadata> allConsumed = subscriptions.allConsumed();
         log.debug("Sending synchronous auto-commit of offsets {} on closing", allConsumed);
         try {
