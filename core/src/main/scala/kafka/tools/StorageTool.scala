@@ -253,7 +253,7 @@ object StorageTool extends Logging {
            .setServerKey(formatter.serverKey(saltedPassword))
            .setIterations(iterations)
     } catch {
-      case e: Throwable => 
+      case e: Throwable =>
         throw new TerseFailure(s"Error attempting to create UserScramCredentialRecord: ${e.getMessage}")
     }
     myrecord
@@ -452,19 +452,20 @@ object StorageTool extends Logging {
       stream.println("All of the log directories are already formatted.")
     } else {
       metaPropertiesEnsemble.emptyLogDirs().forEach(logDir => {
-        copier.setLogDirProps(logDir, new MetaProperties.Builder(metaProperties).
-          setDirectoryId(copier.generateValidDirectoryId()).
+        val loggingCopier = new MetaPropertiesEnsemble.Copier(metaPropertiesEnsemble)
+        loggingCopier.setLogDirProps(logDir, new MetaProperties.Builder(metaProperties).
+          setDirectoryId(loggingCopier.generateValidDirectoryId()).
           build())
-        copier.setPreWriteHandler((logDir, _, _) => {
+        loggingCopier.setPreWriteHandler((logDir, _, _) => {
           stream.println(s"Formatting $logDir with metadata.version $metadataVersion.")
           Files.createDirectories(Paths.get(logDir))
           val bootstrapDirectory = new BootstrapDirectory(logDir, Optional.empty())
           bootstrapDirectory.writeBinaryFile(bootstrapMetadata)
         })
-        copier.setWriteErrorHandler((logDir, e) => {
+        loggingCopier.setWriteErrorHandler((logDir, e) => {
           throw new TerseFailure(s"Error while writing meta.properties file $logDir: ${e.getMessage}")
         })
-        copier.writeLogDirChanges()
+        loggingCopier.writeLogDirChanges()
       })
     }
     0
