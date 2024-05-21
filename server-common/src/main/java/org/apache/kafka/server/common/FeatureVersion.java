@@ -17,9 +17,7 @@
 
 package org.apache.kafka.server.common;
 
-import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 public interface FeatureVersion {
 
@@ -34,10 +32,12 @@ public interface FeatureVersion {
     String featureName();
 
     /**
-     * The next metadata version to be released when the feature became production ready.
-     * (Ie, if the current production MV is 17 when a feature is released, its mapping should be to MV 18)
+     * The minimum metadata version which sets this feature version as default. When bootstrapping using only
+     * a metadata version, a reasonable default for all other features is chosen based on this value.
+     * This should be defined as the next metadata version to be released when the feature version becomes production ready.
+     * (Ie, if the current production MV is 17 when a feature version is released, its mapping should be to MV 18)
      */
-    MetadataVersion metadataVersionMapping();
+    MetadataVersion bootstrapMetadataVersion();
 
     /**
      * A mapping from feature to level for all features that this feature depends on. If this feature doesn't
@@ -46,11 +46,4 @@ public interface FeatureVersion {
      * feature (X level x).dependencies() will return (Y -> y)
      */
     Map<String, Short> dependencies();
-
-    /**
-     * Utility method to map a list of FeatureVersion to a map of feature name to feature level
-     */
-    static Map<String, Short> featureImplsToMap(List<FeatureVersion> features) {
-        return features.stream().collect(Collectors.toMap(FeatureVersion::featureName, FeatureVersion::featureLevel));
-    }
 }

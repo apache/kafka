@@ -44,16 +44,16 @@ public enum Features {
     public static final Features[] FEATURES;
     public static final List<Features> PRODUCTION_FEATURES;
     private final String name;
-    private final FeatureVersion[] features;
+    private final FeatureVersion[] featureVersions;
     private final CreateMethod createFeatureVersionMethod;
     private final boolean usedInProduction;
 
     Features(String name,
-             FeatureVersion[] features,
+             FeatureVersion[] featureVersions,
              CreateMethod createMethod,
              boolean usedInProduction) {
         this.name = name;
-        this.features = features;
+        this.featureVersions = featureVersions;
         this.createFeatureVersionMethod = createMethod;
         this.usedInProduction = usedInProduction;
     }
@@ -71,7 +71,7 @@ public enum Features {
     }
 
     public FeatureVersion[] features() {
-        return features;
+        return featureVersions;
     }
 
     /**
@@ -115,11 +115,10 @@ public enum Features {
     }
 
     /**
-     * A method to return the default version level of a feature. If metadataVersionOpt is not empty, the default is based on
-     * the metadataVersion. If not, use the latest production version for the given feature.
+     * A method to return the default version level of a feature based on the metadata version provided
      *
      * Every time a new feature is added, it should create a mapping from metadata version to feature version
-     * with {@link FeatureVersion#metadataVersionMapping()}
+     * with {@link FeatureVersion#bootstrapMetadataVersion()}
      *
      * @param metadataVersion the metadata version we want to use to set the default
      * @return the default version level for the feature and potential metadata version
@@ -127,14 +126,21 @@ public enum Features {
     public short defaultValue(MetadataVersion metadataVersion) {
         short level = 0;
 
-        for (Iterator<FeatureVersion> it = Arrays.stream(features).iterator(); it.hasNext(); ) {
+        for (Iterator<FeatureVersion> it = Arrays.stream(featureVersions).iterator(); it.hasNext(); ) {
             FeatureVersion feature = it.next();
-            if (feature.metadataVersionMapping().isLessThan(metadataVersion) || feature.metadataVersionMapping().equals(metadataVersion))
+            if (feature.bootstrapMetadataVersion().isLessThan(metadataVersion) || feature.bootstrapMetadataVersion().equals(metadataVersion))
                 level = feature.featureLevel();
             else
                 return level;
         }
         return level;
+    }
+
+    /**
+     * Utility method to map a list of FeatureVersion to a map of feature name to feature level
+     */
+    public static Map<String, Short> featureImplsToMap(List<FeatureVersion> features) {
+        return features.stream().collect(Collectors.toMap(FeatureVersion::featureName, FeatureVersion::featureLevel));
     }
 
 

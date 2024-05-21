@@ -43,7 +43,7 @@ public class FeaturesTest {
         for (FeatureVersion featureImpl : feature.features()) {
             // Ensure that the feature is valid given the typical metadataVersionMapping and the dependencies.
             // Note: Other metadata versions are valid, but this one should always be valid.
-            Features.validateVersion(featureImpl, featureImpl.metadataVersionMapping(), featureImpl.dependencies());
+            Features.validateVersion(featureImpl, featureImpl.bootstrapMetadataVersion(), featureImpl.dependencies());
         }
     }
 
@@ -72,7 +72,7 @@ public class FeaturesTest {
     @EnumSource(Features.class)
     public void testDefaultValueAllFeatures(Features feature) {
         for (FeatureVersion featureImpl : feature.features()) {
-            assertEquals(feature.defaultValue(featureImpl.metadataVersionMapping()), featureImpl.featureLevel(),
+            assertEquals(feature.defaultValue(featureImpl.bootstrapMetadataVersion()), featureImpl.featureLevel(),
                     "Failed to get the correct default for " + featureImpl);
         }
     }

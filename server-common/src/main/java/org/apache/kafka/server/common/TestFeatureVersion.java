@@ -46,7 +46,7 @@ public enum TestFeatureVersion implements FeatureVersion {
         return FEATURE_NAME;
     }
 
-    public MetadataVersion metadataVersionMapping() {
+    public MetadataVersion bootstrapMetadataVersion() {
         return metadataVersionMapping;
     }
 
