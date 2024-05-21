@@ -46,12 +46,12 @@ public class ClusterConfigTest {
         File trustStoreFile = TestUtils.tempFile();
 
         ClusterConfig clusterConfig = ClusterConfig.builder()
-                .setType(Type.KRAFT)
+                .setTypes(Collections.singleton(Type.KRAFT))
                 .setBrokers(3)
                 .setControllers(2)
                 .setDisksPerBroker(1)
-                .setName("builder-test")
                 .setAutoStart(true)
+                .setTags(Arrays.asList("name", "Generated Test"))
                 .setSecurityProtocol(SecurityProtocol.PLAINTEXT)
                 .setListenerName("EXTERNAL")
                 .setTrustStoreFile(trustStoreFile)

@@ -122,7 +122,7 @@ public class DeleteConsumerGroupOffsetsHandlerTest {
     }
 
     private OffsetDeleteResponse buildPartitionErrorResponse(Errors error) {
-        OffsetDeleteResponse response = new OffsetDeleteResponse(
+        return new OffsetDeleteResponse(
             new OffsetDeleteResponseData()
                 .setThrottleTimeMs(0)
                 .setTopics(new OffsetDeleteResponseTopicCollection(singletonList(
@@ -135,7 +135,6 @@ public class DeleteConsumerGroupOffsetsHandlerTest {
                         ).iterator()))
                 ).iterator()))
         );
-        return response;
     }
 
     private AdminApiHandler.ApiResult<CoordinatorKey, Map<TopicPartition, Errors>> handleWithGroupError(

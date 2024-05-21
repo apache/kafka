@@ -30,6 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -169,6 +170,39 @@ public class WakeupTriggerTest {
         wakeupTrigger.clearTask();
         wakeupTrigger.wakeup();
         assertDoesNotThrow(() -> wakeupTrigger.maybeTriggerWakeup());
+    }
+
+    @Test
+    public void testExceptionTriggeredWhenTaskAsynchronouslyCompleted() {
+        final CompletableFuture<Void> task = new CompletableFuture<>();
+        wakeupTrigger.setActiveTask(task);
+        task.complete(null);
+        wakeupTrigger.wakeup();
+        assertNotNull(wakeupTrigger.getPendingTask());
+        assertInstanceOf(WakeupTrigger.WakeupFuture.class, wakeupTrigger.getPendingTask());
+        assertThrows(WakeupException.class, () -> wakeupTrigger.maybeTriggerWakeup());
+    }
+
+    @Test
+    public void testExceptionTriggeredWhenTaskAsynchronouslyFailed() {
+        final CompletableFuture<Void> task = new CompletableFuture<>();
+        wakeupTrigger.setActiveTask(task);
+        task.completeExceptionally(new RuntimeException("Simulated error"));
+        wakeupTrigger.wakeup();
+        assertNotNull(wakeupTrigger.getPendingTask());
+        assertInstanceOf(WakeupTrigger.WakeupFuture.class, wakeupTrigger.getPendingTask());
+        assertThrows(WakeupException.class, () -> wakeupTrigger.maybeTriggerWakeup());
+    }
+
+    @Test
+    public void testExceptionTriggeredWhenTaskAsynchronouslyCancelled() {
+        final CompletableFuture<Void> task = new CompletableFuture<>();
+        wakeupTrigger.setActiveTask(task);
+        task.cancel(true);
+        wakeupTrigger.wakeup();
+        assertNotNull(wakeupTrigger.getPendingTask());
+        assertInstanceOf(WakeupTrigger.WakeupFuture.class, wakeupTrigger.getPendingTask());
+        assertThrows(WakeupException.class, () -> wakeupTrigger.maybeTriggerWakeup());
     }
 
     private void assertWakeupExceptionIsThrown(final CompletableFuture<?> future) {

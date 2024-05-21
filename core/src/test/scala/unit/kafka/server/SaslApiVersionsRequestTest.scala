@@ -61,7 +61,7 @@ object SaslApiVersionsRequestTest {
 
     clusterGenerator.accept(ClusterConfig.defaultBuilder
       .setSecurityProtocol(securityProtocol)
-      .setType(Type.ZK)
+      .setTypes(Set(Type.ZK).asJava)
       .setSaslServerProperties(saslServerProperties)
       .setSaslClientProperties(saslClientProperties)
       .setServerProperties(serverProperties)

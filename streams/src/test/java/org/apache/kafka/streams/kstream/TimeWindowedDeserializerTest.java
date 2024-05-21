@@ -22,15 +22,15 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.streams.StreamsConfig;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.Map;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 public class TimeWindowedDeserializerTest {
@@ -42,7 +42,7 @@ public class TimeWindowedDeserializerTest {
     public void testTimeWindowedDeserializerConstructor() {
         timeWindowedDeserializer.configure(props, true);
         final Deserializer<?> inner = timeWindowedDeserializer.innerDeserializer();
-        assertNotNull("Inner deserializer should be not null", inner);
+        assertNotNull(inner, "Inner deserializer should be not null");
         assertInstanceOf(StringDeserializer.class, inner, "Inner deserializer type should be StringDeserializer");
         assertThat(timeWindowedDeserializer.getWindowSize(), is(5000000L));
     }

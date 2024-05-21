@@ -1978,7 +1978,8 @@ class FetchSessionTest {
   @Test
   def testFetchSessionCache_RoundRobinsIntoShards_WhenIntegerOverflows(): Unit = {
     // Given
-    FetchSessionCache.counter.set(Int.MaxValue+1)
+    val maxInteger = Int.MaxValue
+    FetchSessionCache.counter.set(maxInteger + 1)
     val numShards = 8
     val sessionIdRange = Int.MaxValue / numShards
     val cacheShards = (0 until numShards).map(shardNum => new FetchSessionCacheShard(10, 1000, sessionIdRange, shardNum))

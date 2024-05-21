@@ -51,11 +51,11 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerd
 import org.apache.kafka.common.serialization._
 import org.apache.kafka.common.utils.Utils.formatAddress
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.controller.QuorumController
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.metadata.properties.MetaProperties
 import org.apache.kafka.network.SocketServerConfigs
+import org.apache.kafka.queue.KafkaEventQueue
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
@@ -1872,7 +1872,7 @@ object TestUtils extends Logging {
       AdminClientUnitTestEnv.kafkaAdminClientNetworkThreadPrefix(),
       AbstractCoordinator.HEARTBEAT_THREAD_PREFIX,
       QuorumTestHarness.ZkClientEventThreadSuffix,
-      QuorumController.CONTROLLER_THREAD_SUFFIX,
+      KafkaEventQueue.EVENT_HANDLER_THREAD_SUFFIX,
       ClientMetricsManager.CLIENT_METRICS_REAPER_THREAD_NAME,
       SystemTimer.SYSTEM_TIMER_THREAD_PREFIX,
     )

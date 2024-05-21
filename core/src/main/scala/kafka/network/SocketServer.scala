@@ -725,15 +725,15 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
       else
         new InetSocketAddress(host, port)
     val serverChannel = ServerSocketChannel.open()
-    serverChannel.configureBlocking(false)
-    if (recvBufferSize != Selectable.USE_DEFAULT_BUFFER_SIZE)
-      serverChannel.socket().setReceiveBufferSize(recvBufferSize)
-
     try {
+      serverChannel.configureBlocking(false)
+      if (recvBufferSize != Selectable.USE_DEFAULT_BUFFER_SIZE)
+        serverChannel.socket().setReceiveBufferSize(recvBufferSize)
       serverChannel.socket.bind(socketAddress, listenBacklogSize)
       info(s"Awaiting socket connections on ${socketAddress.getHostString}:${serverChannel.socket.getLocalPort}.")
     } catch {
       case e: SocketException =>
+        Utils.closeQuietly(serverChannel, "server socket")
         throw new KafkaException(s"Socket server failed to bind to ${socketAddress.getHostString}:$port: ${e.getMessage}.", e)
     }
     serverChannel

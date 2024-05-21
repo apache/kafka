@@ -80,6 +80,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -652,6 +653,28 @@ public class HeartbeatRequestManagerTest {
 
         assertEquals(1, result.unsentRequests.size(), "A heartbeat request should be generated to" +
             " complete the ongoing leaving operation that was triggered before the poll timer expired.");
+    }
+
+    @Test
+    public void testisExpiredByUsedForLogging() {
+        Timer pollTimer = spy(time.timer(DEFAULT_MAX_POLL_INTERVAL_MS));
+        heartbeatRequestManager = new HeartbeatRequestManager(new LogContext(), pollTimer, config(),
+            coordinatorRequestManager, membershipManager, heartbeatState, heartbeatRequestState,
+            backgroundEventHandler, metrics);
+        when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
+
+        int exceededTimeMs = 5;
+        time.sleep(DEFAULT_MAX_POLL_INTERVAL_MS + exceededTimeMs);
+
+        NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, pollResult.unsentRequests.size());
+        verify(membershipManager).transitionToSendingLeaveGroup(true);
+        verify(pollTimer, never()).isExpiredBy();
+        assertEquals(exceededTimeMs, pollTimer.isExpiredBy());
+
+        clearInvocations(pollTimer);
+        heartbeatRequestManager.resetPollTimer(time.milliseconds());
+        verify(pollTimer).isExpiredBy();
     }
 
     @Test
