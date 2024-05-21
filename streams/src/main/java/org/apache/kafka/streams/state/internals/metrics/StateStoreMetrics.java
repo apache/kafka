@@ -147,7 +147,7 @@ public class StateStoreMetrics {
 
     private static final String NUM_OPEN_ITERATORS = "num-open-iterators";
     private static final String NUM_OPEN_ITERATORS_DESCRIPTION =
-            "The current number of Iterators on the store that have been created, but not yet closed";
+            "The current number of iterators on the store that have been created, but not yet closed";
 
     public static Sensor putSensor(final String taskId,
                                    final String storeType,
