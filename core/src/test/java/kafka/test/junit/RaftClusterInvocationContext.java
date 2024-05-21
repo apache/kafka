@@ -175,18 +175,18 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
         @Override
         public void start() {
-            if (started.compareAndSet(false, true)) {
-                try {
-                    safeBuildCluster();
+            try {
+                format();
+                if (started.compareAndSet(false, true)) {
                     clusterTestKit.startup();
                     kafka.utils.TestUtils.waitUntilTrue(
                             () -> this.clusterTestKit.brokers().get(0).brokerState() == BrokerState.RUNNING,
                             () -> "Broker never made it to RUNNING state.",
                             org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS,
                             100L);
-                } catch (Exception e) {
-                    throw new RuntimeException("Failed to start Raft server", e);
                 }
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to start Raft server", e);
             }
         }
 
@@ -236,7 +236,23 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
         public void format() throws Exception {
             if (formated.compareAndSet(false, true)) {
-                safeBuildCluster();
+                TestKitNodes nodes = new TestKitNodes.Builder()
+                        .setBootstrapMetadataVersion(clusterConfig.metadataVersion())
+                        .setCombined(isCombined)
+                        .setNumBrokerNodes(clusterConfig.numBrokers())
+                        .setNumDisksPerBroker(clusterConfig.numDisksPerBroker())
+                        .setPerServerProperties(clusterConfig.perServerOverrideProperties())
+                        .setNumControllerNodes(clusterConfig.numControllers()).build();
+                KafkaClusterTestKit.Builder builder = new KafkaClusterTestKit.Builder(nodes);
+                if (Boolean.parseBoolean(clusterConfig.serverProperties()
+                        .getOrDefault("zookeeper.metadata.migration.enable", "false"))) {
+                    this.embeddedZookeeper = new EmbeddedZookeeper();
+                    builder.setConfigProp("zookeeper.connect", String.format("localhost:%d", embeddedZookeeper.port()));
+                }
+                // Copy properties into the TestKit builder
+                clusterConfig.serverProperties().forEach(builder::setConfigProp);
+                // KAFKA-12512 need to pass security protocol and listener name here
+                this.clusterTestKit = builder.build();
                 this.clusterTestKit.format();
             }
         }
@@ -246,30 +262,5 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                     .orElseThrow(() -> new IllegalArgumentException("Unknown brokerId " + brokerId));
         }
 
-        private void safeBuildCluster() throws Exception {
-            if (this.clusterTestKit == null) {
-                doBuild();
-            }
-        }
-
-        private void doBuild() throws Exception {
-            TestKitNodes nodes = new TestKitNodes.Builder()
-                    .setBootstrapMetadataVersion(clusterConfig.metadataVersion())
-                    .setCombined(isCombined)
-                    .setNumBrokerNodes(clusterConfig.numBrokers())
-                    .setNumDisksPerBroker(clusterConfig.numDisksPerBroker())
-                    .setPerServerProperties(clusterConfig.perServerOverrideProperties())
-                    .setNumControllerNodes(clusterConfig.numControllers()).build();
-            KafkaClusterTestKit.Builder builder = new KafkaClusterTestKit.Builder(nodes);
-            if (Boolean.parseBoolean(clusterConfig.serverProperties()
-                    .getOrDefault("zookeeper.metadata.migration.enable", "false"))) {
-                this.embeddedZookeeper = new EmbeddedZookeeper();
-                builder.setConfigProp("zookeeper.connect", String.format("localhost:%d", embeddedZookeeper.port()));
-            }
-            // Copy properties into the TestKit builder
-            clusterConfig.serverProperties().forEach(builder::setConfigProp);
-            // KAFKA-12512 need to pass security protocol and listener name here
-            this.clusterTestKit = builder.build();
-        }
     }
 }
