@@ -335,16 +335,9 @@ public class AsyncKafkaConsumerTest {
 
         assertThrows(Errors.FENCED_INSTANCE_ID.exception().getClass(), () -> consumer.commitAsync());
 
-        // Close the consumer here as we know it will cause a FencedInstanceIdException to be thrown.
-        // If we get an error other than the FencedInstanceIdException, we'll raise a ruckus.
-        try {
-            consumer.close();
-        } catch (KafkaException e) {
-            assertNotNull(e.getCause());
-            assertInstanceOf(FencedInstanceIdException.class, e.getCause());
-        } finally {
-            consumer = null;
-        }
+        Throwable e = assertThrows(KafkaException.class, () -> consumer.close());
+        assertInstanceOf(FencedInstanceIdException.class, e.getCause());
+        consumer = null;
     }
 
     @Test
