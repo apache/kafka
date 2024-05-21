@@ -97,7 +97,8 @@ class ConsumerGroupCommandTestUtils {
 
     private static <T> void releaseConsumers(AtomicBoolean closed, List<KafkaConsumer<T, T>> consumers, ExecutorService executor) throws InterruptedException {
         closed.set(true);
-        consumers.forEach(KafkaConsumer::wakeup);
+//        consumers.forEach(KafkaConsumer::wakeup);
+        consumers.forEach(KafkaConsumer::close);
         executor.shutdown();
         executor.awaitTermination(1, TimeUnit.MINUTES);
     }
