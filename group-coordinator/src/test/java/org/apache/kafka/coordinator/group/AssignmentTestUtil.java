@@ -21,6 +21,7 @@ import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 
 import java.util.AbstractMap;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -55,18 +56,18 @@ public class AssignmentTestUtil {
     public static Map<Uuid, Set<Integer>> mkAssignment(Map.Entry<Uuid, Set<Integer>>... entries) {
         Map<Uuid, Set<Integer>> assignment = new HashMap<>();
         for (Map.Entry<Uuid, Set<Integer>> entry : entries) {
-            assignment.put(entry.getKey(), entry.getValue());
+            assignment.put(entry.getKey(), Collections.unmodifiableSet(entry.getValue()));
         }
-        return assignment;
+        return Collections.unmodifiableMap(assignment);
     }
 
     @SafeVarargs
     public static Map<Uuid, Set<Integer>> mkSortedAssignment(Map.Entry<Uuid, Set<Integer>>... entries) {
         Map<Uuid, Set<Integer>> assignment = new LinkedHashMap<>();
         for (Map.Entry<Uuid, Set<Integer>> entry : entries) {
-            assignment.put(entry.getKey(), entry.getValue());
+            assignment.put(entry.getKey(), Collections.unmodifiableSet(entry.getValue()));
         }
-        return assignment;
+        return Collections.unmodifiableMap(assignment);
     }
 
     /**

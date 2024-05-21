@@ -62,13 +62,13 @@ import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOG
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 public class TargetAssignmentBuilderBenchmark {
 
-    @Param({"100", "500", "1000", "5000", "10000"})
+    @Param({"10000"})
     private int memberCount;
 
-    @Param({"5", "10", "50"})
+    @Param({"10"})
     private int partitionsToMemberRatio;
 
-    @Param({"10", "100", "1000"})
+    @Param({"100"})
     private int topicCount;
 
     private static final String GROUP_ID = "benchmark-group";

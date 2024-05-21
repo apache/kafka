@@ -73,7 +73,7 @@ public class OptimizedUniformAssignmentBuilderTest {
                 Optional.empty(),
                 Optional.empty(),
                 Collections.emptyList(),
-                Collections.emptyMap()
+                Collections.unmodifiableMap(Collections.emptyMap())
             )
         );
 
@@ -103,7 +103,7 @@ public class OptimizedUniformAssignmentBuilderTest {
                 Optional.empty(),
                 Optional.empty(),
                 Collections.singletonList(topic2Uuid),
-                Collections.emptyMap()
+                Collections.unmodifiableMap(Collections.emptyMap())
             )
         );
 
@@ -134,13 +134,13 @@ public class OptimizedUniformAssignmentBuilderTest {
             Optional.empty(),
             Optional.empty(),
             Arrays.asList(topic1Uuid, topic3Uuid),
-            Collections.emptyMap()
+            Collections.unmodifiableMap(Collections.emptyMap())
         ));
         members.put(memberB, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
             Arrays.asList(topic1Uuid, topic3Uuid),
-            Collections.emptyMap()
+            Collections.unmodifiableMap(Collections.emptyMap())
         ));
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members, HOMOGENEOUS);
@@ -177,19 +177,19 @@ public class OptimizedUniformAssignmentBuilderTest {
             Optional.empty(),
             Optional.empty(),
             Collections.singletonList(topic3Uuid),
-            Collections.emptyMap()
+            Collections.unmodifiableMap(Collections.emptyMap())
         ));
         members.put(memberB, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
             Collections.singletonList(topic3Uuid),
-            Collections.emptyMap()
+            Collections.unmodifiableMap(Collections.emptyMap())
         ));
         members.put(memberC, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
             Collections.singletonList(topic3Uuid),
-            Collections.emptyMap()
+            Collections.unmodifiableMap(Collections.emptyMap())
         ));
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members, HOMOGENEOUS);
@@ -206,7 +206,7 @@ public class OptimizedUniformAssignmentBuilderTest {
             mkTopicAssignment(topic3Uuid, 0)
         ));
         expectedAssignment.put(memberC,
-            Collections.emptyMap()
+            Collections.unmodifiableMap(Collections.emptyMap())
         );
 
         assertAssignment(expectedAssignment, computedAssignment);
@@ -234,7 +234,7 @@ public class OptimizedUniformAssignmentBuilderTest {
                 Optional.empty(),
                 Optional.empty(),
                 subscribedTopics,
-                Collections.emptyMap()
+                Collections.unmodifiableMap(Collections.emptyMap())
             ));
         }
 
@@ -264,12 +264,12 @@ public class OptimizedUniformAssignmentBuilderTest {
 
         Map<String, AssignmentMemberSpec> members = new TreeMap<>();
 
-        Map<Uuid, Set<Integer>> currentAssignmentForA = new TreeMap<>(
+        Map<Uuid, Set<Integer>> currentAssignmentForA = Collections.unmodifiableMap(new TreeMap<>(
             mkAssignment(
                 mkTopicAssignment(topic1Uuid, 0, 1),
                 mkTopicAssignment(topic2Uuid, 0, 1)
             )
-        );
+        ));
         members.put(memberA, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
@@ -277,12 +277,12 @@ public class OptimizedUniformAssignmentBuilderTest {
             currentAssignmentForA
         ));
 
-        Map<Uuid, Set<Integer>> currentAssignmentForB = new TreeMap<>(
+        Map<Uuid, Set<Integer>> currentAssignmentForB = Collections.unmodifiableMap(new TreeMap<>(
             mkAssignment(
                 mkTopicAssignment(topic1Uuid, 2),
                 mkTopicAssignment(topic2Uuid, 2)
             )
-        );
+        ));
         members.put(memberB, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
@@ -328,12 +328,12 @@ public class OptimizedUniformAssignmentBuilderTest {
 
         Map<String, AssignmentMemberSpec> members = new TreeMap<>();
 
-        Map<Uuid, Set<Integer>> currentAssignmentForA = new TreeMap<>(
+        Map<Uuid, Set<Integer>> currentAssignmentForA = Collections.unmodifiableMap(new TreeMap<>(
             mkAssignment(
                 mkTopicAssignment(topic1Uuid, 0, 2),
                 mkTopicAssignment(topic2Uuid, 0)
             )
-        );
+        ));
         members.put(memberA, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
@@ -341,12 +341,12 @@ public class OptimizedUniformAssignmentBuilderTest {
             currentAssignmentForA
         ));
 
-        Map<Uuid, Set<Integer>> currentAssignmentForB = new TreeMap<>(
+        Map<Uuid, Set<Integer>> currentAssignmentForB = Collections.unmodifiableMap(new TreeMap<>(
             mkAssignment(
                 mkTopicAssignment(topic1Uuid, 1),
                 mkTopicAssignment(topic2Uuid, 1, 2)
             )
-        );
+        ));
         members.put(memberB, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
@@ -391,10 +391,10 @@ public class OptimizedUniformAssignmentBuilderTest {
 
         Map<String, AssignmentMemberSpec> members = new HashMap<>();
 
-        Map<Uuid, Set<Integer>> currentAssignmentForA = new TreeMap<>(mkAssignment(
+        Map<Uuid, Set<Integer>> currentAssignmentForA = Collections.unmodifiableMap(new TreeMap<>(mkAssignment(
             mkTopicAssignment(topic1Uuid, 0, 2),
             mkTopicAssignment(topic2Uuid, 0)
-        ));
+        )));
         members.put(memberA, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
@@ -402,10 +402,10 @@ public class OptimizedUniformAssignmentBuilderTest {
             currentAssignmentForA
         ));
 
-        Map<Uuid, Set<Integer>> currentAssignmentForB = new TreeMap<>(mkAssignment(
+        Map<Uuid, Set<Integer>> currentAssignmentForB = Collections.unmodifiableMap(new TreeMap<>(mkAssignment(
             mkTopicAssignment(topic1Uuid, 1),
             mkTopicAssignment(topic2Uuid, 1, 2)
-        ));
+        )));
         members.put(memberB, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
@@ -418,7 +418,7 @@ public class OptimizedUniformAssignmentBuilderTest {
             Optional.empty(),
             Optional.empty(),
             Arrays.asList(topic1Uuid, topic2Uuid),
-            Collections.emptyMap()
+            Collections.unmodifiableMap(Collections.emptyMap())
         ));
 
         AssignmentSpec assignmentSpec = new AssignmentSpec(members, HOMOGENEOUS);

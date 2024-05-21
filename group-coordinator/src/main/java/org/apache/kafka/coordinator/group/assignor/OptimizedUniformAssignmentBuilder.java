@@ -27,7 +27,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * The optimized uniform assignment builder is used to generate the target assignment for a consumer group with
@@ -48,6 +47,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignmentBuilder {
     private static final Logger LOG = LoggerFactory.getLogger(OptimizedUniformAssignmentBuilder.class);
+
+    private static final Class<?> UNMODIFIALBE_MAP_CLASS = Collections.unmodifiableMap(new HashMap<>()).getClass();
 
     /**
      * The assignment specification which includes member metadata.
@@ -110,13 +111,12 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
      */
     @Override
     protected GroupAssignment buildAssignment() throws PartitionAssignorException {
-        int totalPartitionsCount = 0;
-
         if (subscribedTopicIds.isEmpty()) {
             LOG.debug("The subscription list is empty, returning an empty assignment");
             return new GroupAssignment(Collections.emptyMap());
         }
 
+        int totalPartitionsCount = 0;
         for (Uuid topicId : subscribedTopicIds) {
             int partitionCount = subscribedTopicDescriber.numPartitions(topicId);
             if (partitionCount == -1) {
@@ -135,7 +135,7 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
         remainingMembersToGetAnExtraPartition = totalPartitionsCount % numberOfMembers;
 
         unassignedPartitions = topicIdPartitions(subscribedTopicIds, subscribedTopicDescriber);
-        potentiallyUnfilledMembers = assignStickyPartitions(minQuota);
+        maybeRevokePartitions(minQuota);
         assignRemainingPartitions();
 
         if (!unassignedPartitions.isEmpty()) {
@@ -145,37 +145,20 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
         return new GroupAssignment(targetAssignment);
     }
 
-    /**
-     * Retains a set of partitions from the existing assignment and includes them in the target assignment.
-     * Only relevant partitions that exist in the current topic metadata and subscriptions are considered.
-     *
-     * <p> For each member:
-     * <ol>
-     *     <li> Find the valid current assignment considering topic subscriptions and metadata</li>
-     *     <li> If the current assignment exists, retain partitions up to the minimum quota.</li>
-     *     <li> If the current assignment size is greater than the minimum quota and
-     *          there are members that could get an extra partition, assign the next partition as well.</li>
-     *     <li> Finally, if the member's current assignment size is less than the minimum quota,
-     *          add them to the potentially unfilled members map and track the number of remaining
-     *          partitions required to meet the quota.</li>
-     * </ol>
-     * </p>
-     *
-     * @return  Members mapped to the remaining number of partitions needed to meet the minimum quota,
-     *          including members that are eligible to receive an extra partition.
-     */
-    private Map<String, Integer> assignStickyPartitions(int minQuota) {
-        Map<String, Integer> potentiallyUnfilledMembers = new HashMap<>();
-
+    private void maybeRevokePartitions(int minQuota) {
         for (Map.Entry<String, AssignmentMemberSpec> entry : assignmentSpec.members().entrySet()) {
             String memberId = entry.getKey();
             AssignmentMemberSpec assignmentMemberSpec = entry.getValue();
             Map<Uuid, Set<Integer>> oldAssignment = assignmentMemberSpec.assignedPartitions();
             Map<Uuid, Set<Integer>> newAssignment = null;
 
-            AtomicInteger quota = new AtomicInteger(minQuota);
+            if (!UNMODIFIALBE_MAP_CLASS.isInstance(oldAssignment)) {
+                throw new IllegalStateException("The assignor expect an immutable map.");
+            }
+
+            int quota = minQuota;
             if (remainingMembersToGetAnExtraPartition > 0) {
-                quota.incrementAndGet();
+                quota++;
                 remainingMembersToGetAnExtraPartition--;
             }
 
@@ -185,8 +168,8 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
 
                 if (subscribedTopicIds.contains(topicId)) {
                     for (Integer partition : partitions) {
-                        if (quota.get() > 0) {
-                            quota.decrementAndGet();
+                        if (quota > 0) {
+                            quota--;
                             unassignedPartitions.remove(new TopicIdPartition(topicId, partition));
                         } else {
                             if (newAssignment == null) newAssignment = deepCopy(oldAssignment);
@@ -201,8 +184,8 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
                 }
             }
 
-            if (quota.get() > 0) {
-                potentiallyUnfilledMembers.put(memberId, quota.get());
+            if (quota > 0) {
+                potentiallyUnfilledMembers.put(memberId, quota);
             }
 
             if (newAssignment == null) {
@@ -211,22 +194,15 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
                 targetAssignment.put(memberId, new MemberAssignment(newAssignment));
             }
         }
-
-        return potentiallyUnfilledMembers;
     }
 
     private void assignRemainingPartitions() {
         for (Map.Entry<String, Integer> unfilledMemberEntry : potentiallyUnfilledMembers.entrySet()) {
             String memberId = unfilledMemberEntry.getKey();
-
             int remaining = unfilledMemberEntry.getValue();
-            if (remainingMembersToGetAnExtraPartition > 0) {
-                remaining++;
-                remainingMembersToGetAnExtraPartition--;
-            }
 
             Map<Uuid, Set<Integer>> newAssignment = targetAssignment.get(memberId).targetPartitions();
-            if (!(newAssignment instanceof HashMap)) {
+            if (UNMODIFIALBE_MAP_CLASS.isInstance(newAssignment)) {
                 newAssignment = deepCopy(newAssignment);
                 targetAssignment.put(memberId, new MemberAssignment(newAssignment));
             }
