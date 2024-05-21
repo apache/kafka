@@ -231,7 +231,7 @@ def run_tests(image, mode, fixtures_dir):
     outfile = open(f"{cur_directory}/report_{mode}.html", "w")
     runner = HTMLTestRunner.HTMLTestRunner(
                 stream=outfile,
-                title='Test Report',
+                title=f'Test Report: Apache Kafka {mode.capitalize()} Docker Image',
                 description='This demonstrates the report output.'
                 )
     result = runner.run(combined_suite)

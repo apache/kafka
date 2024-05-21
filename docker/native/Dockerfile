@@ -32,6 +32,7 @@ RUN mkdir kafka; \
     gpg --batch --verify kafka.tgz.asc kafka.tgz; \
     rm kafka.tgz ; \
     cd kafka ;  \
+# Build the native-binary of the apache kafka using graalVM native-image.
     native-image --no-fallback \
         --enable-http \
         --enable-https \
@@ -70,14 +71,19 @@ LABEL org.label-schema.name="kafka" \
 RUN apk update ; \
     apk add --no-cache gcompat ; \
     apk add --no-cache bash ; \
-    mkdir -p /etc/kafka/docker /mnt/shared/config /opt/kafka/config /etc/kafka/secrets
+    mkdir -p /etc/kafka/docker /mnt/shared/config /opt/kafka/config /etc/kafka/secrets ; \
+    adduser -h /home/appuser -D --shell /bin/bash appuser ; \
+    chown appuser:root -R /etc/kafka /opt/kafka /mnt/shared/config ; \
+    chmod -R ug+w /etc/kafka /opt/kafka /mnt/shared/config ;
 
-COPY --from=build-native-image /app/kafka/kafka.Kafka /opt/kafka/
-COPY --from=build-native-image /app/kafka/config/kraft/server.properties /etc/kafka/docker/
-COPY --from=build-native-image /app/kafka/config/log4j.properties /etc/kafka/docker/
-COPY --from=build-native-image /app/kafka/config/tools-log4j.properties /etc/kafka/docker/
-COPY resources/common-scripts /etc/kafka/docker/
-COPY launch /etc/kafka/docker/
+COPY --chown=appuser:root --from=build-native-image /app/kafka/kafka.Kafka /opt/kafka/
+COPY --chown=appuser:root --from=build-native-image /app/kafka/config/kraft/server.properties /etc/kafka/docker/
+COPY --chown=appuser:root --from=build-native-image /app/kafka/config/log4j.properties /etc/kafka/docker/
+COPY --chown=appuser:root --from=build-native-image /app/kafka/config/tools-log4j.properties /etc/kafka/docker/
+COPY --chown=appuser:root resources/common-scripts /etc/kafka/docker/
+COPY --chown=appuser:root launch /etc/kafka/docker/
+
+USER appuser
 
 VOLUME ["/etc/kafka/secrets", "/mnt/shared/config"]
 
