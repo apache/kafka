@@ -66,4 +66,13 @@ class LogOffsetMetadataTest {
         assertFalse(metadata2.messageOffsetOnly());
         assertTrue(metadata1.messageOffsetOnly());
     }
+
+    @Test
+    void testOnSameSegment() {
+        LogOffsetMetadata metadata1 = new LogOffsetMetadata(1L, 0L, 1);
+        LogOffsetMetadata metadata2 = new LogOffsetMetadata(5L, 4L, 2);
+        LogOffsetMetadata metadata3 = new LogOffsetMetadata(10L, 4L, 200);
+        assertFalse(metadata1.onSameSegment(metadata2));
+        assertTrue(metadata2.onSameSegment(metadata3));
+    }
 }

@@ -53,8 +53,7 @@ public class FetchFromLeaderWithCorruptedCheckpointTest extends TieredStorageTes
                 LogManager.RecoveryPointCheckpointFile(),
                 CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME);
 
-        builder
-                .createTopic(topicA, partitionCount, replicationFactor, maxBatchCountPerSegment, assignment,
+        builder.createTopic(topicA, partitionCount, replicationFactor, maxBatchCountPerSegment, assignment,
                         enableRemoteLogStorage)
                 // send records to partition 0
                 .expectSegmentToBeOffloaded(broker0, topicA, p0, 0, new KeyValueSpec("k0", "v0"))

@@ -57,7 +57,7 @@ public final class LogOffsetMetadata {
     }
 
     // check if this offset is on the same segment with the given offset
-    private boolean onSameSegment(LogOffsetMetadata that) {
+    public boolean onSameSegment(LogOffsetMetadata that) {
         return this.segmentBaseOffset == that.segmentBaseOffset;
     }
 

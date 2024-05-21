@@ -174,9 +174,9 @@ class DelayedFetchTest {
     assertEquals(Errors.NONE, fetchResult.error)
   }
 
-  @ParameterizedTest(name = "testDelayedFetchWithInvalidHighWatermark endOffset={0}")
+  @ParameterizedTest(name = "testDelayedFetchWithMessageOnlyHighWatermark endOffset={0}")
   @ValueSource(longs = Array(0, 500))
-  def testDelayedFetchWithInvalidHighWatermark(endOffset: Long): Unit = {
+  def testDelayedFetchWithMessageOnlyHighWatermark(endOffset: Long): Unit = {
     val topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), 0, "topic")
     val fetchOffset = 450L
     val logStartOffset = 5L
@@ -203,7 +203,7 @@ class DelayedFetchTest {
 
     val partition: Partition = mock(classOf[Partition])
     when(replicaManager.getPartitionOrException(topicIdPartition.topicPartition)).thenReturn(partition)
-    // Note that the high-watermark does not contains the complete metadata
+    // Note that the high-watermark does not contain the complete metadata
     val endOffsetMetadata = new LogOffsetMetadata(endOffset, -1L, -1)
     when(partition.fetchOffsetSnapshot(
       currentLeaderEpoch,
@@ -212,15 +212,10 @@ class DelayedFetchTest {
     when(replicaManager.isAddingReplica(any(), anyInt())).thenReturn(false)
     expectReadFromReplica(fetchParams, topicIdPartition, fetchStatus.fetchInfo, Errors.NONE)
 
-    val expected = endOffset == 500
-    assertEquals(expected, delayedFetch.tryComplete())
-    assertEquals(expected, delayedFetch.isCompleted)
-    assertEquals(expected, fetchResultOpt.isDefined)
-
-    if (fetchResultOpt.isDefined) {
-      val fetchResult = fetchResultOpt.get
-      assertEquals(Errors.NONE, fetchResult.error)
-    }
+    assertTrue(delayedFetch.tryComplete())
+    assertTrue(delayedFetch.isCompleted)
+    assertTrue(fetchResultOpt.isDefined)
+    assertEquals(Errors.NONE, fetchResultOpt.get.error)
   }
 
   private def buildFollowerFetchParams(
