@@ -44,9 +44,3 @@ dirCommit() {
     )
 }
 
-# Function to get the latest non-RC version for a given major.minor version
-get_latest_version() {
-    local major_version="$1"
-    find ./docker_official_images/ -mindepth 1 -maxdepth 1 -type d -name "${major_version}.*" ! -name "*-rc" | sort -Vr | head -n 1 | xargs basename
-}
-

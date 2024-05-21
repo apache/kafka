@@ -41,7 +41,7 @@ for dir in $versions; do
     major_minor_version=$(echo "$version" | cut -d'.' -f1-2)
     highest_major_minor=$(echo "$highest_version" | cut -d'.' -f1-2)
 
-    latest_in_series=$(find . -mindepth 1 -maxdepth 1 -type d -name "$major_minor_version.*" ! -name "*-rc" | sort -V | tail -n 1)
+    latest_in_series=$(find . -mindepth 1 -maxdepth 1 -type d -name "$major_minor_version.*" | sort -V | tail -n 1)
     latest_in_series_basename=$(basename "$latest_in_series")
 
     tags="$version"
