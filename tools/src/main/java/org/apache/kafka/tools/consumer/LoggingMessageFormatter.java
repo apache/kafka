@@ -26,7 +26,7 @@ import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
-class LoggingMessageFormatter implements MessageFormatter {
+public class LoggingMessageFormatter implements MessageFormatter {
 
     private static final Logger LOG = LoggerFactory.getLogger(LoggingMessageFormatter.class);
     private final DefaultMessageFormatter defaultWriter = new DefaultMessageFormatter();

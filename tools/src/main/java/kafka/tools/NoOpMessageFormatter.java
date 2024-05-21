@@ -14,17 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.tools.consumer;
+package kafka.tools;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.MessageFormatter;
-
-import java.io.PrintStream;
-
-public class NoOpMessageFormatter implements MessageFormatter {
-
-    @Override
-    public void writeTo(ConsumerRecord<byte[], byte[]> consumerRecord, PrintStream output) {
-
+/**
+ * @deprecated Deprecated Since Kafka 3.8. Use {@link org.apache.kafka.tools.consumer.NoOpMessageFormatter} instead.
+ */
+@Deprecated
+public class NoOpMessageFormatter extends org.apache.kafka.tools.consumer.NoOpMessageFormatter {
+    public NoOpMessageFormatter() {
+        super();
+        System.err.println("WARNING: kafka.tools.NoOpMessageFormatter is deprecated and will be removed in the next major release. " +
+                "Please use org.apache.kafka.tools.consumer.NoOpMessageFormatter instead");
     }
 }
