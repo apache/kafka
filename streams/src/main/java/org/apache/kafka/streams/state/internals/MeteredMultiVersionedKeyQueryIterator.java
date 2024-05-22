@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import org.apache.kafka.streams.state.VersionedRecordIterator;
 import org.apache.kafka.streams.state.VersionedRecord;
@@ -24,18 +25,25 @@ public class MeteredMultiVersionedKeyQueryIterator<V> implements VersionedRecord
 
     private final VersionedRecordIterator<byte[]> iterator;
     private final Function<VersionedRecord<byte[]>, VersionedRecord<V>> deserializeValue;
-
+    private final AtomicInteger numOpenIterators;
 
     public MeteredMultiVersionedKeyQueryIterator(final VersionedRecordIterator<byte[]> iterator,
-                                                 final Function<VersionedRecord<byte[]>, VersionedRecord<V>> deserializeValue) {
+                                                 final Function<VersionedRecord<byte[]>, VersionedRecord<V>> deserializeValue,
+                                                 final AtomicInteger numOpenIterators) {
         this.iterator = iterator;
         this.deserializeValue = deserializeValue;
+        this.numOpenIterators = numOpenIterators;
+        numOpenIterators.incrementAndGet();
     }
 
 
     @Override
     public void close() {
-        iterator.close();
+        try {
+            iterator.close();
+        } finally {
+            numOpenIterators.decrementAndGet();
+        }
     }
 
     @Override

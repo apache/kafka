@@ -23,8 +23,8 @@ import net.jpountz.lz4.LZ4SafeDecompressor;
 import net.jpountz.xxhash.XXHash32;
 import net.jpountz.xxhash.XXHashFactory;
 
-import org.apache.kafka.common.compress.KafkaLZ4BlockOutputStream.BD;
-import org.apache.kafka.common.compress.KafkaLZ4BlockOutputStream.FLG;
+import org.apache.kafka.common.compress.Lz4BlockOutputStream.BD;
+import org.apache.kafka.common.compress.Lz4BlockOutputStream.FLG;
 import org.apache.kafka.common.utils.BufferSupplier;
 
 import java.io.IOException;
@@ -32,8 +32,8 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
-import static org.apache.kafka.common.compress.KafkaLZ4BlockOutputStream.LZ4_FRAME_INCOMPRESSIBLE_MASK;
-import static org.apache.kafka.common.compress.KafkaLZ4BlockOutputStream.MAGIC;
+import static org.apache.kafka.common.compress.Lz4BlockOutputStream.LZ4_FRAME_INCOMPRESSIBLE_MASK;
+import static org.apache.kafka.common.compress.Lz4BlockOutputStream.MAGIC;
 
 /**
  * A partial implementation of the v1.5.1 LZ4 Frame format.
@@ -42,7 +42,7 @@ import static org.apache.kafka.common.compress.KafkaLZ4BlockOutputStream.MAGIC;
  *
  * This class is not thread-safe.
  */
-public final class KafkaLZ4BlockInputStream extends InputStream {
+public final class Lz4BlockInputStream extends InputStream {
 
     public static final String PREMATURE_EOS = "Stream ended prematurely";
     public static final String NOT_SUPPORTED = "Stream unsupported (invalid magic bytes)";
@@ -86,7 +86,7 @@ public final class KafkaLZ4BlockInputStream extends InputStream {
      * @param ignoreFlagDescriptorChecksum for compatibility with old kafka clients, ignore incorrect HC byte
      * @throws IOException
      */
-    public KafkaLZ4BlockInputStream(ByteBuffer in, BufferSupplier bufferSupplier, boolean ignoreFlagDescriptorChecksum) throws IOException {
+    public Lz4BlockInputStream(ByteBuffer in, BufferSupplier bufferSupplier, boolean ignoreFlagDescriptorChecksum) throws IOException {
         if (BROKEN_LZ4_EXCEPTION != null) {
             throw BROKEN_LZ4_EXCEPTION;
         }

@@ -71,7 +71,6 @@ public class ApplicationEventHandler implements Closeable {
     public void add(final ApplicationEvent event) {
         Objects.requireNonNull(event, "ApplicationEvent provided to add must be non-null");
         applicationEventQueue.add(event);
-        log.trace("Enqueued event: {}", event);
         wakeupNetworkThread();
     }
 

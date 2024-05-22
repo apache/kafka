@@ -189,7 +189,7 @@ public class QuorumConfig {
             InetSocketAddress address = new InetSocketAddress(host, port);
             if (address.getHostString().equals(NON_ROUTABLE_HOST) && requireRoutableAddresses) {
                 throw new ConfigException(
-                    String.format("Host string ({}) is not routeable", address.getHostString())
+                    String.format("Host string (%s) is not routeable", address.getHostString())
                 );
             } else {
                 voterMap.put(voterId, address);

@@ -349,8 +349,14 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
     protected void append(LoggingEvent event) {
         String message = subAppend(event);
         LogLog.debug("[" + new Date(event.getTimeStamp()) + "]" + message);
-        Future<RecordMetadata> response = producer.send(
-            new ProducerRecord<>(topic, message.getBytes(StandardCharsets.UTF_8)));
+        Future<RecordMetadata> response;
+        try {
+            response = producer.send(new ProducerRecord<>(topic, message.getBytes(StandardCharsets.UTF_8)));
+        } catch (IllegalStateException e) {
+            // The producer has been closed
+            LogLog.debug("Exception while sending to Kafka", e);
+            return;
+        }
         if (syncSend) {
             try {
                 response.get();
@@ -370,7 +376,9 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
     public void close() {
         if (!this.closed) {
             this.closed = true;
-            producer.close();
+            if (producer != null) {
+                producer.close();
+            }
         }
     }
 

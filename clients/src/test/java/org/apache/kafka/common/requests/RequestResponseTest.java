@@ -29,6 +29,7 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
@@ -449,9 +450,9 @@ public class RequestResponseTest {
         TopicIdPartition tp0 = new TopicIdPartition(topicId, 0, "test");
         TopicIdPartition tp1 = new TopicIdPartition(topicId, 1, "test");
         MemoryRecords records0 = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2,
-            CompressionType.NONE, new SimpleRecord("woot".getBytes()));
+            Compression.NONE, new SimpleRecord("woot".getBytes()));
         MemoryRecords records1 = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2,
-            CompressionType.NONE, new SimpleRecord("woot".getBytes()), new SimpleRecord("woot".getBytes()));
+            Compression.NONE, new SimpleRecord("woot".getBytes()), new SimpleRecord("woot".getBytes()));
         ProduceRequest request = ProduceRequest.forMagic(RecordBatch.MAGIC_VALUE_V2,
                 new ProduceRequestData()
                         .setTopicData(new ProduceRequestData.TopicProduceDataCollection(asList(
@@ -1395,7 +1396,7 @@ public class RequestResponseTest {
                                         .setEpoch(0))
                                 .setPosition(234L)
                                 .setSize(345L)
-                                .setUnalignedRecords(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("blah".getBytes())))))))
+                                .setUnalignedRecords(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("blah".getBytes())))))))
                 .setThrottleTimeMs(123);
         return new FetchSnapshotResponse(data);
     }
@@ -1870,7 +1871,7 @@ public class RequestResponseTest {
         LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> responseData = new LinkedHashMap<>();
         Map<String, Uuid> topicIds = new HashMap<>();
         topicIds.put("test", Uuid.randomUuid());
-        MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("blah".getBytes()));
+        MemoryRecords records = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("blah".getBytes()));
         responseData.put(new TopicIdPartition(topicIds.get("test"), new TopicPartition("test", 0)), new FetchResponseData.PartitionData()
                         .setPartitionIndex(0)
                         .setHighWatermark(1000000)
@@ -1890,7 +1891,7 @@ public class RequestResponseTest {
     private FetchResponse createFetchResponse(boolean includeAborted) {
         LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> responseData = new LinkedHashMap<>();
         Uuid topicId = Uuid.randomUuid();
-        MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("blah".getBytes()));
+        MemoryRecords records = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("blah".getBytes()));
         responseData.put(new TopicIdPartition(topicId, new TopicPartition("test", 0)), new FetchResponseData.PartitionData()
                         .setPartitionIndex(0)
                         .setHighWatermark(1000000)
@@ -1920,7 +1921,7 @@ public class RequestResponseTest {
             data.setErrorCode(Errors.NONE.code())
                     .setSessionId(123);
         }
-        MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("blah".getBytes()));
+        MemoryRecords records = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("blah".getBytes()));
         FetchResponseData.PartitionData partition = new FetchResponseData.PartitionData()
                 .setPartitionIndex(0)
                 .setErrorCode(Errors.NONE.code())
@@ -2337,7 +2338,7 @@ public class RequestResponseTest {
 
     private ProduceRequest createProduceRequest(short version) {
         if (version < 2) {
-            MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("blah".getBytes()));
+            MemoryRecords records = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("blah".getBytes()));
             ProduceRequestData data = new ProduceRequestData()
                     .setAcks((short) -1)
                     .setTimeoutMs(123)
@@ -2350,7 +2351,7 @@ public class RequestResponseTest {
             return new ProduceRequest.Builder(version, version, data).build(version);
         }
         byte magic = version == 2 ? RecordBatch.MAGIC_VALUE_V1 : RecordBatch.MAGIC_VALUE_V2;
-        MemoryRecords records = MemoryRecords.withRecords(magic, CompressionType.NONE, new SimpleRecord("woot".getBytes()));
+        MemoryRecords records = MemoryRecords.withRecords(magic, Compression.NONE, new SimpleRecord("woot".getBytes()));
         return ProduceRequest.forMagic(magic,
                 new ProduceRequestData()
                         .setTopicData(new ProduceRequestData.TopicProduceDataCollection(singletonList(
