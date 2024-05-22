@@ -633,7 +633,8 @@ class ConnectDistributedTest(Test):
     def _wait_for_loggers(self, level, request_time, namespace, workers=None):
         wait_until(
             lambda: self._loggers_are_set(level, request_time, namespace, workers),
-            # This should be super quick--just a write+read of the config topic, which workers are constantly polling
+            # This should generally be super quick--just a write+read of the config topic, which workers are constantly polling
+            # yet we still set a higher value got the timeout.
             timeout_sec=30,
             err_msg="Log level for namespace '" + namespace + "'  was not adjusted in a reasonable amount of time."
         )
