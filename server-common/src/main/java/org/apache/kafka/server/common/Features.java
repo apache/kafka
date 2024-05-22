@@ -71,7 +71,7 @@ public enum Features {
         return name;
     }
 
-    public FeatureVersion[] features() {
+    public FeatureVersion[] featureVersions() {
         return featureVersions;
     }
 

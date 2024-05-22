@@ -30,7 +30,7 @@ public class FeaturesTest {
     @ParameterizedTest
     @EnumSource(Features.class)
     public void testFromFeatureLevelAllFeatures(Features feature) {
-        FeatureVersion[] featureImplementations = feature.features();
+        FeatureVersion[] featureImplementations = feature.featureVersions();
         int numFeatures = featureImplementations.length;
         for (short i = 0; i < numFeatures; i++) {
             assertEquals(featureImplementations[i], feature.fromFeatureLevel(i));
@@ -40,7 +40,7 @@ public class FeaturesTest {
     @ParameterizedTest
     @EnumSource(Features.class)
     public void testValidateVersionAllFeatures(Features feature) {
-        for (FeatureVersion featureImpl : feature.features()) {
+        for (FeatureVersion featureImpl : feature.featureVersions()) {
             // Ensure that the feature is valid given the typical metadataVersionMapping and the dependencies.
             // Note: Other metadata versions are valid, but this one should always be valid.
             Features.validateVersion(featureImpl, featureImpl.bootstrapMetadataVersion(), featureImpl.dependencies());
@@ -71,7 +71,7 @@ public class FeaturesTest {
     @ParameterizedTest
     @EnumSource(Features.class)
     public void testDefaultValueAllFeatures(Features feature) {
-        for (FeatureVersion featureImpl : feature.features()) {
+        for (FeatureVersion featureImpl : feature.featureVersions()) {
             assertEquals(feature.defaultValue(featureImpl.bootstrapMetadataVersion()), featureImpl.featureLevel(),
                     "Failed to get the correct default for " + featureImpl);
         }

@@ -469,10 +469,9 @@ public class ClusterControlManager {
                     feature.maxSupportedVersion() + ", inclusive.");
         }
         // A feature is not found in the finalizedFeature map if it is unknown to the controller or set to 0 (feature not enabled).
-        // As more features roll out, it may be common to leave a feature disabled, so this log is debug level in the case
-        // an intended feature is not being set.
+        // Only log if the feature name is not known by the controller.
         if (!Features.PRODUCTION_FEATURE_NAMES.contains(feature.name()))
-            log.warn("Broker {} registered with feature {} that is either unknown to the controller",
+            log.warn("Broker {} registered with feature {} that is unknown to the controller",
                     brokerId, feature.name());
         return new BrokerFeature().
                 setName(feature.name()).
