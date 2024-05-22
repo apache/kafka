@@ -21,6 +21,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.Cluster;
@@ -28,6 +29,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
+import org.apache.kafka.streams.processor.assignment.TaskTopicPartition;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,26 +40,37 @@ public final class RackUtils {
 
     private RackUtils() { }
 
-    public static Map<TopicPartition, Set<String>> getRacksForTopicPartition(final Cluster cluster,
-                                                                             final InternalTopicManager internalTopicManager,
-                                                                             final Set<TopicPartition> topicPartitions,
-                                                                             final boolean isChangelog) {
-        final Set<String> topicsToDescribe = new HashSet<>();
-        if (isChangelog) {
-            topicsToDescribe.addAll(topicPartitions.stream().map(TopicPartition::topic).collect(
-                Collectors.toSet()));
-        } else {
-            topicsToDescribe.addAll(topicsWithMissingMetadata(cluster, topicPartitions));
-        }
-
-        final Set<TopicPartition> topicsWithUpToDateMetadata = topicPartitions.stream()
-            .filter(partition -> !topicsToDescribe.contains(partition.topic()))
+    public static void annotateWithTopicPartitionsWithRackInfo(final Cluster cluster,
+                                                                    final InternalTopicManager internalTopicManager,
+                                                                    final Set<DefaultTaskTopicPartition> topicPartitions) {
+        // First we add all the changelog topics to the set of topics to describe.
+        final Set<String> topicsToDescribe = topicPartitions.stream()
+            .filter(DefaultTaskTopicPartition::isChangelog)
+            .map(topicPartition -> topicPartition.topicPartition().topic())
             .collect(Collectors.toSet());
-        final Map<TopicPartition, Set<String>> racksForTopicPartition = knownRacksForPartition(
-            cluster, topicsWithUpToDateMetadata);
 
+        // Then we add the non changelog topics that we do not have full information about.
+        final Set<TopicPartition> nonChangelogTopics = topicPartitions.stream()
+            .filter(taskTopicPartition -> !taskTopicPartition.isChangelog())
+            .map(TaskTopicPartition::topicPartition)
+            .collect(Collectors.toSet());
+        topicsToDescribe.addAll(topicsWithMissingMetadata(cluster, nonChangelogTopics));
+
+        // We can issue an RPC call to get up-to-date information about the topics that had rack
+        // information missing.
         final Map<String, List<TopicPartitionInfo>> freshTopicPartitionInfo =
             describeTopics(internalTopicManager, topicsToDescribe);
+
+        // Finally we compute the list of topics that already have all rack information known.
+        final Set<TopicPartition> topicsWithUpToDateMetadata = topicPartitions.stream()
+            .map(TaskTopicPartition::topicPartition)
+            .filter(topicPartition -> !topicsToDescribe.contains(topicPartition.topic()))
+            .collect(Collectors.toSet());
+
+        // Lastly we compile the mapping of topic partition to rack ids by combining known data and
+        // information that we got from the earlier RPC call.
+        final Map<TopicPartition, Set<String>> racksForTopicPartition = knownRacksForPartition(
+            cluster, topicsWithUpToDateMetadata);
         freshTopicPartitionInfo.forEach((topic, partitionInfos) -> {
             for (final TopicPartitionInfo partitionInfo : partitionInfos) {
                 final int partition = partitionInfo.partition();
@@ -75,7 +88,14 @@ public final class RackUtils {
             }
         });
 
-        return racksForTopicPartition;
+        for (final DefaultTaskTopicPartition topicPartition : topicPartitions) {
+            if (!racksForTopicPartition.containsKey(topicPartition.topicPartition())) {
+                continue;
+            }
+
+            final Set<String> racks = racksForTopicPartition.get(topicPartition.topicPartition());
+            topicPartition.annotateWithRackIds(racks);
+        }
     }
 
     public static Set<String> topicsWithMissingMetadata(final Cluster cluster, final Set<TopicPartition> topicPartitions) {
