@@ -21,7 +21,7 @@ import org.apache.kafka.common.MessageFormatter;
 
 import java.io.PrintStream;
 
-public class NoOpMessageFormatter implements MessageFormatter {
+class NoOpMessageFormatter implements MessageFormatter {
 
     @Override
     public void writeTo(ConsumerRecord<byte[], byte[]> consumerRecord, PrintStream output) {

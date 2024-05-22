@@ -32,7 +32,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Optional;
 
-public class DefaultMessageFormatter implements MessageFormatter {
+class DefaultMessageFormatter implements MessageFormatter {
 
     private static final Logger LOG = LoggerFactory.getLogger(DefaultMessageFormatter.class);
 
