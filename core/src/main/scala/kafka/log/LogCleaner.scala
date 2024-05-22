@@ -230,7 +230,7 @@ class LogCleaner(initialConfig: CleanerConfig,
       info(s"Updating logCleanerIoMaxBytesPerSecond: $maxIoBytesPerSecond")
       throttler.updateDesiredRatePerSec(maxIoBytesPerSecond)
     }
-    /* call shutdownCleaners() instead of shutdown to avoid unnecessary deletion of metrics */
+//    call shutdownCleaners() instead of shutdown to avoid unnecessary deletion of metrics
     shutdownCleaners()
     startup()
   }
