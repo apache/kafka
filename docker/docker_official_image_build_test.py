@@ -42,24 +42,10 @@ import tempfile
 import os
 
 
-# Sets executable permissions for all files in the specified directory and its subdirectories.
-def set_executable_permissions(directory):
-    for root, _, files in os.walk(directory):
-        for file in files:
-            path = os.path.join(root, file)
-            os.chmod(path, os.stat(path).st_mode | 0o111)
-
-
 def build_docker_official_image(image, tag, kafka_version, image_type):
     image = f'{image}:{tag}'
     current_dir = os.path.dirname(os.path.realpath(__file__))
     temp_dir_path = tempfile.mkdtemp()
-    directories = [
-        f'{current_dir}/docker_official_images/{kafka_version}/{image_type}',
-        f'{current_dir}/docker_official_images/{kafka_version}/{image_type}/resources'
-    ]
-    for directory in directories:
-        set_executable_permissions(directory)
     copy_tree(f"{current_dir}/docker_official_images/{kafka_version}/{image_type}",
               f"{temp_dir_path}/{image_type}")
     copy_tree(f"{current_dir}/docker_official_images/{kafka_version}/jvm/resources",
