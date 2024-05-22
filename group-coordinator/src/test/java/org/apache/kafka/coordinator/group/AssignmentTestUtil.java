@@ -103,8 +103,7 @@ public class AssignmentTestUtil {
                 Uuid topicId = topicEntry.getKey();
                 Set<Integer> partitions = topicEntry.getValue();
 
-                invertedTargetAssignment.putIfAbsent(topicId, new HashMap<>());
-                Map<Integer, String> partitionMap = invertedTargetAssignment.get(topicId);
+                Map<Integer, String> partitionMap = invertedTargetAssignment.computeIfAbsent(topicId, k -> new HashMap<>());
 
                 for (Integer partitionId : partitions) {
                     partitionMap.put(partitionId, memberId);
