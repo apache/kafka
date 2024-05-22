@@ -35,7 +35,7 @@ class SampledStatTest {
 
     @BeforeEach
     public void setup() {
-        stat = new SampleCount(0);
+        stat = new SampleCount();
         time = new MockTime();
     }
 
@@ -93,8 +93,8 @@ class SampledStatTest {
     // measure() of this impl returns the number of samples
     static class SampleCount extends SampledStat {
 
-        SampleCount(double initialValue) {
-            super(initialValue);
+        SampleCount() {
+            super(0);
         }
 
         @Override
