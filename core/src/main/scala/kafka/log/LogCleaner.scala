@@ -178,7 +178,6 @@ class LogCleaner(initialConfig: CleanerConfig,
       shutdownCleaners()
     } finally {
       removeMetrics()
-      info("Shutting down the log cleaner.")
     }
   }
 
@@ -231,7 +230,7 @@ class LogCleaner(initialConfig: CleanerConfig,
       info(s"Updating logCleanerIoMaxBytesPerSecond: $maxIoBytesPerSecond")
       throttler.updateDesiredRatePerSec(maxIoBytesPerSecond)
     }
-
+    /* call shutdownCleaners() instead of shutdown to avoid unnecessary deletion of metrics */
     shutdownCleaners()
     startup()
   }

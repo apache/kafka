@@ -78,7 +78,6 @@ class LogCleanerTest extends Logging {
         logs = new Pool[TopicPartition, UnifiedLog](),
         logDirFailureChannel = new LogDirFailureChannel(1),
         time = time)
-      logCleaner.startup()
       val metricsToVerify = new java.util.HashMap[String, java.util.List[java.util.Map[String, String]]]()
       logCleaner.cleanerManager.gaugeMetricNameWithTag.asScala.foreach { metricNameAndTags =>
         val tags = new java.util.ArrayList[java.util.Map[String, String]]()
@@ -1963,7 +1962,6 @@ class LogCleanerTest extends Logging {
       logs = new Pool[TopicPartition, UnifiedLog](),
       logDirFailureChannel = new LogDirFailureChannel(1),
       time = time)
-    logCleaner.startup()
 
     def checkGauge(name: String): Unit = {
       val gauge = logCleaner.metricsGroup.newGauge(name, () => 999)
