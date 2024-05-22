@@ -444,7 +444,9 @@ public class LogSegment implements Closeable {
         if (minOneMessage)
             adjustedMaxSize = Math.max(maxSize, startOffsetAndSize.size);
 
-        // return a log segment but with zero size in the case below
+        // return empty records in the fetch-data-info when:
+        // 1. adjustedMaxSize is 0 (or)
+        // 2. maxPosition to read is unavailable
         if (adjustedMaxSize == 0 || !maxPositionOpt.isPresent())
             return new FetchDataInfo(offsetMetadata, MemoryRecords.EMPTY);
 
