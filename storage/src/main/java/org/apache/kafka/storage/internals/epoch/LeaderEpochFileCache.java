@@ -44,7 +44,7 @@ import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UND
  * Leader Epoch = epoch assigned to each leader by the controller.
  * Offset = offset of the first message in each epoch.
  * <p>
- * Note that {@link #truncateFromStart},{@link #truncateFromEnd} flushes the epoch-entry changes to checkpoint asynchronously.
+ * Note that {@link #truncateFromStart},{@link #truncateFromEnd} flush the epoch-entry changes to checkpoint asynchronously.
  * Hence, it is instantiater's responsibility to ensure restoring the cache to the correct state after instantiating
  * this class from checkpoint (which might contain stale epoch entries right after instantiation).
  */
@@ -74,8 +74,8 @@ public class LeaderEpochFileCache {
     }
 
     /**
-     * Instantiates a new LeaderEpochFileCache with replacing checkpoint with given one
-     * without restoring the cache from the checkpoint, with retaining the current epoch entries.
+     * Instantiate a new LeaderEpochFileCache with provided epoch entries instead of from the backing checkpoint file.
+     * The provided epoch entries are expected to no less fresher than the checkpoint file.
      * @param epochEntries the current epoch entries
      * @param topicPartition the associated topic partition
      * @param checkpoint the checkpoint file
@@ -350,8 +350,9 @@ public class LeaderEpochFileCache {
                 //   * fsync latency could be huge on a disk glitch, which is not rare in spinning drives
                 //   * This method is called by ReplicaFetcher threads, which could block replica fetching
                 //     then causing ISR shrink or high produce response time degradation in remote scope on high fsync latency.
-                // - Even when stale epochs remained in LeaderEpoch file due to the unclean shutdown, it will be handled by
-                //   another truncateFromEnd call on log loading procedure so it won't be a problem
+                // - We still flush the change in #assign synchronously, meaning that it's guaranteed that the checkpoint file always has no missing entries.
+                //   * Even when stale epochs are restored from the checkpoint file after the unclean shutdown, it will be handled by
+                //     another truncateFromEnd call on log loading procedure, so it won't be a problem
                 scheduler.scheduleOnce("leader-epoch-cache-flush-" + topicPartition, this::writeToFile);
 
                 log.debug("Cleared entries {} from epoch cache after truncating to end offset {}, leaving {} entries in the cache.", removedEntries, endOffset, epochs.size());
@@ -386,8 +387,9 @@ public class LeaderEpochFileCache {
                 //   * fsync latency could be huge on a disk glitch, which is not rare in spinning drives
                 //   * This method is called as part of deleteRecords with holding UnifiedLog#lock.
                 //      - Meanwhile all produces against the partition will be blocked, which causes req-handlers to exhaust
-                // - Even when stale epochs remained in LeaderEpoch file due to the unclean shutdown, it will be recovered by
-                //   another truncateFromStart call on log loading procedure so it won't be a problem
+                // - We still flush the change in #assign synchronously, meaning that it's guaranteed that the checkpoint file always has no missing entries.
+                //   * Even when stale epochs are restored from the checkpoint file after the unclean shutdown, it will be handled by
+                //     another truncateFromStart call on log loading procedure, so it won't be a problem
                 scheduler.scheduleOnce("leader-epoch-cache-flush-" + topicPartition, this::writeToFile);
 
                 log.debug("Cleared entries {} and rewrote first entry {} after truncating to start offset {}, leaving {} in the cache.", removedEntries, updatedFirstEntry, startOffset, epochs.size());
@@ -434,8 +436,8 @@ public class LeaderEpochFileCache {
 
     /**
      * Returns a new LeaderEpochFileCache which contains same
-     * epoch entries with replacing backing checkpoint
-     * @param leaderEpochCheckpoint the new checkpoint
+     * epoch entries with replacing backing checkpoint file.
+     * @param leaderEpochCheckpoint the new checkpoint file
      * @return a new LeaderEpochFileCache instance
      */
     public LeaderEpochFileCache withCheckpoint(LeaderEpochCheckpoint leaderEpochCheckpoint) {
@@ -496,10 +498,9 @@ public class LeaderEpochFileCache {
 
     private void writeToFile() {
         lock.readLock().lock();
-        try {
-            checkpoint.write(epochs.values());
-        } finally {
-            lock.readLock().unlock();
-        }
+        List<EpochEntry> entries = new ArrayList<>(epochs.values());
+        lock.readLock().unlock();
+
+        checkpoint.write(entries);
     }
 }

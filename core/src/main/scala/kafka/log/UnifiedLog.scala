@@ -2101,8 +2101,8 @@ object UnifiedLog extends Logging {
   }
 
   /**
-   * If the recordVersion is >= RecordVersion.V2, then create a new LeaderEpochFileCache instance
-   * or update current cache if any with the new checkpoint and return it.
+   * If the recordVersion is >= RecordVersion.V2, create a new LeaderEpochFileCache instance.
+   * Loading the epoch entries from the backing checkpoint file or the provided currentCache if not empty.
    * Otherwise, the message format is considered incompatible and the existing LeaderEpoch file
    * is deleted.
    *
