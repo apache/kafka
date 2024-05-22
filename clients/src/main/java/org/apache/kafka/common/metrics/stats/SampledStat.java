@@ -107,12 +107,15 @@ public abstract class SampledStat implements MeasurableStat {
 
     public abstract double combine(List<Sample> samples, MetricConfig config, long now);
 
-    /* Timeout any windows that have expired in the absence of any events */
+    // purge any samples that lack observed events within the monitored window
     protected void purgeObsoleteSamples(MetricConfig config, long now) {
         long expireAge = config.samples() * config.timeWindowMs();
         for (Sample sample : samples) {
-            if (now - sample.lastEventMs >= expireAge)
+            // samples overlapping the monitored window are kept,
+            // even if they started before it
+            if (now - sample.lastEventMs >= expireAge) {
                 sample.reset(now);
+            }
         }
     }
 
@@ -148,6 +151,7 @@ public abstract class SampledStat implements MeasurableStat {
                 "value=" + value +
                 ", eventCount=" + eventCount +
                 ", startTimeMs=" + startTimeMs +
+                ", lastEventMs=" + lastEventMs +
                 ", initialValue=" + initialValue +
                 ')';
         }

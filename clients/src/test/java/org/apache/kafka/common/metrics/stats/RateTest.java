@@ -72,7 +72,8 @@ public class RateTest {
 
     // Record an event every 100 ms on average, moving some 1 ms back or forth for fine-grained 
     // window control. The expected rate, hence, is 10-11 events/sec depending on the moment of 
-    // measurement. Start assertions from the second window.
+    // measurement. Start assertions from the second window. This test is to address past issue,
+    // when measurements in the end of the sample led to value spikes.
     @Test
     public void testRateIsConsistentAfterTheFirstWindow() {
         MetricConfig config = new MetricConfig().timeWindow(1, SECONDS).samples(2);
