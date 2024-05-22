@@ -144,6 +144,38 @@ class LogSegmentTest {
     checkEquals(ms2.records.iterator, read.records.records.iterator)
   }
 
+  @Test
+  def testReadWhenNoMaxPosition(): Unit = {
+    val maxPosition = -1
+    val seg = createSegment(40)
+    val ms = records(50, "hello", "there")
+    seg.append(51, RecordBatch.NO_TIMESTAMP, -1L, ms)
+    for (minOneMessage <- Array(true, false)) {
+      // read before first offset
+      var read = seg.read(48, 200, maxPosition, minOneMessage)
+      assertEquals(new LogOffsetMetadata(48, 40, 0), read.fetchOffsetMetadata)
+      assertTrue(read.records.records().iterator().asScala.isEmpty)
+
+      // read at first offset
+      read = seg.read(50, 200, maxPosition, minOneMessage)
+      assertEquals(new LogOffsetMetadata(50, 40, 0), read.fetchOffsetMetadata)
+      assertTrue(read.records.records().iterator().asScala.isEmpty)
+
+      // read beyond first offset
+      read = seg.read(51, 200, maxPosition, minOneMessage)
+      assertEquals(new LogOffsetMetadata(51, 40, 39), read.fetchOffsetMetadata)
+      assertTrue(read.records.records().iterator().asScala.isEmpty)
+
+      // read at last offset
+      read = seg.read(52, 200, maxPosition, minOneMessage)
+      assertNull(read)
+
+      // read beyond last offset
+      read = seg.read(53, 200, maxPosition, minOneMessage)
+      assertNull(read)
+    }
+  }
+
   /**
    * In a loop append two messages then truncate off the second of those messages and check that we can read
    * the first but not the second message.
