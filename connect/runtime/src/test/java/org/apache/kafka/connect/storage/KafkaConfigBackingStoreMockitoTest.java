@@ -1308,10 +1308,13 @@ public class KafkaConfigBackingStoreMockitoTest {
         verify(configLog).start();
 
         ClusterConfigState configState = configStorage.snapshot();
-        expectRead(TARGET_STATE_KEYS.get(0), CONFIGS_SERIALIZED.get(0), TARGET_STATE_STARTED);
+        expectRead(Collections.singletonMap(TARGET_STATE_KEYS.get(0), CONFIGS_SERIALIZED.get(0)),
+                Collections.singletonMap(TARGET_STATE_KEYS.get(0), TARGET_STATE_STARTED));
         // Should see a single connector with initial state paused
         assertEquals(TargetState.STARTED, configState.targetState(CONNECTOR_IDS.get(0)));
-        expectRead(TARGET_STATE_KEYS.get(0), CONFIGS_SERIALIZED.get(0), TARGET_STATE_STARTED);
+        expectRead(Collections.singletonMap(TARGET_STATE_KEYS.get(0), CONFIGS_SERIALIZED.get(0)),
+                Collections.singletonMap(TARGET_STATE_KEYS.get(0), TARGET_STATE_STARTED));
+
         // on resume update listener shouldn't be called
         verify(configUpdateListener, never()).onConnectorConfigUpdate(anyString());
 
@@ -1419,7 +1422,7 @@ public class KafkaConfigBackingStoreMockitoTest {
         });
     }
 
-    private void expectRead(LinkedHashMap<String, byte[]> serializedValues,
+    private void expectRead(Map<String, byte[]> serializedValues,
                             Map<String, Struct> deserializedValues) {
         for (Map.Entry<String, Struct> deserializedValueEntry : deserializedValues.entrySet()) {
             byte[] serializedValue = serializedValues.get(deserializedValueEntry.getKey());
