@@ -1712,6 +1712,62 @@ public interface Admin extends AutoCloseable {
     Uuid clientInstanceId(Duration timeout);
 
     /**
+     * Add a new voter node to the KRaft metadata quorum.
+     *
+     * @param voterId           The node ID of the voter.
+     * @param voterDirectoryId  The directory ID of the voter.
+     * @param endpoints         The endpoints that the new voter has.
+     */
+    default AddRaftVoterResult addRaftVoter(
+        int voterId,
+        Uuid voterDirectoryId,
+        Set<RaftVoterEndpoint> endpoints
+    ) {
+        return addRaftVoter(voterId, voterDirectoryId, endpoints, new AddRaftVoterOptions());
+    }
+
+    /**
+     * Add a new voter node to the KRaft metadata quorum.
+     *
+     * @param voterId           The node ID of the voter.
+     * @param voterDirectoryId  The directory ID of the voter.
+     * @param endpoints         The endpoints that the new voter has.
+     * @param options           The options to use when adding the new voter node.
+     */
+    AddRaftVoterResult addRaftVoter(
+        int voterId,
+        Uuid voterDirectoryId,
+        Set<RaftVoterEndpoint> endpoints,
+        AddRaftVoterOptions options
+    );
+
+    /**
+     * Remove a voter node from the KRaft metadata quorum.
+     *
+     * @param voterId           The node ID of the voter.
+     * @param voterDirectoryId  The directory ID of the voter.
+     */
+    default RemoveRaftVoterResult removeRaftVoter(
+        int voterId,
+        Uuid voterDirectoryId
+    ) {
+        return removeRaftVoter(voterId, voterDirectoryId, new RemoveRaftVoterOptions());
+    }
+
+    /**
+     * Remove a voter node from the KRaft metadata quorum.
+     *
+     * @param voterId           The node ID of the voter.
+     * @param voterDirectoryId  The directory ID of the voter.
+     * @param options           The options to use when removing the voter node.
+     */
+    RemoveRaftVoterResult removeRaftVoter(
+        int voterId,
+        Uuid voterDirectoryId,
+        RemoveRaftVoterOptions options
+    );
+
+    /**
      * Get the metrics kept by the adminClient
      */
     Map<MetricName, ? extends Metric> metrics();

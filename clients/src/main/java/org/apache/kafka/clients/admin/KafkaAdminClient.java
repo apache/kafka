@@ -97,6 +97,7 @@ import org.apache.kafka.common.errors.UnsupportedEndpointTypeException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.message.AddRaftVoterRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignableTopic;
 import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData;
@@ -154,6 +155,7 @@ import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.MetadataRequestData;
+import org.apache.kafka.common.message.RemoveRaftVoterRequestData;
 import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
 import org.apache.kafka.common.message.UnregisterBrokerRequestData;
 import org.apache.kafka.common.message.UpdateFeaturesRequestData;
@@ -170,6 +172,8 @@ import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
+import org.apache.kafka.common.requests.AddRaftVoterRequest;
+import org.apache.kafka.common.requests.AddRaftVoterResponse;
 import org.apache.kafka.common.requests.AlterClientQuotasRequest;
 import org.apache.kafka.common.requests.AlterClientQuotasResponse;
 import org.apache.kafka.common.requests.AlterConfigsRequest;
@@ -232,6 +236,7 @@ import org.apache.kafka.common.requests.ListPartitionReassignmentsRequest;
 import org.apache.kafka.common.requests.ListPartitionReassignmentsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.RemoveRaftVoterRequest;
 import org.apache.kafka.common.requests.RenewDelegationTokenRequest;
 import org.apache.kafka.common.requests.RenewDelegationTokenResponse;
 import org.apache.kafka.common.requests.UnregisterBrokerRequest;
@@ -4602,6 +4607,101 @@ public class KafkaAdminClient extends AdminClient {
             }
         }, now);
         return new ListClientMetricsResourcesResult(future);
+    }
+
+    @Override
+    public AddRaftVoterResult addRaftVoter(
+        int voterId,
+        Uuid voterDirectoryId,
+        Set<RaftVoterEndpoint> endpoints,
+        AddRaftVoterOptions options
+    ) {
+        NodeProvider provider = new LeastLoadedBrokerOrActiveKController();
+
+        final KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+        final long now = time.milliseconds();
+        final Call call = new Call(
+                "addRaftVoter", calcDeadlineMs(now, options.timeoutMs()), provider) {
+
+            @Override
+            AddRaftVoterRequest.Builder createRequest(int timeoutMs) {
+                AddRaftVoterRequestData.ListenerCollection listeners =
+                    new AddRaftVoterRequestData.ListenerCollection();
+                endpoints.forEach(endpoint ->
+                    listeners.add(new AddRaftVoterRequestData.Listener().
+                        setName(endpoint.name()).
+                        setHost(endpoint.host()).
+                        setPort(endpoint.port())));
+                return new AddRaftVoterRequest.Builder(
+                   new AddRaftVoterRequestData().
+                       setVoterId(voterId) .
+                       setVoterDirectoryId(voterDirectoryId).
+                       setListeners(listeners));
+            }
+
+            @Override
+            void handleResponse(AbstractResponse response) {
+                AddRaftVoterResponse addResponse = (AddRaftVoterResponse) response;
+                if (addResponse.data().errorCode() != Errors.NONE.code()) {
+                    ApiError error = new ApiError(
+                        addResponse.data().errorCode(),
+                        addResponse.data().errorMessage());
+                    future.completeExceptionally(error.exception());
+                } else {
+                    future.complete(null);
+                }
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                future.completeExceptionally(throwable);
+            }
+        };
+        runnable.call(call, now);
+        return new AddRaftVoterResult(future);
+    }
+
+    @Override
+    public RemoveRaftVoterResult removeRaftVoter(
+        int voterId,
+        Uuid voterDirectoryId,
+        RemoveRaftVoterOptions options
+    ) {
+        NodeProvider provider = new LeastLoadedBrokerOrActiveKController();
+
+        final KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+        final long now = time.milliseconds();
+        final Call call = new Call(
+                "removeRaftVoter", calcDeadlineMs(now, options.timeoutMs()), provider) {
+
+            @Override
+            RemoveRaftVoterRequest.Builder createRequest(int timeoutMs) {
+                return new RemoveRaftVoterRequest.Builder(
+                    new RemoveRaftVoterRequestData().
+                        setVoterId(voterId) .
+                        setVoterDirectoryId(voterDirectoryId));
+            }
+
+            @Override
+            void handleResponse(AbstractResponse response) {
+                AddRaftVoterResponse addResponse = (AddRaftVoterResponse) response;
+                if (addResponse.data().errorCode() != Errors.NONE.code()) {
+                    ApiError error = new ApiError(
+                            addResponse.data().errorCode(),
+                            addResponse.data().errorMessage());
+                    future.completeExceptionally(error.exception());
+                } else {
+                    future.complete(null);
+                }
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                future.completeExceptionally(throwable);
+            }
+        };
+        runnable.call(call, now);
+        return new RemoveRaftVoterResult(future);
     }
 
     @Override
