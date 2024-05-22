@@ -57,6 +57,8 @@ import java.util.Map;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -436,5 +438,22 @@ public class MeteredTimestampedKeyValueStoreTest {
             }
             throw exception;
         }
+    }
+
+    @Test
+    public void shouldTrackOpenIteratorsMetric() {
+        when(inner.all()).thenReturn(KeyValueIterators.emptyIterator());
+        init();
+
+        final KafkaMetric openIteratorsMetric = metric("num-open-iterators");
+        assertThat(openIteratorsMetric, not(nullValue()));
+
+        assertThat((Integer) openIteratorsMetric.metricValue(), equalTo(0));
+
+        try (final KeyValueIterator<String, ValueAndTimestamp<String>> iterator = metered.all()) {
+            assertThat((Integer) openIteratorsMetric.metricValue(), equalTo(1));
+        }
+
+        assertThat((Integer) openIteratorsMetric.metricValue(), equalTo(0));
     }
 }

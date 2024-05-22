@@ -24,6 +24,7 @@ import kafka.server.epoch.util.MockBlockingSender
 import kafka.server.metadata.ZkMetadataCache
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.FetchSessionHandler
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.message.{FetchResponseData, UpdateMetadataRequestData}
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
@@ -1331,7 +1332,7 @@ class ReplicaFetcherThreadTest {
 
     val tp0 = new TopicPartition("testTopic", 0)
     val tp1 = new TopicPartition("testTopic", 1)
-    val records = MemoryRecords.withRecords(CompressionType.NONE,
+    val records = MemoryRecords.withRecords(Compression.NONE,
       new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))
     val partitionData = new FetchResponseData.PartitionData()
       .setRecords(records)
@@ -1380,7 +1381,7 @@ class ReplicaFetcherThreadTest {
     when(mockBlockingSend.brokerEndPoint()).thenReturn(brokerEndPoint)
 
     val log: UnifiedLog = mock(classOf[UnifiedLog])
-    val records = MemoryRecords.withRecords(CompressionType.NONE,
+    val records = MemoryRecords.withRecords(Compression.NONE,
       new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))
     when(log.maybeUpdateHighWatermark(hw = 0)).thenReturn(None)
 

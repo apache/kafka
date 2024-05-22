@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.Timer;
 
 import java.util.Map;
 
@@ -28,7 +27,7 @@ import java.util.Map;
  */
 public class SyncCommitEvent extends CommitEvent {
 
-    public SyncCommitEvent(final Map<TopicPartition, OffsetAndMetadata> offsets, final Timer timer) {
-        super(Type.COMMIT_SYNC, offsets, timer);
+    public SyncCommitEvent(final Map<TopicPartition, OffsetAndMetadata> offsets, final long deadlineMs) {
+        super(Type.COMMIT_SYNC, offsets, deadlineMs);
     }
 }
