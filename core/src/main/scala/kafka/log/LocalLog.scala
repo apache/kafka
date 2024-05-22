@@ -372,13 +372,7 @@ class LocalLog(@volatile private var _dir: File,
 
       if (startOffset == maxOffsetMetadata.messageOffset) {
         emptyFetchDataInfo(maxOffsetMetadata, includeAbortedTxns)
-      } else if (startOffset > maxOffsetMetadata.messageOffset ||
-        maxOffsetMetadata.messageOffsetOnly() ||
-        maxOffsetMetadata.segmentBaseOffset < segmentOpt.get.baseOffset) {
-        // We need to be careful before reading the segment as `maxOffsetMetadata` may not be a complete metadata:
-        // 1. If maxOffsetMetadata is message-offset-only, then return empty fetchDataInfo since
-        // maxOffsetMetadata.offset is not on local log segments.
-        // 2. If maxOffsetMetadata.segmentBaseOffset is smaller than segment.baseOffset, then return empty fetchDataInfo.
+      } else if (startOffset > maxOffsetMetadata.messageOffset) {
         emptyFetchDataInfo(convertToOffsetMetadataOrThrow(startOffset), includeAbortedTxns)
       } else {
         // Do the read on the segment with a base offset less than the target offset
@@ -389,10 +383,17 @@ class LocalLog(@volatile private var _dir: File,
           val segment = segmentOpt.get
           val baseOffset = segment.baseOffset
 
+          // 1. If `maxOffsetMetadata#segmentBaseOffset < segment#baseOffset`, then return maxPosition as -1.
+          // 2. Use the max-offset position if it is on this segment; otherwise, the segment size is the limit.
+          // 3. When maxOffsetMetadata is message-offset-only, then we don't know the relativePositionInSegment so
+          //    return maxPosition as -1 to avoid reading beyond the max-offset
           val maxPosition =
-          // Use the max offset position if it is on this segment; otherwise, the segment size is the limit.
-            if (maxOffsetMetadata.segmentBaseOffset == segment.baseOffset) maxOffsetMetadata.relativePositionInSegment
-            else segment.size
+            if (segment.baseOffset < maxOffsetMetadata.segmentBaseOffset)
+              segment.size
+            else if (segment.baseOffset == maxOffsetMetadata.segmentBaseOffset && !maxOffsetMetadata.messageOffsetOnly())
+              maxOffsetMetadata.relativePositionInSegment
+            else
+              -1
 
           fetchDataInfo = segment.read(startOffset, maxLength, maxPosition, minOneMessage)
           if (fetchDataInfo != null) {
