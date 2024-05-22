@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.internals.Topic;
@@ -186,7 +187,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     .withCoordinatorRuntimeMetrics(coordinatorRuntimeMetrics)
                     .withCoordinatorMetrics(groupCoordinatorMetrics)
                     .withSerializer(new CoordinatorRecordSerde())
-                    .withCompressionType(config.compressionType)
+                    .withCompression(Compression.of(config.compressionType).build())
                     .build();
 
             return new GroupCoordinatorService(

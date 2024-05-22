@@ -31,6 +31,7 @@ import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.common._
 import org.apache.kafka.common.acl.AclOperation
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER}
 import org.apache.kafka.common.errors.{ClusterAuthorizationException, UnsupportedVersionException}
@@ -2474,7 +2475,7 @@ class KafkaApisTest extends Logging {
             .setName(tp.topic).setPartitionData(Collections.singletonList(
             new ProduceRequestData.PartitionProduceData()
               .setIndex(tp.partition)
-              .setRecords(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("test".getBytes))))))
+              .setRecords(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("test".getBytes))))))
             .iterator))
         .setAcks(1.toShort)
         .setTimeoutMs(5000))
@@ -2536,7 +2537,7 @@ class KafkaApisTest extends Logging {
             .setName(tp.topic).setPartitionData(Collections.singletonList(
             new ProduceRequestData.PartitionProduceData()
               .setIndex(tp.partition)
-              .setRecords(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("test".getBytes))))))
+              .setRecords(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("test".getBytes))))))
             .iterator))
         .setAcks(1.toShort)
         .setTimeoutMs(5000))
@@ -2601,7 +2602,7 @@ class KafkaApisTest extends Logging {
             .setName(tp.topic).setPartitionData(Collections.singletonList(
             new ProduceRequestData.PartitionProduceData()
               .setIndex(tp.partition)
-              .setRecords(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("test".getBytes))))))
+              .setRecords(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("test".getBytes))))))
             .iterator))
         .setAcks(1.toShort)
         .setTimeoutMs(5000))
@@ -2665,7 +2666,7 @@ class KafkaApisTest extends Logging {
             .setName(tp.topic).setPartitionData(Collections.singletonList(
             new ProduceRequestData.PartitionProduceData()
               .setIndex(tp.partition)
-              .setRecords(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("test".getBytes))))))
+              .setRecords(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("test".getBytes))))))
             .iterator))
         .setAcks(1.toShort)
         .setTimeoutMs(5000))
@@ -2728,7 +2729,7 @@ class KafkaApisTest extends Logging {
             .setName(tp.topic).setPartitionData(Collections.singletonList(
             new ProduceRequestData.PartitionProduceData()
               .setIndex(tp.partition)
-              .setRecords(MemoryRecords.withTransactionalRecords(CompressionType.NONE, 0, 0, 0, new SimpleRecord("test".getBytes))))))
+              .setRecords(MemoryRecords.withTransactionalRecords(Compression.NONE, 0, 0, 0, new SimpleRecord("test".getBytes))))))
             .iterator))
         .setAcks(1.toShort)
         .setTransactionalId(transactionalId)
@@ -4203,7 +4204,7 @@ class KafkaApisTest extends Logging {
       any[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]()
     )).thenAnswer(invocation => {
       val callback = invocation.getArgument(3).asInstanceOf[Seq[(TopicIdPartition, FetchPartitionData)] => Unit]
-      val records = MemoryRecords.withRecords(CompressionType.NONE,
+      val records = MemoryRecords.withRecords(Compression.NONE,
         new SimpleRecord(timestamp, "foo".getBytes(StandardCharsets.UTF_8)))
       callback(Seq(tidp -> new FetchPartitionData(Errors.NONE, hw, 0, records,
         Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false)))
@@ -5566,7 +5567,7 @@ class KafkaApisTest extends Logging {
     val fetchFromFollower = buildRequest(new FetchRequest.Builder(
       ApiKeys.FETCH.oldestVersion(), ApiKeys.FETCH.latestVersion(), 1, 1, 1000, 0, fetchDataBuilder).build())
 
-    val records = MemoryRecords.withRecords(CompressionType.NONE,
+    val records = MemoryRecords.withRecords(Compression.NONE,
       new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))
     when(replicaManager.fetchMessages(
       any[FetchParams],
@@ -6310,7 +6311,7 @@ class KafkaApisTest extends Logging {
             .setHighWatermark(105)
             .setLastStableOffset(105)
             .setLogStartOffset(0)
-            .setRecords(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(100, raw.getBytes(StandardCharsets.UTF_8))))
+            .setRecords(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(100, raw.getBytes(StandardCharsets.UTF_8))))
       }.toMap.asJava)
 
       data.foreach{case (tp, _) =>
