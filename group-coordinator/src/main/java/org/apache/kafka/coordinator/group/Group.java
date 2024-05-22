@@ -88,16 +88,16 @@ public interface Group {
     ListGroupsResponseData.ListedGroup asListedGroup(long committedOffset);
 
     /**
-     * @return The group Id.
+     * @return The group id.
      */
     String groupId();
 
     /**
      * Validates the OffsetCommit request.
      *
-     * @param memberId                      The member Id.
-     * @param groupInstanceId               The group instance Id.
-     * @param generationIdOrMemberEpoch     The generation Id for genetic groups or the member epoch
+     * @param memberId                      The member id.
+     * @param groupInstanceId               The group instance id.
+     * @param generationIdOrMemberEpoch     The generation id for genetic groups or the member epoch
      *                                      for consumer groups.
      * @param isTransactional               Whether the offset commit is transactional or not.
      */
@@ -111,7 +111,7 @@ public interface Group {
     /**
      * Validates the OffsetFetch request.
      *
-     * @param memberId              The member Id for consumer groups.
+     * @param memberId              The member id for consumer groups.
      * @param memberEpoch           The member epoch for consumer groups.
      * @param lastCommittedOffset   The last committed offsets in the timeline.
      */
