@@ -84,6 +84,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         RaftClusterInstance clusterInstance = new RaftClusterInstance(clusterConfig, isCombined);
         return Arrays.asList(
                 (BeforeTestExecutionCallback) context -> {
+                    clusterInstance.format();
                     if (clusterConfig.isAutoStart()) {
                         clusterInstance.start();
                     }
