@@ -40,7 +40,8 @@ public abstract class SampledStat implements MeasurableStat {
 
     public SampledStat(double initialValue) {
         this.initialValue = initialValue;
-        this.samples = new ArrayList<>(3);
+        // keep one extra placeholder for "overlapping sample" (see purgeObsoleteSamples() logic)
+        this.samples = new ArrayList<>(MetricConfig.DEFAULT_NUM_SAMPLES + 1);
     }
 
     @Override
@@ -54,7 +55,7 @@ public abstract class SampledStat implements MeasurableStat {
     }
 
     private Sample advance(MetricConfig config, long timeMs) {
-        // need to keep one extra sample (see purgeObsoleteSamples() logic)
+        // keep one extra placeholder for "overlapping sample" (see purgeObsoleteSamples() logic)
         int maxSamples = config.samples() + 1;
         this.current = (this.current + 1) % maxSamples;
         if (this.current >= samples.size()) {
