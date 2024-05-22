@@ -349,7 +349,7 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
         return formatter;
     }
 
-    private String convertDeprecatedClass(String className) {
+    private static String convertDeprecatedClass(String className) {
         switch (className) {
             case "kafka.tools.DefaultMessageFormatter":
                 System.err.println("WARNING: kafka.tools.DefaultMessageFormatter is deprecated and will be removed in the next major release. " +
