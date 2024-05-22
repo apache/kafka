@@ -212,10 +212,15 @@ class DelayedFetchTest {
     when(replicaManager.isAddingReplica(any(), anyInt())).thenReturn(false)
     expectReadFromReplica(fetchParams, topicIdPartition, fetchStatus.fetchInfo, Errors.NONE)
 
-    assertTrue(delayedFetch.tryComplete())
-    assertTrue(delayedFetch.isCompleted)
-    assertTrue(fetchResultOpt.isDefined)
-    assertEquals(Errors.NONE, fetchResultOpt.get.error)
+    // 1. When `endOffset` is 0, it refers to the truncation case
+    // 2. When `endOffset` is 500, it refers to the normal case
+    val expected = endOffset == 0
+    assertEquals(expected, delayedFetch.tryComplete())
+    assertEquals(expected, delayedFetch.isCompleted)
+    assertEquals(expected, fetchResultOpt.isDefined)
+    if (fetchResultOpt.isDefined) {
+      assertEquals(Errors.NONE, fetchResultOpt.get.error)
+    }
   }
 
   private def buildFollowerFetchParams(

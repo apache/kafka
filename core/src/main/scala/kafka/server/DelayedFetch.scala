@@ -96,11 +96,10 @@ class DelayedFetch(
               debug(s"Satisfying fetch $this since it is fetching later segments of partition $topicIdPartition.")
               return forceComplete()
             } else if (fetchOffset.messageOffset < endOffset.messageOffset) {
-              if (endOffset.messageOffsetOnly() || fetchOffset.messageOffsetOnly()) {
-                // If we don't know the position of the offset on log segments, just pessimistically assume that we
-                // only gained 1 byte when fetchOffset < endOffset, otherwise do nothing. This can happen when the
+              if (fetchOffset.messageOffsetOnly() || endOffset.messageOffsetOnly()) {
+                // If fetchOffset or endOffset is message only, we return empty records when reading from the log.
+                // So, to be consistent, we want to avoid accumulating new bytes in this case. This can happen when the
                 // high-watermark is stale, but should be rare.
-                accumulatedSize += 1
               } else if (fetchOffset.onOlderSegment(endOffset)) {
                 // Case F, this can happen when the fetch operation is falling behind the current segment
                 // or the partition has just rolled a new segment
