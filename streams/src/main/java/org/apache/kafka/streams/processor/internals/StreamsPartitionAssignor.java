@@ -38,6 +38,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.ApplicationState;
+import org.apache.kafka.streams.processor.assignment.TaskInfo;
 import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment;
 import org.apache.kafka.streams.processor.internals.assignment.ApplicationStateImpl;
@@ -52,10 +53,12 @@ import org.apache.kafka.streams.processor.internals.assignment.ClientState;
 import org.apache.kafka.streams.processor.internals.assignment.CopartitionedTopicsEnforcer;
 import org.apache.kafka.streams.processor.internals.assignment.FallbackPriorTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.RackUtils;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
 import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.DefaultTaskInfo;
 import org.apache.kafka.streams.state.HostInfo;
 import org.slf4j.Logger;
 
@@ -82,6 +85,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import static java.util.Collections.unmodifiableSet;
 import static java.util.Map.Entry.comparingByKey;
 import static java.util.UUID.randomUUID;
 import static org.apache.kafka.common.utils.Utils.filterMap;
@@ -133,8 +137,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         private final HostInfo hostInfo;
         private final ClientState state;
         private final SortedSet<String> consumers;
+        private final Optional<String> rackId;
 
-        ClientMetadata(final UUID processId, final String endPoint, final Map<String, String> clientTags) {
+        ClientMetadata(final UUID processId, final String endPoint, final Map<String, String> clientTags, final Optional<String> rackId) {
 
             // get the host info, or null if no endpoint is configured (ie endPoint == null)
             hostInfo = HostInfo.buildFromEndpoint(endPoint);
@@ -144,6 +149,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
             // initialize the client state with client tags
             state = new ClientState(processId, clientTags);
+
+            this.rackId = rackId;
         }
 
         void addConsumer(final String consumerMemberId, final List<TopicPartition> ownedPartitions) {
@@ -162,6 +169,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         public HostInfo hostInfo() {
             return hostInfo;
+        }
+
+        public Optional<String> rackId() {
+            return rackId;
         }
 
         @Override
@@ -355,7 +366,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 futureMetadataVersion = usedVersion;
                 processId = FUTURE_ID;
                 if (!clientMetadataMap.containsKey(FUTURE_ID)) {
-                    clientMetadataMap.put(FUTURE_ID, new ClientMetadata(FUTURE_ID, null, Collections.emptyMap()));
+                    clientMetadataMap.put(FUTURE_ID, new ClientMetadata(FUTURE_ID, null, Collections.emptyMap(), subscription.rackId()));
                 }
             } else {
                 processId = info.processId();
@@ -367,7 +378,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
             // create the new client metadata if necessary
             if (clientMetadata == null) {
-                clientMetadata = new ClientMetadata(info.processId(), info.userEndPoint(), info.clientTags());
+                clientMetadata = new ClientMetadata(info.processId(), info.userEndPoint(), info.clientTags(), subscription.rackId());
                 clientMetadataMap.put(info.processId(), clientMetadata);
             }
 
@@ -474,23 +485,84 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
      *
      * @param clientMetadataMap the map of process id to client metadata used to build an immutable
      *                          {@code ApplicationState}
-     * @param statefulTasks     the set of {@code TaskId} that correspond to all the stateful
-     *                          tasks that need to be reassigned.
      * @return The {@code ApplicationState} needed by the TaskAssigner to compute new task
      *         assignments.
      */
-    private ApplicationState buildApplicationState(final Map<UUID, ClientMetadata> clientMetadataMap,
-                                                   final Set<TaskId> statefulTasks) {
-        final Set<TaskId> statelessTasks = new HashSet<>();
-        for (final Map.Entry<UUID, ClientMetadata> clientEntry : clientMetadataMap.entrySet()) {
-            final ClientState clientState = clientEntry.getValue().state;
-            statelessTasks.addAll(clientState.statelessActiveTasks());
+    private ApplicationState buildApplicationState(final TopologyMetadata topologyMetadata,
+                                                   final Map<UUID, ClientMetadata> clientMetadataMap,
+                                                   final Map<Subtopology, TopicsInfo> topicGroups,
+                                                   final Cluster cluster) {
+        final Map<Subtopology, Set<String>> sourceTopicsByGroup = new HashMap<>();
+        final Map<Subtopology, Set<String>> changelogTopicsByGroup = new HashMap<>();
+        for (final Map.Entry<Subtopology, TopicsInfo> entry : topicGroups.entrySet()) {
+            final Set<String> sourceTopics = entry.getValue().sourceTopics;
+            final Set<String> changelogTopics = entry.getValue().changelogTopics();
+            sourceTopicsByGroup.put(entry.getKey(), sourceTopics);
+            changelogTopicsByGroup.put(entry.getKey(), changelogTopics);
         }
+
+        final Map<TaskId, Set<TopicPartition>> sourcePartitionsForTask =
+            partitionGrouper.partitionGroups(sourceTopicsByGroup, cluster);
+        final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask =
+            partitionGrouper.partitionGroups(changelogTopicsByGroup, cluster);
+
+        if (!sourcePartitionsForTask.keySet().equals(changelogPartitionsForTask.keySet())) {
+            log.error("Partition grouper returned {} tasks for source topics but {} tasks for changelog topics",
+                sourcePartitionsForTask.size(), changelogPartitionsForTask.size());
+            throw new TaskAssignmentException("Partition grouper returned conflicting information about the "
+                                              + "tasks for source topics vs changelog topics.");
+        }
+
+        final Set<TopicPartition> sourceTopicPartitions = new HashSet<>();
+        final Set<TopicPartition> nonSourceChangelogTopicPartitions = new HashSet<>();
+        for (final Map.Entry<TaskId, Set<TopicPartition>> entry : sourcePartitionsForTask.entrySet()) {
+            final TaskId taskId = entry.getKey();
+            final Set<TopicPartition> taskSourcePartitions = entry.getValue();
+            final Set<TopicPartition> taskChangelogPartitions = changelogPartitionsForTask.get(taskId);
+            final Set<TopicPartition> taskNonSourceChangelogPartitions = new HashSet<>(taskChangelogPartitions);
+            taskNonSourceChangelogPartitions.removeAll(taskSourcePartitions);
+
+            sourceTopicPartitions.addAll(taskSourcePartitions);
+            nonSourceChangelogTopicPartitions.addAll(taskNonSourceChangelogPartitions);
+        }
+
+        final Map<TopicPartition, Set<String>> racksForSourcePartitions = RackUtils.getRacksForTopicPartition(
+            cluster, internalTopicManager, sourceTopicPartitions, false);
+        final Map<TopicPartition, Set<String>> racksForChangelogPartitions = RackUtils.getRacksForTopicPartition(
+            cluster, internalTopicManager, nonSourceChangelogTopicPartitions, true);
+
+        final Set<TaskId> logicalTaskIds = unmodifiableSet(sourcePartitionsForTask.keySet());
+        final Set<TaskInfo> logicalTasks = logicalTaskIds.stream().map(taskId -> {
+            final Set<String> stateStoreNames = topologyMetadata
+                .stateStoreNameToSourceTopicsForTopology(taskId.topologyName())
+                .keySet();
+            final Set<TopicPartition> sourcePartitions = sourcePartitionsForTask.get(taskId);
+            final Set<TopicPartition> changelogPartitions = changelogPartitionsForTask.get(taskId);
+            final Map<TopicPartition, Set<String>> racksForTaskPartition = new HashMap<>();
+            sourcePartitions.forEach(topicPartition -> {
+                racksForTaskPartition.put(topicPartition, racksForSourcePartitions.get(topicPartition));
+            });
+            changelogPartitions.forEach(topicPartition -> {
+                if (racksForSourcePartitions.containsKey(topicPartition)) {
+                    racksForTaskPartition.put(topicPartition, racksForSourcePartitions.get(topicPartition));
+                } else {
+                    racksForTaskPartition.put(topicPartition, racksForChangelogPartitions.get(topicPartition));
+                }
+            });
+
+            return new DefaultTaskInfo(
+                taskId,
+                !stateStoreNames.isEmpty(),
+                racksForTaskPartition,
+                stateStoreNames,
+                sourcePartitions,
+                changelogPartitions
+            );
+        }).collect(Collectors.toSet());
 
         return new ApplicationStateImpl(
             assignmentConfigs.toPublicAssignmentConfigs(),
-            statefulTasks,
-            statelessTasks,
+            logicalTasks,
             clientMetadataMap
         );
     }
