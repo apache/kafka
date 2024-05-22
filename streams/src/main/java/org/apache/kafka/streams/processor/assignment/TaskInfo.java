@@ -52,6 +52,12 @@ public interface TaskInfo {
 
     /**
      *
+     * @return The topic partitions in use by this task.
+     */
+    Set<TaskTopicPartition> topicPartitions();
+
+    /**
+     *
      * @return the set of source topic partitions. This set will include both changelog and non-changelog
      *         topic partitions.
      */
