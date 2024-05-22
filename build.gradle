@@ -341,7 +341,7 @@ subprojects {
                 artifact task
             }
 
-            artifactId = project.extensions.findByType(BasePluginExtension)?.archivesName?.get()
+            artifactId = base.archivesName.get()
             pom {
               name = 'Apache Kafka'
               url = 'https://kafka.apache.org'
