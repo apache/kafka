@@ -35,10 +35,10 @@ class OffsetSyncWriter implements AutoCloseable {
 
     private final Map<TopicPartition, OffsetSync> delayedOffsetSyncs = new LinkedHashMap<>();
     private final Map<TopicPartition, OffsetSync> pendingOffsetSyncs = new LinkedHashMap<>();
-    private Semaphore outstandingOffsetSyncs;
-    private KafkaProducer<byte[], byte[]> offsetProducer;
-    private String offsetSyncsTopic;
-    protected long maxOffsetLag;
+    private final Semaphore outstandingOffsetSyncs;
+    private final KafkaProducer<byte[], byte[]> offsetProducer;
+    private final String offsetSyncsTopic;
+    protected final long maxOffsetLag;
 
     public OffsetSyncWriter(MirrorSourceTaskConfig config) {
         outstandingOffsetSyncs = new Semaphore(MAX_OUTSTANDING_OFFSET_SYNCS);
@@ -99,10 +99,6 @@ class OffsetSyncWriter implements AutoCloseable {
             sendOffsetSync(pendingOffsetSync);
             log.trace("Dispatched offset sync for {}", pendingOffsetSync.topicPartition());
         }
-    }
-
-    protected void clearPendingOffsetSyncs() {
-        pendingOffsetSyncs.clear();
     }
 
     protected synchronized void promoteDelayedOffsetSyncs() {

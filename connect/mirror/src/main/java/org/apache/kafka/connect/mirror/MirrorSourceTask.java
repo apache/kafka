@@ -73,7 +73,6 @@ public class MirrorSourceTask extends SourceTask {
         consumerAccess = new Semaphore(1);
         if (emitOffsetSyncEnabled) {
             this.offsetSyncWriter = new OffsetSyncWriter(producer, offsetSyncsTopic, outstandingOffsetSyncs, maxOffsetLag);
-            offsetSyncWriter.clearPendingOffsetSyncs();
         }
         this.emitOffsetSyncEnabled = emitOffsetSyncEnabled;
         this.partitionStates = partitionStates;
@@ -91,7 +90,6 @@ public class MirrorSourceTask extends SourceTask {
         partitionStates = new HashMap<>();
         if (this.emitOffsetSyncEnabled) {
             offsetSyncWriter = new OffsetSyncWriter(config);
-            offsetSyncWriter.clearPendingOffsetSyncs();
         }
         consumer = MirrorUtils.newConsumer(config.sourceConsumerConfig("replication-consumer"));
         Set<TopicPartition> taskTopicPartitions = config.taskTopicPartitions();
@@ -103,8 +101,8 @@ public class MirrorSourceTask extends SourceTask {
 
     @Override
     public void commit() {
-        // Handle delayed and pending offset syncs only when emit.offset-syncs.enabled set to true
-        if (emitOffsetSyncEnabled) {
+        // Handle delayed and pending offset syncs only when offsetSyncWriter is available
+        if (offsetSyncWriter != null) {
             // Offset syncs which were not emitted immediately due to their offset spacing should be sent periodically
             // This ensures that low-volume topics aren't left with persistent lag at the end of the topic
             offsetSyncWriter.promoteDelayedOffsetSyncs();
@@ -191,8 +189,8 @@ public class MirrorSourceTask extends SourceTask {
         long latency = System.currentTimeMillis() - record.timestamp();
         metrics.countRecord(topicPartition);
         metrics.replicationLatency(topicPartition, latency);
-        // Queue offset syncs only when emit.offset-syncs.enabled set to true
-        if (emitOffsetSyncEnabled) {
+        // Queue offset syncs only when offsetWriter is available
+        if (offsetSyncWriter != null) {
             TopicPartition sourceTopicPartition = MirrorUtils.unwrapPartition(record.sourcePartition());
             long upstreamOffset = MirrorUtils.unwrapOffset(record.sourceOffset());
             long downstreamOffset = metadata.offset();
