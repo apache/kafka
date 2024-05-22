@@ -1546,7 +1546,7 @@ public class KafkaRaftClientTest {
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
     }
 
-    // TODO: fix this after I better under the error
+    // TODO: fix this after I better understand the error
     @Test
     public void testObserverHandleRetryFetchResponse() throws Exception {
         int localId = 0;
@@ -1588,7 +1588,6 @@ public class KafkaRaftClientTest {
 
         context.client.poll();
         context.assertElectedLeader(epoch, leaderId);
-        assertTrue(false);
     }
 
     @Test

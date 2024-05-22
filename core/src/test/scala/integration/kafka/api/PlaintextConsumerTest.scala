@@ -28,19 +28,13 @@ import org.apache.kafka.common.record.{CompressionType, TimestampType}
 import org.apache.kafka.common.serialization._
 import org.apache.kafka.common.{KafkaException, MetricName, TopicPartition}
 import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor}
-import org.apache.log4j.Level
-import org.apache.log4j.LogManager
-import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, MethodSource}
 
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 import scala.jdk.CollectionConverters._
-
-// TODO: change logging so that we log at info and enable request logging
 
 @Timeout(600)
 class PlaintextConsumerTest extends BaseConsumerTest {
@@ -936,17 +930,5 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     awaitRebalance(consumer, listener)
     assertEquals(1, listener.callsToAssigned)
     assertEquals(0, listener.callsToRevoked)
-  }
-}
-
-object PlaintextConsumerTest {
-  @BeforeAll
-  def beforeAll() {
-    LogManager.getLogger("org.apache.kafka.raft").setLevel(Level.TRACE)
-  }
-
-  @AfterAll
-  def afterAll() {
-    LogManager.getLogger("org.apache.kafka.raft").setLevel(Level.ERROR)
   }
 }

@@ -253,7 +253,7 @@ object StorageTool extends Logging {
            .setServerKey(formatter.serverKey(saltedPassword))
            .setIterations(iterations)
     } catch {
-      case e: Throwable => 
+      case e: Throwable =>
         throw new TerseFailure(s"Error attempting to create UserScramCredentialRecord: ${e.getMessage}")
     }
     myrecord
@@ -433,7 +433,7 @@ object StorageTool extends Logging {
     metaPropertiesEnsemble.verify(metaProperties.clusterId(), metaProperties.nodeId(),
       util.EnumSet.noneOf(classOf[VerificationFlag]))
 
-    System.out.println(s"metaPropertiesEnsemble=$metaPropertiesEnsemble")
+    stream.println(s"metaPropertiesEnsemble=$metaPropertiesEnsemble")
     val copier = new MetaPropertiesEnsemble.Copier(metaPropertiesEnsemble)
     if (!(ignoreFormatted || copier.logDirProps().isEmpty)) {
       val firstLogDir = copier.logDirProps().keySet().iterator().next()
