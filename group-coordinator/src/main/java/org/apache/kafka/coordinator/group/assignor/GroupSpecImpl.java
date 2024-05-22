@@ -55,6 +55,7 @@ public class GroupSpecImpl implements GroupSpec {
     /**
      * {@inheritDoc}
      */
+    @Override
     public Map<String, AssignmentMemberSpec> members() {
         return members;
     }
@@ -62,6 +63,7 @@ public class GroupSpecImpl implements GroupSpec {
     /**
      * {@inheritDoc}
      */
+    @Override
     public SubscriptionType subscriptionType() {
         return subscriptionType;
     }
@@ -96,8 +98,9 @@ public class GroupSpecImpl implements GroupSpec {
         return result;
     }
 
+    @Override
     public String toString() {
-        return "GroupSpec(members=" + members +
+        return "GroupSpecImpl(members=" + members +
             ", subscriptionType=" + subscriptionType.toString() +
             ", invertedTargetAssignment=" + invertedTargetAssignment +
             ')';

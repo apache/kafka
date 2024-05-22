@@ -814,6 +814,9 @@ public class ConsumerGroupTest {
         ));
         consumerGroup.updateTargetAssignment(memberId1, initialAssignment);
 
+        // Verify that partition 0 is assigned to member1.
+        assertEquals(memberId1, consumerGroup.invertedTargetAssignment().get(topicId).get(0));
+
         // New assignment for member1;
         Assignment newAssignment = new Assignment(Collections.singletonMap(
             topicId,
