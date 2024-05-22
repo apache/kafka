@@ -39,7 +39,7 @@ public enum Features {
      *
      * See {@link TestFeatureVersion} as an example. See {@link FeatureVersion} when implementing a new feature.
      */
-    TEST_VERSION("test.feature.version", TestFeatureVersion.values(), false);
+    TEST_VERSION("test.feature.version", TestFeatureVersion.values(), null);
 
     public static final Features[] FEATURES;
     public static final List<Features> PRODUCTION_FEATURES;
@@ -47,14 +47,14 @@ public enum Features {
     public static final List<String> PRODUCTION_FEATURE_NAMES;
     private final String name;
     private final FeatureVersion[] featureVersions;
-    private final boolean usedInProduction;
+    private final FeatureVersion latestProductionVersion;
 
     Features(String name,
              FeatureVersion[] featureVersions,
-             boolean usedInProduction) {
+             FeatureVersion latestProductionVersion) {
         this.name = name;
         this.featureVersions = featureVersions;
-        this.usedInProduction = usedInProduction;
+        this.latestProductionVersion = latestProductionVersion;
     }
 
     static {
@@ -62,7 +62,7 @@ public enum Features {
         FEATURES = Arrays.copyOf(enumValues, enumValues.length);
 
         PRODUCTION_FEATURES = Arrays.stream(FEATURES).filter(feature ->
-                feature.usedInProduction).collect(Collectors.toList());
+                feature.latestProductionVersion != null).collect(Collectors.toList());
         PRODUCTION_FEATURE_NAMES = PRODUCTION_FEATURES.stream().map(feature ->
                 feature.name).collect(Collectors.toList());
     }
@@ -144,5 +144,9 @@ public enum Features {
      */
     public static Map<String, Short> featureImplsToMap(List<FeatureVersion> features) {
         return features.stream().collect(Collectors.toMap(FeatureVersion::featureName, FeatureVersion::featureLevel));
+    }
+
+    public FeatureVersion latestProductionVersion() {
+        return latestProductionVersion;
     }
 }

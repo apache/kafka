@@ -85,7 +85,7 @@ object BrokerFeatures extends Logging {
             MetadataVersion.latestProduction.featureLevel
           }))
     org.apache.kafka.server.common.Features.PRODUCTION_FEATURES.forEach { feature =>
-        features.put(feature.featureName, new SupportedVersionRange(0, feature.defaultValue(MetadataVersion.LATEST_PRODUCTION)))
+        features.put(feature.featureName, new SupportedVersionRange(0, feature.latestProductionVersion().featureLevel()))
       }
     Features.supportedFeatures(features)
   }
