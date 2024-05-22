@@ -118,7 +118,7 @@ public class RecordCollectorImpl implements RecordCollector {
     }
 
     /**
-     * @throws StreamsException      fatal error that should cause the thread to die
+     * @throws StreamsException fatal error that should cause the thread to die
      * @throws TaskMigratedException recoverable error that would cause the task to be removed
      */
     @Override

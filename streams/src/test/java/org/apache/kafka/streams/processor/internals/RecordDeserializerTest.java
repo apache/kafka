@@ -41,30 +41,30 @@ public class RecordDeserializerTest {
 
     private final RecordHeaders headers = new RecordHeaders(new Header[]{new RecordHeader("key", "value".getBytes())});
     private final ConsumerRecord<byte[], byte[]> rawRecord = new ConsumerRecord<>("topic",
-            1,
-            1,
-            10,
-            TimestampType.LOG_APPEND_TIME,
-            3,
-            5,
-            new byte[0],
-            new byte[0],
-            headers,
-            Optional.empty());
+        1,
+        1,
+        10,
+        TimestampType.LOG_APPEND_TIME,
+        3,
+        5,
+        new byte[0],
+        new byte[0],
+        headers,
+        Optional.empty());
 
     private final InternalProcessorContext<Void, Void> context = new InternalMockProcessorContext<>();
 
     @Test
     public void shouldReturnConsumerRecordWithDeserializedValueWhenNoExceptions() {
         final RecordDeserializer recordDeserializer = new RecordDeserializer(
-                new TheSourceNode(
-                        false,
-                        false,
-                        "key", "value"
-                ),
-                null,
-                new LogContext(),
-                new Metrics().sensor("dropped-records")
+            new TheSourceNode(
+                false,
+                false,
+                "key", "value"
+            ),
+            null,
+            new LogContext(),
+            new Metrics().sensor("dropped-records")
         );
         final ConsumerRecord<Object, Object> record = recordDeserializer.deserialize(null, rawRecord);
         assertEquals(rawRecord.topic(), record.topic());
@@ -80,14 +80,14 @@ public class RecordDeserializerTest {
     @Test
     public void shouldThrowExceptionWithKeyDeserializationAndFail() {
         final RecordDeserializer recordDeserializer = new RecordDeserializer(
-                new TheSourceNode(
-                        true,
-                        false,
-                        "key", "value"
-                ),
-                new LogAndFailExceptionHandler(),
-                new LogContext(),
-                new Metrics().sensor("dropped-records")
+            new TheSourceNode(
+                true,
+                false,
+                "key", "value"
+            ),
+            new LogAndFailExceptionHandler(),
+            new LogContext(),
+            new Metrics().sensor("dropped-records")
         );
         final StreamsException e = assertThrows(StreamsException.class, () -> recordDeserializer.deserialize(context, rawRecord));
         assertEquals(e.getMessage(), "Deserialization exception handler is set to fail upon a deserialization error. If you would rather have the streaming pipeline continue after a deserialization error, please set the default.deserialization.exception.handler appropriately.");
@@ -96,14 +96,14 @@ public class RecordDeserializerTest {
     @Test
     public void shouldThrowExceptionWithValueDeserializationAndFail() {
         final RecordDeserializer recordDeserializer = new RecordDeserializer(
-                new TheSourceNode(
-                        false,
-                        true,
-                        "key", "value"
-                ),
-                new LogAndFailExceptionHandler(),
-                new LogContext(),
-                new Metrics().sensor("dropped-records")
+            new TheSourceNode(
+                false,
+                true,
+                "key", "value"
+            ),
+            new LogAndFailExceptionHandler(),
+            new LogContext(),
+            new Metrics().sensor("dropped-records")
         );
         final StreamsException e = assertThrows(StreamsException.class, () -> recordDeserializer.deserialize(context, rawRecord));
         assertEquals(e.getMessage(), "Deserialization exception handler is set to fail upon a deserialization error. If you would rather have the streaming pipeline continue after a deserialization error, please set the default.deserialization.exception.handler appropriately.");
@@ -112,14 +112,14 @@ public class RecordDeserializerTest {
     @Test
     public void shouldThrowExceptionWithKeyDeserializationAndContinue() {
         final RecordDeserializer recordDeserializer = new RecordDeserializer(
-                new TheSourceNode(
-                        true,
-                        false,
-                        "key", "value"
-                ),
-                new LogAndContinueExceptionHandler(),
-                new LogContext(),
-                new Metrics().sensor("dropped-records")
+            new TheSourceNode(
+                true,
+                false,
+                "key", "value"
+            ),
+            new LogAndContinueExceptionHandler(),
+            new LogContext(),
+            new Metrics().sensor("dropped-records")
         );
         final ConsumerRecord<Object, Object> record = recordDeserializer.deserialize(context, rawRecord);
         assertNull(record);
@@ -128,14 +128,14 @@ public class RecordDeserializerTest {
     @Test
     public void shouldThrowExceptionWithValueDeserializationAndContinue() {
         final RecordDeserializer recordDeserializer = new RecordDeserializer(
-                new TheSourceNode(
-                        false,
-                        true,
-                        "key", "value"
-                ),
-                new LogAndContinueExceptionHandler(),
-                new LogContext(),
-                new Metrics().sensor("dropped-records")
+            new TheSourceNode(
+                false,
+                true,
+                "key", "value"
+            ),
+            new LogAndContinueExceptionHandler(),
+            new LogContext(),
+            new Metrics().sensor("dropped-records")
         );
         final ConsumerRecord<Object, Object> record = recordDeserializer.deserialize(context, rawRecord);
         assertNull(record);
