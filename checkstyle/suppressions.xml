@@ -280,7 +280,7 @@
     <suppress checks="NPathComplexity"
               files="(DefaultMessageFormatter|ProducerPerformance|StreamsResetter|Agent|TransactionalMessageCopier|ReplicaVerificationTool).java"/>
     <suppress checks="ImportControl"
-              files="(SignalLogger|DefaultMessageFormatter|LoggingMessageFormatter|NoOpMessageFormatter).java"/>
+              files="SignalLogger.java"/>
     <suppress checks="IllegalImport"
               files="SignalLogger.java"/>
     <suppress checks="ParameterNumber"
