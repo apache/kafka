@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group.assignor;
 import org.apache.kafka.common.Uuid;
 
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The group metadata specifications required to compute the target assignment.
@@ -39,4 +40,12 @@ public interface GroupSpec {
      *         False, otherwise.
      */
     boolean isPartitionAssigned(Uuid topicId, int partitionId);
+
+    /**
+     * Gets the current assignment for a member.
+     *
+     * @param memberId          The member Id.
+     * @return A map of topic Ids to sets of partition numbers.
+     */
+    Map<Uuid, Set<Integer>> currentMemberAssignment(String memberId);
 }

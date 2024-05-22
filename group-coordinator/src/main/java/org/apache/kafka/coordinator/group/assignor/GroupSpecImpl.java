@@ -18,8 +18,10 @@ package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
 
+import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * The assignment specification for a consumer group.
@@ -36,6 +38,11 @@ public class GroupSpecImpl implements GroupSpec {
     private final SubscriptionType subscriptionType;
 
     /**
+     * Partitions assigned keyed by topicId.
+     */
+    private final Map<String, Map<Uuid, Set<Integer>>> assignedPartitions;
+
+    /**
      * Reverse lookup map representing topic partitions with
      * their current member assignments.
      */
@@ -44,6 +51,7 @@ public class GroupSpecImpl implements GroupSpec {
     public GroupSpecImpl(
         Map<String, AssignmentMemberSpec> members,
         SubscriptionType subscriptionType,
+        Map<String, Map<Uuid, Set<Integer>>> assignedPartitions,
         Map<Uuid, Map<Integer, String>> invertedTargetAssignment
     ) {
         Objects.requireNonNull(members);
@@ -51,6 +59,7 @@ public class GroupSpecImpl implements GroupSpec {
         Objects.requireNonNull(invertedTargetAssignment);
         this.members = members;
         this.subscriptionType = subscriptionType;
+        this.assignedPartitions = assignedPartitions;
         this.invertedTargetAssignment = invertedTargetAssignment;
     }
 
@@ -82,6 +91,14 @@ public class GroupSpecImpl implements GroupSpec {
         return partitionMap.containsKey(partitionId);
     }
 
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Map<Uuid, Set<Integer>> currentMemberAssignment(String memberId) {
+        return assignedPartitions.getOrDefault(memberId, Collections.emptyMap());
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -89,14 +106,16 @@ public class GroupSpecImpl implements GroupSpec {
         GroupSpecImpl that = (GroupSpecImpl) o;
         return subscriptionType == that.subscriptionType &&
             members.equals(that.members) &&
+            assignedPartitions.equals(that.assignedPartitions) &&
             invertedTargetAssignment.equals(that.invertedTargetAssignment);
     }
 
     @Override
     public int hashCode() {
         int result = members.hashCode();
-        result = 31 * result + subscriptionType.hashCode();
-        result = 31 * result + invertedTargetAssignment.hashCode();
+            result = 31 * result + subscriptionType.hashCode();
+            result = 31 * result + assignedPartitions.hashCode();
+            result = 31 * result + invertedTargetAssignment.hashCode();
         return result;
     }
 
@@ -104,6 +123,7 @@ public class GroupSpecImpl implements GroupSpec {
     public String toString() {
         return "GroupSpecImpl(members=" + members +
             ", subscriptionType=" + subscriptionType +
+            ", assignedPartitions=" + assignedPartitions +
             ", invertedTargetAssignment=" + invertedTargetAssignment +
             ')';
     }
