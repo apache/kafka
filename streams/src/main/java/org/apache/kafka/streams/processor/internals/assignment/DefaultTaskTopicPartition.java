@@ -39,6 +39,7 @@ public class DefaultTaskTopicPartition implements TaskTopicPartition {
     private final boolean isChangelogTopic;
 
     private Optional<Set<String>> rackIds;
+  
 
     public DefaultTaskTopicPartition(final TopicPartition topicPartition,
                                      final boolean isSourceTopic,
