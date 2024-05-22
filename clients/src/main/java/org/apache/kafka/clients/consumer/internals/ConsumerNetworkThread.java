@@ -311,6 +311,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         } finally {
             sendUnsentRequests(timer);
             applicationEventReaper.reap(applicationEventQueue);
+
             closeQuietly(requestManagers, "request managers");
             closeQuietly(networkClientDelegate, "network client delegate");
             log.debug("Closed the consumer network thread");
