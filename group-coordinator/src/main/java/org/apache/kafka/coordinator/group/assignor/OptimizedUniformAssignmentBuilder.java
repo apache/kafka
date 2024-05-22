@@ -48,6 +48,7 @@ import java.util.Set;
 public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignmentBuilder {
     private static final Logger LOG = LoggerFactory.getLogger(OptimizedUniformAssignmentBuilder.class);
 
+    // TODO: Handle emptyMap too.
     private static final Class<?> UNMODIFIALBE_MAP_CLASS = Collections.unmodifiableMap(new HashMap<>()).getClass();
 
     /**
@@ -197,6 +198,8 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
     }
 
     private void assignRemainingPartitions() {
+        Iterator<TopicIdPartition> it = unassignedPartitions.iterator();
+
         for (Map.Entry<String, Integer> unfilledMemberEntry : potentiallyUnfilledMembers.entrySet()) {
             String memberId = unfilledMemberEntry.getKey();
             int remaining = unfilledMemberEntry.getValue();
@@ -207,7 +210,6 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
                 targetAssignment.put(memberId, new MemberAssignment(newAssignment));
             }
 
-            Iterator<TopicIdPartition> it = unassignedPartitions.iterator();
             for (int i = 0; i < remaining && it.hasNext(); i++) {
                 TopicIdPartition unassignedTopicIdPartition = it.next();
                 it.remove();

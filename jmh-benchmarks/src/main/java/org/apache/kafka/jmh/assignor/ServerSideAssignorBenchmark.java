@@ -217,7 +217,7 @@ public class ServerSideAssignorBenchmark {
             Optional.empty(),
             rackId,
             subscribedTopicIds,
-            Collections.emptyMap()
+            Collections.unmodifiableMap(Collections.emptyMap())
         ));
     }
 
@@ -260,7 +260,7 @@ public class ServerSideAssignorBenchmark {
             Optional.empty(),
             rackId,
             subscribedTopicIdsForNewMember,
-            Collections.emptyMap()
+            Collections.unmodifiableMap(Collections.emptyMap())
         ));
 
         assignmentSpec = new AssignmentSpec(updatedMembers, subscriptionType);

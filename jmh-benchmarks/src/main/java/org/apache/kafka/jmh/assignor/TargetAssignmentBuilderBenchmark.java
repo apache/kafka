@@ -183,7 +183,7 @@ public class TargetAssignmentBuilderBenchmark {
                 Optional.empty(),
                 Optional.empty(),
                 allTopicIds,
-                Collections.emptyMap()
+                Collections.unmodifiableMap(Collections.emptyMap())
             ));
         }
         assignmentSpec = new AssignmentSpec(members, HOMOGENEOUS);
