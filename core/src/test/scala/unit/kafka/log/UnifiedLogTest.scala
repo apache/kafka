@@ -3246,7 +3246,7 @@ class UnifiedLogTest {
 
     val readInfo = segment.read(offsetMetadata.messageOffset,
       2048,
-      segment.size,
+      Optional.of(segment.size),
       false)
 
     if (offsetMetadata.relativePositionInSegment < segment.size)

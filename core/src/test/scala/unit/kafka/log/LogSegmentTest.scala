@@ -146,7 +146,7 @@ class LogSegmentTest {
 
   @Test
   def testReadWhenNoMaxPosition(): Unit = {
-    val maxPosition = -1
+    val maxPosition: Optional[java.lang.Long] = Optional.empty()
     val maxSize = 1
     val seg = createSegment(40)
     val ms = records(50, "hello", "there")
@@ -360,7 +360,7 @@ class LogSegmentTest {
     writeNonsenseToFile(indexFile, 5, indexFile.length.toInt)
     seg.recover(newProducerStateManager(), Optional.empty())
     for (i <- 0 until 100) {
-      val records = seg.read(i, 1, seg.size(), true).records.records
+      val records = seg.read(i, 1, Optional.of(seg.size()), true).records.records
       assertEquals(i, records.iterator.next().offset)
     }
   }
