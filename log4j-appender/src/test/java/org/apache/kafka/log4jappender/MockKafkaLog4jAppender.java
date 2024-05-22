@@ -25,6 +25,7 @@ import org.apache.log4j.spi.LoggingEvent;
 import java.util.List;
 import java.util.Properties;
 
+@SuppressWarnings("deprecation")
 public class MockKafkaLog4jAppender extends KafkaLog4jAppender {
     private MockProducer<byte[], byte[]> mockProducer =
             new MockProducer<>(false, new MockSerializer(), new MockSerializer());
