@@ -24,6 +24,7 @@ import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
 class MeteredWindowedKeyValueIterator<K, V> implements KeyValueIterator<Windowed<K>, V> {
@@ -35,13 +36,15 @@ class MeteredWindowedKeyValueIterator<K, V> implements KeyValueIterator<Windowed
     private final Function<byte[], V> deserializeValue;
     private final long startNs;
     private final Time time;
+    private final AtomicInteger numOpenIterators;
 
     MeteredWindowedKeyValueIterator(final KeyValueIterator<Windowed<Bytes>, byte[]> iter,
                                     final Sensor sensor,
                                     final StreamsMetrics metrics,
                                     final Function<byte[], K> deserializeKey,
                                     final Function<byte[], V> deserializeValue,
-                                    final Time time) {
+                                    final Time time,
+                                    final AtomicInteger numOpenIterators) {
         this.iter = iter;
         this.sensor = sensor;
         this.metrics = metrics;
@@ -49,6 +52,8 @@ class MeteredWindowedKeyValueIterator<K, V> implements KeyValueIterator<Windowed
         this.deserializeValue = deserializeValue;
         this.startNs = time.nanoseconds();
         this.time = time;
+        this.numOpenIterators = numOpenIterators;
+        numOpenIterators.incrementAndGet();
     }
 
     @Override
@@ -73,6 +78,7 @@ class MeteredWindowedKeyValueIterator<K, V> implements KeyValueIterator<Windowed
             iter.close();
         } finally {
             sensor.record(time.nanoseconds() - startNs);
+            numOpenIterators.decrementAndGet();
         }
     }
 
