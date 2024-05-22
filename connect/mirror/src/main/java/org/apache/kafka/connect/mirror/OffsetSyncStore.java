@@ -108,7 +108,7 @@ public class OffsetSyncStore implements AutoCloseable {
      */
     public void start(boolean initializationMustReadToEnd) {
         this.initializationMustReadToEnd = initializationMustReadToEnd;
-        log.debug("OffsetSyncStore starting - must read to OffsetSync end = ", initializationMustReadToEnd);
+        log.debug("OffsetSyncStore starting - must read to OffsetSync end = {}", initializationMustReadToEnd);
         backingStoreStart();
         readToEnd = true;
     }
