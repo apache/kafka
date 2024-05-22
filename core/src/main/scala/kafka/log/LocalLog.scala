@@ -370,11 +370,11 @@ class LocalLog(@volatile private var _dir: File,
         throw new OffsetOutOfRangeException(s"Received request for offset $startOffset for partition $topicPartition, " +
           s"but we only have log segments upto $endOffset.")
 
-      if (startOffset == maxOffsetMetadata.messageOffset) {
+      if (startOffset == maxOffsetMetadata.messageOffset)
         emptyFetchDataInfo(maxOffsetMetadata, includeAbortedTxns)
-      } else if (startOffset > maxOffsetMetadata.messageOffset) {
+      else if (startOffset > maxOffsetMetadata.messageOffset)
         emptyFetchDataInfo(convertToOffsetMetadataOrThrow(startOffset), includeAbortedTxns)
-      } else {
+      else {
         // Do the read on the segment with a base offset less than the target offset
         // but if that segment doesn't contain any messages with an offset greater than that
         // continue to read from successive segments until we get some messages or we reach the end of the log

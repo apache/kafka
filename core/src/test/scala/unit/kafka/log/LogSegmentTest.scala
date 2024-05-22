@@ -156,22 +156,18 @@ class LogSegmentTest {
       var read = seg.read(48, maxSize, maxPosition, minOneMessage)
       assertEquals(new LogOffsetMetadata(48, 40, 0), read.fetchOffsetMetadata)
       assertTrue(read.records.records().iterator().asScala.isEmpty)
-
       // read at first offset
       read = seg.read(50, maxSize, maxPosition, minOneMessage)
       assertEquals(new LogOffsetMetadata(50, 40, 0), read.fetchOffsetMetadata)
       assertTrue(read.records.records().iterator().asScala.isEmpty)
-
-      // read beyond first offset
+      // read at last offset
       read = seg.read(51, maxSize, maxPosition, minOneMessage)
       assertEquals(new LogOffsetMetadata(51, 40, 39), read.fetchOffsetMetadata)
       assertTrue(read.records.records().iterator().asScala.isEmpty)
-
-      // read at last offset
+      // read at log-end-offset
       read = seg.read(52, maxSize, maxPosition, minOneMessage)
       assertNull(read)
-
-      // read beyond last offset
+      // read beyond log-end-offset
       read = seg.read(53, maxSize, maxPosition, minOneMessage)
       assertNull(read)
     }
