@@ -20,7 +20,7 @@ package kafka.log
 import kafka.common.{OffsetsOutOfOrderException, UnexpectedAppendOffsetException}
 import kafka.log.remote.RemoteLogManager
 import kafka.server.{BrokerTopicStats, KafkaConfig}
-import kafka.utils._
+import kafka.utils.TestUtils
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.{InvalidRecordException, TopicPartition, Uuid}
@@ -39,6 +39,7 @@ import org.apache.kafka.server.util.{KafkaScheduler, MockTime, Scheduler}
 import org.apache.kafka.storage.internals.checkpoint.{LeaderEpochCheckpointFile, PartitionMetadataFile}
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, EpochEntry, FetchIsolation, LogConfig, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, RecordValidationException, VerificationGuard}
+import org.apache.kafka.storage.internals.utils.Throttler
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -1046,7 +1047,7 @@ class UnifiedLogTest {
       ioBufferSize = 64 * 1024,
       maxIoBufferSize = 64 * 1024,
       dupBufferLoadFactor = 0.75,
-      throttler = new Throttler(Double.MaxValue, Long.MaxValue, false, time = mockTime),
+      throttler = new Throttler(Double.MaxValue, Long.MaxValue, "throttler", "entries", mockTime),
       time = mockTime,
       checkDone = _ => {})
 
