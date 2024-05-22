@@ -91,13 +91,13 @@ if __name__ == '__main__':
                         default=False, help="Only run the tests, don't build the image")
     args = parser.parse_args()
     kafka_url = f"https://downloads.apache.org/kafka/{args.kafka_version}/kafka_2.13-{args.kafka_version}.tgz"
-    if args.image_type == "jvm" and (args.build_only or not (args.build_only or args.test_only)):
+    if args.build_only or not (args.build_only or args.test_only):
         if args.kafka_version:
             build_docker_official_image(args.image, args.tag, args.kafka_version, args.image_type)
         else:
             raise ValueError(
                 "--kafka-version is required argument for jvm docker official image image")
-    if args.image_type == "jvm" and (args.test_only or not (args.build_only or args.test_only)):
+    if args.test_only or not (args.build_only or args.test_only):
         run_docker_tests(args.image, args.tag, kafka_url, args.image_type)
 
 
