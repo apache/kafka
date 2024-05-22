@@ -94,7 +94,7 @@ GitRepo: https://github.com/apache/kafka.git
         if version == highest_version:
             tags += ", latest"
 
-        commit = dir_commit(os.path.join(dir,{args.image_type}))
+        commit = dir_commit(os.path.join(dir,args.image_type))
 
         info = f"""
 Tags: {tags}
