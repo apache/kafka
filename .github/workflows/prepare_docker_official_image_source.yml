@@ -26,6 +26,7 @@ on:
       kafka_version:
         description: Kafka version for which the source for docker official image is to be built
         required: true
+        
 jobs:
   build:
     runs-on: ubuntu-latest

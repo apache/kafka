@@ -15,6 +15,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""
+Python script to prepare the hardcoded source folder for the docker official image
+This script is used to prepare the source folder for the docker official image
+
+Usage:
+    prepare_docker_official_image_source.py --help
+        Get detailed description of each option
+
+    Example command:-
+        prepare_docker_official_image_source.py --image-type <image_type> --kafka-version <kafka_version>
+
+        This command will build a directory with the name as <kafka_version> housing the hardcoded static Dockerfile and scripts for 
+        the docker official image, <image_type> as image type (jvm by default), <kafka_version> for the kafka version for which the 
+        image is being built.
+"""
+
 from datetime import date
 import argparse
 from distutils.dir_util import copy_tree
@@ -38,14 +54,12 @@ if __name__ == '__main__':
     parser.add_argument("--kafka-version", "-v", dest="kafka_version",
                         help="Kafka version for which the source for docker official image is to be built")
     args = parser.parse_args()
-    
     kafka_url = f"https://downloads.apache.org/kafka/{args.kafka_version}/kafka_2.13-{args.kafka_version}.tgz"
-    
     current_dir = os.path.dirname(os.path.realpath(__file__))
     new_dir = os.path.join(
         current_dir, f'docker_official_images', args.kafka_version)
     os.makedirs(new_dir, exist_ok=True)
-    copy_tree(f"{current_dir}/jvm", os.path.join(new_dir, args.kafka_version, 'jvm'))
-    copy_tree(f"{current_dir}/resources", os.path.join(new_dir, args.kafka_version, 'jvm/resources'))
+    copy_tree(f"{current_dir}/{args.image_type}", os.path.join(new_dir, args.kafka_version, f"{args.image_type}"))
+    copy_tree(f"{current_dir}/resources", os.path.join(new_dir, args.kafka_version, f"{args.image_type}/resources"))
     remove_args_and_hardcode_values(
-        os.path.join(new_dir, args.kafka_version, 'jvm/Dockerfile'), kafka_url)
+        os.path.join(new_dir, args.kafka_version, f"{args.image_type}/Dockerfile"), kafka_url)

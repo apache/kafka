@@ -20,83 +20,59 @@ Python script to build and test a docker image
 This script is used to generate a test report
 
 Usage:
-    docker_build_test.py --help
+    docker_official_image_build_test.py --help
         Get detailed description of each option
 
     Example command:-
-        docker_build_test.py <image_name> --image-tag <image_tag> --image-type <image_type> --kafka-url <kafka_url>
+        docker_official_image_build_test.py <image_name> --image-tag <image_tag> --image-type <image_type> --kafka-version <kafka_version>
 
         This command will build an image with <image_name> as image name, <image_tag> as image_tag (it will be latest by default),
-        <image_type> as image type (jvm by default), <kafka_url> for the kafka inside the image and run tests on the image.
+        <image_type> as image type (jvm by default), <kafka_version> for the kafka version for which the image is being built, and
+        run tests on the image.
         -b can be passed as additional argument if you just want to build the image.
         -t can be passed if you just want to run tests on the image.
 """
 
-from datetime import date
 import argparse
 from distutils.dir_util import copy_tree
 import shutil
-from test.docker_sanity_test import run_tests
 from common import execute
+from docker_build_test import run_docker_tests
 import tempfile
 import os
 
 
+# Sets executable permissions for all files in the specified directory and its subdirectories.
 def set_executable_permissions(directory):
-    """
-    Sets executable permissions for all files in the specified directory and its subdirectories.
-    """
     for root, _, files in os.walk(directory):
         for file in files:
             path = os.path.join(root, file)
             os.chmod(path, os.stat(path).st_mode | 0o111)
 
 
-def build_jvm(image, tag, kafka_version):
+def build_docker_official_image(image, tag, kafka_version, image_type):
     image = f'{image}:{tag}'
     current_dir = os.path.dirname(os.path.realpath(__file__))
     temp_dir_path = tempfile.mkdtemp()
     directories = [
-        f'{current_dir}/docker_official_images/{kafka_version}/jvm',
-        f'{current_dir}/docker_official_images/{kafka_version}/jvm/resources'
+        f'{current_dir}/docker_official_images/{kafka_version}/{image_type}',
+        f'{current_dir}/docker_official_images/{kafka_version}/{image_type}/resources'
     ]
     for directory in directories:
         set_executable_permissions(directory)
-    copy_tree(f"{current_dir}/docker_official_images/{kafka_version}/jvm",
-              f"{temp_dir_path}/jvm")
+    copy_tree(f"{current_dir}/docker_official_images/{kafka_version}/{image_type}",
+              f"{temp_dir_path}/{image_type}")
     copy_tree(f"{current_dir}/docker_official_images/{kafka_version}/jvm/resources",
-              f"{temp_dir_path}/jvm/resources")
+              f"{temp_dir_path}/{image_type}/resources")
     command = f"docker build -f $DOCKER_FILE -t {image} $DOCKER_DIR"
-    command = command.replace("$DOCKER_FILE", f"{temp_dir_path}/jvm/Dockerfile")
-    command = command.replace("$DOCKER_DIR", f"{temp_dir_path}/jvm")
+    command = command.replace("$DOCKER_FILE", f"{temp_dir_path}/{image_type}/Dockerfile")
+    command = command.replace("$DOCKER_DIR", f"{temp_dir_path}/{image_type}")
     try:
         execute(command.split())
     except:
         raise SystemError("Docker Image Build failed")
     finally:
         shutil.rmtree(temp_dir_path)
-
-
-def run_jvm_tests(image, tag, kafka_url):
-    temp_dir_path = tempfile.mkdtemp()
-    try:
-        current_dir = os.path.dirname(os.path.realpath(__file__))
-        copy_tree(f"{current_dir}/test/fixtures", f"{temp_dir_path}/fixtures")
-        execute(["wget", "-nv", "-O", f"{temp_dir_path}/kafka.tgz", kafka_url])
-        execute(["mkdir", f"{temp_dir_path}/fixtures/kafka"])
-        execute(["tar", "xfz", f"{temp_dir_path}/kafka.tgz", "-C",
-                f"{temp_dir_path}/fixtures/kafka", "--strip-components", "1"])
-        failure_count = run_tests(f"{image}:{tag}", "jvm", temp_dir_path)
-    except:
-        raise SystemError("Failed to run the tests")
-    finally:
-        shutil.rmtree(temp_dir_path)
-    test_report_location_text = f"Test report written to {current_dir}/test/report_jvm.html"
-    if failure_count != 0:
-        raise SystemError(
-            f"{failure_count} tests have failed. {test_report_location_text}")
-    else:
-        print(f"All tests passed. {test_report_location_text}")
 
 
 if __name__ == '__main__':
@@ -114,15 +90,15 @@ if __name__ == '__main__':
     parser.add_argument("--test", "-t", action="store_true", dest="test_only",
                         default=False, help="Only run the tests, don't build the image")
     args = parser.parse_args()
-
     kafka_url = f"https://downloads.apache.org/kafka/{args.kafka_version}/kafka_2.13-{args.kafka_version}.tgz"
-
     if args.image_type == "jvm" and (args.build_only or not (args.build_only or args.test_only)):
         if args.kafka_version:
-            build_jvm(args.image, args.tag, args.kafka_version)
+            build_docker_official_image(args.image, args.tag, args.kafka_version, args.image_type)
         else:
             raise ValueError(
-                "--kafka-version are required argument for jvm docker official image image")
-
+                "--kafka-version is required argument for jvm docker official image image")
     if args.image_type == "jvm" and (args.test_only or not (args.build_only or args.test_only)):
-        run_jvm_tests(args.image, args.tag, kafka_url)
+        run_docker_tests(args.image, args.tag, kafka_url, args.image_type)
+
+
+
