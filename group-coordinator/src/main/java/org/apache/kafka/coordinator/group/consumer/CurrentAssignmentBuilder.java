@@ -28,6 +28,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiFunction;
+import org.apache.kafka.coordinator.group.common.MemberState;
 
 /**
  * The CurrentAssignmentBuilder class encapsulates the reconciliation engine of the

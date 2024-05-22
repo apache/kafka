@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.CoordinatorRecord;
+import org.apache.kafka.coordinator.group.GroupMember;
 import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
 import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
@@ -110,7 +111,7 @@ public class TargetAssignmentBuilder {
     /**
      * The members in the group.
      */
-    private Map<String, ConsumerGroupMember> members = Collections.emptyMap();
+    private Map<String, GroupMember> members = Collections.emptyMap();
 
     /**
      * The subscription metadata.
@@ -131,7 +132,7 @@ public class TargetAssignmentBuilder {
      * The members which have been updated or deleted. Deleted members
      * are signaled by a null value.
      */
-    private final Map<String, ConsumerGroupMember> updatedMembers = new HashMap<>();
+    private final Map<String, GroupMember> updatedMembers = new HashMap<>();
 
     /**
      * The static members in the group.
@@ -162,7 +163,7 @@ public class TargetAssignmentBuilder {
      * @return This object.
      */
     public TargetAssignmentBuilder withMembers(
-        Map<String, ConsumerGroupMember> members
+        Map<String, GroupMember> members
     ) {
         this.members = members;
         return this;
@@ -230,7 +231,7 @@ public class TargetAssignmentBuilder {
      */
     public TargetAssignmentBuilder addOrUpdateMember(
         String memberId,
-        ConsumerGroupMember member
+        GroupMember member
     ) {
         this.updatedMembers.put(memberId, member);
         return this;
@@ -354,7 +355,7 @@ public class TargetAssignmentBuilder {
     }
 
     public static AssignmentMemberSpec createAssignmentMemberSpec(
-        ConsumerGroupMember member,
+        GroupMember member,
         Assignment targetAssignment,
         Map<String, TopicMetadata> subscriptionMetadata
     ) {

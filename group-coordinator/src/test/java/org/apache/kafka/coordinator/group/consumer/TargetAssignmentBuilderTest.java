@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.GroupMember;
 import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
 import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
@@ -55,9 +56,9 @@ public class TargetAssignmentBuilderTest {
         private final String groupId;
         private final int groupEpoch;
         private final PartitionAssignor assignor = mock(PartitionAssignor.class);
-        private final Map<String, ConsumerGroupMember> members = new HashMap<>();
+        private final Map<String, GroupMember> members = new HashMap<>();
         private final Map<String, TopicMetadata> subscriptionMetadata = new HashMap<>();
-        private final Map<String, ConsumerGroupMember> updatedMembers = new HashMap<>();
+        private final Map<String, GroupMember> updatedMembers = new HashMap<>();
         private final Map<String, Assignment> targetAssignment = new HashMap<>();
         private final Map<String, MemberAssignment> memberAssignments = new HashMap<>();
         private final Map<String, String> staticMembers = new HashMap<>();
@@ -128,10 +129,10 @@ public class TargetAssignmentBuilderTest {
             Optional<String> instanceId,
             Optional<String> rackId
         ) {
-            ConsumerGroupMember existingMember = members.get(memberId);
+            GroupMember existingMember = members.get(memberId);
             ConsumerGroupMember.Builder builder;
             if (existingMember != null) {
-                builder = new ConsumerGroupMember.Builder(existingMember);
+                builder = new ConsumerGroupMember.Builder((ConsumerGroupMember) existingMember);
             } else {
                 builder = new ConsumerGroupMember.Builder(memberId);
             }

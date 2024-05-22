@@ -17,6 +17,7 @@
 package org.apache.kafka.jmh.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.GroupMember;
 import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
@@ -94,7 +95,7 @@ public class TargetAssignmentBuilderBenchmark {
         partitionAssignor = new UniformAssignor();
 
         subscriptionMetadata = generateMockSubscriptionMetadata();
-        Map<String, ConsumerGroupMember> members = generateMockMembers();
+        Map<String, GroupMember> members = generateMockMembers();
         Map<String, Assignment> existingTargetAssignment = generateMockInitialTargetAssignment();
 
         ConsumerGroupMember newMember = new ConsumerGroupMember.Builder("newMember")
@@ -109,8 +110,8 @@ public class TargetAssignmentBuilderBenchmark {
             .addOrUpdateMember(newMember.memberId(), newMember);
     }
 
-    private Map<String, ConsumerGroupMember> generateMockMembers() {
-        Map<String, ConsumerGroupMember> members = new HashMap<>();
+    private Map<String, GroupMember> generateMockMembers() {
+        Map<String, GroupMember> members = new HashMap<>();
 
         for (int i = 0; i < memberCount - 1; i++) {
             ConsumerGroupMember member = new ConsumerGroupMember.Builder("member" + i)
