@@ -87,6 +87,7 @@ public class InternalConnectResourceTest {
                 eq(CONNECTOR_NAME),
                 eq(TASK_CONFIGS),
                 cb.capture(),
+                any(),
                 any()
         );
         expectRequestPath(TASK_CONFIGS_PATH);
@@ -106,7 +107,8 @@ public class InternalConnectResourceTest {
                 eq(CONNECTOR_NAME),
                 eq(TASK_CONFIGS),
                 cb.capture(),
-                signatureCapture.capture()
+                signatureCapture.capture(),
+                any()
         );
 
         HttpHeaders headers = mock(HttpHeaders.class);
@@ -137,6 +139,7 @@ public class InternalConnectResourceTest {
                 eq(CONNECTOR_NAME),
                 eq(TASK_CONFIGS),
                 cb.capture(),
+                any(),
                 any()
         );
         expectRequestPath(TASK_CONFIGS_PATH);

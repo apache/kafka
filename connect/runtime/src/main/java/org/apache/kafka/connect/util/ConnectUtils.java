@@ -16,11 +16,9 @@
  */
 package org.apache.kafka.connect.util;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerConfig;
@@ -30,14 +28,12 @@ import org.apache.kafka.connect.source.SourceConnector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.TreeMap;
 import java.util.function.Function;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
@@ -46,8 +42,6 @@ import static org.apache.kafka.clients.CommonClientConfigs.CLIENT_ID_CONFIG;
 
 public final class ConnectUtils {
     private static final Logger log = LoggerFactory.getLogger(ConnectUtils.class);
-
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     public static Long checkAndConvertTimestamp(Long timestamp) {
         if (timestamp == null || timestamp >= 0)
@@ -250,31 +244,14 @@ public final class ConnectUtils {
         return result;
     }
 
-    /**
-     * Generate a deterministic hash of the supplied config. For configurations
-     * with identical key-value pairs, this hash will always be the same.
-     * <p>
-     * <strong>NOTE: hashes of connector configs should never be logged above
-     * TRACE level</strong>.
-     * @param config the config to hash; may be null
-     * @return a hash of the config
-     */
-    public static int configHash(Map<String, String> config) {
-        if (config == null)
-            return 0;
-
-        Map<String, String> toHash = new TreeMap<>(config);
-
-        byte[] serialized;
-        try {
-            serialized = OBJECT_MAPPER.writeValueAsBytes(toHash);
-        } catch (IOException e) {
-            throw new ConnectException(
-                    "Unable to serialize connector config contents for hashing",
-                    e
-            );
-        }
-
-        return Utils.murmur2(serialized);
+    // Convert an integer value extracted from a schemaless struct to an int. This handles potentially different
+    // encodings by different Converters.
+    public static int intValue(Object value) {
+        if (value instanceof Integer)
+            return (int) value;
+        else if (value instanceof Long)
+            return (int) (long) value;
+        else
+            throw new ConnectException("Expected integer value to be either Integer or Long");
     }
 }

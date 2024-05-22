@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.storage;
 
+import org.apache.kafka.connect.runtime.ConfigHash;
 import org.apache.kafka.connect.runtime.RestartRequest;
 import org.apache.kafka.connect.runtime.SessionKey;
 import org.apache.kafka.connect.runtime.TargetState;
@@ -71,11 +72,9 @@ public interface ConfigBackingStore {
      * Update the task configurations for a connector.
      * @param connector name of the connector
      * @param configs the new task configs for the connector
-     * @param configHash a {@link org.apache.kafka.connect.util.ConnectUtils#configHash(Map)  hash}
-     *                   of the most recent config for the connector. <strong>NOTE: this value should never be
-     *                   logged above TRACE level</strong>
+     * @param configHash a hash of the connector config that was used to generate the task configs
      */
-    void putTaskConfigs(String connector, List<Map<String, String>> configs, int configHash);
+    void putTaskConfigs(String connector, List<Map<String, String>> configs, ConfigHash configHash);
 
     /**
      * Remove the task configs associated with a connector.

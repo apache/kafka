@@ -70,15 +70,16 @@ public class RestClient {
      *
      * @param url             HTTP connection will be established with this url, non-null.
      * @param method          HTTP method ("GET", "POST", "PUT", etc.), non-null
-     * @param headers         HTTP headers from REST endpoint
+     * @param inboundHeaders            HTTP headers received from an inbound REST request, which
+     *                                  may be forwarded in this outgoing request
      * @param requestBodyData Object to serialize as JSON and send in the request body.
      * @param responseFormat  Expected format of the response to the HTTP request, non-null.
      * @param <T>             The type of the deserialized response to the HTTP request.
      * @return The deserialized response to the HTTP request, containing null if no data is expected or returned.
      */
-    public <T> HttpResponse<T> httpRequest(String url, String method, HttpHeaders headers, Object requestBodyData,
+    public <T> HttpResponse<T> httpRequest(String url, String method, HttpHeaders inboundHeaders, Object requestBodyData,
                                                   TypeReference<T> responseFormat) {
-        return httpRequest(url, method, headers, requestBodyData, responseFormat, null, null);
+        return httpRequest(url, method, inboundHeaders, null, requestBodyData, responseFormat, null, null);
     }
 
     /**
@@ -86,16 +87,18 @@ public class RestClient {
      *
      * @param url                       HTTP connection will be established with this url, non-null.
      * @param method                    HTTP method ("GET", "POST", "PUT", etc.), non-null
-     * @param headers                   HTTP headers from REST endpoint
+     * @param inboundHeaders            HTTP headers received from an inbound REST request, which
+     *                                  may be forwarded in this outgoing request
+     * @param additionalHeaders         HTTP headers to unconditionally add to this request; may be null
      * @param requestBodyData           Object to serialize as JSON and send in the request body.
      * @param sessionKey                The key to sign the request with (intended for internal requests only);
      *                                  may be null if the request doesn't need to be signed
      * @param requestSignatureAlgorithm The algorithm to sign the request with (intended for internal requests only);
      *                                  may be null if the request doesn't need to be signed
      */
-    public void httpRequest(String url, String method, HttpHeaders headers, Object requestBodyData,
-                                           SecretKey sessionKey, String requestSignatureAlgorithm) {
-        httpRequest(url, method, headers, requestBodyData, new TypeReference<Void>() { }, sessionKey, requestSignatureAlgorithm);
+    public void httpRequest(String url, String method, HttpHeaders inboundHeaders, Map<String, String> additionalHeaders,
+                            Object requestBodyData, SecretKey sessionKey, String requestSignatureAlgorithm) {
+        httpRequest(url, method, inboundHeaders, additionalHeaders, requestBodyData, new TypeReference<Void>() { }, sessionKey, requestSignatureAlgorithm);
     }
 
     /**
@@ -103,7 +106,9 @@ public class RestClient {
      *
      * @param url                       HTTP connection will be established with this url, non-null.
      * @param method                    HTTP method ("GET", "POST", "PUT", etc.), non-null
-     * @param headers                   HTTP headers from REST endpoint
+     * @param inboundHeaders            HTTP headers received from an inbound REST request, which
+     *                                  may be forwarded in this outgoing request
+     * @param additionalHeaders         HTTP headers to unconditionally add to this request; may be null
      * @param requestBodyData           Object to serialize as JSON and send in the request body.
      * @param responseFormat            Expected format of the response to the HTTP request, non-null.
      * @param <T>                       The type of the deserialized response to the HTTP request.
@@ -113,9 +118,9 @@ public class RestClient {
      *                                  may be null if the request doesn't need to be signed
      * @return The deserialized response to the HTTP request, containing null if no data is expected or returned.
      */
-    public <T> HttpResponse<T> httpRequest(String url, String method, HttpHeaders headers, Object requestBodyData,
-                                                  TypeReference<T> responseFormat,
-                                                  SecretKey sessionKey, String requestSignatureAlgorithm) {
+    // Visible for testing
+    <T> HttpResponse<T> httpRequest(String url, String method, HttpHeaders inboundHeaders, Map<String, String> additionalHeaders,
+                                    Object requestBodyData, TypeReference<T> responseFormat, SecretKey sessionKey, String requestSignatureAlgorithm) {
         Objects.requireNonNull(url, "url must be non-null");
         Objects.requireNonNull(method, "method must be non-null");
         Objects.requireNonNull(responseFormat, "response format must be non-null");
@@ -134,7 +139,7 @@ public class RestClient {
         }
 
         try {
-            return httpRequest(client, url, method, headers, requestBodyData, responseFormat, sessionKey, requestSignatureAlgorithm);
+            return httpRequest(client, url, method, inboundHeaders, additionalHeaders, requestBodyData, responseFormat, sessionKey, requestSignatureAlgorithm);
         } finally {
             try {
                 client.stop();
@@ -145,9 +150,9 @@ public class RestClient {
     }
 
     private <T> HttpResponse<T> httpRequest(HttpClient client, String url, String method,
-                                           HttpHeaders headers, Object requestBodyData,
-                                           TypeReference<T> responseFormat, SecretKey sessionKey,
-                                           String requestSignatureAlgorithm) {
+                                           HttpHeaders inboundHeaders, Map<String, String> additionalHeaders,
+                                            Object requestBodyData, TypeReference<T> responseFormat,
+                                            SecretKey sessionKey, String requestSignatureAlgorithm) {
         try {
             String serializedBody = requestBodyData == null ? null : JSON_SERDE.writeValueAsString(requestBodyData);
             log.trace("Sending {} with input {} to {}", method, serializedBody, url);
@@ -156,7 +161,7 @@ public class RestClient {
             req.method(method);
             req.accept("application/json");
             req.agent("kafka-connect");
-            addHeadersToRequest(headers, req);
+            addHeadersToRequest(inboundHeaders, additionalHeaders, req);
 
             if (serializedBody != null) {
                 req.content(new StringContentProvider(serializedBody, StandardCharsets.UTF_8), "application/json");
@@ -206,15 +211,22 @@ public class RestClient {
 
     /**
      * Extract headers from REST call and add to client request
-     * @param headers         Headers from REST endpoint
+     * @param inboundHeaders         Headers from REST endpoint
      * @param req             The client request to modify
      */
-    private static void addHeadersToRequest(HttpHeaders headers, Request req) {
-        if (headers != null) {
-            String credentialAuthorization = headers.getHeaderString(HttpHeaders.AUTHORIZATION);
+    private static void addHeadersToRequest(
+            HttpHeaders inboundHeaders,
+            Map<String, String> additionalHeaders,
+            Request req
+    ) {
+        if (inboundHeaders != null) {
+            String credentialAuthorization = inboundHeaders.getHeaderString(HttpHeaders.AUTHORIZATION);
             if (credentialAuthorization != null) {
                 req.header(HttpHeaders.AUTHORIZATION, credentialAuthorization);
             }
+        }
+        if (additionalHeaders != null) {
+            additionalHeaders.forEach(req::header);
         }
     }
 

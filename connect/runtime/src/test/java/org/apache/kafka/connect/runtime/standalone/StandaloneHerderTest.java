@@ -86,6 +86,7 @@ import static java.util.Collections.singletonMap;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_PREFIX;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
+import static org.apache.kafka.connect.runtime.WorkerTestUtils.configHash;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
@@ -831,7 +832,7 @@ public class StandaloneHerderTest {
         Callback<Void> cb = mock(Callback.class);
 
         assertThrows(UnsupportedOperationException.class, () -> herder.putTaskConfigs(CONNECTOR_NAME,
-                singletonList(singletonMap("config", "value")), cb, null));
+                singletonList(singletonMap("config", "value")), cb, null, configHash(0)));
     }
 
     @Test

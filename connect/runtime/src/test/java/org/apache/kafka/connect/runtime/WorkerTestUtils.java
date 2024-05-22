@@ -194,4 +194,8 @@ public class WorkerTestUtils {
 
         assertEquals("Wrong rebalance delay in " + assignment, expectedDelay, assignment.delay());
     }
+
+    public static ConfigHash configHash(Integer hash) {
+        return new ConfigHash(hash);
+    }
 }

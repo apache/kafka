@@ -61,6 +61,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
+import static org.apache.kafka.connect.runtime.WorkerTestUtils.configHash;
 import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.INCLUDE_TASKS_FIELD_NAME;
 import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.ONLY_FAILED_FIELD_NAME;
 import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.RESTART_KEY;
@@ -255,7 +256,7 @@ public class KafkaConfigBackingStoreTest {
         // Writing task configs should block until all the writes have been performed and the root record update
         // has completed
         List<Map<String, String>> taskConfigs = Arrays.asList(SAMPLE_CONFIGS.get(0), SAMPLE_CONFIGS.get(1));
-        configStorage.putTaskConfigs("connector1", taskConfigs, 0);
+        configStorage.putTaskConfigs("connector1", taskConfigs, configHash(0));
 
         configState = configStorage.snapshot();
         assertEquals(3, configState.offset());
@@ -324,7 +325,7 @@ public class KafkaConfigBackingStoreTest {
         // Writing task configs should block until all the writes have been performed and the root record update
         // has completed
         List<Map<String, String>> taskConfigs = Arrays.asList(SAMPLE_CONFIGS.get(0), SAMPLE_CONFIGS.get(1));
-        configStorage.putTaskConfigs("connector1", taskConfigs, 0);
+        configStorage.putTaskConfigs("connector1", taskConfigs, configHash(0));
 
         // Validate root config by listing all connectors and tasks
         configState = configStorage.snapshot();
@@ -410,9 +411,9 @@ public class KafkaConfigBackingStoreTest {
         // Writing task configs should block until all the writes have been performed and the root record update
         // has completed
         List<Map<String, String>> taskConfigs = Arrays.asList(SAMPLE_CONFIGS.get(0), SAMPLE_CONFIGS.get(1));
-        configStorage.putTaskConfigs("connector1", taskConfigs, 0);
+        configStorage.putTaskConfigs("connector1", taskConfigs, configHash(0));
         taskConfigs = Collections.singletonList(SAMPLE_CONFIGS.get(2));
-        configStorage.putTaskConfigs("connector2", taskConfigs, 0);
+        configStorage.putTaskConfigs("connector2", taskConfigs, configHash(0));
 
         // Validate root config by listing all connectors and tasks
         configState = configStorage.snapshot();
@@ -469,7 +470,7 @@ public class KafkaConfigBackingStoreTest {
         // Writing task configs should block until all the writes have been performed and the root record update
         // has completed
         List<Map<String, String>> taskConfigs = Collections.emptyList();
-        configStorage.putTaskConfigs("connector1", taskConfigs, 0);
+        configStorage.putTaskConfigs("connector1", taskConfigs, configHash(0));
 
         // Validate root config by listing all connectors and tasks
         configState = configStorage.snapshot();

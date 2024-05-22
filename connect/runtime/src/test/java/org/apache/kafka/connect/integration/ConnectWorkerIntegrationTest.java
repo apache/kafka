@@ -1156,7 +1156,7 @@ public class ConnectWorkerIntegrationTest {
         connectorConfig.put(CONNECTOR_CLASS_CONFIG, SimpleConnector.class.getName());
         connectorConfig.put(TASKS_MAX_CONFIG, "1");
         connectorConfig.put(TOPICS_CONFIG, topic);
-        // Initially configure the connector to use the JSON converter
+        // Initially configure the connector to use the JSON converter, which should cause task failure(s)
         connectorConfig.put(VALUE_CONVERTER_CLASS_CONFIG, JsonConverter.class.getName());
         connectorConfig.put(
                 VALUE_CONVERTER_CLASS_CONFIG + "." + JsonConverterConfig.SCHEMAS_ENABLE_CONFIG,
@@ -1175,7 +1175,7 @@ public class ConnectWorkerIntegrationTest {
                 connect.connectorOffsets(CONNECTOR_NAME)
         );
 
-        // Reconfigure the connector to use the string converter
+        // Reconfigure the connector to use the string converter, which should not cause any more task failures
         connectorConfig.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
         connectorConfig.remove(
                 KEY_CONVERTER_CLASS_CONFIG + "." + JsonConverterConfig.SCHEMAS_ENABLE_CONFIG

@@ -114,6 +114,7 @@ import static org.apache.kafka.common.utils.Utils.UncheckedCloseable;
 import static org.apache.kafka.connect.runtime.AbstractStatus.State.FAILED;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX;
 import static org.apache.kafka.connect.runtime.SourceConnectorConfig.ExactlyOnceSupportLevel.REQUIRED;
+import static org.apache.kafka.connect.runtime.WorkerTestUtils.configHash;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.CONNECT_PROTOCOL_V0;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.GROUP_ID_CONFIG;
@@ -129,7 +130,6 @@ import static org.junit.Assert.fail;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.AdditionalMatchers.leq;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
@@ -1805,7 +1805,7 @@ public class DistributedHerderTest {
         // handle stop request
         expectMemberEnsureActive();
         expectConfigRefreshAndSnapshot(SNAPSHOT);
-        doNothing().when(configBackingStore).putTaskConfigs(eq(CONN1), eq(Collections.emptyList()), anyInt());
+        doNothing().when(configBackingStore).putTaskConfigs(eq(CONN1), eq(Collections.emptyList()), any());
         doNothing().when(configBackingStore).putTargetState(CONN1, TargetState.STOPPED);
 
         FutureCallback<Void> cb = new FutureCallback<>();
@@ -1870,7 +1870,7 @@ public class DistributedHerderTest {
         ConnectException taskConfigsWriteException = new ConnectException("Could not write task configs to config topic");
         // handle stop request
         expectMemberEnsureActive();
-        doThrow(taskConfigsWriteException).when(configBackingStore).putTaskConfigs(eq(CONN1), eq(Collections.emptyList()), anyInt());
+        doThrow(taskConfigsWriteException).when(configBackingStore).putTaskConfigs(eq(CONN1), eq(Collections.emptyList()), any());
         // We do not expect configBackingStore::putTargetState to be invoked, which
         // is intentional since that call should only take place if we are first able to
         // successfully write the empty list of task configs
@@ -2575,7 +2575,7 @@ public class DistributedHerderTest {
 
         Callback<Void> taskConfigCb = mock(Callback.class);
         List<String> stages = expectRecordStages(taskConfigCb);
-        herder.putTaskConfigs(CONN1, TASK_CONFIGS, taskConfigCb, null);
+        herder.putTaskConfigs(CONN1, TASK_CONFIGS, taskConfigCb, null, configHash(0));
 
         // Expect a wakeup call after the request to write task configs is added to the herder's request queue
         verify(member).wakeup();
@@ -2592,7 +2592,7 @@ public class DistributedHerderTest {
 
         Callback<Void> taskConfigCb = mock(Callback.class);
         List<String> stages = expectRecordStages(taskConfigCb);
-        herder.putTaskConfigs(CONN1, TASK_CONFIGS, taskConfigCb, null);
+        herder.putTaskConfigs(CONN1, TASK_CONFIGS, taskConfigCb, null, configHash(0));
 
         // Expect a wakeup call after the request to write task configs is added to the herder's request queue
         verify(member).wakeup();
@@ -2608,7 +2608,7 @@ public class DistributedHerderTest {
         when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V2);
 
         Callback<Void> taskConfigCb = mock(Callback.class);
-        herder.putTaskConfigs(CONN1, TASK_CONFIGS, taskConfigCb, null);
+        herder.putTaskConfigs(CONN1, TASK_CONFIGS, taskConfigCb, null, configHash(0));
 
         ArgumentCaptor<Throwable> errorCapture = ArgumentCaptor.forClass(Throwable.class);
         verify(taskConfigCb).onCompletion(errorCapture.capture(), isNull());
@@ -2625,7 +2625,7 @@ public class DistributedHerderTest {
         when(signature.keyAlgorithm()).thenReturn("HmacSHA489");
 
         Callback<Void> taskConfigCb = mock(Callback.class);
-        herder.putTaskConfigs(CONN1, TASK_CONFIGS, taskConfigCb, signature);
+        herder.putTaskConfigs(CONN1, TASK_CONFIGS, taskConfigCb, signature, configHash(0));
 
         ArgumentCaptor<Throwable> errorCapture = ArgumentCaptor.forClass(Throwable.class);
         verify(taskConfigCb).onCompletion(errorCapture.capture(), isNull());
@@ -2651,7 +2651,7 @@ public class DistributedHerderTest {
         configUpdateListener.onSessionKeyUpdate(sessionKey);
 
         Callback<Void> taskConfigCb = mock(Callback.class);
-        herder.putTaskConfigs(CONN1, TASK_CONFIGS, taskConfigCb, signature);
+        herder.putTaskConfigs(CONN1, TASK_CONFIGS, taskConfigCb, signature, configHash(0));
 
         ArgumentCaptor<Throwable> errorCapture = ArgumentCaptor.forClass(Throwable.class);
         verify(taskConfigCb).onCompletion(errorCapture.capture(), isNull());
@@ -2669,7 +2669,7 @@ public class DistributedHerderTest {
         when(signature.keyAlgorithm()).thenReturn("HmacSHA256");
 
         Callback<Void> taskConfigCb = mock(Callback.class);
-        herder.putTaskConfigs(CONN1, TASK_CONFIGS, taskConfigCb, signature);
+        herder.putTaskConfigs(CONN1, TASK_CONFIGS, taskConfigCb, signature, configHash(0));
 
         ArgumentCaptor<Throwable> errorCapture = ArgumentCaptor.forClass(Throwable.class);
         verify(taskConfigCb).onCompletion(errorCapture.capture(), isNull());
@@ -2697,7 +2697,7 @@ public class DistributedHerderTest {
 
         Callback<Void> taskConfigCb = mock(Callback.class);
         List<String> stages = expectRecordStages(taskConfigCb);
-        herder.putTaskConfigs(CONN1, TASK_CONFIGS, taskConfigCb, signature);
+        herder.putTaskConfigs(CONN1, TASK_CONFIGS, taskConfigCb, signature, configHash(0));
 
         // Expect a wakeup call after the request to write task configs is added to the herder's request queue
         verify(member).wakeup();
@@ -2844,7 +2844,7 @@ public class DistributedHerderTest {
             }
             return null;
         }).when(restClient).httpRequest(
-                any(), eq("PUT"), isNull(), isNull(), any(), any()
+                any(), eq("PUT"), isNull(), isNull(), isNull(), any(), any()
         );
 
         ArgumentCaptor<Runnable> forwardRequest = ArgumentCaptor.forClass(Runnable.class);
@@ -3478,7 +3478,7 @@ public class DistributedHerderTest {
         doThrow(new ConnectException("Request to leader to reconfigure connector tasks failed"))
                 .doThrow(new ConnectException("Request to leader to reconfigure connector tasks failed"))
                 .doNothing()
-                .when(restClient).httpRequest(any(), eq("POST"), any(), any(), any(), any());
+                .when(restClient).httpRequest(any(), eq("POST"), any(), any(), any(), any(), any());
 
         expectAndVerifyTaskReconfigurationRetries();
     }

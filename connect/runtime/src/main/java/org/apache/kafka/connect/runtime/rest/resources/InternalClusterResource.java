@@ -19,6 +19,7 @@ package org.apache.kafka.connect.runtime.rest.resources;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
+import org.apache.kafka.connect.runtime.ConfigHash;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.distributed.Crypto;
 import org.apache.kafka.connect.runtime.rest.HerderRequestHandler;
@@ -77,7 +78,13 @@ public abstract class InternalClusterResource {
             final byte[] requestBody) throws Throwable {
         List<Map<String, String>> taskConfigs = new ObjectMapper().readValue(requestBody, TASK_CONFIGS_TYPE);
         FutureCallback<Void> cb = new FutureCallback<>();
-        herderForRequest().putTaskConfigs(connector, taskConfigs, cb, InternalRequestSignature.fromHeaders(Crypto.SYSTEM, requestBody, headers));
+        herderForRequest().putTaskConfigs(
+                connector,
+                taskConfigs,
+                cb,
+                InternalRequestSignature.fromHeaders(Crypto.SYSTEM, requestBody, headers),
+                ConfigHash.fromHeaders(connector, headers)
+        );
         requestHandler.completeOrForwardRequest(
                 cb,
                 uriInfo.getPath(),

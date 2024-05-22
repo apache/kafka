@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.storage;
 
 import org.apache.kafka.common.config.provider.ConfigProvider;
+import org.apache.kafka.connect.runtime.ConfigHash;
 import org.apache.kafka.connect.runtime.SessionKey;
 import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.runtime.TargetState;
@@ -54,7 +55,7 @@ public class ClusterConfigState {
     final Map<String, Map<String, String>> connectorConfigs;
     final Map<String, TargetState> connectorTargetStates;
     final Map<ConnectorTaskId, Map<String, String>> taskConfigs;
-    final Map<String, Integer> taskConfigHashses;
+    final Map<String, ConfigHash> taskConfigHashses;
     final Map<String, Integer> connectorTaskCountRecords;
     final Map<String, Integer> connectorTaskConfigGenerations;
     final Set<String> connectorsPendingFencing;
@@ -66,7 +67,7 @@ public class ClusterConfigState {
                               Map<String, Map<String, String>> connectorConfigs,
                               Map<String, TargetState> connectorTargetStates,
                               Map<ConnectorTaskId, Map<String, String>> taskConfigs,
-                              Map<String, Integer> taskConfigHashses,
+                              Map<String, ConfigHash> taskConfigHashses,
                               Map<String, Integer> connectorTaskCountRecords,
                               Map<String, Integer> connectorTaskConfigGenerations,
                               Set<String> connectorsPendingFencing,
@@ -91,7 +92,7 @@ public class ClusterConfigState {
                               Map<String, Map<String, String>> connectorConfigs,
                               Map<String, TargetState> connectorTargetStates,
                               Map<ConnectorTaskId, Map<String, String>> taskConfigs,
-                              Map<String, Integer> taskConfigHashses,
+                              Map<String, ConfigHash> taskConfigHashses,
                               Map<String, Integer> connectorTaskCountRecords,
                               Map<String, Integer> connectorTaskConfigGenerations,
                               Set<String> connectorsPendingFencing,
@@ -197,11 +198,11 @@ public class ClusterConfigState {
      * Get the hash of the connector config that was used to generate the
      * latest set of task configs for the connector
      * @param connectorName name of the connector
-     * @return the config hash, or null if the connector does not exist or
-     * no config hash for its latest set of tasks has been stored
+     * @return the config hash; never null, but may be {@link ConfigHash#NO_HASH}
+     * if the connector does not exist or no config hash for its latest set of tasks has been stored
      */
-    public Integer taskConfigHash(String connectorName) {
-        return taskConfigHashses.get(connectorName);
+    public ConfigHash taskConfigHash(String connectorName) {
+        return taskConfigHashses.getOrDefault(connectorName, ConfigHash.NO_HASH);
     }
 
     /**

@@ -23,6 +23,7 @@ import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.AbstractHerder;
+import org.apache.kafka.connect.runtime.ConfigHash;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.HerderConnectorContext;
 import org.apache.kafka.connect.runtime.HerderRequest;
@@ -306,7 +307,13 @@ public class StandaloneHerder extends AbstractHerder {
     }
 
     @Override
-    public void putTaskConfigs(String connName, List<Map<String, String>> configs, Callback<Void> callback, InternalRequestSignature requestSignature) {
+    public void putTaskConfigs(
+            String connName,
+            List<Map<String, String>> configs,
+            Callback<Void> callback,
+            InternalRequestSignature requestSignature,
+            ConfigHash configHash
+    ) {
         throw new UnsupportedOperationException("Kafka Connect in standalone mode does not support externally setting task configurations.");
     }
 
@@ -520,7 +527,7 @@ public class StandaloneHerder extends AbstractHerder {
 
         List<Map<String, String>> newTaskConfigs = recomputeTaskConfigs(connName);
         Map<String, String> connectorConfig = configState.connectorConfig(connName);
-        int configHash = ConnectUtils.configHash(connectorConfig);
+        ConfigHash configHash = ConfigHash.fromConfig(connectorConfig);
 
         if (taskConfigsChanged(configState, connName, newTaskConfigs, configHash)) {
             removeConnectorTasks(connName);

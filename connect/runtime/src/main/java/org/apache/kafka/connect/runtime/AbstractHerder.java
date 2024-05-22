@@ -1043,7 +1043,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             ClusterConfigState configState,
             String connName,
             List<Map<String, String>> taskProps,
-            int connectorConfigHash
+            ConfigHash connectorConfigHash
     ) {
         int currentNumTasks = configState.taskCount(connName);
         boolean result = false;
@@ -1061,16 +1061,14 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             // Do a final check to see if runtime-controlled properties that affect tasks but may
             // not be included in the connector-generated configs for them (such as converter overrides)
             // have changed
-            if (!result) {
-                Integer storedConnectorConfigHash = configState.taskConfigHash(connName);
-                if (storedConnectorConfigHash == null) {
+            // No need to re-publish configs if there are currently no tasks for the connector and the
+            // new set of task configs is also empty
+            if (!result && !taskProps.isEmpty()) {
+                ConfigHash storedConnectorConfigHash = configState.taskConfigHash(connName);
+                if (!storedConnectorConfigHash.exists()) {
                     log.debug("Connector {} has no config hash stored for its existing tasks", connName);
-                } else if (storedConnectorConfigHash != connectorConfigHash) {
+                } else if (ConfigHash.shouldUpdateTasks(storedConnectorConfigHash, connectorConfigHash)) {
                     log.debug("Connector {} has change in config hash for tasks", connName);
-                    log.trace(
-                            "Connector {} previous config hash: {} new config hash: {}",
-                            connName, storedConnectorConfigHash, connectorConfigHash
-                    );
                     result = true;
                 }
             }

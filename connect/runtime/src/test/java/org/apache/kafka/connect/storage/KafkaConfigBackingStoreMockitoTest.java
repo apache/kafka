@@ -76,6 +76,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_C
 import static org.apache.kafka.clients.producer.ProducerConfig.CLIENT_ID_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.TRANSACTIONAL_ID_CONFIG;
+import static org.apache.kafka.connect.runtime.WorkerTestUtils.configHash;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG;
 import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.INCLUDE_TASKS_FIELD_NAME;
 import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.ONLY_FAILED_FIELD_NAME;
@@ -649,7 +650,7 @@ public class KafkaConfigBackingStoreMockitoTest {
         assertEquals(Collections.singletonList(CONNECTOR_IDS.get(0)), new ArrayList<>(configState.connectors()));
         assertEquals(TargetState.PAUSED, configState.targetState(CONNECTOR_IDS.get(0)));
         assertEquals(TargetState.STOPPED, configState.targetState(CONNECTOR_IDS.get(1)));
-        assertNull(configState.taskConfigHash(CONNECTOR_IDS.get(0)));
+        assertFalse(configState.taskConfigHash(CONNECTOR_IDS.get(0)).exists());
 
         configStorage.stop();
         verify(configLog).stop();
@@ -1093,7 +1094,7 @@ public class KafkaConfigBackingStoreMockitoTest {
 
         // Next, issue a write that has everything that is needed and it should be accepted. Note that in this case
         // we are going to shrink the number of tasks to 1
-        configStorage.putTaskConfigs("connector1", Collections.singletonList(SAMPLE_CONFIGS.get(0)), 0);
+        configStorage.putTaskConfigs("connector1", Collections.singletonList(SAMPLE_CONFIGS.get(0)), configHash(0));
 
         // Validate updated config
         configState = configStorage.snapshot();

@@ -160,8 +160,16 @@ public interface Herder {
      * @param callback callback to invoke upon completion
      * @param requestSignature the signature of the request made for this task (re-)configuration;
      *                         may be null if no signature was provided
+     * @param configHash a hash of the connector config that was used to generate the task configs;
+     *                   never null, but may be {@link ConfigHash#NO_HASH} if no hash is available
      */
-    void putTaskConfigs(String connName, List<Map<String, String>> configs, Callback<Void> callback, InternalRequestSignature requestSignature);
+    void putTaskConfigs(
+            String connName,
+            List<Map<String, String>> configs,
+            Callback<Void> callback,
+            InternalRequestSignature requestSignature,
+            ConfigHash configHash
+    );
 
     /**
      * Fence out any older task generations for a source connector, and then write a record to the config topic

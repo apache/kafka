@@ -41,6 +41,7 @@ import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
+import org.apache.kafka.connect.runtime.ConfigHash;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.RestartRequest;
 import org.apache.kafka.connect.runtime.SessionKey;
@@ -322,7 +323,7 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
 
     final Map<String, Integer> connectorTaskCountRecords = new HashMap<>();
     final Map<String, Integer> connectorTaskConfigGenerations = new HashMap<>();
-    final Map<String, Integer> taskConfigHashes = new HashMap<>();
+    final Map<String, ConfigHash> taskConfigHashes = new HashMap<>();
     final Set<String> connectorsPendingFencing = new HashSet<>();
 
     private final WorkerConfigTransformer configTransformer;
@@ -574,9 +575,7 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
      *
      * @param connector the connector to write task configuration
      * @param configs list of task configurations for the connector
-     * @param configHash a {@link org.apache.kafka.connect.util.ConnectUtils#configHash(Map)  hash}
-     *                   of the most recent config for the connector. <strong>NOTE: this value should never be
-     *                   logged above TRACE level</strong>
+     * @param configHash a hash of the connector config that was used to generate the task configs
      * @throws ConnectException if the task configurations do not resolve inconsistencies found in the existing root
      *                          and task configurations.
      * @throws IllegalStateException if {@link #claimWritePrivileges()} is required, but was not successfully invoked before
@@ -585,7 +584,7 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
      * and the write fails
      */
     @Override
-    public void putTaskConfigs(String connector, List<Map<String, String>> configs, int configHash) {
+    public void putTaskConfigs(String connector, List<Map<String, String>> configs, ConfigHash configHash) {
         Timer timer = time.timer(READ_WRITE_TOTAL_TIMEOUT_MS);
         // Make sure we're at the end of the log. We should be the only writer, but we want to make sure we don't have
         // any outstanding lagging data to consume.
@@ -630,7 +629,7 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
             // Write the commit message
             Struct commitMessage = new Struct(CONNECTOR_TASKS_COMMIT_V1);
             commitMessage.put("tasks", taskCount);
-            commitMessage.put("connector-config-hash", configHash);
+            configHash.addToStruct(commitMessage, "connector-config-hash");
             byte[] serializedCommitMessage = converter.fromConnectData(topic, CONNECTOR_TASKS_COMMIT_V1, commitMessage);
             log.debug("Writing commit for connector '{}' with {} tasks.", connector, taskCount);
 
@@ -1104,7 +1103,7 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
 
             @SuppressWarnings("unchecked")
             Map<String, Object> valueMap = (Map<String, Object>) value.value();
-            int newTaskCount = intValue(valueMap.get("tasks"));
+            int newTaskCount = ConnectUtils.intValue(valueMap.get("tasks"));
 
             // Validate the configs we're supposed to update to ensure we're getting a complete configuration
             // update of all tasks that are expected based on the number of tasks in the commit message.
@@ -1122,12 +1121,8 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
                     updatedTasks.addAll(deferred.keySet());
                     connectorTaskConfigGenerations.compute(connectorName, (ignored, generation) -> generation != null ? generation + 1 : 0);
 
-                    Object configHash = valueMap.get("connector-config-hash");
-                    if (configHash != null) {
-                        taskConfigHashes.put(connectorName, intValue(configHash));
-                    } else {
-                        taskConfigHashes.remove(connectorName);
-                    }
+                    ConfigHash configHash = ConfigHash.fromMap(valueMap, "connector-config-hash");
+                    taskConfigHashes.put(connectorName, configHash);
                 }
                 inconsistent.remove(connectorName);
             }
@@ -1183,7 +1178,7 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
             return;
         }
         @SuppressWarnings("unchecked")
-        int taskCount = intValue(((Map<String, Object>) value.value()).get("task-count"));
+        int taskCount = ConnectUtils.intValue(((Map<String, Object>) value.value()).get("task-count"));
 
         log.debug("Setting task count record for connector '{}' to {}", connectorName, taskCount);
         connectorTaskCountRecords.put(connectorName, taskCount);
@@ -1323,15 +1318,5 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
         return true;
     }
 
-    // Convert an integer value extracted from a schemaless struct to an int. This handles potentially different
-    // encodings by different Converters.
-    private static int intValue(Object value) {
-        if (value instanceof Integer)
-            return (int) value;
-        else if (value instanceof Long)
-            return (int) (long) value;
-        else
-            throw new ConnectException("Expected integer value to be either Integer or Long");
-    }
 }
 

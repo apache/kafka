@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.storage;
 
+import org.apache.kafka.connect.runtime.ConfigHash;
 import org.apache.kafka.connect.runtime.RestartRequest;
 import org.apache.kafka.connect.runtime.SessionKey;
 import org.apache.kafka.connect.runtime.TargetState;
@@ -60,7 +61,7 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
         Map<String, Integer> connectorTaskCounts = new HashMap<>();
         Map<String, Map<String, String>> connectorConfigs = new HashMap<>();
         Map<String, TargetState> connectorTargetStates = new HashMap<>();
-        Map<String, Integer> taskConfigHashes = new HashMap<>();
+        Map<String, ConfigHash> taskConfigHashes = new HashMap<>();
         Map<ConnectorTaskId, Map<String, String>> taskConfigs = new HashMap<>();
 
         for (Map.Entry<String, ConnectorState> connectorStateEntry : connectors.entrySet()) {
@@ -126,14 +127,18 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
 
         HashSet<ConnectorTaskId> taskIds = new HashSet<>(state.taskConfigs.keySet());
         state.taskConfigs.clear();
-        state.taskConfigHash = null;
+        state.taskConfigHash = ConfigHash.NO_HASH;
 
         if (updateListener != null)
             updateListener.onTaskConfigUpdate(taskIds);
     }
 
     @Override
-    public synchronized void putTaskConfigs(String connector, List<Map<String, String>> configs, int configHash) {
+    public synchronized void putTaskConfigs(
+            String connector,
+            List<Map<String, String>> configs,
+            ConfigHash configHash
+    ) {
         ConnectorState state = connectors.get(connector);
         if (state == null)
             throw new IllegalArgumentException("Cannot put tasks for non-existing connector");
@@ -192,7 +197,7 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
         private TargetState targetState;
         private Map<String, String> connConfig;
         private Map<ConnectorTaskId, Map<String, String>> taskConfigs;
-        private Integer taskConfigHash;
+        private ConfigHash taskConfigHash;
 
         /**
          * @param connConfig the connector's configuration
@@ -203,6 +208,7 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
             this.targetState = targetState == null ? TargetState.STARTED : targetState;
             this.connConfig = connConfig;
             this.taskConfigs = new HashMap<>();
+            this.taskConfigHash = ConfigHash.NO_HASH;
         }
     }
 

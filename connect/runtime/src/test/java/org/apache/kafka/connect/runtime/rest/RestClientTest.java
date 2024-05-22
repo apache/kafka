@@ -95,6 +95,7 @@ public class RestClientTest {
                 url,
                 method,
                 null,
+                null,
                 TEST_DTO,
                 responseFormat,
                 MOCK_SECRET_KEY,

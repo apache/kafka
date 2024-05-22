@@ -37,6 +37,7 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.AbstractHerder;
 import org.apache.kafka.connect.runtime.CloseableConnectorContext;
+import org.apache.kafka.connect.runtime.ConfigHash;
 import org.apache.kafka.connect.runtime.ConnectMetrics;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.ConnectMetricsRegistry;
@@ -1192,7 +1193,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                     // if the connector is reassigned during the ensuing rebalance, it is likely that it will immediately generate
                     // a non-empty set of task configs). A STOPPED connector with a non-empty set of tasks is less acceptable
                     // and likely to confuse users.
-                    writeTaskConfigs(connName, Collections.emptyList());
+                    writeTaskConfigs(connName, Collections.emptyList(), ConfigHash.NO_HASH);
                     String stageDescription = "writing the STOPPED target stage for connector " + connName + " to the config topic";
                     try (TickThreadStage stage = new TickThreadStage(stageDescription)) {
                         configBackingStore.putTargetState(connName, TargetState.STOPPED);
@@ -1253,7 +1254,12 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     @Override
-    public void putTaskConfigs(final String connName, final List<Map<String, String>> configs, final Callback<Void> callback, InternalRequestSignature requestSignature) {
+    public void putTaskConfigs(
+            final String connName,
+            final List<Map<String, String>> configs,
+            final Callback<Void> callback, InternalRequestSignature requestSignature,
+            final ConfigHash configHash
+    ) {
         log.trace("Submitting put task configuration request {}", connName);
         if (requestNotSignedProperly(requestSignature, callback)) {
             return;
@@ -1266,7 +1272,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 else if (!configState.contains(connName))
                     callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
                 else {
-                    writeTaskConfigs(connName, configs);
+                    writeTaskConfigs(connName, configs, configHash);
                     callback.onCompletion(null, null);
                 }
                 return null;
@@ -1306,7 +1312,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         try {
                             String stageDescription = "Forwarding zombie fencing request to the leader at " + workerUrl;
                             try (TemporaryStage stage = new TemporaryStage(stageDescription, callback, time)) {
-                                restClient.httpRequest(fenceUrl, "PUT", null, null, sessionKey, requestSignatureAlgorithm);
+                                restClient.httpRequest(fenceUrl, "PUT", null, null, null, sessionKey, requestSignatureAlgorithm);
                             }
                             callback.onCompletion(null, null);
                         } catch (Throwable t) {
@@ -2222,7 +2228,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             try (TickThreadStage stage = new TickThreadStage("generating task configs for connector " + connName)) {
                 taskProps = worker.connectorTaskConfigs(connName, connConfig);
             }
-            int configHash = ConnectUtils.configHash(configs);
+            ConfigHash configHash = ConfigHash.fromConfig(configs);
             publishConnectorTaskConfigs(connName, taskProps, cb, configHash);
         } catch (Throwable t) {
             cb.onCompletion(t, null);
@@ -2233,7 +2239,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             String connName,
             List<Map<String, String>> taskProps,
             Callback<Void> cb,
-            int configHash
+            ConfigHash configHash
     ) {
         if (!taskConfigsChanged(configState, connName, taskProps, configHash)) {
             return;
@@ -2241,7 +2247,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
         List<Map<String, String>> rawTaskProps = reverseTransform(connName, configState, taskProps);
         if (isLeader()) {
-            writeTaskConfigs(connName, rawTaskProps);
+            writeTaskConfigs(connName, rawTaskProps, configHash);
             cb.onCompletion(null, null);
         } else if (restClient == null) {
             throw new NotLeaderException("This worker is not able to communicate with the leader of the cluster, "
@@ -2270,8 +2276,10 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                             .toString();
                     log.trace("Forwarding task configurations for connector {} to leader", connName);
                     String stageDescription = "Forwarding task configurations to the leader at " + leaderUrl;
+                    Map<String, String> additionalHeaders = new HashMap<>();
+                    configHash.addToHeaders(additionalHeaders);
                     try (TemporaryStage stage = new TemporaryStage(stageDescription, cb, time)) {
-                        restClient.httpRequest(reconfigUrl, "POST", null, rawTaskProps, sessionKey, requestSignatureAlgorithm);
+                        restClient.httpRequest(reconfigUrl, "POST", null, additionalHeaders, rawTaskProps, sessionKey, requestSignatureAlgorithm);
                     }
                     cb.onCompletion(null, null);
                 } catch (ConnectException e) {
@@ -2282,14 +2290,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
     }
 
-    private void writeTaskConfigs(String connName, List<Map<String, String>> taskConfigs) {
+    private void writeTaskConfigs(String connName, List<Map<String, String>> taskConfigs, ConfigHash configHash) {
         if (!taskConfigs.isEmpty()) {
             if (configState.targetState(connName) == TargetState.STOPPED)
                 throw new BadRequestException("Cannot submit non-empty set of task configs for stopped connector " + connName);
         }
-
-        Map<String, String> connConfig = configState.connectorConfig(connName);
-        int configHash = ConnectUtils.configHash(connConfig);
 
         writeToConfigTopicAsLeader(
                 "writing " + taskConfigs.size() + " task configs for connector " + connName + " to the config topic",

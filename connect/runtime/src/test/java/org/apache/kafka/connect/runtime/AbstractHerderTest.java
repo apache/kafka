@@ -53,7 +53,6 @@ import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
 import org.apache.kafka.connect.util.Callback;
-import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.FutureCallback;
 import org.junit.Test;
@@ -139,9 +138,10 @@ public class AbstractHerderTest {
         TASK_CONFIGS_MAP.put(TASK1, TASK_CONFIG);
         TASK_CONFIGS_MAP.put(TASK2, TASK_CONFIG);
     }
-    private static final Map<String, Integer> TASK_CONFIG_HASHES = new HashMap<>();
+    private static final Map<String, ConfigHash> TASK_CONFIG_HASHES = new HashMap<>();
+    private static final int CONN1_CONFIG_HASH = 9228;
     static {
-        TASK_CONFIG_HASHES.put(CONN1, ConnectUtils.configHash(CONN1_CONFIG));
+        TASK_CONFIG_HASHES.put(CONN1, new ConfigHash(CONN1_CONFIG_HASH));
     }
     private static final ClusterConfigState SNAPSHOT = new ClusterConfigState(
             1,
@@ -1156,7 +1156,7 @@ public class AbstractHerderTest {
                         snapshotWithoutConfigHash,
                         CONN1,
                         TASK_CONFIGS,
-                        ConnectUtils.configHash(CONN1_CONFIG)
+                        new ConfigHash(CONN1_CONFIG_HASH)
                 )
         );
 
@@ -1166,7 +1166,7 @@ public class AbstractHerderTest {
                         SNAPSHOT,
                         CONN1,
                         TASK_CONFIGS,
-                        SNAPSHOT.taskConfigHash(CONN1) + 1
+                        new ConfigHash(CONN1_CONFIG_HASH + 1)
                 )
         );
     }
