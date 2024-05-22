@@ -38,7 +38,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 
 import java.io.Closeable;
-import java.time.Duration;
 import java.util.HashMap;
 import java.util.Optional;
 import java.util.Properties;
@@ -109,7 +108,7 @@ public class ConsumerTestBuilder implements Closeable {
         this.time = enableAutoTick ? new MockTime(1) : new MockTime();
         this.applicationEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventQueue = new LinkedBlockingQueue<>();
-        this.backgroundEventHandler = spy(new BackgroundEventHandler(logContext, backgroundEventQueue));
+        this.backgroundEventHandler = spy(new BackgroundEventHandler(backgroundEventQueue));
         this.offsetCommitCallbackInvoker = mock(OffsetCommitCallbackInvoker.class);
         GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(
             100,
@@ -290,32 +289,6 @@ public class ConsumerTestBuilder implements Closeable {
     @Override
     public void close() {
         closeQuietly(requestManagers, RequestManagers.class.getSimpleName());
-    }
-
-    public static class ConsumerNetworkThreadTestBuilder extends ConsumerTestBuilder {
-
-        final ConsumerNetworkThread consumerNetworkThread;
-
-        public ConsumerNetworkThreadTestBuilder() {
-            this(createDefaultGroupInformation());
-        }
-
-        public ConsumerNetworkThreadTestBuilder(Optional<GroupInformation> groupInfo) {
-            super(groupInfo);
-            this.consumerNetworkThread = new ConsumerNetworkThread(
-                    logContext,
-                    time,
-                    applicationEventQueue,
-                    () -> applicationEventProcessor,
-                    () -> networkClientDelegate,
-                    () -> requestManagers
-            );
-        }
-
-        @Override
-        public void close() {
-            consumerNetworkThread.close(Duration.ZERO);
-        }
     }
 
     public static class GroupInformation {

@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.GroupProtocol;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
@@ -38,6 +39,7 @@ import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableBackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
@@ -57,6 +59,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -142,17 +145,13 @@ import static org.mockito.Mockito.when;
 @SuppressWarnings("unchecked")
 public class AsyncKafkaConsumerTest {
 
-    private long retryBackoffMs = 100L;
-    private int defaultApiTimeoutMs = 1000;
-    private boolean autoCommitEnabled = true;
-
     private AsyncKafkaConsumer<String, String> consumer = null;
-
     private Time time = new MockTime(0);
     private final FetchCollector<String, String> fetchCollector = mock(FetchCollector.class);
     private final ApplicationEventHandler applicationEventHandler = mock(ApplicationEventHandler.class);
     private final ConsumerMetadata metadata = mock(ConsumerMetadata.class);
     private final LinkedBlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
+    private final CompletableEventReaper backgroundEventReaper = mock(CompletableEventReaper.class);
 
     @AfterEach
     public void resetAll() {
@@ -193,7 +192,8 @@ public class AsyncKafkaConsumerTest {
             new StringDeserializer(),
             new StringDeserializer(),
             time,
-            (a, b, c, d, e, f) -> applicationEventHandler,
+            (a, b, c, d, e, f, g) -> applicationEventHandler,
+            a -> backgroundEventReaper,
             (a, b, c, d, e, f, g) -> fetchCollector,
             (a, b, c, d) -> metadata,
             backgroundEventQueue
@@ -208,6 +208,9 @@ public class AsyncKafkaConsumerTest {
         List<ConsumerPartitionAssignor> assignors,
         String groupId,
         String clientId) {
+        long retryBackoffMs = 100L;
+        int defaultApiTimeoutMs = 1000;
+        boolean autoCommitEnabled = true;
         return new AsyncKafkaConsumer<>(
             new LogContext(),
             clientId,
@@ -218,6 +221,7 @@ public class AsyncKafkaConsumerTest {
             time,
             applicationEventHandler,
             backgroundEventQueue,
+            backgroundEventReaper,
             rebalanceListenerInvoker,
             new Metrics(),
             subscriptions,
@@ -857,13 +861,12 @@ public class AsyncKafkaConsumerTest {
         consumer.subscribe(singleton("topic"), mock(ConsumerRebalanceListener.class));
         subscriptions.assignFromSubscribed(singleton(new TopicPartition("topic", 0)));
         subscriptions.seek(new TopicPartition("topic", 0), 100);
-        consumer.maybeAutoCommitSync(time.timer(100));
+        consumer.autoCommitSync(time.timer(100));
         verify(applicationEventHandler).add(any(SyncCommitEvent.class));
     }
 
     @Test
     public void testAutoCommitSyncDisabled() {
-        autoCommitEnabled = false;
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
         consumer = newConsumer(
             mock(FetchBuffer.class),
@@ -1447,7 +1450,9 @@ public class AsyncKafkaConsumerTest {
                                             Optional<RuntimeException> lostError,
                                             int expectedRevokedCount,
                                             int expectedAssignedCount,
-                                            int expectedLostCount) {
+                                            int expectedLostCount,
+                                            Optional<RuntimeException> expectedException
+                                            ) {
         consumer = newConsumer();
         CounterConsumerRebalanceListener consumerRebalanceListener = new CounterConsumerRebalanceListener(
                 revokedError,
@@ -1461,9 +1466,16 @@ public class AsyncKafkaConsumerTest {
         for (ConsumerRebalanceListenerMethodName methodName : methodNames) {
             CompletableBackgroundEvent<Void> e = new ConsumerRebalanceListenerCallbackNeededEvent(methodName, partitions);
             backgroundEventQueue.add(e);
+        }
 
-            // This will trigger the background event queue to process our background event message.
-            consumer.poll(Duration.ZERO);
+        // This will trigger the background event queue to process our background event message.
+        // If any error is happening inside the rebalance callbacks, we expect the first exception to be thrown from poll.
+        if (expectedException.isPresent()) {
+            Exception exception = assertThrows(expectedException.get().getClass(), () -> consumer.poll(Duration.ZERO));
+            assertEquals(expectedException.get().getMessage(), exception.getMessage());
+            assertEquals(expectedException.get().getCause(), exception.getCause());
+        } else {
+            assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
         }
 
         assertEquals(expectedRevokedCount, consumerRebalanceListener.revokedCount());
@@ -1474,32 +1486,43 @@ public class AsyncKafkaConsumerTest {
     private static Stream<Arguments> listenerCallbacksInvokeSource() {
         Optional<RuntimeException> empty = Optional.empty();
         Optional<RuntimeException> error = Optional.of(new RuntimeException("Intentional error"));
+        Optional<RuntimeException> kafkaException = Optional.of(new KafkaException("Intentional error"));
+        Optional<RuntimeException> wrappedException = Optional.of(new KafkaException("User rebalance callback throws an error", error.get()));
 
         return Stream.of(
             // Tests if we don't have an event, the listener doesn't get called.
-            Arguments.of(Collections.emptyList(), empty, empty, empty, 0, 0, 0),
+            Arguments.of(Collections.emptyList(), empty, empty, empty, 0, 0, 0, empty),
 
             // Tests if we get an event for a revocation, that we invoke our listener.
-            Arguments.of(Collections.singletonList(ON_PARTITIONS_REVOKED), empty, empty, empty, 1, 0, 0),
+            Arguments.of(Collections.singletonList(ON_PARTITIONS_REVOKED), empty, empty, empty, 1, 0, 0, empty),
 
             // Tests if we get an event for an assignment, that we invoke our listener.
-            Arguments.of(Collections.singletonList(ON_PARTITIONS_ASSIGNED), empty, empty, empty, 0, 1, 0),
+            Arguments.of(Collections.singletonList(ON_PARTITIONS_ASSIGNED), empty, empty, empty, 0, 1, 0, empty),
 
             // Tests that we invoke our listener even if it encounters an exception.
-            Arguments.of(Collections.singletonList(ON_PARTITIONS_LOST), empty, empty, empty, 0, 0, 1),
+            Arguments.of(Collections.singletonList(ON_PARTITIONS_LOST), empty, empty, empty, 0, 0, 1, empty),
 
             // Tests that we invoke our listener even if it encounters an exception.
-            Arguments.of(Collections.singletonList(ON_PARTITIONS_REVOKED), error, empty, empty, 1, 0, 0),
+            Arguments.of(Collections.singletonList(ON_PARTITIONS_REVOKED), error, empty, empty, 1, 0, 0, wrappedException),
 
             // Tests that we invoke our listener even if it encounters an exception.
-            Arguments.of(Collections.singletonList(ON_PARTITIONS_ASSIGNED), empty, error, empty, 0, 1, 0),
+            Arguments.of(Collections.singletonList(ON_PARTITIONS_ASSIGNED), empty, error, empty, 0, 1, 0, wrappedException),
 
             // Tests that we invoke our listener even if it encounters an exception.
-            Arguments.of(Collections.singletonList(ON_PARTITIONS_LOST), empty, empty, error, 0, 0, 1),
+            Arguments.of(Collections.singletonList(ON_PARTITIONS_LOST), empty, empty, error, 0, 0, 1, wrappedException),
+
+            // Tests that we invoke our listener even if it encounters an exception. Special case to test that a kafka exception is not wrapped.
+            Arguments.of(Collections.singletonList(ON_PARTITIONS_REVOKED), kafkaException, empty, empty, 1, 0, 0, kafkaException),
+            Arguments.of(Collections.singletonList(ON_PARTITIONS_ASSIGNED), empty, kafkaException, empty, 0, 1, 0, kafkaException),
+            Arguments.of(Collections.singletonList(ON_PARTITIONS_LOST), empty, empty, kafkaException, 0, 0, 1, kafkaException),
 
             // Tests if we get separate events for revocation and then assignment--AND our revocation throws an error--
-            // we still invoke the listeners correctly without throwing the error at the user.
-            Arguments.of(Arrays.asList(ON_PARTITIONS_REVOKED, ON_PARTITIONS_ASSIGNED), error, empty, empty, 1, 1, 0)
+            // we still invoke the listeners correctly and throw the error.
+            Arguments.of(Arrays.asList(ON_PARTITIONS_REVOKED, ON_PARTITIONS_ASSIGNED), error, empty, empty, 1, 1, 0, wrappedException),
+
+            // Tests if we get separate events for revocation and then assignment--AND both throws an error--
+            // we still invoke the listeners correctly and throw the first error.
+            Arguments.of(Arrays.asList(ON_PARTITIONS_REVOKED, ON_PARTITIONS_ASSIGNED), kafkaException, error, empty, 1, 1, 0, kafkaException)
         );
     }
 
@@ -1724,7 +1747,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     /**
-     * Tests {@link AsyncKafkaConsumer#processBackgroundEvents(EventProcessor, Future, Timer) processBackgroundEvents}
+     * Tests {@link AsyncKafkaConsumer#processBackgroundEvents(Future, Timer) processBackgroundEvents}
      * handles the case where the {@link Future} takes a bit of time to complete, but does within the timeout.
      */
     @Test
@@ -1750,15 +1773,14 @@ public class AsyncKafkaConsumerTest {
             return null;
         }).when(future).get(any(Long.class), any(TimeUnit.class));
 
-        EventProcessor<BackgroundEvent> processor = mock(EventProcessor.class);
-        consumer.processBackgroundEvents(processor, future, timer);
+        consumer.processBackgroundEvents(future, timer);
 
         // 800 is the 1000 ms timeout (above) minus the 200 ms delay for the two incremental timeouts/retries.
         assertEquals(800, timer.remainingMs());
     }
 
     /**
-     * Tests {@link AsyncKafkaConsumer#processBackgroundEvents(EventProcessor, Future, Timer) processBackgroundEvents}
+     * Tests {@link AsyncKafkaConsumer#processBackgroundEvents(Future, Timer) processBackgroundEvents}
      * handles the case where the {@link Future} is already complete when invoked, so it doesn't have to wait.
      */
     @Test
@@ -1769,8 +1791,7 @@ public class AsyncKafkaConsumerTest {
         // Create a future that is already completed.
         CompletableFuture<?> future = CompletableFuture.completedFuture(null);
 
-        EventProcessor<BackgroundEvent> processor = mock(EventProcessor.class);
-        consumer.processBackgroundEvents(processor, future, timer);
+        consumer.processBackgroundEvents(future, timer);
 
         // Because we didn't need to perform a timed get, we should still have every last millisecond
         // of our initial timeout.
@@ -1778,7 +1799,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     /**
-     * Tests {@link AsyncKafkaConsumer#processBackgroundEvents(EventProcessor, Future, Timer) processBackgroundEvents}
+     * Tests {@link AsyncKafkaConsumer#processBackgroundEvents(Future, Timer) processBackgroundEvents}
      * handles the case where the {@link Future} does not complete within the timeout.
      */
     @Test
@@ -1793,11 +1814,61 @@ public class AsyncKafkaConsumerTest {
             throw new java.util.concurrent.TimeoutException("Intentional timeout");
         }).when(future).get(any(Long.class), any(TimeUnit.class));
 
-        EventProcessor<BackgroundEvent> processor = mock(EventProcessor.class);
-        assertThrows(TimeoutException.class, () -> consumer.processBackgroundEvents(processor, future, timer));
+        assertThrows(TimeoutException.class, () -> consumer.processBackgroundEvents(future, timer));
 
         // Because we forced our mocked future to continuously time out, we should have no time remaining.
         assertEquals(0, timer.remainingMs());
+    }
+
+    /**
+     * Tests that calling {@link Thread#interrupt()} before {@link KafkaConsumer#poll(Duration)}
+     * causes {@link InterruptException} to be thrown.
+     */
+    @Test
+    public void testPollThrowsInterruptExceptionIfInterrupted() {
+        consumer = newConsumer();
+        final String topicName = "foo";
+        final int partition = 3;
+        final TopicPartition tp = new TopicPartition(topicName, partition);
+        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
+        Map<TopicPartition, OffsetAndMetadata> offsets = mkMap(mkEntry(tp, new OffsetAndMetadata(1)));
+        completeFetchedCommittedOffsetApplicationEventSuccessfully(offsets);
+        doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
+        consumer.assign(singleton(tp));
+
+        // interrupt the thread and call poll
+        try {
+            Thread.currentThread().interrupt();
+            assertThrows(InterruptException.class, () -> consumer.poll(Duration.ZERO));
+        } finally {
+            // clear interrupted state again since this thread may be reused by JUnit
+            Thread.interrupted();
+        }
+        assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
+    }
+
+    @Test
+    void testReaperInvokedInClose() {
+        consumer = newConsumer();
+        consumer.close();
+        verify(backgroundEventReaper).reap(backgroundEventQueue);
+    }
+
+    @Test
+    void testReaperInvokedInUnsubscribe() {
+        consumer = newConsumer();
+        completeUnsubscribeApplicationEventSuccessfully();
+        consumer.unsubscribe();
+        verify(backgroundEventReaper).reap(time.milliseconds());
+    }
+
+    @Test
+    void testReaperInvokedInPoll() {
+        consumer = newConsumer();
+        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
+        consumer.subscribe(Collections.singletonList("topic"));
+        consumer.poll(Duration.ZERO);
+        verify(backgroundEventReaper).reap(time.milliseconds());
     }
 
     private Map<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {

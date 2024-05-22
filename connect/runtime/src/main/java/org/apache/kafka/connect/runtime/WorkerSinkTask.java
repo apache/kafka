@@ -311,7 +311,7 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
         if (SinkConnectorConfig.hasTopicsConfig(taskConfig)) {
             List<String> topics = SinkConnectorConfig.parseTopicsList(taskConfig);
             consumer.subscribe(topics, new HandleRebalance());
-            log.debug("{} Initializing and starting task for topics {}", this, Utils.join(topics, ", "));
+            log.debug("{} Initializing and starting task for topics {}", this, String.join(", ", topics));
         } else {
             String topicsRegexStr = taskConfig.get(SinkTask.TOPICS_REGEX_CONFIG);
             Pattern pattern = Pattern.compile(topicsRegexStr);

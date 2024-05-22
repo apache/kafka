@@ -134,7 +134,7 @@ public class NetworkClientDelegateTest {
 
     public NetworkClientDelegate.UnsentRequest newUnsentFindCoordinatorRequest() {
         Objects.requireNonNull(GROUP_ID);
-        NetworkClientDelegate.UnsentRequest req = new NetworkClientDelegate.UnsentRequest(
+        return new NetworkClientDelegate.UnsentRequest(
                 new FindCoordinatorRequest.Builder(new FindCoordinatorRequestData()
                     .setKey(GROUP_ID)
                     .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())
@@ -142,7 +142,6 @@ public class NetworkClientDelegateTest {
             Optional.empty(),
             time.timer(REQUEST_TIMEOUT_MS)
         );
-        return req;
     }
 
     public void prepareFindCoordinatorResponse(Errors error) {

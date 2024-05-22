@@ -33,14 +33,15 @@ import static java.lang.annotation.RetentionPolicy.RUNTIME;
 @Retention(RUNTIME)
 @TestTemplate
 public @interface ClusterTest {
-    Type clusterType() default Type.DEFAULT;
+    Type[] types() default {};
     int brokers() default 0;
     int controllers() default 0;
+    int disksPerBroker() default 0;
     AutoStart autoStart() default AutoStart.DEFAULT;
-
-    String name() default "";
     SecurityProtocol securityProtocol() default SecurityProtocol.PLAINTEXT;
     String listener() default "";
     MetadataVersion metadataVersion() default MetadataVersion.IBP_3_8_IV0;
     ClusterConfigProperty[] serverProperties() default {};
+    // users can add tags that they want to display in test
+    String[] tags() default {};
 }

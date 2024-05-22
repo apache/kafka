@@ -16,20 +16,23 @@
  */
 package kafka.admin
 
-import java.util
-import java.util.{Optional, Properties}
-import kafka.controller.ReplicaAssignment
+import kafka.api.LeaderAndIsr
+import kafka.cluster.{Broker, EndPoint}
+import kafka.controller.{LeaderIsrAndControllerEpoch, ReplicaAssignment}
 import kafka.server.KafkaConfig._
 import kafka.server.{KafkaConfig, KafkaServer, QuorumTestHarness}
 import kafka.utils.CoreUtils._
 import kafka.utils.TestUtils._
 import kafka.utils.{Logging, TestUtils}
-import kafka.zk.{AdminZkClient, ConfigEntityTypeZNode, KafkaZkClient}
+import kafka.zk._
+import org.apache.kafka.admin.BrokerMetadata
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.{InvalidReplicaAssignmentException, InvalidTopicException, TopicExistsException}
 import org.apache.kafka.common.metrics.Quota
-import org.apache.kafka.server.common.AdminOperationException
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.server.common.{AdminOperationException, MetadataVersion}
 import org.apache.kafka.server.config.{ConfigType, QuotaConfigs}
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.kafka.test.{TestUtils => JTestUtils}
@@ -37,8 +40,10 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.mockito.Mockito.{mock, when}
 
-import scala.jdk.CollectionConverters._
+import java.util
+import java.util.{Optional, Properties}
 import scala.collection.{Map, Seq, immutable}
+import scala.jdk.CollectionConverters._
 
 class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTest {
 
@@ -55,7 +60,7 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
   @Test
   def testManualReplicaAssignment(): Unit = {
     val brokers = List(0, 1, 2, 3, 4)
-    TestUtils.createBrokersInZk(zkClient, brokers)
+    createBrokersInZk(zkClient, brokers)
 
     val topicConfig = new Properties()
 
@@ -114,11 +119,11 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
     )
     val topic = "test"
     val topicConfig = new Properties()
-    TestUtils.createBrokersInZk(zkClient, List(0, 1, 2, 3, 4))
+    createBrokersInZk(zkClient, List(0, 1, 2, 3, 4))
     // create the topic
     adminZkClient.createTopicWithAssignment(topic, topicConfig, expectedReplicaAssignment)
     // create leaders for all partitions
-    TestUtils.makeLeaderForPartition(zkClient, topic, leaderForPartitionMap, 1)
+    makeLeaderForPartition(zkClient, topic, leaderForPartitionMap)
     val actualReplicaMap = leaderForPartitionMap.keys.map(p => p -> zkClient.getReplicasForPartition(new TopicPartition(topic, p))).toMap
     assertEquals(expectedReplicaAssignment.size, actualReplicaMap.size)
     for (i <- 0 until actualReplicaMap.size)
@@ -132,7 +137,7 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
   def testTopicCreationWithCollision(): Unit = {
     val topic = "test.topic"
     val collidingTopic = "test_topic"
-    TestUtils.createBrokersInZk(zkClient, List(0, 1, 2, 3, 4))
+    createBrokersInZk(zkClient, List(0, 1, 2, 3, 4))
     // create the topic
     adminZkClient.createTopic(topic, 3, 1)
 
@@ -167,7 +172,7 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
   @Test
   def testConcurrentTopicCreation(): Unit = {
     val topic = "test-concurrent-topic-creation"
-    TestUtils.createBrokersInZk(zkClient, List(0, 1, 2, 3, 4))
+    createBrokersInZk(zkClient, List(0, 1, 2, 3, 4))
     val props = new Properties
     props.setProperty(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
     def createTopic(): Unit = {
@@ -335,7 +340,7 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
     val brokerList = 0 to 5
     val rackInfo = Map(0 -> "rack1", 1 -> "rack2", 2 -> "rack2", 3 -> "rack1", 5 -> "rack3")
     val brokerMetadatas = toBrokerMetadata(rackInfo, brokersWithoutRack = brokerList.filterNot(rackInfo.keySet))
-    TestUtils.createBrokersInZk(brokerMetadatas.asScala.toSeq, zkClient)
+    createBrokersInZk(brokerMetadatas.asScala.toSeq, zkClient)
 
     val processedMetadatas1 = adminZkClient.getBrokerMetadatas(RackAwareMode.Disabled)
     assertEquals(brokerList, processedMetadatas1.map(_.id))
@@ -421,5 +426,33 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
     adminZkClient.changeIpConfig("127.0.0.1", new Properties())
     val users = zkClient.getChildren(ConfigEntityTypeZNode.path(ConfigType.IP))
     assert(users.isEmpty)
+  }
+
+  private def createBrokersInZk(zkClient: KafkaZkClient, ids: Seq[Int]): Seq[Broker] =
+    createBrokersInZk(ids.map(new BrokerMetadata(_, Optional.empty())), zkClient)
+
+  private def createBrokersInZk(brokerMetadatas: Seq[BrokerMetadata], zkClient: KafkaZkClient): Seq[Broker] = {
+    zkClient.makeSurePersistentPathExists(BrokerIdsZNode.path)
+    val brokers = brokerMetadatas.map { b =>
+      val protocol = SecurityProtocol.PLAINTEXT
+      val listenerName = ListenerName.forSecurityProtocol(protocol)
+      Broker(b.id, Seq(EndPoint("localhost", 6667, listenerName, protocol)), if (b.rack.isPresent) Some(b.rack.get()) else None)
+    }
+    brokers.foreach(b => zkClient.registerBroker(BrokerInfo(Broker(b.id, b.endPoints, rack = b.rack),
+      MetadataVersion.latestTesting, jmxPort = -1)))
+    brokers
+  }
+
+  private def makeLeaderForPartition(zkClient: KafkaZkClient,
+                                       topic: String,
+                                       leaderPerPartitionMap: scala.collection.immutable.Map[Int, Int]): Unit = {
+    val newLeaderIsrAndControllerEpochs = leaderPerPartitionMap.map { case (partition, leader) =>
+      val topicPartition = new TopicPartition(topic, partition)
+      val newLeaderAndIsr = zkClient.getTopicPartitionState(topicPartition)
+        .map(_.leaderAndIsr.newLeader(leader))
+        .getOrElse(LeaderAndIsr(leader, List(leader)))
+      topicPartition -> LeaderIsrAndControllerEpoch(newLeaderAndIsr, 1)
+    }
+    zkClient.setTopicPartitionStatesRaw(newLeaderIsrAndControllerEpochs, ZkVersion.MatchAnyVersion)
   }
 }

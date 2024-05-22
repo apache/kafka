@@ -30,6 +30,7 @@ import java.io.Closeable;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.Future;
 import java.util.function.Supplier;
 
 /**
@@ -46,6 +47,7 @@ public class ApplicationEventHandler implements Closeable {
     public ApplicationEventHandler(final LogContext logContext,
                                    final Time time,
                                    final BlockingQueue<ApplicationEvent> applicationEventQueue,
+                                   final CompletableEventReaper applicationEventReaper,
                                    final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
                                    final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
                                    final Supplier<RequestManagers> requestManagersSupplier) {
@@ -54,6 +56,7 @@ public class ApplicationEventHandler implements Closeable {
         this.networkThread = new ConsumerNetworkThread(logContext,
                 time,
                 applicationEventQueue,
+                applicationEventReaper,
                 applicationEventProcessorSupplier,
                 networkClientDelegateSupplier,
                 requestManagersSupplier);
@@ -69,7 +72,6 @@ public class ApplicationEventHandler implements Closeable {
     public void add(final ApplicationEvent event) {
         Objects.requireNonNull(event, "ApplicationEvent provided to add must be non-null");
         applicationEventQueue.add(event);
-        log.trace("Enqueued event: {}", event);
         wakeupNetworkThread();
     }
 
@@ -95,6 +97,10 @@ public class ApplicationEventHandler implements Closeable {
     /**
      * Add a {@link CompletableApplicationEvent} to the handler. The method blocks waiting for the result, and will
      * return the result value upon successful completion; otherwise throws an error.
+     *
+     * <p/>
+     *
+     * See {@link ConsumerUtils#getResult(Future)} for more details.
      *
      * @param event A {@link CompletableApplicationEvent} created by the polling thread
      * @return      Value that is the result of the event

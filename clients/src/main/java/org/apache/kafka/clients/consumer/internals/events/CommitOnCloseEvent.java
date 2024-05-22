@@ -16,11 +16,9 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.common.utils.Timer;
-
 public class CommitOnCloseEvent extends CompletableApplicationEvent<Void> {
 
-    public CommitOnCloseEvent(final Timer timer) {
-        super(Type.COMMIT_ON_CLOSE, timer);
+    public CommitOnCloseEvent(final long deadlineMs) {
+        super(Type.COMMIT_ON_CLOSE, deadlineMs);
     }
 }

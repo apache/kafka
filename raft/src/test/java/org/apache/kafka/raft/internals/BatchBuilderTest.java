@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft.internals;
 
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MutableRecordBatch;
@@ -35,8 +36,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class BatchBuilderTest {
-    private StringSerde serde = new StringSerde();
-    private MockTime time = new MockTime();
+    private final StringSerde serde = new StringSerde();
+    private final MockTime time = new MockTime();
 
     @ParameterizedTest
     @EnumSource(CompressionType.class)
@@ -46,11 +47,11 @@ class BatchBuilderTest {
         long logAppendTime = time.milliseconds();
         boolean isControlBatch = false;
         int leaderEpoch = 15;
-
+        Compression compression = Compression.of(compressionType).build();
         BatchBuilder<String> builder = new BatchBuilder<>(
             buffer,
             serde,
-            compressionType,
+            compression,
             baseOffset,
             logAppendTime,
             isControlBatch,
@@ -102,7 +103,7 @@ class BatchBuilderTest {
         BatchBuilder<String> builder = new BatchBuilder<>(
             buffer,
             serde,
-            CompressionType.NONE,
+            Compression.NONE,
             baseOffset,
             logAppendTime,
             isControlBatch,

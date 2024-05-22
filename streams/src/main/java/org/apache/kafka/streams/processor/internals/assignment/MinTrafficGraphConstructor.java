@@ -28,7 +28,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor.CostFunction;
 
-public class MinTrafficGraphConstructor implements RackAwareGraphConstructor {
+public class MinTrafficGraphConstructor<T> implements RackAwareGraphConstructor<T> {
 
     @Override
     public int getSinkNodeID(
@@ -53,10 +53,10 @@ public class MinTrafficGraphConstructor implements RackAwareGraphConstructor {
     public Graph<Integer> constructTaskGraph(
         final List<UUID> clientList,
         final List<TaskId> taskIdList,
-        final Map<UUID, ClientState> clientStates,
+        final Map<UUID, T> clientStates,
         final Map<TaskId, UUID> taskClientMap,
         final Map<UUID, Integer> originalAssignedTaskNumber,
-        final BiPredicate<ClientState, TaskId> hasAssignedTask,
+        final BiPredicate<T, TaskId> hasAssignedTask,
         final CostFunction costFunction,
         final int trafficCost,
         final int nonOverlapCost,
@@ -66,7 +66,7 @@ public class MinTrafficGraphConstructor implements RackAwareGraphConstructor {
         final Graph<Integer> graph = new Graph<>();
 
         for (final TaskId taskId : taskIdList) {
-            for (final Entry<UUID, ClientState> clientState : clientStates.entrySet()) {
+            for (final Entry<UUID, T> clientState : clientStates.entrySet()) {
                 if (hasAssignedTask.test(clientState.getValue(), taskId)) {
                     originalAssignedTaskNumber.merge(clientState.getKey(), 1, Integer::sum);
                 }
@@ -122,12 +122,12 @@ public class MinTrafficGraphConstructor implements RackAwareGraphConstructor {
         final Graph<Integer> graph,
         final List<UUID> clientList,
         final List<TaskId> taskIdList,
-        final Map<UUID, ClientState> clientStates,
+        final Map<UUID, T> clientStates,
         final Map<UUID, Integer> originalAssignedTaskNumber,
         final Map<TaskId, UUID> taskClientMap,
-        final BiConsumer<ClientState, TaskId> assignTask,
-        final BiConsumer<ClientState, TaskId> unAssignTask,
-        final BiPredicate<ClientState, TaskId> hasAssignedTask
+        final BiConsumer<T, TaskId> assignTask,
+        final BiConsumer<T, TaskId> unAssignTask,
+        final BiPredicate<T, TaskId> hasAssignedTask
     ) {
         int tasksAssigned = 0;
         boolean taskMoved = false;

@@ -58,10 +58,13 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.metadata.LeaderRecoveryState;
+import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.config.KRaftConfigs;
+
 import org.junit.jupiter.api.Test;
 
 import java.net.InetAddress;
@@ -550,11 +553,11 @@ class DescribeTopicPartitionsRequestHandlerTest {
             1,
             (short) 1,
             false);
-        properties.put(KafkaConfig.NodeIdProp(), Integer.toString(brokerId));
-        properties.put(KafkaConfig.ProcessRolesProp(), "broker");
+        properties.put(KRaftConfigs.NODE_ID_CONFIG, Integer.toString(brokerId));
+        properties.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker");
         int voterId = brokerId + 1;
-        properties.put(KafkaConfig.QuorumVotersProp(), voterId + "@localhost:9093");
-        properties.put(KafkaConfig.ControllerListenerNamesProp(), "SSL");
+        properties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, voterId + "@localhost:9093");
+        properties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL");
         TestUtils.setIbpAndMessageFormatVersions(properties, MetadataVersion.latestProduction());
         return new KafkaConfig(properties);
     }

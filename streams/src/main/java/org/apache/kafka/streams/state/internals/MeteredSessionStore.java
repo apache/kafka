@@ -47,6 +47,7 @@ import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -69,6 +70,8 @@ public class MeteredSessionStore<K, V>
     private Sensor e2eLatencySensor;
     private InternalProcessorContext<?, ?> context;
     private TaskId taskId;
+
+    private AtomicInteger numOpenIterators = new AtomicInteger(0);
 
     @SuppressWarnings("rawtypes")
     private final Map<Class, QueryHandler> queryHandlers =
@@ -131,6 +134,8 @@ public class MeteredSessionStore<K, V>
         flushSensor = StateStoreMetrics.flushSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         removeSensor = StateStoreMetrics.removeSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         e2eLatencySensor = StateStoreMetrics.e2ELatencySensor(taskId.toString(), metricsScope, name(), streamsMetrics);
+        StateStoreMetrics.addNumOpenIteratorsGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
+                (config, now) -> numOpenIterators.get());
     }
 
 
@@ -248,7 +253,8 @@ public class MeteredSessionStore<K, V>
             streamsMetrics,
             serdes::keyFrom,
             serdes::valueFrom,
-            time);
+            time,
+            numOpenIterators);
     }
 
     @Override
@@ -260,7 +266,8 @@ public class MeteredSessionStore<K, V>
             streamsMetrics,
             serdes::keyFrom,
             serdes::valueFrom,
-            time
+            time,
+            numOpenIterators
         );
     }
 
@@ -273,7 +280,8 @@ public class MeteredSessionStore<K, V>
             streamsMetrics,
             serdes::keyFrom,
             serdes::valueFrom,
-            time);
+            time,
+            numOpenIterators);
     }
 
     @Override
@@ -285,7 +293,8 @@ public class MeteredSessionStore<K, V>
             streamsMetrics,
             serdes::keyFrom,
             serdes::valueFrom,
-            time
+            time,
+            numOpenIterators
         );
     }
 
@@ -304,7 +313,8 @@ public class MeteredSessionStore<K, V>
             streamsMetrics,
             serdes::keyFrom,
             serdes::valueFrom,
-            time);
+            time,
+            numOpenIterators);
     }
 
     @Override
@@ -323,7 +333,8 @@ public class MeteredSessionStore<K, V>
             streamsMetrics,
             serdes::keyFrom,
             serdes::valueFrom,
-            time
+            time,
+            numOpenIterators
         );
     }
 
@@ -344,7 +355,8 @@ public class MeteredSessionStore<K, V>
             streamsMetrics,
             serdes::keyFrom,
             serdes::valueFrom,
-            time);
+            time,
+            numOpenIterators);
     }
 
     @Override
@@ -356,7 +368,8 @@ public class MeteredSessionStore<K, V>
                 streamsMetrics,
                 serdes::keyFrom,
                 serdes::valueFrom,
-                time);
+                time,
+                numOpenIterators);
     }
 
     @Override
@@ -377,7 +390,8 @@ public class MeteredSessionStore<K, V>
             streamsMetrics,
             serdes::keyFrom,
             serdes::valueFrom,
-            time
+            time,
+            numOpenIterators
         );
     }
 
@@ -447,7 +461,8 @@ public class MeteredSessionStore<K, V>
                         streamsMetrics,
                         serdes::keyFrom,
                         StoreQueryUtils.getDeserializeValue(serdes, wrapped()),
-                        time
+                        time,
+                        numOpenIterators
                     );
                 final QueryResult<MeteredWindowedKeyValueIterator<K, V>> typedQueryResult =
                     InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);

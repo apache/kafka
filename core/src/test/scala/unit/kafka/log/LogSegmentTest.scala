@@ -17,21 +17,22 @@
 package kafka.log
 
 import kafka.utils.TestUtils
-import kafka.utils.TestUtils.checkEquals
+import kafka.utils.TestUtils.random
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{MockTime, Time, Utils}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpoint
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{BatchMetadata, EpochEntry, LogConfig, LogFileUtils, LogSegment, LogSegmentOffsetOverflowException, ProducerStateEntry, ProducerStateManager, ProducerStateManagerConfig, RollParams}
+import org.apache.kafka.storage.internals.log._
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
-import java.io.File
+import java.io.{File, RandomAccessFile}
 import java.util
 import java.util.{Optional, OptionalLong}
 import scala.collection._
@@ -53,7 +54,7 @@ class LogSegmentTest {
 
   /* create a ByteBufferMessageSet for the given messages starting from the given offset */
   def records(offset: Long, records: String*): MemoryRecords = {
-    MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, offset, CompressionType.NONE, TimestampType.CREATE_TIME,
+    MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, offset, Compression.NONE, TimestampType.CREATE_TIME,
       records.map { s => new SimpleRecord(offset * 10, s.getBytes) }: _*)
   }
 
@@ -327,7 +328,7 @@ class LogSegmentTest {
     for (i <- 0 until 100)
       seg.append(i, RecordBatch.NO_TIMESTAMP, -1L, records(i, i.toString))
     val indexFile = seg.offsetIndexFile
-    TestUtils.writeNonsenseToFile(indexFile, 5, indexFile.length.toInt)
+    writeNonsenseToFile(indexFile, 5, indexFile.length.toInt)
     seg.recover(newProducerStateManager(), Optional.empty())
     for (i <- 0 until 100) {
       val records = seg.read(i, 1, seg.size(), true).records.records
@@ -347,15 +348,15 @@ class LogSegmentTest {
 
     // append transactional records from pid1
     segment.append(101L, RecordBatch.NO_TIMESTAMP,
-      100L, MemoryRecords.withTransactionalRecords(100L, CompressionType.NONE,
+      100L, MemoryRecords.withTransactionalRecords(100L, Compression.NONE,
         pid1, producerEpoch, sequence, partitionLeaderEpoch, new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
 
     // append transactional records from pid2
-    segment.append(103L, RecordBatch.NO_TIMESTAMP, 102L, MemoryRecords.withTransactionalRecords(102L, CompressionType.NONE,
+    segment.append(103L, RecordBatch.NO_TIMESTAMP, 102L, MemoryRecords.withTransactionalRecords(102L, Compression.NONE,
         pid2, producerEpoch, sequence, partitionLeaderEpoch, new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
 
     // append non-transactional records
-    segment.append(105L, RecordBatch.NO_TIMESTAMP, 104L, MemoryRecords.withRecords(104L, CompressionType.NONE,
+    segment.append(105L, RecordBatch.NO_TIMESTAMP, 104L, MemoryRecords.withRecords(104L, Compression.NONE,
         partitionLeaderEpoch, new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
 
     // abort the transaction from pid2 (note LSO should be 100L since the txn from pid1 has not completed)
@@ -413,16 +414,16 @@ class LogSegmentTest {
     }
 
     val cache = new LeaderEpochFileCache(topicPartition, checkpoint)
-    seg.append(105L, RecordBatch.NO_TIMESTAMP, 104L, MemoryRecords.withRecords(104L, CompressionType.NONE, 0,
+    seg.append(105L, RecordBatch.NO_TIMESTAMP, 104L, MemoryRecords.withRecords(104L, Compression.NONE, 0,
         new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
 
-    seg.append(107L, RecordBatch.NO_TIMESTAMP, 106L, MemoryRecords.withRecords(106L, CompressionType.NONE, 1,
+    seg.append(107L, RecordBatch.NO_TIMESTAMP, 106L, MemoryRecords.withRecords(106L, Compression.NONE, 1,
         new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
 
-    seg.append(109L, RecordBatch.NO_TIMESTAMP, 108L, MemoryRecords.withRecords(108L, CompressionType.NONE, 1,
+    seg.append(109L, RecordBatch.NO_TIMESTAMP, 108L, MemoryRecords.withRecords(108L, Compression.NONE, 1,
         new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
 
-    seg.append(111L, RecordBatch.NO_TIMESTAMP, 110, MemoryRecords.withRecords(110L, CompressionType.NONE, 2,
+    seg.append(111L, RecordBatch.NO_TIMESTAMP, 110, MemoryRecords.withRecords(110L, Compression.NONE, 2,
         new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
 
     seg.recover(newProducerStateManager(), Optional.of(cache))
@@ -453,7 +454,7 @@ class LogSegmentTest {
     for (i <- 0 until 100)
       seg.append(i, i * 10, i, records(i, i.toString))
     val timeIndexFile = seg.timeIndexFile
-    TestUtils.writeNonsenseToFile(timeIndexFile, 5, timeIndexFile.length.toInt)
+    writeNonsenseToFile(timeIndexFile, 5, timeIndexFile.length.toInt)
     seg.recover(newProducerStateManager(), Optional.empty())
     for (i <- 0 until 100) {
       assertEquals(i, seg.findOffsetByTimestamp(i * 10, 0L).get.offset)
@@ -477,7 +478,7 @@ class LogSegmentTest {
 
       val recordPosition = seg.log.searchForOffsetWithSize(offsetToBeginCorruption, 0)
       val position = recordPosition.position + TestUtils.random.nextInt(15)
-      TestUtils.writeNonsenseToFile(seg.log.file, position, (seg.log.file.length - position).toInt)
+      writeNonsenseToFile(seg.log.file, position, (seg.log.file.length - position).toInt)
       seg.recover(newProducerStateManager(), Optional.empty())
       assertEquals((0 until offsetToBeginCorruption).toList, seg.log.batches.asScala.map(_.lastOffset).toList,
         "Should have truncated off bad messages.")
@@ -555,7 +556,7 @@ class LogSegmentTest {
     val offset = 40
 
     def records(offset: Long, record: String): MemoryRecords =
-      MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, offset, CompressionType.NONE, TimestampType.CREATE_TIME,
+      MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, offset, Compression.NONE, TimestampType.CREATE_TIME,
         new SimpleRecord(offset * 1000, record.getBytes))
 
     //Given two messages with a gap between them (e.g. mid offset compacted away)
@@ -576,7 +577,7 @@ class LogSegmentTest {
   @Test
   def testAppendFromFile(): Unit = {
     def records(offset: Long, size: Int): MemoryRecords =
-      MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, offset, CompressionType.NONE, TimestampType.CREATE_TIME,
+      MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, offset, Compression.NONE, TimestampType.CREATE_TIME,
         new SimpleRecord(new Array[Byte](size)))
 
     // create a log file in a separate directory to avoid conflicting with created segments
@@ -611,6 +612,24 @@ class LogSegmentTest {
       new ProducerStateManagerConfig(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
       new MockTime()
     )
+  }
+
+  private def checkEquals[T](s1: java.util.Iterator[T], s2: java.util.Iterator[T]): Unit = {
+    while (s1.hasNext && s2.hasNext)
+      assertEquals(s1.next, s2.next)
+    assertFalse(s1.hasNext, "Iterators have uneven length--first has more")
+    assertFalse(s2.hasNext, "Iterators have uneven length--second has more")
+  }
+
+  private def writeNonsenseToFile(fileName: File, position: Long, size: Int): Unit = {
+    val file = new RandomAccessFile(fileName, "rw")
+    try {
+      file.seek(position)
+      for (_ <- 0 until size)
+        file.writeByte(random.nextInt(255))
+    } finally {
+      file.close()
+    }
   }
 
 }

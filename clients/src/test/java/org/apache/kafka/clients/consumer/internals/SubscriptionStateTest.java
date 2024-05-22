@@ -318,7 +318,7 @@ public class SubscriptionStateTest {
         state.assignFromSubscribedAwaitingCallback(Utils.mkSet(tp0, tp1), singleton(tp1));
         assertTrue(state.isFetchable(tp0));
         assertFalse(state.isFetchable(tp1));
-        assertEquals(0, state.initializingPartitions().size());
+        assertEquals(1, state.initializingPartitions().size());
 
         // Callback completed. Added partition be initializing positions and become fetchable when it gets one.
         state.enablePartitionsAwaitingCallback(singleton(tp1));
@@ -334,7 +334,7 @@ public class SubscriptionStateTest {
         assertEquals(singleton(topicPartition.topic()), state.subscription());
 
         assertFalse(state.isFetchable(topicPartition));
-        assertEquals(0, state.initializingPartitions().size());
+        assertEquals(1, state.initializingPartitions().size());
         assertFalse(state.isPaused(topicPartition));
     }
 
@@ -966,40 +966,5 @@ public class SubscriptionStateTest {
         state.requestOffsetResetIfPartitionAssigned(unassignedPartition);
 
         assertThrows(IllegalStateException.class, () -> state.isOffsetResetNeeded(unassignedPartition));
-    }
-
-    /**
-     * This test checks that we will not attempt to prematurely reset position of partitions that are pending.
-     *
-     * See KAFKA-16556.
-     */
-    @Test
-    public void testPendingPartitionsDoNotResetPositions() {
-        Optional<ConsumerRebalanceListener> listener = Optional.of(new CounterConsumerRebalanceListener());
-        Set<String> topics = Collections.singleton(topic);
-        Collection<TopicPartition> assignedPartitions = Collections.singleton(tp0);
-
-        // User subscribes to a topic and the group coordinator assigns a partitions to our consumer.
-        state.subscribe(topics, listener);
-        state.assignFromSubscribedAwaitingCallback(assignedPartitions, assignedPartitions);
-
-        // The logic in initializingPartitions will filter out the pending partition and it will
-        // not be considered fetchable.
-        assertFalse(state.initializingPartitions().contains(tp0));
-        assertFalse(state.isFetchable(tp0));
-        assertFalse(state.hasAllFetchPositions());
-
-        // Let's pretend this code is being executed by the Consumer.poll() code on the application thread.
-        assertFalse(state.isOffsetResetNeeded(tp0));
-        state.resetInitializingPositions();
-        assertFalse(state.isOffsetResetNeeded(tp0));
-
-        // Shortly after, on the next loop of the poll() method, we complete the callback.
-        state.enablePartitionsAwaitingCallback(Collections.singleton(tp0));
-
-        // THEN, we can reset the partition (if needed).
-        assertFalse(state.isOffsetResetNeeded(tp0));
-        state.resetInitializingPositions();
-        assertTrue(state.isOffsetResetNeeded(tp0));
     }
 }

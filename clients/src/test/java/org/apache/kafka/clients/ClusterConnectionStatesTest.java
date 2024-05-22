@@ -75,14 +75,15 @@ public class ClusterConnectionStatesTest {
     private final String nodeId2 = "2002";
     private final String nodeId3 = "3003";
     private final String hostTwoIps = "multiple.ip.address";
-    private ClusterConnectionStates connectionStates;
 
     // For testing nodes with a single IP address, use localhost and default DNS resolution
-    private DefaultHostResolver singleIPHostResolver = new DefaultHostResolver();
+    private final DefaultHostResolver singleIPHostResolver = new DefaultHostResolver();
 
     // For testing nodes with multiple IP addresses, mock DNS resolution to get consistent results
-    private AddressChangeHostResolver multipleIPHostResolver = new AddressChangeHostResolver(
+    private final AddressChangeHostResolver multipleIPHostResolver = new AddressChangeHostResolver(
             initialAddresses.toArray(new InetAddress[0]), newAddresses.toArray(new InetAddress[0]));
+
+    private ClusterConnectionStates connectionStates;
 
     @BeforeEach
     public void setup() {

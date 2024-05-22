@@ -37,7 +37,6 @@ import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConvertingFutureCallback;
 import org.apache.kafka.connect.util.KafkaBasedLog;
-import org.apache.kafka.connect.util.SharedTopicAdmin;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -149,7 +148,6 @@ public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore impleme
     private Converter keyConverter;
     private final Supplier<TopicAdmin> topicAdminSupplier;
     private final Supplier<String> clientIdBase;
-    private SharedTopicAdmin ownTopicAdmin;
     protected boolean exactlyOnce;
 
     /**
@@ -211,17 +209,9 @@ public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore impleme
         Map<String, Object> adminProps = new HashMap<>(originals);
         adminProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
         ConnectUtils.addMetricsContextProperties(adminProps, config, clusterId);
-        Supplier<TopicAdmin> adminSupplier;
-        if (topicAdminSupplier != null) {
-            adminSupplier = topicAdminSupplier;
-        } else {
-            // Create our own topic admin supplier that we'll close when we're stopped
-            this.ownTopicAdmin = new SharedTopicAdmin(adminProps);
-            adminSupplier = ownTopicAdmin;
-        }
         NewTopic topicDescription = newTopicDescription(topic, config);
 
-        this.offsetLog = createKafkaBasedLog(topic, producerProps, consumerProps, consumedCallback, topicDescription, adminSupplier, config, Time.SYSTEM);
+        this.offsetLog = createKafkaBasedLog(topic, producerProps, consumerProps, consumedCallback, topicDescription, topicAdminSupplier, config, Time.SYSTEM);
     }
 
     protected NewTopic newTopicDescription(final String topic, final WorkerConfig config) {
@@ -268,13 +258,7 @@ public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore impleme
     @Override
     public void stop() {
         log.info("Stopping KafkaOffsetBackingStore");
-        try {
-            offsetLog.stop();
-        } finally {
-            if (ownTopicAdmin != null) {
-                ownTopicAdmin.close();
-            }
-        }
+        offsetLog.stop();
         log.info("Stopped KafkaOffsetBackingStore");
     }
 

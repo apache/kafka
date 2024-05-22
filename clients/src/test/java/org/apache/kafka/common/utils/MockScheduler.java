@@ -74,11 +74,7 @@ public class MockScheduler implements Scheduler, MockTime.Listener {
             waiter.complete(timeMs);
         } else {
             long triggerTimeMs = timeMs + delayMs;
-            List<KafkaFutureImpl<Long>> futures = waiters.get(triggerTimeMs);
-            if (futures == null) {
-                futures = new ArrayList<>();
-                waiters.put(triggerTimeMs, futures);
-            }
+            List<KafkaFutureImpl<Long>> futures = waiters.computeIfAbsent(triggerTimeMs, k -> new ArrayList<>());
             futures.add(waiter);
         }
     }

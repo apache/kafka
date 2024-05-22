@@ -19,6 +19,8 @@ package org.apache.kafka.streams.state.internals;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_CODE_VALID_TO_UNDEFINED;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.greaterThan;
@@ -26,6 +28,7 @@ import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.not;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -33,6 +36,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -62,9 +66,11 @@ import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.RangeQuery;
+import org.apache.kafka.streams.query.ResultOrder;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.VersionedBytesStore;
 import org.apache.kafka.streams.state.VersionedRecord;
+import org.apache.kafka.streams.state.VersionedRecordIterator;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -360,6 +366,28 @@ public class MeteredVersionedKeyValueStoreTest {
         when(inner.getPosition()).thenReturn(position);
 
         assertThat(store.getPosition(), is(position));
+    }
+
+    @Test
+    public void shouldTrackOpenIteratorsMetric() {
+        final MultiVersionedKeyQuery<String, String> query = MultiVersionedKeyQuery.withKey(KEY);
+        final PositionBound bound = PositionBound.unbounded();
+        final QueryConfig config = new QueryConfig(false);
+        when(inner.query(any(), any(), any())).thenReturn(
+            QueryResult.forResult(new LogicalSegmentIterator(Collections.emptyListIterator(), RAW_KEY, 0L, 0L, ResultOrder.ANY)));
+
+        final KafkaMetric openIteratorsMetric = getMetric("num-open-iterators");
+        assertThat(openIteratorsMetric, not(nullValue()));
+
+        assertThat((Integer) openIteratorsMetric.metricValue(), equalTo(0));
+
+        final QueryResult<VersionedRecordIterator<String>> result = store.query(query, bound, config);
+
+        try (final VersionedRecordIterator<String> iterator = result.getResult()) {
+            assertThat((Integer) openIteratorsMetric.metricValue(), equalTo(1));
+        }
+
+        assertThat((Integer) openIteratorsMetric.metricValue(), equalTo(0));
     }
 
     private KafkaMetric getMetric(final String name) {

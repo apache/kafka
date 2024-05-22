@@ -33,14 +33,14 @@ import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.{ConfigException, SslConfigs}
 import org.apache.kafka.common.metrics.{JmxReporter, Metrics}
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.security.PasswordEncoderConfigs
 import org.apache.kafka.server.authorizer._
-import org.apache.kafka.server.config.{Defaults, KafkaSecurityConfigs, ZkConfigs}
+import org.apache.kafka.server.config.{Defaults, KRaftConfigs, KafkaSecurityConfigs, ReplicationConfigs, ServerLogConfigs, ZkConfigs}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
-import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.metrics.{KafkaYammerMetrics, MetricConfigs}
 import org.apache.kafka.server.util.KafkaScheduler
-import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, ProducerStateManagerConfig}
 import org.apache.kafka.test.MockMetricsReporter
 import org.junit.jupiter.api.Assertions._
@@ -518,10 +518,10 @@ class DynamicBrokerConfigTest {
       enableControlledShutdown = true,
       enableDeleteTopic = true,
       port)
-    retval.put(KafkaConfig.ProcessRolesProp, "broker,controller")
-    retval.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+    retval.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker,controller")
+    retval.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
     retval.put(SocketServerConfigs.LISTENERS_CONFIG, s"${retval.get(SocketServerConfigs.LISTENERS_CONFIG)},CONTROLLER://localhost:0")
-    retval.put(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:0")
+    retval.put(QuorumConfig.QUORUM_VOTERS_CONFIG, s"${nodeId}@localhost:0")
     retval
   }
 
@@ -562,12 +562,12 @@ class DynamicBrokerConfigTest {
       enableDeleteTopic = true,
       port
     )
-    retval.put(KafkaConfig.ProcessRolesProp, "controller")
+    retval.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
     retval.remove(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG)
 
-    retval.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+    retval.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
     retval.put(SocketServerConfigs.LISTENERS_CONFIG, "CONTROLLER://localhost:0")
-    retval.put(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:0")
+    retval.put(QuorumConfig.QUORUM_VOTERS_CONFIG, s"${nodeId}@localhost:0")
     retval
   }
 
@@ -674,7 +674,7 @@ class DynamicBrokerConfigTest {
     assertEquals(classOf[JmxReporter].getName, m.currentReporters.keySet.head)
 
     val props = new Properties()
-    props.put(KafkaConfig.MetricReporterClassesProp, classOf[MockMetricsReporter].getName)
+    props.put(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG, classOf[MockMetricsReporter].getName)
     config.dynamicConfig.updateDefaultConfig(props)
     assertEquals(2, m.currentReporters.size)
     assertEquals(Set(classOf[JmxReporter].getName, classOf[MockMetricsReporter].getName), m.currentReporters.keySet)
@@ -685,7 +685,7 @@ class DynamicBrokerConfigTest {
   def testUpdateMetricReportersNoJmxReporter(): Unit = {
     val brokerId = 0
     val origProps = TestUtils.createBrokerConfig(brokerId, TestUtils.MockZkConnect, port = 8181)
-    origProps.put(KafkaConfig.AutoIncludeJmxReporterProp, "false")
+    origProps.put(MetricConfigs.AUTO_INCLUDE_JMX_REPORTER_CONFIG, "false")
 
     val config = KafkaConfig(origProps)
     val serverMock = Mockito.mock(classOf[KafkaBroker])
@@ -699,12 +699,12 @@ class DynamicBrokerConfigTest {
     assertTrue(m.currentReporters.isEmpty)
 
     val props = new Properties()
-    props.put(KafkaConfig.MetricReporterClassesProp, classOf[MockMetricsReporter].getName)
+    props.put(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG, classOf[MockMetricsReporter].getName)
     config.dynamicConfig.updateDefaultConfig(props)
     assertEquals(1, m.currentReporters.size)
     assertEquals(classOf[MockMetricsReporter].getName, m.currentReporters.keySet.head)
 
-    props.remove(KafkaConfig.MetricReporterClassesProp)
+    props.remove(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG)
     config.dynamicConfig.updateDefaultConfig(props)
     assertTrue(m.currentReporters.isEmpty)
   }
@@ -713,11 +713,11 @@ class DynamicBrokerConfigTest {
   def testNonInternalValuesDoesNotExposeInternalConfigs(): Unit = {
     val props = new Properties()
     props.put(ZkConfigs.ZK_CONNECT_CONFIG, "localhost:2181")
-    props.put(KafkaConfig.MetadataLogSegmentMinBytesProp, "1024")
+    props.put(KRaftConfigs.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG, "1024")
     val config = new KafkaConfig(props)
-    assertFalse(config.nonInternalValues.containsKey(KafkaConfig.MetadataLogSegmentMinBytesProp))
+    assertFalse(config.nonInternalValues.containsKey(KRaftConfigs.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG))
     config.updateCurrentConfig(new KafkaConfig(props))
-    assertFalse(config.nonInternalValues.containsKey(KafkaConfig.MetadataLogSegmentMinBytesProp))
+    assertFalse(config.nonInternalValues.containsKey(KRaftConfigs.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG))
   }
 
   @Test
