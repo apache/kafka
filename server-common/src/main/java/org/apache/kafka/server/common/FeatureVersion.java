@@ -22,7 +22,7 @@ import java.util.Map;
 public interface FeatureVersion {
 
     /**
-     * The level of the feature. 0 means the feature is disabled.
+     * The level of the feature. 0 means the feature is fully disabled, so this value should be positive.
      */
     short featureLevel();
 
@@ -32,10 +32,14 @@ public interface FeatureVersion {
     String featureName();
 
     /**
-     * The minimum metadata version which sets this feature version as default. When bootstrapping using only
-     * a metadata version, a reasonable default for all other features is chosen based on this value.
-     * This should be defined as the next metadata version to be released when the feature version becomes production ready.
+     * When bootstrapping using only a metadata version, a reasonable default for all other features is chosen based
+     * on the metadata version. This method returns the minimum metadata version that sets this feature version as default.
+     * This should be defined as the next metadata version to be released when this feature version becomes production ready.
+     * If feature level X is released when metadata version Y is the latest, this method should return Y + 1
      * (Ie, if the current production MV is 17 when a feature version is released, its mapping should be to MV 18)
+     *
+     * NOTE: The feature can be used without setting this metadata version (unless specified by {@link FeatureVersion#dependencies})
+     * This method is simply for choosing the default when only metadata version is specified.
      */
     MetadataVersion bootstrapMetadataVersion();
 

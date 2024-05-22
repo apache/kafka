@@ -32,8 +32,8 @@ public class FeaturesTest {
     public void testFromFeatureLevelAllFeatures(Features feature) {
         FeatureVersion[] featureImplementations = feature.featureVersions();
         int numFeatures = featureImplementations.length;
-        for (short i = 0; i < numFeatures; i++) {
-            assertEquals(featureImplementations[i], feature.fromFeatureLevel(i));
+        for (short i = 1; i < numFeatures; i++) {
+            assertEquals(featureImplementations[i - 1], feature.fromFeatureLevel(i));
         }
     }
 

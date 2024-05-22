@@ -85,7 +85,7 @@ public enum Features {
     public FeatureVersion fromFeatureLevel(short level) {
         return Arrays.stream(featureVersions).filter(featureVersion ->
             featureVersion.featureLevel() == level).findFirst().orElseThrow(
-                () -> new IllegalArgumentException("No " + featureName() + " with feature level " + level));
+                () -> new IllegalArgumentException("No feature:" + featureName() + " with feature level " + level));
     }
 
     /**

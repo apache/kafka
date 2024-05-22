@@ -125,23 +125,25 @@ object StorageTool extends Logging {
     // If we are using --version-default, the default is based on the metadata version.
     val metadataVersionForDefault = if (specifiedFeatures.isEmpty) metadataVersion else MetadataVersion.LATEST_PRODUCTION
 
-    val allFeaturesAndLevels: List[FeatureVersion] = allFeatures.map { feature =>
+    val allNonZeroFeaturesAndLevels: ArrayBuffer[FeatureVersion]  = mutable.ArrayBuffer[FeatureVersion]()
+
+    allFeatures.foreach { feature =>
       val level: java.lang.Short = specifiedFeatures.getOrElse(feature.featureName, feature.defaultValue(metadataVersionForDefault))
-      feature.fromFeatureLevel(level)
+      // Only set feature records for levels greater than 0. 0 is assumed if there is no record. Throw an error if level < 0.
+      if (level != 0) {
+       allNonZeroFeaturesAndLevels.append(feature.fromFeatureLevel(level))
+      }
     }
-    val featuresMap = Features.featureImplsToMap(allFeaturesAndLevels.asJava)
+    val featuresMap = Features.featureImplsToMap(allNonZeroFeaturesAndLevels.asJava)
     featuresMap.put(MetadataVersion.FEATURE_NAME, metadataVersion.featureLevel)
 
     try {
-      for (feature <- allFeaturesAndLevels) {
+      for (feature <- allNonZeroFeaturesAndLevels) {
         // In order to validate, we need all feature versions set.
         Features.validateVersion(feature, metadataVersion, featuresMap)
-        // Only set feature records for levels greater than 0. 0 is assumed if there is no record.
-        if (feature.featureLevel > 0) {
-          metadataRecords.append(new ApiMessageAndVersion(new FeatureLevelRecord().
-            setName(feature.featureName).
-            setFeatureLevel(feature.featureLevel), 0.toShort))
-        }
+        metadataRecords.append(new ApiMessageAndVersion(new FeatureLevelRecord().
+          setName(feature.featureName).
+          setFeatureLevel(feature.featureLevel), 0.toShort))
       }
     } catch {
       case e: Throwable => throw new TerseFailure(e.getMessage)
