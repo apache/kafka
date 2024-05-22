@@ -40,7 +40,7 @@ public abstract class SampledStat implements MeasurableStat {
 
     public SampledStat(double initialValue) {
         this.initialValue = initialValue;
-        this.samples = new ArrayList<>(2);
+        this.samples = new ArrayList<>(3);
     }
 
     @Override
@@ -54,7 +54,9 @@ public abstract class SampledStat implements MeasurableStat {
     }
 
     private Sample advance(MetricConfig config, long timeMs) {
-        this.current = (this.current + 1) % config.samples();
+        // need to keep one extra sample (see purgeObsoleteSamples() logic)
+        int maxSamples = config.samples() + 1;
+        this.current = (this.current + 1) % maxSamples;
         if (this.current >= samples.size()) {
             Sample sample = newSample(timeMs);
             this.samples.add(sample);
