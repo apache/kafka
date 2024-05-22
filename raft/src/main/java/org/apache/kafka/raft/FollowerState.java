@@ -38,7 +38,10 @@ public class FollowerState implements EpochState {
     /* Used to track the currently fetching snapshot. When fetching snapshot regular
      * Fetch request are paused
      */
-    private Optional<RawSnapshotWriter> fetchingSnapshot;
+    private Optional<RawSnapshotWriter> fetchingSnapshot = Optional.empty();
+
+    // TODO: remove this when done debuggin CI failures
+    private Optional<RaftResponse.Inbound> previousFetchResponse = Optional.empty();
 
     private final Logger log;
 
@@ -57,7 +60,6 @@ public class FollowerState implements EpochState {
         this.voters = voters;
         this.fetchTimer = time.timer(fetchTimeoutMs);
         this.highWatermark = highWatermark;
-        this.fetchingSnapshot = Optional.empty();
         this.log = logContext.logger(FollowerState.class);
     }
 
@@ -150,6 +152,14 @@ public class FollowerState implements EpochState {
     public void setFetchingSnapshot(Optional<RawSnapshotWriter> newSnapshot) {
         fetchingSnapshot.ifPresent(RawSnapshotWriter::close);
         fetchingSnapshot = newSnapshot;
+    }
+
+    public Optional<RaftResponse.Inbound> previousFetchResponse() {
+        return previousFetchResponse;
+    }
+
+    public void setPreviousFetchResponse(RaftResponse.Inbound fetchResponse) {
+        previousFetchResponse = Optional.of(fetchResponse);
     }
 
     @Override
