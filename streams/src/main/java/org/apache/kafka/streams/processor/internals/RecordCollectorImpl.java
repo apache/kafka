@@ -97,14 +97,14 @@ public class RecordCollectorImpl implements RecordCollector {
         for (final String topic : topology.sinkTopics()) {
             final String processorNodeId = topology.sink(topic).name();
             producedSensorByTopic.put(
+                topic,
+                TopicMetrics.producedSensor(
+                    threadId,
+                    taskId.toString(),
+                    processorNodeId,
                     topic,
-                    TopicMetrics.producedSensor(
-                            threadId,
-                            taskId.toString(),
-                            processorNodeId,
-                            topic,
-                            streamsMetrics
-                    ));
+                    streamsMetrics
+                ));
         }
 
         this.offsets = new HashMap<>();
@@ -146,8 +146,8 @@ public class RecordCollectorImpl implements RecordCollector {
                 // here we cannot drop the message on the floor even if it is a transient timeout exception,
                 // so we treat everything the same as a fatal exception
                 throw new StreamsException("Could not determine the number of partitions for topic '" + topic +
-                        "' for task " + taskId + " due to " + fatal,
-                        fatal
+                    "' for task " + taskId + " due to " + fatal,
+                    fatal
                 );
             }
             if (partitions.size() > 0) {
@@ -170,7 +170,7 @@ public class RecordCollectorImpl implements RecordCollector {
                 }
             } else {
                 throw new StreamsException("Could not get partition information for topic " + topic + " for task " + taskId +
-                        ". This can happen if the topic does not exist.");
+                    ". This can happen if the topic does not exist.");
             }
         } else {
             send(topic, key, value, headers, null, timestamp, keySerializer, valueSerializer, processorNodeId, context);
@@ -230,14 +230,14 @@ public class RecordCollectorImpl implements RecordCollector {
                     // we may not have created a sensor during initialization if the node uses dynamic topic routing,
                     // as all topics are not known up front, so create the sensor for this topic if absent
                     final Sensor topicProducedSensor = producedSensorByTopic.computeIfAbsent(
+                        topic,
+                        t -> TopicMetrics.producedSensor(
+                            Thread.currentThread().getName(),
+                            taskId.toString(),
+                            processorNodeId,
                             topic,
-                            t -> TopicMetrics.producedSensor(
-                                    Thread.currentThread().getName(),
-                                    taskId.toString(),
-                                    processorNodeId,
-                                    topic,
-                                    context.metrics()
-                            )
+                            context.metrics()
+                        )
                     );
                     final long bytesProduced = producerRecordSizeInBytes(serializedRecord);
                     topicProducedSensor.record(bytesProduced, context.currentSystemTimeMs());
@@ -341,26 +341,26 @@ public class RecordCollectorImpl implements RecordCollector {
                 exception instanceof InvalidProducerEpochException ||
                 exception instanceof OutOfOrderSequenceException) {
             errorMessage += "\nWritten offsets would not be recorded and no more records would be sent since the producer is fenced, " +
-                    "indicating the task may be migrated out";
+                "indicating the task may be migrated out";
             sendException.set(new TaskMigratedException(errorMessage, exception));
         } else {
             if (exception instanceof RetriableException) {
                 errorMessage += "\nThe broker is either slow or in bad state (like not having enough replicas) in responding the request, " +
-                        "or the connection to broker was interrupted sending the request or receiving the response. " +
-                        "\nConsider overwriting `max.block.ms` and /or " +
-                        "`delivery.timeout.ms` to a larger value to wait longer for such scenarios and avoid timeout errors";
+                    "or the connection to broker was interrupted sending the request or receiving the response. " +
+                    "\nConsider overwriting `max.block.ms` and /or " +
+                    "`delivery.timeout.ms` to a larger value to wait longer for such scenarios and avoid timeout errors";
                 sendException.set(new TaskCorruptedException(Collections.singleton(taskId)));
             } else {
                 final ErrorHandlerContextImpl errorHandlerContext = new ErrorHandlerContextImpl(
-                        null,
-                        serializedRecord.topic(),
-                        serializedRecord.partition(),
-                        context != null ? context.offset() : -1,
-                        serializedRecord.headers(),
-                        null,
-                        null,
-                        processorNodeId,
-                        taskId);
+                    null,
+                    serializedRecord.topic(),
+                    serializedRecord.partition(),
+                    context != null ? context.offset() : -1,
+                    serializedRecord.headers(),
+                    null,
+                    null,
+                    processorNodeId,
+                    taskId);
                 if (productionExceptionHandler.handle(errorHandlerContext, serializedRecord, exception) == ProductionExceptionHandlerResponse.FAIL) {
 
                     errorMessage += "\nException handler choose to FAIL the processing, no more records would be sent.";
@@ -377,20 +377,20 @@ public class RecordCollectorImpl implements RecordCollector {
 
     private boolean isFatalException(final Exception exception) {
         final boolean securityException = exception instanceof AuthenticationException ||
-                exception instanceof AuthorizationException ||
-                exception instanceof SecurityDisabledException;
+            exception instanceof AuthorizationException ||
+            exception instanceof SecurityDisabledException;
 
         final boolean communicationException = exception instanceof InvalidTopicException ||
-                exception instanceof UnknownServerException ||
-                exception instanceof SerializationException ||
-                exception instanceof OffsetMetadataTooLarge ||
-                exception instanceof IllegalStateException;
+            exception instanceof UnknownServerException ||
+            exception instanceof SerializationException ||
+            exception instanceof OffsetMetadataTooLarge ||
+            exception instanceof IllegalStateException;
 
         return securityException || communicationException;
     }
 
     /**
-     * @throws StreamsException      fatal error that should cause the thread to die
+     * @throws StreamsException fatal error that should cause the thread to die
      * @throws TaskMigratedException recoverable error that would cause the task to be removed
      */
     @Override
@@ -401,7 +401,7 @@ public class RecordCollectorImpl implements RecordCollector {
     }
 
     /**
-     * @throws StreamsException      fatal error that should cause the thread to die
+     * @throws StreamsException fatal error that should cause the thread to die
      * @throws TaskMigratedException recoverable error that would cause the task to be removed
      */
     @Override
@@ -418,7 +418,7 @@ public class RecordCollectorImpl implements RecordCollector {
     }
 
     /**
-     * @throws StreamsException      fatal error that should cause the thread to die
+     * @throws StreamsException fatal error that should cause the thread to die
      * @throws TaskMigratedException recoverable error that would cause the task to be removed
      */
     @Override
