@@ -255,11 +255,12 @@ public class HeartbeatRequestManager implements RequestManager {
      * member to {@link MemberState#JOINING}, so that it rejoins the group.
      */
     public void resetPollTimer(final long pollMs) {
+        pollTimer.update(pollMs);
         if (pollTimer.isExpired()) {
-            logger.debug("Poll timer has been reset after it had expired");
+            logger.warn("Time between subsequent calls to poll() was longer than the configured " +
+                "max.poll.interval.ms, exceeded approximately by {} ms.", pollTimer.isExpiredBy());
             membershipManager.maybeRejoinStaleMember();
         }
-        pollTimer.update(pollMs);
         pollTimer.reset(maxPollIntervalMs);
     }
 

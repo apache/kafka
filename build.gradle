@@ -168,6 +168,21 @@ allprojects {
     }
   }
   task printAllDependencies(type: DependencyReportTask) {}
+
+  tasks.withType(Javadoc) {
+    options.charSet = 'UTF-8'
+    options.docEncoding = 'UTF-8'
+    options.encoding = 'UTF-8'
+    options.memberLevel = JavadocMemberLevel.PUBLIC  // Document only public members/API
+    // Turn off doclint for now, see https://blog.joda.org/2014/02/turning-off-doclint-in-jdk-8-javadoc.html for rationale
+    options.addStringOption('Xdoclint:none', '-quiet')
+
+    // The URL structure was changed to include the locale after Java 8
+    if (JavaVersion.current().isJava11Compatible())
+      options.links "https://docs.oracle.com/en/java/javase/${JavaVersion.current().majorVersion}/docs/api/"
+    else
+      options.links "https://docs.oracle.com/javase/8/docs/api/"
+  }
 }
 
 def determineCommitId() {
@@ -272,7 +287,7 @@ subprojects {
     options.encoding = 'UTF-8'
     options.compilerArgs << "-Xlint:all"
     // temporary exclusions until all the warnings are fixed
-    if (!project.path.startsWith(":connect"))
+    if (!project.path.startsWith(":connect") && !project.path.startsWith(":storage"))
       options.compilerArgs << "-Xlint:-rawtypes"
     options.compilerArgs << "-Xlint:-serial"
     options.compilerArgs << "-Xlint:-try"
@@ -594,21 +609,6 @@ subprojects {
 
   task docsJar(dependsOn: javadocJar)
 
-  javadoc {
-    options.charSet = 'UTF-8'
-    options.docEncoding = 'UTF-8'
-    options.encoding = 'UTF-8'
-    options.memberLevel = JavadocMemberLevel.PUBLIC  // Document only public members/API
-    // Turn off doclint for now, see https://blog.joda.org/2014/02/turning-off-doclint-in-jdk-8-javadoc.html for rationale
-    options.addStringOption('Xdoclint:none', '-quiet')
-
-    // The URL structure was changed to include the locale after Java 8
-    if (JavaVersion.current().isJava11Compatible())
-      options.links "https://docs.oracle.com/en/java/javase/${JavaVersion.current().majorVersion}/docs/api/"
-    else
-      options.links "https://docs.oracle.com/javase/8/docs/api/"
-  }
-
   task systemTestLibs(dependsOn: jar)
 
   if (!sourceSets.test.allSource.isEmpty()) {
@@ -651,7 +651,7 @@ subprojects {
     scalaCompileOptions.keepAliveMode = userKeepAliveMode
 
     scalaCompileOptions.additionalParameters = [
-      "-deprecation",
+      "-deprecation:false",
       "-unchecked",
       "-encoding", "utf8",
       "-Xlog-reflective-calls",
@@ -1328,6 +1328,8 @@ project(':group-coordinator') {
     implementation project(':clients')
     implementation project(':metadata')
     implementation project(':storage')
+    implementation libs.jacksonDatabind
+    implementation libs.jacksonJDK8Datatypes
     implementation libs.slf4jApi
     implementation libs.metrics
 
@@ -1358,13 +1360,17 @@ project(':group-coordinator') {
     enabled = false
   }
 
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-group-coordinator.xml")
+  }
+
   task processMessages(type:JavaExec) {
     mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = configurations.generator
     args = [ "-p", "org.apache.kafka.coordinator.group.generated",
              "-o", "src/generated/java/org/apache/kafka/coordinator/group/generated",
              "-i", "src/main/resources/common/message",
-             "-m", "MessageDataGenerator"
+             "-m", "MessageDataGenerator", "JsonConverterGenerator"
     ]
     inputs.dir("src/main/resources/common/message")
         .withPropertyName("messages")
@@ -3336,16 +3342,4 @@ task aggregatedJavadoc(type: Javadoc, dependsOn: compileJava) {
   classpath = files(projectsWithJavadoc.collect { it.sourceSets.main.compileClasspath })
   includes = projectsWithJavadoc.collectMany { it.javadoc.getIncludes() }
   excludes = projectsWithJavadoc.collectMany { it.javadoc.getExcludes() }
-
-  options.charSet = 'UTF-8'
-  options.docEncoding = 'UTF-8'
-  options.encoding = 'UTF-8'
-  // Turn off doclint for now, see https://blog.joda.org/2014/02/turning-off-doclint-in-jdk-8-javadoc.html for rationale
-  options.addStringOption('Xdoclint:none', '-quiet')
-
-  // The URL structure was changed to include the locale after Java 8
-  if (JavaVersion.current().isJava11Compatible())
-    options.links "https://docs.oracle.com/en/java/javase/${JavaVersion.current().majorVersion}/docs/api/"
-  else
-    options.links "https://docs.oracle.com/javase/8/docs/api/"
 }

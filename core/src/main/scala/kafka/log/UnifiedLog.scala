@@ -792,7 +792,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
             val offset = PrimitiveRef.ofLong(localLog.logEndOffset)
             appendInfo.setFirstOffset(offset.value)
             val validateAndOffsetAssignResult = try {
-              val targetCompression = BrokerCompressionType.forName(config.compressionType).targetCompressionType(appendInfo.sourceCompression)
+              val targetCompression = BrokerCompressionType.targetCompression(config.compression, appendInfo.sourceCompression())
               val validator = new LogValidator(validRecords,
                 topicPartition,
                 time,
@@ -1178,6 +1178,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       validBytesCount += batchSize
 
       val batchCompression = CompressionType.forId(batch.compressionType.id)
+      // sourceCompression is only used on the leader path, which only contains one batch if version is v2 or messages are compressed
       if (batchCompression != CompressionType.NONE)
         sourceCompression = batchCompression
     }

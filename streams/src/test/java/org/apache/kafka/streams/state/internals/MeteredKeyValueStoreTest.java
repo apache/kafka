@@ -56,6 +56,7 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.greaterThan;
@@ -437,6 +438,24 @@ public class MeteredKeyValueStoreTest {
 
         final KafkaMetric metric = metrics.metric(new MetricName("prefix-scan-rate", STORE_LEVEL_GROUP, "", tags));
         assertTrue((Double) metric.metricValue() > 0);
+    }
+
+    @Test
+    public void shouldTrackOpenIteratorsMetric() {
+        final StringSerializer stringSerializer = new StringSerializer();
+        when(inner.prefixScan(KEY, stringSerializer)).thenReturn(KeyValueIterators.emptyIterator());
+        init();
+
+        final KafkaMetric openIteratorsMetric = metric("num-open-iterators");
+        assertThat(openIteratorsMetric, not(nullValue()));
+
+        assertThat((Integer) openIteratorsMetric.metricValue(), equalTo(0));
+
+        try (final KeyValueIterator<String, String> iterator = metered.prefixScan(KEY, stringSerializer)) {
+            assertThat((Integer) openIteratorsMetric.metricValue(), equalTo(1));
+        }
+
+        assertThat((Integer) openIteratorsMetric.metricValue(), equalTo(0));
     }
 
     private KafkaMetric metric(final MetricName metricName) {
