@@ -75,13 +75,12 @@ public class DeleteConsumerGroupsHandlerTest {
     }
 
     private DeleteGroupsResponse buildResponse(Errors error) {
-        DeleteGroupsResponse response = new DeleteGroupsResponse(
+        return new DeleteGroupsResponse(
                 new DeleteGroupsResponseData()
                     .setResults(new DeletableGroupResultCollection(singletonList(
                             new DeletableGroupResult()
                                 .setErrorCode(error.code())
                                 .setGroupId(groupId1)).iterator())));
-        return response;
     }
 
     private AdminApiHandler.ApiResult<CoordinatorKey, Void> handleWithError(

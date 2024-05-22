@@ -39,7 +39,7 @@ public class TestJaasConfig extends Configuration {
     static final String USERNAME = "myuser";
     static final String PASSWORD = "mypassword";
 
-    private Map<String, AppConfigurationEntry[]> entryMap = new HashMap<>();
+    private final Map<String, AppConfigurationEntry[]> entryMap = new HashMap<>();
 
     public static TestJaasConfig createConfiguration(String clientMechanism, List<String> serverMechanisms) {
         TestJaasConfig config = new TestJaasConfig();

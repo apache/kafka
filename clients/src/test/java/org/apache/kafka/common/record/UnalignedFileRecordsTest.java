@@ -17,6 +17,7 @@
 package org.apache.kafka.common.record;
 
 
+import org.apache.kafka.common.compress.Compression;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class UnalignedFileRecordsTest {
 
-    private byte[][] values = new byte[][] {
+    private final byte[][] values = new byte[][] {
             "foo".getBytes(),
             "bar".getBytes()
     };
@@ -71,7 +72,7 @@ public class UnalignedFileRecordsTest {
         FileRecords fileRecords = FileRecords.open(tempFile());
 
         for (byte[] value : values) {
-            fileRecords.append(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(value)));
+            fileRecords.append(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord(value)));
         }
 
         return fileRecords;

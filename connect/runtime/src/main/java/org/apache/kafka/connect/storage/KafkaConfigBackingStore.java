@@ -53,7 +53,6 @@ import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.KafkaBasedLog;
-import org.apache.kafka.connect.util.SharedTopicAdmin;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -300,7 +299,6 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
     final Map<String, Map<String, String>> connectorConfigs = new HashMap<>();
     final Map<ConnectorTaskId, Map<String, String>> taskConfigs = new HashMap<>();
     private final Supplier<TopicAdmin> topicAdminSupplier;
-    private SharedTopicAdmin ownTopicAdmin;
     private final String clientId;
 
     // Set of connectors where we saw a task commit with an incomplete set of task config updates, indicating the data
@@ -332,11 +330,6 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
     //VisibleForTesting
     void setConfigLog(KafkaBasedLog<String, byte[]> configLog) {
         this.configLog = configLog;
-    }
-
-    @Deprecated
-    public KafkaConfigBackingStore(Converter converter, DistributedConfig config, WorkerConfigTransformer configTransformer) {
-        this(converter, config, configTransformer, null, "connect-distributed-");
     }
 
     public KafkaConfigBackingStore(Converter converter, DistributedConfig config, WorkerConfigTransformer configTransformer, Supplier<TopicAdmin> adminSupplier, String clientIdBase) {
@@ -411,7 +404,6 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
         log.info("Closing KafkaConfigBackingStore");
 
         relinquishWritePrivileges();
-        Utils.closeQuietly(ownTopicAdmin, "admin for config topic");
         Utils.closeQuietly(configLog::stop, "KafkaBasedLog for config topic");
 
         log.info("Closed KafkaConfigBackingStore");
@@ -794,14 +786,7 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
         Map<String, Object> adminProps = new HashMap<>(originals);
         ConnectUtils.addMetricsContextProperties(adminProps, config, clusterId);
         adminProps.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId);
-        Supplier<TopicAdmin> adminSupplier;
-        if (topicAdminSupplier != null) {
-            adminSupplier = topicAdminSupplier;
-        } else {
-            // Create our own topic admin supplier that we'll close when we're stopped
-            ownTopicAdmin = new SharedTopicAdmin(adminProps);
-            adminSupplier = ownTopicAdmin;
-        }
+
         Map<String, Object> topicSettings = config instanceof DistributedConfig
                                             ? ((DistributedConfig) config).configStorageTopicSettings()
                                             : Collections.emptyMap();
@@ -812,7 +797,7 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
                 .replicationFactor(config.getShort(DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG))
                 .build();
 
-        return createKafkaBasedLog(topic, producerProps, consumerProps, new ConsumeCallback(), topicDescription, adminSupplier, config, time);
+        return createKafkaBasedLog(topic, producerProps, consumerProps, new ConsumeCallback(), topicDescription, topicAdminSupplier, config, time);
     }
 
     /**

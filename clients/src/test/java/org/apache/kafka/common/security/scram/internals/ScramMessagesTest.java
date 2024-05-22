@@ -280,7 +280,7 @@ public class ScramMessagesTest {
         checkInvalidScramMessage(ServerFinalMessage.class, invalid);
 
         // Invalid server signature
-        invalid = String.format("v=1=23");
+        invalid = "v=1=23";
         checkInvalidScramMessage(ServerFinalMessage.class, invalid);
 
         // Invalid extensions

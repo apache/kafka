@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.internals.Topic;
@@ -96,8 +97,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
     public static class Builder {
         private final int nodeId;
         private final GroupCoordinatorConfig config;
-        private PartitionWriter<Record> writer;
-        private CoordinatorLoader<Record> loader;
+        private PartitionWriter writer;
+        private CoordinatorLoader<CoordinatorRecord> loader;
         private Time time;
         private Timer timer;
         private CoordinatorRuntimeMetrics coordinatorRuntimeMetrics;
@@ -111,12 +112,12 @@ public class GroupCoordinatorService implements GroupCoordinator {
             this.config = config;
         }
 
-        public Builder withWriter(PartitionWriter<Record> writer) {
+        public Builder withWriter(PartitionWriter writer) {
             this.writer = writer;
             return this;
         }
 
-        public Builder withLoader(CoordinatorLoader<Record> loader) {
+        public Builder withLoader(CoordinatorLoader<CoordinatorRecord> loader) {
             this.loader = loader;
             return this;
         }
@@ -160,7 +161,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             String logPrefix = String.format("GroupCoordinator id=%d", nodeId);
             LogContext logContext = new LogContext(String.format("[%s] ", logPrefix));
 
-            CoordinatorShardBuilderSupplier<GroupCoordinatorShard, Record> supplier = () ->
+            CoordinatorShardBuilderSupplier<GroupCoordinatorShard, CoordinatorRecord> supplier = () ->
                 new GroupCoordinatorShard.Builder(config);
 
             CoordinatorEventProcessor processor = new MultiThreadedEventProcessor(
@@ -171,8 +172,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 coordinatorRuntimeMetrics
             );
 
-            CoordinatorRuntime<GroupCoordinatorShard, Record> runtime =
-                new CoordinatorRuntime.Builder<GroupCoordinatorShard, Record>()
+            CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime =
+                new CoordinatorRuntime.Builder<GroupCoordinatorShard, CoordinatorRecord>()
                     .withTime(time)
                     .withTimer(timer)
                     .withLogPrefix(logPrefix)
@@ -185,6 +186,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     .withDefaultWriteTimeOut(Duration.ofMillis(config.offsetCommitTimeoutMs))
                     .withCoordinatorRuntimeMetrics(coordinatorRuntimeMetrics)
                     .withCoordinatorMetrics(groupCoordinatorMetrics)
+                    .withSerializer(new CoordinatorRecordSerde())
+                    .withCompression(Compression.of(config.compressionType).build())
                     .build();
 
             return new GroupCoordinatorService(
@@ -209,7 +212,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
     /**
      * The coordinator runtime.
      */
-    private final CoordinatorRuntime<GroupCoordinatorShard, Record> runtime;
+    private final CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime;
 
     /**
      * The metrics registry.
@@ -237,7 +240,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
     GroupCoordinatorService(
         LogContext logContext,
         GroupCoordinatorConfig config,
-        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime,
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime,
         GroupCoordinatorMetrics groupCoordinatorMetrics
     ) {
         this.log = logContext.logger(GroupCoordinatorService.class);

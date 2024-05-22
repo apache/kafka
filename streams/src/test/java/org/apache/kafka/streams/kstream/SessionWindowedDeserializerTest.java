@@ -22,14 +22,14 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.streams.StreamsConfig;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class SessionWindowedDeserializerTest {
     private final SessionWindowedDeserializer<?> sessionWindowedDeserializer = new SessionWindowedDeserializer<>(new StringDeserializer());
@@ -39,7 +39,7 @@ public class SessionWindowedDeserializerTest {
     public void testSessionWindowedDeserializerConstructor() {
         sessionWindowedDeserializer.configure(props, true);
         final Deserializer<?> inner = sessionWindowedDeserializer.innerDeserializer();
-        assertNotNull("Inner deserializer should be not null", inner);
+        assertNotNull(inner, "Inner deserializer should be not null");
         assertInstanceOf(StringDeserializer.class, inner, "Inner deserializer type should be StringDeserializer");
     }
 
