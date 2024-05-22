@@ -12298,7 +12298,7 @@ public class GroupMetadataManagerTest {
                 .setName("range")
                 .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(
                     new ConsumerPartitionAssignor.Subscription(
-                        Arrays.asList("foo"),
+                        Collections.singletonList("foo"),
                         null,
                         Collections.emptyList()
                     )
@@ -12362,7 +12362,7 @@ public class GroupMetadataManagerTest {
                 .setName("range")
                 .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(
                     new ConsumerPartitionAssignor.Subscription(
-                        Arrays.asList("foo"),
+                        Collections.singletonList("foo"),
                         null,
                         Collections.emptyList()
                     )
@@ -12404,7 +12404,7 @@ public class GroupMetadataManagerTest {
                 .setName("range")
                 .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(
                     new ConsumerPartitionAssignor.Subscription(
-                        Arrays.asList("foo"),
+                        Collections.singletonList("foo"),
                         null,
                         Collections.emptyList()
                     )
@@ -12450,7 +12450,7 @@ public class GroupMetadataManagerTest {
                 .setName("range")
                 .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(
                     new ConsumerPartitionAssignor.Subscription(
-                        Arrays.asList("foo"),
+                        Collections.singletonList("foo"),
                         null,
                         Collections.emptyList()
                     )
@@ -12510,7 +12510,7 @@ public class GroupMetadataManagerTest {
                 .setName("range")
                 .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(
                     new ConsumerPartitionAssignor.Subscription(
-                        Arrays.asList("foo"),
+                        Collections.singletonList("foo"),
                         null,
                         Collections.emptyList()
                     )
@@ -12685,7 +12685,7 @@ public class GroupMetadataManagerTest {
                 .setName("range")
                 .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(
                     new ConsumerPartitionAssignor.Subscription(
-                        Arrays.asList("foo"),
+                        Collections.singletonList("foo"),
                         null,
                         Collections.emptyList()
                     )
@@ -12723,9 +12723,12 @@ public class GroupMetadataManagerTest {
         assertEquals(consumerGroupSessionTimeoutKey(groupId, memberId), timeout.key);
         assertRecordsEquals(
             Arrays.asList(
+                // The member is removed.
                 CoordinatorRecordHelpers.newCurrentAssignmentTombstoneRecord(groupId, memberId),
                 CoordinatorRecordHelpers.newTargetAssignmentTombstoneRecord(groupId, memberId),
                 CoordinatorRecordHelpers.newMemberSubscriptionTombstoneRecord(groupId, memberId),
+
+                // The group epoch is bumped.
                 CoordinatorRecordHelpers.newGroupEpochRecord(groupId, 11)
             ),
             timeout.result.records()
@@ -12743,7 +12746,7 @@ public class GroupMetadataManagerTest {
                 .setName("range")
                 .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(
                     new ConsumerPartitionAssignor.Subscription(
-                        Arrays.asList("foo"),
+                        Collections.singletonList("foo"),
                         null,
                         Collections.emptyList()
                     )
@@ -12786,9 +12789,12 @@ public class GroupMetadataManagerTest {
         assertEquals(consumerGroupJoinKey(groupId, memberId), timeout.key);
         assertRecordsEquals(
             Arrays.asList(
+                // The member is removed.
                 CoordinatorRecordHelpers.newCurrentAssignmentTombstoneRecord(groupId, memberId),
                 CoordinatorRecordHelpers.newTargetAssignmentTombstoneRecord(groupId, memberId),
                 CoordinatorRecordHelpers.newMemberSubscriptionTombstoneRecord(groupId, memberId),
+
+                // The group epoch is bumped.
                 CoordinatorRecordHelpers.newGroupEpochRecord(groupId, 11)
             ),
             timeout.result.records()
