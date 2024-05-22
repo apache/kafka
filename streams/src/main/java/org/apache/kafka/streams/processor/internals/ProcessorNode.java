@@ -53,6 +53,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
     public ProcessorNode(final String name,
                          final Processor<KIn, VIn, KOut, VOut> processor,
                          final Set<String> stateStores) {
+
         this.name = name;
         this.processor = processor;
         this.fixedKeyProcessor = null;
@@ -64,6 +65,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
     public ProcessorNode(final String name,
                          final FixedKeyProcessor<KIn, VIn, VOut> processor,
                          final Set<String> stateStores) {
+
         this.name = name;
         this.processor = null;
         this.fixedKeyProcessor = processor;
@@ -140,6 +142,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
             throw new IllegalStateException("The processor is already closed");
         }
     }
+
 
     public void process(final Record<KIn, VIn> record) {
         throwIfClosed();
