@@ -53,13 +53,4 @@ public enum TestFeatureVersion implements FeatureVersion {
     public Map<String, Short> dependencies() {
         return dependencies;
     }
-
-    public static TestFeatureVersion fromFeatureLevel(short level) {
-        for (TestFeatureVersion testFeatureVersion: TestFeatureVersion.values()) {
-            if (testFeatureVersion.featureLevel() == level) {
-                return testFeatureVersion;
-            }
-        }
-        throw new IllegalArgumentException("No TestFeatureVersion with feature level " + level);
-    }
 }

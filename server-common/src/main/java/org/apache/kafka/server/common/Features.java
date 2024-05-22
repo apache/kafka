@@ -39,22 +39,21 @@ public enum Features {
      *
      * See {@link TestFeatureVersion} as an example. See {@link FeatureVersion} when implementing a new feature.
      */
-    TEST_VERSION("test.feature.version", TestFeatureVersion.values(), TestFeatureVersion::fromFeatureLevel, false);
+    TEST_VERSION("test.feature.version", TestFeatureVersion.values(), false);
 
     public static final Features[] FEATURES;
     public static final List<Features> PRODUCTION_FEATURES;
+
+    public static final List<String> PRODUCTION_FEATURE_NAMES;
     private final String name;
     private final FeatureVersion[] featureVersions;
-    private final CreateMethod createFeatureVersionMethod;
     private final boolean usedInProduction;
 
     Features(String name,
              FeatureVersion[] featureVersions,
-             CreateMethod createMethod,
              boolean usedInProduction) {
         this.name = name;
         this.featureVersions = featureVersions;
-        this.createFeatureVersionMethod = createMethod;
         this.usedInProduction = usedInProduction;
     }
 
@@ -64,6 +63,8 @@ public enum Features {
 
         PRODUCTION_FEATURES = Arrays.stream(FEATURES).filter(feature ->
                 feature.usedInProduction).collect(Collectors.toList());
+        PRODUCTION_FEATURE_NAMES = PRODUCTION_FEATURES.stream().map(feature ->
+                feature.name).collect(Collectors.toList());
     }
 
     public String featureName() {
@@ -82,7 +83,9 @@ public enum Features {
      * @throws        IllegalArgumentException if the feature name is not valid (not implemented for this method)
      */
     public FeatureVersion fromFeatureLevel(short level) {
-        return createFeatureVersionMethod.fromFeatureLevel(level);
+        return Arrays.stream(featureVersions).filter(featureVersion ->
+            featureVersion.featureLevel() == level).findFirst().orElseThrow(
+                () -> new IllegalArgumentException("No " + featureName() + " with feature level " + level));
     }
 
     /**
@@ -102,7 +105,7 @@ public enum Features {
     public static void validateVersion(FeatureVersion feature, MetadataVersion metadataVersion, Map<String, Short> features) {
         if (feature.featureLevel() >= 1 && metadataVersion.isLessThan(MetadataVersion.IBP_3_3_IV0))
             throw new IllegalArgumentException(feature.featureName() + " could not be set to " + feature.featureLevel() +
-                    " because it depends on metadata.version=14 (" + MetadataVersion.IBP_3_3_IV0 + ")");
+                    " because it depends on metadata.version=4 (" + MetadataVersion.IBP_3_3_IV0 + ")");
 
         for (Map.Entry<String, Short> dependency: feature.dependencies().entrySet()) {
             Short featureLevel = features.get(dependency.getKey());
@@ -141,16 +144,5 @@ public enum Features {
      */
     public static Map<String, Short> featureImplsToMap(List<FeatureVersion> features) {
         return features.stream().collect(Collectors.toMap(FeatureVersion::featureName, FeatureVersion::featureLevel));
-    }
-
-
-    interface CreateMethod {
-        /**
-         * Creates a FeatureVersion from a given feature and level with the correct feature object underneath.
-         *
-         * @param level   the level of the feature
-         * @throws        IllegalArgumentException if the feature name is not valid (not implemented for this method)
-         */
-        FeatureVersion fromFeatureLevel(short level);
     }
 }
