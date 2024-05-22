@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * Thrown when the share coordinator rejected the request because the share-group state epoch did not match.
+ */
 public class FencedStateEpochException extends ApiException {
     private static final long serialVersionUID = 1L;
 
