@@ -165,15 +165,22 @@ public class TargetAssignmentBuilderTest {
             TopicsImage topicsImage = topicsImageBuilder.build().topics();
             // Prepare expected member specs.
             Map<String, AssignmentMemberSpec> memberSpecs = new HashMap<>();
+            Map<String, Map<Uuid, Set<Integer>>> assignedPartitions = new HashMap<>(members.size());
 
             // All the existing members are prepared.
-            members.forEach((memberId, member) ->
+            members.forEach((memberId, member) -> {
+                Assignment assignment = targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
+
                 memberSpecs.put(memberId, createAssignmentMemberSpec(
                     member,
-                    targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
+                    assignment,
                     topicsImage
-                )
-            ));
+                ));
+                assignedPartitions.put(
+                    memberId,
+                    assignment.partitions()
+                );
+            });
 
             // All the updated are added and all the deleted
             // members are removed.
@@ -196,6 +203,10 @@ public class TargetAssignmentBuilderTest {
                         assignment,
                         topicsImage
                     ));
+                    assignedPartitions.put(
+                        memberId,
+                        assignment.partitions()
+                    );
                 }
             });
 
@@ -212,7 +223,12 @@ public class TargetAssignmentBuilderTest {
             Map<Uuid, Map<Integer, String>> invertedTargetAssignment = AssignmentTestUtil.invertedTargetAssignment(memberSpecs);
 
             // Prepare the expected assignment spec.
-            GroupSpecImpl groupSpec = new GroupSpecImpl(memberSpecs, subscriptionType, invertedTargetAssignment);
+            GroupSpecImpl groupSpec = new GroupSpecImpl(
+                memberSpecs,
+                subscriptionType,
+                assignedPartitions,
+                invertedTargetAssignment
+            );
 
             // We use `any` here to always return an assignment but use `verify` later on
             // to ensure that the input was correct.

@@ -206,7 +206,12 @@ public class TargetAssignmentBuilderBenchmark {
                 Collections.emptyMap()
             ));
         }
-        groupSpec = new GroupSpecImpl(members, HOMOGENEOUS, Collections.emptyMap());
+        groupSpec = new GroupSpecImpl(
+            members,
+            HOMOGENEOUS,
+            Collections.emptyMap(),
+            Collections.emptyMap()
+        );
     }
 
     @Benchmark

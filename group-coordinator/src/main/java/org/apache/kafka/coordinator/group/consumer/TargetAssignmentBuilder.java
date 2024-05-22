@@ -34,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTargetAssignmentEpochRecord;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTargetAssignmentRecord;
@@ -294,13 +295,22 @@ public class TargetAssignmentBuilder {
      */
     public TargetAssignmentResult build() throws PartitionAssignorException {
         Map<String, AssignmentMemberSpec> memberSpecs = new HashMap<>();
+        Map<String, Map<Uuid, Set<Integer>>> assignedPartitions = new HashMap<>(members.size());
 
         // Prepare the member spec for all members.
-        members.forEach((memberId, member) -> memberSpecs.put(memberId, createAssignmentMemberSpec(
-            member,
-            targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
-            topicsImage
-        )));
+        members.forEach((memberId, member) -> {
+            Assignment assignment = targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
+
+            memberSpecs.put(memberId, createAssignmentMemberSpec(
+                member,
+                assignment,
+                topicsImage
+            ));
+            assignedPartitions.put(
+                memberId,
+                assignment.partitions()
+            );
+        });
 
         // Update the member spec if updated or deleted members.
         updatedMembers.forEach((memberId, updatedMemberOrNull) -> {
@@ -322,6 +332,10 @@ public class TargetAssignmentBuilder {
                     assignment,
                     topicsImage
                 ));
+                assignedPartitions.put(
+                    memberId,
+                    assignment.partitions()
+                );
             }
         });
 
@@ -339,6 +353,7 @@ public class TargetAssignmentBuilder {
             new GroupSpecImpl(
                 Collections.unmodifiableMap(memberSpecs),
                 subscriptionType,
+                assignedPartitions,
                 invertedTargetAssignment
             ),
             new SubscribedTopicMetadata(topicMetadataMap)

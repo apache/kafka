@@ -215,7 +215,12 @@ public class ServerSideAssignorBenchmark {
             }
         }
 
-        this.groupSpec = new GroupSpecImpl(members, subscriptionType, Collections.emptyMap());
+        this.groupSpec = new GroupSpecImpl(
+            members,
+            subscriptionType,
+            Collections.emptyMap(),
+            Collections.emptyMap()
+        );
     }
 
     private Optional<String> rackId(int memberIndex) {
@@ -255,6 +260,7 @@ public class ServerSideAssignorBenchmark {
         Map<String, MemberAssignment> members = initialAssignment.members();
 
         Map<Uuid, Map<Integer, String>> invertedTargetAssignment = AssignorBenchmarkUtils.computeInvertedTargetAssignment(initialAssignment);
+        Map<String, Map<Uuid, Set<Integer>>> assignedPartitions = new HashMap<>();
 
         Map<String, AssignmentMemberSpec> updatedMembers = new HashMap<>();
 
@@ -263,6 +269,8 @@ public class ServerSideAssignorBenchmark {
                 memberId,
                 new MemberAssignment(Collections.emptyMap())
             );
+
+            assignedPartitions.put(memberId, memberAssignment.targetPartitions());
 
             updatedMembers.put(memberId, new AssignmentMemberSpec(
                 assignmentMemberSpec.instanceId(),
@@ -287,7 +295,11 @@ public class ServerSideAssignorBenchmark {
             Collections.emptyMap()
         ));
 
-        groupSpec = new GroupSpecImpl(updatedMembers, subscriptionType, invertedTargetAssignment);
+        groupSpec = new GroupSpecImpl(
+            updatedMembers,
+            subscriptionType,
+            assignedPartitions,
+            invertedTargetAssignment);
     }
 
     @Benchmark

@@ -83,6 +83,7 @@ public class GeneralUniformAssignmentBuilderTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
+            Collections.emptyMap(),
             Collections.emptyMap()
         );
 
@@ -125,6 +126,7 @@ public class GeneralUniformAssignmentBuilderTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
+            Collections.emptyMap(),
             Collections.emptyMap()
         );
 
@@ -165,6 +167,7 @@ public class GeneralUniformAssignmentBuilderTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
+            Collections.emptyMap(),
             Collections.emptyMap()
         );
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
@@ -225,6 +228,7 @@ public class GeneralUniformAssignmentBuilderTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
+            Collections.emptyMap(),
             Collections.emptyMap()
         );
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
@@ -272,12 +276,14 @@ public class GeneralUniformAssignmentBuilderTest {
         ));
 
         Map<String, AssignmentMemberSpec> members = new TreeMap<>();
+        Map<String, Map<Uuid, Set<Integer>>> assignedPartitions = new HashMap<>();
 
         Map<Uuid, Set<Integer>> currentAssignmentForA = new TreeMap<>(
             mkAssignment(
                 mkTopicAssignment(topic1Uuid, 0, 1, 2)
             )
         );
+        assignedPartitions.put(memberA, currentAssignmentForA);
         members.put(memberA, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.of("rack0"),
@@ -291,6 +297,7 @@ public class GeneralUniformAssignmentBuilderTest {
                 mkTopicAssignment(topic2Uuid, 0)
             )
         );
+        assignedPartitions.put(memberB, currentAssignmentForB);
         members.put(memberB, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.of("rack1"),
@@ -305,6 +312,7 @@ public class GeneralUniformAssignmentBuilderTest {
                 mkTopicAssignment(topic3Uuid, 0, 1, 2, 3)
             )
         );
+        assignedPartitions.put(memberC, currentAssignmentForC);
         members.put(memberC, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.of("rack2"),
@@ -315,6 +323,7 @@ public class GeneralUniformAssignmentBuilderTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
+            assignedPartitions,
             invertedTargetAssignment(members)
         );
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
@@ -369,6 +378,7 @@ public class GeneralUniformAssignmentBuilderTest {
         ));
 
         Map<String, AssignmentMemberSpec> members = new TreeMap<>();
+        Map<String, Map<Uuid, Set<Integer>>> assignedPartitions = new HashMap<>();
 
         Map<Uuid, Set<Integer>> currentAssignmentForA = new TreeMap<>(
             mkAssignment(
@@ -376,6 +386,7 @@ public class GeneralUniformAssignmentBuilderTest {
                 mkTopicAssignment(topic3Uuid, 0, 1)
             )
         );
+        assignedPartitions.put(memberA, currentAssignmentForA);
         members.put(memberA, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
@@ -389,6 +400,7 @@ public class GeneralUniformAssignmentBuilderTest {
                 mkTopicAssignment(topic4Uuid, 0, 1, 2)
             )
         );
+        assignedPartitions.put(memberB, currentAssignmentForB);
         members.put(memberB, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
@@ -399,6 +411,7 @@ public class GeneralUniformAssignmentBuilderTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
+            assignedPartitions,
             invertedTargetAssignment(members)
         );
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
@@ -438,12 +451,14 @@ public class GeneralUniformAssignmentBuilderTest {
             mkMapOfPartitionRacks(7)
         ));
 
-        Map<String, AssignmentMemberSpec> members = new HashMap<>();
+        Map<String, AssignmentMemberSpec> members = new TreeMap<>();
+        Map<String, Map<Uuid, Set<Integer>>> assignedPartitions = new HashMap<>();
 
         Map<Uuid, Set<Integer>> currentAssignmentForA = new TreeMap<>(mkAssignment(
             mkTopicAssignment(topic1Uuid, 0, 2),
             mkTopicAssignment(topic2Uuid, 0)
         ));
+        assignedPartitions.put(memberA, currentAssignmentForA);
         members.put(memberA, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
@@ -455,6 +470,7 @@ public class GeneralUniformAssignmentBuilderTest {
             mkTopicAssignment(topic1Uuid, 1),
             mkTopicAssignment(topic2Uuid, 1, 2)
         ));
+        assignedPartitions.put(memberB, currentAssignmentForB);
         members.put(memberB, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
@@ -473,6 +489,7 @@ public class GeneralUniformAssignmentBuilderTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
+            assignedPartitions,
             invertedTargetAssignment(members)
         );
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
@@ -519,12 +536,14 @@ public class GeneralUniformAssignmentBuilderTest {
             mkMapOfPartitionRacks(3)
         ));
 
-        Map<String, AssignmentMemberSpec> members = new HashMap<>();
+        Map<String, AssignmentMemberSpec> members = new TreeMap<>();
+        Map<String, Map<Uuid, Set<Integer>>> assignedPartitions = new HashMap<>();
 
         Map<Uuid, Set<Integer>> currentAssignmentForA = mkAssignment(
             mkTopicAssignment(topic1Uuid, 0, 1, 2),
             mkTopicAssignment(topic3Uuid, 0, 1)
         );
+        assignedPartitions.put(memberA, currentAssignmentForA);
         members.put(memberA, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
@@ -535,6 +554,7 @@ public class GeneralUniformAssignmentBuilderTest {
         Map<Uuid, Set<Integer>> currentAssignmentForB = mkAssignment(
             mkTopicAssignment(topic2Uuid, 3, 4, 5, 6)
         );
+        assignedPartitions.put(memberB, currentAssignmentForB);
         members.put(memberB, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
@@ -547,6 +567,7 @@ public class GeneralUniformAssignmentBuilderTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
+            assignedPartitions,
             invertedTargetAssignment(members)
         );
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
@@ -585,12 +606,14 @@ public class GeneralUniformAssignmentBuilderTest {
         ));
 
         // Initial subscriptions were [T1, T2]
-        Map<String, AssignmentMemberSpec> members = new HashMap<>();
+        Map<String, AssignmentMemberSpec> members = new TreeMap<>();
+        Map<String, Map<Uuid, Set<Integer>>> assignedPartitions = new HashMap<>();
 
         Map<Uuid, Set<Integer>> currentAssignmentForA = mkAssignment(
             mkTopicAssignment(topic1Uuid, 0, 2),
             mkTopicAssignment(topic2Uuid, 1, 3)
         );
+        assignedPartitions.put(memberA, currentAssignmentForA);
         members.put(memberA, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
@@ -602,6 +625,7 @@ public class GeneralUniformAssignmentBuilderTest {
             mkTopicAssignment(topic1Uuid, 1),
             mkTopicAssignment(topic2Uuid, 0, 2, 4)
         );
+        assignedPartitions.put(memberB, currentAssignmentForB);
         members.put(memberB, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
@@ -612,6 +636,7 @@ public class GeneralUniformAssignmentBuilderTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
+            assignedPartitions,
             invertedTargetAssignment(members)
         );
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);

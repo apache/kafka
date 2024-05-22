@@ -20,11 +20,13 @@ import org.apache.kafka.common.Uuid;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -35,6 +37,7 @@ public class GroupSpecImplTest {
 
     private Map<String, AssignmentMemberSpec> members;
     private SubscriptionType subscriptionType;
+    private Map<String, Map<Uuid, Set<Integer>>> assignedPartitions;
     private Map<Uuid, Map<Integer, String>> invertedTargetAssignment;
     private GroupSpecImpl groupSpec;
     private Uuid topicId;
@@ -42,8 +45,8 @@ public class GroupSpecImplTest {
     @BeforeEach
     void setUp() {
         members = new HashMap<>();
-
         subscriptionType = SubscriptionType.HOMOGENEOUS;
+        assignedPartitions = new HashMap<>();
         invertedTargetAssignment = new HashMap<>();
         topicId = Uuid.randomUuid();
 
@@ -57,6 +60,7 @@ public class GroupSpecImplTest {
         groupSpec = new GroupSpecImpl(
             members,
             subscriptionType,
+            assignedPartitions,
             invertedTargetAssignment
         );
     }
@@ -69,6 +73,19 @@ public class GroupSpecImplTest {
     @Test
     void testSubscriptionType() {
         assertEquals(subscriptionType, groupSpec.subscriptionType());
+    }
+
+    @Test
+    void testCurrentMemberAssignment() {
+        Map<Uuid, Set<Integer>> topicPartitions = new HashMap<>();
+        topicPartitions.put(
+            topicId,
+            new HashSet<>(Arrays.asList(0, 1))
+        );
+        assignedPartitions.put("test-member", topicPartitions);
+
+        assertEquals(topicPartitions, groupSpec.currentMemberAssignment("test-member"));
+        assertEquals(Collections.emptyMap(), groupSpec.currentMemberAssignment("unknown-member"));
     }
 
     @Test
