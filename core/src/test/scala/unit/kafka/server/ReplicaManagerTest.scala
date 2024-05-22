@@ -6457,6 +6457,35 @@ class ReplicaManagerTest {
   }
 
   @Test
+  def testDescribeLogDirsWithoutAnyPartitionTopic(): Unit = {
+    val noneTopic = "none-topic"
+    val topicPartition = 0
+    val topicId = Uuid.randomUuid()
+    val followerBrokerId = 0
+    val leaderBrokerId = 1
+    val leaderEpoch = 1
+    val leaderEpochIncrement = 2
+    val countDownLatch = new CountDownLatch(1)
+    val offsetFromLeader = 5
+
+    // Prepare the mocked components for the test
+    val (replicaManager, mockLogMgr) = prepareReplicaManagerAndLogManager(new MockTimer(time),
+      topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId, leaderBrokerId, countDownLatch,
+      expectTruncation = false, localLogOffset = Some(10), offsetFromLeader = offsetFromLeader, topicId = Some(topicId))
+
+    try {
+      val responses = replicaManager.describeLogDirs(Set(new TopicPartition(noneTopic, topicPartition)))
+      assertEquals(mockLogMgr.liveLogDirs.size, responses.size)
+      responses.foreach { response =>
+        assertEquals(Errors.NONE.code, response.errorCode)
+        assertTrue(response.topics().isEmpty)
+      }
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
+  @Test
   def testCheckpointHwOnShutdown(): Unit = {
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
     val spyRm = spy(new ReplicaManager(

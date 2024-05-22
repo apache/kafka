@@ -1262,7 +1262,7 @@ class ReplicaManager(val config: KafkaConfig,
                     .setOffsetLag(getLogEndOffsetLag(log.topicPartition, log.logEndOffset, log.isFuture))
                     .setIsFutureKey(log.isFuture)
                 }.toList.asJava)
-            }.toList.asJava
+            }.filterNot(_.partitions().isEmpty).toList.asJava
 
             new DescribeLogDirsResponseData.DescribeLogDirsResult().setLogDir(absolutePath)
               .setErrorCode(Errors.NONE.code).setTopics(topicInfos)
