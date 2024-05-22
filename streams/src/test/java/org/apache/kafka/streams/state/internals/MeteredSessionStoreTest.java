@@ -58,6 +58,7 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.not;
@@ -602,6 +603,23 @@ public class MeteredSessionStoreTest {
         assertThat(storeMetrics(), not(empty()));
         assertThrows(RuntimeException.class, store::close);
         assertThat(storeMetrics(), empty());
+    }
+
+    @Test
+    public void shouldTrackOpenIteratorsMetric() {
+        when(innerStore.backwardFetch(KEY_BYTES)).thenReturn(KeyValueIterators.emptyIterator());
+        init();
+
+        final KafkaMetric openIteratorsMetric = metric("num-open-iterators");
+        assertThat(openIteratorsMetric, not(nullValue()));
+
+        assertThat((Integer) openIteratorsMetric.metricValue(), equalTo(0));
+
+        try (final KeyValueIterator<Windowed<String>, String> iterator = store.backwardFetch(KEY)) {
+            assertThat((Integer) openIteratorsMetric.metricValue(), equalTo(1));
+        }
+
+        assertThat((Integer) openIteratorsMetric.metricValue(), equalTo(0));
     }
 
     private KafkaMetric metric(final String name) {

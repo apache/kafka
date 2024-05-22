@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals.metrics;
 
+import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -143,6 +144,10 @@ public class StateStoreMetrics {
         AVG_DESCRIPTION_PREFIX + SUPPRESSION_BUFFER_SIZE_DESCRIPTION;
     private static final String SUPPRESSION_BUFFER_SIZE_MAX_DESCRIPTION =
         MAX_DESCRIPTION_PREFIX + SUPPRESSION_BUFFER_SIZE_DESCRIPTION;
+
+    private static final String NUM_OPEN_ITERATORS = "num-open-iterators";
+    private static final String NUM_OPEN_ITERATORS_DESCRIPTION =
+            "The current number of iterators on the store that have been created, but not yet closed";
 
     public static Sensor putSensor(final String taskId,
                                    final String storeType,
@@ -402,6 +407,23 @@ public class StateStoreMetrics {
             RECORD_E2E_LATENCY_MAX_DESCRIPTION
         );
         return sensor;
+    }
+
+    public static void addNumOpenIteratorsGauge(final String taskId,
+                                                final String storeType,
+                                                final String storeName,
+                                                final StreamsMetricsImpl streamsMetrics,
+                                                final Gauge<Integer> numOpenIteratorsGauge) {
+        streamsMetrics.addStoreLevelMutableMetric(
+                taskId,
+                storeType,
+                storeName,
+                NUM_OPEN_ITERATORS,
+                NUM_OPEN_ITERATORS_DESCRIPTION,
+                RecordingLevel.INFO,
+                numOpenIteratorsGauge
+        );
+
     }
 
     private static Sensor sizeOrCountSensor(final String taskId,
