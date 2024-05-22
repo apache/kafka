@@ -35,7 +35,6 @@ public class Throttler {
 
     private final Object lock = new Object();
     private final long checkIntervalNs;
-    private final boolean throttleDown;
     private final Meter meter;
     private final Time time;
 
@@ -50,20 +49,17 @@ public class Throttler {
      *
      * @param desiredRatePerSec  The rate we want to hit in units/sec
      * @param checkIntervalMs    The interval at which to check our rate
-     * @param throttleDown       Does throttling increase or decrease our rate?
      * @param metricName         The name of the metric
      * @param units              The name of the unit
      * @param time               The time implementation to use
      */
     public Throttler(double desiredRatePerSec,
                      long checkIntervalMs,
-                     boolean throttleDown,
                      String metricName,
                      String units,
                      Time time) {
         this.desiredRatePerSec = desiredRatePerSec;
         this.checkIntervalNs = TimeUnit.MILLISECONDS.toNanos(checkIntervalMs);
-        this.throttleDown = throttleDown;
         this.meter = new KafkaMetricsGroup(Throttler.class).newMeter(metricName, units, TimeUnit.SECONDS);
         this.time = time;
         this.periodStartNs = time.nanoseconds();
@@ -88,8 +84,7 @@ public class Throttler {
             // we should take a little nap
             if (elapsedNs > checkIntervalNs && observedSoFar > 0) {
                 double rateInSecs = (observedSoFar * NS_PER_SEC) / elapsedNs;
-                boolean needAdjustment = throttleDown == rateInSecs > currentDesiredRatePerSec;
-                if (needAdjustment) {
+                if (rateInSecs > currentDesiredRatePerSec) {
                     // solve for the amount of time to sleep to make us hit the desired rate
                     double desiredRateMs = currentDesiredRatePerSec / MS_PER_SEC;
                     long elapsedMs = TimeUnit.NANOSECONDS.toMillis(elapsedNs);

@@ -60,7 +60,7 @@ class LogCleanerTest extends Logging {
   logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
   val logConfig = new LogConfig(logProps)
   val time = new MockTime()
-  val throttler = new Throttler(Double.MaxValue, Long.MaxValue, true, "throttler", "entries", time)
+  val throttler = new Throttler(Double.MaxValue, Long.MaxValue, "throttler", "entries", time)
   val tombstoneRetentionMs = 86400000
   val largeTimestamp = Long.MaxValue - tombstoneRetentionMs - 1
   val producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false)

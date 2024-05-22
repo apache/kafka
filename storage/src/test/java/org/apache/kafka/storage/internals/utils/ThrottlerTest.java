@@ -35,7 +35,6 @@ class ThrottlerTest {
         Time mockTime = new MockTime();
         Throttler throttler = new Throttler(desiredCountPerSec,
                                             throttleCheckIntervalMs,
-                                            true,
                                             "throttler",
                                             "entries",
                                             mockTime);
@@ -77,7 +76,6 @@ class ThrottlerTest {
         Time mockTime = new MockTime();
         Throttler throttler = new Throttler(desiredCountPerSec,
                                             throttleCheckIntervalMs,
-                                            true,
                                             "throttler",
                                             "entries",
                                             mockTime);

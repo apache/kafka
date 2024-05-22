@@ -110,12 +110,7 @@ class LogCleaner(initialConfig: CleanerConfig,
   private[log] val cleanerManager = new LogCleanerManager(logDirs, logs, logDirFailureChannel)
 
   /* a throttle used to limit the I/O of all the cleaner threads to a user-specified maximum rate */
-  private[log] val throttler = new Throttler(config.maxIoBytesPerSecond,
-                                             300,
-                                             true,
-                                             "cleaner-io",
-                                             "bytes",
-                                             time)
+  private[log] val throttler = new Throttler(config.maxIoBytesPerSecond, 300, "cleaner-io", "bytes", time)
 
   private[log] val cleaners = mutable.ArrayBuffer[CleanerThread]()
 
