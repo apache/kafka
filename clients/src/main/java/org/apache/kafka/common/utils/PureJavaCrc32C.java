@@ -111,8 +111,8 @@ public class PureJavaCrc32C implements Checksum {
     // java -cp build/test/classes/:build/classes/ \
     //   org.apache.hadoop.util.TestPureJavaCrc32\$Table 82F63B78
 
-    private static final int T8_0_START = 0;
-    private static final int T8_1_START = 256;
+    private static final int T8_0_START = 0 * 256;
+    private static final int T8_1_START = 1 * 256;
     private static final int T8_2_START = 2 * 256;
     private static final int T8_3_START = 3 * 256;
     private static final int T8_4_START = 4 * 256;
