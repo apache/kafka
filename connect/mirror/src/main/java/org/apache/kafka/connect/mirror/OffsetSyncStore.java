@@ -66,7 +66,8 @@ public class OffsetSyncStore implements AutoCloseable {
     protected volatile boolean initializationMustReadToEnd = true;
     protected volatile boolean readToEnd = false;
 
-    public OffsetSyncStore(MirrorCheckpointConfig config) {
+    // package access to avoid Java 21 "this-escape" warning
+    OffsetSyncStore(MirrorCheckpointConfig config) {
         Consumer<byte[], byte[]> consumer = null;
         TopicAdmin admin = null;
         KafkaBasedLog<byte[], byte[]> store;
@@ -98,6 +99,7 @@ public class OffsetSyncStore implements AutoCloseable {
         );
     }
 
+    // for testing
     OffsetSyncStore() {
         this.admin = null;
         this.backingStore = null;
@@ -219,7 +221,6 @@ public class OffsetSyncStore implements AutoCloseable {
 
     private void updateSyncArray(OffsetSync[] syncs, OffsetSync[] original, OffsetSync offsetSync) {
         long upstreamOffset = offsetSync.upstreamOffset();
-
         // While reading to the end of the topic, ensure that our earliest sync is later than
         // any earlier sync that could have been used for translation, to preserve monotonicity
         // If the upstream offset rewinds, all previous offsets are invalid, so overwrite them all.
