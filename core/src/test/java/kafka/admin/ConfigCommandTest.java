@@ -1710,7 +1710,7 @@ public class ConfigCommandTest {
     public void checkEntities(List<String> opts, Map<String, List<String>> expectedFetches, List<String> expectedEntityNames) {
         ConfigCommand.ConfigEntity entity = ConfigCommand.parseEntity(new ConfigCommand.ConfigCommandOptions(toArray(opts, Collections.singletonList("--describe"))));
         expectedFetches.forEach((name, values) ->
-            when(zkClient.getAllEntitiesWithConfig(name)).thenReturn(ConfigCommandIntegrationTest.seq(values)));
+            when(zkClient.getAllEntitiesWithConfig(name)).thenReturn(seq(values)));
         Seq<ConfigCommand.ConfigEntity> entities0 = entity.getAllEntities(zkClient);
         List<ConfigCommand.ConfigEntity> entities = new ArrayList<>();
         entities0.foreach(e -> {
