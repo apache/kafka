@@ -4396,7 +4396,7 @@ public class GroupMetadataManager {
      * @param memberId          The member id.
      * @param instanceId        The instance id.
      *
-     * @return The ConsumerGruopMember.
+     * @return The ConsumerGroupMember.
      */
     private ConsumerGroupMember validateConsumerGroupMember(
         ConsumerGroup group,
