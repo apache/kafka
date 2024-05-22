@@ -611,6 +611,7 @@ public class Sender implements Runnable {
                 // This will be set by completeBatch.
                 Map<TopicPartition, Metadata.LeaderIdAndEpoch> partitionsWithUpdatedLeaderInfo = new HashMap<>();
                 produceResponse.data().responses().forEach(r -> r.partitionResponses().forEach(p -> {
+
                     // Version 12 drop topic name and add support to topic id. However, metadata can be used to map topic id to topic name.
                     String topicName = (r.name() == null || r.name().isEmpty()) ? metadata.topicNames().get(r.topicId()) : r.name();
                     TopicPartition tp = new TopicPartition(topicName, p.index());
@@ -897,15 +898,18 @@ public class Sender implements Runnable {
             // which is supporting the new magic version to one which doesn't, then we will need to convert.
             if (!records.hasMatchingMagic(minUsedMagic))
                 records = batch.records().downConvert(minUsedMagic, 0, time).records();
-            Optional<ProduceRequestData.TopicProduceData> topicProduceData = canUseTopicId ?
-                    Optional.ofNullable(tpd.find(tp.topic(), topicIds.get(tp.topic()))) :
-                    tpd.stream().filter(data -> data.name().equals(tp.topic())).findFirst();
+            ProduceRequestData.TopicProduceData tpData = canUseTopicId ?
+                    tpd.find(tp.topic(), topicIds.get(tp.topic())) :
+                    tpd.find(new ProduceRequestData.TopicProduceData().setName(tp.topic()));
 
-            ProduceRequestData.TopicProduceData tpData = topicProduceData.orElse(new ProduceRequestData.TopicProduceData().setName(tp.topic()));
+            if (tpData == null) {
+                tpData = new ProduceRequestData.TopicProduceData().setName(tp.topic());
+                tpd.add(tpData);
+            }
             if (canUseTopicId) {
                 tpData.setTopicId(topicIds.get(tp.topic()));
             }
-            tpd.add(tpData);
+
             tpData.partitionData().add(new ProduceRequestData.PartitionProduceData()
                     .setIndex(tp.partition())
                     .setRecords(records));

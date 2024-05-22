@@ -612,9 +612,11 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     produceRequest.data.topicData.forEach { topic =>
       topic.partitionData.forEach { partition =>
-        val topicIdIsMissing = topic.topicId == null || topic.topicId == Uuid.ZERO_UUID
-        val topicName: String = if (topicIdIsMissing) topic.name else metadataCache.getTopicName(topic.topicId).getOrElse(topic.name)
-        val topicId: Uuid = if (topicIdIsMissing) metadataCache.getTopicId(topicName)  else topic.topicId
+        val (topicName, topicId) = if (produceRequest.version() >= 12) {
+          (metadataCache.getTopicName(topic.topicId).getOrElse(topic.name), topic.topicId())
+        } else {
+          (topic.name(), metadataCache.getTopicId(topic.name()))
+        }
 
         val topicPartition = new TopicPartition(topicName, partition.index())
         if (topicName == null || topicName.isEmpty)
