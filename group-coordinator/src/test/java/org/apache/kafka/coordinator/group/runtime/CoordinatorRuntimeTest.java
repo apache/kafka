@@ -2519,6 +2519,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
                 .build();
 
         // Loads the coordinator.
