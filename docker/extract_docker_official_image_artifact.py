@@ -60,10 +60,10 @@ def extract_artifact(artifact_path):
         if len(artifact_version_dirs) != 1:
             raise Exception("Unexpected contents in the artifact. Exactly one version directory is expected.")
         artifact_version_dir = artifact_version_dirs[0]
-        target_version_dir =  os.path.join(docker_official_images_dir, artifact_version_dir.name)
+        target_version_dir =  Path(os.path.join(docker_official_images_dir, artifact_version_dir.name))
         target_version_dir.mkdir(parents=True, exist_ok=True)
         for image_type_dir in artifact_version_dir.iterdir():
-            target_image_type_dir = os.path.join(target_version_dir, image_type_dir.name)
+            target_image_type_dir = Path(os.path.join(target_version_dir, image_type_dir.name))
             if target_image_type_dir.exists():
                 shutil.rmtree(target_image_type_dir)            
             shutil.copytree(image_type_dir, target_image_type_dir)
