@@ -75,7 +75,7 @@ public class RangeAssignorTest {
             )
         );
 
-        GroupSpecImpl groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
             Collections.emptyMap()
@@ -113,7 +113,7 @@ public class RangeAssignorTest {
             )
         );
 
-        GroupSpecImpl groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
             Collections.emptyMap()
@@ -155,7 +155,7 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        GroupSpecImpl groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
             Collections.emptyMap()
@@ -225,7 +225,7 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        GroupSpecImpl groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             Collections.emptyMap()
@@ -292,7 +292,7 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        GroupSpecImpl groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
             Collections.emptyMap()
@@ -369,7 +369,7 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        GroupSpecImpl groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
             invertedTargetAssignment(members)
@@ -437,7 +437,7 @@ public class RangeAssignorTest {
             currentAssignmentForB
         ));
 
-        GroupSpecImpl groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
             invertedTargetAssignment(members)
@@ -510,7 +510,7 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        GroupSpecImpl groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
             invertedTargetAssignment(members)
@@ -588,7 +588,7 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        GroupSpecImpl groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             invertedTargetAssignment(members)
@@ -646,7 +646,7 @@ public class RangeAssignorTest {
             currentAssignmentForB
         ));
 
-        GroupSpecImpl groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
             invertedTargetAssignment(members)
@@ -725,7 +725,7 @@ public class RangeAssignorTest {
             currentAssignmentForC
         ));
 
-        GroupSpecImpl groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             invertedTargetAssignment(members)

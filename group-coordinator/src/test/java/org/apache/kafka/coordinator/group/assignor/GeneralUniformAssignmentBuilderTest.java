@@ -80,7 +80,7 @@ public class GeneralUniformAssignmentBuilderTest {
             Collections.emptyMap()
         ));
 
-        GroupSpecImpl groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             Collections.emptyMap()
@@ -122,7 +122,7 @@ public class GeneralUniformAssignmentBuilderTest {
             Collections.emptyMap()
         ));
 
-        GroupSpecImpl groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             Collections.emptyMap()
@@ -162,7 +162,7 @@ public class GeneralUniformAssignmentBuilderTest {
             Collections.emptyMap()
         ));
 
-        GroupSpecImpl groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             Collections.emptyMap()
@@ -222,7 +222,7 @@ public class GeneralUniformAssignmentBuilderTest {
             Collections.emptyMap()
         ));
 
-        GroupSpecImpl groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             Collections.emptyMap()
@@ -312,7 +312,7 @@ public class GeneralUniformAssignmentBuilderTest {
             currentAssignmentForC
         ));
 
-        GroupSpecImpl groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             invertedTargetAssignment(members)
@@ -396,7 +396,7 @@ public class GeneralUniformAssignmentBuilderTest {
             currentAssignmentForB
         ));
 
-        GroupSpecImpl groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             invertedTargetAssignment(members)
@@ -470,7 +470,7 @@ public class GeneralUniformAssignmentBuilderTest {
             Collections.emptyMap()
         ));
 
-        GroupSpecImpl groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             invertedTargetAssignment(members)
@@ -544,7 +544,7 @@ public class GeneralUniformAssignmentBuilderTest {
 
         // Member C was removed
 
-        GroupSpecImpl groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             invertedTargetAssignment(members)
@@ -609,7 +609,7 @@ public class GeneralUniformAssignmentBuilderTest {
             currentAssignmentForB
         ));
 
-        GroupSpecImpl groupSpec = new GroupSpecImpl(
+        GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
             invertedTargetAssignment(members)

@@ -215,7 +215,6 @@ public class TargetAssignmentBuilderBenchmark {
         return invertedTargetAssignment;
     }
 
-
     @Benchmark
     @Threads(1)
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
