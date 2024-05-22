@@ -30,7 +30,7 @@ public class GroupSpecImpl implements GroupSpec {
     /**
      * The member metadata keyed by member Id.
      */
-    private final Map<String, AssignmentMemberSpec> members;
+    private final Map<String, MemberSubscriptionSpec> members;
 
     /**
      * The subscription type followed by the group.
@@ -49,7 +49,7 @@ public class GroupSpecImpl implements GroupSpec {
     private final Map<Uuid, Map<Integer, String>> invertedTargetAssignment;
 
     public GroupSpecImpl(
-        Map<String, AssignmentMemberSpec> members,
+        Map<String, MemberSubscriptionSpec> members,
         SubscriptionType subscriptionType,
         Map<String, Map<Uuid, Set<Integer>>> assignedPartitions,
         Map<Uuid, Map<Integer, String>> invertedTargetAssignment
@@ -67,7 +67,7 @@ public class GroupSpecImpl implements GroupSpec {
      * {@inheritDoc}
      */
     @Override
-    public Map<String, AssignmentMemberSpec> members() {
+    public Map<String, MemberSubscriptionSpec> members() {
         return members;
     }
 

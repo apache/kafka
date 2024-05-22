@@ -20,6 +20,8 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.assignor.GroupSpecImpl;
+import org.apache.kafka.coordinator.group.assignor.MemberSubscriptionSpec;
+import org.apache.kafka.coordinator.group.assignor.MemberSubscriptionSpecImpl;
 import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
@@ -294,16 +296,15 @@ public class TargetAssignmentBuilder {
      * @throws PartitionAssignorException if the target assignment cannot be computed.
      */
     public TargetAssignmentResult build() throws PartitionAssignorException {
-        Map<String, AssignmentMemberSpec> memberSpecs = new HashMap<>();
+        Map<String, MemberSubscriptionSpec> memberSpecs = new HashMap<>();
         Map<String, Map<Uuid, Set<Integer>>> assignedPartitions = new HashMap<>(members.size());
 
         // Prepare the member spec for all members.
         members.forEach((memberId, member) -> {
             Assignment assignment = targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
 
-            memberSpecs.put(memberId, createAssignmentMemberSpec(
+            memberSpecs.put(memberId, createMemberSubscriptionSpec(
                 member,
-                assignment,
                 topicsImage
             ));
             assignedPartitions.put(
@@ -327,9 +328,8 @@ public class TargetAssignmentBuilder {
                     }
                 }
 
-                memberSpecs.put(memberId, createAssignmentMemberSpec(
+                memberSpecs.put(memberId, createMemberSubscriptionSpec(
                     updatedMemberOrNull,
-                    assignment,
                     topicsImage
                 ));
                 assignedPartitions.put(
@@ -408,16 +408,14 @@ public class TargetAssignmentBuilder {
         }
     }
 
-    static AssignmentMemberSpec createAssignmentMemberSpec(
+    public static MemberSubscriptionSpec createMemberSubscriptionSpec(
         ConsumerGroupMember member,
-        Assignment targetAssignment,
         TopicsImage topicsImage
     ) {
-        return new AssignmentMemberSpec(
-            Optional.ofNullable(member.instanceId()),
+        return new MemberSubscriptionSpecImpl(
+            member.memberId(),
             Optional.ofNullable(member.rackId()),
-            new TopicIds(member.subscribedTopicNames(), topicsImage),
-            targetAssignment.partitions()
+            new TopicIds(member.subscribedTopicNames(), topicsImage)
         );
     }
 }

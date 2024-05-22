@@ -28,7 +28,7 @@ public interface GroupSpec {
     /**
      * @return Member metadata keyed by member Id.
      */
-    Map<String, AssignmentMemberSpec> members();
+    Map<String, MemberSubscriptionSpec> members();
 
     /**
      * @return The group's subscription type.
