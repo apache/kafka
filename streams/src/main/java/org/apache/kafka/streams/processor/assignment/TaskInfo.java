@@ -17,7 +17,9 @@
 package org.apache.kafka.streams.processor.assignment;
 
 
+import java.util.Map;
 import java.util.Set;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.TaskId;
 
 /**
@@ -50,7 +52,21 @@ public interface TaskInfo {
 
     /**
      *
-     * @return the set of topic partitions in use for this task.
+     * @return the set of source topic partitions. This set will include both changelog and non-changelog
+     *         topic partitions.
      */
-    Set<TaskTopicPartition> topicPartitions();
+    Set<TopicPartition> sourceTopicPartitions();
+
+    /**
+     *
+     * @return the set of changelog topic partitions. This set will include both source and non-source
+     *         topic partitions.
+     */
+    Set<TopicPartition> changelogTopicPartitions();
+
+    /**
+     *
+     * @return the mapping of {@code TopicPartition} to set of rack ids that this partition resides on.
+     */
+    Map<TopicPartition, Set<String>> partitionToRackIds();
 }

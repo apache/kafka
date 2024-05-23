@@ -16,28 +16,36 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import static java.util.Collections.unmodifiableMap;
 import static java.util.Collections.unmodifiableSet;
 
+import java.util.Map;
 import java.util.Set;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.TaskInfo;
-import org.apache.kafka.streams.processor.assignment.TaskTopicPartition;
 
 public class DefaultTaskInfo implements TaskInfo {
 
     private final TaskId id;
     private final boolean isStateful;
+    private final Map<TopicPartition, Set<String>> partitionToRackIds;
     private final Set<String> stateStoreNames;
-    private final Set<TaskTopicPartition> topicPartitions;
+    private final Set<TopicPartition> sourceTopicPartitions;
+    private final Set<TopicPartition> changelogTopicPartitions;
 
     public DefaultTaskInfo(final TaskId id,
                            final boolean isStateful,
+                           final Map<TopicPartition, Set<String>> partitionToRackIds,
                            final Set<String> stateStoreNames,
-                           final Set<TaskTopicPartition> topicPartitions) {
+                           final Set<TopicPartition> sourceTopicPartitions,
+                           final Set<TopicPartition> changelogTopicPartitions) {
         this.id = id;
+        this.partitionToRackIds = unmodifiableMap(partitionToRackIds);
         this.isStateful = isStateful;
         this.stateStoreNames = unmodifiableSet(stateStoreNames);
-        this.topicPartitions = unmodifiableSet(topicPartitions);
+        this.sourceTopicPartitions = unmodifiableSet(sourceTopicPartitions);
+        this.changelogTopicPartitions = unmodifiableSet(changelogTopicPartitions);
     }
 
     @Override
@@ -56,7 +64,17 @@ public class DefaultTaskInfo implements TaskInfo {
     }
 
     @Override
-    public Set<TaskTopicPartition> topicPartitions() {
-        return topicPartitions;
+    public Set<TopicPartition> sourceTopicPartitions() {
+        return sourceTopicPartitions;
+    }
+
+    @Override
+    public Set<TopicPartition> changelogTopicPartitions() {
+        return changelogTopicPartitions;
+    }
+
+    @Override
+    public Map<TopicPartition, Set<String>> partitionToRackIds() {
+        return partitionToRackIds;
     }
 }
