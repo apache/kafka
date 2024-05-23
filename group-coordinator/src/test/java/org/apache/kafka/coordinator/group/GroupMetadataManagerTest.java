@@ -103,11 +103,11 @@ import java.util.stream.Stream;
 
 import static org.apache.kafka.common.protocol.Errors.NOT_COORDINATOR;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
 import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
+import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.coordinator.group.Assertions.assertRecordEquals;
 import static org.apache.kafka.coordinator.group.Assertions.assertRecordsEquals;
 import static org.apache.kafka.coordinator.group.Assertions.assertResponseEquals;
@@ -349,7 +349,7 @@ public class GroupMetadataManagerTest {
             .setRebalanceTimeoutMs(5000)
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
-            .setSubscribedTopicNames(mkSet("foo", "bar"))
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setServerAssignorName("range")
             .setAssignedPartitions(mkAssignment(mkTopicAssignment(fooTopicId, 1, 2, 3)))
             .build();
@@ -477,7 +477,7 @@ public class GroupMetadataManagerTest {
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
             .setRebalanceTimeoutMs(5000)
-            .setSubscribedTopicNames(mkSet("foo", "bar"))
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setServerAssignorName("range")
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
@@ -528,7 +528,7 @@ public class GroupMetadataManagerTest {
                     .setPreviousMemberEpoch(9)
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
-                    .setSubscribedTopicNames(Collections.singleton("foo"))
+                    .setSubscribedTopicNames(Collections.singletonList("foo"))
                     .setServerAssignorName("range")
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)))
@@ -575,7 +575,7 @@ public class GroupMetadataManagerTest {
             .setPreviousMemberEpoch(10)
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
-            .setSubscribedTopicNames(mkSet("foo", "bar"))
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setServerAssignorName("range")
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
@@ -631,7 +631,7 @@ public class GroupMetadataManagerTest {
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
                     .setRebalanceTimeoutMs(5000)
-                    .setSubscribedTopicNames(mkSet("foo", "bar"))
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                     .setServerAssignorName("range")
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1, 2),
@@ -644,7 +644,7 @@ public class GroupMetadataManagerTest {
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
                     .setRebalanceTimeoutMs(5000)
-                    .setSubscribedTopicNames(mkSet("foo", "bar"))
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                     .setServerAssignorName("range")
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 3, 4, 5),
@@ -705,7 +705,7 @@ public class GroupMetadataManagerTest {
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
             .setRebalanceTimeoutMs(5000)
-            .setSubscribedTopicNames(mkSet("foo", "bar"))
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setServerAssignorName("range")
             .build();
 
@@ -771,7 +771,7 @@ public class GroupMetadataManagerTest {
                     .setPreviousMemberEpoch(9)
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
-                    .setSubscribedTopicNames(mkSet("foo", "bar"))
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                     .setServerAssignorName("range")
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1, 2),
@@ -784,7 +784,7 @@ public class GroupMetadataManagerTest {
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
                     // Use zar only here to ensure that metadata needs to be recomputed.
-                    .setSubscribedTopicNames(mkSet("foo", "bar", "zar"))
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar", "zar"))
                     .setServerAssignorName("range")
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 3, 4, 5),
@@ -864,7 +864,7 @@ public class GroupMetadataManagerTest {
                     .setPreviousMemberEpoch(9)
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
-                    .setSubscribedTopicNames(mkSet("foo", "bar"))
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                     .setServerAssignorName("range")
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1, 2),
@@ -878,7 +878,7 @@ public class GroupMetadataManagerTest {
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
                     // Use zar only here to ensure that metadata needs to be recomputed.
-                    .setSubscribedTopicNames(mkSet("foo", "bar", "zar"))
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar", "zar"))
                     .setServerAssignorName("range")
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 3, 4, 5),
@@ -941,7 +941,7 @@ public class GroupMetadataManagerTest {
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
             .setRebalanceTimeoutMs(5000)
-            .setSubscribedTopicNames(mkSet("foo", "bar"))
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setServerAssignorName("range")
             .build();
 
@@ -996,7 +996,7 @@ public class GroupMetadataManagerTest {
             .setPreviousMemberEpoch(9)
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
-            .setSubscribedTopicNames(mkSet("foo", "bar"))
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setServerAssignorName("range")
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2),
@@ -1010,7 +1010,7 @@ public class GroupMetadataManagerTest {
             .setRebalanceTimeoutMs(5000)
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
-            .setSubscribedTopicNames(mkSet("foo", "bar"))
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setServerAssignorName("range")
             .setAssignedPartitions(mkAssignment(
                     mkTopicAssignment(fooTopicId, 3, 4, 5),
@@ -1122,7 +1122,7 @@ public class GroupMetadataManagerTest {
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
             .setRebalanceTimeoutMs(5000)
-            .setSubscribedTopicNames(mkSet("foo", "bar"))
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setServerAssignorName("range")
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 3, 4, 5),
@@ -1167,7 +1167,7 @@ public class GroupMetadataManagerTest {
             .setPreviousMemberEpoch(9)
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
-            .setSubscribedTopicNames(mkSet("foo", "bar"))
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setServerAssignorName("range")
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2),
@@ -1181,7 +1181,7 @@ public class GroupMetadataManagerTest {
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
             // Use zar only here to ensure that metadata needs to be recomputed.
-            .setSubscribedTopicNames(mkSet("foo", "bar"))
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setServerAssignorName("range")
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 3, 4, 5),
@@ -1269,7 +1269,7 @@ public class GroupMetadataManagerTest {
                     .setPreviousMemberEpoch(9)
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
-                    .setSubscribedTopicNames(mkSet("foo", "bar"))
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                     .setServerAssignorName("range")
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1, 2),
@@ -1283,7 +1283,7 @@ public class GroupMetadataManagerTest {
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
                     // Use zar only here to ensure that metadata needs to be recomputed.
-                    .setSubscribedTopicNames(mkSet("foo", "bar", "zar"))
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar", "zar"))
                     .setServerAssignorName("range")
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 3, 4, 5),
@@ -1360,7 +1360,7 @@ public class GroupMetadataManagerTest {
                     .setPreviousMemberEpoch(9)
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
-                    .setSubscribedTopicNames(mkSet("foo", "bar"))
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                     .setServerAssignorName("range")
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1, 2)))
@@ -1409,7 +1409,7 @@ public class GroupMetadataManagerTest {
                     .setPreviousMemberEpoch(9)
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
-                    .setSubscribedTopicNames(mkSet("foo", "bar"))
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                     .setServerAssignorName("range")
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1, 2)))
@@ -1457,7 +1457,7 @@ public class GroupMetadataManagerTest {
                     .setPreviousMemberEpoch(9)
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
-                    .setSubscribedTopicNames(mkSet("foo", "bar"))
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                     .setServerAssignorName("range")
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1, 2)))
@@ -1498,7 +1498,7 @@ public class GroupMetadataManagerTest {
             .setRebalanceTimeoutMs(5000)
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
-            .setSubscribedTopicNames(mkSet("foo", "bar"))
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setServerAssignorName("range")
             .setAssignedPartitions(mkAssignment(mkTopicAssignment(fooTopicId, 1, 2, 3)))
             .build();
@@ -1590,7 +1590,7 @@ public class GroupMetadataManagerTest {
                     .setPreviousMemberEpoch(9)
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
-                    .setSubscribedTopicNames(mkSet("foo", "bar"))
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                     .setServerAssignorName("range")
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1, 2)))
@@ -1636,7 +1636,7 @@ public class GroupMetadataManagerTest {
                     .setPreviousMemberEpoch(9)
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
-                    .setSubscribedTopicNames(mkSet("foo", "bar"))
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                     .setServerAssignorName("range")
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1, 2)))
@@ -1783,7 +1783,7 @@ public class GroupMetadataManagerTest {
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
                     .setRebalanceTimeoutMs(5000)
-                    .setSubscribedTopicNames(mkSet("foo", "bar"))
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                     .setServerAssignorName("range")
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1, 2),
@@ -1796,7 +1796,7 @@ public class GroupMetadataManagerTest {
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
                     .setRebalanceTimeoutMs(5000)
-                    .setSubscribedTopicNames(mkSet("foo", "bar"))
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                     .setServerAssignorName("range")
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 3, 4, 5),
@@ -2218,7 +2218,7 @@ public class GroupMetadataManagerTest {
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
                     .setRebalanceTimeoutMs(5000)
-                    .setSubscribedTopicNames(mkSet("foo", "bar"))
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                     .setServerAssignorName("range")
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1, 2),
@@ -2231,7 +2231,7 @@ public class GroupMetadataManagerTest {
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
                     .setRebalanceTimeoutMs(5000)
-                    .setSubscribedTopicNames(mkSet("foo", "bar"))
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                     .setServerAssignorName("range")
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 3, 4, 5),
@@ -2275,7 +2275,7 @@ public class GroupMetadataManagerTest {
 
         context.replay(CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId, new ConsumerGroupMember.Builder(memberId1)
             .setState(MemberState.STABLE)
-            .setSubscribedTopicNames(Collections.singleton(fooTopicName))
+            .setSubscribedTopicNames(Collections.singletonList(fooTopicName))
             .build()));
         context.replay(CoordinatorRecordHelpers.newGroupEpochRecord(groupId, 11));
 
@@ -2370,7 +2370,7 @@ public class GroupMetadataManagerTest {
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
                     .setRebalanceTimeoutMs(5000)
-                    .setSubscribedTopicNames(mkSet("foo", "bar"))
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                     .setServerAssignorName("range")
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1, 2)))
@@ -2427,7 +2427,7 @@ public class GroupMetadataManagerTest {
             .setPreviousMemberEpoch(10)
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
-            .setSubscribedTopicNames(mkSet("foo", "bar"))
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setServerAssignorName("range")
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)))
@@ -2481,7 +2481,7 @@ public class GroupMetadataManagerTest {
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
                     .setRebalanceTimeoutMs(5000)
-                    .setSubscribedTopicNames(mkSet("foo", "bar"))
+                    .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                     .setServerAssignorName("range")
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1, 2)))
@@ -2556,7 +2556,7 @@ public class GroupMetadataManagerTest {
             .setPreviousMemberEpoch(10)
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
-            .setSubscribedTopicNames(mkSet("foo", "bar"))
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setServerAssignorName("range")
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)))
@@ -2601,7 +2601,7 @@ public class GroupMetadataManagerTest {
         // M1 in group 1 subscribes to foo and bar.
         context.replay(CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId1,
             new ConsumerGroupMember.Builder("group1-m1")
-                .setSubscribedTopicNames(mkSet("foo", "bar"))
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                 .build()));
 
         assertEquals(mkSet(groupId1), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
@@ -2611,7 +2611,7 @@ public class GroupMetadataManagerTest {
         // M1 in group 2 subscribes to foo, bar and zar.
         context.replay(CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId2,
             new ConsumerGroupMember.Builder("group2-m1")
-                .setSubscribedTopicNames(mkSet("foo", "bar", "zar"))
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar", "zar"))
                 .build()));
 
         assertEquals(mkSet(groupId1, groupId2), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
@@ -2621,7 +2621,7 @@ public class GroupMetadataManagerTest {
         // M2 in group 1 subscribes to bar and zar.
         context.replay(CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId1,
             new ConsumerGroupMember.Builder("group1-m2")
-                .setSubscribedTopicNames(mkSet("bar", "zar"))
+                .setSubscribedTopicNames(Arrays.asList("bar", "zar"))
                 .build()));
 
         assertEquals(mkSet(groupId1, groupId2), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
@@ -2631,7 +2631,7 @@ public class GroupMetadataManagerTest {
         // M2 in group 2 subscribes to foo and bar.
         context.replay(CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId2,
             new ConsumerGroupMember.Builder("group2-m2")
-                .setSubscribedTopicNames(mkSet("foo", "bar"))
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                 .build()));
 
         assertEquals(mkSet(groupId1, groupId2), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
@@ -2649,7 +2649,7 @@ public class GroupMetadataManagerTest {
         // M1 in group 2 subscribes to nothing.
         context.replay(CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId2,
             new ConsumerGroupMember.Builder("group2-m1")
-                .setSubscribedTopicNames(Collections.emptySet())
+                .setSubscribedTopicNames(Collections.emptyList())
                 .build()));
 
         assertEquals(mkSet(groupId2), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
@@ -2659,7 +2659,7 @@ public class GroupMetadataManagerTest {
         // M2 in group 2 subscribes to foo.
         context.replay(CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId2,
             new ConsumerGroupMember.Builder("group2-m2")
-                .setSubscribedTopicNames(Collections.singleton("foo"))
+                .setSubscribedTopicNames(Collections.singletonList("foo"))
                 .build()));
 
         assertEquals(mkSet(groupId2), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
@@ -2669,7 +2669,7 @@ public class GroupMetadataManagerTest {
         // M2 in group 2 subscribes to nothing.
         context.replay(CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId2,
             new ConsumerGroupMember.Builder("group2-m2")
-                .setSubscribedTopicNames(Collections.emptySet())
+                .setSubscribedTopicNames(Collections.emptyList())
                 .build()));
 
         assertEquals(Collections.emptySet(), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
@@ -2679,7 +2679,7 @@ public class GroupMetadataManagerTest {
         // M2 in group 1 subscribes to nothing.
         context.replay(CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId1,
             new ConsumerGroupMember.Builder("group1-m2")
-                .setSubscribedTopicNames(Collections.emptySet())
+                .setSubscribedTopicNames(Collections.emptyList())
                 .build()));
 
         assertEquals(Collections.emptySet(), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
@@ -2709,31 +2709,31 @@ public class GroupMetadataManagerTest {
         // M1 in group 1 subscribes to a and b.
         context.replay(CoordinatorRecordHelpers.newMemberSubscriptionRecord("group1",
             new ConsumerGroupMember.Builder("group1-m1")
-                .setSubscribedTopicNames(mkSet("a", "b"))
+                .setSubscribedTopicNames(Arrays.asList("a", "b"))
                 .build()));
 
         // M1 in group 2 subscribes to b and c.
         context.replay(CoordinatorRecordHelpers.newMemberSubscriptionRecord("group2",
             new ConsumerGroupMember.Builder("group2-m1")
-                .setSubscribedTopicNames(mkSet("b", "c"))
+                .setSubscribedTopicNames(Arrays.asList("b", "c"))
                 .build()));
 
         // M1 in group 3 subscribes to d.
         context.replay(CoordinatorRecordHelpers.newMemberSubscriptionRecord("group3",
             new ConsumerGroupMember.Builder("group3-m1")
-                .setSubscribedTopicNames(Collections.singleton("d"))
+                .setSubscribedTopicNames(Collections.singletonList("d"))
                 .build()));
 
         // M1 in group 4 subscribes to e.
         context.replay(CoordinatorRecordHelpers.newMemberSubscriptionRecord("group4",
             new ConsumerGroupMember.Builder("group4-m1")
-                .setSubscribedTopicNames(Collections.singleton("e"))
+                .setSubscribedTopicNames(Collections.singletonList("e"))
                 .build()));
 
         // M1 in group 5 subscribes to f.
         context.replay(CoordinatorRecordHelpers.newMemberSubscriptionRecord("group5",
             new ConsumerGroupMember.Builder("group5-m1")
-                .setSubscribedTopicNames(Collections.singleton("f"))
+                .setSubscribedTopicNames(Collections.singletonList("f"))
                 .build()));
 
         // Ensures that all refresh flags are set to the future.
@@ -3324,7 +3324,7 @@ public class GroupMetadataManagerTest {
                     .setPreviousMemberEpoch(9)
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
-                    .setSubscribedTopicNames(Collections.singleton("foo"))
+                    .setSubscribedTopicNames(Collections.singletonList("foo"))
                     .setServerAssignorName("range")
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1, 2)))
@@ -3337,7 +3337,7 @@ public class GroupMetadataManagerTest {
                     .setPreviousMemberEpoch(10)
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
-                    .setSubscribedTopicNames(Collections.singleton("foo"))
+                    .setSubscribedTopicNames(Collections.singletonList("foo"))
                     .setServerAssignorName("range")
                     .build())
                 .withAssignment("foo-1", mkAssignment(
@@ -8234,7 +8234,7 @@ public class GroupMetadataManagerTest {
         context.commit();
         ClassicGroup classicGroup = context.groupMetadataManager.getOrMaybeCreateClassicGroup(classicGroupId, false);
         context.replay(CoordinatorRecordHelpers.newMemberSubscriptionRecord(consumerGroupId, new ConsumerGroupMember.Builder(memberId1)
-            .setSubscribedTopicNames(Collections.singleton(fooTopicName))
+            .setSubscribedTopicNames(Collections.singletonList(fooTopicName))
             .build()));
         context.replay(CoordinatorRecordHelpers.newGroupEpochRecord(consumerGroupId, 11));
 
@@ -8360,7 +8360,7 @@ public class GroupMetadataManagerTest {
         String memberId = "member-id";
         String topicName = "topicName";
         ConsumerGroupMember.Builder memberBuilder = new ConsumerGroupMember.Builder(memberId)
-            .setSubscribedTopicNames(Collections.singleton(topicName))
+            .setSubscribedTopicNames(Collections.singletonList(topicName))
             .setServerAssignorName("assignorName");
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
@@ -8433,7 +8433,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         ConsumerGroupMember.Builder memberBuilder1 = new ConsumerGroupMember.Builder(memberId1)
-            .setSubscribedTopicNames(Collections.singleton(topicName));
+            .setSubscribedTopicNames(Collections.singletonList(topicName));
         context.replay(CoordinatorRecordHelpers.newMemberSubscriptionRecord(consumerGroupId, memberBuilder1.build()));
         context.replay(CoordinatorRecordHelpers.newGroupEpochRecord(consumerGroupId, epoch + 1));
 
@@ -9410,7 +9410,7 @@ public class GroupMetadataManagerTest {
             .setRebalanceTimeoutMs(5000)
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
-            .setSubscribedTopicNames(mkSet("foo", "bar"))
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setServerAssignorName(NoOpPartitionAssignor.NAME)
             .setAssignedPartitions(Collections.emptyMap())
             .build();
@@ -9562,7 +9562,7 @@ public class GroupMetadataManagerTest {
             .setPreviousMemberEpoch(0)
             .setClientId("client-id")
             .setClientHost("client-host")
-            .setSubscribedTopicNames(mkSet(fooTopicName, barTopicName))
+            .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
             .setRebalanceTimeoutMs(10000)
             .setClassicMemberMetadata(
                 new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
@@ -9581,7 +9581,7 @@ public class GroupMetadataManagerTest {
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
             .setServerAssignorName("range")
-            .setSubscribedTopicNames(mkSet(fooTopicName, barTopicName))
+            .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
             .setRebalanceTimeoutMs(5000)
             .setAssignedPartitions(Collections.emptyMap())
             .build();
@@ -9784,7 +9784,7 @@ public class GroupMetadataManagerTest {
             .setPreviousMemberEpoch(0)
             .setClientId("client-id")
             .setClientHost("client-host")
-            .setSubscribedTopicNames(mkSet(fooTopicName, barTopicName))
+            .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
             .setRebalanceTimeoutMs(10000)
             .setClassicMemberMetadata(
                 new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
@@ -9800,7 +9800,7 @@ public class GroupMetadataManagerTest {
             .setPreviousMemberEpoch(0)
             .setClientId("client-id")
             .setClientHost("client-host")
-            .setSubscribedTopicNames(mkSet(fooTopicName, barTopicName))
+            .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
             .setRebalanceTimeoutMs(10000)
             .setClassicMemberMetadata(
                 new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
@@ -9818,7 +9818,7 @@ public class GroupMetadataManagerTest {
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
             .setServerAssignorName("range")
-            .setSubscribedTopicNames(mkSet(fooTopicName, barTopicName))
+            .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
             .setRebalanceTimeoutMs(5000)
             .setAssignedPartitions(Collections.emptyMap())
             .build();
@@ -10049,7 +10049,7 @@ public class GroupMetadataManagerTest {
             .setPreviousMemberEpoch(1)
             .setClientId("client-id")
             .setClientHost("client-host")
-            .setSubscribedTopicNames(mkSet(fooTopicName, barTopicName))
+            .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
             .setRebalanceTimeoutMs(10000)
             .setClassicMemberMetadata(
                 new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
@@ -10065,7 +10065,7 @@ public class GroupMetadataManagerTest {
             .setPreviousMemberEpoch(1)
             .setClientId("client-id")
             .setClientHost("client-host")
-            .setSubscribedTopicNames(mkSet(fooTopicName, barTopicName))
+            .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
             .setRebalanceTimeoutMs(10000)
             .setClassicMemberMetadata(
                 new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
@@ -10083,7 +10083,7 @@ public class GroupMetadataManagerTest {
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
             .setServerAssignorName("range")
-            .setSubscribedTopicNames(mkSet(fooTopicName, barTopicName))
+            .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
             .setRebalanceTimeoutMs(5000)
             .setAssignedPartitions(Collections.emptyMap())
             .build();
@@ -10284,7 +10284,7 @@ public class GroupMetadataManagerTest {
             .setPreviousMemberEpoch(9)
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
-            .setSubscribedTopicNames(mkSet("foo", "bar"))
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setServerAssignorName("range")
             .setRebalanceTimeoutMs(45000)
             .setClassicMemberMetadata(
@@ -10302,7 +10302,7 @@ public class GroupMetadataManagerTest {
             .setPreviousMemberEpoch(9)
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
-            .setSubscribedTopicNames(mkSet("foo", "bar"))
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setServerAssignorName("range")
             .setRebalanceTimeoutMs(45000)
             .setAssignedPartitions(mkAssignment(
@@ -10476,7 +10476,7 @@ public class GroupMetadataManagerTest {
             .setPreviousMemberEpoch(9)
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
-            .setSubscribedTopicNames(mkSet("foo", "bar"))
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setServerAssignorName("range")
             .setRebalanceTimeoutMs(45000)
             .setClassicMemberMetadata(
@@ -10494,7 +10494,7 @@ public class GroupMetadataManagerTest {
             .setPreviousMemberEpoch(9)
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
-            .setSubscribedTopicNames(mkSet("foo", "bar"))
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setServerAssignorName("range")
             .setRebalanceTimeoutMs(45000)
             .setAssignedPartitions(mkAssignment(
@@ -10666,7 +10666,7 @@ public class GroupMetadataManagerTest {
             .setPreviousMemberEpoch(9)
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
-            .setSubscribedTopicNames(mkSet("foo", "bar"))
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setServerAssignorName("range")
             .setRebalanceTimeoutMs(30000)
             .setClassicMemberMetadata(
@@ -10684,7 +10684,7 @@ public class GroupMetadataManagerTest {
             .setPreviousMemberEpoch(9)
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
-            .setSubscribedTopicNames(mkSet("foo", "bar", "zar"))
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar", "zar"))
             .setServerAssignorName("range")
             .setRebalanceTimeoutMs(30000)
             .setAssignedPartitions(mkAssignment(
@@ -11000,7 +11000,7 @@ public class GroupMetadataManagerTest {
                 .setState(MemberState.STABLE)
                 .setClientId("client")
                 .setClientHost("localhost/127.0.0.1")
-                .setSubscribedTopicNames(mkSet(fooTopicName, barTopicName))
+                .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
                 .setRebalanceTimeoutMs(500)
                 .setAssignedPartitions(assignor.targetPartitions(newMemberId))
                 .setClassicMemberMetadata(
@@ -11171,7 +11171,7 @@ public class GroupMetadataManagerTest {
             .setState(MemberState.STABLE)
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
-            .setSubscribedTopicNames(mkSet(fooTopicName, barTopicName))
+            .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
             .setRebalanceTimeoutMs(500)
             .setClassicMemberMetadata(
                 new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
@@ -11236,7 +11236,7 @@ public class GroupMetadataManagerTest {
                     .setState(MemberState.STABLE)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(10)
-                    .setSubscribedTopicNames(Collections.singleton(fooTopicName))
+                    .setSubscribedTopicNames(Collections.singletonList(fooTopicName))
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1)))
                     .build())
@@ -11273,7 +11273,7 @@ public class GroupMetadataManagerTest {
             .setState(MemberState.STABLE)
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
-            .setSubscribedTopicNames(Collections.singleton(fooTopicName))
+            .setSubscribedTopicNames(Collections.singletonList(fooTopicName))
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1)))
             .setRebalanceTimeoutMs(500)
@@ -11349,7 +11349,7 @@ public class GroupMetadataManagerTest {
                     .setRebalanceTimeoutMs(500)
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
-                    .setSubscribedTopicNames(mkSet(fooTopicName, barTopicName))
+                    .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0),
                         mkTopicAssignment(barTopicId, 0)))
@@ -11371,7 +11371,7 @@ public class GroupMetadataManagerTest {
                     .setRebalanceTimeoutMs(500)
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
-                    .setSubscribedTopicNames(mkSet(fooTopicName, barTopicName))
+                    .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 1)))
                     .build())
@@ -11418,7 +11418,7 @@ public class GroupMetadataManagerTest {
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
             .setState(MemberState.STABLE)
-            .setSubscribedTopicNames(mkSet(fooTopicName, barTopicName, zarTopicName))
+            .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName, zarTopicName))
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0),
                 mkTopicAssignment(zarTopicId, 0)))
@@ -11577,7 +11577,7 @@ public class GroupMetadataManagerTest {
                     .setRebalanceTimeoutMs(500)
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
-                    .setSubscribedTopicNames(mkSet(fooTopicName, barTopicName))
+                    .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0),
                         mkTopicAssignment(barTopicId, 0)))
@@ -11599,7 +11599,7 @@ public class GroupMetadataManagerTest {
                     .setRebalanceTimeoutMs(500)
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
-                    .setSubscribedTopicNames(mkSet(fooTopicName, barTopicName))
+                    .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 1)))
                     .build())
@@ -11648,7 +11648,7 @@ public class GroupMetadataManagerTest {
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
             .setState(MemberState.UNRELEASED_PARTITIONS)
-            .setSubscribedTopicNames(mkSet(fooTopicName, barTopicName, zarTopicName))
+            .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName, zarTopicName))
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0),
                 mkTopicAssignment(zarTopicId, 0)))
@@ -11806,7 +11806,7 @@ public class GroupMetadataManagerTest {
                     .setRebalanceTimeoutMs(500)
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
-                    .setSubscribedTopicNames(mkSet(fooTopicName, barTopicName))
+                    .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0),
                         mkTopicAssignment(barTopicId, 0)))
@@ -11828,7 +11828,7 @@ public class GroupMetadataManagerTest {
                     .setRebalanceTimeoutMs(500)
                     .setClientId("client")
                     .setClientHost("localhost/127.0.0.1")
-                    .setSubscribedTopicNames(mkSet(fooTopicName, barTopicName))
+                    .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName))
                     .setAssignedPartitions(mkAssignment(
                         mkTopicAssignment(fooTopicId, 1)))
                     .build())
@@ -11876,7 +11876,7 @@ public class GroupMetadataManagerTest {
             .setClientId("client")
             .setClientHost("localhost/127.0.0.1")
             .setState(MemberState.UNREVOKED_PARTITIONS)
-            .setSubscribedTopicNames(mkSet(fooTopicName, barTopicName, zarTopicName))
+            .setSubscribedTopicNames(Arrays.asList(fooTopicName, barTopicName, zarTopicName))
             .setAssignedPartitions(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0)))
             .setPartitionsPendingRevocation(mkAssignment(
@@ -12120,7 +12120,7 @@ public class GroupMetadataManagerTest {
                 .setState(MemberState.STABLE)
                 .setMemberEpoch(10)
                 .setPreviousMemberEpoch(9)
-                .setSubscribedTopicNames(mkSet("foo", "bar"))
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                 .setClassicMemberMetadata(
                     new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                         .setSessionTimeoutMs(5000)
@@ -12134,7 +12134,7 @@ public class GroupMetadataManagerTest {
                 .setState(MemberState.STABLE)
                 .setMemberEpoch(10)
                 .setPreviousMemberEpoch(9)
-                .setSubscribedTopicNames(mkSet("foo", "bar"))
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                 .setAssignedPartitions(mkAssignment(
                     mkTopicAssignment(fooTopicId, 3, 4, 5),
                     mkTopicAssignment(barTopicId, 2)))

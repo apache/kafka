@@ -68,7 +68,6 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.coordinator.group.Assertions.assertRecordEquals;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkSortedAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkSortedTopicAssignment;
@@ -104,7 +103,7 @@ public class CoordinatorRecordHelpersTest {
             .setRebalanceTimeoutMs(5000)
             .setClientId("client-id")
             .setClientHost("client-host")
-            .setSubscribedTopicNames(mkSet("foo", "zar", "bar"))
+            .setSubscribedTopicNames(Arrays.asList("foo", "zar", "bar"))
             .setSubscribedTopicRegex("regex")
             .setServerAssignorName("range")
             .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()

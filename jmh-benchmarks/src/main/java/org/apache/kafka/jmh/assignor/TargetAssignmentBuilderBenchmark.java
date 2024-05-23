@@ -50,10 +50,12 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -90,7 +92,7 @@ public class TargetAssignmentBuilderBenchmark {
 
     private AssignmentSpec assignmentSpec;
 
-    private final Set<String> allTopicNames = new HashSet<>();
+    private final List<String> allTopicNames = new ArrayList<>();
 
     private TopicsImage topicsImage;
 
@@ -192,7 +194,7 @@ public class TargetAssignmentBuilderBenchmark {
             members.put(memberId, new AssignmentMemberSpec(
                 Optional.empty(),
                 Optional.empty(),
-                new TopicIds(allTopicNames, topicsImage),
+                new TopicIds(new HashSet<>(allTopicNames), topicsImage),
                 Collections.emptyMap()
             ));
         }

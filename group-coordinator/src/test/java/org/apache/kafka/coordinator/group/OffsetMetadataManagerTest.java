@@ -2360,7 +2360,7 @@ public class OffsetMetadataManagerTest {
             .addRacks()
             .build();
         ConsumerGroupMember member1 = new ConsumerGroupMember.Builder("member1")
-            .setSubscribedTopicNames(Collections.singleton("bar"))
+            .setSubscribedTopicNames(Collections.singletonList("bar"))
             .build();
         group.computeSubscriptionMetadata(
             group.computeSubscribedTopicNames(null, member1),

@@ -1389,7 +1389,7 @@ public class GroupMetadataManager {
         int rebalanceTimeoutMs,
         String clientId,
         String clientHost,
-        Set<String> subscribedTopicNames,
+        List<String> subscribedTopicNames,
         String assignorName,
         List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions
     ) throws ApiException {
@@ -1654,13 +1654,12 @@ public class GroupMetadataManager {
         // changed, the subscription metadata is updated and persisted by writing a ConsumerGroupPartitionMetadataValue
         // record to the __consumer_offsets partition. Finally, the group epoch is bumped if the subscriptions have
         // changed, and persisted by writing a ConsumerGroupMetadataValue record to the partition.
-        Set<String> subscribedTopicNames = subscription.topics() == null ? null : new HashSet<>(subscription.topics());
         ConsumerGroupMember updatedMember = updatedMemberBuilder
             .maybeUpdateInstanceId(Optional.ofNullable(instanceId))
             .maybeUpdateRackId(subscription.rackId())
             .maybeUpdateRebalanceTimeoutMs(ofSentinel(request.rebalanceTimeoutMs()))
             .maybeUpdateServerAssignorName(Optional.empty())
-            .maybeUpdateSubscribedTopicNames(Optional.ofNullable(subscribedTopicNames))
+            .maybeUpdateSubscribedTopicNames(Optional.ofNullable(subscription.topics()))
             .setClientId(context.clientId())
             .setClientHost(context.clientAddress.toString())
             .setClassicMemberMetadata(
@@ -2253,9 +2252,6 @@ public class GroupMetadataManager {
             );
         } else {
             // Otherwise, it is a regular heartbeat.
-            Set<String> subscribedTopicNames = request.subscribedTopicNames() == null ?
-                null : new HashSet<>(request.subscribedTopicNames());
-
             return consumerGroupHeartbeat(
                 request.groupId(),
                 request.memberId(),
@@ -2265,7 +2261,7 @@ public class GroupMetadataManager {
                 request.rebalanceTimeoutMs(),
                 context.clientId(),
                 context.clientAddress.toString(),
-                subscribedTopicNames,
+                request.subscribedTopicNames(),
                 request.serverAssignor(),
                 request.topicPartitions()
             );

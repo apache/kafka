@@ -58,7 +58,7 @@ public class ConsumerGroupMemberTest {
             .setRebalanceTimeoutMs(5000)
             .setClientId("client-id")
             .setClientHost("hostname")
-            .setSubscribedTopicNames(mkSet("foo", "bar"))
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setSubscribedTopicRegex("regex")
             .setServerAssignorName("range")
             .setAssignedPartitions(mkAssignment(
@@ -102,7 +102,7 @@ public class ConsumerGroupMemberTest {
             .setRebalanceTimeoutMs(5000)
             .setClientId("client-id")
             .setClientHost("hostname")
-            .setSubscribedTopicNames(mkSet("foo", "bar"))
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setSubscribedTopicRegex("regex")
             .setServerAssignorName("range")
             .setAssignedPartitions(mkAssignment(
@@ -121,7 +121,7 @@ public class ConsumerGroupMemberTest {
             .setRebalanceTimeoutMs(5000)
             .setClientId("client-id")
             .setClientHost("hostname")
-            .setSubscribedTopicNames(mkSet("foo", "bar"))
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setSubscribedTopicRegex("regex")
             .setServerAssignorName("range")
             .setAssignedPartitions(mkAssignment(
@@ -148,7 +148,7 @@ public class ConsumerGroupMemberTest {
             .setRebalanceTimeoutMs(5000)
             .setClientId("client-id")
             .setClientHost("hostname")
-            .setSubscribedTopicNames(mkSet("foo", "bar"))
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setSubscribedTopicRegex("regex")
             .setServerAssignorName("range")
             .setAssignedPartitions(mkAssignment(
@@ -175,7 +175,7 @@ public class ConsumerGroupMemberTest {
             .maybeUpdateRackId(Optional.of("new-rack-id"))
             .maybeUpdateInstanceId(Optional.of("new-instance-id"))
             .maybeUpdateServerAssignorName(Optional.of("new-assignor"))
-            .maybeUpdateSubscribedTopicNames(Optional.of(mkSet("zar")))
+            .maybeUpdateSubscribedTopicNames(Optional.of(Collections.singletonList("zar")))
             .maybeUpdateSubscribedTopicRegex(Optional.of("new-regex"))
             .maybeUpdateRebalanceTimeoutMs(OptionalInt.of(6000))
             .build();
@@ -273,7 +273,7 @@ public class ConsumerGroupMemberTest {
         String instanceId = "instanceId";
         String rackId = "rackId";
         String clientHost = "clientHost";
-        Set<String> subscribedTopicNames = mkSet("topic1", "topic2");
+        List<String> subscribedTopicNames = Arrays.asList("topic1", "topic2");
         String subscribedTopicRegex = "topic.*";
         Map<Uuid, Set<Integer>> assignmentMap = new HashMap<>();
         assignmentMap.put(topicId4, new HashSet<>(assignedPartitions));

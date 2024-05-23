@@ -147,13 +147,13 @@ public class ConsumerGroupMember {
             return this;
         }
 
-        public Builder setSubscribedTopicNames(Set<String> subscribedTopicNames) {
-            this.subscribedTopicNames = subscribedTopicNames;
+        public Builder setSubscribedTopicNames(List<String> subscribedTopicList) {
+            if (subscribedTopicNames != null) this.subscribedTopicNames = new HashSet<>(subscribedTopicList);
             return this;
         }
 
-        public Builder maybeUpdateSubscribedTopicNames(Optional<Set<String>> subscribedTopicNames) {
-            this.subscribedTopicNames = subscribedTopicNames.orElse(this.subscribedTopicNames);
+        public Builder maybeUpdateSubscribedTopicNames(Optional<List<String>> subscribedTopicList) {
+            subscribedTopicList.ifPresent(list -> this.subscribedTopicNames = new HashSet<>(list));
             return this;
         }
 
@@ -202,7 +202,7 @@ public class ConsumerGroupMember {
             setRackId(record.rackId());
             setClientId(record.clientId());
             setClientHost(record.clientHost());
-            setSubscribedTopicNames(new HashSet<>(record.subscribedTopicNames()));
+            setSubscribedTopicNames(record.subscribedTopicNames());
             setSubscribedTopicRegex(record.subscribedTopicRegex());
             setRebalanceTimeoutMs(record.rebalanceTimeoutMs());
             setServerAssignorName(record.serverAssignor());

@@ -1202,7 +1202,7 @@ public class ConsumerGroup implements Group {
                 .setRebalanceTimeoutMs(classicGroupMember.rebalanceTimeoutMs())
                 .setClientId(classicGroupMember.clientId())
                 .setClientHost(classicGroupMember.clientHost())
-                .setSubscribedTopicNames(new HashSet<>(subscription.topics()))
+                .setSubscribedTopicNames(subscription.topics())
                 .setAssignedPartitions(partitions)
                 .setClassicMemberMetadata(
                     new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
