@@ -25,7 +25,7 @@ import java.util.concurrent.TimeUnit;
  */
 public class MetricConfig {
 
-    public static int DEFAULT_NUM_SAMPLES = 2;
+    public static final int DEFAULT_NUM_SAMPLES = 2;
 
     private Quota quota;
     private int samples;
