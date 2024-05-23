@@ -118,45 +118,48 @@ pipeline {
           }
         }
 
-        // Only run the oldest and newest JDKs on PR builds
-        if (!isChangeRequest(env)) {
-            stage('JDK 11 and Scala 2.13') {
-              agent { label 'ubuntu' }
-              tools {
-                jdk 'jdk_11_latest'
-              }
-              options {
-                timeout(time: 8, unit: 'HOURS')
-                timestamps()
-              }
-              environment {
-                SCALA_VERSION=2.13
-              }
-              steps {
-                doValidation()
-                doTest(env)
-                echo 'Skipping Kafka Streams archetype test for Java 11'
-              }
-            }
+        stage('JDK 11 and Scala 2.13') {
+          agent { label 'ubuntu' }
+          tools {
+            jdk 'jdk_11_latest'
+          }
+          options {
+            timeout(time: 8, unit: 'HOURS') 
+            timestamps()
+          }
+          when {
+            expression !isChangeRequest(env)
+          }
+          environment {
+            SCALA_VERSION=2.13
+          }
+          steps {
+            doValidation()
+            doTest(env)
+            echo 'Skipping Kafka Streams archetype test for Java 11'
+          }
+        }
 
-            stage('JDK 17 and Scala 2.13') {
-              agent { label 'ubuntu' }
-              tools {
-                jdk 'jdk_17_latest'
-              }
-              options {
-                timeout(time: 8, unit: 'HOURS')
-                timestamps()
-              }
-              environment {
-                SCALA_VERSION=2.13
-              }
-              steps {
-                doValidation()
-                doTest(env)
-                echo 'Skipping Kafka Streams archetype test for Java 17'
-              }
-            }
+        stage('JDK 17 and Scala 2.13') {
+          agent { label 'ubuntu' }
+          tools {
+            jdk 'jdk_17_latest'
+          }
+          options {
+            timeout(time: 8, unit: 'HOURS') 
+            timestamps()
+          }
+          when {
+            expression !isChangeRequest(env)
+          }
+          environment {
+            SCALA_VERSION=2.13
+          }
+          steps {
+            doValidation()
+            doTest(env)
+            echo 'Skipping Kafka Streams archetype test for Java 17'
+          }
         }
 
         stage('JDK 21 and Scala 2.13') {
