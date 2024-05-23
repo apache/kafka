@@ -530,7 +530,7 @@ public class ConsumerGroupMember {
             .setClientId(clientId)
             .setInstanceId(instanceId)
             .setRackId(rackId)
-            .setSubscribedTopicNames(new ArrayList<>(subscribedTopicNames))
+            .setSubscribedTopicNames(subscribedTopicNames == null ? null : new ArrayList<>(subscribedTopicNames))
             .setSubscribedTopicRegex(subscribedTopicRegex);
     }
 

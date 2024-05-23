@@ -110,7 +110,6 @@ public class TargetAssignmentBuilderTest {
                 numPartitions,
                 partitionRacks
             ));
-
             topicsImageBuilder = topicsImageBuilder.addTopic(topicId, topicName, numPartitions);
 
             return topicId;
