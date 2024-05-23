@@ -31,9 +31,6 @@ Usage:
         docker_official_images directory , they will be overwritten, else they will be created.
         
 """
-
-#!/usr/bin/env python
-
 import os
 import argparse
 import zipfile
