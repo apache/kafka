@@ -17,9 +17,7 @@
 package org.apache.kafka.streams.processor.assignment;
 
 
-import java.util.Map;
 import java.util.Set;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.TaskId;
 
 /**

@@ -21,7 +21,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.Cluster;
@@ -40,9 +39,9 @@ public final class RackUtils {
 
     private RackUtils() { }
 
-    public static void annotateWithTopicPartitionsWithRackInfo(final Cluster cluster,
-                                                                    final InternalTopicManager internalTopicManager,
-                                                                    final Set<DefaultTaskTopicPartition> topicPartitions) {
+    public static void annotateTopicPartitionsWithRackInfo(final Cluster cluster,
+                                                           final InternalTopicManager internalTopicManager,
+                                                           final Set<DefaultTaskTopicPartition> topicPartitions) {
         // First we add all the changelog topics to the set of topics to describe.
         final Set<String> topicsToDescribe = topicPartitions.stream()
             .filter(DefaultTaskTopicPartition::isChangelog)

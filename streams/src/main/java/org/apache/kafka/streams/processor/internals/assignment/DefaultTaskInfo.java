@@ -16,13 +16,9 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import static java.util.Collections.unmodifiableMap;
 import static java.util.Collections.unmodifiableSet;
 
-import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.TaskInfo;
 import org.apache.kafka.streams.processor.assignment.TaskTopicPartition;

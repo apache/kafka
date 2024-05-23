@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.internals.assignment;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.TreeSet;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.assignment.TaskTopicPartition;
 import org.slf4j.Logger;
@@ -80,21 +79,21 @@ public class DefaultTaskTopicPartition implements TaskTopicPartition {
     }
 
     @Override
-    public boolean equals(Object obj) {
+    public boolean equals(final Object obj) {
         if (this == obj)
             return true;
         if (obj == null)
             return false;
         if (getClass() != obj.getClass())
             return false;
-        TaskTopicPartition other = (TaskTopicPartition) obj;
+        final TaskTopicPartition other = (TaskTopicPartition) obj;
         return topicPartition.equals(other.topicPartition()) &&
                isSourceTopic == other.isSource() &&
                isChangelogTopic == other.isChangelog() &&
                rackIds.equals(other.rackIds());
     }
 
-    public void annotateWithRackIds(Set<String> rackIds) {
+    public void annotateWithRackIds(final Set<String> rackIds) {
         this.rackIds = Optional.of(rackIds);
     }
 }

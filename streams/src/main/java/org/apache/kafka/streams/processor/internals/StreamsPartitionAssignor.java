@@ -527,7 +527,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 final DefaultTaskTopicPartition racklessTopicPartition = new DefaultTaskTopicPartition(
                     topicPartition, isSource, isChangelog, null);
                 allTopicPartitions.add(racklessTopicPartition);
-                topicPartitionsForTask.get(taskId).add(racklessTopicPartition);
+                topicPartitions.add(racklessTopicPartition);
             }
 
             for (final TopicPartition topicPartition : changelogPartitionsForTask.get(taskId)) {
@@ -536,13 +536,13 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 final DefaultTaskTopicPartition racklessTopicPartition = new DefaultTaskTopicPartition(
                     topicPartition, isSource, isChangelog, null);
                 allTopicPartitions.add(racklessTopicPartition);
-                topicPartitionsForTask.get(taskId).add(racklessTopicPartition);
+                topicPartitions.add(racklessTopicPartition);
             }
 
             topicPartitionsForTask.put(taskId, topicPartitions);
         });
 
-        RackUtils.annotateWithTopicPartitionsWithRackInfo(cluster, internalTopicManager, allTopicPartitions);
+        RackUtils.annotateTopicPartitionsWithRackInfo(cluster, internalTopicManager, allTopicPartitions);
 
         final Set<TaskInfo> logicalTasks = logicalTaskIds.stream().map(taskId -> {
             final Set<String> stateStoreNames = topologyMetadata
