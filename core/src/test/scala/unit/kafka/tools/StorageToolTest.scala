@@ -21,7 +21,7 @@ import java.io.{ByteArrayOutputStream, PrintStream}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
 import java.util
-import java.util.{Collections, Properties}
+import java.util.{Collections, Optional, Properties}
 import org.apache.kafka.common.{DirectoryId, KafkaException}
 import kafka.server.KafkaConfig
 import kafka.utils.Exit
@@ -350,7 +350,8 @@ Found problem:
         records,
         MetadataVersion.LATEST_PRODUCTION,
         Map(TestFeatureVersion.FEATURE_NAME -> featureLevel),
-        allFeatures
+        allFeatures,
+        false
       )
       if (featureLevel > 0) {
         assertEquals(List(generateRecord(TestFeatureVersion.FEATURE_NAME, featureLevel)), records)
@@ -366,14 +367,29 @@ Found problem:
       records,
       metadataVersion,
       Map.empty,
-      allFeatures
+      allFeatures,
+      true
     )
 
-    val featureLevel = Features.TEST_VERSION.defaultValue(metadataVersion)
+    val featureLevel = Features.TEST_VERSION.defaultValue(Optional.of(metadataVersion))
     if (featureLevel > 0) {
       assertEquals(List(generateRecord(TestFeatureVersion.FEATURE_NAME, featureLevel)), records)
     }
   }
+  @Test
+  def testVersionDefaultNoArgs(): Unit = {
+    val records = new ArrayBuffer[ApiMessageAndVersion]()
+    StorageTool.generateFeatureRecords(
+      records,
+      MetadataVersion.LATEST_PRODUCTION,
+      Map.empty,
+      allFeatures,
+      false
+    )
+
+    assertEquals(List(generateRecord(TestFeatureVersion.FEATURE_NAME, TestFeatureVersion.LATEST_PRODUCTION.featureLevel())), records)
+  }
+
 
   @Test
   def testFeatureDependency(): Unit = {
@@ -382,7 +398,8 @@ Found problem:
       new ArrayBuffer[ApiMessageAndVersion](),
       MetadataVersion.IBP_2_8_IV1,
       Map(TestFeatureVersion.FEATURE_NAME -> featureLevel),
-      allFeatures
+      allFeatures,
+      false
     ))
   }
 
@@ -393,7 +410,8 @@ Found problem:
       new ArrayBuffer[ApiMessageAndVersion](),
       MetadataVersion.LATEST_PRODUCTION,
       Map(TestFeatureVersion.FEATURE_NAME -> featureLevel),
-      allFeatures
+      allFeatures,
+      false
     ))
   }
 

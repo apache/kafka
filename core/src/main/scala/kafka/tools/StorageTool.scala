@@ -72,7 +72,13 @@ object StorageTool extends Logging {
             Option(config.get.originals.get(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG)).map(_.toString))
           validateMetadataVersion(metadataVersion, config)
           // Get all other features, validate, and create records for them
-          generateFeatureRecords(metadataRecords, metadataVersion, featureNamesAndLevelsMap, Features.PRODUCTION_FEATURES.asScala.toList)
+          generateFeatureRecords(
+            metadataRecords,
+            metadataVersion,
+            featureNamesAndLevelsMap,
+            Features.PRODUCTION_FEATURES.asScala.toList,
+            Option(namespace.getString("release_version")).isEmpty
+          )
           getUserScramCredentialRecords(namespace).foreach(userScramCredentialRecords => {
             if (!metadataVersion.isScramSupported) {
               throw new TerseFailure(s"SCRAM is only supported in metadata.version ${MetadataVersion.IBP_3_5_IV2} or later.")
@@ -121,9 +127,10 @@ object StorageTool extends Logging {
   private[tools] def generateFeatureRecords(metadataRecords: ArrayBuffer[ApiMessageAndVersion],
                                             metadataVersion: MetadataVersion,
                                             specifiedFeatures: Map[String, java.lang.Short],
-                                            allFeatures: List[Features]): Unit = {
+                                            allFeatures: List[Features],
+                                            usesVersionDefault: Boolean): Unit = {
     // If we are using --version-default, the default is based on the metadata version.
-    val metadataVersionForDefault = if (specifiedFeatures.isEmpty) metadataVersion else MetadataVersion.LATEST_PRODUCTION
+    val metadataVersionForDefault = if (usesVersionDefault) Optional.of(metadataVersion) else Optional.empty[MetadataVersion]()
 
     val allNonZeroFeaturesAndLevels: ArrayBuffer[FeatureVersion]  = mutable.ArrayBuffer[FeatureVersion]()
 

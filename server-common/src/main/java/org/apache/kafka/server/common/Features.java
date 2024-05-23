@@ -20,6 +20,7 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -39,7 +40,7 @@ public enum Features {
      *
      * See {@link TestFeatureVersion} as an example. See {@link FeatureVersion} when implementing a new feature.
      */
-    TEST_VERSION("test.feature.version", TestFeatureVersion.values(), null);
+    TEST_VERSION("test.feature.version", TestFeatureVersion.values(), TestFeatureVersion.LATEST_PRODUCTION);
 
     public static final Features[] FEATURES;
     public static final List<Features> PRODUCTION_FEATURES;
@@ -118,17 +119,22 @@ public enum Features {
     }
 
     /**
-     * A method to return the default version level of a feature based on the metadata version provided
+     * A method to return the default version level of a feature based on the metadata version provided or the latest production
+     * version if none is specified.
      *
      * Every time a new feature is added, it should create a mapping from metadata version to feature version
      * with {@link FeatureVersion#bootstrapMetadataVersion()}
      *
-     * @param metadataVersion the metadata version we want to use to set the default
+     * @param metadataVersionOpt the metadata version we want to use to set the default or none if we want to use the latest default.
      * @return the default version level for the feature and potential metadata version
      */
-    public short defaultValue(MetadataVersion metadataVersion) {
+    public short defaultValue(Optional<MetadataVersion> metadataVersionOpt) {
+        if (!metadataVersionOpt.isPresent()) {
+            return latestProductionVersion.featureLevel();
+        }
         short level = 0;
 
+        MetadataVersion metadataVersion = metadataVersionOpt.get();
         for (Iterator<FeatureVersion> it = Arrays.stream(featureVersions).iterator(); it.hasNext(); ) {
             FeatureVersion feature = it.next();
             if (feature.bootstrapMetadataVersion().isLessThan(metadataVersion) || feature.bootstrapMetadataVersion().equals(metadataVersion))
