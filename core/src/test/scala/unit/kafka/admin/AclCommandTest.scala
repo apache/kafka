@@ -142,7 +142,7 @@ class AclCommandTest extends QuorumTestHarness with Logging {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
+  @ValueSource(strings = Array("zk", "kraft"))
   def testAclCliWithAdminAPI(quorum: String): Unit = {
     createServer()
     testAclCli(adminArgs)
@@ -170,7 +170,11 @@ class AclCommandTest extends QuorumTestHarness with Logging {
         val (acls, cmd) = getAclToCommand(permissionType, operationToCmd._1)
         val (addOut, addErr) = callMain(cmdArgs ++ cmd ++ resourceCmd ++ operationToCmd._2 :+ "--add")
         assertOutputContains("Adding ACLs", resources, resourceCmd, addOut)
-        assertOutputContains("Current ACLs", resources, resourceCmd, addOut)
+        // In case of Kraft, it can take some time for the ACL metadata to propagate to all brokers, so the immediate
+        // output may be not correct. Eventually, ACLs will be propagated - see below TestUtils.waitAndVerifyAcls
+        if (!isKRaftTest()) {
+          assertOutputContains("Current ACLs", resources, resourceCmd, addOut)
+        }
         assertEquals("", addErr)
 
         for (resource <- resources) {
@@ -204,14 +208,14 @@ class AclCommandTest extends QuorumTestHarness with Logging {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
+  @ValueSource(strings = Array("zk", "kraft"))
   def testProducerConsumerCliWithAdminAPI(quorum: String): Unit = {
     createServer()
     testProducerConsumerCli(adminArgs)
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk"))
+  @ValueSource(strings = Array("zk", "kraft"))
   def testAclCliWithClientId(quorum: String): Unit = {
     val adminClientConfig = TestUtils.tempFile("client.id=my-client")
 
@@ -330,7 +334,11 @@ class AclCommandTest extends QuorumTestHarness with Logging {
 
   private def testRemove(cmdArgs: Array[String], resources: Set[ResourcePattern], resourceCmd: Array[String]): Unit = {
     val (out, err) = callMain(cmdArgs ++ resourceCmd :+ "--remove" :+ "--force")
-    assertEquals("", out)
+    // In case of Kraft, it can take some time for the ACL metadata to propagate to all brokers, so the immediate
+    // output may be not correct. Eventually, ACLs will be propagated - see below TestUtils.waitAndVerifyAcls
+    if (!isKRaftTest()) {
+      assertEquals("", out)
+    }
     assertEquals("", err)
     for (resource <- resources) {
       withAuthorizer() { authorizer =>
