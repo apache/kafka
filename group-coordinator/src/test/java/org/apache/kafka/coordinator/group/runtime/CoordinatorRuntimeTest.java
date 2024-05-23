@@ -224,6 +224,7 @@ public class CoordinatorRuntimeTest {
         private final int maxWrites;
         private final boolean failEndMarker;
         private final AtomicInteger writeCount = new AtomicInteger(0);
+        private MemoryRecords lastBatch = null;
 
         public MockPartitionWriter() {
             this(Integer.MAX_VALUE, false);
@@ -259,6 +260,7 @@ public class CoordinatorRuntimeTest {
             VerificationGuard verificationGuard,
             MemoryRecords batch
         ) {
+            lastBatch = batch;
             if (writeCount.incrementAndGet() > maxWrites)
                 throw new KafkaException("Maximum number of writes reached");
 
@@ -3005,6 +3007,54 @@ public class CoordinatorRuntimeTest {
         // All timer tasks have been cancelled. TimerTask entries are not removed in MockTimer.
         assertEquals(1, timer.size());
         timer.taskQueue().forEach(taskEntry -> assertTrue(taskEntry.cancelled()));
+    }
+
+    @Test
+    public void testAppendRecordBatchSize() {
+        MockTimer timer = new MockTimer();
+        MockPartitionWriter writer = new MockPartitionWriter();
+        StringSerializer serializer = new StringSerializer();
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .withSerializer(serializer)
+                .build();
+
+        // Schedule the loading.
+        runtime.scheduleLoadOperation(TP, 10);
+
+        // Verify the initial state.
+        CoordinatorRuntime<MockCoordinatorShard, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+        assertEquals(0L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(Collections.singletonList(0L), ctx.coordinator.snapshotRegistry().epochsList());
+
+        int maxBatchSize = writer.config(TP).maxMessageSize();
+        assertTrue(maxBatchSize > 16834);
+
+        // Generate enough records to create a batch that has 16KB < batchSize < maxBatchSize
+        List<String> records = new ArrayList<>();
+        for (int i = 0; i < 3000; i++) {
+            records.add("record-" + i);
+        }
+
+        // Write #1.
+        CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, DEFAULT_WRITE_TIMEOUT,
+            state -> new CoordinatorResult<>(records, "response1")
+        );
+
+        // Verify that the write has not completed exceptionally.
+        // This will catch any exceptions thrown including RecordTooLargeException.
+        assertFalse(write1.isCompletedExceptionally());
     }
 
     private static <S extends CoordinatorShard<U>, U> ArgumentMatcher<CoordinatorPlayback<U>> coordinatorMatcher(
