@@ -1785,7 +1785,7 @@ object TestUtils extends Logging {
 
     val filter = new AclBindingFilter(resource.toFilter, accessControlEntryFilter)
     waitUntilTrue(() => authorizer.acls(filter).asScala.map(_.entry).toSet.contains(expected),
-      s"expected to contain acl: " + expected +
+      s"expected to contain acl: $expected" +
         s"but got:${authorizer.acls(filter).asScala.map(_.entry).mkString(newLine + "\t", newLine + "\t", newLine)}",
       45000)
   }
@@ -1798,7 +1798,7 @@ object TestUtils extends Logging {
 
     val filter = new AclBindingFilter(resource.toFilter, accessControlEntryFilter)
     waitUntilTrue(() => !authorizer.acls(filter).asScala.map(_.entry).toSet.contains(expectedToRemoved),
-      s"expected acl to be removed :" + expectedToRemoved +
+      s"expected acl to be removed : $expectedToRemoved" +
         s"but got:${authorizer.acls(filter).asScala.map(_.entry).mkString(newLine + "\t", newLine + "\t", newLine)}",
       45000)
   }
