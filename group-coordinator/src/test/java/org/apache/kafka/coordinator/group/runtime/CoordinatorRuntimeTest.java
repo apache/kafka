@@ -81,6 +81,7 @@ import static org.apache.kafka.coordinator.group.runtime.CoordinatorRuntime.Coor
 import static org.apache.kafka.coordinator.group.runtime.CoordinatorRuntime.CoordinatorState.FAILED;
 import static org.apache.kafka.coordinator.group.runtime.CoordinatorRuntime.CoordinatorState.INITIAL;
 import static org.apache.kafka.coordinator.group.runtime.CoordinatorRuntime.CoordinatorState.LOADING;
+import static org.apache.kafka.coordinator.group.runtime.CoordinatorRuntime.SIXTEEN_KB;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -3039,7 +3040,7 @@ public class CoordinatorRuntimeTest {
         assertEquals(Collections.singletonList(0L), ctx.coordinator.snapshotRegistry().epochsList());
 
         int maxBatchSize = writer.config(TP).maxMessageSize();
-        assertTrue(maxBatchSize > 16834);
+        assertTrue(maxBatchSize > SIXTEEN_KB);
 
         // Generate enough records to create a batch that has 16KB < batchSize < maxBatchSize
         List<String> records = new ArrayList<>();
@@ -3055,6 +3056,9 @@ public class CoordinatorRuntimeTest {
         // Verify that the write has not completed exceptionally.
         // This will catch any exceptions thrown including RecordTooLargeException.
         assertFalse(write1.isCompletedExceptionally());
+
+        int batchSize = writer.lastBatch.sizeInBytes();
+        assertTrue(batchSize > SIXTEEN_KB && batchSize < maxBatchSize);
     }
 
     private static <S extends CoordinatorShard<U>, U> ArgumentMatcher<CoordinatorPlayback<U>> coordinatorMatcher(

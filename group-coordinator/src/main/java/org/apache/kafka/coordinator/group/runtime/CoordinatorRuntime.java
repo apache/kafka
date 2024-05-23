@@ -1367,6 +1367,9 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         }
     }
 
+    /**
+     * 16KB. Used for initial buffer size for write operations.
+     */
     static final int SIXTEEN_KB = 16384;
 
     /**
