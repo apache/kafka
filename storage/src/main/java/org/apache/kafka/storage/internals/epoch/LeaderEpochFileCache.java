@@ -75,7 +75,7 @@ public class LeaderEpochFileCache {
 
     /**
      * Instantiate a new LeaderEpochFileCache with provided epoch entries instead of from the backing checkpoint file.
-     * The provided epoch entries are expected to no less fresh than the checkpoint file.
+     * The provided epoch entries are expected to be no less fresh than the checkpoint file.
      * @param epochEntries the current epoch entries
      * @param topicPartition the associated topic partition
      * @param checkpoint the checkpoint file
