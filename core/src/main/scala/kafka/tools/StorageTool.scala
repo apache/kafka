@@ -452,21 +452,20 @@ object StorageTool extends Logging {
       stream.println("All of the log directories are already formatted.")
     } else {
       metaPropertiesEnsemble.emptyLogDirs().forEach(logDir => {
-        val loggingCopier = new MetaPropertiesEnsemble.Copier(metaPropertiesEnsemble)
-        loggingCopier.setLogDirProps(logDir, new MetaProperties.Builder(metaProperties).
-          setDirectoryId(loggingCopier.generateValidDirectoryId()).
+        copier.setLogDirProps(logDir, new MetaProperties.Builder(metaProperties).
+          setDirectoryId(copier.generateValidDirectoryId()).
           build())
-        loggingCopier.setPreWriteHandler((logDir, _, _) => {
+        copier.setPreWriteHandler((logDir, _, _) => {
           stream.println(s"Formatting $logDir with metadata.version $metadataVersion.")
           Files.createDirectories(Paths.get(logDir))
           val bootstrapDirectory = new BootstrapDirectory(logDir, Optional.empty())
           bootstrapDirectory.writeBinaryFile(bootstrapMetadata)
         })
-        loggingCopier.setWriteErrorHandler((logDir, e) => {
+        copier.setWriteErrorHandler((logDir, e) => {
           throw new TerseFailure(s"Error while writing meta.properties file $logDir: ${e.getMessage}")
         })
-        loggingCopier.writeLogDirChanges()
       })
+      copier.writeLogDirChanges()
     }
     0
   }

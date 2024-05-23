@@ -206,12 +206,20 @@ Found problem:
 
   @Test
   def testFormatSucceedsIfAllDirectoriesAreAvailable(): Unit = {
-    val availableDir1 = TestUtils.tempDir()
-    val availableDir2 = TestUtils.tempDir()
+    val availableDirs = Seq(TestUtils.tempDir(), TestUtils.tempDir(), TestUtils.tempDir()).map(dir => dir.toString)
     val stream = new ByteArrayOutputStream()
-    assertEquals(0, runFormatCommand(stream, Seq(availableDir1.toString, availableDir2.toString)))
-    assertTrue(stream.toString().contains("Formatting %s".format(availableDir1)))
-    assertTrue(stream.toString().contains("Formatting %s".format(availableDir2)))
+    assertEquals(0, runFormatCommand(stream, availableDirs))
+    val printStringArray = stream.toString().split("\\r?\\n")
+    assertEquals(availableDirs.size, printStringArray.size)
+    var availableSet = availableDirs.to(mutable.Set)
+    printStringArray.foreach(printLine => {
+      val newSet = availableSet.filterNot(dir => {
+        printLine.startsWith("Formatting %s".format(dir))
+      })
+      assertEquals(availableSet.size - 1, newSet.size)
+      availableSet = newSet
+    })
+    assertTrue(availableSet.isEmpty)
   }
 
   @Test
@@ -488,27 +496,4 @@ Found problem:
       assertEquals(1, exitStatus)
     }
   }
-
-  @Test
-  def testFormatMultiEmptyDirectory(): Unit = {
-    val multiDir = Seq(TestUtils.tempDir(), TestUtils.tempDir(), TestUtils.tempDir())
-    try {
-      val metaProperties = new MetaProperties.Builder().
-        setVersion(MetaPropertiesVersion.V1).
-        setClusterId("mockClusterId").
-        setNodeId(1).
-        build()
-      val stream = new ByteArrayOutputStream()
-      val directories = multiDir.map { dir => dir.toString }
-      val bootstrapMetadata = StorageTool.buildBootstrapMetadata(MetadataVersion.latestTesting(), None, "test format command")
-      assertEquals(0, StorageTool.
-        formatCommand(new PrintStream(stream), directories, metaProperties, bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = false))
-      val printStringArray = stream.toString().split("\\r?\\n")
-      assertEquals(multiDir.size, printStringArray.size)
-      directories.zip(printStringArray).foreach { case (dir, printString) =>
-        assertTrue(printString.startsWith("Formatting %s".format(dir)))
-      }
-    } finally multiDir.foreach { tempDir => Utils.delete(tempDir) }
-  }
 }
-
