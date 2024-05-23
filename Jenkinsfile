@@ -128,7 +128,7 @@ pipeline {
             timestamps()
           }
           when {
-            expression !isChangeRequest(env)
+            expression { !isChangeRequest(env) }
           }
           environment {
             SCALA_VERSION=2.13
@@ -150,7 +150,7 @@ pipeline {
             timestamps()
           }
           when {
-            expression !isChangeRequest(env)
+            expression { !isChangeRequest(env) }
           }
           environment {
             SCALA_VERSION=2.13
