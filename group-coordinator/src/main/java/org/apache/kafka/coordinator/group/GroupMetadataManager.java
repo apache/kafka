@@ -2253,6 +2253,9 @@ public class GroupMetadataManager {
             );
         } else {
             // Otherwise, it is a regular heartbeat.
+            Set<String> subscribedTopicNames = request.subscribedTopicNames() == null ?
+                null : new HashSet<>(request.subscribedTopicNames());
+
             return consumerGroupHeartbeat(
                 request.groupId(),
                 request.memberId(),
@@ -2262,7 +2265,7 @@ public class GroupMetadataManager {
                 request.rebalanceTimeoutMs(),
                 context.clientId(),
                 context.clientAddress.toString(),
-                new HashSet<>(request.subscribedTopicNames()),
+                subscribedTopicNames,
                 request.serverAssignor(),
                 request.topicPartitions()
             );
