@@ -1,0 +1,69 @@
+{
+  "resources":{
+  "includes":[{
+    "pattern":"\\QMETA-INF/maven/org.xerial.snappy/snappy-java/pom.properties\\E"
+  }, {
+    "pattern":"\\QMETA-INF/native/libnetty_transport_native_epoll.so\\E"
+  }, {
+    "pattern":"\\QMETA-INF/native/libnetty_transport_native_epoll_x86_64.so\\E"
+  }, {
+    "pattern":"\\QMETA-INF/services/java.lang.System$LoggerFinder\\E"
+  }, {
+    "pattern":"\\QMETA-INF/services/java.net.spi.InetAddressResolverProvider\\E"
+  }, {
+    "pattern":"\\QMETA-INF/services/java.net.spi.URLStreamHandlerProvider\\E"
+  }, {
+    "pattern":"\\QMETA-INF/services/java.nio.channels.spi.SelectorProvider\\E"
+  }, {
+    "pattern":"\\QMETA-INF/services/java.rmi.server.RMIClassLoaderSpi\\E"
+  }, {
+    "pattern":"\\QMETA-INF/services/java.time.zone.ZoneRulesProvider\\E"
+  }, {
+    "pattern":"\\QMETA-INF/services/javax.management.remote.JMXConnectorServerProvider\\E"
+  }, {
+    "pattern":"\\QMETA-INF/services/javax.security.auth.spi.LoginModule\\E"
+  }, {
+    "pattern":"\\Qkafka/kafka-version.properties\\E"
+  }, {
+    "pattern":"\\Qlinux/amd64/libzstd-jni-1.5.5-6.so\\E"
+  }, {
+    "pattern":"\\Qlinux/aarch64/libzstd-jni-1.5.5-6.so\\E"
+  }, {
+    "pattern":"\\Qlinux/amd64/libzstd-jni-1.5.5-11.so\\E"
+  }, {
+    "pattern":"\\Qlinux/aarch64/libzstd-jni-1.5.5-11.so\\E"
+  }, {
+    "pattern":"\\Qnet/jpountz/util/linux/amd64/liblz4-java.so\\E"
+  }, {
+    "pattern":"\\Qnet/jpountz/util/linux/aarch64/liblz4-java.so\\E"
+  }, {
+    "pattern":"\\Qorg-xerial-snappy.properties\\E"
+  }, {
+    "pattern":"\\Qorg/slf4j/impl/StaticLoggerBinder.class\\E"
+  }, {
+    "pattern":"\\Qorg/xerial/snappy/VERSION\\E"
+  }, {
+    "pattern":"\\Qorg/xerial/snappy/native/Linux/x86_64/libsnappyjava.so\\E"
+  }, {
+    "pattern":"\\Qorg/xerial/snappy/native/Linux/aarch64/libsnappyjava.so\\E"
+  }, {
+    "pattern":"java.base:\\Qjdk/internal/icu/impl/data/icudt67b/nfkc.nrm\\E"
+  }, {
+    "pattern":"java.base:\\Qjdk/internal/icu/impl/data/icudt67b/uprops.icu\\E"
+  }, {
+    "pattern":"java.base:\\Qjdk/internal/icu/impl/data/icudt72b/nfkc.nrm\\E"
+  }, {
+    "pattern":"java.base:\\Qjdk/internal/icu/impl/data/icudt72b/uprops.icu\\E"
+  }, {
+    "pattern":"java.base:\\Qsun/net/idn/uidna.spp\\E"
+  }, {
+    "pattern":"jdk.jfr:\\Qjdk/jfr/internal/query/view.ini\\E"
+  }]},
+  "bundles":[{
+    "name":"net.sourceforge.argparse4j.internal.ArgumentParserImpl",
+    "locales":["und"]
+  }, {
+    "name":"sun.security.util.Resources",
+    "classNames":["sun.security.util.Resources"]
+  }]
+}

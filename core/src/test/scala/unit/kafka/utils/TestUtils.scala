@@ -35,6 +35,7 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, Produce
 import org.apache.kafka.clients.{ClientResponse, CommonClientConfigs}
 import org.apache.kafka.common._
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBindingFilter}
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.errors.{KafkaStorageException, OperationNotAttemptedException, TopicExistsException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.header.Header
@@ -51,11 +52,11 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerd
 import org.apache.kafka.common.serialization._
 import org.apache.kafka.common.utils.Utils.formatAddress
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.controller.QuorumController
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.metadata.properties.MetaProperties
 import org.apache.kafka.network.SocketServerConfigs
+import org.apache.kafka.queue.KafkaEventQueue
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
@@ -613,7 +614,7 @@ object TestUtils extends Logging {
    */
   def singletonRecords(value: Array[Byte],
                        key: Array[Byte] = null,
-                       codec: CompressionType = CompressionType.NONE,
+                       codec: Compression = Compression.NONE,
                        timestamp: Long = RecordBatch.NO_TIMESTAMP,
                        magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE): MemoryRecords = {
     records(Seq(new SimpleRecord(timestamp, key, value)), magicValue = magicValue, codec = codec)
@@ -621,7 +622,7 @@ object TestUtils extends Logging {
 
   def records(records: Iterable[SimpleRecord],
               magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE,
-              codec: CompressionType = CompressionType.NONE,
+              codec: Compression = Compression.NONE,
               producerId: Long = RecordBatch.NO_PRODUCER_ID,
               producerEpoch: Short = RecordBatch.NO_PRODUCER_EPOCH,
               sequence: Int = RecordBatch.NO_SEQUENCE,
@@ -1872,7 +1873,7 @@ object TestUtils extends Logging {
       AdminClientUnitTestEnv.kafkaAdminClientNetworkThreadPrefix(),
       AbstractCoordinator.HEARTBEAT_THREAD_PREFIX,
       QuorumTestHarness.ZkClientEventThreadSuffix,
-      QuorumController.CONTROLLER_THREAD_SUFFIX,
+      KafkaEventQueue.EVENT_HANDLER_THREAD_SUFFIX,
       ClientMetricsManager.CLIENT_METRICS_REAPER_THREAD_NAME,
       SystemTimer.SYSTEM_TIMER_THREAD_PREFIX,
     )
