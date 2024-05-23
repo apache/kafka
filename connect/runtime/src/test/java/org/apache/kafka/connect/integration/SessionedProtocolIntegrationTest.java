@@ -19,10 +19,11 @@ package org.apache.kafka.connect.integration;
 import org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
+import org.apache.kafka.connect.util.clusters.WorkerHandle;
 import org.apache.kafka.test.IntegrationTest;
+import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
@@ -87,9 +88,6 @@ public class SessionedProtocolIntegrationTest {
     }
 
     @Test
-    @Ignore
-    // TODO: This test runs fine locally but fails on Jenkins. Ignoring for now, should revisit when
-    //       possible.
     public void ensureInternalEndpointIsSecured() throws Throwable {
         final String connectorTasksEndpoint = connect.endpointForResource(String.format(
             "connectors/%s/tasks",
@@ -99,6 +97,10 @@ public class SessionedProtocolIntegrationTest {
         final Map<String, String> invalidSignatureHeaders = new HashMap<>();
         invalidSignatureHeaders.put(SIGNATURE_HEADER, "S2Fma2Flc3F1ZQ==");
         invalidSignatureHeaders.put(SIGNATURE_ALGORITHM_HEADER, "HmacSHA256");
+
+        TestUtils.waitForCondition(
+                () -> connect.workers().stream().allMatch(WorkerHandle::isRunning),
+                30000L, "Timed out waiting for workers to start");
 
         // We haven't created the connector yet, but this should still return a 400 instead of a 404
         // if the endpoint is secured
@@ -118,10 +120,9 @@ public class SessionedProtocolIntegrationTest {
                 + "expecting 403 error response",
             connectorTasksEndpoint
         );
-        assertEquals(
-            FORBIDDEN.getStatusCode(),
-            connect.requestPost(connectorTasksEndpoint, "[]", invalidSignatureHeaders).getStatus()
-        );
+        TestUtils.waitForCondition(
+                () -> connect.requestPost(connectorTasksEndpoint, "[]", invalidSignatureHeaders).getStatus() == FORBIDDEN.getStatusCode(),
+                30000L, "Timed out waiting for workers to start");
 
         // Create the connector now
         // setup up props for the sink connector

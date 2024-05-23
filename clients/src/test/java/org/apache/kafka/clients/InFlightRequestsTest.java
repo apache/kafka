@@ -34,9 +34,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class InFlightRequestsTest {
 
+    private final String dest = "dest";
     private InFlightRequests inFlightRequests;
     private int correlationId;
-    private String dest = "dest";
 
     @BeforeEach
     public void setup() {

@@ -61,8 +61,9 @@ public class MultiThreadedEventProcessorTest {
 
         @Override
         public CoordinatorEvent take() {
+            CoordinatorEvent event = super.take();
             time.sleep(takeDelayMs);
-            return super.take();
+            return event;
         }
     }
 
@@ -457,14 +458,14 @@ public class MultiThreadedEventProcessorTest {
     }
 
     @Test
-    public void testRecordThreadIdleRatioTwoThreads() throws Exception {
+    public void testRecordThreadIdleRatio() throws Exception {
         GroupCoordinatorRuntimeMetrics mockRuntimeMetrics = mock(GroupCoordinatorRuntimeMetrics.class);
-        Time time = Time.SYSTEM;
+        Time time = new MockTime();
 
         try (CoordinatorEventProcessor eventProcessor = new MultiThreadedEventProcessor(
             new LogContext(),
             "event-processor-",
-            2,
+            1,
             time,
             mockRuntimeMetrics,
             new DelayEventAccumulator(time, 100L)
@@ -474,13 +475,10 @@ public class MultiThreadedEventProcessorTest {
             ArgumentCaptor<Long> idleTimeCaptured = ArgumentCaptor.forClass(Long.class);
             doAnswer(invocation -> {
                 long threadIdleTime = idleTimeCaptured.getValue();
+                assertEquals(100, threadIdleTime);
 
-                // As each thread sleeps for 100ms before returning from take(),
-                // we know that each recorded idle time must be at least 50 (100/2)ms.
-                assertTrue(threadIdleTime >= 50);
-                synchronized (recordedIdleTimesMs) {
-                    recordedIdleTimesMs.add(threadIdleTime);
-                }
+                // No synchronization required as the test uses a single event processor thread.
+                recordedIdleTimesMs.add(threadIdleTime);
                 return null;
             }).when(mockRuntimeMetrics).recordThreadIdleTime(idleTimeCaptured.capture());
 
@@ -508,15 +506,15 @@ public class MultiThreadedEventProcessorTest {
                 assertFalse(event.future.isCompletedExceptionally());
             });
 
-            long diff = time.milliseconds() - startMs;
-
             assertEquals(events.size(), numEventsExecuted.get());
             verify(mockRuntimeMetrics, times(8)).recordThreadIdleTime(anyLong());
             assertEquals(8, recordedIdleTimesMs.size());
 
+            long diff = time.milliseconds() - startMs;
             long sum = recordedIdleTimesMs.stream().mapToLong(Long::longValue).sum();
             double idleRatio = (double) sum / diff;
-            assertTrue(idleRatio >= 0.5 && idleRatio <= 1.0);
+
+            assertEquals(1.0, idleRatio, "idle ratio should be 1.0 but was: " + idleRatio);
         }
     }
 }

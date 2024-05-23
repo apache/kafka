@@ -51,7 +51,7 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
-import static org.apache.kafka.coordinator.group.RecordHelpersTest.mkMapOfPartitionRacks;
+import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpersTest.mkMapOfPartitionRacks;
 import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HETEROGENEOUS;
 import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOGENEOUS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -366,6 +366,42 @@ public class ConsumerGroupTest {
         assertEquals(-1, consumerGroup.currentPartitionEpoch(fooTopicId, 7));
         assertEquals(-1, consumerGroup.currentPartitionEpoch(fooTopicId, 8));
         assertEquals(-1, consumerGroup.currentPartitionEpoch(fooTopicId, 9));
+    }
+
+    @Test
+    public void testWaitingOnUnreleasedPartition() {
+        Uuid fooTopicId = Uuid.randomUuid();
+        Uuid barTopicId = Uuid.randomUuid();
+        Uuid zarTopicId = Uuid.randomUuid();
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+        consumerGroup.updateTargetAssignment(memberId1, new Assignment(mkAssignment(
+            mkTopicAssignment(fooTopicId, 1, 2, 3),
+            mkTopicAssignment(zarTopicId, 7, 8, 9)
+        )));
+
+        ConsumerGroupMember member1 = new ConsumerGroupMember.Builder(memberId1)
+            .setMemberEpoch(10)
+            .setState(MemberState.UNRELEASED_PARTITIONS)
+            .setAssignedPartitions(mkAssignment(
+                mkTopicAssignment(fooTopicId, 1, 2, 3)))
+            .setPartitionsPendingRevocation(mkAssignment(
+                mkTopicAssignment(barTopicId, 4, 5, 6)))
+            .build();
+        consumerGroup.updateMember(member1);
+
+        assertFalse(consumerGroup.waitingOnUnreleasedPartition(member1));
+
+        ConsumerGroupMember member2 = new ConsumerGroupMember.Builder(memberId2)
+            .setMemberEpoch(10)
+            .setPartitionsPendingRevocation(mkAssignment(
+                mkTopicAssignment(zarTopicId, 7)))
+            .build();
+        consumerGroup.updateMember(member2);
+
+        assertTrue(consumerGroup.waitingOnUnreleasedPartition(member1));
     }
 
     @Test
