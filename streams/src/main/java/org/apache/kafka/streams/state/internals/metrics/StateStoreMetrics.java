@@ -151,7 +151,7 @@ public class StateStoreMetrics {
 
     private static final String ITERATOR_DURATION = "iterator-duration";
     private static final String ITERATOR_DURATION_DESCRIPTION =
-            "time spent between creating an Iterator and closing it, in nanoseconds";
+            "time spent between creating an iterator and closing it, in nanoseconds";
     private static final String ITERATOR_DURATION_AVG_DESCRIPTION =
             AVG_DESCRIPTION_PREFIX + ITERATOR_DURATION_DESCRIPTION;
     private static final String ITERATOR_DURATION_MAX_DESCRIPTION =
