@@ -52,7 +52,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mockito;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -1336,13 +1335,13 @@ public class CommitRequestManagerTest {
                                                    long receivedTimeMs,
                                                    Errors error) {
         OffsetCommitResponseData responseData = new OffsetCommitResponseData()
-            .setTopics(Arrays.asList(
-                new OffsetCommitResponseData.OffsetCommitResponseTopic()
-                    .setName(topic)
-                    .setPartitions(Collections.singletonList(
-                        new OffsetCommitResponseData.OffsetCommitResponsePartition()
-                            .setErrorCode(error.code())
-                            .setPartitionIndex(partition)))));
+            .setTopics(Collections.singletonList(
+                    new OffsetCommitResponseData.OffsetCommitResponseTopic()
+                            .setName(topic)
+                            .setPartitions(Collections.singletonList(
+                                    new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                                            .setErrorCode(error.code())
+                                            .setPartitionIndex(partition)))));
         OffsetCommitResponse response = mock(OffsetCommitResponse.class);
         when(response.data()).thenReturn(responseData);
         return new ClientResponse(
@@ -1362,13 +1361,13 @@ public class CommitRequestManagerTest {
                                                                short apiKeyVersion,
                                                                NetworkClientDelegate.UnsentRequest unsentRequest) {
         OffsetCommitResponseData responseData = new OffsetCommitResponseData()
-            .setTopics(Arrays.asList(
-                new OffsetCommitResponseData.OffsetCommitResponseTopic()
-                    .setName(topic)
-                    .setPartitions(Collections.singletonList(
-                        new OffsetCommitResponseData.OffsetCommitResponsePartition()
-                            .setErrorCode(Errors.NONE.code())
-                            .setPartitionIndex(partition)))));
+            .setTopics(Collections.singletonList(
+                    new OffsetCommitResponseData.OffsetCommitResponseTopic()
+                            .setName(topic)
+                            .setPartitions(Collections.singletonList(
+                                    new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                                            .setErrorCode(Errors.NONE.code())
+                                            .setPartitionIndex(partition)))));
         OffsetCommitResponse response = mock(OffsetCommitResponse.class);
         when(response.data()).thenReturn(responseData);
         return new ClientResponse(

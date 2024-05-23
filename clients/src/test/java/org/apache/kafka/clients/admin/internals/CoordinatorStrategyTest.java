@@ -90,7 +90,7 @@ public class CoordinatorStrategyTest {
         strategy.disableBatch();
 
         assertThrows(IllegalArgumentException.class, () -> strategy.buildRequest(
-                new HashSet<>(Arrays.asList(CoordinatorKey.byTransactionalId("txnid")))));
+                new HashSet<>(Collections.singletonList(CoordinatorKey.byTransactionalId("txnid")))));
     }
 
     @Test
