@@ -132,7 +132,7 @@ object StorageTool extends Logging {
     // If we are using --version-default, the default is based on the metadata version.
     val metadataVersionForDefault = if (usesVersionDefault) Optional.of(metadataVersion) else Optional.empty[MetadataVersion]()
 
-    val allNonZeroFeaturesAndLevels: ArrayBuffer[FeatureVersion]  = mutable.ArrayBuffer[FeatureVersion]()
+    val allNonZeroFeaturesAndLevels: ArrayBuffer[FeatureVersion] = mutable.ArrayBuffer[FeatureVersion]()
 
     allFeatures.foreach { feature =>
       val level: java.lang.Short = specifiedFeatures.getOrElse(feature.featureName, feature.defaultValue(metadataVersionForDefault))
