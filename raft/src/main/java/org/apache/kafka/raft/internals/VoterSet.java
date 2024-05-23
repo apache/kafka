@@ -58,7 +58,7 @@ final public class VoterSet {
     /**
      * Returns the node information for all the given voter ids and listener.
      *
-     * @param voterIds the id of the voters
+     * @param voterIds the ids of the voters
      * @param listenerName the name of the listener
      * @return the node information for all of the voter ids
      * @throws IllegalArgumentException if there are missing endpoints

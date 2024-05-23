@@ -180,7 +180,7 @@ public class QuorumConfig {
 
             Integer voterId = parseVoterId(idAndAddress[0]);
             String host = Utils.getHost(idAndAddress[1]);
-            if (host == null) {
+            if (host == null || !Utils.validHostPattern(host)) {
                 throw new ConfigException("Failed to parse host name from entry " + voterMapEntry
                     + " for the configuration " + QUORUM_VOTERS_CONFIG
                     + ". Each entry should be in the form `{id}@{host}:{port}`.");
@@ -206,9 +206,16 @@ public class QuorumConfig {
         return voterMap;
     }
 
-    public static InetSocketAddress parseBootstrapServer(String bootstrapServer) {
+    public static List<InetSocketAddress> parseBootstrapServers(List<String> bootstrapServers) {
+        return bootstrapServers
+            .stream()
+            .map(QuorumConfig::parseBootstrapServer)
+            .collect(Collectors.toList());
+    }
+
+    private static InetSocketAddress parseBootstrapServer(String bootstrapServer) {
         String host = Utils.getHost(bootstrapServer);
-        if (host == null) {
+        if (host == null || !Utils.validHostPattern(host)) {
             throw new ConfigException(
                 String.format(
                     "Failed to parse host name from {} for the configuration {}. Each " +
@@ -279,7 +286,7 @@ public class QuorumConfig {
 
             // Attempt to parse the connect strings
             for (String entry : entries) {
-                QuorumConfig.parseBootstrapServer(entry);
+                parseBootstrapServer(entry);
             }
         }
 

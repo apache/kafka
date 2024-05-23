@@ -66,13 +66,12 @@ import org.apache.kafka.storage.internals.log.LogDirFailureChannel
 import org.apache.zookeeper.client.ZKClientConfig
 
 import java.io.{File, IOException}
-import java.net.{InetAddress, InetSocketAddress, SocketTimeoutException}
+import java.net.{InetAddress, SocketTimeoutException}
 import java.nio.file.{Files, Paths}
 import java.time.Duration
 import java.util
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
-import java.util.stream.Collectors
 import java.util.{Optional, OptionalInt, OptionalLong}
 import scala.collection.{Map, Seq}
 import scala.compat.java8.OptionConverters.RichOptionForJava8
@@ -445,10 +444,7 @@ class KafkaServer(
             metrics,
             threadNamePrefix,
             CompletableFuture.completedFuture(quorumVoters),
-            config.quorumBootstrapServers
-              .stream
-              .map[InetSocketAddress](QuorumConfig.parseBootstrapServer)
-              .collect(Collectors.toList()),
+            QuorumConfig.parseBootstrapServers(config.quorumBootstrapServers),
             fatalFaultHandler = new LoggingFaultHandler("raftManager", () => shutdown())
           )
           val controllerNodes = QuorumConfig.voterConnectionsToNodes(quorumVoters).asScala

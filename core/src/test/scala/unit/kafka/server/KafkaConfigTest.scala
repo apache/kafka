@@ -19,7 +19,6 @@ package kafka.server
 
 import java.net.InetSocketAddress
 import java.util
-import java.util.stream.Collectors
 import java.util.{Arrays, Collections, Properties}
 import kafka.cluster.EndPoint
 import kafka.security.authorizer.AclAuthorizer
@@ -1378,12 +1377,9 @@ class KafkaConfigTest {
     val props = TestUtils.createBrokerConfig(0, null)
     props.setProperty(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, "kafka1:9092,kafka2:9092")
 
-
-    val addresses = KafkaConfig.fromProps(props)
-      .quorumBootstrapServers
-      .stream
-      .map[InetSocketAddress](QuorumConfig.parseBootstrapServer)
-      .collect(Collectors.toList())
+    val addresses = QuorumConfig.parseBootstrapServers(
+      KafkaConfig.fromProps(props).quorumBootstrapServers
+    )
 
     assertEquals(expected, addresses)
   }

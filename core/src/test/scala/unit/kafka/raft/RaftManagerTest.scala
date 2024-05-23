@@ -16,13 +16,11 @@
  */
 package kafka.raft
 
-import java.net.InetSocketAddress
 import java.nio.channels.FileChannel
 import java.nio.channels.OverlappingFileLockException
 import java.nio.file.{Files, Path, StandardOpenOption}
 import java.util.Properties
 import java.util.concurrent.CompletableFuture
-import java.util.stream.Collectors
 import kafka.log.LogManager
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
@@ -120,10 +118,7 @@ class RaftManagerTest {
       new Metrics(Time.SYSTEM),
       Option.empty,
       CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumVoters)),
-      config.quorumBootstrapServers
-        .stream
-        .map[InetSocketAddress](QuorumConfig.parseBootstrapServer)
-        .collect(Collectors.toList()),
+      QuorumConfig.parseBootstrapServers(config.quorumBootstrapServers),
       mock(classOf[FaultHandler])
     )
   }

@@ -437,7 +437,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
                 )
                 .collect(Collectors.toList());
 
-            logger.info("Starting request manager with bootstrap servers: {}", bootstrapNodes);
+            logger.info("Starting request manager with static voters: {}", bootstrapNodes);
 
             requestManager = new RequestManager(
                 bootstrapNodes,

@@ -124,7 +124,8 @@ public class KafkaNetworkChannel implements NetworkChannel {
         RaftResponse.Inbound response = new RaftResponse.Inbound(
                 request.correlationId(),
                 message,
-                request.destination()
+                request.destination(),
+                request
         );
         request.completion.complete(response);
     }
