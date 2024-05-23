@@ -60,7 +60,7 @@ public class CheckpointFileWithFailureHandler<T> {
     public void writeIfDirExists(Collection<T> entries) {
         try {
             checkpointFile.write(entries);
-        } catch (FileNotFoundException|NoSuchFileException e) {
+        } catch (FileNotFoundException | NoSuchFileException e) {
             log.warn("Failed to write to checkpoint file {}", file.getAbsolutePath(), e);
         } catch (IOException e) {
             String msg = "Error while writing to checkpoint file " + file.getAbsolutePath();

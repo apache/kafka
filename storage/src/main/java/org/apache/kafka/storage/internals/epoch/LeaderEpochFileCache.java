@@ -506,10 +506,13 @@ public class LeaderEpochFileCache {
     }
 
     private void writeToFileForTruncation() {
+        List<EpochEntry> entries;
         lock.readLock().lock();
-        List<EpochEntry> entries = new ArrayList<>(epochs.values());
-        lock.readLock().unlock();
-
+        try {
+            entries = new ArrayList<>(epochs.values());
+        } finally {
+            lock.readLock().unlock();
+        }
         checkpoint.writeForTruncation(entries);
     }
 }
