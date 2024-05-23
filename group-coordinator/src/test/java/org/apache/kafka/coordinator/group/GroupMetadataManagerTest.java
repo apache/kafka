@@ -114,9 +114,6 @@ import static org.apache.kafka.coordinator.group.Assertions.assertResponseEquals
 import static org.apache.kafka.coordinator.group.Assertions.assertUnorderedListEquals;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newCurrentAssignmentTombstoneRecord;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newMemberSubscriptionTombstoneRecord;
-import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.appendGroupMetadataErrorToResponseError;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupJoinKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupJoinKey;
@@ -12725,15 +12722,10 @@ public class GroupMetadataManagerTest {
         MockCoordinatorTimer.ExpiredTimeout<Void, CoordinatorRecord> timeout = timeouts.get(0);
         assertEquals(consumerGroupSessionTimeoutKey(groupId, memberId), timeout.key);
         assertRecordsEquals(
-            Arrays.asList(
-                // The member is removed.
-                CoordinatorRecordHelpers.newCurrentAssignmentTombstoneRecord(groupId, memberId),
-                CoordinatorRecordHelpers.newTargetAssignmentTombstoneRecord(groupId, memberId),
-                CoordinatorRecordHelpers.newMemberSubscriptionTombstoneRecord(groupId, memberId),
-
-                // The group epoch is bumped.
-                CoordinatorRecordHelpers.newGroupEpochRecord(groupId, 11)
-            ),
+            Stream.concat(
+                removeMember(groupId, memberId).stream(),
+                Stream.of(CoordinatorRecordHelpers.newGroupEpochRecord(groupId, 11))
+            ).collect(Collectors.toList()),
             timeout.result.records()
         );
     }
@@ -12791,15 +12783,10 @@ public class GroupMetadataManagerTest {
         MockCoordinatorTimer.ExpiredTimeout<Void, CoordinatorRecord> timeout = timeouts.get(0);
         assertEquals(consumerGroupJoinKey(groupId, memberId), timeout.key);
         assertRecordsEquals(
-            Arrays.asList(
-                // The member is removed.
-                CoordinatorRecordHelpers.newCurrentAssignmentTombstoneRecord(groupId, memberId),
-                CoordinatorRecordHelpers.newTargetAssignmentTombstoneRecord(groupId, memberId),
-                CoordinatorRecordHelpers.newMemberSubscriptionTombstoneRecord(groupId, memberId),
-
-                // The group epoch is bumped.
-                CoordinatorRecordHelpers.newGroupEpochRecord(groupId, 11)
-            ),
+            Stream.concat(
+                removeMember(groupId, memberId).stream(),
+                Stream.of(CoordinatorRecordHelpers.newGroupEpochRecord(groupId, 11))
+            ).collect(Collectors.toList()),
             timeout.result.records()
         );
     }
@@ -13004,6 +12991,14 @@ public class GroupMetadataManagerTest {
         context.assertNoJoinTimeout(groupId, memberId2);
     }
 
+    private static List<CoordinatorRecord> removeMember(String groupId, String memberId) {
+        return Arrays.asList(
+            CoordinatorRecordHelpers.newCurrentAssignmentTombstoneRecord(groupId, memberId),
+            CoordinatorRecordHelpers.newTargetAssignmentTombstoneRecord(groupId, memberId),
+            CoordinatorRecordHelpers.newMemberSubscriptionTombstoneRecord(groupId, memberId)
+        );
+    }
+
     private static void checkJoinGroupResponse(
         JoinGroupResponseData expectedResponse,
         JoinGroupResponseData actualResponse,
@@ -13020,14 +13015,6 @@ public class GroupMetadataManagerTest {
                                                      .collect(Collectors.toSet());
 
         assertEquals(expectedGroupInstanceIds, groupInstanceIds);
-    }
-
-    private static List<CoordinatorRecord> removeMember(String groupId, String memberId) {
-        return Arrays.asList(
-            newCurrentAssignmentTombstoneRecord(groupId, memberId),
-            newTargetAssignmentTombstoneRecord(groupId, memberId),
-            newMemberSubscriptionTombstoneRecord(groupId, memberId)
-        );
     }
 
     private static List<JoinGroupResponseMember> toJoinResponseMembers(ClassicGroup group) {
