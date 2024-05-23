@@ -17,7 +17,7 @@
 package org.apache.kafka.tools.consumer.group;
 
 import joptsimple.OptionException;
-import kafka.test.ClusterGenerator;
+import kafka.test.ClusterConfig;
 import kafka.test.ClusterInstance;
 import kafka.test.annotation.ClusterTemplate;
 import kafka.test.junit.ClusterTestExtensions;
@@ -92,8 +92,8 @@ public class ResetConsumerGroupOffsetTest {
     private static final String TOPIC_PREFIX = "foo-";
     private static final String GROUP_PREFIX = "test.group-";
 
-    private static void generator(ClusterGenerator clusterGenerator) {
-        ConsumerGroupCommandTestUtils.generator(clusterGenerator);
+    private static List<ClusterConfig> generator() {
+        return ConsumerGroupCommandTestUtils.generator();
     }
 
     private String[] basicArgs(ClusterInstance cluster) {
