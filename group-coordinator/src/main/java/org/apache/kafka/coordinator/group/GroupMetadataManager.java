@@ -4476,7 +4476,7 @@ public class GroupMetadataManager {
     ) throws UnknownMemberIdException, GroupIdNotFoundException {
         List<MemberResponse> memberResponses = new ArrayList<>();
         List<CoordinatorRecord> records = new ArrayList<>();
-        boolean hasValidLeaveMember = false;
+        boolean hasValidLeaveGroupMember = false;
 
         for (MemberIdentity memberIdentity: request.members()) {
             String memberId = memberIdentity.memberId();
@@ -4514,7 +4514,7 @@ public class GroupMetadataManager {
                         .setMemberId(member.memberId())
                         .setGroupInstanceId(instanceId)
                 );
-                hasValidLeaveMember = true;
+                hasValidLeaveGroupMember = true;
             } catch (KafkaException e) {
                 memberResponses.add(
                     new MemberResponse()
@@ -4525,7 +4525,7 @@ public class GroupMetadataManager {
             }
         }
 
-        if (hasValidLeaveMember) {
+        if (hasValidLeaveGroupMember) {
             // Bump the group epoch.
             records.add(newGroupEpochRecord(group.groupId(), group.groupEpoch() + 1));
         }
