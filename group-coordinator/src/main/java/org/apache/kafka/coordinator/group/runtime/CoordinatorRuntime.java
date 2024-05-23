@@ -893,6 +893,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 if (appendFuture != null) result.appendFuture().complete(null);
                 future.complete(result.response());
             } else {
+                log.error("Execution of {} failed due to {}.", this, exception.getMessage(), exception);
                 if (appendFuture != null) result.appendFuture().completeExceptionally(exception);
                 future.completeExceptionally(exception);
             }
@@ -1033,6 +1034,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             if (exception == null) {
                 future.complete(response);
             } else {
+                log.error("Execution of {} failed due to {}.", this, exception.getMessage(), exception);
                 future.completeExceptionally(exception);
             }
         }
@@ -1191,6 +1193,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             if (exception == null) {
                 future.complete(null);
             } else {
+                log.error("Execution of {} failed due to {}.", this, exception.getMessage(), exception);
                 future.completeExceptionally(exception);
             }
 
@@ -1282,7 +1285,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         @Override
         public void complete(Throwable exception) {
             if (exception != null) {
-                log.error("Execution of {} failed due to {}.", name, exception.getMessage(), exception);
+                log.error("Execution of {} failed due to {}.", this, exception.getMessage(), exception);
             }
         }
 

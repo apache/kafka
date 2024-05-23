@@ -79,7 +79,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.concurrent.CompletableFuture;
@@ -1101,15 +1100,12 @@ public class GroupCoordinatorService implements GroupCoordinator {
     ) {
         ApiError apiError = ApiError.fromThrowable(exception);
 
-        if (apiError.error() == Errors.UNKNOWN_SERVER_ERROR) {
-            log.error("Operation {} with {} hit an unexpected exception: {}.",
-                operationName, operationInput, exception.getMessage(), exception);
-        } else {
-            log.debug("Operation {} with {} hit an exception: {}.",
-                operationName, operationInput, exception.getMessage(), exception);
-        }
-
         switch (apiError.error()) {
+            case UNKNOWN_SERVER_ERROR:
+                log.error("Operation {} with {} hit an unexpected exception: {}.",
+                    operationName, operationInput, exception.getMessage(), exception);
+                return handler.apply(Errors.UNKNOWN_SERVER_ERROR, null);
+
             case NETWORK_EXCEPTION:
                 // When committing offsets transactionally, we now verify the transaction with the
                 // transaction coordinator. Verification can fail with `NETWORK_EXCEPTION`, a
@@ -1127,7 +1123,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
             case KAFKA_STORAGE_ERROR:
                 return handler.apply(Errors.NOT_COORDINATOR, null);
 
-            case UNKNOWN_SERVER_ERROR:
             case MESSAGE_TOO_LARGE:
             case RECORD_LIST_TOO_LARGE:
             case INVALID_FETCH_SIZE:
