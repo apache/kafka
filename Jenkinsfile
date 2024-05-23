@@ -36,6 +36,12 @@ def doTest(env, target = "test") {
   junit '**/build/test-results/**/TEST-*.xml'
 }
 
+def runTestOnDevBranch(env) {
+  if (isChangeRequest(env)) {
+    doTest(env)
+  }
+}
+
 def doStreamsArchetype() {
   echo 'Verify that Kafka Streams archetype compiles'
 
@@ -127,15 +133,12 @@ pipeline {
             timeout(time: 8, unit: 'HOURS') 
             timestamps()
           }
-          when {
-            expression { !isChangeRequest(env) }
-          }
           environment {
             SCALA_VERSION=2.13
           }
           steps {
             doValidation()
-            doTest(env)
+            runTestOnDevBranch(env)
             echo 'Skipping Kafka Streams archetype test for Java 11'
           }
         }
@@ -149,15 +152,12 @@ pipeline {
             timeout(time: 8, unit: 'HOURS') 
             timestamps()
           }
-          when {
-            expression { !isChangeRequest(env) }
-          }
           environment {
             SCALA_VERSION=2.13
           }
           steps {
             doValidation()
-            doTest(env)
+            runTestOnDevBranch(env)
             echo 'Skipping Kafka Streams archetype test for Java 17'
           }
         }
