@@ -100,4 +100,9 @@ public interface KafkaStreamsState {
      * @return all the client tags found in this KafkaStreams client's {@link org.apache.kafka.streams.StreamsConfig}
      */
     Map<String, String> clientTags();
+
+    /**
+     * @return the rackId for this KafkaStreams client, or {@link Optional#empty()} if none was configured
+     */
+    Optional<String> rackId();
 }

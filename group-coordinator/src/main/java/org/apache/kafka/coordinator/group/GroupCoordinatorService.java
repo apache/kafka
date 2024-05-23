@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.internals.Topic;
@@ -96,7 +97,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
     public static class Builder {
         private final int nodeId;
         private final GroupCoordinatorConfig config;
-        private PartitionWriter<CoordinatorRecord> writer;
+        private PartitionWriter writer;
         private CoordinatorLoader<CoordinatorRecord> loader;
         private Time time;
         private Timer timer;
@@ -111,7 +112,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             this.config = config;
         }
 
-        public Builder withWriter(PartitionWriter<CoordinatorRecord> writer) {
+        public Builder withWriter(PartitionWriter writer) {
             this.writer = writer;
             return this;
         }
@@ -185,6 +186,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     .withDefaultWriteTimeOut(Duration.ofMillis(config.offsetCommitTimeoutMs))
                     .withCoordinatorRuntimeMetrics(coordinatorRuntimeMetrics)
                     .withCoordinatorMetrics(groupCoordinatorMetrics)
+                    .withSerializer(new CoordinatorRecordSerde())
+                    .withCompression(Compression.of(config.compressionType).build())
                     .build();
 
             return new GroupCoordinatorService(
@@ -420,12 +423,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
             );
         }
 
-        // Using a read operation is okay here as we ignore the last committed offset in the snapshot registry.
-        // This means we will read whatever is in the latest snapshot, which is how the old coordinator behaves.
-        return runtime.scheduleReadOperation(
+        return runtime.scheduleWriteOperation(
             "classic-group-heartbeat",
             topicPartitionFor(request.groupId()),
-            (coordinator, __) -> coordinator.classicGroupHeartbeat(context, request)
+            Duration.ofMillis(config.offsetCommitTimeoutMs),
+            coordinator -> coordinator.classicGroupHeartbeat(context, request)
         ).exceptionally(exception -> handleOperationException(
             "classic-group-heartbeat",
             request,

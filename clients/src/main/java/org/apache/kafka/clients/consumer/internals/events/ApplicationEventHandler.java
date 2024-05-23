@@ -23,7 +23,6 @@ import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
@@ -32,7 +31,6 @@ import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 /**
@@ -49,6 +47,7 @@ public class ApplicationEventHandler implements Closeable {
     public ApplicationEventHandler(final LogContext logContext,
                                    final Time time,
                                    final BlockingQueue<ApplicationEvent> applicationEventQueue,
+                                   final CompletableEventReaper applicationEventReaper,
                                    final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
                                    final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
                                    final Supplier<RequestManagers> requestManagersSupplier) {
@@ -56,6 +55,8 @@ public class ApplicationEventHandler implements Closeable {
         this.applicationEventQueue = applicationEventQueue;
         this.networkThread = new ConsumerNetworkThread(logContext,
                 time,
+                applicationEventQueue,
+                applicationEventReaper,
                 applicationEventProcessorSupplier,
                 networkClientDelegateSupplier,
                 requestManagersSupplier);
@@ -71,7 +72,6 @@ public class ApplicationEventHandler implements Closeable {
     public void add(final ApplicationEvent event) {
         Objects.requireNonNull(event, "ApplicationEvent provided to add must be non-null");
         applicationEventQueue.add(event);
-        log.trace("Enqueued event: {}", event);
         wakeupNetworkThread();
     }
 
@@ -100,17 +100,16 @@ public class ApplicationEventHandler implements Closeable {
      *
      * <p/>
      *
-     * See {@link ConsumerUtils#getResult(Future, Timer)} and {@link Future#get(long, TimeUnit)} for more details.
+     * See {@link ConsumerUtils#getResult(Future)} for more details.
      *
      * @param event A {@link CompletableApplicationEvent} created by the polling thread
      * @return      Value that is the result of the event
      * @param <T>   Type of return value of the event
      */
-    public <T> T addAndGet(final CompletableApplicationEvent<T> event, final Timer timer) {
+    public <T> T addAndGet(final CompletableApplicationEvent<T> event) {
         Objects.requireNonNull(event, "CompletableApplicationEvent provided to addAndGet must be non-null");
-        Objects.requireNonNull(timer, "Timer provided to addAndGet must be non-null");
         add(event);
-        return ConsumerUtils.getResult(event.future(), timer);
+        return ConsumerUtils.getResult(event.future());
     }
 
     @Override
