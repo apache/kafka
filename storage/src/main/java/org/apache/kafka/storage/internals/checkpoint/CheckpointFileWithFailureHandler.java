@@ -61,7 +61,7 @@ public class CheckpointFileWithFailureHandler<T> {
         try {
             checkpointFile.write(entries);
         } catch (FileNotFoundException | NoSuchFileException e) {
-            log.warn("Failed to write to checkpoint file {}", file.getAbsolutePath(), e);
+            log.warn("Failed to write to checkpoint file {}. This is ok if the topic/partition is being deleted", file.getAbsolutePath(), e);
         } catch (IOException e) {
             String msg = "Error while writing to checkpoint file " + file.getAbsolutePath();
             logDirFailureChannel.maybeAddOfflineLogDir(logDir, msg, e);
