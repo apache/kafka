@@ -12927,28 +12927,26 @@ public class GroupMetadataManagerTest {
         CoordinatorResult<LeaveGroupResponseData, CoordinatorRecord> leaveResult = context.sendClassicGroupLeave(
             new LeaveGroupRequestData()
                 .setGroupId("group-id")
-                .setMembers(
-                    Arrays.asList(
-                        // Valid member id.
-                        new MemberIdentity()
-                            .setMemberId(memberId1),
-                        new MemberIdentity()
-                            .setGroupInstanceId(instanceId2),
-                        // Member that doesn't use the classic protocol.
-                        new MemberIdentity()
-                            .setMemberId(memberId3)
-                            .setGroupInstanceId(instanceId3),
-                        // Unknown member ids.
-                        new MemberIdentity()
-                            .setMemberId("unknown-member-id"),
-                        new MemberIdentity()
-                            .setGroupInstanceId("unknown-instance-id"),
-                        // Fenced instance id.
-                        new MemberIdentity()
-                            .setMemberId("unknown-member-id")
-                            .setGroupInstanceId(instanceId3)
-                    )
-                )
+                .setMembers(Arrays.asList(
+                    // Valid member id.
+                    new MemberIdentity()
+                        .setMemberId(memberId1),
+                    new MemberIdentity()
+                        .setGroupInstanceId(instanceId2),
+                    // Member that doesn't use the classic protocol.
+                    new MemberIdentity()
+                        .setMemberId(memberId3)
+                        .setGroupInstanceId(instanceId3),
+                    // Unknown member ids.
+                    new MemberIdentity()
+                        .setMemberId("unknown-member-id"),
+                    new MemberIdentity()
+                        .setGroupInstanceId("unknown-instance-id"),
+                    // Fenced instance id.
+                    new MemberIdentity()
+                        .setMemberId("unknown-member-id")
+                        .setGroupInstanceId(instanceId3)
+                ))
         );
 
         assertEquals(
