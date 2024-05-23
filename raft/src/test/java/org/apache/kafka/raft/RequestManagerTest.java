@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Random;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -55,7 +56,7 @@ public class RequestManagerTest {
 
         // Another is backing off
         cache.onRequestSent(node2, 2, time.milliseconds());
-        cache.onResponseError(node2, 2, time.milliseconds());
+        cache.onResponseError(node2, OptionalLong.of(2), time.milliseconds());
         assertFalse(cache.isReady(node2, time.milliseconds()));
 
         cache.resetAll();
@@ -82,7 +83,7 @@ public class RequestManagerTest {
         cache.onRequestSent(node, correlationId, time.milliseconds());
         assertFalse(cache.isReady(node, time.milliseconds()));
 
-        cache.onResponseError(node, correlationId, time.milliseconds());
+        cache.onResponseError(node, OptionalLong.of(correlationId), time.milliseconds());
         assertFalse(cache.isReady(node, time.milliseconds()));
 
         time.sleep(retryBackoffMs);
@@ -175,7 +176,7 @@ public class RequestManagerTest {
 
         // Fail the request
         time.sleep(100);
-        cache.onResponseError(bootstrapNode1, 1, time.milliseconds());
+        cache.onResponseError(bootstrapNode1, OptionalLong.of(1), time.milliseconds());
         Node bootstrapNode2 = cache.findReadyBootstrapServer(time.milliseconds()).get();
         assertNotEquals(bootstrapNode1, bootstrapNode2);
         assertEquals(0, cache.backoffBeforeAvailableBootstrapServer(time.milliseconds()));
@@ -191,7 +192,7 @@ public class RequestManagerTest {
 
         // Fail the second request before the first backoff
         time.sleep(retryBackoffMs - 1);
-        cache.onResponseError(bootstrapNode2, 2, time.milliseconds());
+        cache.onResponseError(bootstrapNode2, OptionalLong.of(2), time.milliseconds());
         assertEquals(
             Optional.empty(),
             cache.findReadyBootstrapServer(time.milliseconds())

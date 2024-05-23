@@ -19,6 +19,7 @@ package org.apache.kafka.raft;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -45,22 +46,46 @@ public class RequestManager {
         this.random = random;
     }
 
+    private boolean hasAnyInflightRequest(long currentTimeMs) {
+        Iterator<ConnectionState> iterator = connections.values().iterator();
+        boolean result = false;
+        while (iterator.hasNext()) {
+            ConnectionState connection = iterator.next();
+            if (connection.hasRequestTimedOut(currentTimeMs)) {
+                // Reset any connection where a request has timed out
+                iterator.remove();
+            } else if (connection.hasInflightRequest(currentTimeMs)) {
+                // If there is at least one inflight request, it is enough
+                // to stop checking the rest of the connections
+                result = true;
+                break;
+            }
+        }
+
+        return result;
+    }
+
+    // TODO: add a test similar to the kafkaclienttest unittest
     public Optional<Node> findReadyBootstrapServer(long currentTimeMs) {
+        // Check that there are no infilght requests accross any of the known nodes not just
+        // the bootstrap servers
+        if (hasAnyInflightRequest(currentTimeMs)) {
+            return Optional.empty();
+        }
+
         int startIndex = random.nextInt(bootstrapServers.size());
-        Optional<Node> res = Optional.empty();
+        Optional<Node> result = Optional.empty();
         for (int i = 0; i < bootstrapServers.size(); i++) {
             int index = (startIndex + i) % bootstrapServers.size();
             Node node = bootstrapServers.get(index);
 
             if (isReady(node, currentTimeMs)) {
-                res = Optional.of(node);
-            } else if (hasInflightRequest(node, currentTimeMs)) {
-                res = Optional.empty();
+                result = Optional.of(node);
                 break;
             }
         }
 
-        return res;
+        return result;
     }
 
     public long backoffBeforeAvailableBootstrapServer(long currentTimeMs) {
@@ -143,8 +168,8 @@ public class RequestManager {
         }
     }
 
-    public void onResponseError(Node node, long correlationId, long timeMs) {
-        if (isResponseExpected(node, correlationId)) {
+    public void onResponseError(Node node, OptionalLong correlationId, long timeMs) {
+        if (!correlationId.isPresent() || isResponseExpected(node, correlationId.getAsLong())) {
             connections.get(node.idString()).onResponseError(correlationId, timeMs);
         }
     }
@@ -252,9 +277,9 @@ public class RequestManager {
             return inFlightCorrelationId.isPresent() && inFlightCorrelationId.getAsLong() == correlationId;
         }
 
-        void onResponseError(long correlationId, long timeMs) {
+        void onResponseError(OptionalLong correlationId, long timeMs) {
             inFlightCorrelationId.ifPresent(inflightRequestId -> {
-                if (inflightRequestId == correlationId) {
+                if (!correlationId.isPresent() || OptionalLong.of(inflightRequestId).equals(correlationId)) {
                     lastFailTimeMs = timeMs;
                     state = State.BACKING_OFF;
                     inFlightCorrelationId = OptionalLong.empty();

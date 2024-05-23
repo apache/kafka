@@ -1786,7 +1786,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         } else {
             requestManager.onResponseError(
                 response.source(),
-                response.correlationId(),
+                OptionalLong.of(response.correlationId()),
                 currentTimeMs
             );
         }
@@ -2249,8 +2249,9 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
             // request has timed out, then we attempt to send the Fetch to another
             // voter in order to discover if there has been a leader change.
             if (requestManager.hasRequestTimedOut(state.leader(), currentTimeMs)) {
+                // Once the request has timed out backoff the connection
+                requestManager.onResponseError(state.leader(), OptionalLong.empty(), currentTimeMs);
                 backoffMs = maybeSendAnyVoterFetch(currentTimeMs);
-                requestManager.reset(state.leader());
             } else if (requestManager.isBackingOff(state.leader(), currentTimeMs)) {
                 backoffMs = maybeSendAnyVoterFetch(currentTimeMs);
             } else {
