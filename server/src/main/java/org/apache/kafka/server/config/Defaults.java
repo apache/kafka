@@ -51,10 +51,4 @@ public class Defaults {
 
     /** ********* Request Limit Configuration ***********/
     public static final int MAX_REQUEST_PARTITION_SIZE_LIMIT = 2000;
-
-
-    /**  ********* Delegation Token Configuration *********/
-    public static final long DELEGATION_TOKEN_MAX_LIFE_TIME_MS = 7 * 24 * 60 * 60 * 1000L;
-    public static final long DELEGATION_TOKEN_EXPIRY_TIME_MS = 24 * 60 * 60 * 1000L;
-    public static final long DELEGATION_TOKEN_EXPIRY_CHECK_INTERVAL_MS = 1 * 60 * 60 * 1000L;
 }

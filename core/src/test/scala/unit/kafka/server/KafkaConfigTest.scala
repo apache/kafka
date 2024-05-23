@@ -25,7 +25,7 @@ import kafka.security.authorizer.AclAuthorizer
 import kafka.utils.TestUtils.assertBadConfigContainingMessage
 import kafka.utils.{CoreUtils, TestUtils}
 import org.apache.kafka.common.Node
-import org.apache.kafka.common.config.{ConfigException, TopicConfig}
+import org.apache.kafka.common.config.{ConfigException, DelegationConfigs, TopicConfig}
 import org.apache.kafka.common.metrics.Sensor
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.record.{CompressionType, Records}
@@ -47,6 +47,7 @@ import org.apache.kafka.storage.internals.log.CleanerConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.function.Executable
+
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
@@ -1016,11 +1017,11 @@ class KafkaConfigTest {
         case PasswordEncoderConfigs.PASSWORD_ENCODER_ITERATIONS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "-1", "0")
 
         //delegation token configs
-        case KafkaConfig.DelegationTokenSecretKeyAliasProp => // ignore
-        case KafkaConfig.DelegationTokenSecretKeyProp => // ignore
-        case KafkaConfig.DelegationTokenMaxLifeTimeProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case KafkaConfig.DelegationTokenExpiryTimeMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case KafkaConfig.DelegationTokenExpiryCheckIntervalMsProp => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case DelegationConfigs.DELEGATION_TOKEN_SECRET_KEY_ALIAS_CONFIG => // ignore
+        case DelegationConfigs.DELEGATION_TOKEN_SECRET_KEY_CONFIG => // ignore
+        case DelegationConfigs.DELEGATION_TOKEN_MAX_LIFE_TIME_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case DelegationConfigs.DELEGATION_TOKEN_EXPIRY_TIME_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case DelegationConfigs.DELEGATION_TOKEN_EXPIRY_CHECK_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
 
         //Kafka Yammer metrics reporter configs
         case MetricConfigs.KAFKA_METRICS_REPORTER_CLASSES_CONFIG => // ignore
@@ -1215,7 +1216,7 @@ class KafkaConfigTest {
     assertEquals(24 * 60L * 60L * 1000L, config.delegationTokenExpiryTimeMs)
     assertEquals(1 * 60L * 1000L * 60, config.delegationTokenExpiryCheckIntervalMs)
 
-    defaults.setProperty(KafkaConfig.DelegationTokenSecretKeyProp, "1234567890")
+    defaults.setProperty(DelegationConfigs.DELEGATION_TOKEN_SECRET_KEY_CONFIG, "1234567890")
     val config1 = KafkaConfig.fromProps(defaults)
     assertEquals(true, config1.tokenAuthEnabled)
   }

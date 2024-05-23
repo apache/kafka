@@ -17,13 +17,11 @@
 package kafka.api
 
 import java.util.Properties
-
-import kafka.server.KafkaConfig
 import kafka.utils._
 import kafka.tools.StorageTool
 import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, CreateDelegationTokenOptions, ScramCredentialInfo, UserScramCredentialAlteration, UserScramCredentialUpsertion, ScramMechanism => PublicScramMechanism}
-import org.apache.kafka.common.config.SaslConfigs
+import org.apache.kafka.common.config.{DelegationConfigs, SaslConfigs}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.DelegationToken
@@ -54,8 +52,8 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
 
   protected val privilegedAdminClientConfig = new Properties()
 
-  this.serverConfig.setProperty(KafkaConfig.DelegationTokenSecretKeyProp, "testKey")
-  this.controllerConfig.setProperty(KafkaConfig.DelegationTokenSecretKeyProp, "testKey")
+  this.serverConfig.setProperty(DelegationConfigs.DELEGATION_TOKEN_SECRET_KEY_CONFIG, "testKey")
+  this.controllerConfig.setProperty(DelegationConfigs.DELEGATION_TOKEN_SECRET_KEY_CONFIG, "testKey")
 
   def createDelegationTokenOptions(): CreateDelegationTokenOptions = new CreateDelegationTokenOptions()
 

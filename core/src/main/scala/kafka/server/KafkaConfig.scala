@@ -27,7 +27,7 @@ import kafka.utils.Implicits._
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.Reconfigurable
 import org.apache.kafka.common.compress.{GzipCompression, Lz4Compression, ZstdCompression}
-import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource, SaslConfigs, TopicConfig}
+import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource, DelegationConfigs, SaslConfigs, TopicConfig}
 import org.apache.kafka.common.config.ConfigDef.{ConfigKey, ValidList}
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.network.ListenerName
@@ -132,13 +132,6 @@ object KafkaConfig {
   /** ********* Request Limit Configuration **************/
   val MaxRequestPartitionSizeLimit = "max.request.partition.size.limit"
 
-  /** ********* Delegation Token Configuration ****************/
-  val DelegationTokenSecretKeyAliasProp = "delegation.token.master.key"
-  val DelegationTokenSecretKeyProp = "delegation.token.secret.key"
-  val DelegationTokenMaxLifeTimeProp = "delegation.token.max.lifetime.ms"
-  val DelegationTokenExpiryTimeMsProp = "delegation.token.expiry.time.ms"
-  val DelegationTokenExpiryCheckIntervalMsProp = "delegation.token.expiry.check.interval.ms"
-
   /** Internal Configurations **/
   val UnstableApiVersionsEnableProp = "unstable.api.versions.enable"
   val UnstableMetadataVersionsEnableProp = "unstable.metadata.versions.enable"
@@ -191,15 +184,6 @@ object KafkaConfig {
 
   /** ********* Request Limit Configuration **************/
   val MaxRequestPartitionSizeLimitDoc = "The maximum number of partitions can be served in one request."
-
-  /** ********* Delegation Token Configuration ****************/
-  val DelegationTokenSecretKeyAliasDoc = s"DEPRECATED: An alias for $DelegationTokenSecretKeyProp, which should be used instead of this config."
-  val DelegationTokenSecretKeyDoc = "Secret key to generate and verify delegation tokens. The same key must be configured across all the brokers. " +
-    " If using Kafka with KRaft, the key must also be set across all controllers. " +
-    " If the key is not set or set to empty string, brokers will disable the delegation token support."
-  val DelegationTokenMaxLifeTimeDoc = "The token has a maximum lifetime beyond which it cannot be renewed anymore. Default value 7 days."
-  val DelegationTokenExpiryTimeMsDoc = "The token validity time in milliseconds before the token needs to be renewed. Default value 1 day."
-  val DelegationTokenExpiryCheckIntervalDoc = "Scan interval to remove expired delegation tokens."
 
   @nowarn("cat=deprecation")
   val configDef = {
@@ -532,11 +516,11 @@ object KafkaConfig {
       .define(KafkaSecurityConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER_CONFIG, STRING, null, LOW, KafkaSecurityConfigs.SASL_OAUTHBEARER_EXPECTED_ISSUER_DOC)
 
       /** ********* Delegation Token Configuration ****************/
-      .define(DelegationTokenSecretKeyAliasProp, PASSWORD, null, MEDIUM, DelegationTokenSecretKeyAliasDoc)
-      .define(DelegationTokenSecretKeyProp, PASSWORD, null, MEDIUM, DelegationTokenSecretKeyDoc)
-      .define(DelegationTokenMaxLifeTimeProp, LONG, Defaults.DELEGATION_TOKEN_MAX_LIFE_TIME_MS, atLeast(1), MEDIUM, DelegationTokenMaxLifeTimeDoc)
-      .define(DelegationTokenExpiryTimeMsProp, LONG, Defaults.DELEGATION_TOKEN_EXPIRY_TIME_MS, atLeast(1), MEDIUM, DelegationTokenExpiryTimeMsDoc)
-      .define(DelegationTokenExpiryCheckIntervalMsProp, LONG, Defaults.DELEGATION_TOKEN_EXPIRY_CHECK_INTERVAL_MS, atLeast(1), LOW, DelegationTokenExpiryCheckIntervalDoc)
+      .define(DelegationConfigs.DELEGATION_TOKEN_SECRET_KEY_ALIAS_CONFIG, PASSWORD, null, MEDIUM, DelegationConfigs.DELEGATION_TOKEN_SECRET_KEY_ALIAS_DOC)
+      .define(DelegationConfigs.DELEGATION_TOKEN_SECRET_KEY_CONFIG, PASSWORD, null, MEDIUM, DelegationConfigs.DELEGATION_TOKEN_SECRET_KEY_DOC)
+      .define(DelegationConfigs.DELEGATION_TOKEN_MAX_LIFE_TIME_CONFIG, LONG, DelegationConfigs.DELEGATION_TOKEN_MAX_LIFE_TIME_MS, atLeast(1), MEDIUM, DelegationConfigs.DELEGATION_TOKEN_MAX_LIFE_TIME_DOC)
+      .define(DelegationConfigs.DELEGATION_TOKEN_EXPIRY_TIME_MS_CONFIG, LONG, DelegationConfigs.DELEGATION_TOKEN_EXPIRY_TIME_MS, atLeast(1), MEDIUM, DelegationConfigs.DELEGATION_TOKEN_EXPIRY_TIME_MS_DOC)
+      .define(DelegationConfigs.DELEGATION_TOKEN_EXPIRY_CHECK_INTERVAL_MS_CONFIG, LONG, DelegationConfigs.DELEGATION_TOKEN_EXPIRY_CHECK_INTERVAL_MS, atLeast(1), LOW, DelegationConfigs.DELEGATION_TOKEN_EXPIRY_CHECK_INTERVAL_DOC)
 
       /** ********* Password encryption configuration for dynamic configs *********/
       .define(PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG, PASSWORD, null, MEDIUM, PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_DOC)
@@ -1118,12 +1102,12 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val saslInterBrokerHandshakeRequestEnable = interBrokerProtocolVersion.isSaslInterBrokerHandshakeRequestEnabled
 
   /** ********* DelegationToken Configuration **************/
-  val delegationTokenSecretKey = Option(getPassword(KafkaConfig.DelegationTokenSecretKeyProp))
-    .getOrElse(getPassword(KafkaConfig.DelegationTokenSecretKeyAliasProp))
+  val delegationTokenSecretKey = Option(getPassword(DelegationConfigs.DELEGATION_TOKEN_SECRET_KEY_CONFIG))
+    .getOrElse(getPassword(DelegationConfigs.DELEGATION_TOKEN_SECRET_KEY_ALIAS_CONFIG))
   val tokenAuthEnabled = delegationTokenSecretKey != null && delegationTokenSecretKey.value.nonEmpty
-  val delegationTokenMaxLifeMs = getLong(KafkaConfig.DelegationTokenMaxLifeTimeProp)
-  val delegationTokenExpiryTimeMs = getLong(KafkaConfig.DelegationTokenExpiryTimeMsProp)
-  val delegationTokenExpiryCheckIntervalMs = getLong(KafkaConfig.DelegationTokenExpiryCheckIntervalMsProp)
+  val delegationTokenMaxLifeMs = getLong(DelegationConfigs.DELEGATION_TOKEN_MAX_LIFE_TIME_CONFIG)
+  val delegationTokenExpiryTimeMs = getLong(DelegationConfigs.DELEGATION_TOKEN_EXPIRY_TIME_MS_CONFIG)
+  val delegationTokenExpiryCheckIntervalMs = getLong(DelegationConfigs.DELEGATION_TOKEN_EXPIRY_CHECK_INTERVAL_MS_CONFIG)
 
   /** ********* Password encryption configuration for dynamic configs *********/
   def passwordEncoderSecret = Option(getPassword(PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG))

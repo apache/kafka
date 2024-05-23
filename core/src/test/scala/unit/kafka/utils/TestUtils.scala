@@ -36,7 +36,7 @@ import org.apache.kafka.clients.{ClientResponse, CommonClientConfigs}
 import org.apache.kafka.common._
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBindingFilter}
 import org.apache.kafka.common.compress.Compression
-import org.apache.kafka.common.config.{ConfigException, ConfigResource}
+import org.apache.kafka.common.config.{ConfigException, ConfigResource, DelegationConfigs}
 import org.apache.kafka.common.errors.{KafkaStorageException, OperationNotAttemptedException, TopicExistsException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.internals.Topic
@@ -367,7 +367,7 @@ object TestUtils extends Logging {
     }
 
     if (enableToken)
-      props.put(KafkaConfig.DelegationTokenSecretKeyProp, "secretkey")
+      props.put(DelegationConfigs.DELEGATION_TOKEN_SECRET_KEY_CONFIG, "secretkey")
 
     props.put(ServerLogConfigs.NUM_PARTITIONS_CONFIG, numPartitions.toString)
     props.put(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, defaultReplicationFactor.toString)
