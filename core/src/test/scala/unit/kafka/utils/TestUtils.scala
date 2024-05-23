@@ -63,7 +63,7 @@ import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.apache.kafka.server.config._
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.server.util.timer.SystemTimer
+import org.apache.kafka.server.util.timer.{SystemTimer, SystemTimerReaper}
 import org.apache.kafka.server.{ClientMetricsManager, ControllerRequestCompletionHandler}
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
@@ -96,6 +96,8 @@ import scala.util.{Failure, Success, Try}
  * Utility functions to help with testing
  */
 object TestUtils extends Logging {
+
+  val EXCEPTIONS = new ConcurrentSkipListSet[String]()
 
   val random = JTestUtils.RANDOM
 
@@ -250,8 +252,14 @@ object TestUtils extends Logging {
     import ExecutionContext.Implicits._
     val future = Future.traverse(brokers) { s =>
       Future {
-        s.shutdown()
-        if (deleteLogDirs) CoreUtils.delete(s.config.logDirs)
+        try {
+          s.shutdown()
+          if (deleteLogDirs) CoreUtils.delete(s.config.logDirs)
+        } catch {
+          case e: Throwable =>
+            TestUtils.EXCEPTIONS.add(e.getClass.getName)
+            throw e
+        }
       }
     }
     Await.result(future, FiniteDuration(5, TimeUnit.MINUTES))
@@ -1883,10 +1891,11 @@ object TestUtils extends Logging {
       allThreads.filter(t => unexpectedThreadNames.exists(s => t.contains(s))).toSet
     }
 
-    val (unexpected, _) = TestUtils.computeUntilTrue(unexpectedThreads)(_.isEmpty)
+    val (unexpected, _) = TestUtils.computeUntilTrue(unexpectedThreads, waitTime = 3000)(_.isEmpty)
     assertTrue(unexpected.isEmpty,
       s"Found ${unexpected.size} unexpected threads during $context: " +
-        s"${unexpected.mkString("`", ",", "`")}")
+        s"${unexpected.mkString("`", ",", "`")} pending: ${String.join(",", SystemTimer.PENDING.values())} " +
+        s"breaking: ${String.join(",", SystemTimerReaper.BREAKING)} es: ${String.join(",", EXCEPTIONS)}")
   }
 
   class TestControllerRequestCompletionHandler(expectedResponse: Option[AbstractResponse] = None)

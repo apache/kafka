@@ -437,15 +437,21 @@ abstract class QuorumTestHarness extends Logging {
 
   @AfterEach
   def tearDown(): Unit = {
-    if (implementation != null) {
-      implementation.shutdown()
+    try {
+      if (implementation != null) {
+        implementation.shutdown()
+      }
+      Exit.resetExitProcedure()
+      Exit.resetHaltProcedure()
+      TestUtils.clearYammerMetrics()
+      System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
+      Configuration.setConfiguration(null)
+      faultHandler.maybeRethrowFirstException()
+    } catch {
+      case e: Throwable =>
+        TestUtils.EXCEPTIONS.add(e.getClass.getName)
+        throw e
     }
-    Exit.resetExitProcedure()
-    Exit.resetHaltProcedure()
-    TestUtils.clearYammerMetrics()
-    System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
-    Configuration.setConfiguration(null)
-    faultHandler.maybeRethrowFirstException()
   }
 
   // Trigger session expiry by reusing the session id in another client

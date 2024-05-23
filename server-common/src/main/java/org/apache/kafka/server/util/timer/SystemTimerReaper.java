@@ -18,11 +18,15 @@ package org.apache.kafka.server.util.timer;
 
 import org.apache.kafka.server.util.ShutdownableThread;
 
+import java.util.Set;
+import java.util.concurrent.ConcurrentSkipListSet;
+
 /**
  * SystemTimerReaper wraps a {@link Timer} and starts a reaper thread
  * to expire the tasks in the {@link Timer}.
  */
 public class SystemTimerReaper implements Timer {
+    public static final Set<String> BREAKING = new ConcurrentSkipListSet<>();
     private static final long WORK_TIMEOUT_MS = 200L;
 
     class Reaper extends ShutdownableThread {
@@ -66,15 +70,20 @@ public class SystemTimerReaper implements Timer {
 
     @Override
     public void close() throws Exception {
-        reaper.initiateShutdown();
-        // Improve shutdown time by waking up the reaper thread
-        // blocked on poll by sending a no-op.
-        timer.add(new TimerTask(0) {
-            @Override
-            public void run() {}
-        });
-        reaper.awaitShutdown();
-        timer.close();
+        try {
+            reaper.initiateShutdown();
+            // Improve shutdown time by waking up the reaper thread
+            // blocked on poll by sending a no-op.
+            timer.add(new TimerTask(0) {
+                @Override
+                public void run() {}
+            });
+            reaper.awaitShutdown();
+            timer.close();
+        } catch (Exception e) {
+            BREAKING.add(e.getClass().getName());
+            throw e;
+        }
     }
 
     // visible for testing

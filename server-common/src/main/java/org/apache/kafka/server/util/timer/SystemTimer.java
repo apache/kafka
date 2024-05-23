@@ -17,9 +17,10 @@
 package org.apache.kafka.server.util.timer;
 
 import org.apache.kafka.common.utils.KafkaThread;
-import org.apache.kafka.common.utils.ThreadUtils;
 import org.apache.kafka.common.utils.Time;
 
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.DelayQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -29,7 +30,8 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class SystemTimer implements Timer {
     public static final String SYSTEM_TIMER_THREAD_PREFIX = "executor-";
-
+    public static final AtomicInteger COUNT = new AtomicInteger(0);
+    public static final ConcurrentHashMap<Integer, String> PENDING = new ConcurrentHashMap<>();
     // timeout timer
     private final ExecutorService taskExecutor;
     private final DelayQueue<TimerTaskList> delayQueue;
@@ -77,7 +79,10 @@ public class SystemTimer implements Timer {
         if (!timingWheel.add(timerTaskEntry)) {
             // Already expired or cancelled
             if (!timerTaskEntry.cancelled()) {
-                taskExecutor.submit(timerTaskEntry.timerTask);
+                int id = COUNT.getAndIncrement();
+                PENDING.put(id, timerTaskEntry.timerTask.getClass().getName());
+                CompletableFuture.runAsync(timerTaskEntry.timerTask, taskExecutor)
+                    .whenComplete((__, ___) -> PENDING.remove(id));
             }
         }
     }
@@ -111,7 +116,7 @@ public class SystemTimer implements Timer {
 
     @Override
     public void close() {
-        ThreadUtils.shutdownExecutorServiceQuietly(taskExecutor, 5, TimeUnit.SECONDS);
+        taskExecutor.shutdown();
     }
 
     // visible for testing

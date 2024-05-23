@@ -229,6 +229,10 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
       producers.clear()
       consumers.clear()
       adminClients.clear()
+    } catch {
+      case e: Throwable =>
+        TestUtils.EXCEPTIONS.add(e.getClass.getName)
+        throw e
     } finally {
       super.tearDown()
     }

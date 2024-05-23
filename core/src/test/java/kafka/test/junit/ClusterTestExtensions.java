@@ -25,6 +25,9 @@ import kafka.test.annotation.ClusterTemplate;
 import kafka.test.annotation.ClusterConfigProperty;
 import kafka.test.annotation.Type;
 import kafka.test.annotation.AutoStart;
+import kafka.utils.TestUtils;
+import org.junit.jupiter.api.extension.AfterAllCallback;
+import org.junit.jupiter.api.extension.BeforeAllCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContextProvider;
@@ -78,7 +81,7 @@ import java.util.stream.Stream;
  * SomeIntegrationTest will be instantiated, lifecycle methods (before/after) will be run, and "someTest" will be invoked.
  *
  */
-public class ClusterTestExtensions implements TestTemplateInvocationContextProvider {
+public class ClusterTestExtensions implements TestTemplateInvocationContextProvider, BeforeAllCallback, AfterAllCallback {
     @Override
     public boolean supportsTestTemplate(ExtensionContext context) {
         return true;
@@ -193,6 +196,16 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
     private ClusterTestDefaults getClusterTestDefaults(Class<?> testClass) {
         return Optional.ofNullable(testClass.getDeclaredAnnotation(ClusterTestDefaults.class))
             .orElseGet(() -> EmptyClass.class.getDeclaredAnnotation(ClusterTestDefaults.class));
+    }
+
+    @Override
+    public void afterAll(ExtensionContext context) throws Exception {
+        TestUtils.verifyNoUnexpectedThreads("@AfterAllCallback");
+    }
+
+    @Override
+    public void beforeAll(ExtensionContext context) throws Exception {
+        TestUtils.verifyNoUnexpectedThreads("@BeforeAllCallback");
     }
 
     @ClusterTestDefaults
