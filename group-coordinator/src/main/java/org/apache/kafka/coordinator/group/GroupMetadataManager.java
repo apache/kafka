@@ -2015,21 +2015,7 @@ public class GroupMetadataManager {
         if (validateOnlineDowngrade(group, member.memberId())) {
             return convertToClassicGroup(group, member.memberId(), response);
         } else {
-            List<CoordinatorRecord> records = new ArrayList<>();
-            removeMember(records, group.groupId(), member.memberId());
-
-            // We update the subscription metadata without the leaving member.
-            Map<String, TopicMetadata> subscriptionMetadata = group.computeSubscriptionMetadata(
-                group.computeSubscribedTopicNames(member, null),
-                metadataImage.topics(),
-                metadataImage.cluster()
-            );
-
-            if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
-                log.info("[GroupId {}] Computed new subscription metadata: {}.",
-                    group.groupId(), subscriptionMetadata);
-                records.add(newGroupSubscriptionMetadataRecord(group.groupId(), subscriptionMetadata));
-            }
+            List<CoordinatorRecord> records = removeMemberAndMaybeUpdateSubscriptionMetadata(group, member);
 
             // We bump the group epoch.
             int groupEpoch = group.groupEpoch() + 1;
@@ -2042,7 +2028,39 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Remove the member and maybe update the subscription metadata without the removed member.
+     *
+     * @param group     The ConsumerGroup.
+     * @param member    The ConsumerGroupMember.
+     * @return The list of CoordinatorRecord.
+     */
+    private List<CoordinatorRecord> removeMemberAndMaybeUpdateSubscriptionMetadata(
+        ConsumerGroup group,
+        ConsumerGroupMember member
+    ) {
+        List<CoordinatorRecord> records = new ArrayList<>();
+        removeMember(records, group.groupId(), member.memberId());
+
+        // We update the subscription metadata without the leaving member.
+        Map<String, TopicMetadata> subscriptionMetadata = group.computeSubscriptionMetadata(
+            group.computeSubscribedTopicNames(member, null),
+            metadataImage.topics(),
+            metadataImage.cluster()
+        );
+
+        if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
+            log.info("[GroupId {}] Computed new subscription metadata: {}.",
+                group.groupId(), subscriptionMetadata);
+            records.add(newGroupSubscriptionMetadataRecord(group.groupId(), subscriptionMetadata));
+        }
+
+        return records;
+    }
+
+    /**
      * Write tombstones for the member. The order matters here.
+     *
+     * Package private for testing.
      *
      * @param records       The list of records to append the member assignment tombstone records.
      * @param groupId       The group id.
@@ -4460,6 +4478,7 @@ public class GroupMetadataManager {
     ) throws UnknownMemberIdException, GroupIdNotFoundException {
         List<MemberResponse> memberResponses = new ArrayList<>();
         List<CoordinatorRecord> records = new ArrayList<>();
+        boolean hasValidLeaveMember = false;
 
         for (MemberIdentity memberIdentity: request.members()) {
             String memberId = memberIdentity.memberId();
@@ -4490,12 +4509,14 @@ public class GroupMetadataManager {
                         group.groupId(), memberId, instanceId, reason);
                 }
 
-                records.addAll(consumerGroupFenceMember(group, member, null).records());
+                records.addAll(removeMemberAndMaybeUpdateSubscriptionMetadata(group, member));
+                cancelTimers(group.groupId(), member.memberId());
                 memberResponses.add(
                     new MemberResponse()
-                        .setMemberId(memberId)
+                        .setMemberId(member.memberId())
                         .setGroupInstanceId(instanceId)
                 );
+                hasValidLeaveMember = true;
             } catch (KafkaException e) {
                 memberResponses.add(
                     new MemberResponse()
@@ -4505,6 +4526,12 @@ public class GroupMetadataManager {
                 );
             }
         }
+
+        if (hasValidLeaveMember) {
+            // Bump the group epoch.
+            records.add(newGroupEpochRecord(group.groupId(), group.groupEpoch() + 1));
+        }
+
         return new CoordinatorResult<>(records, new LeaveGroupResponseData().setMembers(memberResponses));
     }
 
