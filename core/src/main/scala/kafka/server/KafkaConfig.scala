@@ -306,7 +306,7 @@ object KafkaConfig {
       .define(KafkaServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, BOOLEAN, KafkaServerConfigs.DELETE_TOPIC_ENABLE_DEFAULT, HIGH, KafkaServerConfigs.DELETE_TOPIC_ENABLE_DOC)
       .define(KafkaServerConfigs.COMPRESSION_TYPE_CONFIG, STRING, LogConfig.DEFAULT_COMPRESSION_TYPE, in(BrokerCompressionType.names.asScala.toSeq:_*), HIGH, KafkaServerConfigs.COMPRESSION_TYPE_DOC)
       .define(KafkaServerConfigs.COMPRESSION_GZIP_LEVEL_CONFIG, INT, GzipCompression.DEFAULT_LEVEL, new GzipCompression.LevelValidator(), MEDIUM, KafkaServerConfigs.COMPRESSION_GZIP_LEVEL_DOC)
-      .define(KafkaServerConfigs.COMPRESSION_LZ_4_LEVEL_CONFIG, INT, Lz4Compression.DEFAULT_LEVEL, between(Lz4Compression.MIN_LEVEL, Lz4Compression.MAX_LEVEL), MEDIUM, KafkaServerConfigs.COMPRESSION_LZ_4_LEVEL_DOC)
+      .define(KafkaServerConfigs.COMPRESSION_LZ4_LEVEL_CONFIG, INT, Lz4Compression.DEFAULT_LEVEL, between(Lz4Compression.MIN_LEVEL, Lz4Compression.MAX_LEVEL), MEDIUM, KafkaServerConfigs.COMPRESSION_LZ4_LEVEL_DOC)
       .define(KafkaServerConfigs.COMPRESSION_ZSTD_LEVEL_CONFIG, INT, ZstdCompression.DEFAULT_LEVEL, between(ZstdCompression.MIN_LEVEL, ZstdCompression.MAX_LEVEL), MEDIUM, KafkaServerConfigs.COMPRESSION_ZSTD_LEVEL_DOC)
 
       /** ********* Transaction management configuration ***********/
@@ -1045,7 +1045,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   def compressionType = getString(KafkaServerConfigs.COMPRESSION_TYPE_CONFIG)
 
   def gzipCompressionLevel = getInt(KafkaServerConfigs.COMPRESSION_GZIP_LEVEL_CONFIG)
-  def lz4CompressionLevel = getInt(KafkaServerConfigs.COMPRESSION_LZ_4_LEVEL_CONFIG)
+  def lz4CompressionLevel = getInt(KafkaServerConfigs.COMPRESSION_LZ4_LEVEL_CONFIG)
   def zstdCompressionLevel = getInt(KafkaServerConfigs.COMPRESSION_ZSTD_LEVEL_CONFIG)
 
   /** ********* Raft Quorum Configuration *********/
@@ -1411,7 +1411,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     require(!interBrokerUsesSasl || saslEnabledMechanisms(interBrokerListenerName).contains(saslMechanismInterBrokerProtocol),
       s"${KafkaSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG} must be included in ${KafkaSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG} when SASL is used for inter-broker communication")
     require(queuedMaxBytes <= 0 || queuedMaxBytes >= socketRequestMaxBytes,
-      s"${KafkaServerConfigs.QUEUED_MAX_BYTES_CONFIG} must be larger or equal to ${SocketServerConfigs.SOCKET_RECEIVE_BUFFER_BYTES_CONFIG}")
+      s"${KafkaServerConfigs.QUEUED_MAX_BYTES_CONFIG} must be larger or equal to ${SocketServerConfigs.SOCKET_REQUEST_MAX_BYTES_CONFIG}")
 
     if (maxConnectionsPerIp == 0)
       require(maxConnectionsPerIpOverrides.nonEmpty, s"${SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG} can be set to zero only if" +

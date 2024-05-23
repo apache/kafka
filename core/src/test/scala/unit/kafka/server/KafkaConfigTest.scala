@@ -723,7 +723,7 @@ class KafkaConfigTest {
   def testInvalidLz4CompressionLevel(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.setProperty(KafkaServerConfigs.COMPRESSION_TYPE_CONFIG, "lz4")
-    props.setProperty(KafkaServerConfigs.COMPRESSION_LZ_4_LEVEL_CONFIG, (Lz4Compression.MAX_LEVEL + 1).toString)
+    props.setProperty(KafkaServerConfigs.COMPRESSION_LZ4_LEVEL_CONFIG, (Lz4Compression.MAX_LEVEL + 1).toString)
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
   }
 
@@ -944,7 +944,7 @@ class KafkaConfigTest {
         case KafkaServerConfigs.BROKER_RACK_CONFIG => // ignore string
 
         case KafkaServerConfigs.COMPRESSION_GZIP_LEVEL_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case KafkaServerConfigs.COMPRESSION_LZ_4_LEVEL_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
+        case KafkaServerConfigs.COMPRESSION_LZ4_LEVEL_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case KafkaServerConfigs.COMPRESSION_ZSTD_LEVEL_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", ZstdCompression.MAX_LEVEL + 1)
 
         //SSL Configs
