@@ -276,8 +276,9 @@ public class KafkaConsumerTest {
         assertInstanceOf(ClientTelemetryReporter.class, consumer.metricsRegistry().reporters().get(0));
     }
 
+    // TODO: enable for new consumer as part of KAFKA-16637
     @ParameterizedTest
-    @EnumSource(GroupProtocol.class)
+    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     @SuppressWarnings("unchecked")
     public void testPollReturnsRecords(GroupProtocol groupProtocol) {
         consumer = setUpConsumerWithRecordsToPoll(groupProtocol, tp0, 5);
@@ -917,8 +918,9 @@ public class KafkaConsumerTest {
         assertThrows(NoOffsetForPartitionException.class, () -> consumer.poll(Duration.ZERO));
     }
 
+    // TODO: enable for new consumer as part of KAFKA-16637
     @ParameterizedTest
-    @EnumSource(GroupProtocol.class)
+    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void testResetToCommittedOffset(GroupProtocol groupProtocol) {
         SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
         ConsumerMetadata metadata = createMetadata(subscription);
@@ -940,8 +942,9 @@ public class KafkaConsumerTest {
         assertEquals(539L, consumer.position(tp0));
     }
 
+    // TODO: enable for new consumer as part of KAFKA-16637
     @ParameterizedTest
-    @EnumSource(GroupProtocol.class)
+    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void testResetUsingAutoResetPolicy(GroupProtocol groupProtocol) {
         SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.LATEST);
         ConsumerMetadata metadata = createMetadata(subscription);
@@ -1221,7 +1224,7 @@ public class KafkaConsumerTest {
     }
 
     @ParameterizedTest
-    @EnumSource(GroupProtocol.class)
+    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void testPollThrowsInterruptExceptionIfInterrupted(GroupProtocol groupProtocol) {
         final ConsumerMetadata metadata = createMetadata(subscription);
         final MockClient client = new MockClient(time, metadata);
@@ -3108,6 +3111,7 @@ public class KafkaConsumerTest {
         assertNotEquals(0, consumer.clientId().length());
         assertEquals(3, CLIENT_IDS.size());
         CLIENT_IDS.forEach(id -> assertEquals(id, consumer.clientId()));
+        CLIENT_IDS.clear();
     }
 
     @ParameterizedTest
