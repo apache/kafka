@@ -48,7 +48,7 @@ class LogOffsetMetadataTest {
         assertTrue(exception.getMessage().endsWith("since it only has message offset info"));
 
         exception = assertThrows(KafkaException.class, () -> metadata2.positionDiff(metadata1));
-        assertTrue(exception.getMessage().endsWith("since they are not on the same segment"));
+        assertTrue(exception.getMessage().endsWith("since it only has message offset info"));
 
         LogOffsetMetadata metadata3 = new LogOffsetMetadata(15L, 10L, 5);
         exception = assertThrows(KafkaException.class, () -> metadata3.positionDiff(metadata2));

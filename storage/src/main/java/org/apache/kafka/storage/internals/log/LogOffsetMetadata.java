@@ -50,7 +50,7 @@ public final class LogOffsetMetadata {
 
     // check if this offset is already on an older segment compared with the given offset
     public boolean onOlderSegment(LogOffsetMetadata that) {
-        if (messageOffsetOnly())
+        if (messageOffsetOnly() || that.messageOffsetOnly())
             return false;
 
         return this.segmentBaseOffset < that.segmentBaseOffset;
@@ -64,7 +64,7 @@ public final class LogOffsetMetadata {
     // compute the number of bytes between this offset to the given offset
     // if they are on the same segment and this offset precedes the given offset
     public int positionDiff(LogOffsetMetadata that) {
-        if (messageOffsetOnly())
+        if (messageOffsetOnly() || that.messageOffsetOnly())
             throw new KafkaException(this + " cannot compare its segment position with " + that + " since it only has message offset info");
         if (!onSameSegment(that))
             throw new KafkaException(this + " cannot compare its segment position with " + that + " since they are not on the same segment");
