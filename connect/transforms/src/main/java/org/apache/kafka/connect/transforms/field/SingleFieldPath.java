@@ -29,6 +29,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 
 import static org.apache.kafka.connect.transforms.util.Requirements.requireMapOrNull;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireStructOrNull;
@@ -207,169 +209,116 @@ public class SingleFieldPath {
     }
 
     /**
-     * Access {@code Map} fields and apply functions to update field values.
-     *
-     * @param originalValue schema-based data value
-     * @param whenFound     function to apply when path is found
-     * @param whenNotFound  function to apply when path is not found
-     * @param whenOther     function to apply on fields not matched by path
-     * @return updated data value
+     * Updates the matching field value if found
+     * @param map original root value
+     * @param update function to apply to existing value
+     * @return the original value with the matching field updated if found
      */
-    public Map<String, Object> updateValueFrom(
-        Map<String, Object> originalValue,
-        MapValueUpdater whenFound,
-        MapValueUpdater whenNotFound,
-        MapValueUpdater whenOther
+    public Map<String, Object> updateMap(
+        Map<String, Object> map,
+        Function<Object, Object> update
     ) {
-        return updateValue(originalValue, 0, whenFound, whenNotFound, whenOther);
-    }
+        if (map == null) return null;
+        Map<String, Object> result = new HashMap<>(map);
 
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> updateValue(
-        Map<String, Object> originalValue,
-        int step,
-        MapValueUpdater whenFound,
-        MapValueUpdater whenNotFound,
-        MapValueUpdater whenOther
-    ) {
-        if (originalValue == null) return null;
-        Map<String, Object> updatedParent = new HashMap<>(originalValue.size());
-        boolean found = false;
-        for (Map.Entry<String, Object> entry : originalValue.entrySet()) {
-            String fieldName = entry.getKey();
-            Object fieldValue = entry.getValue();
-            if (steps.get(step).equals(fieldName)) {
-                found = true;
-                if (step < lastStepIndex()) {
-                    if (fieldValue instanceof Map) {
-                        Map<String, Object> updatedField = updateValue(
-                            (Map<String, Object>) fieldValue,
-                            step + 1,
-                            whenFound,
-                            whenNotFound,
-                            whenOther);
-                        updatedParent.put(fieldName, updatedField);
-                    } else {
-                        // add back to not found and apply others, as only leaf values are updated
-                        found = false;
-                        whenOther.apply(originalValue, updatedParent, null, fieldName);
-                    }
-                } else {
-                    whenFound.apply(originalValue, updatedParent, this, fieldName);
-                }
-            } else {
-                whenOther.apply(originalValue, updatedParent, null, fieldName);
-            }
+        Map<String, Object> parent = result;
+        Map<String, Object> child;
+        for (String step : stepsWithoutLast()) {
+            child = requireMapOrNull(parent.get(step), "nested field access");
+            if (child == null) return map;
+            child = new HashMap<>(child);
+            parent.put(step, child);
+            parent = child;
         }
 
-        if (!found) {
-            whenNotFound.apply(originalValue, updatedParent, this, steps.get(step));
+        Object original = parent.get(lastStep());
+        Object updated = update.apply(original);
+        if (updated != null) {
+            parent.put(lastStep(), updated);
         }
-
-        return updatedParent;
+        return result;
     }
 
     /**
-     * Access {@code Struct} fields and apply functions to update field values.
-     *
-     * @param originalSchema original struct schema
-     * @param originalValue  schema-based data value
-     * @param updatedSchema  updated struct schema
-     * @param whenFound      function to apply when path is found
-     * @param whenNotFound   function to apply when path is not found
-     * @param whenOther      function to apply on fields not matched by path
-     * @return updated data value
+     * Updates the matching field value if found
+     * @param struct original root value
+     * @param update function to apply to existing value, input may be null
+     * @return the original value with the matching field updated if found
      */
-    public Struct updateValueFrom(
-        Schema originalSchema,
-        Struct originalValue,
+    public Struct updateStruct(
+        Struct struct,
         Schema updatedSchema,
-        StructValueUpdater whenFound,
-        StructValueUpdater whenNotFound,
-        StructValueUpdater whenOther
+        BiFunction<Object, Schema, Object> update
     ) {
-        return updateValue(originalSchema, originalValue, updatedSchema, 0, whenFound, whenNotFound, whenOther);
+        return updateStruct(
+            struct,
+            updatedSchema,
+            update,
+            steps.get(0),
+            steps.subList(1, steps.size())
+        );
     }
 
-    private Struct updateValue(
-        Schema originalSchema,
-        Struct originalValue,
-        Schema updateSchema,
-        int step,
-        StructValueUpdater whenFound,
-        StructValueUpdater whenNotFound,
-        StructValueUpdater whenOther
+    private static Struct updateStruct(
+        Struct original,
+        Schema updatedSchema,
+        BiFunction<Object, Schema, Object> update,
+        String currentStep,
+        List<String> nextSteps
     ) {
-        Struct updated = new Struct(updateSchema);
-        boolean found = false;
-        for (Field field : originalSchema.fields()) {
-            if (step < steps.size()) {
-                if (steps.get(step).equals(field.name())) {
-                    found = true;
-                    if (step == lastStepIndex()) {
-                        whenFound.apply(
-                            originalValue,
-                            field,
-                            updated,
-                            updateSchema.field(field.name()),
-                            this
-                        );
-                    } else {
-                        if (field.schema().type() == Schema.Type.STRUCT) {
-                            Struct fieldValue = updateValue(
-                                field.schema(),
-                                originalValue.getStruct(field.name()),
-                                updateSchema.field(field.name()).schema(),
-                                step + 1,
-                                whenFound,
-                                whenNotFound,
-                                whenOther
-                            );
-                            updated.put(field.name(), fieldValue);
-                        } else {
-                            // add back to not found and apply others, as only leaf values are updated
-                            found = false;
-                            whenOther.apply(originalValue, field, updated, null, this);
-                        }
-                    }
+        if (original == null)
+            return null;
+
+        Struct result = new Struct(updatedSchema);
+        for (Field field : updatedSchema.fields()) {
+            String fieldName = field.name();
+
+            if (fieldName.equals(currentStep)) {
+                final Object updatedField;
+
+                // Modify this field
+                if (nextSteps.isEmpty()) {
+                    // This is a leaf node
+                    Object originalField = original.get(fieldName);
+                    updatedField = update.apply(
+                        originalField,
+                        original.schema().field(fieldName).schema()
+                    );
                 } else {
-                    whenOther.apply(originalValue, field, updated, null, this);
+                    // We have to go deeper
+                    Struct originalField = requireStructOrNull(original.get(fieldName), "nested field access");
+                    updatedField = updateStruct(
+                        originalField,
+                        field.schema(),
+                        update,
+                        nextSteps.get(0),
+                        nextSteps.subList(1, nextSteps.size())
+                    );
                 }
+
+                result.put(fieldName, updatedField);
+            } else {
+                // Copy over all other fields from the original to the result
+                result.put(fieldName, original.get(fieldName));
             }
         }
-        if (!found) {
-            whenNotFound.apply(
-                originalValue,
-                null,
-                updated,
-                updateSchema.field(steps.get(step)),
-                this);
-        }
-        return updated;
+
+        return result;
     }
 
     /**
-     * Prepares a new schema based on an original one, and applies an update function
-     * when the current path(s) is found.
-     *
-     * <p>If path is not found, no function is applied, and the path is ignored.
-     *
-     * <p>Other fields are copied from original schema.
-     *
-     * @param originalSchema        baseline schema
-     * @param baselineSchemaBuilder baseline schema build, if changes to the baseline
-     *                              are required before copying original
-     * @param whenFound             function to apply when current path(s) is/are found.
-     * @return an updated schema. Resulting schemas are usually cached for further access.
+     * Updates the matching field schema if found
+     * @param originalSchema original schema
+     * @param baselineSchemaBuilder baseline schema to build
+     * @param update function to apply to existing field, input may be null
+     * @return the original schema with the matching field updated if found
      */
-    public Schema updateSchemaFrom(
+    public Schema updateSchema(
         Schema originalSchema,
         SchemaBuilder baselineSchemaBuilder,
-        StructSchemaUpdater whenFound,
-        StructSchemaUpdater whenNotFound,
-        StructSchemaUpdater whenOther
+        Function<Field, Schema> update
     ) {
-        return updateSchema(originalSchema, baselineSchemaBuilder, 0, whenFound, whenNotFound, whenOther);
+        return updateSchema(originalSchema, baselineSchemaBuilder, update, steps.get(0), steps.subList(1, steps.size()));
     }
 
     // Recursive implementation to update schema at different steps.
@@ -377,43 +326,32 @@ public class SingleFieldPath {
     private Schema updateSchema(
         Schema operatingSchema,
         SchemaBuilder builder,
-        int step,
-        StructSchemaUpdater matching,
-        StructSchemaUpdater notFound,
-        StructSchemaUpdater others
+        Function<Field, Schema> update,
+        String currentStep,
+        List<String> nextSteps
     ) {
         if (operatingSchema.isOptional()) {
             builder.optional();
         }
-        if (operatingSchema.defaultValue() != null) {
-            builder.defaultValue(operatingSchema.defaultValue());
-        }
-        boolean matched = false;
         for (Field field : operatingSchema.fields()) {
-            if (step < steps.size()) {
-                if (steps.get(step).equals(field.name())) {
-                    matched = true;
-                    if (step == lastStepIndex()) {
-                        matching.apply(builder, field, this);
-                    } else {
-                        Schema fieldSchema = updateSchema(
-                            field.schema(),
-                            SchemaBuilder.struct(),
-                            step + 1,
-                            matching,
-                            notFound,
-                            others);
-                        builder.field(field.name(), fieldSchema);
-                    }
+            if (field.name().equals(currentStep)) {
+                final Schema updatedSchema;
+                if (nextSteps.isEmpty()) {
+                    // This is a leaf node
+                    updatedSchema = update.apply(field);
                 } else {
-                    others.apply(builder, field, null);
+                    updatedSchema = updateSchema(
+                        field.schema(),
+                        SchemaBuilder.struct(),
+                        update,
+                        nextSteps.get(0),
+                        nextSteps.subList(1, nextSteps.size()));
                 }
+                builder.field(field.name(), updatedSchema);
             } else {
-                others.apply(builder, field, null);
+                // Copy over all other fields from the original to the result
+                builder.field(field.name(), field.schema());
             }
-        }
-        if (!matched) {
-            notFound.apply(builder, null, this);
         }
         return builder.build();
     }

@@ -33,11 +33,8 @@ import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.DataException;
-import org.apache.kafka.connect.transforms.field.MapValueUpdater;
 import org.apache.kafka.connect.transforms.field.SingleFieldPath;
 import org.apache.kafka.connect.transforms.field.FieldSyntaxVersion;
-import org.apache.kafka.connect.transforms.field.StructSchemaUpdater;
-import org.apache.kafka.connect.transforms.field.StructValueUpdater;
 import org.apache.kafka.connect.transforms.util.SchemaUtil;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
@@ -412,17 +409,10 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
                     builder.defaultValue(updatedDefaultValue);
                 }
 
-                updatedSchema = config.field.updateSchemaFrom(
+                updatedSchema = config.field.updateSchema(
                     schema,
                     builder,
-                    (updated, field, fieldPath) ->
-                        updated.field(
-                            field.name(),
-                            TRANSLATORS.get(config.type)
-                                .typeSchema(field.schema().isOptional())
-                        ),
-                    StructSchemaUpdater.FILTER_OUT_FIELD,
-                    StructSchemaUpdater.PASS_THROUGH_FIELD
+                    field -> TRANSLATORS.get(config.type).typeSchema(field.schema().isOptional())
                 );
                 schemaUpdateCache.put(schema, updatedSchema);
             }
@@ -436,18 +426,10 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
         if (value == null) {
             return null;
         }
-        return config.field.updateValueFrom(
-            value.schema(),
+        return config.field.updateStruct(
             value,
             updatedSchema,
-            (originalParent, originalField, struct, updatedField, fieldPath) ->
-                struct.put(
-                        updatedField.name(),
-                        // default value is conserved
-                        convertTimestamp(originalParent.get(originalField), timestampTypeFromSchema(originalField.schema()))
-                ),
-            StructValueUpdater.FILTER_OUT_VALUE,
-            StructValueUpdater.PASS_THROUGH_VALUE
+            (field, schema) -> convertTimestamp(field, timestampTypeFromSchema(schema))
         );
     }
 
@@ -457,12 +439,9 @@ public abstract class TimestampConverter<R extends ConnectRecord<R>> implements 
             return newRecord(record, null, convertTimestamp(rawValue));
         } else {
             final Map<String, Object> value = requireMap(rawValue, PURPOSE);
-            final Map<String, Object> updatedValue = config.field.updateValueFrom(
+            final Map<String, Object> updatedValue = config.field.updateMap(
                 value,
-                (original, updated, fieldPath, fieldName) ->
-                    updated.put(fieldName, convertTimestamp(original.get(fieldName))),
-                MapValueUpdater.FILTER_OUT_FIELD,
-                MapValueUpdater.PASS_THROUGH_FIELD
+                this::convertTimestamp
             );
             return newRecord(record, null, updatedValue);
         }

@@ -22,12 +22,15 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
-import org.apache.kafka.connect.transforms.util.SchemaUtil;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Stream;
 
 class SingleFieldPathTest {
 
@@ -113,160 +116,103 @@ class SingleFieldPathTest {
         assertNull(pathV2("foo.baz.inner").valueFrom(struct));
     }
 
-    @Test
-    void shouldFilterSchemaV1Fields() {
-        Schema schema = SchemaBuilder.struct().field("foo", Schema.STRING_SCHEMA)
-            .field("bar", Schema.STRING_SCHEMA)
-            .field("baz", Schema.INT32_SCHEMA)
+    private static Integer update(Object field) {
+        return field != null ? ((Integer) field) * 2 : null;
+    }
+
+    static Stream<Arguments> updateMapParams() {
+        return Stream.of(
+            Arguments.of(Collections.singletonMap("foo", 42), pathV1("foo"), Collections.singletonMap("foo", 84)),
+            Arguments.of(Collections.singletonMap("foo", 42), pathV1("bar"), Collections.singletonMap("foo", 42)),
+            Arguments.of(
+                Collections.singletonMap("foo", Collections.singletonMap("bar", 42)),
+                pathV2("foo.bar"),
+                Collections.singletonMap("foo", Collections.singletonMap("bar", 84))
+            ),
+            Arguments.of(
+                Collections.singletonMap("foo", Collections.singletonMap("bar", 42)),
+                pathV2("foo.baz"),
+                Collections.singletonMap("foo", Collections.singletonMap("bar", 42))
+            )
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("updateMapParams")
+    void shouldUpdateMap(Map<String, Object> input, SingleFieldPath path, Map<String, Object> output) {
+        Map<String, Object> updated = path.updateMap(
+            input,
+            SingleFieldPathTest::update
+        );
+        assertEquals(output, updated);
+    }
+
+    static Stream<Arguments> updateStructParams() {
+        Schema barV2Schema = SchemaBuilder.struct().field("bar", Schema.INT32_SCHEMA).build();
+        Schema fooV2Schema = SchemaBuilder.struct().field("foo", barV2Schema).build();
+        Schema fooV1Schema = SchemaBuilder.struct()
+            .field("foo", Schema.INT32_SCHEMA)
             .build();
-
-        SchemaBuilder updated = SchemaUtil.copySchemaBasics(schema, SchemaBuilder.struct());
-        Schema result = pathV1("foo").updateSchemaFrom(
-            schema,
-            updated,
-            StructSchemaUpdater.FILTER_OUT_FIELD,
-            StructSchemaUpdater.FILTER_OUT_FIELD,
-            StructSchemaUpdater.PASS_THROUGH_FIELD
+        return Stream.of(
+            Arguments.of(
+                new Struct(fooV1Schema).put("foo", 42),
+                pathV1("foo"),
+                new Struct(fooV1Schema).put("foo", 84)
+            ),
+            Arguments.of(
+                new Struct(fooV1Schema).put("foo", 42),
+                pathV1("bar"),
+                new Struct(fooV1Schema).put("foo", 42)
+            ),
+            Arguments.of(
+                new Struct(fooV2Schema).put("foo", new Struct(barV2Schema).put("bar", 42)),
+                pathV2("foo.bar"),
+                new Struct(fooV2Schema).put("foo", new Struct(barV2Schema).put("bar", 84))
+            ),
+            Arguments.of(
+                new Struct(fooV2Schema).put("foo", new Struct(barV2Schema).put("bar", 42)),
+                pathV2("foo.baz"),
+                new Struct(fooV2Schema).put("foo", new Struct(barV2Schema).put("bar", 42))
+            )
         );
-
-        assertEquals(2, result.fields().size());
-        assertEquals("bar", result.fields().get(0).name());
-        assertEquals("baz", result.fields().get(1).name());
     }
 
-    @Test
-    void shouldFilterSchemaV2Fields() {
-        Schema schema = SchemaBuilder.struct().field("foo",
-                SchemaBuilder.struct().field("bar", Schema.STRING_SCHEMA)
-                    .field("baz", Schema.INT32_SCHEMA))
-            .build();
-
-        SchemaBuilder updated = SchemaUtil.copySchemaBasics(schema, SchemaBuilder.struct());
-        Schema result = pathV2("foo.baz").updateSchemaFrom(
-            schema,
-            updated,
-            StructSchemaUpdater.FILTER_OUT_FIELD,
-            StructSchemaUpdater.FILTER_OUT_FIELD,
-            StructSchemaUpdater.PASS_THROUGH_FIELD
+    @ParameterizedTest
+    @MethodSource("updateStructParams")
+    void shouldUpdateStruct(Struct input, SingleFieldPath path, Struct output) {
+        Struct updated = path.updateStruct(
+            input,
+            input.schema(),
+            (fieldValue, fieldSchema) -> update(fieldValue)
         );
-
-        assertEquals(1, result.fields().size());
-        assertEquals(1, result.field("foo").schema().fields().size());
-        assertEquals("bar", result.field("foo").schema().fields().get(0).name());
+        assertEquals(output, updated);
     }
 
-    @Test
-    void shouldRenameSchemaV1Fields() {
-        Schema schema = SchemaBuilder.struct()
-            .field("foo", Schema.STRING_SCHEMA)
-            .field("bar", Schema.STRING_SCHEMA)
-            .field("baz", Schema.INT32_SCHEMA)
-            .build();
-
-        SchemaBuilder updated = SchemaUtil.copySchemaBasics(schema, SchemaBuilder.struct());
-        Schema result = pathV1("foo").updateSchemaFrom(
-            schema,
-            updated,
-            (builder, field, path) -> builder.field("other", field.schema()),
-            StructSchemaUpdater.FILTER_OUT_FIELD,
-            StructSchemaUpdater.PASS_THROUGH_FIELD
+    static Stream<Arguments> updateSchemaParams() {
+        Schema fooV1Schema = SchemaBuilder.struct().field("foo", Schema.INT32_SCHEMA).build();
+        Schema resultFooV1Schema = SchemaBuilder.struct().field("foo", Schema.STRING_SCHEMA).build();
+        Schema barV2Schema = SchemaBuilder.struct().field("bar", Schema.INT32_SCHEMA).build();
+        Schema fooV2Schema = SchemaBuilder.struct().field("foo", barV2Schema).build();
+        Schema resultBarV2Schema = SchemaBuilder.struct().field("bar", Schema.STRING_SCHEMA).build();
+        Schema resultFooV2Schema = SchemaBuilder.struct().field("foo", resultBarV2Schema).build();
+        return Stream.of(
+            Arguments.of(fooV1Schema, pathV1("foo"), resultFooV1Schema),
+            Arguments.of(fooV1Schema, pathV1("bar"), fooV1Schema),
+            Arguments.of(fooV2Schema, pathV2("foo.bar"), resultFooV2Schema),
+            Arguments.of(fooV2Schema, pathV2("foo.baz"), fooV2Schema)
         );
-
-        assertEquals(3, result.fields().size());
-        assertEquals("other", result.fields().get(0).name());
-        assertEquals("bar", result.fields().get(1).name());
-        assertEquals("baz", result.fields().get(2).name());
     }
 
-    @Test
-    void shouldRenameSchemaV2Fields() {
-        SchemaBuilder nested = SchemaBuilder.struct()
-            .field("bar", Schema.STRING_SCHEMA)
-            .field("baz", Schema.INT32_SCHEMA);
-        Schema schema = SchemaBuilder.struct()
-            .field("foo", nested)
-            .build();
-
-        SchemaBuilder updated = SchemaUtil.copySchemaBasics(schema, SchemaBuilder.struct());
-        Schema result = pathV2("foo.baz").updateSchemaFrom(
-            schema,
-            updated,
-            (builder, field, path) -> builder.field("other", field.schema()),
-            StructSchemaUpdater.FILTER_OUT_FIELD,
-            StructSchemaUpdater.PASS_THROUGH_FIELD
+    @ParameterizedTest
+    @MethodSource("updateSchemaParams")
+    void shouldUpdateSchema(Schema input, SingleFieldPath path, Schema output) {
+        SchemaBuilder schemaBuilder = SchemaBuilder.struct();
+        Schema updated = path.updateSchema(
+            input,
+            schemaBuilder,
+            field -> field != null ? Schema.STRING_SCHEMA : null
         );
-
-        assertEquals(1, result.fields().size());
-        assertEquals(2, result.field("foo").schema().fields().size());
-        assertEquals("bar", result.field("foo").schema().fields().get(0).name());
-        assertEquals("other", result.field("foo").schema().fields().get(1).name());
-    }
-
-    @Test
-    void shouldUpdateValueV1FromSchemaless() {
-        Map<String, Object> value = Collections.singletonMap("foo", 42);
-
-        SingleFieldPath fieldPath = pathV1("foo");
-        Map<String, Object> updated = fieldPath.updateValueFrom(
-            value,
-            (originalParent, updatedParent, field, name) ->
-                updatedParent.put(name, ((Integer) originalParent.get(name)) * 2),
-            MapValueUpdater.FILTER_OUT_FIELD,
-            MapValueUpdater.PASS_THROUGH_FIELD
-        );
-
-        assertEquals(84, fieldPath.valueFrom(updated));
-    }
-
-    @Test
-    void shouldUpdateNestedValueV2FromSchemaless() {
-        Map<String, Object> value = Collections.singletonMap("foo", Collections.singletonMap("bar", 42));
-
-        SingleFieldPath fieldPath = pathV2("foo.bar");
-        Map<String, Object> updated = fieldPath.updateValueFrom(
-            value,
-            (originalParent, updatedParent, field, name) ->
-                updatedParent.put(name, ((Integer) originalParent.get(name)) * 2),
-            MapValueUpdater.FILTER_OUT_FIELD,
-            MapValueUpdater.PASS_THROUGH_FIELD
-        );
-
-        assertEquals(84, fieldPath.valueFrom(updated));
-    }
-
-    @Test
-    void shouldUpdateValueV1WithSchema() {
-        Schema schema = SchemaBuilder.struct().field("foo", Schema.INT32_SCHEMA).build();
-        Struct value = new Struct(schema).put("foo", 42);
-
-        SingleFieldPath fieldPath = pathV1("foo");
-        Struct updated = fieldPath.updateValueFrom(
-            schema, value, schema,
-            (origParent, oldField, updatedParent, updatedField, f) ->
-                updatedParent.put(updatedField, ((Integer) origParent.get(oldField)) * 2),
-            StructValueUpdater.FILTER_OUT_VALUE,
-            StructValueUpdater.PASS_THROUGH_VALUE
-        );
-
-        assertEquals(84, fieldPath.valueFrom(updated));
-    }
-
-    @Test
-    void shouldUpdateNestedValueV2WithSchema() {
-        SchemaBuilder barSchema = SchemaBuilder.struct().field("bar", Schema.INT32_SCHEMA);
-        Schema schema = SchemaBuilder.struct().field("foo", barSchema).build();
-        Struct value = new Struct(schema).put("foo", new Struct(barSchema).put("bar", 42));
-
-        SingleFieldPath fieldPath = pathV2("foo.bar");
-        Struct updated = fieldPath.updateValueFrom(
-            schema, value, schema,
-            (origParent, oldField, updatedParent, updatedField, f) ->
-                updatedParent.put(updatedField, ((Integer) origParent.get(oldField)) * 2),
-            StructValueUpdater.FILTER_OUT_VALUE,
-            StructValueUpdater.PASS_THROUGH_VALUE
-        );
-
-        assertEquals(84, fieldPath.valueFrom(updated));
+        assertEquals(output, updated);
     }
 
     private static SingleFieldPath pathV1(String path) {
