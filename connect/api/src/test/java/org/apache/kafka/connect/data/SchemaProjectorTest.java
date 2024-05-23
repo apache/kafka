@@ -320,10 +320,10 @@ public class SchemaProjectorTest {
         BigDecimal testDecimal = new BigDecimal(new BigInteger("156"), 2);
         projected = SchemaProjector.project(Decimal.schema(2), testDecimal, Decimal.schema(2));
         assertEquals(testDecimal, projected);
-        projected = SchemaProjector.project(Decimal.schema(2), testDecimal, Decimal.schema(3));
-        assertEquals(testDecimal, projected);
         assertThrows(SchemaProjectorException.class, () -> SchemaProjector.project(Decimal.schema(2), testDecimal,
-                Decimal.schema(1)), "Cannot project Decimal schema with higher scale to Decimal schema with lower scale.");
+                Decimal.schema(3)), "Cannot project Decimal schema with different scale.");
+        assertThrows(SchemaProjectorException.class, () -> SchemaProjector.project(Decimal.schema(2), testDecimal,
+                Decimal.schema(1)), "Cannot project Decimal schema with different scale.");
 
         projected = SchemaProjector.project(Date.SCHEMA, 1000, Date.SCHEMA);
         assertEquals(1000, projected);

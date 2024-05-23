@@ -167,7 +167,7 @@ public class SchemaProjector {
                 throw new SchemaProjectorException("Schema logical type mismatch. source type: " + source.name() + " and target type: " + target.name());
             }
 
-            if (Decimal.scale(source) > Decimal.scale(target)) {
+            if (Decimal.scale(source) != Decimal.scale(target)) {
                 throw new SchemaProjectorException("Decimal scale factor mismatch. source scale: " + Decimal.scale(source) + " and target scale: " + Decimal.scale(target));
             }
         } else {
