@@ -100,6 +100,8 @@ class DelayedFetch(
                 // If fetchOffset or endOffset is message only, we return empty records when reading from the log.
                 // So, to be consistent, we want to avoid accumulating new bytes in this case. This can happen when the
                 // high-watermark is stale, but should be rare.
+                debug(s"Not satisfying fetch $this since the fetchOffset (or) endOffset is message-offset only " +
+                  s"for partition $topicIdPartition.")
               } else if (fetchOffset.onOlderSegment(endOffset)) {
                 // Case F, this can happen when the fetch operation is falling behind the current segment
                 // or the partition has just rolled a new segment
