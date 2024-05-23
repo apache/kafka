@@ -1414,7 +1414,7 @@ public class RequestResponseTest {
 
     private ShareFetchResponse createShareFetchResponse() {
         ShareFetchResponseData data = new ShareFetchResponseData();
-        MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("blah".getBytes()));
+        MemoryRecords records = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("blah".getBytes()));
         ShareFetchResponseData.PartitionData partition = new ShareFetchResponseData.PartitionData()
                 .setPartitionIndex(0)
                 .setErrorCode(Errors.NONE.code())
