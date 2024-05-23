@@ -2060,8 +2060,6 @@ public class GroupMetadataManager {
     /**
      * Write tombstones for the member. The order matters here.
      *
-     * Package private for testing.
-     *
      * @param records       The list of records to append the member assignment tombstone records.
      * @param groupId       The group id.
      * @param memberId      The member id.
