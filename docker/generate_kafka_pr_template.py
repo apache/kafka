@@ -38,11 +38,6 @@ import argparse
 from pathlib import Path
 
 
-# Returns the current branch from which the script is being run
-def get_current_branch():
-    return subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"]).strip().decode('utf-8')
-
-
 # Returns the hash of the most recent commit that modified any of the specified files.
 def file_commit(*files):
     return subprocess.check_output(["git", "log", "-1", "--format=format:%H", "HEAD", "--"] + list(files)).strip().decode('utf-8')
@@ -65,9 +60,6 @@ def main():
     parser.add_argument("--image-type", "-type", choices=[
                         "jvm"], default="jvm", dest="image_type", help="Image type you want to build")
     args = parser.parse_args()
-    if get_current_branch() != "trunk":
-        print("This script can only be run from the trunk branch.")
-        sys.exit(1)
     self = os.path.basename(__file__)
     current_dir = os.path.dirname(os.path.abspath(__file__))
     docker_official_images_dir = Path(os.path.join(current_dir, "docker_official_images"))

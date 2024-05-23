@@ -24,7 +24,7 @@ on:
         options: 
           - "jvm"
       kafka_version:
-        description: Kafka version for which the source for docker official image is to be built
+        description: Kafka version for the docker official image. This should be >=3.7.0
         required: true
 
 jobs:
