@@ -91,12 +91,22 @@ public class StickyTaskAssignor implements TaskAssignor {
         }
 
         final Map<ProcessId, KafkaStreamsAssignment> currentAssignments = assignmentState.buildKafkaStreamsAssignments();
-        final Set<TaskId> tasksToOptimize = applicationState.allTasks().stream()
+
+        final Set<TaskId> statefulTasks = applicationState.allTasks().stream()
+            .filter(TaskInfo::isStateful)
             .map(TaskInfo::id)
             .collect(Collectors.toSet());
-        final Map<ProcessId, KafkaStreamsAssignment> optimizedAssignments = TaskAssignmentUtils.optimizeRackAwareActiveTasks(
-            applicationState, currentAssignments, new TreeSet<>(tasksToOptimize));
-        assignmentState.processOptimizedAssignments(optimizedAssignments);
+        final Map<ProcessId, KafkaStreamsAssignment> optimizedAssignmentsForStatefulTasks = TaskAssignmentUtils.optimizeRackAwareActiveTasks(
+            applicationState, currentAssignments, new TreeSet<>(statefulTasks));
+
+        final Set<TaskId> statelessTasks = applicationState.allTasks().stream()
+            .filter(task -> !task.isStateful())
+            .map(TaskInfo::id)
+            .collect(Collectors.toSet());
+        final Map<ProcessId, KafkaStreamsAssignment> optimizedAssignmentsForAllTasks = TaskAssignmentUtils.optimizeRackAwareActiveTasks(
+            applicationState, optimizedAssignmentsForStatefulTasks, new TreeSet<>(statelessTasks));
+
+        assignmentState.processOptimizedAssignments(optimizedAssignmentsForStatefulTasks);
     }
 
     private void optimizeStandby(final ApplicationState applicationState, final AssignmentState assignmentState) {
