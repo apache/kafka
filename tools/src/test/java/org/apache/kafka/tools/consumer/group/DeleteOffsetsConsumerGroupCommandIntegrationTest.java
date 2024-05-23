@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.tools.consumer.group;
 
-import kafka.test.ClusterConfig;
 import kafka.test.ClusterInstance;
+import kafka.test.ClusterGenerator;
 import kafka.test.annotation.ClusterTemplate;
 import kafka.test.junit.ClusterTestExtensions;
 import org.apache.kafka.clients.CommonClientConfigs;
@@ -44,7 +44,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Properties;
@@ -65,8 +64,8 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
         this.clusterInstance = clusterInstance;
     }
 
-    private static List<ClusterConfig> generator() {
-        return ConsumerGroupCommandTestUtils.generator();
+    private static void generator(ClusterGenerator clusterGenerator) {
+        ConsumerGroupCommandTestUtils.generator(clusterGenerator);
     }
 
     @ClusterTemplate("generator")

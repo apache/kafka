@@ -23,9 +23,8 @@ import kafka.server.BrokerTopicStats
 import kafka.utils.{Pool, TestUtils}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
-import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.server.util.MockTime
@@ -143,7 +142,7 @@ abstract class AbstractLogCleanerIntegrationTest {
   def counter: Int = ctr
   def incCounter(): Unit = ctr += 1
 
-  def writeDups(numKeys: Int, numDups: Int, log: UnifiedLog, codec: Compression,
+  def writeDups(numKeys: Int, numDups: Int, log: UnifiedLog, codec: CompressionType,
                 startKey: Int = 0, magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE): Seq[(Int, String, Long)] = {
     for (_ <- 0 until numDups; key <- startKey until (startKey + numKeys)) yield {
       val value = counter.toString
@@ -156,7 +155,7 @@ abstract class AbstractLogCleanerIntegrationTest {
     }
   }
 
-  def createLargeSingleMessageSet(key: Int, messageFormatVersion: Byte, codec: Compression): (String, MemoryRecords) = {
+  def createLargeSingleMessageSet(key: Int, messageFormatVersion: Byte, codec: CompressionType): (String, MemoryRecords) = {
     def messageValue(length: Int): String = {
       val random = new Random(0)
       new String(random.alphanumeric.take(length).toArray)

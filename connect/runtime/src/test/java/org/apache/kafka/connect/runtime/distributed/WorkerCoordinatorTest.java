@@ -606,8 +606,5 @@ public class WorkerCoordinatorTest {
             this.revokedTasks = tasks;
             revokedCount++;
         }
-
-        @Override
-        public void onPollTimeoutExpiry() {}
     }
 }

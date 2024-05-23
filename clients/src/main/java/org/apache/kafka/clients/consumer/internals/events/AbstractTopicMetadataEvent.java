@@ -17,13 +17,14 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.utils.Timer;
 
 import java.util.List;
 import java.util.Map;
 
 public abstract class AbstractTopicMetadataEvent extends CompletableApplicationEvent<Map<String, List<PartitionInfo>>> {
 
-    protected AbstractTopicMetadataEvent(final Type type, final long deadlineMs) {
-        super(type, deadlineMs);
+    protected AbstractTopicMetadataEvent(final Type type, final Timer timer) {
+        super(type, timer);
     }
 }

@@ -57,7 +57,7 @@ import java.util
 import java.util.Optional
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.{Condition, ReentrantLock}
-import java.util.concurrent.{CompletableFuture, ExecutionException, TimeoutException, TimeUnit}
+import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
 import scala.collection.Map
 import scala.compat.java8.OptionConverters.RichOptionForJava8
 import scala.jdk.CollectionConverters._
@@ -210,8 +210,7 @@ class BrokerServer(
         time,
         s"broker-${config.nodeId}-",
         isZkBroker = false,
-        logDirs = logManager.directoryIdsSet,
-        () => new Thread(() => shutdown(), "kafka-shutdown-thread").start())
+        logDirs = logManager.directoryIdsSet)
 
       // Enable delegation token cache for all SCRAM mechanisms to simplify dynamic update.
       // This keeps the cache up-to-date if new SCRAM mechanisms are enabled dynamically.
@@ -305,7 +304,7 @@ class BrokerServer(
           assignmentsManager.onAssignment(partition, directoryId, reason, callback)
 
         override def handleFailure(directoryId: Uuid): Unit =
-          lifecycleManager.propagateDirectoryFailure(directoryId, config.logDirFailureTimeoutMs)
+          lifecycleManager.propagateDirectoryFailure(directoryId)
       }
 
       this._replicaManager = new ReplicaManager(
@@ -580,8 +579,7 @@ class BrokerServer(
         config.offsetsRetentionCheckIntervalMs,
         config.offsetsRetentionMinutes * 60 * 1000L,
         config.offsetCommitTimeoutMs,
-        config.consumerGroupMigrationPolicy,
-        config.offsetsTopicCompressionType
+        config.consumerGroupMigrationPolicy
       )
       val timer = new SystemTimerReaper(
         "group-coordinator-reaper",
@@ -593,8 +591,11 @@ class BrokerServer(
         serde,
         config.offsetsLoadBufferSize
       )
-      val writer = new CoordinatorPartitionWriter(
-        replicaManager
+      val writer = new CoordinatorPartitionWriter[CoordinatorRecord](
+        replicaManager,
+        serde,
+        config.offsetsTopicCompressionType,
+        time
       )
       new GroupCoordinatorService.Builder(config.brokerId, groupCoordinatorConfig)
         .withTime(time)

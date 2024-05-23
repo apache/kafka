@@ -18,8 +18,6 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.compress.Compression;
-import org.apache.kafka.common.compress.GzipCompression;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.network.TransferableChannel;
@@ -118,7 +116,7 @@ public class FileRecordsTest {
     public void testFileSize() throws IOException {
         assertEquals(fileRecords.channel().size(), fileRecords.sizeInBytes());
         for (int i = 0; i < 20; i++) {
-            fileRecords.append(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("abcd".getBytes())));
+            fileRecords.append(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("abcd".getBytes())));
             assertEquals(fileRecords.channel().size(), fileRecords.sizeInBytes());
         }
     }
@@ -249,7 +247,7 @@ public class FileRecordsTest {
     public void testSearch() throws IOException {
         // append a new message with a high offset
         SimpleRecord lastMessage = new SimpleRecord("test".getBytes());
-        fileRecords.append(MemoryRecords.withRecords(50L, Compression.NONE, lastMessage));
+        fileRecords.append(MemoryRecords.withRecords(50L, CompressionType.NONE, lastMessage));
 
         List<RecordBatch> batches = batches(fileRecords);
         int position = 0;
@@ -486,7 +484,7 @@ public class FileRecordsTest {
                                               int leaderEpoch) throws IOException {
         ByteBuffer buffer = ByteBuffer.allocate(128);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, recordVersion.value,
-                Compression.NONE, TimestampType.CREATE_TIME, offset, timestamp, leaderEpoch);
+                CompressionType.NONE, TimestampType.CREATE_TIME, offset, timestamp, leaderEpoch);
         builder.append(new SimpleRecord(timestamp, new byte[0], new byte[0]));
         fileRecords.append(builder.build());
     }
@@ -499,7 +497,7 @@ public class FileRecordsTest {
         random.nextBytes(bytes);
 
         // records
-        GzipCompression compression = Compression.gzip().build();
+        CompressionType compressionType = CompressionType.GZIP;
         List<Long> offsets = asList(0L, 1L);
         List<Byte> magic = asList(RecordBatch.MAGIC_VALUE_V2, RecordBatch.MAGIC_VALUE_V1);  // downgrade message format from v2 to v1
         List<SimpleRecord> records = asList(
@@ -510,7 +508,7 @@ public class FileRecordsTest {
         // create MemoryRecords
         ByteBuffer buffer = ByteBuffer.allocate(8000);
         for (int i = 0; i < records.size(); i++) {
-            MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic.get(i), compression, TimestampType.CREATE_TIME, 0L);
+            MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic.get(i), compressionType, TimestampType.CREATE_TIME, 0L);
             builder.appendWithOffset(offsets.get(i), records.get(i));
             builder.close();
         }
@@ -520,18 +518,18 @@ public class FileRecordsTest {
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
             fileRecords.append(MemoryRecords.readableRecords(buffer));
             fileRecords.flush();
-            downConvertAndVerifyRecords(records, offsets, fileRecords, compression, toMagic, 0L, time);
+            downConvertAndVerifyRecords(records, offsets, fileRecords, compressionType, toMagic, 0L, time);
         }
     }
 
     @Test
     public void testConversion() throws IOException {
-        doTestConversion(Compression.NONE, RecordBatch.MAGIC_VALUE_V0);
-        doTestConversion(Compression.gzip().build(), RecordBatch.MAGIC_VALUE_V0);
-        doTestConversion(Compression.NONE, RecordBatch.MAGIC_VALUE_V1);
-        doTestConversion(Compression.gzip().build(), RecordBatch.MAGIC_VALUE_V1);
-        doTestConversion(Compression.NONE, RecordBatch.MAGIC_VALUE_V2);
-        doTestConversion(Compression.gzip().build(), RecordBatch.MAGIC_VALUE_V2);
+        doTestConversion(CompressionType.NONE, RecordBatch.MAGIC_VALUE_V0);
+        doTestConversion(CompressionType.GZIP, RecordBatch.MAGIC_VALUE_V0);
+        doTestConversion(CompressionType.NONE, RecordBatch.MAGIC_VALUE_V1);
+        doTestConversion(CompressionType.GZIP, RecordBatch.MAGIC_VALUE_V1);
+        doTestConversion(CompressionType.NONE, RecordBatch.MAGIC_VALUE_V2);
+        doTestConversion(CompressionType.GZIP, RecordBatch.MAGIC_VALUE_V2);
     }
 
     @Test
@@ -553,7 +551,7 @@ public class FileRecordsTest {
         verify(channel).transferFrom(any(), anyLong(), eq((long) size - firstWritten));
     }
 
-    private void doTestConversion(Compression compression, byte toMagic) throws IOException {
+    private void doTestConversion(CompressionType compressionType, byte toMagic) throws IOException {
         List<Long> offsets = asList(0L, 2L, 3L, 9L, 11L, 15L, 16L, 17L, 22L, 24L);
 
         Header[] headers = {new RecordHeader("headerKey1", "headerValue1".getBytes()),
@@ -574,19 +572,19 @@ public class FileRecordsTest {
         assertEquals(offsets.size(), records.size(), "incorrect test setup");
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V0, compression,
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V0, compressionType,
                 TimestampType.CREATE_TIME, 0L);
         for (int i = 0; i < 3; i++)
             builder.appendWithOffset(offsets.get(i), records.get(i));
         builder.close();
 
-        builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V1, compression, TimestampType.CREATE_TIME,
+        builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V1, compressionType, TimestampType.CREATE_TIME,
                 0L);
         for (int i = 3; i < 6; i++)
             builder.appendWithOffset(offsets.get(i), records.get(i));
         builder.close();
 
-        builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, compression, TimestampType.CREATE_TIME, 0L);
+        builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, compressionType, TimestampType.CREATE_TIME, 0L);
         for (int i = 6; i < 10; i++)
             builder.appendWithOffset(offsets.get(i), records.get(i));
         builder.close();
@@ -596,9 +594,9 @@ public class FileRecordsTest {
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
             fileRecords.append(MemoryRecords.readableRecords(buffer));
             fileRecords.flush();
-            downConvertAndVerifyRecords(records, offsets, fileRecords, compression, toMagic, 0L, time);
+            downConvertAndVerifyRecords(records, offsets, fileRecords, compressionType, toMagic, 0L, time);
 
-            if (toMagic <= RecordBatch.MAGIC_VALUE_V1 && compression.type() == CompressionType.NONE) {
+            if (toMagic <= RecordBatch.MAGIC_VALUE_V1 && compressionType == CompressionType.NONE) {
                 long firstOffset;
                 if (toMagic == RecordBatch.MAGIC_VALUE_V0)
                     firstOffset = 11L; // v1 record
@@ -609,10 +607,10 @@ public class FileRecordsTest {
                 int index = filteredOffsets.indexOf(firstOffset) - 1;
                 filteredRecords.remove(index);
                 filteredOffsets.remove(index);
-                downConvertAndVerifyRecords(filteredRecords, filteredOffsets, fileRecords, compression, toMagic, firstOffset, time);
+                downConvertAndVerifyRecords(filteredRecords, filteredOffsets, fileRecords, compressionType, toMagic, firstOffset, time);
             } else {
                 // firstOffset doesn't have any effect in this case
-                downConvertAndVerifyRecords(records, offsets, fileRecords, compression, toMagic, 10L, time);
+                downConvertAndVerifyRecords(records, offsets, fileRecords, compressionType, toMagic, 10L, time);
             }
         }
     }
@@ -620,7 +618,7 @@ public class FileRecordsTest {
     private void downConvertAndVerifyRecords(List<SimpleRecord> initialRecords,
                                              List<Long> initialOffsets,
                                              FileRecords fileRecords,
-                                             Compression compression,
+                                             CompressionType compressionType,
                                              byte toMagic,
                                              long firstOffset,
                                              Time time) {
@@ -634,7 +632,7 @@ public class FileRecordsTest {
         // Test the normal down-conversion path
         List<Records> convertedRecords = new ArrayList<>();
         convertedRecords.add(fileRecords.downConvert(toMagic, firstOffset, time).records());
-        verifyConvertedRecords(initialRecords, initialOffsets, convertedRecords, compression, toMagic);
+        verifyConvertedRecords(initialRecords, initialOffsets, convertedRecords, compressionType, toMagic);
         convertedRecords.clear();
 
         // Test the lazy down-conversion path
@@ -650,7 +648,7 @@ public class FileRecordsTest {
             Iterator<ConvertedRecords<?>> it = lazyRecords.iterator(readSize);
             while (it.hasNext())
                 convertedRecords.add(it.next().records());
-            verifyConvertedRecords(initialRecords, initialOffsets, convertedRecords, compression, toMagic);
+            verifyConvertedRecords(initialRecords, initialOffsets, convertedRecords, compressionType, toMagic);
             convertedRecords.clear();
         }
     }
@@ -658,7 +656,7 @@ public class FileRecordsTest {
     private void verifyConvertedRecords(List<SimpleRecord> initialRecords,
                                         List<Long> initialOffsets,
                                         List<Records> convertedRecordsList,
-                                        Compression compression,
+                                        CompressionType compressionType,
                                         byte magicByte) {
         int i = 0;
 
@@ -669,7 +667,7 @@ public class FileRecordsTest {
                     assertEquals(TimestampType.NO_TIMESTAMP_TYPE, batch.timestampType());
                 else
                     assertEquals(TimestampType.CREATE_TIME, batch.timestampType());
-                assertEquals(compression.type(), batch.compressionType(), "Compression type should not be affected by conversion");
+                assertEquals(compressionType, batch.compressionType(), "Compression type should not be affected by conversion");
                 for (Record record : batch) {
                     assertTrue(record.hasMagic(batch.magic()), "Inner record should have magic " + magicByte);
                     assertEquals(initialOffsets.get(i).longValue(), record.offset(), "Offset should not change");
@@ -712,7 +710,7 @@ public class FileRecordsTest {
         for (byte[] value : values) {
             ByteBuffer buffer = ByteBuffer.allocate(128);
             MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE,
-                    Compression.NONE, TimestampType.CREATE_TIME, offset);
+                    CompressionType.NONE, TimestampType.CREATE_TIME, offset);
             builder.appendWithOffset(offset++, System.currentTimeMillis(), null, value);
             fileRecords.append(builder.build());
         }

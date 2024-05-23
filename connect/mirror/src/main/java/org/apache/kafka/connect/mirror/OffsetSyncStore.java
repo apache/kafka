@@ -54,7 +54,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * started after the position of the consumer group, or if relevant offset syncs for the topic were potentially used as
  * for translation in an earlier generation of the sync store.
  */
-public class OffsetSyncStore implements AutoCloseable {
+class OffsetSyncStore implements AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(OffsetSyncStore.class);
     // Store one offset sync for each bit of the topic offset.
@@ -63,10 +63,8 @@ public class OffsetSyncStore implements AutoCloseable {
     private final KafkaBasedLog<byte[], byte[]> backingStore;
     private final Map<TopicPartition, OffsetSync[]> offsetSyncs = new ConcurrentHashMap<>();
     private final TopicAdmin admin;
-    protected volatile boolean initializationMustReadToEnd = true;
     protected volatile boolean readToEnd = false;
 
-    // package access to avoid Java 21 "this-escape" warning
     OffsetSyncStore(MirrorCheckpointConfig config) {
         Consumer<byte[], byte[]> consumer = null;
         TopicAdmin admin = null;
@@ -99,7 +97,6 @@ public class OffsetSyncStore implements AutoCloseable {
         );
     }
 
-    // for testing
     OffsetSyncStore() {
         this.admin = null;
         this.backingStore = null;
@@ -108,19 +105,12 @@ public class OffsetSyncStore implements AutoCloseable {
     /**
      * Start the OffsetSyncStore, blocking until all previous Offset Syncs have been read from backing storage.
      */
-    public void start(boolean initializationMustReadToEnd) {
-        this.initializationMustReadToEnd = initializationMustReadToEnd;
-        log.debug("OffsetSyncStore starting - must read to OffsetSync end = {}", initializationMustReadToEnd);
-        backingStoreStart();
+    public void start() {
+        backingStore.start();
         readToEnd = true;
     }
 
-    // overridable for testing
-    void backingStoreStart() {
-        backingStore.start(false);
-    }
-
-    public OptionalLong translateDownstream(String group, TopicPartition sourceTopicPartition, long upstreamOffset) {
+    OptionalLong translateDownstream(String group, TopicPartition sourceTopicPartition, long upstreamOffset) {
         if (!readToEnd) {
             // If we have not read to the end of the syncs topic at least once, decline to translate any offsets.
             // This prevents emitting stale offsets while initially reading the offset syncs topic.
@@ -224,9 +214,7 @@ public class OffsetSyncStore implements AutoCloseable {
         // While reading to the end of the topic, ensure that our earliest sync is later than
         // any earlier sync that could have been used for translation, to preserve monotonicity
         // If the upstream offset rewinds, all previous offsets are invalid, so overwrite them all.
-        boolean onlyLoadLastOffset = !readToEnd && initializationMustReadToEnd;
-        boolean upstreamRewind = upstreamOffset < syncs[0].upstreamOffset();
-        if (onlyLoadLastOffset || upstreamRewind) {
+        if (!readToEnd || syncs[0].upstreamOffset() > upstreamOffset) {
             clearSyncArray(syncs, offsetSync);
             return;
         }

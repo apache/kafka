@@ -33,7 +33,6 @@ import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
 import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 
 import java.util.{Comparator, OptionalLong}
-import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 
 /**
@@ -59,8 +58,7 @@ class BrokerLifecycleManager(
   val time: Time,
   val threadNamePrefix: String,
   val isZkBroker: Boolean,
-  val logDirs: Set[Uuid],
-  val shutdownHook: () => Unit = () => {}
+  val logDirs: Set[Uuid]
 ) extends Logging {
 
   private def logPrefix(): String = {
@@ -151,11 +149,10 @@ class BrokerLifecycleManager(
   private var readyToUnfence = false
 
   /**
-   * Map of accumulated offline directories. The value is true if the directory couldn't be communicated
-   * to the Controller.
+   * List of accumulated offline directories.
    * This variable can only be read or written from the event queue thread.
    */
-  private var offlineDirs = mutable.Map[Uuid, Boolean]()
+  private var offlineDirs = Set[Uuid]()
 
   /**
    * True if we sent a event queue to the active controller requesting controlled
@@ -256,12 +253,8 @@ class BrokerLifecycleManager(
    * Propagate directory failures to the controller.
    * @param directory The ID for the directory that failed.
    */
-  def propagateDirectoryFailure(directory: Uuid, timeout: Long): Unit = {
+  def propagateDirectoryFailure(directory: Uuid): Unit = {
     eventQueue.append(new OfflineDirEvent(directory))
-    // If we can't communicate the offline directory to the controller, we should shut down.
-    eventQueue.scheduleDeferred("offlineDirFailure",
-      new DeadlineFunction(time.nanoseconds() + MILLISECONDS.toNanos(timeout)),
-      new OfflineDirBrokerFailureEvent(directory))
   }
 
   def handleKraftJBODMetadataVersionUpdate(): Unit = {
@@ -334,21 +327,12 @@ class BrokerLifecycleManager(
   private class OfflineDirEvent(val dir: Uuid) extends EventQueue.Event {
     override def run(): Unit = {
       if (offlineDirs.isEmpty) {
-        offlineDirs = mutable.Map(dir -> false)
+        offlineDirs = Set(dir)
       } else {
-        offlineDirs += (dir -> false)
+        offlineDirs = offlineDirs + dir
       }
       if (registered) {
         scheduleNextCommunicationImmediately()
-      }
-    }
-  }
-
-  private class OfflineDirBrokerFailureEvent(offlineDir: Uuid) extends EventQueue.Event {
-    override def run(): Unit = {
-      if (!offlineDirs.getOrElse(offlineDir, false)) {
-        error(s"Shutting down because couldn't communicate offline log dir $offlineDir with controllers")
-        shutdownHook()
       }
     }
   }
@@ -472,11 +456,11 @@ class BrokerLifecycleManager(
       setCurrentMetadataOffset(metadataOffset).
       setWantFence(!readyToUnfence).
       setWantShutDown(_state == BrokerState.PENDING_CONTROLLED_SHUTDOWN).
-      setOfflineLogDirs(offlineDirs.keys.toSeq.asJava)
+      setOfflineLogDirs(offlineDirs.toSeq.asJava)
     if (isTraceEnabled) {
       trace(s"Sending broker heartbeat $data")
     }
-    val handler = new BrokerHeartbeatResponseHandler(offlineDirs.keys)
+    val handler = new BrokerHeartbeatResponseHandler()
     _channelManager.sendRequest(new BrokerHeartbeatRequest.Builder(data), handler)
     communicationInFlight = true
   }
@@ -484,19 +468,18 @@ class BrokerLifecycleManager(
   // the response handler is not invoked from the event handler thread,
   // so it is not safe to update state here, instead, schedule an event
   // to continue handling the response on the event handler thread
-  private class BrokerHeartbeatResponseHandler(currentOfflineDirs: Iterable[Uuid]) extends ControllerRequestCompletionHandler {
+  private class BrokerHeartbeatResponseHandler extends ControllerRequestCompletionHandler {
     override def onComplete(response: ClientResponse): Unit = {
-      eventQueue.prepend(new BrokerHeartbeatResponseEvent(response, false, currentOfflineDirs))
+      eventQueue.prepend(new BrokerHeartbeatResponseEvent(response, false))
     }
 
     override def onTimeout(): Unit = {
       info("Unable to send a heartbeat because the RPC got timed out before it could be sent.")
-      eventQueue.prepend(new BrokerHeartbeatResponseEvent(null, true, currentOfflineDirs))
+      eventQueue.prepend(new BrokerHeartbeatResponseEvent(null, true))
     }
   }
 
-  private class BrokerHeartbeatResponseEvent(response: ClientResponse, timedOut: Boolean,
-                                             currentOfflineDirs: Iterable[Uuid]) extends EventQueue.Event {
+  private class BrokerHeartbeatResponseEvent(response: ClientResponse, timedOut: Boolean) extends EventQueue.Event {
     override def run(): Unit = {
       communicationInFlight = false
       if (timedOut) {
@@ -524,7 +507,6 @@ class BrokerLifecycleManager(
         if (errorCode == Errors.NONE) {
           val responseData = message.data()
           failedAttempts = 0
-          currentOfflineDirs.foreach(cur => offlineDirs.put(cur, true))
           _state match {
             case BrokerState.STARTING =>
               if (responseData.isCaughtUp) {

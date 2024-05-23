@@ -23,8 +23,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ListOffsetsRequest, ListOffsetsResponse}
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.api.Test
 
 import java.util.Optional
 import scala.jdk.CollectionConverters._
@@ -34,9 +33,8 @@ class ListOffsetsRequestTest extends BaseRequestTest {
   val topic = "topic"
   val partition = new TopicPartition(topic, 0)
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testListOffsetsErrorCodes(quorum: String): Unit = {
+  @Test
+  def testListOffsetsErrorCodes(): Unit = {
     val targetTimes = List(new ListOffsetsTopic()
       .setName(topic)
       .setPartitions(List(new ListOffsetsPartition()
@@ -50,7 +48,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
       .build()
 
     val replicaRequest = ListOffsetsRequest.Builder
-      .forReplica(ApiKeys.LIST_OFFSETS.latestVersion, brokers.head.config.brokerId)
+      .forReplica(ApiKeys.LIST_OFFSETS.latestVersion, servers.head.config.brokerId)
       .setTargetTimes(targetTimes)
       .build()
 
@@ -60,17 +58,16 @@ class ListOffsetsRequestTest extends BaseRequestTest {
       .build()
 
     // Unknown topic
-    val randomBrokerId = brokers.head.config.brokerId
+    val randomBrokerId = servers.head.config.brokerId
     assertResponseError(Errors.UNKNOWN_TOPIC_OR_PARTITION, randomBrokerId, consumerRequest)
     assertResponseError(Errors.UNKNOWN_TOPIC_OR_PARTITION, randomBrokerId, replicaRequest)
     assertResponseError(Errors.UNKNOWN_TOPIC_OR_PARTITION, randomBrokerId, debugReplicaRequest)
 
     val partitionToLeader = createTopic(numPartitions = 1, replicationFactor = 2)
-    val topicDescription = createAdminClient().describeTopics(Seq(partition.topic).asJava).allTopicNames.get
-    val replicas = topicDescription.get(partition.topic).partitions.get(partition.partition).replicas.asScala.map(_.id).toSet
+    val replicas = zkClient.getReplicasForPartition(partition).toSet
     val leader = partitionToLeader(partition.partition)
     val follower = replicas.find(_ != leader).get
-    val nonReplica = brokers.map(_.config.brokerId).find(!replicas.contains(_)).get
+    val nonReplica = servers.map(_.config.brokerId).find(!replicas.contains(_)).get
 
     // Follower
     assertResponseError(Errors.NOT_LEADER_OR_FOLLOWER, follower, consumerRequest)
@@ -83,9 +80,8 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     assertResponseError(Errors.NOT_LEADER_OR_FOLLOWER, nonReplica, debugReplicaRequest)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testListOffsetsMaxTimeStampOldestVersion(quorum: String): Unit = {
+  @Test
+  def testListOffsetsMaxTimeStampOldestVersion(): Unit = {
     val consumerRequestBuilder = ListOffsetsRequest.Builder
       .forConsumer(false, IsolationLevel.READ_UNCOMMITTED, false)
 
@@ -112,9 +108,8 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     assertResponseError(error, brokerId, request)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testCurrentEpochValidation(quorum: String): Unit = {
+  @Test
+  def testCurrentEpochValidation(): Unit = {
     val topic = "topic"
     val topicPartition = new TopicPartition(topic, 0)
     val partitionToLeader = createTopic(numPartitions = 1, replicationFactor = 3)
@@ -125,15 +120,15 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     killBroker(firstLeaderId)
 
     // Check leader error codes
-    val secondLeaderId = TestUtils.awaitLeaderChange(brokers, topicPartition, firstLeaderId)
-    val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, topicPartition, brokers)
+    val secondLeaderId = TestUtils.awaitLeaderChange(servers, topicPartition, firstLeaderId)
+    val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, topicPartition, servers)
     assertResponseErrorForEpoch(Errors.NONE, secondLeaderId, Optional.empty())
     assertResponseErrorForEpoch(Errors.NONE, secondLeaderId, Optional.of(secondLeaderEpoch))
     assertResponseErrorForEpoch(Errors.FENCED_LEADER_EPOCH, secondLeaderId, Optional.of(secondLeaderEpoch - 1))
     assertResponseErrorForEpoch(Errors.UNKNOWN_LEADER_EPOCH, secondLeaderId, Optional.of(secondLeaderEpoch + 1))
 
     // Check follower error codes
-    val followerId = TestUtils.findFollowerId(topicPartition, brokers)
+    val followerId = TestUtils.findFollowerId(topicPartition, servers)
     assertResponseErrorForEpoch(Errors.NOT_LEADER_OR_FOLLOWER, followerId, Optional.empty())
     assertResponseErrorForEpoch(Errors.NOT_LEADER_OR_FOLLOWER, followerId, Optional.of(secondLeaderEpoch))
     assertResponseErrorForEpoch(Errors.UNKNOWN_LEADER_EPOCH, followerId, Optional.of(secondLeaderEpoch + 1))
@@ -179,16 +174,15 @@ class ListOffsetsRequestTest extends BaseRequestTest {
       (partitionData.offset, partitionData.leaderEpoch, partitionData.errorCode())
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testResponseIncludesLeaderEpoch(quorum: String): Unit = {
+  @Test
+  def testResponseIncludesLeaderEpoch(): Unit = {
     val partitionToLeader = createTopic(numPartitions = 1, replicationFactor = 3)
     val firstLeaderId = partitionToLeader(partition.partition)
 
-    TestUtils.generateAndProduceMessages(brokers, topic, 9)
-    TestUtils.produceMessage(brokers, topic, "test-10", System.currentTimeMillis() + 10L)
+    TestUtils.generateAndProduceMessages(servers, topic, 9)
+    TestUtils.produceMessage(servers, topic, "test-10", System.currentTimeMillis() + 10L)
 
-    val firstLeaderEpoch = TestUtils.findLeaderEpoch(firstLeaderId, partition, brokers)
+    val firstLeaderEpoch = TestUtils.findLeaderEpoch(firstLeaderId, partition, servers)
 
     assertEquals((0L, firstLeaderEpoch), fetchOffsetAndEpoch(firstLeaderId, 0L, -1))
     assertEquals((0L, firstLeaderEpoch), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, -1))
@@ -198,11 +192,11 @@ class ListOffsetsRequestTest extends BaseRequestTest {
 
     // Kill the first leader so that we can verify the epoch change when fetching the latest offset
     killBroker(firstLeaderId)
-    val secondLeaderId = TestUtils.awaitLeaderChange(brokers, partition, firstLeaderId)
+    val secondLeaderId = TestUtils.awaitLeaderChange(servers, partition, firstLeaderId)
     // make sure high watermark of new leader has caught up
     TestUtils.waitUntilTrue(() => sendRequest(secondLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, -1).errorCode != Errors.OFFSET_NOT_AVAILABLE.code,
       "the second leader does not sync to follower")
-    val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, partition, brokers)
+    val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, partition, servers)
 
     // No changes to written data
     assertEquals((0L, firstLeaderEpoch), fetchOffsetAndEpoch(secondLeaderId, 0L, -1))
@@ -220,14 +214,13 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     assertEquals((9L, firstLeaderEpoch, Errors.NONE.code), fetchOffsetAndEpochWithError(secondLeaderId, ListOffsetsRequest.MAX_TIMESTAMP, -1))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testResponseDefaultOffsetAndLeaderEpochForAllVersions(quorum: String): Unit = {
+  @Test
+  def testResponseDefaultOffsetAndLeaderEpochForAllVersions(): Unit = {
     val partitionToLeader = createTopic(numPartitions = 1, replicationFactor = 3)
     val firstLeaderId = partitionToLeader(partition.partition)
 
-    TestUtils.generateAndProduceMessages(brokers, topic, 9)
-    TestUtils.produceMessage(brokers, topic, "test-10", System.currentTimeMillis() + 10L)
+    TestUtils.generateAndProduceMessages(servers, topic, 9)
+    TestUtils.produceMessage(servers, topic, "test-10", System.currentTimeMillis() + 10L)
 
     for (version <- ApiKeys.LIST_OFFSETS.oldestVersion to ApiKeys.LIST_OFFSETS.latestVersion) {
       if (version == 0) {
@@ -240,7 +233,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
         assertEquals((0L, -1), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, version.toShort))
         assertEquals((0L, -1), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, version.toShort))
         assertEquals((10L, -1), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.LATEST_TIMESTAMP, version.toShort))
-      } else if (version >= 4 && version <= 6) {
+      } else if (version >= 4  && version <= 6) {
         assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, 0L, version.toShort))
         assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_TIMESTAMP, version.toShort))
         assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetsRequest.EARLIEST_LOCAL_TIMESTAMP, version.toShort))
@@ -270,6 +263,6 @@ class ListOffsetsRequestTest extends BaseRequestTest {
   }
 
   def createTopic(numPartitions: Int, replicationFactor: Int): Map[Int, Int] = {
-    super.createTopic(topic, numPartitions, replicationFactor)
+    TestUtils.createTopic(zkClient, topic, numPartitions, replicationFactor, servers)
   }
 }

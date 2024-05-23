@@ -64,15 +64,16 @@ public class KafkaStatusBackingStoreFormatTest {
 
     private Time time;
     private KafkaStatusBackingStore store;
+    private JsonConverter converter;
 
-    private final KafkaBasedLog<String, byte[]> kafkaBasedLog = mock(KafkaBasedLog.class);
+    private KafkaBasedLog<String, byte[]> kafkaBasedLog = mock(KafkaBasedLog.class);
 
     @Before
     public void setup() {
         time = new MockTime();
-        JsonConverter converter = new JsonConverter();
+        converter = new JsonConverter();
         converter.configure(Collections.singletonMap(SCHEMAS_ENABLE_CONFIG, false), false);
-        store = new KafkaStatusBackingStore(new MockTime(), converter, STATUS_TOPIC, () -> null, kafkaBasedLog);
+        store = new KafkaStatusBackingStore(new MockTime(), converter, STATUS_TOPIC, kafkaBasedLog);
     }
 
     @Test

@@ -22,7 +22,7 @@ import kafka.api.{KafkaSasl, SaslSetup}
 import kafka.server.SaslApiVersionsRequestTest.{kafkaClientSaslMechanism, kafkaServerSaslMechanisms}
 import kafka.test.annotation.{ClusterTemplate, Type}
 import kafka.test.junit.ClusterTestExtensions
-import kafka.test.{ClusterConfig, ClusterInstance}
+import kafka.test.{ClusterConfig, ClusterGenerator, ClusterInstance}
 import kafka.utils.JaasTestUtils
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
@@ -44,7 +44,7 @@ object SaslApiVersionsRequestTest {
   val controlPlaneListenerName = "CONTROL_PLANE"
   val securityProtocol = SecurityProtocol.SASL_PLAINTEXT
 
-  def saslApiVersionsRequestClusterConfig(): java.util.List[ClusterConfig] = {
+  def saslApiVersionsRequestClusterConfig(clusterGenerator: ClusterGenerator): Unit = {
     val saslServerProperties = new java.util.HashMap[String, String]()
     saslServerProperties.put(KafkaSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, kafkaClientSaslMechanism)
     saslServerProperties.put(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, kafkaServerSaslMechanisms.mkString(","))
@@ -59,13 +59,13 @@ object SaslApiVersionsRequestTest {
     serverProperties.put("listeners", s"$securityProtocol://localhost:0,$controlPlaneListenerName://localhost:0")
     serverProperties.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, s"$securityProtocol://localhost:0,$controlPlaneListenerName://localhost:0")
 
-    List(ClusterConfig.defaultBuilder
+    clusterGenerator.accept(ClusterConfig.defaultBuilder
       .setSecurityProtocol(securityProtocol)
       .setTypes(Set(Type.ZK).asJava)
       .setSaslServerProperties(saslServerProperties)
       .setSaslClientProperties(saslClientProperties)
       .setServerProperties(serverProperties)
-      .build()).asJava
+      .build())
   }
 }
 

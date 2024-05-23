@@ -17,7 +17,6 @@
 package org.apache.kafka.jmh.record;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.TimestampType;
@@ -45,15 +44,15 @@ public class CompressedRecordBatchValidationBenchmark extends BaseRecordBatchBen
     private CompressionType compressionType = CompressionType.LZ4;
 
     @Override
-    Compression compression() {
-        return Compression.of(compressionType).build();
+    CompressionType compressionType() {
+        return compressionType;
     }
 
     @Benchmark
     public void measureValidateMessagesAndAssignOffsetsCompressed(Blackhole bh) {
         MemoryRecords records = MemoryRecords.readableRecords(singleBatchBuffer.duplicate());
         new LogValidator(records, new TopicPartition("a", 0),
-            Time.SYSTEM, compressionType, compression(), false,  messageVersion,
+            Time.SYSTEM, compressionType, compressionType, false,  messageVersion,
             TimestampType.CREATE_TIME, Long.MAX_VALUE, Long.MAX_VALUE, 0, AppendOrigin.CLIENT,
             MetadataVersion.latestTesting()
         ).validateMessagesAndAssignOffsetsCompressed(PrimitiveRef.ofLong(startingOffset),

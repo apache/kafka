@@ -355,10 +355,9 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @param context The request context.
      * @param request The actual Heartbeat request.
      *
-     * @return A Result containing the heartbeat response and
-     *         a list of records to update the state machine.
+     * @return The HeartbeatResponse.
      */
-    public CoordinatorResult<HeartbeatResponseData, CoordinatorRecord> classicGroupHeartbeat(
+    public HeartbeatResponseData classicGroupHeartbeat(
         RequestContext context,
         HeartbeatRequestData request
     ) {

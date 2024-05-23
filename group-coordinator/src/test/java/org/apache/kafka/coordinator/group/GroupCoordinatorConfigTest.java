@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.coordinator.group;
 
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.junit.jupiter.api.Test;
@@ -45,8 +44,7 @@ public class GroupCoordinatorConfigTest {
             600000L,
             24 * 60 * 60 * 1000L,
             5000,
-            ConsumerGroupMigrationPolicy.DISABLED,
-            CompressionType.GZIP
+            ConsumerGroupMigrationPolicy.DISABLED
         );
 
         assertEquals(10, config.numThreads);
@@ -64,7 +62,6 @@ public class GroupCoordinatorConfigTest {
         assertEquals(10 * 60 * 1000, config.offsetsRetentionCheckIntervalMs);
         assertEquals(24 * 60 * 60 * 1000L, config.offsetsRetentionMs);
         assertEquals(5000, config.offsetCommitTimeoutMs);
-        assertEquals(CompressionType.GZIP, config.compressionType);
     }
 
     public static GroupCoordinatorConfig createGroupCoordinatorConfig(
@@ -88,8 +85,7 @@ public class GroupCoordinatorConfigTest {
             offsetsRetentionCheckIntervalMs,
             offsetsRetentionMs,
             5000,
-            ConsumerGroupMigrationPolicy.DISABLED,
-            CompressionType.NONE
+            ConsumerGroupMigrationPolicy.DISABLED
         );
     }
 }

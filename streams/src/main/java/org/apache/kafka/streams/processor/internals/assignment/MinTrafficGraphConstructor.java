@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -26,6 +25,7 @@ import java.util.function.BiConsumer;
 import java.util.function.BiPredicate;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor.CostFunction;
 
 public class MinTrafficGraphConstructor<T> implements RackAwareGraphConstructor<T> {
@@ -34,7 +34,7 @@ public class MinTrafficGraphConstructor<T> implements RackAwareGraphConstructor<
     public int getSinkNodeID(
         final List<TaskId> taskIdList,
         final List<UUID> clientList,
-        final Collection<Set<TaskId>> taskSetsPerTopicGroup
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup
     ) {
         return clientList.size() + taskIdList.size();
     }

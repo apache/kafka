@@ -37,9 +37,10 @@ import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.Timeout;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
@@ -79,16 +80,17 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
-@Timeout(600)
 public class StreamsConfigTest {
+    @Rule
+    public Timeout globalTimeout = Timeout.seconds(600);
     private final Properties props = new Properties();
     private StreamsConfig streamsConfig;
 
@@ -96,7 +98,7 @@ public class StreamsConfigTest {
     private final String clientId = "client";
     private final int threadIdx = 1;
 
-    @BeforeEach
+    @Before
     public void setUp() {
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-config-test");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
@@ -238,16 +240,16 @@ public class StreamsConfigTest {
 
         serializer.configure(serializerConfigs, true);
         assertEquals(
+            "Should get the original string after serialization and deserialization with the configured encoding",
             str,
-            streamsConfig.defaultKeySerde().deserializer().deserialize(topic, serializer.serialize(topic, str)),
-            "Should get the original string after serialization and deserialization with the configured encoding"
+            streamsConfig.defaultKeySerde().deserializer().deserialize(topic, serializer.serialize(topic, str))
         );
 
         serializer.configure(serializerConfigs, false);
         assertEquals(
+            "Should get the original string after serialization and deserialization with the configured encoding",
             str,
-            streamsConfig.defaultValueSerde().deserializer().deserialize(topic, serializer.serialize(topic, str)),
-            "Should get the original string after serialization and deserialization with the configured encoding"
+            streamsConfig.defaultValueSerde().deserializer().deserialize(topic, serializer.serialize(topic, str))
         );
     }
 
@@ -1021,7 +1023,7 @@ public class StreamsConfigTest {
     public void shouldSpecifyNoOptimizationWhenNotExplicitlyAddedToConfigs() {
         final String expectedOptimizeConfig = "none";
         final String actualOptimizedConifig = streamsConfig.getString(TOPOLOGY_OPTIMIZATION_CONFIG);
-        assertEquals(expectedOptimizeConfig, actualOptimizedConifig, "Optimization should be \"none\"");
+        assertEquals("Optimization should be \"none\"", expectedOptimizeConfig, actualOptimizedConifig);
     }
 
     @Test
@@ -1030,7 +1032,7 @@ public class StreamsConfigTest {
         props.put(TOPOLOGY_OPTIMIZATION_CONFIG, "all");
         final StreamsConfig config = new StreamsConfig(props);
         final String actualOptimizedConifig = config.getString(TOPOLOGY_OPTIMIZATION_CONFIG);
-        assertEquals(expectedOptimizeConfig, actualOptimizedConifig, "Optimization should be \"all\"");
+        assertEquals("Optimization should be \"all\"", expectedOptimizeConfig, actualOptimizedConifig);
     }
 
     @Test
@@ -1044,7 +1046,7 @@ public class StreamsConfigTest {
     public void shouldSpecifyRocksdbWhenNotExplicitlyAddedToConfigs() {
         final String expectedDefaultStoreType = StreamsConfig.ROCKS_DB;
         final String actualDefaultStoreType = streamsConfig.getString(DEFAULT_DSL_STORE_CONFIG);
-        assertEquals(expectedDefaultStoreType, actualDefaultStoreType, "default.dsl.store should be \"rocksDB\"");
+        assertEquals("default.dsl.store should be \"rocksDB\"", expectedDefaultStoreType, actualDefaultStoreType);
     }
 
     @SuppressWarnings("deprecation")
@@ -1054,7 +1056,7 @@ public class StreamsConfigTest {
         props.put(DEFAULT_DSL_STORE_CONFIG, expectedDefaultStoreType);
         final StreamsConfig config = new StreamsConfig(props);
         final String actualDefaultStoreType = config.getString(DEFAULT_DSL_STORE_CONFIG);
-        assertEquals(expectedDefaultStoreType, actualDefaultStoreType, "default.dsl.store should be \"in_memory\"");
+        assertEquals("default.dsl.store should be \"in_memory\"", expectedDefaultStoreType, actualDefaultStoreType);
     }
 
     @SuppressWarnings("deprecation")
@@ -1069,10 +1071,9 @@ public class StreamsConfigTest {
         final Class<?> expectedDefaultStoreType = BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers.class;
         final Class<?> actualDefaultStoreType = streamsConfig.getClass(DSL_STORE_SUPPLIERS_CLASS_CONFIG);
         assertEquals(
-            expectedDefaultStoreType,
-            actualDefaultStoreType,
-            "default " + DSL_STORE_SUPPLIERS_CLASS_CONFIG + " should be " + expectedDefaultStoreType
-        );
+                "default " + DSL_STORE_SUPPLIERS_CLASS_CONFIG + " should be " + expectedDefaultStoreType,
+                expectedDefaultStoreType,
+                actualDefaultStoreType);
     }
 
     @Test
@@ -1082,10 +1083,9 @@ public class StreamsConfigTest {
         final StreamsConfig config = new StreamsConfig(props);
         final Class<?> actualDefaultStoreType = config.getClass(DSL_STORE_SUPPLIERS_CLASS_CONFIG);
         assertEquals(
-            expectedDefaultStoreType,
-            actualDefaultStoreType,
-            "default " + DSL_STORE_SUPPLIERS_CLASS_CONFIG + " should be " + expectedDefaultStoreType
-        );
+                "default " + DSL_STORE_SUPPLIERS_CLASS_CONFIG + " should be " + expectedDefaultStoreType,
+                expectedDefaultStoreType,
+                actualDefaultStoreType);
     }
 
     @SuppressWarnings("deprecation")

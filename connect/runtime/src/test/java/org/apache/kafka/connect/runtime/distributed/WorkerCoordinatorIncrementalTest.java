@@ -559,9 +559,6 @@ public class WorkerCoordinatorIncrementalTest {
             this.revokedTasks = tasks;
             revokedCount++;
         }
-
-        @Override
-        public void onPollTimeoutExpiry() {}
     }
 
     private static ExtendedAssignment deserializeAssignment(Map<String, ByteBuffer> assignment,

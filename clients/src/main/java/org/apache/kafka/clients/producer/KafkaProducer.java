@@ -41,7 +41,6 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -251,7 +250,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final RecordAccumulator accumulator;
     private final Sender sender;
     private final Thread ioThread;
-    private final Compression compression;
+    private final CompressionType compressionType;
     private final Sensor errors;
     private final Time time;
     private final Serializer<K> keySerializer;
@@ -414,7 +413,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     Arrays.asList(this.keySerializer, this.valueSerializer));
             this.maxRequestSize = config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG);
             this.totalMemorySize = config.getLong(ProducerConfig.BUFFER_MEMORY_CONFIG);
-            this.compression = configureCompression(config);
+            this.compressionType = CompressionType.forName(config.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
 
             this.maxBlockTimeMs = config.getLong(ProducerConfig.MAX_BLOCK_MS_CONFIG);
             int deliveryTimeoutMs = configureDeliveryTimeout(config, log);
@@ -433,7 +432,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             int batchSize = Math.max(1, config.getInt(ProducerConfig.BATCH_SIZE_CONFIG));
             this.accumulator = new RecordAccumulator(logContext,
                     batchSize,
-                    compression,
+                    this.compressionType,
                     lingerMs(config),
                     retryBackoffMs,
                     retryBackoffMaxMs,
@@ -502,7 +501,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         this.interceptors = interceptors;
         this.maxRequestSize = config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG);
         this.totalMemorySize = config.getLong(ProducerConfig.BUFFER_MEMORY_CONFIG);
-        this.compression = configureCompression(config);
+        this.compressionType = CompressionType.forName(config.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
         this.maxBlockTimeMs = config.getLong(ProducerConfig.MAX_BLOCK_MS_CONFIG);
         this.partitionerIgnoreKeys = config.getBoolean(ProducerConfig.PARTITIONER_IGNORE_KEYS_CONFIG);
         this.apiVersions = new ApiVersions();
@@ -547,29 +546,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 producerConfig.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG),
                 this.transactionManager,
                 apiVersions);
-    }
-
-    private static Compression configureCompression(ProducerConfig config) {
-        CompressionType type = CompressionType.forName(config.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
-        switch (type) {
-            case GZIP: {
-                return Compression.gzip()
-                        .level(config.getInt(ProducerConfig.COMPRESSION_GZIP_LEVEL_CONFIG))
-                        .build();
-            }
-            case LZ4: {
-                return Compression.lz4()
-                        .level(config.getInt(ProducerConfig.COMPRESSION_LZ4_LEVEL_CONFIG))
-                        .build();
-            }
-            case ZSTD: {
-                return Compression.zstd()
-                        .level(config.getInt(ProducerConfig.COMPRESSION_ZSTD_LEVEL_CONFIG))
-                        .build();
-            }
-            default:
-                return Compression.of(type).build();
-        }
     }
 
     private static int lingerMs(ProducerConfig config) {
@@ -1057,7 +1033,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             Header[] headers = record.headers().toArray();
 
             int serializedSize = AbstractRecords.estimateSizeInBytesUpperBound(apiVersions.maxUsableProduceMagic(),
-                    compression.type(), serializedKey, serializedValue, headers);
+                    compressionType, serializedKey, serializedValue, headers);
             ensureValidRecordSize(serializedSize);
             long timestamp = record.timestamp() == null ? nowMs : record.timestamp();
 

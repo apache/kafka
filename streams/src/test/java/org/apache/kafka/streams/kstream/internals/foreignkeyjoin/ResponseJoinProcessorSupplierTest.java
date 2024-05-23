@@ -243,7 +243,7 @@ public class ResponseJoinProcessorSupplierTest {
         assertThat(forwarded.get(0).record(), is(new Record<>("lhs1", null, 0)));
     }
 
-    static Object getDroppedRecordsTotalMetric(final InternalProcessorContext<String, ?> context) {
+    private Object getDroppedRecordsTotalMetric(final InternalProcessorContext<String, String> context) {
         final MetricName dropTotalMetric = new MetricName(
             "dropped-records-total",
             "stream-task-metrics",
@@ -257,7 +257,7 @@ public class ResponseJoinProcessorSupplierTest {
         return context.metrics().metrics().get(dropTotalMetric).metricValue();
     }
 
-    static Object getDroppedRecordsRateMetric(final InternalProcessorContext<String, ?> context) {
+    private Object getDroppedRecordsRateMetric(final InternalProcessorContext<String, String> context) {
         final MetricName dropRateMetric = new MetricName(
             "dropped-records-rate",
             "stream-task-metrics",

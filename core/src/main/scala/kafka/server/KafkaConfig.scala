@@ -21,11 +21,11 @@ import java.{lang, util}
 import java.util.concurrent.TimeUnit
 import java.util.{Collections, Properties}
 import kafka.cluster.EndPoint
+import kafka.utils.CoreUtils.parseCsvList
 import kafka.utils.{CoreUtils, Logging}
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.Reconfigurable
-import org.apache.kafka.common.compress.{GzipCompression, Lz4Compression, ZstdCompression}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource, SaslConfigs, TopicConfig}
 import org.apache.kafka.common.config.ConfigDef.{ConfigKey, ValidList}
 import org.apache.kafka.common.config.types.Password
@@ -108,9 +108,6 @@ object KafkaConfig {
   val ConnectionSetupTimeoutMaxMsProp = CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG
   val DeleteTopicEnableProp = "delete.topic.enable"
   val CompressionTypeProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.COMPRESSION_TYPE_CONFIG)
-  val CompressionGzipLevelProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG)
-  val CompressionLz4LevelProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG)
-  val CompressionZstdLevelProp = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG)
 
   /************* Authorizer Configuration ***********/
   val AuthorizerClassNameProp = "authorizer.class.name"
@@ -164,9 +161,6 @@ object KafkaConfig {
   val CompressionTypeDoc = "Specify the final compression type for a given topic. This configuration accepts the standard compression codecs " +
     "('gzip', 'snappy', 'lz4', 'zstd'). It additionally accepts 'uncompressed' which is equivalent to no compression; and " +
     "'producer' which means retain the original compression codec set by the producer."
-  val CompressionGzipLevelDoc = s"The compression level to use if $CompressionTypeProp is set to 'gzip'."
-  val CompressionLz4LevelDoc = s"The compression level to use if $CompressionTypeProp is set to 'lz4'."
-  val CompressionZstdLevelDoc = s"The compression level to use if $CompressionTypeProp is set to 'zstd'."
 
   /************* Authorizer Configuration ***********/
   val AuthorizerClassNameDoc = s"The fully qualified name of a class that implements <code>${classOf[Authorizer].getName}</code>" +
@@ -190,6 +184,7 @@ object KafkaConfig {
 
   /** ********* Request Limit Configuration **************/
   val MaxRequestPartitionSizeLimitDoc = "The maximum number of partitions can be served in one request."
+
 
   /** ********* Delegation Token Configuration ****************/
   val DelegationTokenSecretKeyAliasDoc = s"DEPRECATED: An alias for $DelegationTokenSecretKeyProp, which should be used instead of this config."
@@ -344,7 +339,6 @@ object KafkaConfig {
       .define(ServerLogConfigs.ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG, CLASS, null, LOW, ServerLogConfigs.ALTER_CONFIG_POLICY_CLASS_NAME_DOC)
       .define(ServerLogConfigs.LOG_MESSAGE_DOWNCONVERSION_ENABLE_CONFIG, BOOLEAN, ServerLogConfigs.LOG_MESSAGE_DOWNCONVERSION_ENABLE_DEFAULT, LOW, ServerLogConfigs.LOG_MESSAGE_DOWNCONVERSION_ENABLE_DOC)
       .defineInternal(ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_CONFIG, LONG, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT, atLeast(0), LOW, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DOC)
-      .define(ServerLogConfigs.LOG_DIR_FAILURE_TIMEOUT_MS_CONFIG, LONG, ServerLogConfigs.LOG_DIR_FAILURE_TIMEOUT_MS_DEFAULT, atLeast(1), LOW, ServerLogConfigs.LOG_DIR_FAILURE_TIMEOUT_MS_DOC)
 
       /** ********* Replication configuration ***********/
       .define(ReplicationConfigs.CONTROLLER_SOCKET_TIMEOUT_MS_CONFIG, INT, ReplicationConfigs.CONTROLLER_SOCKET_TIMEOUT_MS_DEFAULT, MEDIUM, ReplicationConfigs.CONTROLLER_SOCKET_TIMEOUT_MS_DOC)
@@ -414,9 +408,6 @@ object KafkaConfig {
       .define(GroupCoordinatorConfig.OFFSET_COMMIT_REQUIRED_ACKS_CONFIG, SHORT, GroupCoordinatorConfig.OFFSET_COMMIT_REQUIRED_ACKS_DEFAULT, HIGH, GroupCoordinatorConfig.OFFSET_COMMIT_REQUIRED_ACKS_DOC)
       .define(DeleteTopicEnableProp, BOOLEAN, Defaults.DELETE_TOPIC_ENABLE, HIGH, DeleteTopicEnableDoc)
       .define(CompressionTypeProp, STRING, LogConfig.DEFAULT_COMPRESSION_TYPE, in(BrokerCompressionType.names.asScala.toSeq:_*), HIGH, CompressionTypeDoc)
-      .define(CompressionGzipLevelProp, INT, GzipCompression.DEFAULT_LEVEL, new GzipCompression.LevelValidator(), MEDIUM, CompressionGzipLevelDoc)
-      .define(CompressionLz4LevelProp, INT, Lz4Compression.DEFAULT_LEVEL, between(Lz4Compression.MIN_LEVEL, Lz4Compression.MAX_LEVEL), MEDIUM, CompressionLz4LevelDoc)
-      .define(CompressionZstdLevelProp, INT, ZstdCompression.DEFAULT_LEVEL, between(ZstdCompression.MIN_LEVEL, ZstdCompression.MAX_LEVEL), MEDIUM, CompressionZstdLevelDoc)
 
       /** ********* Transaction management configuration ***********/
       .define(TransactionStateManagerConfigs.TRANSACTIONAL_ID_EXPIRATION_MS_CONFIG, INT, TransactionStateManagerConfigs.TRANSACTIONAL_ID_EXPIRATION_MS_DEFAULT, atLeast(1), HIGH, TransactionStateManagerConfigs.TRANSACTIONAL_ID_EXPIRATION_MS_DOC)
@@ -895,7 +886,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   /** ********* Log Configuration ***********/
   val autoCreateTopicsEnable = getBoolean(ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG)
   val numPartitions = getInt(ServerLogConfigs.NUM_PARTITIONS_CONFIG)
-  val logDirs: Seq[String] = Csv.parseCsvList(Option(getString(ServerLogConfigs.LOG_DIRS_CONFIG)).getOrElse(getString(ServerLogConfigs.LOG_DIR_CONFIG))).asScala
+  val logDirs = CoreUtils.parseCsvList(Option(getString(ServerLogConfigs.LOG_DIRS_CONFIG)).getOrElse(getString(ServerLogConfigs.LOG_DIR_CONFIG)))
   def logSegmentBytes = getInt(ServerLogConfigs.LOG_SEGMENT_BYTES_CONFIG)
   def logFlushIntervalMessages = getLong(ServerLogConfigs.LOG_FLUSH_INTERVAL_MESSAGES_CONFIG)
   val logCleanerThreads = getInt(CleanerConfig.LOG_CLEANER_THREADS_PROP)
@@ -974,8 +965,6 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   }
 
   def logMessageDownConversionEnable: Boolean = getBoolean(ServerLogConfigs.LOG_MESSAGE_DOWNCONVERSION_ENABLE_CONFIG)
-
-  def logDirFailureTimeoutMs: Long = getLong(ServerLogConfigs.LOG_DIR_FAILURE_TIMEOUT_MS_CONFIG)
 
   /** ********* Replication configuration ***********/
   val controllerSocketTimeoutMs: Int = getInt(ReplicationConfigs.CONTROLLER_SOCKET_TIMEOUT_MS_CONFIG)
@@ -1154,9 +1143,6 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
 
   val deleteTopicEnable = getBoolean(KafkaConfig.DeleteTopicEnableProp)
   def compressionType = getString(KafkaConfig.CompressionTypeProp)
-  def gzipCompressionLevel = getInt(KafkaConfig.CompressionGzipLevelProp)
-  def lz4CompressionLevel = getInt(KafkaConfig.CompressionLz4LevelProp)
-  def zstdCompressionLevel = getInt(KafkaConfig.CompressionZstdLevelProp)
 
   /** ********* Raft Quorum Configuration *********/
   val quorumVoters = getList(QuorumConfig.QUORUM_VOTERS_CONFIG)
@@ -1294,7 +1280,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       // check controller listener names (they won't appear in listeners when process.roles=broker)
       // as well as listeners for occurrences of SSL or SASL_*
       if (controllerListenerNames.exists(isSslOrSasl) ||
-        Csv.parseCsvList(getString(SocketServerConfigs.LISTENERS_CONFIG)).asScala.exists(listenerValue => isSslOrSasl(EndPoint.parseListenerName(listenerValue)))) {
+        parseCsvList(getString(SocketServerConfigs.LISTENERS_CONFIG)).exists(listenerValue => isSslOrSasl(EndPoint.parseListenerName(listenerValue)))) {
         mapValue // don't add default mappings since we found something that is SSL or SASL_*
       } else {
         // add the PLAINTEXT mappings for all controller listener names that are not explicitly PLAINTEXT
@@ -1593,9 +1579,6 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, logCleanupPolicy)
     logProps.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, minInSyncReplicas)
     logProps.put(TopicConfig.COMPRESSION_TYPE_CONFIG, compressionType)
-    logProps.put(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG, gzipCompressionLevel)
-    logProps.put(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG, lz4CompressionLevel)
-    logProps.put(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG, zstdCompressionLevel)
     logProps.put(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, uncleanLeaderElectionEnable)
     logProps.put(TopicConfig.PREALLOCATE_CONFIG, logPreAllocateEnable)
     logProps.put(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG, logMessageFormatVersion.version)

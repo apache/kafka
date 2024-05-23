@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.record;
 
-import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
@@ -51,9 +50,9 @@ public class FileLogInputStreamTest {
 
     private static class Args {
         final byte magic;
-        final Compression compression;
+        final CompressionType compression;
 
-        public Args(byte magic, Compression compression) {
+        public Args(byte magic, CompressionType compression) {
             this.magic = magic;
             this.compression = compression;
         }
@@ -72,7 +71,7 @@ public class FileLogInputStreamTest {
             List<Arguments> arguments = new ArrayList<>();
             for (byte magic : asList(MAGIC_VALUE_V0, MAGIC_VALUE_V1, MAGIC_VALUE_V2))
                 for (CompressionType type: CompressionType.values())
-                    arguments.add(Arguments.of(new Args(magic, Compression.of(type).build())));
+                    arguments.add(Arguments.of(new Args(magic, type)));
             return arguments.stream();
         }
     }
@@ -80,9 +79,9 @@ public class FileLogInputStreamTest {
     @ParameterizedTest
     @ArgumentsSource(FileLogInputStreamArgumentsProvider.class)
     public void testWriteTo(Args args) throws IOException {
-        Compression compression = args.compression;
+        CompressionType compression = args.compression;
         byte magic = args.magic;
-        if (compression.type() == CompressionType.ZSTD && magic < MAGIC_VALUE_V2)
+        if (compression == CompressionType.ZSTD && magic < MAGIC_VALUE_V2)
             return;
 
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
@@ -111,9 +110,9 @@ public class FileLogInputStreamTest {
     @ParameterizedTest
     @ArgumentsSource(FileLogInputStreamArgumentsProvider.class)
     public void testSimpleBatchIteration(Args args) throws IOException {
-        Compression compression = args.compression;
+        CompressionType compression = args.compression;
         byte magic = args.magic;
-        if (compression.type() == CompressionType.ZSTD && magic < MAGIC_VALUE_V2)
+        if (compression == CompressionType.ZSTD && magic < MAGIC_VALUE_V2)
             return;
 
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
@@ -141,12 +140,12 @@ public class FileLogInputStreamTest {
     @ParameterizedTest
     @ArgumentsSource(FileLogInputStreamArgumentsProvider.class)
     public void testBatchIterationWithMultipleRecordsPerBatch(Args args) throws IOException {
-        Compression compression = args.compression;
+        CompressionType compression = args.compression;
         byte magic = args.magic;
-        if (magic < MAGIC_VALUE_V2 && compression.type() == CompressionType.NONE)
+        if (magic < MAGIC_VALUE_V2 && compression == CompressionType.NONE)
             return;
 
-        if (compression.type() == CompressionType.ZSTD && magic < MAGIC_VALUE_V2)
+        if (compression == CompressionType.ZSTD && magic < MAGIC_VALUE_V2)
             return;
 
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
@@ -182,7 +181,7 @@ public class FileLogInputStreamTest {
     @ParameterizedTest
     @ArgumentsSource(FileLogInputStreamArgumentsProvider.class)
     public void testBatchIterationV2(Args args) throws IOException {
-        Compression compression = args.compression;
+        CompressionType compression = args.compression;
         byte magic = args.magic;
         if (magic != MAGIC_VALUE_V2)
             return;
@@ -230,9 +229,9 @@ public class FileLogInputStreamTest {
     @ParameterizedTest
     @ArgumentsSource(FileLogInputStreamArgumentsProvider.class)
     public void testBatchIterationIncompleteBatch(Args args) throws IOException {
-        Compression compression = args.compression;
+        CompressionType compression = args.compression;
         byte magic = args.magic;
-        if (compression.type() == CompressionType.ZSTD && magic < MAGIC_VALUE_V2)
+        if (compression == CompressionType.ZSTD && magic < MAGIC_VALUE_V2)
             return;
 
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
@@ -289,10 +288,10 @@ public class FileLogInputStreamTest {
 
     private void assertGenericRecordBatchData(Args args, RecordBatch batch, long baseOffset, long maxTimestamp,
                                               SimpleRecord... records) {
-        Compression compression = args.compression;
+        CompressionType compression = args.compression;
         byte magic = args.magic;
         assertEquals(magic, batch.magic());
-        assertEquals(compression.type(), batch.compressionType());
+        assertEquals(compression, batch.compressionType());
 
         if (magic == MAGIC_VALUE_V0) {
             assertEquals(NO_TIMESTAMP_TYPE, batch.timestampType());

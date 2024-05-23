@@ -35,14 +35,13 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.extension.ExtendWith;
 
-import java.util.Map;
-import java.util.List;
-import java.util.Collections;
-import java.util.concurrent.ExecutionException;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.HashSet;
-import java.util.Arrays;
+import java.util.Collections;
+import java.util.concurrent.ExecutionException;
 
 import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
 import static org.apache.kafka.clients.consumer.GroupProtocol.CONSUMER;
@@ -63,10 +62,10 @@ public class ClusterTestExtensionsTest {
     }
 
     // Static methods can generate cluster configurations
-    static List<ClusterConfig> generate1() {
+    static void generate1(ClusterGenerator clusterGenerator) {
         Map<String, String> serverProperties = new HashMap<>();
         serverProperties.put("foo", "bar");
-        return Collections.singletonList(ClusterConfig.defaultBuilder()
+        clusterGenerator.accept(ClusterConfig.defaultBuilder()
                 .setTypes(Collections.singleton(Type.ZK))
                 .setServerProperties(serverProperties)
                 .setTags(Collections.singletonList("Generated Test"))

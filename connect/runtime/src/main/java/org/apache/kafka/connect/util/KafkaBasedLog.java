@@ -107,8 +107,6 @@ public class KafkaBasedLog<K, V> {
     private boolean stopRequested;
     private final Queue<Callback<Void>> readLogEndOffsetCallbacks;
     private final java.util.function.Consumer<TopicAdmin> initializer;
-    // initialized as false for backward compatibility
-    private volatile boolean reportErrorsToCallback = false;
 
     /**
      * Create a new KafkaBasedLog object. This does not start reading the log and writing is not permitted until
@@ -245,12 +243,7 @@ public class KafkaBasedLog<K, V> {
     }
 
     public void start() {
-        start(false);
-    }
-
-    public void start(boolean reportErrorsToCallback) {
-        this.reportErrorsToCallback = reportErrorsToCallback;
-        log.info("Starting KafkaBasedLog with topic {} reportErrorsToCallback={}", topic, reportErrorsToCallback);
+        log.info("Starting KafkaBasedLog with topic " + topic);
 
         // Create the topic admin client and initialize the topic ...
         admin = topicAdminSupplier.get();   // may be null
@@ -475,9 +468,6 @@ public class KafkaBasedLog<K, V> {
             throw e;
         } catch (KafkaException e) {
             log.error("Error polling: " + e);
-            if (reportErrorsToCallback) {
-                consumedCallback.onCompletion(e, null);
-            }
         }
     }
 

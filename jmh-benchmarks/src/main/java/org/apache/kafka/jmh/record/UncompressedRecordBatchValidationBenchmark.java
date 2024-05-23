@@ -17,7 +17,6 @@
 package org.apache.kafka.jmh.record;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.TimestampType;
@@ -41,15 +40,15 @@ import org.openjdk.jmh.infra.Blackhole;
 public class UncompressedRecordBatchValidationBenchmark extends BaseRecordBatchBenchmark {
 
     @Override
-    Compression compression() {
-        return Compression.NONE;
+    CompressionType compressionType() {
+        return CompressionType.NONE;
     }
 
     @Benchmark
     public void measureAssignOffsetsNonCompressed(Blackhole bh) {
         MemoryRecords records = MemoryRecords.readableRecords(singleBatchBuffer.duplicate());
         new LogValidator(records, new TopicPartition("a", 0),
-            Time.SYSTEM, CompressionType.NONE, Compression.NONE, false,
+            Time.SYSTEM, CompressionType.NONE, CompressionType.NONE, false,
             messageVersion, TimestampType.CREATE_TIME, Long.MAX_VALUE, Long.MAX_VALUE, 0, AppendOrigin.CLIENT,
             MetadataVersion.latestTesting()
         ).assignOffsetsNonCompressed(PrimitiveRef.ofLong(startingOffset), validatorMetricsRecorder);

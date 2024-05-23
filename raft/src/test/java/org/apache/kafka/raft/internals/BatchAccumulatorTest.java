@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.raft.internals;
 
-import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.LeaderChangeMessage;
@@ -72,7 +71,7 @@ class BatchAccumulatorTest {
             maxBatchSize,
             memoryPool,
             time,
-            Compression.NONE,
+            CompressionType.NONE,
             serde
         );
     }
@@ -452,7 +451,7 @@ class BatchAccumulatorTest {
             maxBatchSize,
             memoryPool,
             time,
-            Compression.NONE,
+            CompressionType.NONE,
             serde
         );
 
@@ -723,7 +722,7 @@ class BatchAccumulatorTest {
         return new MemoryRecordsBuilder(
             buffer,
             RecordBatch.CURRENT_MAGIC_VALUE,
-            Compression.NONE,
+            CompressionType.NONE,
             TimestampType.CREATE_TIME,
             baseOffset,
             now,

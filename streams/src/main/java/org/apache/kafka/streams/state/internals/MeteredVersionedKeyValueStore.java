@@ -264,13 +264,7 @@ public class MeteredVersionedKeyValueStore<K, V>
             final QueryResult<VersionedRecordIterator<byte[]>> rawResult = wrapped().query(rawKeyQuery, positionBound, config);
             if (rawResult.isSuccess()) {
                 final MeteredMultiVersionedKeyQueryIterator<V> typedResult =
-                        new MeteredMultiVersionedKeyQueryIterator<V>(
-                            rawResult.getResult(),
-                            iteratorDurationSensor,
-                            time,
-                            StoreQueryUtils.getDeserializeValue(plainValueSerdes),
-                            numOpenIterators
-                        );
+                        new MeteredMultiVersionedKeyQueryIterator<V>(rawResult.getResult(), StoreQueryUtils.getDeserializeValue(plainValueSerdes));
                 final QueryResult<MeteredMultiVersionedKeyQueryIterator<V>> typedQueryResult =
                         InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);
                 result = (QueryResult<R>) typedQueryResult;

@@ -18,11 +18,7 @@ package org.apache.kafka.common.compress;
 
 import net.jpountz.xxhash.XXHashFactory;
 
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.BufferSupplier;
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
-import org.apache.kafka.common.utils.ChunkedBytesStream;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -31,93 +27,24 @@ import org.junit.jupiter.params.provider.ArgumentsSource;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.common.compress.Lz4BlockOutputStream.LZ4_FRAME_INCOMPRESSIBLE_MASK;
+import static org.apache.kafka.common.compress.KafkaLZ4BlockOutputStream.LZ4_FRAME_INCOMPRESSIBLE_MASK;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class Lz4CompressionTest {
+public class KafkaLZ4Test {
 
     private final static Random RANDOM = new Random(0);
-
-    @Test
-    public void testLz4FramingMagicV0() {
-        ByteBuffer buffer = ByteBuffer.allocate(256);
-        Lz4Compression compression = new Lz4Compression.Builder().build();
-        Lz4BlockOutputStream out = (Lz4BlockOutputStream) compression.wrapForOutput(
-                new ByteBufferOutputStream(buffer), RecordBatch.MAGIC_VALUE_V0);
-        assertTrue(out.useBrokenFlagDescriptorChecksum());
-
-        buffer.rewind();
-
-        ChunkedBytesStream in = (ChunkedBytesStream) compression.wrapForInput(buffer, RecordBatch.MAGIC_VALUE_V0, BufferSupplier.NO_CACHING);
-        assertTrue(((Lz4BlockInputStream) in.sourceStream()).ignoreFlagDescriptorChecksum());
-    }
-
-    @Test
-    public void testLz4FramingMagicV1() {
-        ByteBuffer buffer = ByteBuffer.allocate(256);
-        Lz4Compression compression = new Lz4Compression.Builder().build();
-        Lz4BlockOutputStream out = (Lz4BlockOutputStream) compression.wrapForOutput(
-                new ByteBufferOutputStream(buffer), RecordBatch.MAGIC_VALUE_V1);
-        assertFalse(out.useBrokenFlagDescriptorChecksum());
-
-        buffer.rewind();
-
-        ChunkedBytesStream in = (ChunkedBytesStream) compression.wrapForInput(buffer, RecordBatch.MAGIC_VALUE_V1, BufferSupplier.create());
-        assertFalse(((Lz4BlockInputStream) in.sourceStream()).ignoreFlagDescriptorChecksum());
-    }
-
-    @Test
-    public void testCompressionDecompression() throws IOException {
-        Lz4Compression.Builder builder = Compression.lz4();
-        byte[] data = String.join("", Collections.nCopies(256, "data")).getBytes(StandardCharsets.UTF_8);
-
-        for (byte magic : Arrays.asList(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V2)) {
-            for (int level : Arrays.asList(Lz4Compression.MIN_LEVEL, Lz4Compression.DEFAULT_LEVEL, Lz4Compression.MAX_LEVEL)) {
-                Lz4Compression compression = builder.level(level).build();
-                ByteBufferOutputStream bufferStream = new ByteBufferOutputStream(4);
-                try (OutputStream out = compression.wrapForOutput(bufferStream, magic)) {
-                    out.write(data);
-                    out.flush();
-                }
-                bufferStream.buffer().flip();
-
-                try (InputStream inputStream = compression.wrapForInput(bufferStream.buffer(), magic, BufferSupplier.create())) {
-                    byte[] result = new byte[data.length];
-                    int read = inputStream.read(result);
-                    assertEquals(data.length, read);
-                    assertArrayEquals(data, result);
-                }
-            }
-        }
-    }
-
-    @Test
-    public void testCompressionLevels() {
-        Lz4Compression.Builder builder = Compression.lz4();
-
-        assertThrows(IllegalArgumentException.class, () -> builder.level(Lz4Compression.MIN_LEVEL - 1));
-        assertThrows(IllegalArgumentException.class, () -> builder.level(Lz4Compression.MAX_LEVEL + 1));
-
-        builder.level(Lz4Compression.MIN_LEVEL);
-        builder.level(Lz4Compression.MAX_LEVEL);
-    }
 
     private static class Payload {
         String name;
@@ -140,16 +67,14 @@ public class Lz4CompressionTest {
     private static class Args {
         final boolean useBrokenFlagDescriptorChecksum;
         final boolean ignoreFlagDescriptorChecksum;
-        final int level;
         final byte[] payload;
         final boolean close;
         final boolean blockChecksum;
 
         Args(boolean useBrokenFlagDescriptorChecksum, boolean ignoreFlagDescriptorChecksum,
-             int level, boolean blockChecksum, boolean close, Payload payload) {
+             boolean blockChecksum, boolean close, Payload payload) {
             this.useBrokenFlagDescriptorChecksum = useBrokenFlagDescriptorChecksum;
             this.ignoreFlagDescriptorChecksum = ignoreFlagDescriptorChecksum;
-            this.level = level;
             this.blockChecksum = blockChecksum;
             this.close = close;
             this.payload = payload.payload;
@@ -159,7 +84,6 @@ public class Lz4CompressionTest {
         public String toString() {
             return "useBrokenFlagDescriptorChecksum=" + useBrokenFlagDescriptorChecksum +
                 ", ignoreFlagDescriptorChecksum=" + ignoreFlagDescriptorChecksum +
-                ", level=" + level +
                 ", blockChecksum=" + blockChecksum +
                 ", close=" + close +
                 ", payload=" + Arrays.toString(payload);
@@ -191,8 +115,7 @@ public class Lz4CompressionTest {
                     for (boolean ignore : Arrays.asList(false, true))
                         for (boolean blockChecksum : Arrays.asList(false, true))
                             for (boolean close : Arrays.asList(false, true))
-                                for (int level : Arrays.asList(Lz4Compression.MIN_LEVEL, Lz4Compression.DEFAULT_LEVEL, Lz4Compression.MAX_LEVEL))
-                                    arguments.add(Arguments.of(new Args(broken, ignore, level, blockChecksum, close, payload)));
+                                arguments.add(Arguments.of(new Args(broken, ignore, blockChecksum, close, payload)));
 
             return arguments.stream();
         }
@@ -203,11 +126,11 @@ public class Lz4CompressionTest {
     public void testHeaderPrematureEnd(Args args) {
         ByteBuffer buffer = ByteBuffer.allocate(2);
         IOException e = assertThrows(IOException.class, () -> makeInputStream(buffer, args.ignoreFlagDescriptorChecksum));
-        assertEquals(Lz4BlockInputStream.PREMATURE_EOS, e.getMessage());
+        assertEquals(KafkaLZ4BlockInputStream.PREMATURE_EOS, e.getMessage());
     }
 
-    private Lz4BlockInputStream makeInputStream(ByteBuffer buffer, boolean ignoreFlagDescriptorChecksum) throws IOException {
-        return new Lz4BlockInputStream(buffer, BufferSupplier.create(), ignoreFlagDescriptorChecksum);
+    private KafkaLZ4BlockInputStream makeInputStream(ByteBuffer buffer, boolean ignoreFlagDescriptorChecksum) throws IOException {
+        return new KafkaLZ4BlockInputStream(buffer, BufferSupplier.create(), ignoreFlagDescriptorChecksum);
     }
 
     @ParameterizedTest
@@ -217,7 +140,7 @@ public class Lz4CompressionTest {
         compressed[0] = 0x00;
         ByteBuffer buffer = ByteBuffer.wrap(compressed);
         IOException e = assertThrows(IOException.class, () -> makeInputStream(buffer, args.ignoreFlagDescriptorChecksum));
-        assertEquals(Lz4BlockInputStream.NOT_SUPPORTED, e.getMessage());
+        assertEquals(KafkaLZ4BlockInputStream.NOT_SUPPORTED, e.getMessage());
     }
 
     @ParameterizedTest
@@ -231,7 +154,7 @@ public class Lz4CompressionTest {
             makeInputStream(buffer, args.ignoreFlagDescriptorChecksum);
         } else {
             IOException e = assertThrows(IOException.class, () -> makeInputStream(buffer, args.ignoreFlagDescriptorChecksum));
-            assertEquals(Lz4BlockInputStream.DESCRIPTOR_HASH_MISMATCH, e.getMessage());
+            assertEquals(KafkaLZ4BlockInputStream.DESCRIPTOR_HASH_MISMATCH, e.getMessage());
         }
     }
 
@@ -379,7 +302,7 @@ public class Lz4CompressionTest {
     public void testSkip(Args args) throws Exception {
         if (!args.close || (args.useBrokenFlagDescriptorChecksum && !args.ignoreFlagDescriptorChecksum)) return;
 
-        final Lz4BlockInputStream in = makeInputStream(ByteBuffer.wrap(compressedBytes(args)),
+        final KafkaLZ4BlockInputStream in = makeInputStream(ByteBuffer.wrap(compressedBytes(args)),
             args.ignoreFlagDescriptorChecksum);
 
         int n = 100;
@@ -396,7 +319,7 @@ public class Lz4CompressionTest {
     private void testDecompression(ByteBuffer buffer, Args args) throws IOException {
         IOException error = null;
         try {
-            Lz4BlockInputStream decompressed = makeInputStream(buffer, args.ignoreFlagDescriptorChecksum);
+            KafkaLZ4BlockInputStream decompressed = makeInputStream(buffer, args.ignoreFlagDescriptorChecksum);
 
             byte[] testPayload = new byte[args.payload.length];
 
@@ -418,10 +341,10 @@ public class Lz4CompressionTest {
             assertArrayEquals(args.payload, testPayload);
         } catch (IOException e) {
             if (!args.ignoreFlagDescriptorChecksum && args.useBrokenFlagDescriptorChecksum) {
-                assertEquals(Lz4BlockInputStream.DESCRIPTOR_HASH_MISMATCH, e.getMessage());
+                assertEquals(KafkaLZ4BlockInputStream.DESCRIPTOR_HASH_MISMATCH, e.getMessage());
                 error = e;
             } else if (!args.close) {
-                assertEquals(Lz4BlockInputStream.PREMATURE_EOS, e.getMessage());
+                assertEquals(KafkaLZ4BlockInputStream.PREMATURE_EOS, e.getMessage());
                 error = e;
             } else {
                 throw e;
@@ -433,10 +356,9 @@ public class Lz4CompressionTest {
 
     private byte[] compressedBytes(Args args) throws IOException {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
-        Lz4BlockOutputStream lz4 = new Lz4BlockOutputStream(
+        KafkaLZ4BlockOutputStream lz4 = new KafkaLZ4BlockOutputStream(
             output,
-            Lz4BlockOutputStream.BLOCKSIZE_64KB,
-            args.level,
+            KafkaLZ4BlockOutputStream.BLOCKSIZE_64KB,
             args.blockChecksum,
             args.useBrokenFlagDescriptorChecksum
         );

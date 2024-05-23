@@ -35,7 +35,6 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.SortedSet;
-import java.util.TreeMap;
 import java.util.UUID;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.TaskId;
@@ -89,8 +88,7 @@ public class RackAwareGraphConstructorTest {
         if (constructorType.equals(MIN_COST)) {
             constructor = new MinTrafficGraphConstructor<>();
         } else if (constructorType.equals(BALANCE_SUBTOPOLOGY)) {
-            final List<Set<TaskId>> taskSetsPerTopicGroup = new ArrayList<>(new TreeMap<>(tasksForTopicGroup).values());
-            constructor = new BalanceSubtopologyGraphConstructor<>(taskSetsPerTopicGroup);
+            constructor = new BalanceSubtopologyGraphConstructor<>(tasksForTopicGroup);
         }
         graph = constructor.constructTaskGraph(
             clientList, taskIdList, clientStateMap, taskClientMap, originalAssignedTaskNumber, ClientState::hasAssignedTask, this::getCost, 10, 1, false, false);

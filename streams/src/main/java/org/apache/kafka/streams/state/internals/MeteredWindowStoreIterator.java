@@ -22,36 +22,28 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
 class MeteredWindowStoreIterator<V> implements WindowStoreIterator<V> {
 
     private final WindowStoreIterator<byte[]> iter;
-    private final Sensor operationSensor;
-    private final Sensor iteratorSensor;
+    private final Sensor sensor;
     private final StreamsMetrics metrics;
     private final Function<byte[], V> valueFrom;
     private final long startNs;
     private final Time time;
-    private final AtomicInteger numOpenIterators;
 
     MeteredWindowStoreIterator(final WindowStoreIterator<byte[]> iter,
-                               final Sensor operationSensor,
-                               final Sensor iteratorSensor,
+                               final Sensor sensor,
                                final StreamsMetrics metrics,
                                final Function<byte[], V> valueFrom,
-                               final Time time,
-                               final AtomicInteger numOpenIterators) {
+                               final Time time) {
         this.iter = iter;
-        this.operationSensor = operationSensor;
-        this.iteratorSensor = iteratorSensor;
+        this.sensor = sensor;
         this.metrics = metrics;
         this.valueFrom = valueFrom;
         this.startNs = time.nanoseconds();
         this.time = time;
-        this.numOpenIterators = numOpenIterators;
-        numOpenIterators.incrementAndGet();
     }
 
     @Override
@@ -70,10 +62,7 @@ class MeteredWindowStoreIterator<V> implements WindowStoreIterator<V> {
         try {
             iter.close();
         } finally {
-            final long duration = time.nanoseconds() - startNs;
-            operationSensor.record(duration);
-            iteratorSensor.record(duration);
-            numOpenIterators.decrementAndGet();
+            sensor.record(time.nanoseconds() - startNs);
         }
     }
 

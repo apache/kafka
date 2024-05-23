@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals.events;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.internals.OffsetAndTimestampInternal;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Timer;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -37,9 +38,9 @@ public class ListOffsetsEvent extends CompletableApplicationEvent<Map<TopicParti
     private final boolean requireTimestamps;
 
     public ListOffsetsEvent(Map<TopicPartition, Long> timestampToSearch,
-                            long deadlineMs,
+                            Timer timer,
                             boolean requireTimestamps) {
-        super(Type.LIST_OFFSETS, deadlineMs);
+        super(Type.LIST_OFFSETS, timer);
         this.timestampsToSearch = Collections.unmodifiableMap(timestampToSearch);
         this.requireTimestamps = requireTimestamps;
     }

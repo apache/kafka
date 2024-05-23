@@ -252,11 +252,6 @@ public class GroupCoordinatorConfig {
      */
     public final ConsumerGroupMigrationPolicy consumerGroupMigrationPolicy;
 
-    /**
-     * The compression type used to compress records in batches.
-     */
-    public final CompressionType compressionType;
-
     public GroupCoordinatorConfig(
         int numThreads,
         int consumerGroupSessionTimeoutMs,
@@ -273,8 +268,7 @@ public class GroupCoordinatorConfig {
         long offsetsRetentionCheckIntervalMs,
         long offsetsRetentionMs,
         int offsetCommitTimeoutMs,
-        ConsumerGroupMigrationPolicy consumerGroupMigrationPolicy,
-        CompressionType compressionType
+        ConsumerGroupMigrationPolicy consumerGroupMigrationPolicy
     ) {
         this.numThreads = numThreads;
         this.consumerGroupSessionTimeoutMs = consumerGroupSessionTimeoutMs;
@@ -292,6 +286,5 @@ public class GroupCoordinatorConfig {
         this.offsetsRetentionMs = offsetsRetentionMs;
         this.offsetCommitTimeoutMs = offsetCommitTimeoutMs;
         this.consumerGroupMigrationPolicy = consumerGroupMigrationPolicy;
-        this.compressionType = compressionType;
     }
 }

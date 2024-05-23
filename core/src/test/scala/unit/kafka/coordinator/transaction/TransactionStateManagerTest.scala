@@ -28,7 +28,6 @@ import kafka.server.{ReplicaManager, RequestLocal}
 import kafka.utils.{Pool, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME
 import org.apache.kafka.common.metrics.{JmxReporter, KafkaMetricsContext, Metrics}
 import org.apache.kafka.common.protocol.{Errors, MessageUtil}
@@ -167,7 +166,7 @@ class TransactionStateManagerTest {
     txnMetadata1.addPartitions(Set[TopicPartition](
       new TopicPartition("topic1", 0),
       new TopicPartition("topic1", 1)))
-    val records = MemoryRecords.withRecords(startOffset, Compression.NONE,
+    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
       new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit())))
 
     // We create a latch which is awaited while the log is loading. This ensures that the deletion
@@ -251,7 +250,7 @@ class TransactionStateManagerTest {
     txnRecords += new SimpleRecord(txnMessageKeyBytes2, TransactionLog.valueToBytes(txnMetadata2.prepareNoTransit()))
 
     val startOffset = 15L   // it should work for any start offset
-    val records = MemoryRecords.withRecords(startOffset, Compression.NONE, txnRecords.toArray: _*)
+    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE, txnRecords.toArray: _*)
 
     prepareTxnLog(topicPartition, startOffset, records)
 
@@ -879,7 +878,7 @@ class TransactionStateManagerTest {
 
     txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit()))
     val startOffset = 0L
-    val records = MemoryRecords.withRecords(startOffset, Compression.NONE, txnRecords.toArray: _*)
+    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE, txnRecords.toArray: _*)
 
     prepareTxnLog(topicPartition, 0, records)
 
@@ -1027,7 +1026,7 @@ class TransactionStateManagerTest {
       val partitionId = transactionManager.partitionFor(transactionalId1)
       val topicPartition = new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, partitionId)
       val expectedTombstone = new SimpleRecord(time.milliseconds(), TransactionLog.keyToBytes(transactionalId1), null)
-      val expectedRecords = MemoryRecords.withRecords(TransactionLog.EnforcedCompression, expectedTombstone)
+      val expectedRecords = MemoryRecords.withRecords(TransactionLog.EnforcedCompressionType, expectedTombstone)
       assertEquals(Set(topicPartition), appendedRecords.keySet)
       assertEquals(Seq(expectedRecords), appendedRecords(topicPartition).toSeq)
     } else {
@@ -1042,7 +1041,7 @@ class TransactionStateManagerTest {
 
     txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit()))
     val startOffset = 0L
-    val records = MemoryRecords.withRecords(startOffset, Compression.NONE, txnRecords.toArray: _*)
+    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE, txnRecords.toArray: _*)
 
     prepareTxnLog(topicPartition, 0, records)
 
@@ -1149,7 +1148,7 @@ class TransactionStateManagerTest {
     txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1.prepareNoTransit()))
 
     val startOffset = 15L
-    val records = MemoryRecords.withRecords(startOffset, Compression.NONE, txnRecords.toArray: _*)
+    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE, txnRecords.toArray: _*)
 
     prepareTxnLog(topicPartition, startOffset, records)
     transactionManager.loadTransactionsForTxnTopicPartition(partitionId, 0, (_, _, _, _) => ())
@@ -1172,7 +1171,7 @@ class TransactionStateManagerTest {
     val unknownMessage = MessageUtil.toVersionPrefixedBytes(Short.MaxValue, unknownKey)
     val unknownRecord = new SimpleRecord(unknownMessage, unknownMessage)
 
-    val records = MemoryRecords.withRecords(startOffset, Compression.NONE,
+    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
       (Seq(unknownRecord) ++ txnRecords).toArray: _*)
 
     prepareTxnLog(topicPartition, 0, records)

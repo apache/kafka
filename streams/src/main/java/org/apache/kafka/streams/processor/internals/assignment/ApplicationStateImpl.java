@@ -19,11 +19,11 @@ package org.apache.kafka.streams.processor.internals.assignment;
 import static java.util.Collections.unmodifiableSet;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import org.apache.kafka.streams.processor.assignment.TaskInfo;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor.ClientMetadata;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.ApplicationState;
@@ -35,14 +35,19 @@ import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 public class ApplicationStateImpl implements ApplicationState {
 
     private final AssignmentConfigs assignmentConfigs;
-    private final Set<TaskInfo> tasks;
+    private final Set<TaskId> statelessTasks;
+    private final Set<TaskId> statefulTasks;
+    private final Set<TaskId> allTasks;
     private final Map<UUID, ClientMetadata> clientStates;
 
     public ApplicationStateImpl(final AssignmentConfigs assignmentConfigs,
-                                final Set<TaskInfo> tasks,
+                                final Set<TaskId> statefulTasks,
+                                final Set<TaskId> statelessTasks,
                                 final Map<UUID, ClientMetadata> clientStates) {
         this.assignmentConfigs = assignmentConfigs;
-        this.tasks = unmodifiableSet(tasks);
+        this.statefulTasks = unmodifiableSet(statefulTasks);
+        this.statelessTasks = unmodifiableSet(statelessTasks);
+        this.allTasks = unmodifiableSet(computeAllTasks(statelessTasks, statefulTasks));
         this.clientStates = clientStates;
     }
 
@@ -62,8 +67,7 @@ public class ApplicationStateImpl implements ApplicationState {
                 clientState.previousStandbyTasks(),
                 clientState.taskIdsByPreviousConsumer(),
                 Optional.ofNullable(metadata.hostInfo()),
-                Optional.ofNullable(taskLagTotals),
-                metadata.rackId()
+                Optional.ofNullable(taskLagTotals)
             );
             kafkaStreamsStates.put(processId, kafkaStreamsState);
         }
@@ -77,7 +81,23 @@ public class ApplicationStateImpl implements ApplicationState {
     }
 
     @Override
-    public Set<TaskInfo> allTasks() {
-        return tasks;
+    public Set<TaskId> allTasks() {
+        return allTasks;
+    }
+
+    @Override
+    public Set<TaskId> statefulTasks() {
+        return statefulTasks;
+    }
+
+    @Override
+    public Set<TaskId> statelessTasks() {
+        return statelessTasks;
+    }
+
+    private static Set<TaskId> computeAllTasks(final Set<TaskId> statelessTasks, final Set<TaskId> statefulTasks) {
+        final Set<TaskId> union = new HashSet<>(statefulTasks);
+        union.addAll(statelessTasks);
+        return union;
     }
 }

@@ -54,8 +54,7 @@ public class KafkaStreamsStateTest {
                     mkEntry(NAMED_TASK_T0_0_0, 2000L),
                     mkEntry(NAMED_TASK_T0_0_1, 1000L)
                 )
-            ),
-            Optional.empty()
+            )
         );
 
         assertThrows(IllegalStateException.class, () -> state.lagFor(NAMED_TASK_T0_1_0));
@@ -79,7 +78,6 @@ public class KafkaStreamsStateTest {
             new TreeMap<>(mkMap(
                 mkEntry("c1", mkSet(NAMED_TASK_T0_0_0, NAMED_TASK_T0_0_1))
             )),
-            Optional.empty(),
             Optional.empty(),
             Optional.empty()
         );

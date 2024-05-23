@@ -22,6 +22,7 @@ import kafka.test.junit.RaftClusterInvocationContext;
 import kafka.test.junit.ZkClusterInvocationContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 
+import java.util.function.Consumer;
 
 /**
  * The type of cluster config being requested. Used by {@link kafka.test.ClusterConfig} and the test annotations.
@@ -29,22 +30,22 @@ import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 public enum Type {
     KRAFT {
         @Override
-        public TestTemplateInvocationContext invocationContexts(String baseDisplayName, ClusterConfig config) {
-            return new RaftClusterInvocationContext(baseDisplayName, config, false);
+        public void invocationContexts(String baseDisplayName, ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
+            invocationConsumer.accept(new RaftClusterInvocationContext(baseDisplayName, config, false));
         }
     },
     CO_KRAFT {
         @Override
-        public TestTemplateInvocationContext invocationContexts(String baseDisplayName, ClusterConfig config) {
-            return new RaftClusterInvocationContext(baseDisplayName, config, true);
+        public void invocationContexts(String baseDisplayName, ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
+            invocationConsumer.accept(new RaftClusterInvocationContext(baseDisplayName, config, true));
         }
     },
     ZK {
         @Override
-        public TestTemplateInvocationContext invocationContexts(String baseDisplayName, ClusterConfig config) {
-            return new ZkClusterInvocationContext(baseDisplayName, config);
+        public void invocationContexts(String baseDisplayName, ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer) {
+            invocationConsumer.accept(new ZkClusterInvocationContext(baseDisplayName, config));
         }
     };
 
-    public abstract TestTemplateInvocationContext invocationContexts(String baseDisplayName, ClusterConfig config);
+    public abstract void invocationContexts(String baseDisplayName, ClusterConfig config, Consumer<TestTemplateInvocationContext> invocationConsumer);
 }

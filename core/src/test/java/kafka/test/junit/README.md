@@ -42,27 +42,24 @@ annotation takes a single string value which references a static method on the t
 produce any number of test configurations using a fluent builder style API.
 
 ```java
-import java.util.Arrays;
-
 @ClusterTemplate("generateConfigs")
-void testSomething() { ...}
+void testSomething() { ... }
 
-static List<ClusterConfig> generateConfigs() {
-  ClusterConfig config1 = ClusterConfig.defaultClusterBuilder()
-          .name("Generated Test 1")
-          .serverProperties(props1)
-          .ibp("2.7-IV1")
-          .build();
-  ClusterConfig config2 = ClusterConfig.defaultClusterBuilder()
-          .name("Generated Test 2")
-          .serverProperties(props2)
-          .ibp("2.7-IV2")
-          .build();
-  ClusterConfig config3 = ClusterConfig.defaultClusterBuilder()
-          .name("Generated Test 3")
-          .serverProperties(props3)
-          .build();
-  return Arrays.asList(config1, config2, config3);
+static void generateConfigs(ClusterGenerator clusterGenerator) {
+  clusterGenerator.accept(ClusterConfig.defaultClusterBuilder()
+      .name("Generated Test 1")
+      .serverProperties(props1)
+      .ibp("2.7-IV1")
+      .build());
+  clusterGenerator.accept(ClusterConfig.defaultClusterBuilder()
+      .name("Generated Test 2")
+      .serverProperties(props2)
+      .ibp("2.7-IV2")
+      .build());
+  clusterGenerator.accept(ClusterConfig.defaultClusterBuilder()
+      .name("Generated Test 3")
+      .serverProperties(props3)
+      .build());
 }
 ```
 

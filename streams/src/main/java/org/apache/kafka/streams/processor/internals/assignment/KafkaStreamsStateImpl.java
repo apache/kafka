@@ -48,7 +48,6 @@ public class KafkaStreamsStateImpl implements KafkaStreamsState {
     private final SortedMap<String, Set<TaskId>> taskIdsByConsumer;
     private final Optional<HostInfo> hostInfo;
     private final Optional<Map<TaskId, Long>> taskLagTotals; // contains lag for all stateful tasks in the app topology
-    private final Optional<String> rackId;
 
     public KafkaStreamsStateImpl(final ProcessId processId,
                                  final int numProcessingThreads,
@@ -57,8 +56,7 @@ public class KafkaStreamsStateImpl implements KafkaStreamsState {
                                  final SortedSet<TaskId> previousStandbyTasks,
                                  final SortedMap<String, Set<TaskId>> taskIdsByConsumer,
                                  final Optional<HostInfo> hostInfo,
-                                 final Optional<Map<TaskId, Long>> taskLagTotals,
-                                 final Optional<String> rackId) {
+                                 final Optional<Map<TaskId, Long>> taskLagTotals) {
         this.processId = processId;
         this.numProcessingThreads = numProcessingThreads;
         this.clientTags = unmodifiableMap(clientTags);
@@ -67,7 +65,6 @@ public class KafkaStreamsStateImpl implements KafkaStreamsState {
         this.taskIdsByConsumer = unmodifiableSortedMap(taskIdsByConsumer);
         this.hostInfo = hostInfo;
         this.taskLagTotals = taskLagTotals;
-        this.rackId = rackId;
     }
 
     @Override
@@ -155,10 +152,5 @@ public class KafkaStreamsStateImpl implements KafkaStreamsState {
     @Override
     public Map<String, String> clientTags() {
         return clientTags;
-    }
-
-    @Override
-    public Optional<String> rackId() {
-        return rackId;
     }
 }

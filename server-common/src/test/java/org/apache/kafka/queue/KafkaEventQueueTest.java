@@ -32,10 +32,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 
 import static java.util.concurrent.TimeUnit.HOURS;
@@ -68,177 +65,167 @@ public class KafkaEventQueueTest {
         }
     }
 
-    private LogContext logContext;
-
-    @AfterAll
-    public static void tearDown() throws InterruptedException {
-        TestUtils.waitForCondition(
-                () -> Thread.getAllStackTraces().keySet().stream()
-                        .map(Thread::getName)
-                        .noneMatch(t -> t.endsWith(KafkaEventQueue.EVENT_HANDLER_THREAD_SUFFIX)),
-                "Thread leak detected"
-        );
-    }
-
-    @BeforeEach
-    public void setUp(TestInfo testInfo) {
-        logContext = new LogContext("[KafkaEventQueue test=" + testInfo.getDisplayName() + "]");
-    }
-
     @Test
     public void testCreateAndClose() throws Exception {
         KafkaEventQueue queue =
-            new KafkaEventQueue(Time.SYSTEM, logContext, "testCreateAndClose");
+            new KafkaEventQueue(Time.SYSTEM, new LogContext(), "testCreateAndClose");
         queue.close();
     }
 
     @Test
     public void testHandleEvents() throws Exception {
-        try (KafkaEventQueue queue = new KafkaEventQueue(Time.SYSTEM, logContext, "testHandleEvents")) {
-            AtomicInteger numEventsExecuted = new AtomicInteger(0);
-            CompletableFuture<Integer> future1 = new CompletableFuture<>();
-            queue.prepend(new FutureEvent<>(future1, () -> {
-                assertEquals(1, numEventsExecuted.incrementAndGet());
-                return 1;
+        KafkaEventQueue queue =
+            new KafkaEventQueue(Time.SYSTEM, new LogContext(), "testHandleEvents");
+        AtomicInteger numEventsExecuted = new AtomicInteger(0);
+        CompletableFuture<Integer> future1 = new CompletableFuture<>();
+        queue.prepend(new FutureEvent<>(future1, () -> {
+            assertEquals(1, numEventsExecuted.incrementAndGet());
+            return 1;
+        }));
+        CompletableFuture<Integer> future2 = new CompletableFuture<>();
+        queue.appendWithDeadline(Time.SYSTEM.nanoseconds() + TimeUnit.SECONDS.toNanos(60),
+            new FutureEvent<>(future2, () -> {
+                assertEquals(2, numEventsExecuted.incrementAndGet());
+                return 2;
             }));
-            CompletableFuture<Integer> future2 = new CompletableFuture<>();
-            queue.appendWithDeadline(Time.SYSTEM.nanoseconds() + TimeUnit.SECONDS.toNanos(60),
-                    new FutureEvent<>(future2, () -> {
-                        assertEquals(2, numEventsExecuted.incrementAndGet());
-                        return 2;
-                    }));
-            CompletableFuture<Integer> future3 = new CompletableFuture<>();
-            queue.append(new FutureEvent<>(future3, () -> {
-                assertEquals(3, numEventsExecuted.incrementAndGet());
-                return 3;
+        CompletableFuture<Integer> future3 = new CompletableFuture<>();
+        queue.append(new FutureEvent<>(future3, () -> {
+            assertEquals(3, numEventsExecuted.incrementAndGet());
+            return 3;
+        }));
+        assertEquals(Integer.valueOf(1), future1.get());
+        assertEquals(Integer.valueOf(3), future3.get());
+        assertEquals(Integer.valueOf(2), future2.get());
+        CompletableFuture<Integer> future4 = new CompletableFuture<>();
+        queue.appendWithDeadline(Time.SYSTEM.nanoseconds() + TimeUnit.SECONDS.toNanos(60),
+            new FutureEvent<>(future4, () -> {
+                assertEquals(4, numEventsExecuted.incrementAndGet());
+                return 4;
             }));
-            assertEquals(Integer.valueOf(1), future1.get());
-            assertEquals(Integer.valueOf(3), future3.get());
-            assertEquals(Integer.valueOf(2), future2.get());
-            CompletableFuture<Integer> future4 = new CompletableFuture<>();
-            queue.appendWithDeadline(Time.SYSTEM.nanoseconds() + TimeUnit.SECONDS.toNanos(60),
-                    new FutureEvent<>(future4, () -> {
-                        assertEquals(4, numEventsExecuted.incrementAndGet());
-                        return 4;
-                    }));
-            future4.get();
-        }
+        future4.get();
+        queue.beginShutdown("testHandleEvents");
+        queue.close();
     }
 
     @Test
     public void testTimeouts() throws Exception {
-        try (KafkaEventQueue queue = new KafkaEventQueue(Time.SYSTEM, logContext, "testTimeouts")) {
-            AtomicInteger numEventsExecuted = new AtomicInteger(0);
-            CompletableFuture<Integer> future1 = new CompletableFuture<>();
-            queue.append(new FutureEvent<>(future1, () -> {
-                assertEquals(1, numEventsExecuted.incrementAndGet());
-                return 1;
-            }));
-            CompletableFuture<Integer> future2 = new CompletableFuture<>();
-            queue.append(new FutureEvent<>(future2, () -> {
-                assertEquals(2, numEventsExecuted.incrementAndGet());
-                Time.SYSTEM.sleep(1);
-                return 2;
-            }));
-            CompletableFuture<Integer> future3 = new CompletableFuture<>();
-            queue.appendWithDeadline(Time.SYSTEM.nanoseconds() + 1,
-                    new FutureEvent<>(future3, () -> {
-                        numEventsExecuted.incrementAndGet();
-                        return 3;
-                    }));
-            CompletableFuture<Integer> future4 = new CompletableFuture<>();
-            queue.append(new FutureEvent<>(future4, () -> {
+        KafkaEventQueue queue =
+            new KafkaEventQueue(Time.SYSTEM, new LogContext(), "testTimeouts");
+        AtomicInteger numEventsExecuted = new AtomicInteger(0);
+        CompletableFuture<Integer> future1 = new CompletableFuture<>();
+        queue.append(new FutureEvent<>(future1, () -> {
+            assertEquals(1, numEventsExecuted.incrementAndGet());
+            return 1;
+        }));
+        CompletableFuture<Integer> future2 = new CompletableFuture<>();
+        queue.append(new FutureEvent<>(future2, () -> {
+            assertEquals(2, numEventsExecuted.incrementAndGet());
+            Time.SYSTEM.sleep(1);
+            return 2;
+        }));
+        CompletableFuture<Integer> future3 = new CompletableFuture<>();
+        queue.appendWithDeadline(Time.SYSTEM.nanoseconds() + 1,
+            new FutureEvent<>(future3, () -> {
                 numEventsExecuted.incrementAndGet();
-                return 4;
+                return 3;
             }));
-            assertEquals(Integer.valueOf(1), future1.get());
-            assertEquals(Integer.valueOf(2), future2.get());
-            assertEquals(Integer.valueOf(4), future4.get());
-            assertEquals(TimeoutException.class,
-                    assertThrows(ExecutionException.class,
-                            () -> future3.get()).getCause().getClass());
-            assertEquals(3, numEventsExecuted.get());
-        }
+        CompletableFuture<Integer> future4 = new CompletableFuture<>();
+        queue.append(new FutureEvent<>(future4, () -> {
+            numEventsExecuted.incrementAndGet();
+            return 4;
+        }));
+        assertEquals(Integer.valueOf(1), future1.get());
+        assertEquals(Integer.valueOf(2), future2.get());
+        assertEquals(Integer.valueOf(4), future4.get());
+        assertEquals(TimeoutException.class,
+            assertThrows(ExecutionException.class,
+                () -> future3.get()).getCause().getClass());
+        queue.close();
+        assertEquals(3, numEventsExecuted.get());
     }
 
     @Test
     public void testScheduleDeferred() throws Exception {
-        try (KafkaEventQueue queue = new KafkaEventQueue(Time.SYSTEM, logContext, "testAppendDeferred")) {
+        KafkaEventQueue queue =
+            new KafkaEventQueue(Time.SYSTEM, new LogContext(), "testAppendDeferred");
 
-            // Wait for the deferred event to happen after the non-deferred event.
-            // It may not happen every time, so we keep trying until it does.
-            AtomicLong counter = new AtomicLong(0);
-            CompletableFuture<Boolean> future1;
-            do {
-                counter.addAndGet(1);
-                future1 = new CompletableFuture<>();
-                queue.scheduleDeferred(null,
-                        __ -> OptionalLong.of(Time.SYSTEM.nanoseconds() + 1000000),
-                        new FutureEvent<>(future1, () -> counter.get() % 2 == 0));
-                CompletableFuture<Long> future2 = new CompletableFuture<>();
-                queue.append(new FutureEvent<>(future2, () -> counter.addAndGet(1)));
-                future2.get();
-            } while (!future1.get());
-        }
+        // Wait for the deferred event to happen after the non-deferred event.
+        // It may not happen every time, so we keep trying until it does.
+        AtomicLong counter = new AtomicLong(0);
+        CompletableFuture<Boolean> future1;
+        do {
+            counter.addAndGet(1);
+            future1 = new CompletableFuture<>();
+            queue.scheduleDeferred(null,
+                __ -> OptionalLong.of(Time.SYSTEM.nanoseconds() + 1000000),
+                    new FutureEvent<>(future1, () -> counter.get() % 2 == 0));
+            CompletableFuture<Long> future2 = new CompletableFuture<>();
+            queue.append(new FutureEvent<>(future2, () -> counter.addAndGet(1)));
+            future2.get();
+        } while (!future1.get());
+        queue.close();
     }
 
     private final static long ONE_HOUR_NS = TimeUnit.NANOSECONDS.convert(1, HOURS);
 
     @Test
     public void testScheduleDeferredWithTagReplacement() throws Exception {
-        try (KafkaEventQueue queue = new KafkaEventQueue(Time.SYSTEM, logContext, "testScheduleDeferredWithTagReplacement")) {
+        KafkaEventQueue queue = new KafkaEventQueue(Time.SYSTEM, new LogContext(),
+            "testScheduleDeferredWithTagReplacement");
 
-            AtomicInteger ai = new AtomicInteger(0);
-            CompletableFuture<Integer> future1 = new CompletableFuture<>();
-            queue.scheduleDeferred("foo",
-                    __ -> OptionalLong.of(Time.SYSTEM.nanoseconds() + ONE_HOUR_NS),
-                    new FutureEvent<>(future1, () -> ai.addAndGet(1000)));
-            CompletableFuture<Integer> future2 = new CompletableFuture<>();
-            queue.scheduleDeferred("foo", prev -> OptionalLong.of(prev.orElse(0) - ONE_HOUR_NS),
-                    new FutureEvent<>(future2, () -> ai.addAndGet(1)));
-            assertFalse(future1.isDone());
-            assertEquals(Integer.valueOf(1), future2.get());
-            assertEquals(1, ai.get());
-        }
+        AtomicInteger ai = new AtomicInteger(0);
+        CompletableFuture<Integer> future1 = new CompletableFuture<>();
+        queue.scheduleDeferred("foo",
+            __ -> OptionalLong.of(Time.SYSTEM.nanoseconds() + ONE_HOUR_NS),
+                new FutureEvent<>(future1, () -> ai.addAndGet(1000)));
+        CompletableFuture<Integer> future2 = new CompletableFuture<>();
+        queue.scheduleDeferred("foo", prev -> OptionalLong.of(prev.orElse(0) - ONE_HOUR_NS),
+                new FutureEvent<>(future2, () -> ai.addAndGet(1)));
+        assertFalse(future1.isDone());
+        assertEquals(Integer.valueOf(1), future2.get());
+        assertEquals(1, ai.get());
+        queue.close();
     }
 
     @Test
     public void testDeferredIsQueuedAfterTriggering() throws Exception {
         MockTime time = new MockTime(0, 100000, 1);
-        try (KafkaEventQueue queue = new KafkaEventQueue(time, logContext, "testDeferredIsQueuedAfterTriggering")) {
-            AtomicInteger count = new AtomicInteger(0);
-            List<CompletableFuture<Integer>> futures = Arrays.asList(
-                    new CompletableFuture<>(),
-                    new CompletableFuture<>(),
-                    new CompletableFuture<>());
-            queue.scheduleDeferred("foo", __ -> OptionalLong.of(2L),
-                    new FutureEvent<>(futures.get(0), () -> count.getAndIncrement()));
-            queue.append(new FutureEvent<>(futures.get(1), () -> count.getAndAdd(1)));
-            assertEquals(Integer.valueOf(0), futures.get(1).get());
-            time.sleep(1);
-            queue.append(new FutureEvent<>(futures.get(2), () -> count.getAndAdd(1)));
-            assertEquals(Integer.valueOf(1), futures.get(0).get());
-            assertEquals(Integer.valueOf(2), futures.get(2).get());
-        }
+        KafkaEventQueue queue = new KafkaEventQueue(time, new LogContext(),
+            "testDeferredIsQueuedAfterTriggering");
+        AtomicInteger count = new AtomicInteger(0);
+        List<CompletableFuture<Integer>> futures = Arrays.asList(
+                new CompletableFuture<>(),
+                new CompletableFuture<>(),
+                new CompletableFuture<>());
+        queue.scheduleDeferred("foo", __ -> OptionalLong.of(2L),
+            new FutureEvent<>(futures.get(0), () -> count.getAndIncrement()));
+        queue.append(new FutureEvent<>(futures.get(1), () -> count.getAndAdd(1)));
+        assertEquals(Integer.valueOf(0), futures.get(1).get());
+        time.sleep(1);
+        queue.append(new FutureEvent<>(futures.get(2), () -> count.getAndAdd(1)));
+        assertEquals(Integer.valueOf(1), futures.get(0).get());
+        assertEquals(Integer.valueOf(2), futures.get(2).get());
+        queue.close();
     }
 
     @Test
     public void testShutdownBeforeDeferred() throws Exception {
-        try (KafkaEventQueue queue = new KafkaEventQueue(Time.SYSTEM, logContext, "testShutdownBeforeDeferred")) {
-            final AtomicInteger count = new AtomicInteger(0);
-            CompletableFuture<Integer> future = new CompletableFuture<>();
-            queue.scheduleDeferred("myDeferred",
-                    __ -> OptionalLong.of(Time.SYSTEM.nanoseconds() + HOURS.toNanos(1)),
-                    new FutureEvent<>(future, () -> count.getAndAdd(1)));
-            queue.beginShutdown("testShutdownBeforeDeferred");
-            assertEquals(RejectedExecutionException.class, assertThrows(ExecutionException.class, () -> future.get()).getCause().getClass());
-            assertEquals(0, count.get());
-        }
+        KafkaEventQueue queue = new KafkaEventQueue(Time.SYSTEM, new LogContext(),
+            "testShutdownBeforeDeferred");
+        final AtomicInteger count = new AtomicInteger(0);
+        CompletableFuture<Integer> future = new CompletableFuture<>();
+        queue.scheduleDeferred("myDeferred",
+            __ -> OptionalLong.of(Time.SYSTEM.nanoseconds() + HOURS.toNanos(1)),
+            new FutureEvent<>(future, () -> count.getAndAdd(1)));
+        queue.beginShutdown("testShutdownBeforeDeferred");
+        assertEquals(RejectedExecutionException.class, assertThrows(ExecutionException.class, () -> future.get()).getCause().getClass());
+        assertEquals(0, count.get());
+        queue.close();
     }
 
     @Test
     public void testRejectedExecutionException() throws Exception {
-        KafkaEventQueue queue = new KafkaEventQueue(Time.SYSTEM, logContext,
+        KafkaEventQueue queue = new KafkaEventQueue(Time.SYSTEM, new LogContext(),
             "testRejectedExecutionException");
         queue.close();
         CompletableFuture<Void> future = new CompletableFuture<>();
@@ -259,31 +246,30 @@ public class KafkaEventQueueTest {
 
     @Test
     public void testSize() throws Exception {
-        try (KafkaEventQueue queue = new KafkaEventQueue(Time.SYSTEM, logContext, "testEmpty")) {
-            assertTrue(queue.isEmpty());
-            CompletableFuture<Void> future = new CompletableFuture<>();
-            queue.append(() -> future.get());
-            assertFalse(queue.isEmpty());
-            assertEquals(1, queue.size());
-            queue.append(() -> future.get());
-            assertEquals(2, queue.size());
-            future.complete(null);
-            TestUtils.waitForCondition(() -> queue.isEmpty(), "Failed to see the queue become empty.");
-            queue.scheduleDeferred("later",
-                    __ -> OptionalLong.of(Time.SYSTEM.nanoseconds() + HOURS.toNanos(1)),
-                    () -> {
-                    });
-            assertFalse(queue.isEmpty());
-            queue.scheduleDeferred("soon",
-                    __ -> OptionalLong.of(Time.SYSTEM.nanoseconds() + TimeUnit.MILLISECONDS.toNanos(1)),
-                    () -> {
-                    });
-            assertFalse(queue.isEmpty());
-            queue.cancelDeferred("later");
-            queue.cancelDeferred("soon");
-            TestUtils.waitForCondition(() -> queue.isEmpty(), "Failed to see the queue become empty.");
-            assertTrue(queue.isEmpty());
-        }
+        KafkaEventQueue queue = new KafkaEventQueue(Time.SYSTEM, new LogContext(),
+                "testEmpty");
+        assertTrue(queue.isEmpty());
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        queue.append(() -> future.get());
+        assertFalse(queue.isEmpty());
+        assertEquals(1, queue.size());
+        queue.append(() -> future.get());
+        assertEquals(2, queue.size());
+        future.complete(null);
+        TestUtils.waitForCondition(() -> queue.isEmpty(), "Failed to see the queue become empty.");
+        queue.scheduleDeferred("later",
+                __ -> OptionalLong.of(Time.SYSTEM.nanoseconds() + HOURS.toNanos(1)),
+                () -> { });
+        assertFalse(queue.isEmpty());
+        queue.scheduleDeferred("soon",
+                __ -> OptionalLong.of(Time.SYSTEM.nanoseconds() + TimeUnit.MILLISECONDS.toNanos(1)),
+                () -> { });
+        assertFalse(queue.isEmpty());
+        queue.cancelDeferred("later");
+        queue.cancelDeferred("soon");
+        TestUtils.waitForCondition(() -> queue.isEmpty(), "Failed to see the queue become empty.");
+        queue.close();
+        assertTrue(queue.isEmpty());
     }
 
     /**
@@ -291,31 +277,32 @@ public class KafkaEventQueueTest {
      */
     @Test
     public void testHandleExceptionThrowingAnException() throws Exception {
-        try (KafkaEventQueue queue = new KafkaEventQueue(Time.SYSTEM, logContext, "testHandleExceptionThrowingAnException")) {
-            CompletableFuture<Void> initialFuture = new CompletableFuture<>();
-            queue.append(() -> initialFuture.get());
-            AtomicInteger counter = new AtomicInteger(0);
-            queue.append(new EventQueue.Event() {
-                @Override
-                public void run() {
-                    counter.incrementAndGet();
-                    throw new IllegalStateException("First exception");
-                }
+        KafkaEventQueue queue = new KafkaEventQueue(Time.SYSTEM, new LogContext(),
+                "testHandleExceptionThrowingAnException");
+        CompletableFuture<Void> initialFuture = new CompletableFuture<>();
+        queue.append(() -> initialFuture.get());
+        AtomicInteger counter = new AtomicInteger(0);
+        queue.append(new EventQueue.Event() {
+            @Override
+            public void run() {
+                counter.incrementAndGet();
+                throw new IllegalStateException("First exception");
+            }
 
-                @Override
-                public void handleException(Throwable e) {
-                    if (e instanceof IllegalStateException) {
-                        counter.incrementAndGet();
-                        throw new RuntimeException("Second exception");
-                    }
+            @Override
+            public void handleException(Throwable e) {
+                if (e instanceof IllegalStateException) {
+                    counter.incrementAndGet();
+                    throw new RuntimeException("Second exception");
                 }
-            });
-            queue.append(() -> counter.incrementAndGet());
-            assertEquals(3, queue.size());
-            initialFuture.complete(null);
-            TestUtils.waitForCondition(() -> counter.get() == 3,
-                    "Failed to see all events execute as planned.");
-        }
+            }
+        });
+        queue.append(() -> counter.incrementAndGet());
+        assertEquals(3, queue.size());
+        initialFuture.complete(null);
+        TestUtils.waitForCondition(() -> counter.get() == 3,
+                "Failed to see all events execute as planned.");
+        queue.close();
     }
 
     private static class InterruptibleEvent implements EventQueue.Event {
@@ -353,20 +340,21 @@ public class KafkaEventQueueTest {
 
     @Test
     public void testInterruptedExceptionHandling() throws Exception {
-        try (KafkaEventQueue queue = new KafkaEventQueue(Time.SYSTEM, logContext, "testInterruptedExceptionHandling")) {
-            CompletableFuture<Thread> queueThread = new CompletableFuture<>();
-            AtomicInteger numCallsToRun = new AtomicInteger(0);
-            AtomicInteger numInterruptedExceptionsSeen = new AtomicInteger(0);
-            queue.append(new InterruptibleEvent(queueThread, numCallsToRun, numInterruptedExceptionsSeen));
-            queue.append(new InterruptibleEvent(queueThread, numCallsToRun, numInterruptedExceptionsSeen));
-            queue.append(new InterruptibleEvent(queueThread, numCallsToRun, numInterruptedExceptionsSeen));
-            queue.append(new InterruptibleEvent(queueThread, numCallsToRun, numInterruptedExceptionsSeen));
-            queueThread.get().interrupt();
-            TestUtils.retryOnExceptionWithTimeout(30000,
-                    () -> assertEquals(1, numCallsToRun.get()));
-            TestUtils.retryOnExceptionWithTimeout(30000,
-                    () -> assertEquals(3, numInterruptedExceptionsSeen.get()));
-        }
+        KafkaEventQueue queue = new KafkaEventQueue(Time.SYSTEM, new LogContext(),
+                "testInterruptedExceptionHandling");
+        CompletableFuture<Thread> queueThread = new CompletableFuture<>();
+        AtomicInteger numCallsToRun = new AtomicInteger(0);
+        AtomicInteger numInterruptedExceptionsSeen = new AtomicInteger(0);
+        queue.append(new InterruptibleEvent(queueThread, numCallsToRun, numInterruptedExceptionsSeen));
+        queue.append(new InterruptibleEvent(queueThread, numCallsToRun, numInterruptedExceptionsSeen));
+        queue.append(new InterruptibleEvent(queueThread, numCallsToRun, numInterruptedExceptionsSeen));
+        queue.append(new InterruptibleEvent(queueThread, numCallsToRun, numInterruptedExceptionsSeen));
+        queueThread.get().interrupt();
+        TestUtils.retryOnExceptionWithTimeout(30000,
+                () -> assertEquals(1, numCallsToRun.get()));
+        TestUtils.retryOnExceptionWithTimeout(30000,
+                () -> assertEquals(3, numInterruptedExceptionsSeen.get()));
+        queue.close();
     }
 
     static class ExceptionTrapperEvent implements EventQueue.Event {
@@ -386,41 +374,42 @@ public class KafkaEventQueueTest {
     @Test
     public void testInterruptedWithEmptyQueue() throws Exception {
         CompletableFuture<Void> cleanupFuture = new CompletableFuture<>();
-        try (KafkaEventQueue queue = new KafkaEventQueue(Time.SYSTEM, logContext, "testInterruptedWithEmptyQueue", () -> cleanupFuture.complete(null))) {
-            CompletableFuture<Thread> queueThread = new CompletableFuture<>();
-            queue.append(() -> queueThread.complete(Thread.currentThread()));
-            TestUtils.retryOnExceptionWithTimeout(30000, () -> assertEquals(0, queue.size()));
-            queueThread.get().interrupt();
-            cleanupFuture.get();
-            ExceptionTrapperEvent ieTrapper = new ExceptionTrapperEvent();
-            queue.append(ieTrapper);
-            assertEquals(InterruptedException.class, ieTrapper.exception.get().getClass());
-            queue.close();
-            ExceptionTrapperEvent reTrapper = new ExceptionTrapperEvent();
-            queue.append(reTrapper);
-            assertEquals(RejectedExecutionException.class, reTrapper.exception.get().getClass());
-        }
+        KafkaEventQueue queue = new KafkaEventQueue(Time.SYSTEM, new LogContext(),
+                "testInterruptedWithEmptyQueue", () -> cleanupFuture.complete(null));
+        CompletableFuture<Thread> queueThread = new CompletableFuture<>();
+        queue.append(() -> queueThread.complete(Thread.currentThread()));
+        TestUtils.retryOnExceptionWithTimeout(30000, () -> assertEquals(0, queue.size()));
+        queueThread.get().interrupt();
+        cleanupFuture.get();
+        ExceptionTrapperEvent ieTrapper = new ExceptionTrapperEvent();
+        queue.append(ieTrapper);
+        assertEquals(InterruptedException.class, ieTrapper.exception.get().getClass());
+        queue.close();
+        ExceptionTrapperEvent reTrapper = new ExceptionTrapperEvent();
+        queue.append(reTrapper);
+        assertEquals(RejectedExecutionException.class, reTrapper.exception.get().getClass());
     }
 
     @Test
     public void testInterruptedWithDeferredEvents() throws Exception {
         CompletableFuture<Void> cleanupFuture = new CompletableFuture<>();
-        try (KafkaEventQueue queue = new KafkaEventQueue(Time.SYSTEM, logContext, "testInterruptedWithDeferredEvents", () -> cleanupFuture.complete(null))) {
-            CompletableFuture<Thread> queueThread = new CompletableFuture<>();
-            queue.append(() -> queueThread.complete(Thread.currentThread()));
-            ExceptionTrapperEvent ieTrapper1 = new ExceptionTrapperEvent();
-            ExceptionTrapperEvent ieTrapper2 = new ExceptionTrapperEvent();
-            queue.scheduleDeferred("ie2",
-                    __ -> OptionalLong.of(Time.SYSTEM.nanoseconds() + HOURS.toNanos(2)),
-                    ieTrapper2);
-            queue.scheduleDeferred("ie1",
-                    __ -> OptionalLong.of(Time.SYSTEM.nanoseconds() + HOURS.toNanos(1)),
-                    ieTrapper1);
-            TestUtils.retryOnExceptionWithTimeout(30000, () -> assertEquals(2, queue.size()));
-            queueThread.get().interrupt();
-            cleanupFuture.get();
-            assertEquals(InterruptedException.class, ieTrapper1.exception.get().getClass());
-            assertEquals(InterruptedException.class, ieTrapper2.exception.get().getClass());
-        }
+        KafkaEventQueue queue = new KafkaEventQueue(Time.SYSTEM, new LogContext(),
+                "testInterruptedWithDeferredEvents", () -> cleanupFuture.complete(null));
+        CompletableFuture<Thread> queueThread = new CompletableFuture<>();
+        queue.append(() -> queueThread.complete(Thread.currentThread()));
+        ExceptionTrapperEvent ieTrapper1 = new ExceptionTrapperEvent();
+        ExceptionTrapperEvent ieTrapper2 = new ExceptionTrapperEvent();
+        queue.scheduleDeferred("ie2",
+                __ -> OptionalLong.of(Time.SYSTEM.nanoseconds() + HOURS.toNanos(2)),
+                ieTrapper2);
+        queue.scheduleDeferred("ie1",
+                __ -> OptionalLong.of(Time.SYSTEM.nanoseconds() + HOURS.toNanos(1)),
+                ieTrapper1);
+        TestUtils.retryOnExceptionWithTimeout(30000, () -> assertEquals(2, queue.size()));
+        queueThread.get().interrupt();
+        cleanupFuture.get();
+        assertEquals(InterruptedException.class, ieTrapper1.exception.get().getClass());
+        assertEquals(InterruptedException.class, ieTrapper2.exception.get().getClass());
+        queue.close();
     }
 }

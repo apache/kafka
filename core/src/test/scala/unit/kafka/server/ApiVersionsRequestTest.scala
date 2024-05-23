@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.test.{ClusterConfig, ClusterInstance}
+import kafka.test.{ClusterConfig, ClusterGenerator, ClusterInstance}
 import org.apache.kafka.common.message.ApiVersionsRequestData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.ApiVersionsRequest
@@ -26,7 +26,6 @@ import kafka.test.junit.ClusterTestExtensions
 import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.extension.ExtendWith
-import scala.jdk.CollectionConverters._
 
 object ApiVersionsRequestTest {
 
@@ -40,42 +39,42 @@ object ApiVersionsRequestTest {
     serverProperties
   }
 
-  def testApiVersionsRequestTemplate(): java.util.List[ClusterConfig] = {
+  def testApiVersionsRequestTemplate(clusterGenerator: ClusterGenerator): Unit = {
     val serverProperties: java.util.HashMap[String, String] = controlPlaneListenerProperties()
     serverProperties.put("unstable.api.versions.enable", "false")
     serverProperties.put("unstable.metadata.versions.enable", "true")
-    List(ClusterConfig.defaultBuilder()
+    clusterGenerator.accept(ClusterConfig.defaultBuilder()
       .setTypes(java.util.Collections.singleton(Type.ZK))
       .setServerProperties(serverProperties)
       .setMetadataVersion(MetadataVersion.IBP_3_8_IV0)
-      .build()).asJava
+      .build())
   }
 
-  def testApiVersionsRequestIncludesUnreleasedApisTemplate(): java.util.List[ClusterConfig] = {
+  def testApiVersionsRequestIncludesUnreleasedApisTemplate(clusterGenerator: ClusterGenerator): Unit = {
     val serverProperties: java.util.HashMap[String, String] = controlPlaneListenerProperties()
     serverProperties.put("unstable.api.versions.enable", "true")
     serverProperties.put("unstable.metadata.versions.enable", "true")
-    List(ClusterConfig.defaultBuilder()
+    clusterGenerator.accept(ClusterConfig.defaultBuilder()
       .setTypes(java.util.Collections.singleton(Type.ZK))
       .setServerProperties(serverProperties)
-      .build()).asJava
+      .build())
   }
 
-  def testApiVersionsRequestValidationV0Template(): java.util.List[ClusterConfig] = {
+  def testApiVersionsRequestValidationV0Template(clusterGenerator: ClusterGenerator): Unit = {
     val serverProperties: java.util.HashMap[String, String] = controlPlaneListenerProperties()
     serverProperties.put("unstable.api.versions.enable", "false")
     serverProperties.put("unstable.metadata.versions.enable", "false")
-    List(ClusterConfig.defaultBuilder()
+    clusterGenerator.accept(ClusterConfig.defaultBuilder()
       .setTypes(java.util.Collections.singleton(Type.ZK))
       .setMetadataVersion(MetadataVersion.IBP_3_7_IV4)
-      .build()).asJava
+      .build())
   }
 
-  def zkApiVersionsRequest(): java.util.List[ClusterConfig] = {
-    List(ClusterConfig.defaultBuilder()
+  def zkApiVersionsRequest(clusterGenerator: ClusterGenerator): Unit = {
+    clusterGenerator.accept(ClusterConfig.defaultBuilder()
       .setTypes(java.util.Collections.singleton(Type.ZK))
       .setServerProperties(controlPlaneListenerProperties())
-      .build()).asJava
+      .build())
   }
 }
 

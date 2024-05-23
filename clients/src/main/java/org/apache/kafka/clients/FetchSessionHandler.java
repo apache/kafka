@@ -599,9 +599,7 @@ public class FetchSessionHandler {
      * The client will initiate the session close on next fetch request.
      */
     public void notifyClose() {
-        if (log.isDebugEnabled()) {
-            log.debug("Set the metadata for next fetch request to close the existing session ID={}", nextMetadata.sessionId());
-        }
+        log.debug("Set the metadata for next fetch request to close the existing session ID={}", nextMetadata.sessionId());
         nextMetadata = nextMetadata.nextCloseExisting();
     }
 

@@ -17,7 +17,6 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.network.TransferableChannel;
@@ -113,20 +112,19 @@ public class LazyDownConversionRecordsTest {
         assertEquals(offsets.size(), records.size(), "incorrect test setup");
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
-        Compression compression = Compression.of(compressionType).build();
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compression,
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compressionType,
                 TimestampType.CREATE_TIME, 0L);
         for (int i = 0; i < 3; i++)
             builder.appendWithOffset(offsets.get(i), records.get(i));
         builder.close();
 
-        builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compression, TimestampType.CREATE_TIME,
+        builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compressionType, TimestampType.CREATE_TIME,
                 0L);
         for (int i = 3; i < 6; i++)
             builder.appendWithOffset(offsets.get(i), records.get(i));
         builder.close();
 
-        builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compression, TimestampType.CREATE_TIME,
+        builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compressionType, TimestampType.CREATE_TIME,
                 0L);
         for (int i = 6; i < 10; i++)
             builder.appendWithOffset(offsets.get(i), records.get(i));

@@ -36,9 +36,6 @@ import org.slf4j.Logger;
 
 
 public final class KafkaEventQueue implements EventQueue {
-
-    public static final String EVENT_HANDLER_THREAD_SUFFIX = "event-handler";
-
     /**
      * A context object that wraps events.
      */
@@ -457,7 +454,7 @@ public final class KafkaEventQueue implements EventQueue {
         this.lock = new ReentrantLock();
         this.log = logContext.logger(KafkaEventQueue.class);
         this.eventHandler = new EventHandler();
-        this.eventHandlerThread = new KafkaThread(threadNamePrefix + EVENT_HANDLER_THREAD_SUFFIX,
+        this.eventHandlerThread = new KafkaThread(threadNamePrefix + "event-handler",
             this.eventHandler, false);
         this.shuttingDown = false;
         this.interrupted = false;

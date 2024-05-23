@@ -57,7 +57,6 @@ import org.apache.kafka.common.network.ClientInformation;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.TransactionResult;
@@ -132,8 +131,7 @@ public class GroupCoordinatorServiceTest {
             600000L,
             24 * 60 * 1000L,
             5000,
-            ConsumerGroupMigrationPolicy.DISABLED,
-            CompressionType.NONE
+            ConsumerGroupMigrationPolicy.DISABLED
         );
     }
 
@@ -676,10 +674,9 @@ public class GroupCoordinatorServiceTest {
 
         service.startup(() -> 1);
 
-        when(runtime.scheduleWriteOperation(
+        when(runtime.scheduleReadOperation(
             ArgumentMatchers.eq("classic-group-heartbeat"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(
             new HeartbeatResponseData()
@@ -709,10 +706,9 @@ public class GroupCoordinatorServiceTest {
 
         service.startup(() -> 1);
 
-        when(runtime.scheduleWriteOperation(
+        when(runtime.scheduleReadOperation(
             ArgumentMatchers.eq("classic-group-heartbeat"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(
             new CoordinatorLoadInProgressException(null)
@@ -742,10 +738,9 @@ public class GroupCoordinatorServiceTest {
 
         service.startup(() -> 1);
 
-        when(runtime.scheduleWriteOperation(
+        when(runtime.scheduleReadOperation(
             ArgumentMatchers.eq("classic-group-heartbeat"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
-            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(
             new RebalanceInProgressException()

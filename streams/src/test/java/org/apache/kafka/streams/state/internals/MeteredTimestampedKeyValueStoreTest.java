@@ -29,6 +29,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -52,13 +53,10 @@ import org.mockito.junit.MockitoJUnitRunner;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.not;
-import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -95,7 +93,6 @@ public class MeteredTimestampedKeyValueStoreTest {
     private KeyValueStore<Bytes, byte[]> inner;
     @Mock
     private InternalProcessorContext context;
-    private MockTime mockTime;
 
     private final static Map<String, Object> CONFIGS =  mkMap(mkEntry(StreamsConfig.InternalConfig.TOPIC_PREFIX_ALTERNATIVE, APPLICATION_ID));
 
@@ -108,7 +105,7 @@ public class MeteredTimestampedKeyValueStoreTest {
 
     @Before
     public void before() {
-        mockTime = new MockTime();
+        final Time mockTime = new MockTime();
         metered = new MeteredTimestampedKeyValueStore<>(
             inner,
             "scope",
@@ -439,52 +436,5 @@ public class MeteredTimestampedKeyValueStoreTest {
             }
             throw exception;
         }
-    }
-
-    @Test
-    public void shouldTrackOpenIteratorsMetric() {
-        when(inner.all()).thenReturn(KeyValueIterators.emptyIterator());
-        init();
-
-        final KafkaMetric openIteratorsMetric = metric("num-open-iterators");
-        assertThat(openIteratorsMetric, not(nullValue()));
-
-        assertThat((Integer) openIteratorsMetric.metricValue(), equalTo(0));
-
-        try (final KeyValueIterator<String, ValueAndTimestamp<String>> iterator = metered.all()) {
-            assertThat((Integer) openIteratorsMetric.metricValue(), equalTo(1));
-        }
-
-        assertThat((Integer) openIteratorsMetric.metricValue(), equalTo(0));
-    }
-
-    @Test
-    public void shouldTimeIteratorDuration() {
-        when(inner.all()).thenReturn(KeyValueIterators.emptyIterator());
-        init();
-
-        final KafkaMetric iteratorDurationAvgMetric = metric("iterator-duration-avg");
-        final KafkaMetric iteratorDurationMaxMetric = metric("iterator-duration-max");
-        assertThat(iteratorDurationAvgMetric, not(nullValue()));
-        assertThat(iteratorDurationMaxMetric, not(nullValue()));
-
-        assertThat((Double) iteratorDurationAvgMetric.metricValue(), equalTo(Double.NaN));
-        assertThat((Double) iteratorDurationMaxMetric.metricValue(), equalTo(Double.NaN));
-
-        try (final KeyValueIterator<String, ValueAndTimestamp<String>> iterator = metered.all()) {
-            // nothing to do, just close immediately
-            mockTime.sleep(2);
-        }
-
-        assertThat((double) iteratorDurationAvgMetric.metricValue(), equalTo(2.0 * TimeUnit.MILLISECONDS.toNanos(1)));
-        assertThat((double) iteratorDurationMaxMetric.metricValue(), equalTo(2.0 * TimeUnit.MILLISECONDS.toNanos(1)));
-
-        try (final KeyValueIterator<String, ValueAndTimestamp<String>> iterator = metered.all()) {
-            // nothing to do, just close immediately
-            mockTime.sleep(3);
-        }
-
-        assertThat((double) iteratorDurationAvgMetric.metricValue(), equalTo(2.5 * TimeUnit.MILLISECONDS.toNanos(1)));
-        assertThat((double) iteratorDurationMaxMetric.metricValue(), equalTo(3.0 * TimeUnit.MILLISECONDS.toNanos(1)));
     }
 }

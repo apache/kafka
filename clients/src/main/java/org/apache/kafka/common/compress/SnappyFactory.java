@@ -14,41 +14,37 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.compress;
 
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
+import org.xerial.snappy.SnappyInputStream;
+import org.xerial.snappy.SnappyOutputStream;
 
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 
-public class NoCompression implements Compression {
+public class SnappyFactory {
 
-    private NoCompression() {}
+    private SnappyFactory() { }
 
-    @Override
-    public CompressionType type() {
-        return CompressionType.NONE;
-    }
-
-    @Override
-    public OutputStream wrapForOutput(ByteBufferOutputStream bufferStream, byte messageVersion) {
-        return bufferStream;
-    }
-
-    @Override
-    public InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
-        return new ByteBufferInputStream(buffer);
-    }
-
-    public static class Builder implements Compression.Builder<NoCompression> {
-
-        @Override
-        public NoCompression build() {
-            return new NoCompression();
+    public static OutputStream wrapForOutput(ByteBufferOutputStream buffer) {
+        try {
+            return new SnappyOutputStream(buffer);
+        } catch (Throwable e) {
+            throw new KafkaException(e);
         }
     }
+
+    public static InputStream wrapForInput(ByteBuffer buffer) {
+        try {
+            return new SnappyInputStream(new ByteBufferInputStream(buffer));
+        } catch (Throwable e) {
+            throw new KafkaException(e);
+        }
+    }
+
 }

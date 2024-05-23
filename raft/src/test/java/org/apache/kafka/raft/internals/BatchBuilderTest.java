@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.raft.internals;
 
-import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MutableRecordBatch;
@@ -47,11 +46,11 @@ class BatchBuilderTest {
         long logAppendTime = time.milliseconds();
         boolean isControlBatch = false;
         int leaderEpoch = 15;
-        Compression compression = Compression.of(compressionType).build();
+
         BatchBuilder<String> builder = new BatchBuilder<>(
             buffer,
             serde,
-            compression,
+            compressionType,
             baseOffset,
             logAppendTime,
             isControlBatch,
@@ -103,7 +102,7 @@ class BatchBuilderTest {
         BatchBuilder<String> builder = new BatchBuilder<>(
             buffer,
             serde,
-            Compression.NONE,
+            CompressionType.NONE,
             baseOffset,
             logAppendTime,
             isControlBatch,

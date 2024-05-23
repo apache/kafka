@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.raft.internals;
 
-import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.protocol.DataOutputStreamWritable;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Writable;
 import org.apache.kafka.common.record.AbstractRecords;
+import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.DefaultRecord;
 import org.apache.kafka.common.record.DefaultRecordBatch;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -48,7 +48,7 @@ import java.util.OptionalInt;
  */
 public class BatchBuilder<T> {
     private final ByteBuffer initialBuffer;
-    private final Compression compression;
+    private final CompressionType compressionType;
     private final ByteBufferOutputStream batchOutput;
     private final DataOutputStreamWritable recordOutput;
     private final long baseOffset;
@@ -67,7 +67,7 @@ public class BatchBuilder<T> {
     public BatchBuilder(
         ByteBuffer buffer,
         RecordSerde<T> serde,
-        Compression compression,
+        CompressionType compressionType,
         long baseOffset,
         long appendTime,
         boolean isControlBatch,
@@ -77,7 +77,7 @@ public class BatchBuilder<T> {
         this.initialBuffer = buffer;
         this.batchOutput = new ByteBufferOutputStream(buffer);
         this.serde = serde;
-        this.compression = compression;
+        this.compressionType = compressionType;
         this.baseOffset = baseOffset;
         this.nextOffset = baseOffset;
         this.appendTime = appendTime;
@@ -92,7 +92,7 @@ public class BatchBuilder<T> {
         batchOutput.position(initialPosition + batchHeaderSizeInBytes);
 
         this.recordOutput = new DataOutputStreamWritable(new DataOutputStream(
-            compression.wrapForOutput(this.batchOutput, RecordBatch.MAGIC_VALUE_V2)));
+            compressionType.wrapForOutput(this.batchOutput, RecordBatch.MAGIC_VALUE_V2)));
     }
 
     /**
@@ -247,7 +247,7 @@ public class BatchBuilder<T> {
             lastOffsetDelta,
             size,
             RecordBatch.MAGIC_VALUE_V2,
-            compression.type(),
+            compressionType,
             TimestampType.CREATE_TIME,
             appendTime,
             appendTime,
@@ -314,7 +314,7 @@ public class BatchBuilder<T> {
     private int batchHeaderSizeInBytes() {
         return AbstractRecords.recordBatchHeaderSizeInBytes(
             RecordBatch.MAGIC_VALUE_V2,
-            compression.type()
+            compressionType
         );
     }
 

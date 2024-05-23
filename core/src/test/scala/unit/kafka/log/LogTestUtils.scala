@@ -24,8 +24,7 @@ import java.util.Properties
 import kafka.server.BrokerTopicStats
 import kafka.utils.TestUtils
 import org.apache.kafka.common.Uuid
-import org.apache.kafka.common.compress.Compression
-import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, FileRecords, MemoryRecords, RecordBatch, SimpleRecord}
+import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, FileRecords, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse}
 
@@ -157,12 +156,12 @@ object LogTestUtils {
         new SimpleRecord(data, data)
       }
 
-      segment.append(MemoryRecords.withRecords(baseOffset, Compression.NONE, 0,
+      segment.append(MemoryRecords.withRecords(baseOffset, CompressionType.NONE, 0,
         record(baseOffset)))
-      segment.append(MemoryRecords.withRecords(baseOffset + 1, Compression.NONE, 0,
+      segment.append(MemoryRecords.withRecords(baseOffset + 1, CompressionType.NONE, 0,
         record(baseOffset + 1),
         record(baseOffset + 2)))
-      segment.append(MemoryRecords.withRecords(baseOffset + Int.MaxValue - 1, Compression.NONE, 0,
+      segment.append(MemoryRecords.withRecords(baseOffset + Int.MaxValue - 1, CompressionType.NONE, 0,
         record(baseOffset + Int.MaxValue - 1)))
       // Need to create the offset files explicitly to avoid triggering segment recovery to truncate segment.
       Files.createFile(LogFileUtils.offsetIndexFile(logDir, baseOffset).toPath)
@@ -266,7 +265,7 @@ object LogTestUtils {
     val simpleRecords = (0 until numRecords).map { seq =>
       new SimpleRecord(s"$seq".getBytes)
     }
-    val records = MemoryRecords.withRecords(Compression.NONE, simpleRecords: _*)
+    val records = MemoryRecords.withRecords(CompressionType.NONE, simpleRecords: _*)
     log.appendAsLeader(records, leaderEpoch = 0)
   }
 
@@ -289,10 +288,10 @@ object LogTestUtils {
       }
 
       val records = if (isTransactional) {
-        MemoryRecords.withTransactionalRecords(Compression.NONE, producerId,
+        MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId,
           producerEpoch, sequence, simpleRecords: _*)
       } else {
-        MemoryRecords.withIdempotentRecords(Compression.NONE, producerId,
+        MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId,
           producerEpoch, sequence, simpleRecords: _*)
       }
 
