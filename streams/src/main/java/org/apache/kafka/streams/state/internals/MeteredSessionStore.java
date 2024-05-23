@@ -68,6 +68,7 @@ public class MeteredSessionStore<K, V>
     private Sensor flushSensor;
     private Sensor removeSensor;
     private Sensor e2eLatencySensor;
+    private Sensor iteratorDurationSensor;
     private InternalProcessorContext<?, ?> context;
     private TaskId taskId;
 
@@ -134,6 +135,7 @@ public class MeteredSessionStore<K, V>
         flushSensor = StateStoreMetrics.flushSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         removeSensor = StateStoreMetrics.removeSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         e2eLatencySensor = StateStoreMetrics.e2ELatencySensor(taskId.toString(), metricsScope, name(), streamsMetrics);
+        iteratorDurationSensor = StateStoreMetrics.iteratorDurationSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         StateStoreMetrics.addNumOpenIteratorsGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
                 (config, now) -> numOpenIterators.get());
     }
@@ -250,6 +252,7 @@ public class MeteredSessionStore<K, V>
         return new MeteredWindowedKeyValueIterator<>(
             wrapped().fetch(keyBytes(key)),
             fetchSensor,
+            iteratorDurationSensor,
             streamsMetrics,
             serdes::keyFrom,
             serdes::valueFrom,
@@ -263,6 +266,7 @@ public class MeteredSessionStore<K, V>
         return new MeteredWindowedKeyValueIterator<>(
             wrapped().backwardFetch(keyBytes(key)),
             fetchSensor,
+            iteratorDurationSensor,
             streamsMetrics,
             serdes::keyFrom,
             serdes::valueFrom,
@@ -277,6 +281,7 @@ public class MeteredSessionStore<K, V>
         return new MeteredWindowedKeyValueIterator<>(
             wrapped().fetch(keyBytes(keyFrom), keyBytes(keyTo)),
             fetchSensor,
+            iteratorDurationSensor,
             streamsMetrics,
             serdes::keyFrom,
             serdes::valueFrom,
@@ -290,6 +295,7 @@ public class MeteredSessionStore<K, V>
         return new MeteredWindowedKeyValueIterator<>(
             wrapped().backwardFetch(keyBytes(keyFrom), keyBytes(keyTo)),
             fetchSensor,
+            iteratorDurationSensor,
             streamsMetrics,
             serdes::keyFrom,
             serdes::valueFrom,
@@ -310,6 +316,7 @@ public class MeteredSessionStore<K, V>
                 earliestSessionEndTime,
                 latestSessionStartTime),
             fetchSensor,
+            iteratorDurationSensor,
             streamsMetrics,
             serdes::keyFrom,
             serdes::valueFrom,
@@ -330,6 +337,7 @@ public class MeteredSessionStore<K, V>
                 latestSessionStartTime
             ),
             fetchSensor,
+            iteratorDurationSensor,
             streamsMetrics,
             serdes::keyFrom,
             serdes::valueFrom,
@@ -352,6 +360,7 @@ public class MeteredSessionStore<K, V>
                 earliestSessionEndTime,
                 latestSessionStartTime),
             fetchSensor,
+            iteratorDurationSensor,
             streamsMetrics,
             serdes::keyFrom,
             serdes::valueFrom,
@@ -365,6 +374,7 @@ public class MeteredSessionStore<K, V>
         return new MeteredWindowedKeyValueIterator<>(
                 wrapped().findSessions(earliestSessionEndTime, latestSessionEndTime),
                 fetchSensor,
+                iteratorDurationSensor,
                 streamsMetrics,
                 serdes::keyFrom,
                 serdes::valueFrom,
@@ -387,6 +397,7 @@ public class MeteredSessionStore<K, V>
                 latestSessionStartTime
             ),
             fetchSensor,
+            iteratorDurationSensor,
             streamsMetrics,
             serdes::keyFrom,
             serdes::valueFrom,
@@ -458,6 +469,7 @@ public class MeteredSessionStore<K, V>
                     new MeteredWindowedKeyValueIterator<>(
                         rawResult.getResult(),
                         fetchSensor,
+                        iteratorDurationSensor,
                         streamsMetrics,
                         serdes::keyFrom,
                         StoreQueryUtils.getDeserializeValue(serdes, wrapped()),
