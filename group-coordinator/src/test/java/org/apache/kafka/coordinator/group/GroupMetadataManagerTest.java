@@ -12989,6 +12989,49 @@ public class GroupMetadataManagerTest {
         context.assertNoJoinTimeout(groupId, memberId2);
     }
 
+    @Test
+    public void testClassicGroupLeaveToConsumerGroupWithoutValidLeaveGroupMember() {
+        String groupId = "group-id";
+        String memberId = Uuid.randomUuid().toString();
+
+        // Consumer group without member using the classic protocol.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withAssignors(Collections.singletonList(new MockPartitionAssignor("range")))
+            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                .withMember(new ConsumerGroupMember.Builder(memberId)
+                    .build()))
+            .build();
+
+        // Send leave request without valid member.
+        CoordinatorResult<LeaveGroupResponseData, CoordinatorRecord> leaveResult = context.sendClassicGroupLeave(
+            new LeaveGroupRequestData()
+                .setGroupId("group-id")
+                .setMembers(Arrays.asList(
+                    new MemberIdentity()
+                        .setMemberId("unknown-member-id"),
+                    new MemberIdentity()
+                        .setMemberId(memberId)
+                ))
+        );
+
+        assertEquals(
+            new LeaveGroupResponseData()
+                .setMembers(Arrays.asList(
+                    new LeaveGroupResponseData.MemberResponse()
+                        .setGroupInstanceId(null)
+                        .setMemberId("unknown-member-id")
+                        .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code()),
+                    new LeaveGroupResponseData.MemberResponse()
+                        .setGroupInstanceId(null)
+                        .setMemberId(memberId)
+                        .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
+                )),
+            leaveResult.response()
+        );
+
+        assertEquals(Collections.emptyList(), leaveResult.records());
+    }
+
     private static List<CoordinatorRecord> removeMember(String groupId, String memberId) {
         return Arrays.asList(
             CoordinatorRecordHelpers.newCurrentAssignmentTombstoneRecord(groupId, memberId),
