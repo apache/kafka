@@ -788,9 +788,8 @@ public class HeartbeatRequestManagerTest {
         final ArgumentCaptor<ErrorEvent> errorEventArgumentCaptor = ArgumentCaptor.forClass(ErrorEvent.class);
         verify(backgroundEventHandler).add(errorEventArgumentCaptor.capture());
         ErrorEvent errorEvent = errorEventArgumentCaptor.getValue();
-        assertInstanceOf(expectedError.exception().getClass(), errorEvent.error(), "The " +
-            "fatal error propagated to the app thread does not match the error received in the " +
-            "heartbeat response.");
+        assertInstanceOf(expectedError.exception().getClass(), errorEvent.error(),
+            "The fatal error propagated to the app thread does not match the error received in the heartbeat response.");
 
         ensureHeartbeatStopped();
     }
