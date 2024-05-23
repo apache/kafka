@@ -174,7 +174,7 @@ public class RackAwareTaskAssignor {
      *
      * @return whether the operation successfully completed and the rack information is valid.
      */
-    public boolean validateTopicPartitionRack(final boolean changelogTopics) {
+    private boolean validateTopicPartitionRack(final boolean changelogTopics) {
         // Make sure rackId exist for all TopicPartitions needed
         final Set<String> topicsToDescribe = new HashSet<>();
         if (!populateTopicsToDescribe(topicsToDescribe, changelogTopics)) {
