@@ -74,5 +74,9 @@ class LogOffsetMetadataTest {
         LogOffsetMetadata metadata3 = new LogOffsetMetadata(10L, 4L, 200);
         assertFalse(metadata1.onSameSegment(metadata2));
         assertTrue(metadata2.onSameSegment(metadata3));
+
+        LogOffsetMetadata metadata4 = new LogOffsetMetadata(50);
+        LogOffsetMetadata metadata5 = new LogOffsetMetadata(100);
+        assertFalse(metadata4.onSameSegment(metadata5));
     }
 }
