@@ -84,11 +84,18 @@ public class Decimal {
         return new BigDecimal(new BigInteger(value), scale(schema));
     }
 
-    private static int scale(Schema schema) {
-        String scaleString = schema.parameters().get(SCALE_FIELD);
-        if (scaleString == null)
+    /**
+     * Get the scale factor from the Decimal logical schema
+     * @param schema the schema for the Decimal
+     * @return the scale factor
+     */
+    public static int scale(Schema schema) {
+        if (schema.parameters() == null || !schema.parameters().containsKey(SCALE_FIELD)) {
             throw new DataException("Invalid Decimal schema: scale parameter not found.");
+        }
+
         try {
+            String scaleString = schema.parameters().get(SCALE_FIELD);
             return Integer.parseInt(scaleString);
         } catch (NumberFormatException e) {
             throw new DataException("Invalid scale parameter found in Decimal schema: ", e);

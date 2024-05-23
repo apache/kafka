@@ -315,12 +315,15 @@ public class SchemaProjectorTest {
 
     @Test
     public void testLogicalTypeProjection() {
-        Schema[] logicalTypeSchemas = {Decimal.schema(2), Date.SCHEMA, Time.SCHEMA, Timestamp.SCHEMA};
         Object projected;
 
         BigDecimal testDecimal = new BigDecimal(new BigInteger("156"), 2);
         projected = SchemaProjector.project(Decimal.schema(2), testDecimal, Decimal.schema(2));
         assertEquals(testDecimal, projected);
+        projected = SchemaProjector.project(Decimal.schema(2), testDecimal, Decimal.schema(3));
+        assertEquals(testDecimal, projected);
+        assertThrows(SchemaProjectorException.class, () -> SchemaProjector.project(Decimal.schema(2), testDecimal,
+                Decimal.schema(1)), "Cannot project Decimal schema with higher scale to Decimal schema with lower scale.");
 
         projected = SchemaProjector.project(Date.SCHEMA, 1000, Date.SCHEMA);
         assertEquals(1000, projected);
@@ -335,13 +338,26 @@ public class SchemaProjectorTest {
 
         projected = SchemaProjector.project(Date.SCHEMA, date, Date.SCHEMA);
         assertEquals(date, projected);
+        projected = SchemaProjector.project(Date.SCHEMA, date, Timestamp.SCHEMA);
+        assertEquals(date, projected);
+        assertThrows(SchemaProjectorException.class, () -> SchemaProjector.project(Date.SCHEMA, date,
+                Time.SCHEMA), "Cannot project Date to Time.");
 
         projected = SchemaProjector.project(Time.SCHEMA, date, Time.SCHEMA);
         assertEquals(date, projected);
+        projected = SchemaProjector.project(Time.SCHEMA, date, Timestamp.SCHEMA);
+        assertEquals(date, projected);
+        assertThrows(SchemaProjectorException.class, () -> SchemaProjector.project(Time.SCHEMA, date,
+                Date.SCHEMA), "Cannot project Time to Date.");
 
         projected = SchemaProjector.project(Timestamp.SCHEMA, date, Timestamp.SCHEMA);
         assertEquals(date, projected);
+        assertThrows(SchemaProjectorException.class, () -> SchemaProjector.project(Timestamp.SCHEMA, date,
+                Date.SCHEMA), "Cannot project Timestamp to Date.");
+        assertThrows(SchemaProjectorException.class, () -> SchemaProjector.project(Timestamp.SCHEMA, date,
+                Time.SCHEMA), "Cannot project Timestamp to Time.");
 
+        Schema[] logicalTypeSchemas = {Decimal.schema(2), Date.SCHEMA, Time.SCHEMA, Timestamp.SCHEMA};
         Schema namedSchema = SchemaBuilder.int32().name("invalidLogicalTypeName").build();
         for (Schema logicalTypeSchema: logicalTypeSchemas) {
             assertThrows(SchemaProjectorException.class, () -> SchemaProjector.project(logicalTypeSchema, null,

@@ -21,6 +21,8 @@ import org.apache.kafka.connect.errors.SchemaProjectorException;
 
 import java.util.AbstractMap;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -39,6 +41,11 @@ public class SchemaProjector {
 
     private static final Set<AbstractMap.SimpleImmutableEntry<Type, Type>> PROMOTABLE = new HashSet<>();
 
+    // Logical type names that are directly promotable to each other without extra checks
+    private static final Set<AbstractMap.SimpleImmutableEntry<String, String>> PROMOTABLE_LOGICAL_TYPE_NAMES = new HashSet<>();
+    private static final Set<String> LOGICAL_TYPE_NAMES = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+            Date.LOGICAL_NAME, Time.LOGICAL_NAME, Timestamp.LOGICAL_NAME, Decimal.LOGICAL_NAME)));
+
     static {
         Type[] promotableTypes = {Type.INT8, Type.INT16, Type.INT32, Type.INT64, Type.FLOAT32, Type.FLOAT64};
         for (int i = 0; i < promotableTypes.length; ++i) {
@@ -46,6 +53,16 @@ public class SchemaProjector {
                 PROMOTABLE.add(new AbstractMap.SimpleImmutableEntry<>(promotableTypes[i], promotableTypes[j]));
             }
         }
+
+        PROMOTABLE_LOGICAL_TYPE_NAMES.add(new AbstractMap.SimpleImmutableEntry<>(Date.LOGICAL_NAME, Date.LOGICAL_NAME));
+        PROMOTABLE_LOGICAL_TYPE_NAMES.add(new AbstractMap.SimpleImmutableEntry<>(Date.LOGICAL_NAME, Timestamp.LOGICAL_NAME));
+        PROMOTABLE_LOGICAL_TYPE_NAMES.add(new AbstractMap.SimpleImmutableEntry<>(Time.LOGICAL_NAME, Time.LOGICAL_NAME));
+        PROMOTABLE_LOGICAL_TYPE_NAMES.add(new AbstractMap.SimpleImmutableEntry<>(Time.LOGICAL_NAME, Timestamp.LOGICAL_NAME));
+        PROMOTABLE_LOGICAL_TYPE_NAMES.add(new AbstractMap.SimpleImmutableEntry<>(Timestamp.LOGICAL_NAME, Timestamp.LOGICAL_NAME));
+    }
+
+    private SchemaProjector() {
+        // private constructor for utility class
     }
 
     /**
@@ -125,12 +142,36 @@ public class SchemaProjector {
 
 
     private static void checkMaybeCompatible(Schema source, Schema target) {
-        if (source.type() != target.type() && !isPromotable(source.type(), target.type())) {
+        if (isLogicalType(source) && isLogicalType(target)) {
+            checkLogicalTypeCompatibility(source, target);
+        } else if (source.type() != target.type() && !isPromotable(source.type(), target.type())) {
             throw new SchemaProjectorException("Schema type mismatch. source type: " + source.type() + " and target type: " + target.type());
         } else if (!Objects.equals(source.name(), target.name())) {
             throw new SchemaProjectorException("Schema name mismatch. source name: " + source.name() + " and target name: " + target.name());
         } else if (!Objects.equals(source.parameters(), target.parameters())) {
             throw new SchemaProjectorException("Schema parameters not equal. source parameters: " + source.parameters() + " and target parameters: " + target.parameters());
+        }
+    }
+
+    private static void checkLogicalTypeCompatibility(Schema source, Schema target) {
+        if (Decimal.LOGICAL_NAME.equals(target.name())) {
+            checkDecimalLogicalTypeCompatibility(source, target);
+        } else if (!isPromotableLogicalType(source.name(), target.name())) {
+            throw new SchemaProjectorException("Schema logical type mismatch. source type: " + source.name() + " and target type: " + target.name());
+        }
+    }
+
+    private static void checkDecimalLogicalTypeCompatibility(Schema source, Schema target) {
+        if (Decimal.LOGICAL_NAME.equals(target.name())) {
+            if (!Decimal.LOGICAL_NAME.equals(source.name())) {
+                throw new SchemaProjectorException("Schema logical type mismatch. source type: " + source.name() + " and target type: " + target.name());
+            }
+
+            if (Decimal.scale(source) > Decimal.scale(target)) {
+                throw new SchemaProjectorException("Decimal scale factor mismatch. source scale: " + Decimal.scale(source) + " and target scale: " + Decimal.scale(target));
+            }
+        } else {
+            throw new SchemaProjectorException("Target schema is not a Decimal logical type, target type: " + target.name());
         }
     }
 
@@ -192,5 +233,14 @@ public class SchemaProjector {
 
     private static boolean isPromotable(Type sourceType, Type targetType) {
         return PROMOTABLE.contains(new AbstractMap.SimpleImmutableEntry<>(sourceType, targetType));
+    }
+
+    private static boolean isPromotableLogicalType(String sourceName, String targetName) {
+        return sourceName != null && targetName != null
+                && PROMOTABLE_LOGICAL_TYPE_NAMES.contains(new AbstractMap.SimpleImmutableEntry<>(sourceName, targetName));
+    }
+
+    private static boolean isLogicalType(Schema schema) {
+        return schema.name() != null && LOGICAL_TYPE_NAMES.contains(schema.name());
     }
 }

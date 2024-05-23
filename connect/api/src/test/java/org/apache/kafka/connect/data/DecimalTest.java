@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.data;
 
+import org.apache.kafka.connect.errors.DataException;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -24,6 +25,7 @@ import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 
 public class DecimalTest {
     private static final int TEST_SCALE = 2;
@@ -58,5 +60,13 @@ public class DecimalTest {
 
         converted = Decimal.toLogical(schema, TEST_BYTES_NEGATIVE);
         assertEquals(TEST_DECIMAL_NEGATIVE, converted);
+    }
+
+    @Test
+    public void setTestScale() {
+        Schema schema = Decimal.schema(2);
+        assertEquals(2, Decimal.scale(schema));
+
+        assertThrowsExactly(DataException.class, () -> Decimal.scale(Schema.BYTES_SCHEMA));
     }
 }
