@@ -138,19 +138,22 @@ public final class TaskAssignmentUtils {
         final Map<ProcessId, KafkaStreamsState> kafkaStreamsStates = applicationState.kafkaStreamsStates(false);
         final Map<UUID, Optional<String>> clientRacks = kafkaStreamsStates.values().stream().collect(
                 Collectors.toMap(state -> state.processId().id(), KafkaStreamsState::rackId));
-        final List<TaskId> taskIds = new ArrayList<>(tasks);
-        final Map<UUID, Set<TaskId>> previousTaskIdsByProcess = kafkaStreamsAssignments.values().stream().collect(
+        final Map<UUID, Set<TaskId>> previousTaskIdsByProcess = kafkaStreamsAssignments.values().stream()
+            .collect(
             Collectors.toMap(
                 assignment -> assignment.processId().id(),
                 assignment -> {
-                    return assignment.assignment().stream().map(AssignedTask::id).collect(
-                        Collectors.toSet());
+                    return assignment.assignment().stream().map(AssignedTask::id)
+                        .filter(tasks::contains)
+                        .collect(Collectors.toSet());
                 }
             )
         );
-        final Map<TaskId, Set<TaskTopicPartition>> topicPartitionsByTaskId = applicationState.allTasks().stream().collect(
-            Collectors.toMap(TaskInfo::id, TaskInfo::topicPartitions));
+        final Map<TaskId, Set<TaskTopicPartition>> topicPartitionsByTaskId = applicationState.allTasks().stream()
+            .filter(taskInfo -> tasks.contains(taskInfo.id()))
+            .collect(Collectors.toMap(TaskInfo::id, TaskInfo::topicPartitions));
 
+        final List<TaskId> taskIds = new ArrayList<>(tasks);
         final RackAwareGraphConstructor<UUID> graphConstructor = RackAwareGraphConstructorFactory.create(
             applicationState.assignmentConfigs().rackAwareAssignmentStrategy(), taskIds);
         final AssignmentGraph assignmentGraph = buildTaskGraph(
