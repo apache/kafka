@@ -26,9 +26,9 @@ public enum TestFeatureVersion implements FeatureVersion {
     // TEST_2 released right before MV 3.8-IVO was released, and it depends on this metadata version
     TEST_2(2, MetadataVersion.IBP_3_8_IV0, Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_8_IV0.featureLevel()));
 
-    private short featureLevel;
-    private MetadataVersion metadataVersionMapping;
-    private Map<String, Short> dependencies;
+    private final short featureLevel;
+    private final MetadataVersion metadataVersionMapping;
+    private final Map<String, Short> dependencies;
 
     public static final String FEATURE_NAME = "test.feature.version";
     public static final TestFeatureVersion LATEST_PRODUCTION = TEST_1;

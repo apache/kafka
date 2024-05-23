@@ -34,9 +34,9 @@ public interface FeatureVersion {
     /**
      * When bootstrapping using only a metadata version, a reasonable default for all other features is chosen based
      * on the metadata version. This method returns the minimum metadata version that sets this feature version as default.
-     * This should be defined as the next metadata version to be released when this feature version becomes production ready.
-     * If feature level X is released when metadata version Y is the latest, this method should return Y + 1
-     * (Ie, if the current production MV is 17 when a feature version is released, its mapping should be to MV 18)
+     * This should be defined as the metadata version released when this feature version becomes production ready.
+     * If feature level X is released when metadata version Y is the latest, a new MV should be released and this method should return Y + 1
+     * (Ie, if the current production MV is 17 when a feature version is released, its mapping should be to newly released MV 18)
      *
      * NOTE: The feature can be used without setting this metadata version (unless specified by {@link FeatureVersion#dependencies})
      * This method is simply for choosing the default when only metadata version is specified.

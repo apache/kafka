@@ -73,6 +73,7 @@ object ApiVersionManager {
  * @param brokerFeatures the broker features
  * @param enableUnstableLastVersion whether to enable unstable last version, see [[KafkaConfig.unstableApiVersionsEnabled]]
  * @param zkMigrationEnabled whether to enable zk migration, see [[KafkaConfig.migrationEnabled]]
+ * @param featuresProvider a provider to the finalized features supported
  */
 class SimpleApiVersionManager(
   val listenerType: ListenerType,

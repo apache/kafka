@@ -100,7 +100,8 @@ public class FeaturesTest {
         assertEquals(expectedVersion, Features.TEST_VERSION.defaultValue(Optional.of(metadataVersion)));
     }
 
+    @Test
     public void testTestVersionLatestProduction() {
-        assertEquals(Features.TEST_VERSION.latestProductionVersion(), Features.TEST_VERSION.defaultValue(Optional.empty()));
+        assertEquals(Features.TEST_VERSION.latestProductionVersion().featureLevel(), Features.TEST_VERSION.defaultValue(Optional.empty()));
     }
 }

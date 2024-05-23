@@ -67,6 +67,9 @@ object StorageTool extends Logging {
             build()
           val metadataRecords : ArrayBuffer[ApiMessageAndVersion] = ArrayBuffer()
           val specifiedFeatures: util.List[String] = namespace.getList("feature")
+          if (namespace.getString("release_version") != null && specifiedFeatures != null) {
+            throw new TerseFailure("Both --release_version and --feature were set. Only one of the two flags can be set.")
+          }
           val featureNamesAndLevelsMap = featureNamesAndLevels(Option(specifiedFeatures).getOrElse(Collections.emptyList).asScala.toList)
           val metadataVersion = getMetadataVersion(namespace, featureNamesAndLevelsMap,
             Option(config.get.originals.get(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG)).map(_.toString))
@@ -129,7 +132,7 @@ object StorageTool extends Logging {
                                             specifiedFeatures: Map[String, java.lang.Short],
                                             allFeatures: List[Features],
                                             usesVersionDefault: Boolean): Unit = {
-    // If we are using --version-default, the default is based on the metadata version.
+    // If we are using --release-version, the default is based on the metadata version.
     val metadataVersionForDefault = if (usesVersionDefault) Optional.of(metadataVersion) else Optional.empty[MetadataVersion]()
 
     val allNonZeroFeaturesAndLevels: ArrayBuffer[FeatureVersion] = mutable.ArrayBuffer[FeatureVersion]()
@@ -189,7 +192,7 @@ object StorageTool extends Logging {
     formatParser.addArgument("--release-version", "-r").
       action(store()).
       help(s"A KRaft release version to use for the initial metadata.version. The minimum is ${MetadataVersion.IBP_3_0_IV0}, the default is ${MetadataVersion.LATEST_PRODUCTION}")
-    formatParser.addArgument("--feature").
+    formatParser.addArgument("--feature", "-f").
       help("A feature upgrade we should perform, in feature=level format. For example: `metadata.version=5`.").
       action(append());
 
@@ -219,7 +222,7 @@ object StorageTool extends Logging {
     val featureTag = featureNamesAndLevelsMap.get(MetadataVersion.FEATURE_NAME)
 
     (releaseVersionTag, featureTag) match {
-      case (Some(_), Some(_)) =>
+      case (Some(_), Some(_)) => // We should throw an error before we hit this case, but include for completeness
         throw new IllegalArgumentException("Both --release_version and --feature were set. Only one of the two flags can be set.")
       case (Some(version), None) =>
         MetadataVersion.fromVersionString(version)

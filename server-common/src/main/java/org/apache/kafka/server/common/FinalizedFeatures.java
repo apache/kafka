@@ -24,7 +24,7 @@ import java.util.Objects;
 import static org.apache.kafka.server.common.MetadataVersion.FEATURE_NAME;
 
 public final class FinalizedFeatures {
-    private final MetadataVersion version;
+    private final MetadataVersion metadataVersion;
     private final Map<String, Short> finalizedFeatures;
     private final long finalizedFeaturesEpoch;
 
@@ -33,25 +33,25 @@ public final class FinalizedFeatures {
     }
 
     public FinalizedFeatures(
-        MetadataVersion version,
+        MetadataVersion metadataVersion,
         Map<String, Short> finalizedFeatures,
         long finalizedFeaturesEpoch,
         boolean kraftMode
     ) {
-        this.version = version;
+        this.metadataVersion = metadataVersion;
         this.finalizedFeatures = new HashMap<>(finalizedFeatures);
         this.finalizedFeaturesEpoch = finalizedFeaturesEpoch;
         // In KRaft mode, we always include the metadata version in the features map.
         // In ZK mode, we never include it.
         if (kraftMode) {
-            this.finalizedFeatures.put(FEATURE_NAME, version.featureLevel());
+            this.finalizedFeatures.put(FEATURE_NAME, metadataVersion.featureLevel());
         } else {
             this.finalizedFeatures.remove(FEATURE_NAME);
         }
     }
 
     public MetadataVersion metadataVersion() {
-        return version;
+        return metadataVersion;
     }
 
     public Map<String, Short> finalizedFeatures() {
@@ -66,20 +66,20 @@ public final class FinalizedFeatures {
     public boolean equals(Object o) {
         if (o == null || !(o.getClass().equals(FinalizedFeatures.class))) return false;
         FinalizedFeatures other = (FinalizedFeatures) o;
-        return version == other.version &&
+        return metadataVersion == other.metadataVersion &&
             finalizedFeatures.equals(other.finalizedFeatures) &&
                 finalizedFeaturesEpoch == other.finalizedFeaturesEpoch;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(version, finalizedFeatures, finalizedFeaturesEpoch);
+        return Objects.hash(metadataVersion, finalizedFeatures, finalizedFeaturesEpoch);
     }
 
     @Override
     public String toString() {
         return "Features" +
-                "(version=" + version +
+                "(version=" + metadataVersion +
                 ", finalizedFeatures=" + finalizedFeatures +
                 ", finalizedFeaturesEpoch=" + finalizedFeaturesEpoch +
                 ")";

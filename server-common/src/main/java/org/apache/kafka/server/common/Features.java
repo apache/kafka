@@ -77,11 +77,11 @@ public enum Features {
     }
 
     /**
-     * Creates a FeatureVersion from a given name and level with the correct feature object underneath.
+     * Creates a FeatureVersion from a level.
      *
      * @param level   the level of the feature
-     * @returns       the FeatureVersionUtils.FeatureVersion for the feature the enum is based on.
-     * @throws        IllegalArgumentException if the feature name is not valid (not implemented for this method)
+     * @return       the FeatureVersionUtils.FeatureVersion for the feature the enum is based on.
+     * @throws        IllegalArgumentException if the feature is not known.
      */
     public FeatureVersion fromFeatureLevel(short level) {
         return Arrays.stream(featureVersions).filter(featureVersion ->
