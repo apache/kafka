@@ -139,7 +139,7 @@ public class RackAwareTaskAssignor {
         return populateTopicsToDescribe(fullMetadata, changelogPartitionsForTask, partitionsForTask, changelog, topicsToDescribe, racksForPartition);
     }
 
-    public static boolean populateTopicsToDescribe(final Cluster fullMetadata,
+    public boolean populateTopicsToDescribe(final Cluster fullMetadata,
                                                    final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask,
                                                    final Map<TaskId, Set<TopicPartition>> partitionsForTask,
                                                    final boolean changelog,
@@ -188,7 +188,7 @@ public class RackAwareTaskAssignor {
      *
      * @return whether the operation successfully completed and the rack information is valid.
      */
-    public static boolean validateTopicPartitionRack(final Cluster fullMetadata,
+    public boolean validateTopicPartitionRack(final Cluster fullMetadata,
                                                      final InternalTopicManager internalTopicManager,
                                                      final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask,
                                                      final Map<TaskId, Set<TopicPartition>> partitionsForTask,
