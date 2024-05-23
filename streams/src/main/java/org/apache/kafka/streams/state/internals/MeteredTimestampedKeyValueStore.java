@@ -350,7 +350,9 @@ public class MeteredTimestampedKeyValueStore<K, V>
             try {
                 iter.close();
             } finally {
-                sensor.record(time.nanoseconds() - startNs);
+                final long duration = time.nanoseconds() - startNs;
+                sensor.record(duration);
+                iteratorDurationSensor.record(duration);
                 numOpenIterators.decrementAndGet();
             }
         }

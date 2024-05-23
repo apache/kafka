@@ -403,6 +403,19 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         }
 
         @Override
+        public void scheduleIfAbsent(
+            String key,
+            long delay,
+            TimeUnit unit,
+            boolean retry,
+            TimeoutOperation<Void, U> operation
+        ) {
+            if (!tasks.containsKey(key)) {
+                schedule(key, delay, unit, retry, 500, operation);
+            }
+        }
+
+        @Override
         public void cancel(String key) {
             TimerTask prevTask = tasks.remove(key);
             if (prevTask != null) prevTask.cancel();
