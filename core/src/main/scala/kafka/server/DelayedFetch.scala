@@ -91,17 +91,11 @@ class DelayedFetch(
             // Go directly to the check for Case G if the message offsets are the same. If the log segment
             // has just rolled, then the high watermark offset will remain the same but be on the old segment,
             // which would incorrectly be seen as an instance of Case F.
-            if (fetchOffset.messageOffset > endOffset.messageOffset) {
-              // Case F, this can happen when the new fetch operation is on a truncated leader
-              debug(s"Satisfying fetch $this since it is fetching later segments of partition $topicIdPartition.")
-              return forceComplete()
-            } else if (fetchOffset.messageOffset < endOffset.messageOffset) {
-              if (fetchOffset.messageOffsetOnly() || endOffset.messageOffsetOnly()) {
-                // If fetchOffset or endOffset is message only, we return empty records when reading from the log.
-                // So, to be consistent, we want to avoid accumulating new bytes in this case. This can happen when the
-                // high-watermark is stale, but should be rare.
-                debug(s"Not satisfying fetch $this since the fetchOffset (or) endOffset is message-offset only " +
-                  s"for partition $topicIdPartition.")
+            if (endOffset.messageOffset != fetchOffset.messageOffset) {
+              if (endOffset.onOlderSegment(fetchOffset)) {
+                // Case F, this can happen when the new fetch operation is on a truncated leader
+                debug(s"Satisfying fetch $this since it is fetching later segments of partition $topicIdPartition.")
+                return forceComplete()
               } else if (fetchOffset.onOlderSegment(endOffset)) {
                 // Case F, this can happen when the fetch operation is falling behind the current segment
                 // or the partition has just rolled a new segment
@@ -109,7 +103,7 @@ class DelayedFetch(
                 // We will not force complete the fetch request if a replica should be throttled.
                 if (!params.isFromFollower || !replicaManager.shouldLeaderThrottle(quota, partition, params.replicaId))
                   return forceComplete()
-              } else if (fetchOffset.onSameSegment(endOffset)) {
+              } else if (fetchOffset.onSameSegment(endOffset) && fetchOffset.messageOffset < endOffset.messageOffset) {
                 // we take the partition fetch size as upper bound when accumulating the bytes (skip if a throttled partition)
                 val bytesAvailable = math.min(endOffset.positionDiff(fetchOffset), fetchStatus.fetchInfo.maxBytes)
                 if (!params.isFromFollower || !replicaManager.shouldLeaderThrottle(quota, partition, params.replicaId))
