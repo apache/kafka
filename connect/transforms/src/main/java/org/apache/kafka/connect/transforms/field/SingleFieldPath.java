@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.transforms.field;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
@@ -41,6 +42,7 @@ import static org.apache.kafka.connect.transforms.util.Requirements.requireStruc
  * @see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-821%3A+Connect+Transforms+support+for+nested+structures">KIP-821</a>
  * @see FieldSyntaxVersion
  */
+@InterfaceStability.Evolving
 public class SingleFieldPath {
     // Invariants:
     // - A field path can contain one or more steps
