@@ -63,15 +63,17 @@ public class WorkerTestUtils {
     public static ClusterConfigState clusterConfigState(long offset,
                                                         int connectorNum,
                                                         int taskNum) {
+        Map<String, Map<String, String>> connectorConfigs = connectorConfigs(1, connectorNum);
         return new ClusterConfigState(
                 offset,
                 null,
                 connectorTaskCounts(1, connectorNum, taskNum),
-                connectorConfigs(1, connectorNum),
+                connectorConfigs,
                 connectorTargetStates(1, connectorNum, TargetState.STARTED),
                 taskConfigs(0, connectorNum, connectorNum * taskNum),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
+                connectorConfigs,
                 Collections.emptySet(),
                 Collections.emptySet());
     }
