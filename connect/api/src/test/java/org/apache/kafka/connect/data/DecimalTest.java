@@ -63,7 +63,7 @@ public class DecimalTest {
     }
 
     @Test
-    public void setTestScale() {
+    public void testScale() {
         Schema schema = Decimal.schema(2);
         assertEquals(2, Decimal.scale(schema));
 
