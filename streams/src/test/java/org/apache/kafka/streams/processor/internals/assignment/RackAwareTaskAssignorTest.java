@@ -76,8 +76,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
@@ -196,8 +194,8 @@ public class RackAwareTaskAssignorTest {
 
         // False since partitionWithoutInfo10 is missing in cluster metadata
         assertFalse(assignor.canEnableRackAwareAssignor());
-        verify(assignor, never()).populateTopicsToDescribe(any(), anyMap(), anyMap(), eq(false), anySet(), anyMap());
-        verify(assignor, never()).populateTopicsToDescribe(any(), anyMap(), anyMap(), eq(true), anySet(), anyMap());
+        verify(assignor, never()).populateTopicsToDescribe(anySet(), eq(false));
+        verify(assignor, never()).populateTopicsToDescribe(anySet(), eq(true));
     }
 
     @Test
@@ -215,8 +213,8 @@ public class RackAwareTaskAssignorTest {
 
         // False since partitionWithoutInfo10 is missing in cluster metadata
         assertFalse(assignor.canEnableRackAwareAssignor());
-        verify(assignor, times(1)).populateTopicsToDescribe(any(), anyMap(), anyMap(), eq(false), anySet(), anyMap());
-        verify(assignor, never()).populateTopicsToDescribe(any(), anyMap(), anyMap(), eq(true), anySet(), anyMap());
+        verify(assignor, times(1)).populateTopicsToDescribe(anySet(), eq(false));
+        verify(assignor, never()).populateTopicsToDescribe(anySet(), eq(true));
         assertFalse(assignor.populateTopicsToDescribe(new HashSet<>(), false));
     }
 
@@ -235,8 +233,8 @@ public class RackAwareTaskAssignorTest {
 
         // False since nodeMissingRack has one node which doesn't have rack
         assertFalse(assignor.canEnableRackAwareAssignor());
-        verify(assignor, times(1)).populateTopicsToDescribe(any(), anyMap(), anyMap(), eq(false), anySet(), anyMap());
-        verify(assignor, never()).populateTopicsToDescribe(any(), anyMap(), anyMap(), eq(true), anySet(), anyMap());
+        verify(assignor, times(1)).populateTopicsToDescribe(anySet(), eq(false));
+        verify(assignor, never()).populateTopicsToDescribe(anySet(), eq(true));
         assertFalse(assignor.populateTopicsToDescribe(new HashSet<>(), false));
     }
 
@@ -344,12 +342,12 @@ public class RackAwareTaskAssignorTest {
 
         // partitionWithoutInfo00 has rackInfo in cluster metadata
         assertTrue(assignor.canEnableRackAwareAssignor());
-        verify(assignor, times(1)).populateTopicsToDescribe(any(), anyMap(), anyMap(), eq(false), anySet(), anyMap());
+        verify(assignor, times(1)).populateTopicsToDescribe(anySet(), eq(false));
 
         // Should use cache result
         Mockito.reset(assignor);
         assertTrue(assignor.canEnableRackAwareAssignor());
-        verify(assignor, never()).populateTopicsToDescribe(any(), anyMap(), anyMap(), eq(false), anySet(), anyMap());
+        verify(assignor, never()).populateTopicsToDescribe(anySet(), eq(false));
     }
 
     @Test
@@ -411,8 +409,8 @@ public class RackAwareTaskAssignorTest {
         ));
 
         assertTrue(assignor.canEnableRackAwareAssignor());
-        verify(assignor, times(1)).populateTopicsToDescribe(any(), anyMap(), anyMap(), eq(false), anySet(), anyMap());
-        verify(assignor, times(1)).populateTopicsToDescribe(any(), anyMap(), anyMap(), eq(true), anySet(), anyMap());
+        verify(assignor, times(1)).populateTopicsToDescribe(anySet(), eq(false));
+        verify(assignor, times(1)).populateTopicsToDescribe(anySet(), eq(true));
 
         final Map<TopicPartition, Set<String>> racksForPartition = assignor.racksForPartition();
         final Map<TopicPartition, Set<String>> expected = mkMap(
@@ -449,8 +447,8 @@ public class RackAwareTaskAssignorTest {
         ));
 
         assertFalse(assignor.canEnableRackAwareAssignor());
-        verify(assignor, times(1)).populateTopicsToDescribe(any(), anyMap(), anyMap(), eq(false), anySet(), anyMap());
-        verify(assignor, times(1)).populateTopicsToDescribe(any(), anyMap(), anyMap(), eq(true), anySet(), anyMap());
+        verify(assignor, times(1)).populateTopicsToDescribe(anySet(), eq(false));
+        verify(assignor, times(1)).populateTopicsToDescribe(anySet(), eq(true));
     }
 
     @Test
@@ -471,8 +469,8 @@ public class RackAwareTaskAssignorTest {
         ));
 
         assertFalse(assignor.canEnableRackAwareAssignor());
-        verify(assignor, times(1)).populateTopicsToDescribe(any(), anyMap(), anyMap(), eq(false), anySet(), anyMap());
-        verify(assignor, never()).populateTopicsToDescribe(any(), anyMap(), anyMap(), eq(true), anySet(), anyMap());
+        verify(assignor, times(1)).populateTopicsToDescribe(anySet(), eq(false));
+        verify(assignor, never()).populateTopicsToDescribe(anySet(), eq(true));
         assertTrue(assignor.populateTopicsToDescribe(new HashSet<>(), false));
     }
 
