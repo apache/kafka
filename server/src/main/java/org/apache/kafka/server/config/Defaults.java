@@ -40,11 +40,6 @@ public class Defaults {
     /** ********* Authorizer Configuration *********/
     public static final String AUTHORIZER_CLASS_NAME = "";
 
-    /** ********* Controlled shutdown configuration *********/
-    public static final int CONTROLLED_SHUTDOWN_MAX_RETRIES = 3;
-    public static final int CONTROLLED_SHUTDOWN_RETRY_BACKOFF_MS = 5000;
-    public static final boolean CONTROLLED_SHUTDOWN_ENABLE = true;
-
     /** ********* Fetch Configuration *********/
     public static final int MAX_INCREMENTAL_FETCH_SESSION_CACHE_SLOTS = 1000;
     public static final int FETCH_MAX_BYTES = 55 * 1024 * 1024;

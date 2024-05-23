@@ -21,7 +21,7 @@ import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{DescribeUserScramCredentialsRequest, DescribeUserScramCredentialsResponse}
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
-import org.apache.kafka.server.config.KafkaSecurityConfigs
+import org.apache.kafka.server.config.{ControlledShutdownConfigs, KafkaSecurityConfigs}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -33,7 +33,7 @@ import java.util.Properties
  */
 class DescribeUserScramCredentialsRequestNotAuthorizedTest extends BaseRequestTest {
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.put(KafkaConfig.ControlledShutdownEnableProp, "false")
+    properties.put(ControlledShutdownConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, "false")
     if (isKRaftTest()) {
       properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[StandardAuthorizer].getName)
     } else {

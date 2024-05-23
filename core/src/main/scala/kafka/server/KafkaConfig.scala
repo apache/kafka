@@ -48,7 +48,7 @@ import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{MetadataVersion, MetadataVersionValidator}
 import org.apache.kafka.server.common.MetadataVersion._
-import org.apache.kafka.server.config.{Defaults, KRaftConfigs, KafkaSecurityConfigs, QuotaConfigs, ReplicationConfigs, ServerLogConfigs, ServerTopicConfigSynonyms, ZkConfigs}
+import org.apache.kafka.server.config.{ControlledShutdownConfigs, Defaults, KRaftConfigs, KafkaSecurityConfigs, QuotaConfigs, ReplicationConfigs, ServerLogConfigs, ServerTopicConfigSynonyms, ZkConfigs}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.MetricConfigs
 import org.apache.kafka.server.record.BrokerCompressionType
@@ -120,11 +120,6 @@ object KafkaConfig {
   /***************** rack configuration *************/
   val RackProp = "broker.rack"
 
-  /** ********* Controlled shutdown configuration ***********/
-  val ControlledShutdownMaxRetriesProp = "controlled.shutdown.max.retries"
-  val ControlledShutdownRetryBackoffMsProp = "controlled.shutdown.retry.backoff.ms"
-  val ControlledShutdownEnableProp = "controlled.shutdown.enable"
-
   /** ********* Fetch Configuration **************/
   val MaxIncrementalFetchSessionCacheSlots = "max.incremental.fetch.session.cache.slots"
   val FetchMaxBytes = "fetch.max.bytes"
@@ -179,11 +174,6 @@ object KafkaConfig {
 
   /************* Rack Configuration **************/
   val RackDoc = "Rack of the broker. This will be used in rack aware replication assignment for fault tolerance. Examples: <code>RACK1</code>, <code>us-east-1d</code>"
-
-  /** ********* Controlled shutdown configuration ***********/
-  val ControlledShutdownMaxRetriesDoc = "Controlled shutdown can fail for multiple reasons. This determines the number of retries when such failure happens"
-  val ControlledShutdownRetryBackoffMsDoc = "Before each retry, the system needs time to recover from the state that caused the previous failure (Controller fail over, replica lag etc). This config determines the amount of time to wait before retrying."
-  val ControlledShutdownEnableDoc = "Enable controlled shutdown of the server."
 
   /** ********* Fetch Configuration **************/
   val MaxIncrementalFetchSessionCacheSlotsDoc = "The maximum number of total incremental fetch sessions that we will maintain. FetchSessionCache is sharded into 8 shards and the limit is equally divided among all shards. Sessions are allocated to each shard in round-robin. Only entries within a shard are considered eligible for eviction."
@@ -373,9 +363,9 @@ object KafkaConfig {
 
 
       /** ********* Controlled shutdown configuration ***********/
-      .define(ControlledShutdownMaxRetriesProp, INT, Defaults.CONTROLLED_SHUTDOWN_MAX_RETRIES, MEDIUM, ControlledShutdownMaxRetriesDoc)
-      .define(ControlledShutdownRetryBackoffMsProp, LONG, Defaults.CONTROLLED_SHUTDOWN_RETRY_BACKOFF_MS, MEDIUM, ControlledShutdownRetryBackoffMsDoc)
-      .define(ControlledShutdownEnableProp, BOOLEAN, Defaults.CONTROLLED_SHUTDOWN_ENABLE, MEDIUM, ControlledShutdownEnableDoc)
+      .define(ControlledShutdownConfigs.CONTROLLED_SHUTDOWN_MAX_RETRIES_CONFIG, INT, ControlledShutdownConfigs.CONTROLLED_SHUTDOWN_MAX_RETRIES, MEDIUM, ControlledShutdownConfigs.CONTROLLED_SHUTDOWN_MAX_RETRIES_DOC)
+      .define(ControlledShutdownConfigs.CONTROLLED_SHUTDOWN_RETRY_BACKOFF_MS_CONFIG, LONG, ControlledShutdownConfigs.CONTROLLED_SHUTDOWN_RETRY_BACKOFF_MS, MEDIUM, ControlledShutdownConfigs.CONTROLLED_SHUTDOWN_RETRY_BACKOFF_MS_DOC)
+      .define(ControlledShutdownConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, BOOLEAN, ControlledShutdownConfigs.CONTROLLED_SHUTDOWN_ENABLE, MEDIUM, ControlledShutdownConfigs.CONTROLLED_SHUTDOWN_ENABLE_DOC)
 
       /** ********* Group coordinator configuration ***********/
       .define(GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, INT, GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_DEFAULT, MEDIUM, GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_DOC)
@@ -1020,9 +1010,9 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   }
 
   /** ********* Controlled shutdown configuration ***********/
-  val controlledShutdownMaxRetries = getInt(KafkaConfig.ControlledShutdownMaxRetriesProp)
-  val controlledShutdownRetryBackoffMs = getLong(KafkaConfig.ControlledShutdownRetryBackoffMsProp)
-  val controlledShutdownEnable = getBoolean(KafkaConfig.ControlledShutdownEnableProp)
+  val controlledShutdownMaxRetries = getInt(ControlledShutdownConfigs.CONTROLLED_SHUTDOWN_MAX_RETRIES_CONFIG)
+  val controlledShutdownRetryBackoffMs = getLong(ControlledShutdownConfigs.CONTROLLED_SHUTDOWN_RETRY_BACKOFF_MS_CONFIG)
+  val controlledShutdownEnable = getBoolean(ControlledShutdownConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG)
 
   /** ********* Feature configuration ***********/
   def isFeatureVersioningSupported = interBrokerProtocolVersion.isFeatureVersioningSupported

@@ -45,7 +45,7 @@ import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.apache.kafka.network.Session
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
-import org.apache.kafka.server.config.{KafkaSecurityConfigs, QuotaConfigs}
+import org.apache.kafka.server.config.{ControlledShutdownConfigs, KafkaSecurityConfigs, QuotaConfigs}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -78,7 +78,7 @@ class RequestQuotaTest extends BaseRequestTest {
   private val tasks = new ListBuffer[Task]
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.put(KafkaConfig.ControlledShutdownEnableProp, "false")
+    properties.put(ControlledShutdownConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, "false")
     properties.put(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1")
     properties.put(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "1")
     properties.put(GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, "100")

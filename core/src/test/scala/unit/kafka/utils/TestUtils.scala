@@ -341,10 +341,10 @@ object TestUtils extends Logging {
     }
     props.put(ReplicationConfigs.REPLICA_SOCKET_TIMEOUT_MS_CONFIG, "1500")
     props.put(ReplicationConfigs.CONTROLLER_SOCKET_TIMEOUT_MS_CONFIG, "1500")
-    props.put(KafkaConfig.ControlledShutdownEnableProp, enableControlledShutdown.toString)
+    props.put(ControlledShutdownConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, enableControlledShutdown.toString)
     props.put(KafkaConfig.DeleteTopicEnableProp, enableDeleteTopic.toString)
     props.put(ServerLogConfigs.LOG_DELETE_DELAY_MS_CONFIG, "1000")
-    props.put(KafkaConfig.ControlledShutdownRetryBackoffMsProp, "100")
+    props.put(ControlledShutdownConfigs.CONTROLLED_SHUTDOWN_RETRY_BACKOFF_MS_CONFIG, "100")
     props.put(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, "2097152")
     props.put(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1")
     if (!props.containsKey(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG))

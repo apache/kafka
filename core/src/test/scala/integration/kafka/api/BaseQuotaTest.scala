@@ -33,7 +33,7 @@ import org.apache.kafka.common.quota.ClientQuotaAlteration
 import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
-import org.apache.kafka.server.config.QuotaConfigs
+import org.apache.kafka.server.config.{ControlledShutdownConfigs, QuotaConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
@@ -51,7 +51,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
   protected def consumerClientId = "QuotasTestConsumer-1"
   protected def createQuotaTestClients(topic: String, leaderNode: KafkaBroker): QuotaTestClients
 
-  this.serverConfig.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false")
+  this.serverConfig.setProperty(ControlledShutdownConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, "false")
   this.serverConfig.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "2")
   this.serverConfig.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "1")
   this.serverConfig.setProperty(GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, "100")
