@@ -4240,13 +4240,13 @@ class UnifiedLogTest {
     // case-1: offset is higher than the local-log-start-offset.
     // log-start-offset < local-log-start-offset < offset-to-be-converted < log-end-offset
     assertEquals(new LogOffsetMetadata(35, 31, 288), log.maybeConvertToOffsetMetadata(35))
-    // case-2: offset is lesser than the local-log-start-offset
+    // case-2: offset is less than the local-log-start-offset
     // log-start-offset < offset-to-be-converted < local-log-start-offset < log-end-offset
     assertEquals(new LogOffsetMetadata(29, -1L, -1), log.maybeConvertToOffsetMetadata(29))
     // case-3: offset is higher than the log-end-offset
     // log-start-offset < local-log-start-offset < log-end-offset < offset-to-be-converted
     assertEquals(new LogOffsetMetadata(log.logEndOffset + 1, -1L, -1), log.maybeConvertToOffsetMetadata(log.logEndOffset + 1))
-    // case-4: offset is lesser than the log-start-offset
+    // case-4: offset is less than the log-start-offset
     // offset-to-be-converted < log-start-offset < local-log-start-offset < log-end-offset
     assertEquals(new LogOffsetMetadata(14, -1L, -1), log.maybeConvertToOffsetMetadata(14))
   }

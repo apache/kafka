@@ -67,7 +67,7 @@ public final class LogOffsetMetadata {
     public int positionDiff(LogOffsetMetadata that) {
         if (messageOffsetOnly() || that.messageOffsetOnly())
             throw new KafkaException(this + " cannot compare its segment position with " + that + " since it only has message offset info");
-        if (this.segmentBaseOffset != that.segmentBaseOffset)
+        if (!onSameSegment(that))
             throw new KafkaException(this + " cannot compare its segment position with " + that + " since they are not on the same segment");
 
         return this.relativePositionInSegment - that.relativePositionInSegment;
