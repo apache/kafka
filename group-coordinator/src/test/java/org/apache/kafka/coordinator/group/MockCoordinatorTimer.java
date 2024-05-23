@@ -130,6 +130,19 @@ public class MockCoordinatorTimer<T, U> implements CoordinatorTimer<T, U> {
         schedule(key, delay, unit, retry, 500L, operation);
     }
 
+    @Override
+    public void scheduleIfAbsent(
+        String key,
+        long delay,
+        TimeUnit unit,
+        boolean retry,
+        TimeoutOperation<T, U> operation
+    ) {
+        if (!timeoutMap.containsKey(key)) {
+            schedule(key, delay, unit, retry, 500L, operation);
+        }
+    }
+
     /**
      * Cancels a timeout.
      */

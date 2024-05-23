@@ -2440,7 +2440,9 @@ class ReplicaManager(val config: KafkaConfig,
   def handleLogDirFailure(dir: String, notifyController: Boolean = true): Unit = {
     if (!logManager.isLogDirOnline(dir))
       return
-    warn(s"Stopping serving replicas in dir $dir")
+    // retrieve the UUID here because logManager.handleLogDirFailure handler removes it
+    val uuid = logManager.directoryId(dir)
+    warn(s"Stopping serving replicas in dir $dir with uuid $uuid because the log directory has failed.")
     replicaStateChangeLock synchronized {
       val newOfflinePartitions = onlinePartitionsIterator.filter { partition =>
         partition.log.exists { _.parentDir == dir }
@@ -2465,8 +2467,6 @@ class ReplicaManager(val config: KafkaConfig,
       warn(s"Broker $localBrokerId stopped fetcher for partitions ${newOfflinePartitions.mkString(",")} and stopped moving logs " +
            s"for partitions ${partitionsWithOfflineFutureReplica.mkString(",")} because they are in the failed log directory $dir.")
     }
-    // retrieve the UUID here because logManager.handleLogDirFailure handler removes it
-    val uuid = logManager.directoryId(dir)
     logManager.handleLogDirFailure(dir)
     if (dir == new File(config.metadataLogDir).getAbsolutePath && (config.processRoles.nonEmpty || config.migrationEnabled)) {
       fatal(s"Shutdown broker because the metadata log dir $dir has failed")
