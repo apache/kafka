@@ -51,6 +51,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -62,6 +63,7 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
+import java.util.stream.Collectors;
 
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.raft.RaftClientTestContext.Builder.DEFAULT_ELECTION_TIMEOUT_MS;
@@ -1546,7 +1548,6 @@ public class KafkaRaftClientTest {
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
     }
 
-    // TODO: fix this after I better understand the error
     @Test
     public void testObserverHandleRetryFetchResponse() throws Exception {
         int localId = 0;
@@ -1554,40 +1555,67 @@ public class KafkaRaftClientTest {
         int otherNodeId = 2;
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(leaderId, otherNodeId);
+        List<InetSocketAddress> bootstrapServers = voters
+            .stream()
+            .map(RaftClientTestContext::mockAddress)
+            .collect(Collectors.toList());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withBootstrapServers(bootstrapServers)
+            .build();
 
+        // Expect a fetch request to one of the bootstrap servers
         context.pollUntilRequest();
-        RaftRequest.Outbound firstFetchRequest = context.assertSentFetchRequest();
-        assertTrue(voters.contains(firstFetchRequest.destination().id()));
-        context.assertFetchRequestData(firstFetchRequest, 0, 0L, 0);
+        RaftRequest.Outbound discoveryFetchRequest = context.assertSentFetchRequest();
+        assertFalse(voters.contains(discoveryFetchRequest.destination().id()));
+        assertTrue(Arrays.asList(-2, -3).contains(discoveryFetchRequest.destination().id()));
+        context.assertFetchRequestData(discoveryFetchRequest, 0, 0L, 0);
 
-        context.time.sleep(context.fetchTimeoutMs);
-
-        context.pollUntilRequest();
-        RaftRequest.Outbound retryFetchRequest = context.assertSentFetchRequest();
-        assertTrue(voters.contains(retryFetchRequest.destination().id()));
-        context.assertFetchRequestData(retryFetchRequest, 0, 0L, 0);
-
-        // Deliver the delayed responses
-        Records records = context.buildBatch(0L, 3, Arrays.asList("a", "b"));
+        // Send a response with the leader and epoch
         context.deliverResponse(
-            firstFetchRequest.correlationId(),
-            firstFetchRequest.destination(),
-            context.fetchResponse(epoch, leaderId, records, 0L, Errors.NONE)
-        );
-
-        context.client.poll();
-
-        records = context.buildBatch(0L, 3, Arrays.asList("a", "b"));
-        context.deliverResponse(
-            retryFetchRequest.correlationId(),
-            retryFetchRequest.destination(),
-            context.fetchResponse(epoch, leaderId, records, 0L, Errors.NONE)
+            discoveryFetchRequest.correlationId(),
+            discoveryFetchRequest.destination(),
+            context.fetchResponse(epoch, leaderId, MemoryRecords.EMPTY, 0L, Errors.FENCED_LEADER_EPOCH)
         );
 
         context.client.poll();
         context.assertElectedLeader(epoch, leaderId);
+
+        // Expect a fetch request to the leader
+        context.pollUntilRequest();
+        RaftRequest.Outbound toLeaderFetchRequest = context.assertSentFetchRequest();
+        assertTrue(voters.contains(toLeaderFetchRequest.destination().id()));
+        context.assertFetchRequestData(toLeaderFetchRequest, epoch, 0L, 0);
+
+        context.time.sleep(context.fetchTimeoutMs);
+
+        // After the fetch timeout expect a request to a bootstrap server
+        context.pollUntilRequest();
+        RaftRequest.Outbound retryToBootstrapServerFetchRequest = context.assertSentFetchRequest();
+        assertFalse(voters.contains(retryToBootstrapServerFetchRequest.destination().id()));
+        assertTrue(Arrays.asList(-2, -3).contains(retryToBootstrapServerFetchRequest.destination().id()));
+        context.assertFetchRequestData(retryToBootstrapServerFetchRequest, epoch, 0L, 0);
+
+        // Deliver the delayed responses from the leader
+        Records records = context.buildBatch(0L, 3, Arrays.asList("a", "b"));
+        context.deliverResponse(
+            toLeaderFetchRequest.correlationId(),
+            toLeaderFetchRequest.destination(),
+            context.fetchResponse(epoch, leaderId, records, 0L, Errors.NONE)
+        );
+
+        context.client.poll();
+
+        // Deliver the same delayed responses from the bootstrap server and assume that it is the leader
+        records = context.buildBatch(0L, 3, Arrays.asList("a", "b"));
+        context.deliverResponse(
+            retryToBootstrapServerFetchRequest.correlationId(),
+            retryToBootstrapServerFetchRequest.destination(),
+            context.fetchResponse(epoch, leaderId, records, 0L, Errors.NONE)
+        );
+
+        // This poll should not fail when handling the duplicate response from the bootstrap server
+        context.client.poll();
     }
 
     @Test

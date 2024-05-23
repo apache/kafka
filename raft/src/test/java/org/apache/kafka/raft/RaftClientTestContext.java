@@ -863,7 +863,7 @@ public final class RaftClientTestContext {
         return requests;
     }
 
-    private static InetSocketAddress mockAddress(int id) {
+    public static InetSocketAddress mockAddress(int id) {
         return new InetSocketAddress("localhost", 9990 + id);
     }
 
