@@ -4280,14 +4280,104 @@ public class GroupMetadataManager {
      * @param context        The request context.
      * @param request        The actual LeaveGroup request.
      *
-     * @return The LeaveGroup response and the GroupMetadata record to append if the group
-     *         no longer has any members.
+     * @return The LeaveGroup response and the records to append.
      */
     public CoordinatorResult<LeaveGroupResponseData, CoordinatorRecord> classicGroupLeave(
         RequestContext context,
         LeaveGroupRequestData request
     ) throws UnknownMemberIdException, GroupIdNotFoundException {
-        ClassicGroup group = getOrMaybeCreateClassicGroup(request.groupId(), false);
+        Group group = groups.get(request.groupId(), Long.MAX_VALUE);
+
+        if (group == null) {
+            throw new UnknownMemberIdException(String.format("Group %s not found.", request.groupId()));
+        }
+
+        if (group.type() == CLASSIC) {
+            return classicGroupLeaveToClassicGroup((ClassicGroup) group, context, request);
+        } else {
+            return classicGroupLeaveToConsumerGroup((ConsumerGroup) group, context, request);
+        }
+    }
+
+    /**
+     * Handle a classic LeaveGroupRequest to a ConsumerGroup.
+     *
+     * @param group          The ConsumerGroup.
+     * @param context        The request context.
+     * @param request        The actual LeaveGroup request.
+     *
+     * @return The LeaveGroup response and the records to append.
+     */
+    private CoordinatorResult<LeaveGroupResponseData, CoordinatorRecord> classicGroupLeaveToConsumerGroup(
+        ConsumerGroup group,
+        RequestContext context,
+        LeaveGroupRequestData request
+    ) throws UnknownMemberIdException, GroupIdNotFoundException {
+        List<MemberResponse> memberResponses = new ArrayList<>();
+        List<CoordinatorRecord> records = new ArrayList<>();
+
+        for (MemberIdentity memberIdentity: request.members()) {
+            String memberId = memberIdentity.memberId();
+            String instanceId = memberIdentity.groupInstanceId();
+            String reason = memberIdentity.reason() != null ? memberIdentity.reason() : "not provided";
+
+            ConsumerGroupMember member;
+            try {
+                if (instanceId == null) {
+                    member = group.getOrMaybeCreateMember(memberId, false);
+                    throwIfMemberDoesNotUseClassicProtocol(member);
+
+                    log.info("[Group {}] Static Member {} has left group " +
+                            "through explicit `LeaveGroup` request; client reason: {}",
+                        group.groupId(), memberId, reason);
+                } else {
+                    member = group.staticMember(instanceId);
+                    throwIfStaticMemberIsUnknown(member, memberId);
+                    // The LeaveGroup API allows administrative removal of members by GroupInstanceId
+                    // in which case we expect the MemberId to be undefined.
+                    if (!UNKNOWN_MEMBER_ID.equals(memberId)) {
+                        throwIfInstanceIdIsFenced(member, group.groupId(), memberId, instanceId);
+                    }
+                    throwIfMemberDoesNotUseClassicProtocol(member);
+
+                    log.info("[Group {}] Static Member {} with instance id {} has left group " +
+                            "through explicit `LeaveGroup` request; client reason: {}",
+                        group.groupId(), memberId, instanceId, reason);
+                }
+
+                records.addAll(consumerGroupFenceMember(group, member, null).records());
+                memberResponses.add(
+                    new MemberResponse()
+                        .setMemberId(memberId)
+                        .setGroupInstanceId(instanceId)
+                );
+            } catch (KafkaException e) {
+                memberResponses.add(
+                    new MemberResponse()
+                        .setMemberId(memberId)
+                        .setGroupInstanceId(instanceId)
+                        .setErrorCode(Errors.forException(e).code())
+                );
+            }
+        }
+        return new CoordinatorResult<>(records, new LeaveGroupResponseData().setMembers(memberResponses));
+    }
+
+    /**
+     * Handle a classic LeaveGroupRequest to a ClassicGroup.
+     *
+     * @param group          The ClassicGroup.
+     * @param context        The request context.
+     * @param request        The actual LeaveGroup request.
+     *
+     * @return The LeaveGroup response and the GroupMetadata record to append if the group
+     *         no longer has any members.
+     */
+    private CoordinatorResult<LeaveGroupResponseData, CoordinatorRecord> classicGroupLeaveToClassicGroup(
+        ClassicGroup group,
+        RequestContext context,
+        LeaveGroupRequestData request
+    ) throws UnknownMemberIdException, GroupIdNotFoundException {
         if (group.isInState(DEAD)) {
             return new CoordinatorResult<>(
                 Collections.emptyList(),
