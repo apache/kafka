@@ -37,7 +37,7 @@ def doTest(env, target = "test") {
 }
 
 def runTestOnDevBranch(env) {
-  if (isChangeRequest(env)) {
+  if (!isChangeRequest(env)) {
     doTest(env)
   }
 }
