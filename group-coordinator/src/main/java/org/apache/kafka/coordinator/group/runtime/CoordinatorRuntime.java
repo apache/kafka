@@ -847,7 +847,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                                     );
                                 } else {
                                     throw new RecordTooLargeException("Message batch size is " + builder.estimatedSizeInBytes() +
-                                        " bytes in append to partition " + tp + " which exceeds the maximum configured size of " + maxBatchSize + ".");
+                                        " bytes in append to partition " + tp + " which exceeds the maximum " +
+                                        "configured size of " + maxBatchSize + ".");
                                 }
                             }
 
