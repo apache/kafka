@@ -52,10 +52,20 @@ public class LeaderEpochCheckpointFile implements LeaderEpochCheckpoint {
         checkpoint = new CheckpointFileWithFailureHandler<>(file, CURRENT_VERSION, FORMATTER, logDirFailureChannel, file.getParentFile().getParent());
     }
 
+    @Override
     public void write(Collection<EpochEntry> epochs) {
         checkpoint.write(epochs);
     }
 
+    @Override
+    public void writeForTruncation(Collection<EpochEntry> epochs) {
+        // Writing epoch entries after truncation is done asynchronously for performance reasons.
+        // This could cause NoSuchFileException when the directory is renamed concurrently for topic deletion,
+        // so we use writeIfDirExists here.
+        checkpoint.writeIfDirExists(epochs);
+    }
+
+    @Override
     public List<EpochEntry> read() {
         return checkpoint.read();
     }

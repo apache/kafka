@@ -24,5 +24,9 @@ import java.util.List;
 public interface LeaderEpochCheckpoint {
     void write(Collection<EpochEntry> epochs);
 
+    default void writeForTruncation(Collection<EpochEntry> epochs) {
+        write(epochs);
+    }
+
     List<EpochEntry> read();
 }
