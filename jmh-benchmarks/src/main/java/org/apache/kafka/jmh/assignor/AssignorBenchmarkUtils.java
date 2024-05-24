@@ -35,7 +35,7 @@ public class AssignorBenchmarkUtils {
      * @param groupAssignment       The group assignment.
      * @return Map of topic partition to member assignments.
      */
-    public static Map<Uuid, Map<Integer, String>> invertedTargetAssignment(
+    public static Map<Uuid, Map<Integer, String>> computeInvertedTargetAssignment(
         GroupAssignment groupAssignment
     ) {
         Map<Uuid, Map<Integer, String>> invertedTargetAssignment = new HashMap<>();

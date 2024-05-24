@@ -60,7 +60,6 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOGENEOUS;
-import static org.apache.kafka.jmh.assignor.AssignorBenchmarkUtils.invertedTargetAssignment;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
@@ -178,7 +177,7 @@ public class TargetAssignmentBuilderBenchmark {
             groupSpec,
             new SubscribedTopicMetadata(topicMetadataMap)
         );
-        invertedTargetAssignment = invertedTargetAssignment(groupAssignment);
+        invertedTargetAssignment = AssignorBenchmarkUtils.computeInvertedTargetAssignment(groupAssignment);
 
         Map<String, Assignment> initialTargetAssignment = new HashMap<>(memberCount);
 

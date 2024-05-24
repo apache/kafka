@@ -254,7 +254,7 @@ public class ServerSideAssignorBenchmark {
         GroupAssignment initialAssignment = partitionAssignor.assign(groupSpec, subscribedTopicDescriber);
         Map<String, MemberAssignment> members = initialAssignment.members();
 
-        Map<Uuid, Map<Integer, String>> invertedTargetAssignment = AssignorBenchmarkUtils.invertedTargetAssignment(initialAssignment);
+        Map<Uuid, Map<Integer, String>> invertedTargetAssignment = AssignorBenchmarkUtils.computeInvertedTargetAssignment(initialAssignment);
 
         Map<String, AssignmentMemberSpec> updatedMembers = new HashMap<>();
 
