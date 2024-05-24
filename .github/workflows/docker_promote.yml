@@ -19,10 +19,10 @@ on:
   workflow_dispatch:
     inputs:
       rc_docker_image:
-        description: RC docker image that needs to be promoted (Example:- apache/kafka:3.6.0-rc0, apache/kafka-native:3.6.0-rc0)
+        description: RC docker image that needs to be promoted (Example:- apache/kafka:3.8.0-rc0 (OR) apache/kafka-native:3.8.0-rc0)
         required: true
       promoted_docker_image:
-        description: Docker image name of the promoted image (Example:- apache/kafka:3.6.0, apache/kafka-native:3.6.0)
+        description: Docker image name of the promoted image (Example:- apache/kafka:3.8.0 (OR) apache/kafka-native:3.8.0)
         required: true
 
 jobs:
