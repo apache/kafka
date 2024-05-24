@@ -41,6 +41,7 @@ import org.apache.kafka.streams.processor.assignment.ApplicationState;
 import org.apache.kafka.streams.processor.assignment.TaskInfo;
 import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment;
+import org.apache.kafka.streams.processor.assignment.TaskTopicPartition;
 import org.apache.kafka.streams.processor.internals.assignment.ApplicationStateImpl;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.TopicsInfo;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
@@ -51,6 +52,7 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignorConfigura
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
 import org.apache.kafka.streams.processor.internals.assignment.CopartitionedTopicsEnforcer;
+import org.apache.kafka.streams.processor.internals.assignment.DefaultTaskTopicPartition;
 import org.apache.kafka.streams.processor.internals.assignment.FallbackPriorTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.RackUtils;
@@ -513,50 +515,45 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                               + "tasks for source topics vs changelog topics.");
         }
 
-        final Set<TopicPartition> sourceTopicPartitions = new HashSet<>();
-        final Set<TopicPartition> nonSourceChangelogTopicPartitions = new HashSet<>();
-        for (final Map.Entry<TaskId, Set<TopicPartition>> entry : sourcePartitionsForTask.entrySet()) {
-            final TaskId taskId = entry.getKey();
-            final Set<TopicPartition> taskSourcePartitions = entry.getValue();
-            final Set<TopicPartition> taskChangelogPartitions = changelogPartitionsForTask.get(taskId);
-            final Set<TopicPartition> taskNonSourceChangelogPartitions = new HashSet<>(taskChangelogPartitions);
-            taskNonSourceChangelogPartitions.removeAll(taskSourcePartitions);
-
-            sourceTopicPartitions.addAll(taskSourcePartitions);
-            nonSourceChangelogTopicPartitions.addAll(taskNonSourceChangelogPartitions);
-        }
-
-        final Map<TopicPartition, Set<String>> racksForSourcePartitions = RackUtils.getRacksForTopicPartition(
-            cluster, internalTopicManager, sourceTopicPartitions, false);
-        final Map<TopicPartition, Set<String>> racksForChangelogPartitions = RackUtils.getRacksForTopicPartition(
-            cluster, internalTopicManager, nonSourceChangelogTopicPartitions, true);
-
         final Set<TaskId> logicalTaskIds = unmodifiableSet(sourcePartitionsForTask.keySet());
+        final Set<DefaultTaskTopicPartition> allTopicPartitions = new HashSet<>();
+        final Map<TaskId, Set<TaskTopicPartition>> topicPartitionsForTask = new HashMap<>();
+        logicalTaskIds.forEach(taskId -> {
+            final Set<TaskTopicPartition> topicPartitions = new HashSet<>();
+
+            for (final TopicPartition topicPartition : sourcePartitionsForTask.get(taskId)) {
+                final boolean isSource = true;
+                final boolean isChangelog = changelogPartitionsForTask.get(taskId).contains(topicPartition);
+                final DefaultTaskTopicPartition racklessTopicPartition = new DefaultTaskTopicPartition(
+                    topicPartition, isSource, isChangelog, null);
+                allTopicPartitions.add(racklessTopicPartition);
+                topicPartitions.add(racklessTopicPartition);
+            }
+
+            for (final TopicPartition topicPartition : changelogPartitionsForTask.get(taskId)) {
+                final boolean isSource = sourcePartitionsForTask.get(taskId).contains(topicPartition);
+                final boolean isChangelog = true;
+                final DefaultTaskTopicPartition racklessTopicPartition = new DefaultTaskTopicPartition(
+                    topicPartition, isSource, isChangelog, null);
+                allTopicPartitions.add(racklessTopicPartition);
+                topicPartitions.add(racklessTopicPartition);
+            }
+
+            topicPartitionsForTask.put(taskId, topicPartitions);
+        });
+
+        RackUtils.annotateTopicPartitionsWithRackInfo(cluster, internalTopicManager, allTopicPartitions);
+
         final Set<TaskInfo> logicalTasks = logicalTaskIds.stream().map(taskId -> {
             final Set<String> stateStoreNames = topologyMetadata
                 .stateStoreNameToSourceTopicsForTopology(taskId.topologyName())
                 .keySet();
-            final Set<TopicPartition> sourcePartitions = sourcePartitionsForTask.get(taskId);
-            final Set<TopicPartition> changelogPartitions = changelogPartitionsForTask.get(taskId);
-            final Map<TopicPartition, Set<String>> racksForTaskPartition = new HashMap<>();
-            sourcePartitions.forEach(topicPartition -> {
-                racksForTaskPartition.put(topicPartition, racksForSourcePartitions.get(topicPartition));
-            });
-            changelogPartitions.forEach(topicPartition -> {
-                if (racksForSourcePartitions.containsKey(topicPartition)) {
-                    racksForTaskPartition.put(topicPartition, racksForSourcePartitions.get(topicPartition));
-                } else {
-                    racksForTaskPartition.put(topicPartition, racksForChangelogPartitions.get(topicPartition));
-                }
-            });
-
+            final Set<TaskTopicPartition> topicPartitions = topicPartitionsForTask.get(taskId);
             return new DefaultTaskInfo(
                 taskId,
                 !stateStoreNames.isEmpty(),
-                racksForTaskPartition,
                 stateStoreNames,
-                sourcePartitions,
-                changelogPartitions
+                topicPartitions
             );
         }).collect(Collectors.toSet());
 
