@@ -369,16 +369,21 @@ public class ProducerStateManager {
      * Also expire any verification state entries that are lingering as unverified.
      */
     public void removeExpiredProducers(long currentTimeMs) {
-        List<Long> keys = producers.entrySet().stream()
-                .filter(entry -> isProducerExpired(currentTimeMs, entry.getValue()))
-                .map(Map.Entry::getKey)
-                .collect(Collectors.toList());
+        List<Long> keys = new ArrayList<>();
+        producers.entrySet().forEach(entry -> {
+            if (isProducerExpired(currentTimeMs, entry.getValue())) {
+                keys.add(entry.getKey());
+            }
+        });
         removeProducerIds(keys);
 
-        List<Long> verificationKeys = verificationStates.entrySet().stream()
-                .filter(entry -> currentTimeMs - entry.getValue().timestamp() >= producerStateManagerConfig.producerIdExpirationMs())
-                .map(Map.Entry::getKey)
-                .collect(Collectors.toList());
+        List<Long> verificationKeys = new ArrayList<>(keys.size());
+        verificationStates.entrySet().stream()
+            .forEach(entry -> {
+                if (currentTimeMs - entry.getValue().timestamp() >= producerStateManagerConfig.producerIdExpirationMs()) {
+                    verificationKeys.add(entry.getKey());
+                }
+            });
         verificationKeys.forEach(verificationStates::remove);
     }
 

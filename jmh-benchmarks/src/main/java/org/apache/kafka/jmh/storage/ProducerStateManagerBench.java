@@ -49,7 +49,7 @@ import java.util.concurrent.TimeUnit;
 @Fork(1)
 @BenchmarkMode(Mode.AverageTime)
 @State(value = Scope.Benchmark)
-@OutputTimeUnit(TimeUnit.NANOSECONDS)
+@OutputTimeUnit(TimeUnit.MICROSECONDS)
 public class ProducerStateManagerBench {
     Time time = new MockTime();
     final int producerIdExpirationMs = 1000;
@@ -57,23 +57,35 @@ public class ProducerStateManagerBench {
     ProducerStateManager manager;
     Path tempDirectory;
 
-    @Param({"100", "1000", "10000", "100000"})
+    @Param({"10000", "100000", "1000000"})
     public int numProducerIds;
 
-    @Setup(Level.Trial)
+    @Setup(Level.Invocation)
     public void setup() throws IOException {
         tempDirectory = Files.createTempDirectory("kafka-logs");
         manager = new ProducerStateManager(
-            new TopicPartition("t1", 0),
-            tempDirectory.toFile(),
-            Integer.MAX_VALUE,
-            new ProducerStateManagerConfig(producerIdExpirationMs, false),
-            time
+                new TopicPartition("t1", 0),
+                tempDirectory.toFile(),
+                Integer.MAX_VALUE,
+                new ProducerStateManagerConfig(producerIdExpirationMs, false),
+                time
         );
+        short epoch = 0;
+        for (long i = 0L; i < numProducerIds; i++) {
+            final ProducerStateEntry entry = new ProducerStateEntry(
+                    i,
+                    epoch,
+                    0,
+                    time.milliseconds(),
+                    OptionalLong.empty(),
+                    Optional.empty()
+            );
+            manager.loadProducerEntry(entry);
+        }
     }
 
 
-    @TearDown(Level.Trial)
+    @TearDown(Level.Invocation)
     public void tearDown() throws Exception {
         Files.deleteIfExists(tempDirectory);
     }
@@ -81,19 +93,6 @@ public class ProducerStateManagerBench {
     @Benchmark
     @Threads(1)
     public void testDeleteExpiringIds() {
-        short epoch = 0;
-        for (long i = 0L; i < numProducerIds; i++) {
-            final ProducerStateEntry entry = new ProducerStateEntry(
-                i,
-                epoch,
-                0,
-                time.milliseconds(),
-                OptionalLong.empty(),
-                Optional.empty()
-            );
-            manager.loadProducerEntry(entry);
-        }
-
         manager.removeExpiredProducers(time.milliseconds() + producerIdExpirationMs + 1);
     }
 }
