@@ -115,7 +115,8 @@ public final class TaskAssignmentUtils {
         }
 
         if (!hasValidRackInformation(applicationState)) {
-            throw new IllegalStateException("Cannot perform rack-aware assignment optimizations with invalid rack information.");
+            LOG.warn("Cannot optimize active tasks with invalid rack information.");
+            return kafkaStreamsAssignments;
         }
 
         final int crossRackTrafficCost= applicationState.assignmentConfigs().rackAwareTrafficCost();
@@ -136,17 +137,10 @@ public final class TaskAssignmentUtils {
         final Map<ProcessId, KafkaStreamsState> kafkaStreamsStates = applicationState.kafkaStreamsStates(false);
         final Map<UUID, Optional<String>> clientRacks = kafkaStreamsStates.values().stream().collect(
                 Collectors.toMap(state -> state.processId().id(), KafkaStreamsState::rackId));
-        final Map<UUID, Set<TaskId>> previousTaskIdsByProcess = kafkaStreamsAssignments.values().stream()
-            .collect(
-            Collectors.toMap(
-                assignment -> assignment.processId().id(),
-                assignment -> {
-                    return assignment.assignment().stream().map(AssignedTask::id)
-                        .filter(tasks::contains)
-                        .collect(Collectors.toSet());
-                }
-            )
-        );
+        final Map<UUID, Set<TaskId>> previousTaskIdsByProcess = kafkaStreamsStates.values().stream().collect(Collectors.toMap(
+            state -> state.processId().id(),
+            KafkaStreamsState::previousActiveTasks
+        ));
         final Map<TaskId, Set<TaskTopicPartition>> topicPartitionsByTaskId = applicationState.allTasks().stream()
             .filter(taskInfo -> tasks.contains(taskInfo.id()))
             .collect(Collectors.toMap(TaskInfo::id, TaskInfo::topicPartitions));
@@ -171,7 +165,7 @@ public final class TaskAssignmentUtils {
 
         final Map<UUID, Set<AssignedTask>> reassigned = new HashMap<>();
         final Map<UUID, Set<TaskId>> unassigned = new HashMap<>();
-        final boolean taskMoved = graphConstructor.assignTaskFromMinCostFlow(
+        graphConstructor.assignTaskFromMinCostFlow(
             assignmentGraph.graph,
             clientIds,
             taskIds,
@@ -261,15 +255,15 @@ public final class TaskAssignmentUtils {
     }
 
     private static AssignmentGraph buildTaskGraph(final List<UUID> clientIds,
-                                                 final Map<UUID, Optional<String>> clientRacks,
-                                                 final List<TaskId> taskIds,
-                                                 final Map<UUID, Set<TaskId>> previousTaskIdsByProcess,
-                                                 final Map<TaskId, Set<TaskTopicPartition>> topicPartitionsByTaskId,
-                                                 final int crossRackTrafficCost,
-                                                 final int nonOverlapCost,
-                                                 final boolean hasReplica,
-                                                 final boolean isStandby,
-                                                 final RackAwareGraphConstructor<UUID> graphConstructor) {
+                                                  final Map<UUID, Optional<String>> clientRacks,
+                                                  final List<TaskId> taskIds,
+                                                  final Map<UUID, Set<TaskId>> previousTaskIdsByProcess,
+                                                  final Map<TaskId, Set<TaskTopicPartition>> topicPartitionsByTaskId,
+                                                  final int crossRackTrafficCost,
+                                                  final int nonOverlapCost,
+                                                  final boolean hasReplica,
+                                                  final boolean isStandby,
+                                                  final RackAwareGraphConstructor<UUID> graphConstructor) {
         final Map<UUID, UUID> clientsUuidByUuid = clientIds.stream().collect(Collectors.toMap(id -> id, id -> id));
         final Map<TaskId, UUID> clientByTask = new HashMap<>();
         final Map<UUID, Integer> taskCountByClient = new HashMap<>();
