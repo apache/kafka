@@ -37,6 +37,7 @@ import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 
+import java.nio.charset.StandardCharsets
 import java.util
 import java.util.Base64
 import java.util.Optional
@@ -95,6 +96,10 @@ object StorageTool extends Logging {
           Exit.exit(formatCommand(System.out, directories, metaProperties, bootstrapMetadata,
                                   metadataVersion,ignoreFormatted))
 
+        case "standalone" =>
+          val directory = configToMetadataLogDirectories(config.get)
+          System.out.println("In standalone mode", directory)
+          Exit.exit(standaloneCommand(System.out, directory))
         case "random-uuid" =>
           System.out.println(Uuid.randomUuid)
           Exit.exit(0)
@@ -118,10 +123,12 @@ object StorageTool extends Logging {
 
     val infoParser = subparsers.addParser("info").
       help("Get information about the Kafka log directories on this node.")
+    val standaloneParser = subparsers.addParser("standalone").
+      help("Create a meta.properties file in metadata log directory on this node.")
     val formatParser = subparsers.addParser("format").
       help("Format the Kafka log directories on this node.")
     subparsers.addParser("random-uuid").help("Print a random UUID.")
-    List(infoParser, formatParser).foreach(parser => {
+    List(infoParser, standaloneParser, formatParser).foreach(parser => {
       parser.addArgument("--config", "-c").
         action(store()).
         required(true).
@@ -150,6 +157,10 @@ object StorageTool extends Logging {
     directories ++= config.logDirs
     Option(config.metadataLogDir).foreach(directories.add)
     directories.toSeq
+  }
+
+  def configToMetadataLogDirectories(config: KafkaConfig): String = {
+    config.metadataLogDir
   }
 
   private def configToSelfManagedMode(config: KafkaConfig): Boolean = config.processRoles.nonEmpty
@@ -280,6 +291,56 @@ object StorageTool extends Logging {
     } else {
       None
     }
+  }
+
+  def standaloneCommand(stream: PrintStream, directory: String): Int = {
+    val problems = new mutable.ArrayBuffer[String]
+    val directoryPath = Paths.get(directory)
+    if (!Files.isDirectory(directoryPath)) {
+      if (!Files.exists(directoryPath)) {
+        problems += s"$directoryPath does not exist"
+      } else {
+        problems += s"$directoryPath is not a directory"
+      }
+    } else {
+      val metaPath = directoryPath.resolve(MetaPropertiesEnsemble.META_PROPERTIES_NAME)
+      if (Files.exists(metaPath)) {
+        problems += s"$metaPath exists."
+      }else{
+        if (directoryPath.toString.nonEmpty) {
+          stream.println("Found metadata log directory:")
+          stream.println("  %s".format(directoryPath))
+          stream.println("")
+        }
+        Files.createFile(metaPath)
+        val randomDirectoryId = generateDirectoryId()
+        val content = s"directory.id=$randomDirectoryId"
+        Files.write(metaPath, content.getBytes(StandardCharsets.UTF_8))
+        stream.println("directory.id written to file : " + metaPath)
+      }
+    }
+
+    if (directory.isEmpty) {
+      stream.println("No directories specified.")
+      0
+    } else {
+      if (problems.nonEmpty) {
+        if (problems.size == 1) {
+          stream.println("Found problem:")
+        } else {
+          stream.println("Found problems:")
+        }
+        problems.foreach(d => stream.println("  %s".format(d)))
+        stream.println("")
+        1
+      } else {
+        0
+      }
+    }
+  }
+
+  def generateDirectoryId(): String = {
+    Uuid.randomUuid.toString
   }
 
   def infoCommand(stream: PrintStream, selfManagedMode: Boolean, directories: Seq[String]): Int = {

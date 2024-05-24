@@ -166,6 +166,55 @@ Found problem:
   }
 
   @Test
+  def testStandaloneCommandOnEmptyDirectory(): Unit = {
+    val stream = new ByteArrayOutputStream()
+    val tempDir = TestUtils.tempDir()
+    val metaPropertiesFile = tempDir + "/" + MetaPropertiesEnsemble.META_PROPERTIES_NAME
+    try {
+      assertEquals(0, StorageTool.
+        standaloneCommand(new PrintStream(stream), tempDir.toString))
+
+      assertEquals(
+        s"""Found metadata log directory:
+  ${tempDir.toString}
+
+directory.id written to file : ${metaPropertiesFile}
+""", stream.toString())
+    } finally Utils.delete(tempDir)
+  }
+
+  @Test
+  def testStorageCommandOnMissingDirectory(): Unit = {
+    val stream = new ByteArrayOutputStream()
+    val tempDir = TestUtils.tempDir()
+    tempDir.delete()
+    try {
+      assertEquals(1, StorageTool.
+        standaloneCommand(new PrintStream(stream), tempDir.toString))
+      assertEquals(
+        s"""Found problem:
+  ${tempDir.toString} does not exist
+
+""", stream.toString())
+    } finally Utils.delete(tempDir)
+  }
+
+  @Test
+  def testStorageCommandOnDirectoryAsFile(): Unit = {
+    val stream = new ByteArrayOutputStream()
+    val tempFile = TestUtils.tempFile()
+    try {
+      assertEquals(1, StorageTool.
+        standaloneCommand(new PrintStream(stream), tempFile.toString))
+      assertEquals(
+        s"""Found problem:
+  ${tempFile.toString} is not a directory
+
+""", stream.toString())
+    } finally tempFile.delete()
+  }
+
+  @Test
   def testFormatEmptyDirectory(): Unit = {
     val tempDir = TestUtils.tempDir()
     try {
