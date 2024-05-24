@@ -97,7 +97,7 @@ allprojects {
       }
     }
   }
-    task printAllDependencies(type: DependencyReportTask) {}
+
 }
 
 ext {
@@ -396,7 +396,7 @@ subprojects {
       exceptionFormat = testExceptionFormat
     }
     logTestStdout.rehydrate(delegate, owner, this)()
-
+    
     // The suites are for running sets of tests in IDEs.
     // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
     exclude '**/*Suite.class'
@@ -740,7 +740,7 @@ project(':core') {
   println "Building project 'core' with Scala version ${versions.scala}"
 
   apply plugin: 'scala'
-
+  
   // scaladoc generation is configured at the sub-module level with an artifacts
   // block (cf. see streams-scala). If scaladoc generation is invoked explicitly
   // for the `core` module, this ensures the generated jar doesn't include scaladoc
@@ -1292,7 +1292,7 @@ project(':raft') {
       }
     }
   }
-
+  
   compileJava.dependsOn 'processMessages'
 
   jar {
@@ -1322,21 +1322,21 @@ project(':tools') {
     compile libs.jacksonJDK8Datatypes
     compile libs.slf4jApi
 
-    implementation libs.jacksonJaxrsJsonProvider
-    implementation libs.jerseyContainerServlet
-    implementation libs.jerseyHk2
-    implementation libs.jaxbApi // Jersey dependency that was available in the JDK before Java 9
-    implementation libs.activation // Jersey dependency that was available in the JDK before Java 9
-    implementation libs.jettyServer
-    implementation libs.jettyServlet
-    implementation libs.jettyServlets
+    compile libs.jacksonJaxrsJsonProvider
+    compile libs.jerseyContainerServlet
+    compile libs.jerseyHk2
+    compile libs.jaxbApi // Jersey dependency that was available in the JDK before Java 9
+    compile libs.activation // Jersey dependency that was available in the JDK before Java 9
+    compile libs.jettyServer
+    compile libs.jettyServlet
+    compile libs.jettyServlets
 
-    testImplementation project(':clients')
-    testImplementation libs.junitJupiter
-    testImplementation project(':clients').sourceSets.test.output
-    testImplementation libs.mockitoInline // supports mocking static methods, final classes, etc.
+    testCompile project(':clients')
+    testCompile libs.junitJupiter
+    testCompile project(':clients').sourceSets.test.output
+    testCompile libs.mockitoInline // supports mocking static methods, final classes, etc.
 
-    testRuntimeOnly libs.slf4jlog4j
+    testRuntime libs.slf4jlog4j
   }
 
   javadoc {
@@ -1344,11 +1344,11 @@ project(':tools') {
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
-    from (configurations.testRuntimeClasspath) {
+    from (configurations.testRuntime) {
       include('slf4j-log4j12*')
       include('log4j*jar')
     }
-    from (configurations.runtimeClasspath) {
+    from (configurations.runtime) {
       exclude('kafka-clients*')
     }
     into "$buildDir/dependant-libs-${versions.scala}"
