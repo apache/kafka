@@ -4457,7 +4457,7 @@ public class GroupMetadataManager {
         ConsumerGroup group,
         RequestContext context,
         LeaveGroupRequestData request
-    ) throws UnknownMemberIdException, GroupIdNotFoundException {
+    ) throws UnknownMemberIdException {
         String groupId = group.groupId();
         List<MemberResponse> memberResponses = new ArrayList<>();
         Set<ConsumerGroupMember> validLeaveGroupMembers = new HashSet<>();
@@ -4479,7 +4479,7 @@ public class GroupMetadataManager {
                         groupId, memberId, reason);
                 } else {
                     member = group.staticMember(instanceId);
-                    throwIfStaticMemberIsUnknown(member, memberId);
+                    throwIfStaticMemberIsUnknown(member, instanceId);
                     // The LeaveGroup API allows administrative removal of members by GroupInstanceId
                     // in which case we expect the MemberId to be undefined.
                     if (!UNKNOWN_MEMBER_ID.equals(memberId)) {
