@@ -34,6 +34,17 @@ public class ErrorHandlerContextImpl implements ErrorHandlerContext {
     private final String processorNodeId;
     private final TaskId taskId;
 
+    public ErrorHandlerContextImpl(final String topic,
+                                   final int partition,
+                                   final long offset,
+                                   final Headers headers,
+                                   final byte[] sourceRawKey,
+                                   final byte[] sourceRawValue,
+                                   final String processorNodeId,
+                                   final TaskId taskId) {
+        this(null, topic, partition, offset, headers, sourceRawKey, sourceRawValue, processorNodeId, taskId);
+    }
+
     public ErrorHandlerContextImpl(final InternalProcessorContext processorContext,
                                    final String topic,
                                    final int partition,

@@ -29,11 +29,13 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.LockException;
+import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.Cancellable;
+import org.apache.kafka.streams.processor.ErrorHandlerContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.TaskId;
@@ -62,6 +64,7 @@ import java.util.stream.Collectors;
 
 import static java.util.Collections.singleton;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeRecordSensor;
+import static org.apache.kafka.streams.StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
 /**
@@ -910,7 +913,19 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         } catch (final StreamsException e) {
             throw e;
         } catch (final RuntimeException e) {
-            throw new StreamsException(String.format("%sException caught while punctuating processor '%s'", logPrefix, node.name()), e);
+            final ErrorHandlerContext errorHandlerContext = new ErrorHandlerContextImpl(recordContext.topic(),
+                recordContext.partition(), recordContext.offset(), recordContext.headers(), null, null, node.name(), id);
+            final ProcessingExceptionHandler.ProcessingHandlerResponse response = config.processingExceptionHandler
+                .handle(errorHandlerContext, null, e);
+
+            if (response == ProcessingExceptionHandler.ProcessingHandlerResponse.FAIL) {
+                throw new StreamsException(String.format("%sException caught while punctuating processor '%s'. " +
+                    "Processing exception handler is set to fail upon" +
+                    " a processing error. If you would rather have the streaming pipeline" +
+                    " continue after a processing error, please set the " +
+                    PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.", logPrefix, node.name()),
+                    e);
+            }
         } finally {
             processorContext.setCurrentNode(null);
         }

@@ -304,7 +304,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
                 final byte[] rawKey = streamTask.rawRecord() != null ? streamTask.rawRecord().key() : null;
                 final byte[] rawValue = streamTask.rawRecord() != null ? streamTask.rawRecord().value() : null;
 
-                final ErrorHandlerContext errorHandlerContext = new ErrorHandlerContextImpl(null, topic(),
+                final ErrorHandlerContext errorHandlerContext = new ErrorHandlerContextImpl(topic(),
                         partition(), offset(), headers(), rawKey, rawValue,
                         child.name(), taskId());
                 final ProcessingExceptionHandler.ProcessingHandlerResponse response = processingExceptionHandler

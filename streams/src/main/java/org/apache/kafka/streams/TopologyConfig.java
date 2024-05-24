@@ -22,15 +22,16 @@ import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
+import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.TimestampExtractor;
-
 import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNamedTopologyWrapper;
 import org.apache.kafka.streams.state.DslStoreSuppliers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import java.util.Optional;
 import java.util.Properties;
 import java.util.function.Supplier;
@@ -135,6 +136,7 @@ public class TopologyConfig extends AbstractConfig {
     public final Class<?> dslStoreSuppliers;
     public final Supplier<TimestampExtractor> timestampExtractorSupplier;
     public final Supplier<DeserializationExceptionHandler> deserializationExceptionHandlerSupplier;
+    public final Supplier<ProcessingExceptionHandler> processingExceptionHandler;
 
     public TopologyConfig(final StreamsConfig globalAppConfigs) {
         this(null, globalAppConfigs, new Properties());
@@ -150,6 +152,7 @@ public class TopologyConfig extends AbstractConfig {
 
         this.applicationConfigs = globalAppConfigs;
         this.topologyOverrides = topologyOverrides;
+        this.processingExceptionHandler = () -> globalAppConfigs.getConfiguredInstance(PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, ProcessingExceptionHandler.class);
 
         if (isTopologyOverride(BUFFERED_RECORDS_PER_PARTITION_CONFIG, topologyOverrides)) {
             maxBufferedSize = getInt(BUFFERED_RECORDS_PER_PARTITION_CONFIG);
@@ -280,7 +283,8 @@ public class TopologyConfig extends AbstractConfig {
             maxBufferedSize,
             timestampExtractorSupplier.get(),
             deserializationExceptionHandlerSupplier.get(),
-            eosEnabled
+            eosEnabled,
+            processingExceptionHandler.get()
         );
     }
 
@@ -291,19 +295,22 @@ public class TopologyConfig extends AbstractConfig {
         public final TimestampExtractor timestampExtractor;
         public final DeserializationExceptionHandler deserializationExceptionHandler;
         public final boolean eosEnabled;
+        public final ProcessingExceptionHandler processingExceptionHandler;
 
         private TaskConfig(final long maxTaskIdleMs,
                            final long taskTimeoutMs,
                            final int maxBufferedSize,
                            final TimestampExtractor timestampExtractor,
                            final DeserializationExceptionHandler deserializationExceptionHandler,
-                           final boolean eosEnabled) {
+                           final boolean eosEnabled,
+                           final ProcessingExceptionHandler processingExceptionHandler) {
             this.maxTaskIdleMs = maxTaskIdleMs;
             this.taskTimeoutMs = taskTimeoutMs;
             this.maxBufferedSize = maxBufferedSize;
             this.timestampExtractor = timestampExtractor;
             this.deserializationExceptionHandler = deserializationExceptionHandler;
             this.eosEnabled = eosEnabled;
+            this.processingExceptionHandler = processingExceptionHandler;
         }
     }
 }
