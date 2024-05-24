@@ -147,6 +147,23 @@ import static org.mockito.Mockito.when;
 
 public class GroupMetadataManagerTest {
     @Test
+    public void testGetOrMaybeCreateClassicGroupReturnsUnknownMemberIdException() {
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withAssignors(Collections.singletonList(assignor))
+            .build();
+
+        // When the group does not exist, we get UnknownMemberIdException.
+        assertThrows(UnknownMemberIdException.class,
+            () -> context.groupMetadataManager.getOrMaybeCreateClassicGroup("bar", false));
+
+        // When the group does exist but with a different type, we get UnknownMemberIdException.
+        context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup("foo", true);
+        assertThrows(UnknownMemberIdException.class,
+            () -> context.groupMetadataManager.getOrMaybeCreateClassicGroup("foo", true));
+    }
+
+    @Test
     public void testConsumerHeartbeatRequestValidation() {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()

@@ -641,8 +641,7 @@ public class GroupMetadataManager {
             } else if (createIfNotExists && validateOnlineUpgrade((ClassicGroup) group)) {
                 return convertToConsumerGroup((ClassicGroup) group, records);
             } else {
-                throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.",
-                    groupId));
+                throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.", groupId));
             }
         }
     }
@@ -728,15 +727,15 @@ public class GroupMetadataManager {
      *                          created if it does not exist.
      *
      * @return A ClassicGroup.
-     * @throws UnknownMemberIdException if the group does not exist and createIfNotExists is false.
-     * @throws GroupIdNotFoundException if the group is not a classic group.
+     * @throws UnknownMemberIdException if the group does not exist and createIfNotExists is false. We
+     *                                  use this exception for historical reasons.
      *
      * Package private for testing.
      */
     ClassicGroup getOrMaybeCreateClassicGroup(
         String groupId,
         boolean createIfNotExists
-    ) throws UnknownMemberIdException, GroupIdNotFoundException {
+    ) throws UnknownMemberIdException {
         Group group = groups.get(groupId);
 
         if (group == null && !createIfNotExists) {
@@ -752,10 +751,7 @@ public class GroupMetadataManager {
             if (group.type() == CLASSIC) {
                 return (ClassicGroup) group;
             } else {
-                // We don't support upgrading/downgrading between protocols at the moment so
-                // we throw an exception if a group exists with the wrong type.
-                throw new GroupIdNotFoundException(String.format("Group %s is not a classic group.",
-                    groupId));
+                throw new UnknownMemberIdException(String.format("Group %s is not a classic group.", groupId));
             }
         }
     }
@@ -778,10 +774,7 @@ public class GroupMetadataManager {
         if (group.type() == CLASSIC) {
             return (ClassicGroup) group;
         } else {
-            // We don't support upgrading/downgrading between protocols at the moment so
-            // we throw an exception if a group exists with the wrong type.
-            throw new GroupIdNotFoundException(String.format("Group %s is not a classic group.",
-                groupId));
+            throw new GroupIdNotFoundException(String.format("Group %s is not a classic group.", groupId));
         }
     }
 
@@ -3204,7 +3197,7 @@ public class GroupMetadataManager {
         ClassicGroup group;
         try {
             group = getOrMaybeCreateClassicGroup(groupId, false);
-        } catch (UnknownMemberIdException | GroupIdNotFoundException exception) {
+        } catch (UnknownMemberIdException exception) {
             log.debug("Cannot find the group, skipping rebalance stage.", exception);
             return EMPTY_RESULT;
         }
@@ -3348,7 +3341,7 @@ public class GroupMetadataManager {
         ClassicGroup group;
         try {
             group = getOrMaybeCreateClassicGroup(groupId, false);
-        } catch (UnknownMemberIdException | GroupIdNotFoundException exception) {
+        } catch (UnknownMemberIdException exception) {
             log.debug("Received notification of heartbeat expiration for member {} after group {} " +
                 "had already been deleted or upgraded.", memberId, groupId);
             return EMPTY_RESULT;
@@ -3622,7 +3615,7 @@ public class GroupMetadataManager {
         ClassicGroup group;
         try {
             group = getOrMaybeCreateClassicGroup(groupId, false);
-        } catch (UnknownMemberIdException | GroupIdNotFoundException exception) {
+        } catch (UnknownMemberIdException exception) {
             log.debug("Cannot find the group, skipping the initial rebalance stage.", exception);
             return EMPTY_RESULT;
         }
@@ -3779,7 +3772,7 @@ public class GroupMetadataManager {
         ClassicGroup group;
         try {
             group = getOrMaybeCreateClassicGroup(groupId, false);
-        } catch (UnknownMemberIdException | GroupIdNotFoundException exception) {
+        } catch (UnknownMemberIdException exception) {
             log.debug("Received notification of sync expiration for an unknown classic group {}.", groupId);
             return EMPTY_RESULT;
         }
@@ -4431,7 +4424,7 @@ public class GroupMetadataManager {
     public CoordinatorResult<LeaveGroupResponseData, CoordinatorRecord> classicGroupLeave(
         RequestContext context,
         LeaveGroupRequestData request
-    ) throws UnknownMemberIdException, GroupIdNotFoundException {
+    ) throws UnknownMemberIdException {
         ClassicGroup group = getOrMaybeCreateClassicGroup(request.groupId(), false);
         if (group.isInState(DEAD)) {
             return new CoordinatorResult<>(
