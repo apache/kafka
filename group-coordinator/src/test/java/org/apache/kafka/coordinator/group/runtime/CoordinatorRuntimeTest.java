@@ -81,7 +81,7 @@ import static org.apache.kafka.coordinator.group.runtime.CoordinatorRuntime.Coor
 import static org.apache.kafka.coordinator.group.runtime.CoordinatorRuntime.CoordinatorState.FAILED;
 import static org.apache.kafka.coordinator.group.runtime.CoordinatorRuntime.CoordinatorState.INITIAL;
 import static org.apache.kafka.coordinator.group.runtime.CoordinatorRuntime.CoordinatorState.LOADING;
-import static org.apache.kafka.coordinator.group.runtime.CoordinatorRuntime.SIXTEEN_KB;
+import static org.apache.kafka.coordinator.group.runtime.CoordinatorRuntime.MIN_BUFFER_SIZE;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -225,7 +225,6 @@ public class CoordinatorRuntimeTest {
         private final int maxWrites;
         private final boolean failEndMarker;
         private final AtomicInteger writeCount = new AtomicInteger(0);
-        private MemoryRecords lastBatch = null;
 
         public MockPartitionWriter() {
             this(Integer.MAX_VALUE, false);
@@ -261,7 +260,6 @@ public class CoordinatorRuntimeTest {
             VerificationGuard verificationGuard,
             MemoryRecords batch
         ) {
-            lastBatch = batch;
             if (writeCount.incrementAndGet() > maxWrites)
                 throw new KafkaException("Maximum number of writes reached");
 
@@ -3040,7 +3038,7 @@ public class CoordinatorRuntimeTest {
         assertEquals(Collections.singletonList(0L), ctx.coordinator.snapshotRegistry().epochsList());
 
         int maxBatchSize = writer.config(TP).maxMessageSize();
-        assertTrue(maxBatchSize > SIXTEEN_KB);
+        assertTrue(maxBatchSize > MIN_BUFFER_SIZE);
 
         // Generate enough records to create a batch that has 16KB < batchSize < maxBatchSize
         List<String> records = new ArrayList<>();
@@ -3057,8 +3055,8 @@ public class CoordinatorRuntimeTest {
         // This will catch any exceptions thrown including RecordTooLargeException.
         assertFalse(write1.isCompletedExceptionally());
 
-        int batchSize = writer.lastBatch.sizeInBytes();
-        assertTrue(batchSize > SIXTEEN_KB && batchSize < maxBatchSize);
+        int batchSize = writer.entries(TP).get(0).sizeInBytes();
+        assertTrue(batchSize > MIN_BUFFER_SIZE && batchSize < maxBatchSize);
     }
 
     private static <S extends CoordinatorShard<U>, U> ArgumentMatcher<CoordinatorPlayback<U>> coordinatorMatcher(

@@ -800,7 +800,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         byte magic = logConfig.recordVersion().value;
                         int maxBatchSize = logConfig.maxMessageSize();
                         long currentTimeMs = time.milliseconds();
-                        ByteBuffer buffer = context.bufferSupplier.get(Math.min(SIXTEEN_KB, maxBatchSize));
+                        ByteBuffer buffer = context.bufferSupplier.get(Math.min(MIN_BUFFER_SIZE, maxBatchSize));
 
                         try {
                             MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
@@ -1371,7 +1371,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     /**
      * 16KB. Used for initial buffer size for write operations.
      */
-    static final int SIXTEEN_KB = 16384;
+    static final int MIN_BUFFER_SIZE = 16384;
 
     /**
      * The log prefix.
