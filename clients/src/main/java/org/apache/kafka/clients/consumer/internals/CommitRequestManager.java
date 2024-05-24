@@ -1090,12 +1090,14 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         @Override
-        public String toStringBase() {
-            return super.toStringBase() +
+        public String toString() {
+            return "OffsetFetchRequestState{" +
+                    "requestedPartitions=" + requestedPartitions +
                     ", memberId=" + memberInfo.memberId.orElse("undefined") +
-                    ", memberEpoch=" + (memberInfo.memberEpoch.isPresent() ?  memberInfo.memberEpoch.get() : "undefined") +
-                    ", requestedPartitions=" + requestedPartitions +
-                    ", future=" + future;
+                    ", memberEpoch=" + (memberInfo.memberEpoch.isPresent() ? memberInfo.memberEpoch.get() : "undefined") +
+                    ", future=" + future +
+                    ", " + toStringBase() +
+                    '}';
         }
     }
 
