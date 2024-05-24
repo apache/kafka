@@ -151,6 +151,20 @@ public class HeartbeatRequestManagerTest {
     }
 
     @Test
+    public void testHeartBeatRequestStateToStringBase() {
+        LogContext logContext = mock(LogContext.class);
+        RequestState requestState = new RequestState(
+                logContext,
+                "CommitRequestManager",
+                10,
+                100);
+        String target = requestState.toStringBase() +
+                ", heartbeatTimer=" + heartbeatRequestState.heartbeatTimer +
+                ", heartbeatIntervalMs=" + heartbeatRequestState.heartbeatIntervalMs;
+        assertEquals(target, heartbeatRequestState.toStringBase());
+    }
+
+    @Test
     public void testHeartbeatOnStartup() {
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(0, result.unsentRequests.size());
