@@ -46,13 +46,17 @@ public class RequestManager {
         this.random = random;
     }
 
-    private boolean hasAnyInflightRequest(long currentTimeMs) {
-        Iterator<ConnectionState> iterator = connections.values().iterator();
+    public boolean hasAnyInflightRequest(long currentTimeMs) {
         boolean result = false;
+
+        Iterator<ConnectionState> iterator = connections.values().iterator();
         while (iterator.hasNext()) {
             ConnectionState connection = iterator.next();
             if (connection.hasRequestTimedOut(currentTimeMs)) {
-                // Reset any connection where a request has timed out
+                // Mark the node as ready after request timeout
+                iterator.remove();
+            } else if (connection.isBackoffComplete(currentTimeMs)) {
+                // Mark the node as ready after completed backoff
                 iterator.remove();
             } else if (connection.hasInflightRequest(currentTimeMs)) {
                 // If there is at least one inflight request, it is enough
@@ -88,18 +92,35 @@ public class RequestManager {
         return result;
     }
 
+    // TODO: maybe write some tests
     public long backoffBeforeAvailableBootstrapServer(long currentTimeMs) {
-        long minBackoffMs = Math.max(retryBackoffMs, requestTimeoutMs);
-        for (Node node : bootstrapServers) {
-            if (isReady(node, currentTimeMs)) {
-                return 0L;
-            } else if (isBackingOff(node, currentTimeMs)) {
-                minBackoffMs = Math.min(minBackoffMs, remainingBackoffMs(node, currentTimeMs));
-            } else {
-                minBackoffMs = Math.min(minBackoffMs, remainingRequestTimeMs(node, currentTimeMs));
+        long minBackoffMs = retryBackoffMs;
+
+        Iterator<ConnectionState> iterator = connections.values().iterator();
+        while (iterator.hasNext()) {
+            ConnectionState connection = iterator.next();
+            if (connection.hasRequestTimedOut(currentTimeMs)) {
+                // Mark the node as ready after request timeout
+                iterator.remove();
+            } else if (connection.isBackoffComplete(currentTimeMs)) {
+                // Mark the node as ready after completed backoff
+                iterator.remove();
+            } else if (connection.hasInflightRequest(currentTimeMs)) {
+                // There can be at most one inflight fetch request
+                return connection.remainingRequestTimeMs(currentTimeMs);
+            } else if (connection.isBackingOff(currentTimeMs)) {
+                minBackoffMs = Math.min(minBackoffMs, connection.remainingBackoffMs(currentTimeMs));
             }
         }
 
+        // There are no inflight fetch requests so check if there is a ready bootstrap server
+        for (Node node : bootstrapServers) {
+            if (isReady(node, currentTimeMs)) {
+                return 0L;
+            }
+        }
+
+        // There are no ready bootstrap servers and inflight fetch requests, return the backoff
         return minBackoffMs;
     }
 
@@ -168,8 +189,8 @@ public class RequestManager {
         }
     }
 
-    public void onResponseError(Node node, OptionalLong correlationId, long timeMs) {
-        if (!correlationId.isPresent() || isResponseExpected(node, correlationId.getAsLong())) {
+    public void onResponseError(Node node, long correlationId, long timeMs) {
+        if (isResponseExpected(node, correlationId)) {
             connections.get(node.idString()).onResponseError(correlationId, timeMs);
         }
     }
@@ -189,15 +210,6 @@ public class RequestManager {
 
     public void resetAll() {
         connections.clear();
-    }
-
-    private boolean hasInflightRequest(Node node, long timeMs) {
-        ConnectionState state = connections.get(node.idString());
-        if (state == null) {
-            return false;
-        }
-
-        return state.hasInflightRequest(timeMs);
     }
 
     private enum State {
@@ -277,9 +289,9 @@ public class RequestManager {
             return inFlightCorrelationId.isPresent() && inFlightCorrelationId.getAsLong() == correlationId;
         }
 
-        void onResponseError(OptionalLong correlationId, long timeMs) {
+        void onResponseError(long correlationId, long timeMs) {
             inFlightCorrelationId.ifPresent(inflightRequestId -> {
-                if (!correlationId.isPresent() || OptionalLong.of(inflightRequestId).equals(correlationId)) {
+                if (inflightRequestId == correlationId) {
                     lastFailTimeMs = timeMs;
                     state = State.BACKING_OFF;
                     inFlightCorrelationId = OptionalLong.empty();

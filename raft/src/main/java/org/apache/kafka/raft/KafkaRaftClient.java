@@ -1786,7 +1786,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         } else {
             requestManager.onResponseError(
                 response.source(),
-                OptionalLong.of(response.correlationId()),
+                response.correlationId(),
                 currentTimeMs
             );
         }
@@ -1936,10 +1936,11 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
                 messageQueue.add(response);
             });
 
+            requestManager.onRequestSent(destination, correlationId, currentTimeMs);
             channel.send(requestMessage);
             logger.trace("Sent outbound request: {}", requestMessage);
-            requestManager.onRequestSent(destination, correlationId, currentTimeMs);
-            return Long.MAX_VALUE;
+
+            return requestManager.remainingRequestTimeMs(destination, currentTimeMs);
         }
 
         return requestManager.remainingRequestTimeMs(destination, currentTimeMs);
@@ -2250,12 +2251,14 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
             // voter in order to discover if there has been a leader change.
             if (requestManager.hasRequestTimedOut(state.leader(), currentTimeMs)) {
                 // Once the request has timed out backoff the connection
-                requestManager.onResponseError(state.leader(), OptionalLong.empty(), currentTimeMs);
+                requestManager.reset(state.leader());
                 backoffMs = maybeSendAnyVoterFetch(currentTimeMs);
             } else if (requestManager.isBackingOff(state.leader(), currentTimeMs)) {
                 backoffMs = maybeSendAnyVoterFetch(currentTimeMs);
-            } else {
+            } else if (!requestManager.hasAnyInflightRequest(currentTimeMs)) {
                 backoffMs = maybeSendFetchOrFetchSnapshot(state, currentTimeMs);
+            } else {
+                backoffMs = requestManager.backoffBeforeAvailableBootstrapServer(currentTimeMs);
             }
 
             return Math.min(backoffMs, state.remainingFetchTimeMs(currentTimeMs));

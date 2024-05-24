@@ -80,6 +80,7 @@ import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.apache.kafka.raft.LeaderState.CHECK_QUORUM_TIMEOUT_FACTOR;
 import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
@@ -115,6 +116,7 @@ public final class RaftClientTestContext {
     final MockTime time;
     final MockListener listener;
     final Set<Integer> voters;
+    final Set<Integer> bootstrapIds;
 
     private final List<RaftResponse.Outbound> sentResponses = new ArrayList<>();
 
@@ -299,6 +301,11 @@ public final class RaftClientTestContext {
                 time,
                 quorumStateStore,
                 voters,
+                IntStream
+                    .iterate(-2, id -> id - 1)
+                    .limit(bootstrapServers.size())
+                    .boxed()
+                    .collect(Collectors.toSet()),
                 metrics,
                 listener
             );
@@ -321,6 +328,7 @@ public final class RaftClientTestContext {
         MockTime time,
         QuorumStateStore quorumStateStore,
         Set<Integer> voters,
+        Set<Integer> bootstrapIds,
         Metrics metrics,
         MockListener listener
     ) {
@@ -333,6 +341,7 @@ public final class RaftClientTestContext {
         this.time = time;
         this.quorumStateStore = quorumStateStore;
         this.voters = voters;
+        this.bootstrapIds = bootstrapIds;
         this.metrics = metrics;
         this.listener = listener;
     }
@@ -835,7 +844,11 @@ public final class RaftClientTestContext {
     ) throws Exception {
         pollUntilRequest();
         RaftRequest.Outbound fetchRequest = assertSentFetchRequest();
-        assertTrue(voters.contains(fetchRequest.destination().id()));
+        int destinationId = fetchRequest.destination().id();
+        assertTrue(
+            voters.contains(destinationId) || bootstrapIds.contains(destinationId),
+            String.format("id %d is not in sets %s or %s", destinationId, voters, bootstrapIds)
+        );
         assertFetchRequestData(fetchRequest, 0, 0L, 0);
 
         deliverResponse(
