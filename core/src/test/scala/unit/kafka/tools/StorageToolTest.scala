@@ -344,7 +344,7 @@ Found problem:
   @EnumSource(classOf[TestFeatureVersion])
   def testFeatureFlag(testFeatureVersion: TestFeatureVersion): Unit = {
     val featureLevel = testFeatureVersion.featureLevel
-    if (featureLevel <= TestFeatureVersion.LATEST_PRODUCTION.featureLevel) {
+    if (featureLevel <= Features.TEST_VERSION.defaultValue(MetadataVersion.LATEST_PRODUCTION)) {
       val records = new ArrayBuffer[ApiMessageAndVersion]()
       StorageTool.generateFeatureRecords(
         records,
@@ -387,7 +387,7 @@ Found problem:
       false
     )
 
-    assertEquals(List(generateRecord(TestFeatureVersion.FEATURE_NAME, TestFeatureVersion.LATEST_PRODUCTION.featureLevel())), records)
+    assertEquals(List(generateRecord(TestFeatureVersion.FEATURE_NAME, Features.TEST_VERSION.defaultValue(MetadataVersion.LATEST_PRODUCTION))), records)
   }
 
 
