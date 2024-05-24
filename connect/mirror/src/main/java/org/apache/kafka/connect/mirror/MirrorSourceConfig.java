@@ -101,7 +101,13 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
     public static final Class<?> CONFIG_PROPERTY_FILTER_CLASS_DEFAULT = DefaultConfigPropertyFilter.class;
 
     public static final String OFFSET_LAG_MAX = "offset.lag.max";
-    private static final String OFFSET_LAG_MAX_DOC = "How out-of-sync a remote partition can be before it is resynced.";
+    private static final String OFFSET_LAG_MAX_DOC = "Determines the maximum allowed lag between the source and remote partitions before MirrorMaker initiates a resync operation to catch up the remote partition. The lag is calculated as the difference between the latest offset in the source partition and the last committed offset in the remote partition.\n" +
+            "\n" +
+            "When the lag for a remote partition exceeds the <code>offset.lag.max</code> value, MirrorMaker will initiate a resync operation to catch up the remote partition with the source partition. This involves reading records from the source partition starting from the last committed offset in the remote partition and writing them to the remote partition.\n" +
+            "\n" +
+            "Setting <code>offset.lag.max</code> to a lower value can be beneficial in scenarios where records may not flow constantly or at a consistent rate, as it ensures the remote partitions stay more closely in sync with the source partitions during periods of low throughput or inactivity. On the other hand, setting it to a higher value can be useful when the source topic has high throughput and the remote partitions can tolerate a larger lag.\n" +
+            "\n" +
+            "It's also possible to set <code>offset.lag.max</code> to 0, which will cause MirrorMaker to initiate a resync operation for a remote partition as soon as it falls behind the source partition. This can be useful for strict synchronization requirements but may increase the load on the source cluster due to frequent resync operations.";
     public static final long OFFSET_LAG_MAX_DEFAULT = 100L;
 
     public static final String ADD_SOURCE_ALIAS_TO_METRICS = "add.source.alias.to.metrics";
