@@ -1089,6 +1089,25 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             });
         }
 
+        // override hashCode()
+//        public class MyClass {
+//            private int id;
+//            private String name;
+//
+//            // Constructors, getters, setters, etc.
+//
+//            @Override
+//            public int hashCode() {
+//                final int prime = 31;
+//                int result = 1;
+//                result = prime * result + id;
+//                result = prime * result + ((name == null) ? 0 : name.hashCode());
+//                return result;
+//            }
+//
+//            // Other methods like equals(), toString(), etc.
+//        }
+
         @Override
         public String toStringBase() {
             return super.toStringBase() +
