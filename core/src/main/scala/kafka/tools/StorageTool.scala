@@ -68,7 +68,7 @@ object StorageTool extends Logging {
           val metadataRecords : ArrayBuffer[ApiMessageAndVersion] = ArrayBuffer()
           val specifiedFeatures: util.List[String] = namespace.getList("feature")
           if (namespace.getString("release_version") != null && specifiedFeatures != null) {
-            throw new TerseFailure("Both --release_version and --feature were set. Only one of the two flags can be set.")
+            throw new TerseFailure("Both --release-version and --feature were set. Only one of the two flags can be set.")
           }
           val featureNamesAndLevelsMap = featureNamesAndLevels(Option(specifiedFeatures).getOrElse(Collections.emptyList).asScala.toList)
           val metadataVersion = getMetadataVersion(namespace, featureNamesAndLevelsMap,
@@ -80,7 +80,7 @@ object StorageTool extends Logging {
             metadataVersion,
             featureNamesAndLevelsMap,
             Features.PRODUCTION_FEATURES.asScala.toList,
-            Option(namespace.getString("release_version")).isEmpty
+            !Option(namespace.getString("release_version")).isEmpty
           )
           getUserScramCredentialRecords(namespace).foreach(userScramCredentialRecords => {
             if (!metadataVersion.isScramSupported) {
@@ -132,7 +132,7 @@ object StorageTool extends Logging {
                                             specifiedFeatures: Map[String, java.lang.Short],
                                             allFeatures: List[Features],
                                             usesVersionDefault: Boolean): Unit = {
-    // If we are using --version-default, the default is based on the metadata version.
+    // If we are using --release-version, the default is based on the metadata version.
     val metadataVersionForDefault = if (usesVersionDefault) metadataVersion else MetadataVersion.LATEST_PRODUCTION
 
     val allNonZeroFeaturesAndLevels: ArrayBuffer[FeatureVersion] = mutable.ArrayBuffer[FeatureVersion]()

@@ -404,6 +404,20 @@ Found problem:
   }
 
   @Test
+  def testLatestFeaturesWithOldMetadataVersion(): Unit = {
+    val records = new ArrayBuffer[ApiMessageAndVersion]()
+    StorageTool.generateFeatureRecords(
+      records,
+      MetadataVersion.IBP_3_3_IV0,
+      Map.empty,
+      allFeatures,
+      false
+    )
+
+    assertEquals(List(generateRecord(TestFeatureVersion.FEATURE_NAME, Features.TEST_VERSION.defaultValue(MetadataVersion.LATEST_PRODUCTION))), records)
+  }
+
+  @Test
   def testFeatureInvalidFlag(): Unit = {
     val featureLevel = 99.toShort
     assertThrows(classOf[IllegalArgumentException], () => StorageTool.generateFeatureRecords(
