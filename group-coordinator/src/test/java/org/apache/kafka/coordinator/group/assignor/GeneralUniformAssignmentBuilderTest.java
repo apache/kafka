@@ -21,7 +21,6 @@ import org.apache.kafka.coordinator.group.consumer.SubscribedTopicMetadata;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -29,6 +28,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 
+import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.assertAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
@@ -70,13 +70,13 @@ public class GeneralUniformAssignmentBuilderTest {
         members.put(memberA, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Collections.emptyList(),
+            Collections.emptySet(),
             Collections.emptyMap()
         ));
         members.put(memberB, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Collections.emptyList(),
+            Collections.emptySet(),
             Collections.emptyMap()
         ));
 
@@ -112,13 +112,13 @@ public class GeneralUniformAssignmentBuilderTest {
         members.put(memberA, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Collections.singletonList(topic3Uuid),
+            Collections.singleton(topic3Uuid),
             Collections.emptyMap()
         ));
         members.put(memberB, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Collections.singletonList(topic2Uuid),
+            Collections.singleton(topic2Uuid),
             Collections.emptyMap()
         ));
 
@@ -152,13 +152,13 @@ public class GeneralUniformAssignmentBuilderTest {
         members.put(memberA, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Arrays.asList(topic1Uuid, topic3Uuid),
+            mkSet(topic1Uuid, topic3Uuid),
             Collections.emptyMap()
         ));
         members.put(memberB, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Collections.singletonList(topic3Uuid),
+            Collections.singleton(topic3Uuid),
             Collections.emptyMap()
         ));
 
@@ -206,19 +206,19 @@ public class GeneralUniformAssignmentBuilderTest {
         members.put(memberA, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Collections.singletonList(topic3Uuid),
+            Collections.singleton(topic3Uuid),
             Collections.emptyMap()
         ));
         members.put(memberB, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Collections.singletonList(topic3Uuid),
+            Collections.singleton(topic3Uuid),
             Collections.emptyMap()
         ));
         members.put(memberC, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Collections.singletonList(topic1Uuid),
+            Collections.singleton(topic1Uuid),
             Collections.emptyMap()
         ));
 
@@ -281,7 +281,7 @@ public class GeneralUniformAssignmentBuilderTest {
         members.put(memberA, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.of("rack0"),
-            Collections.singletonList(topic1Uuid),
+            Collections.singleton(topic1Uuid),
             currentAssignmentForA
         ));
 
@@ -294,7 +294,7 @@ public class GeneralUniformAssignmentBuilderTest {
         members.put(memberB, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.of("rack1"),
-            Arrays.asList(topic1Uuid, topic2Uuid),
+            mkSet(topic1Uuid, topic2Uuid),
             currentAssignmentForB
         ));
 
@@ -308,7 +308,7 @@ public class GeneralUniformAssignmentBuilderTest {
         members.put(memberC, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.of("rack2"),
-            Arrays.asList(topic1Uuid, topic2Uuid, topic3Uuid),
+            mkSet(topic1Uuid, topic2Uuid, topic3Uuid),
             currentAssignmentForC
         ));
 
@@ -379,7 +379,7 @@ public class GeneralUniformAssignmentBuilderTest {
         members.put(memberA, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Arrays.asList(topic1Uuid, topic3Uuid),
+            mkSet(topic1Uuid, topic3Uuid),
             currentAssignmentForA
         ));
 
@@ -392,7 +392,7 @@ public class GeneralUniformAssignmentBuilderTest {
         members.put(memberB, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Arrays.asList(topic1Uuid, topic2Uuid, topic3Uuid, topic4Uuid),
+            mkSet(topic1Uuid, topic2Uuid, topic3Uuid, topic4Uuid),
             currentAssignmentForB
         ));
 
@@ -447,7 +447,7 @@ public class GeneralUniformAssignmentBuilderTest {
         members.put(memberA, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Collections.singletonList(topic1Uuid),
+            Collections.singleton(topic1Uuid),
             currentAssignmentForA
         ));
 
@@ -458,7 +458,7 @@ public class GeneralUniformAssignmentBuilderTest {
         members.put(memberB, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Arrays.asList(topic1Uuid, topic2Uuid),
+            mkSet(topic1Uuid, topic2Uuid),
             currentAssignmentForB
         ));
 
@@ -466,7 +466,7 @@ public class GeneralUniformAssignmentBuilderTest {
         members.put(memberC, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Arrays.asList(topic1Uuid, topic2Uuid),
+            mkSet(topic1Uuid, topic2Uuid),
             Collections.emptyMap()
         ));
 
@@ -528,7 +528,7 @@ public class GeneralUniformAssignmentBuilderTest {
         members.put(memberA, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Arrays.asList(topic1Uuid, topic3Uuid),
+            mkSet(topic1Uuid, topic3Uuid),
             currentAssignmentForA
         ));
 
@@ -538,7 +538,7 @@ public class GeneralUniformAssignmentBuilderTest {
         members.put(memberB, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Collections.singletonList(topic2Uuid),
+            Collections.singleton(topic2Uuid),
             currentAssignmentForB
         ));
 
@@ -594,7 +594,7 @@ public class GeneralUniformAssignmentBuilderTest {
         members.put(memberA, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Collections.singletonList(topic1Uuid),
+            Collections.singleton(topic1Uuid),
             currentAssignmentForA
         ));
 
@@ -605,7 +605,7 @@ public class GeneralUniformAssignmentBuilderTest {
         members.put(memberB, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Arrays.asList(topic1Uuid, topic2Uuid),
+            mkSet(topic1Uuid, topic2Uuid),
             currentAssignmentForB
         ));
 

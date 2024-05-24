@@ -190,4 +190,9 @@ public class ServerLogConfigs {
     public static final long LOG_INITIAL_TASK_DELAY_MS_DEFAULT = 30 * 1000L;
     public static final String LOG_INITIAL_TASK_DELAY_MS_DOC = "The initial task delay in millisecond when initializing " +
             "tasks in LogManager. This should be used for testing only.";
+
+    public static final String LOG_DIR_FAILURE_TIMEOUT_MS_CONFIG = LOG_PREFIX + "dir.failure.timeout.ms";
+    public static final Long LOG_DIR_FAILURE_TIMEOUT_MS_DEFAULT = 30000L;
+    public static final String LOG_DIR_FAILURE_TIMEOUT_MS_DOC = "If the broker is unable to successfully communicate to the controller that some log " +
+        "directory has failed for longer than this time, the broker will fail and shut down.";
 }

@@ -202,7 +202,7 @@ class BrokerRegistrationRequestTest {
     autoStart = AutoStart.NO,
     serverProperties = Array(new ClusterConfigProperty(key = "zookeeper.metadata.migration.enable", value = "true")))
   def testRegisterZkWithKRaftMigrationEnabled(clusterInstance: ClusterInstance): Unit = {
-    clusterInstance.asInstanceOf[RaftClusterInstance].controllers().forEach(_.startup())
+    clusterInstance.asInstanceOf[RaftClusterInstance].controllers().values().forEach(_.startup())
 
     val clusterId = clusterInstance.clusterId()
     val channelManager = brokerToControllerChannelManager(clusterInstance)
@@ -239,7 +239,7 @@ class BrokerRegistrationRequestTest {
       serverProperties = Array(new ClusterConfigProperty(key = "zookeeper.metadata.migration.enable", value = "true")))
   ))
   def testNoMetadataChangesInPreMigrationMode(clusterInstance: ClusterInstance): Unit = {
-    clusterInstance.asInstanceOf[RaftClusterInstance].controllers().forEach(_.startup())
+    clusterInstance.asInstanceOf[RaftClusterInstance].controllers().values().forEach(_.startup())
 
     val channelManager = brokerToControllerChannelManager(clusterInstance)
     try {

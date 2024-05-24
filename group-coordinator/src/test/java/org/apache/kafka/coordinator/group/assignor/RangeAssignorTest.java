@@ -22,7 +22,6 @@ import org.apache.kafka.coordinator.group.consumer.SubscribedTopicMetadata;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -30,6 +29,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 
+import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.invertedTargetAssignment;
@@ -70,7 +70,7 @@ public class RangeAssignorTest {
             new AssignmentMemberSpec(
                 Optional.empty(),
                 Optional.empty(),
-                Collections.emptyList(),
+                Collections.emptySet(),
                 Collections.emptyMap()
             )
         );
@@ -108,7 +108,7 @@ public class RangeAssignorTest {
             new AssignmentMemberSpec(
                 Optional.empty(),
                 Optional.empty(),
-                Collections.singletonList(topic2Uuid),
+                Collections.singleton(topic2Uuid),
                 Collections.emptyMap()
             )
         );
@@ -144,14 +144,14 @@ public class RangeAssignorTest {
         members.put(consumerA, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Arrays.asList(topic1Uuid, topic3Uuid),
+            mkSet(topic1Uuid, topic3Uuid),
             Collections.emptyMap()
         ));
 
         members.put(consumerB, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Arrays.asList(topic1Uuid, topic3Uuid),
+            mkSet(topic1Uuid, topic3Uuid),
             Collections.emptyMap()
         ));
 
@@ -207,21 +207,21 @@ public class RangeAssignorTest {
         members.put(consumerA, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Arrays.asList(topic1Uuid, topic2Uuid),
+            mkSet(topic1Uuid, topic2Uuid),
             Collections.emptyMap()
         ));
 
         members.put(consumerB, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Collections.singletonList(topic3Uuid),
+            Collections.singleton(topic3Uuid),
             Collections.emptyMap()
         ));
 
         members.put(consumerC, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Arrays.asList(topic2Uuid, topic3Uuid),
+            mkSet(topic2Uuid, topic3Uuid),
             Collections.emptyMap()
         ));
 
@@ -274,21 +274,21 @@ public class RangeAssignorTest {
         members.put(consumerA, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Arrays.asList(topic1Uuid, topic3Uuid),
+            mkSet(topic1Uuid, topic3Uuid),
             Collections.emptyMap()
         ));
 
         members.put(consumerB, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Arrays.asList(topic1Uuid, topic3Uuid),
+            mkSet(topic1Uuid, topic3Uuid),
             Collections.emptyMap()
         ));
 
         members.put(consumerC, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Arrays.asList(topic1Uuid, topic3Uuid),
+            mkSet(topic1Uuid, topic3Uuid),
             Collections.emptyMap()
         ));
 
@@ -346,7 +346,7 @@ public class RangeAssignorTest {
         members.put(consumerA, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Arrays.asList(topic1Uuid, topic2Uuid),
+            mkSet(topic1Uuid, topic2Uuid),
             currentAssignmentForA
         ));
 
@@ -357,7 +357,7 @@ public class RangeAssignorTest {
         members.put(consumerB, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Arrays.asList(topic1Uuid, topic2Uuid),
+            mkSet(topic1Uuid, topic2Uuid),
             currentAssignmentForB
         ));
 
@@ -365,7 +365,7 @@ public class RangeAssignorTest {
         members.put(consumerC, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Arrays.asList(topic1Uuid, topic2Uuid),
+            mkSet(topic1Uuid, topic2Uuid),
             Collections.emptyMap()
         ));
 
@@ -422,7 +422,7 @@ public class RangeAssignorTest {
         members.put(consumerA, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Arrays.asList(topic1Uuid, topic2Uuid),
+            mkSet(topic1Uuid, topic2Uuid),
             currentAssignmentForA
         ));
 
@@ -433,7 +433,7 @@ public class RangeAssignorTest {
         members.put(consumerB, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Arrays.asList(topic1Uuid, topic2Uuid),
+            mkSet(topic1Uuid, topic2Uuid),
             currentAssignmentForB
         ));
 
@@ -487,7 +487,7 @@ public class RangeAssignorTest {
         members.put(consumerA, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Arrays.asList(topic1Uuid, topic2Uuid),
+            mkSet(topic1Uuid, topic2Uuid),
             currentAssignmentForA
         ));
 
@@ -498,7 +498,7 @@ public class RangeAssignorTest {
         members.put(consumerB, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Arrays.asList(topic1Uuid, topic2Uuid),
+            mkSet(topic1Uuid, topic2Uuid),
             currentAssignmentForB
         ));
 
@@ -506,7 +506,7 @@ public class RangeAssignorTest {
         members.put(consumerC, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Arrays.asList(topic1Uuid, topic2Uuid),
+            mkSet(topic1Uuid, topic2Uuid),
             Collections.emptyMap()
         ));
 
@@ -565,7 +565,7 @@ public class RangeAssignorTest {
         members.put(consumerA, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Arrays.asList(topic1Uuid, topic2Uuid),
+            mkSet(topic1Uuid, topic2Uuid),
             currentAssignmentForA
         ));
 
@@ -576,7 +576,7 @@ public class RangeAssignorTest {
         members.put(consumerB, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Arrays.asList(topic1Uuid, topic2Uuid),
+            mkSet(topic1Uuid, topic2Uuid),
             currentAssignmentForB
         ));
 
@@ -584,7 +584,7 @@ public class RangeAssignorTest {
         members.put(consumerC, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Collections.singletonList(topic1Uuid),
+            Collections.singleton(topic1Uuid),
             Collections.emptyMap()
         ));
 
@@ -642,7 +642,7 @@ public class RangeAssignorTest {
         members.put(consumerB, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Arrays.asList(topic1Uuid, topic2Uuid),
+            mkSet(topic1Uuid, topic2Uuid),
             currentAssignmentForB
         ));
 
@@ -700,7 +700,7 @@ public class RangeAssignorTest {
         members.put(consumerA, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Collections.singletonList(topic1Uuid),
+            Collections.singleton(topic1Uuid),
             currentAssignmentForA
         ));
 
@@ -710,7 +710,7 @@ public class RangeAssignorTest {
         members.put(consumerB, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Arrays.asList(topic1Uuid, topic2Uuid, topic3Uuid),
+            mkSet(topic1Uuid, topic2Uuid, topic3Uuid),
             currentAssignmentForB
         ));
 
@@ -721,7 +721,7 @@ public class RangeAssignorTest {
         members.put(consumerC, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Collections.singletonList(topic2Uuid),
+            Collections.singleton(topic2Uuid),
             currentAssignmentForC
         ));
 
