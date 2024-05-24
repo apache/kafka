@@ -17,10 +17,11 @@
 package org.apache.kafka.jmh.assignor;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
+import org.apache.kafka.coordinator.group.assignor.MemberSubscriptionSpec;
+import org.apache.kafka.coordinator.group.assignor.MemberSubscriptionSpecImpl;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.consumer.TopicIds;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
@@ -194,16 +195,14 @@ public class TargetAssignmentBuilderBenchmark {
     }
 
     private void createAssignmentSpec() {
-        Map<String, AssignmentMemberSpec> members = new HashMap<>();
+        Map<String, MemberSubscriptionSpec> members = new HashMap<>();
 
         for (int i = 0; i < memberCount - 1; i++) {
             String memberId = "member" + i;
 
-            members.put(memberId, new AssignmentMemberSpec(
+            members.put(memberId, new MemberSubscriptionSpecImpl(
                 Optional.empty(),
-                Optional.empty(),
-                new TopicIds(new HashSet<>(allTopicNames), topicsImage),
-                Collections.emptyMap()
+                new TopicIds(new HashSet<>(allTopicNames), topicsImage)
             ));
         }
         groupSpec = new GroupSpecImpl(

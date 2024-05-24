@@ -99,7 +99,7 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
     OptimizedUniformAssignmentBuilder(GroupSpec groupSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
         this.groupSpec = groupSpec;
         this.subscribedTopicDescriber = subscribedTopicDescriber;
-        this.subscribedTopicIds = new HashSet<>(groupSpec.members().values().iterator().next().subscribedTopicIds());
+        this.subscribedTopicIds = new HashSet<>(groupSpec.memberSubscriptions().values().iterator().next().subscribedTopicIds());
         this.potentiallyUnfilledMembers = new HashMap<>();
         this.unassignedPartitions = new HashSet<>();
         this.targetAssignment = new HashMap<>();
@@ -146,11 +146,11 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
 
         // The minimum required quota that each member needs to meet for a balanced assignment.
         // This is the same for all members.
-        final int numberOfMembers = groupSpec.members().size();
+        final int numberOfMembers = groupSpec.memberSubscriptions().size();
         final int minQuota = totalPartitionsCount / numberOfMembers;
         remainingMembersToGetAnExtraPartition = totalPartitionsCount % numberOfMembers;
 
-        groupSpec.members().keySet().forEach(memberId ->
+        groupSpec.memberSubscriptions().keySet().forEach(memberId ->
             targetAssignment.put(memberId, new MemberAssignment(new HashMap<>())
         ));
 
@@ -187,9 +187,9 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
     private Map<String, Integer> assignStickyPartitions(int minQuota) {
         Map<String, Integer> potentiallyUnfilledMembers = new HashMap<>();
 
-        groupSpec.members().forEach((memberId, assignmentMemberSpec) -> {
+        groupSpec.memberSubscriptions().forEach((memberId, memberSubscriptionSpec) -> {
             List<TopicIdPartition> validCurrentMemberAssignment = validCurrentMemberAssignment(
-                assignmentMemberSpec.assignedPartitions()
+                groupSpec.currentMemberAssignment(memberId)
             );
 
             int currentAssignmentSize = validCurrentMemberAssignment.size();

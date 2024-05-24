@@ -19,8 +19,9 @@ package org.apache.kafka.coordinator.group.consumer;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.AssignmentTestUtil;
 import org.apache.kafka.coordinator.group.MetadataImageBuilder;
-import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.assignor.GroupSpecImpl;
+import org.apache.kafka.coordinator.group.assignor.MemberSubscriptionSpec;
+import org.apache.kafka.coordinator.group.assignor.MemberSubscriptionSpecImpl;
 import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
@@ -31,6 +32,7 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -44,7 +46,7 @@ import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTar
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTargetAssignmentRecord;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpersTest.mkMapOfPartitionRacks;
 import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOGENEOUS;
-import static org.apache.kafka.coordinator.group.consumer.TargetAssignmentBuilder.createAssignmentMemberSpec;
+import static org.apache.kafka.coordinator.group.consumer.TargetAssignmentBuilder.createMemberSubscriptionSpec;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -164,16 +166,15 @@ public class TargetAssignmentBuilderTest {
         public TargetAssignmentBuilder.TargetAssignmentResult build() {
             TopicsImage topicsImage = topicsImageBuilder.build().topics();
             // Prepare expected member specs.
-            Map<String, AssignmentMemberSpec> memberSpecs = new HashMap<>();
+            Map<String, MemberSubscriptionSpec> memberSubscriptions = new HashMap<>();
             Map<String, Map<Uuid, Set<Integer>>> assignedPartitions = new HashMap<>(members.size());
 
             // All the existing members are prepared.
             members.forEach((memberId, member) -> {
                 Assignment assignment = targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
 
-                memberSpecs.put(memberId, createAssignmentMemberSpec(
+                memberSubscriptions.put(memberId, createMemberSubscriptionSpec(
                     member,
-                    assignment,
                     topicsImage
                 ));
                 assignedPartitions.put(
@@ -186,7 +187,7 @@ public class TargetAssignmentBuilderTest {
             // members are removed.
             updatedMembers.forEach((memberId, updatedMemberOrNull) -> {
                 if (updatedMemberOrNull == null) {
-                    memberSpecs.remove(memberId);
+                    memberSubscriptions.remove(memberId);
                 } else {
                     Assignment assignment = targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
 
@@ -198,9 +199,8 @@ public class TargetAssignmentBuilderTest {
                         }
                     }
 
-                    memberSpecs.put(memberId, createAssignmentMemberSpec(
+                    memberSubscriptions.put(memberId, createMemberSubscriptionSpec(
                         updatedMemberOrNull,
-                        assignment,
                         topicsImage
                     ));
                     assignedPartitions.put(
@@ -220,11 +220,12 @@ public class TargetAssignmentBuilderTest {
             SubscriptionType subscriptionType = HOMOGENEOUS;
 
             // Prepare the member assignments per topic partition.
-            Map<Uuid, Map<Integer, String>> invertedTargetAssignment = AssignmentTestUtil.invertedTargetAssignment(memberSpecs);
+            Map<Uuid, Map<Integer, String>> invertedTargetAssignment = AssignmentTestUtil
+                .invertedTargetAssignment(assignedPartitions, memberSubscriptions);
 
             // Prepare the expected assignment spec.
             GroupSpecImpl groupSpec = new GroupSpecImpl(
-                memberSpecs,
+                memberSubscriptions,
                 subscriptionType,
                 assignedPartitions,
                 invertedTargetAssignment
@@ -267,7 +268,7 @@ public class TargetAssignmentBuilderTest {
     }
 
     @Test
-    public void testCreateAssignmentMemberSpec() {
+    public void testCreateMemberSubscriptionSpec() {
         Uuid fooTopicId = Uuid.randomUuid();
         Uuid barTopicId = Uuid.randomUuid();
         TopicsImage topicsImage = new MetadataImageBuilder()
@@ -282,23 +283,15 @@ public class TargetAssignmentBuilderTest {
             .setInstanceId("instanceId")
             .build();
 
-        Assignment assignment = new Assignment(mkAssignment(
-            mkTopicAssignment(fooTopicId, 1, 2, 3),
-            mkTopicAssignment(barTopicId, 1, 2, 3)
-        ));
-
-        AssignmentMemberSpec assignmentMemberSpec = createAssignmentMemberSpec(
+        MemberSubscriptionSpec subscriptionSpec = createMemberSubscriptionSpec(
             member,
-            assignment,
             topicsImage
         );
 
-        assertEquals(new AssignmentMemberSpec(
-            Optional.of("instanceId"),
+        assertEquals(new MemberSubscriptionSpecImpl(
             Optional.of("rackId"),
-            new TopicIds(mkSet("bar", "foo", "zar"), topicsImage),
-            assignment.partitions()
-        ), assignmentMemberSpec);
+            new HashSet<>(Arrays.asList(fooTopicId, barTopicId))
+        ), subscriptionSpec);
     }
 
     @Test

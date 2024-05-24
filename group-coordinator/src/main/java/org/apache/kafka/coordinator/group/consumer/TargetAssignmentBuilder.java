@@ -18,7 +18,6 @@ package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.CoordinatorRecord;
-import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.assignor.MemberSubscriptionSpec;
 import org.apache.kafka.coordinator.group.assignor.MemberSubscriptionSpecImpl;
@@ -413,7 +412,6 @@ public class TargetAssignmentBuilder {
         TopicsImage topicsImage
     ) {
         return new MemberSubscriptionSpecImpl(
-            member.memberId(),
             Optional.ofNullable(member.rackId()),
             new TopicIds(member.subscribedTopicNames(), topicsImage)
         );

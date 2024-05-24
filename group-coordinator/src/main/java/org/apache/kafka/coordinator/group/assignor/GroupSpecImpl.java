@@ -28,12 +28,12 @@ import java.util.Set;
  */
 public class GroupSpecImpl implements GroupSpec {
     /**
-     * The member metadata keyed by member Id.
+     * Member subscription metadata keyed by member Id.
      */
     private final Map<String, MemberSubscriptionSpec> members;
 
     /**
-     * The subscription type followed by the group.
+     * The subscription type of the group.
      */
     private final SubscriptionType subscriptionType;
 
@@ -67,7 +67,7 @@ public class GroupSpecImpl implements GroupSpec {
      * {@inheritDoc}
      */
     @Override
-    public Map<String, MemberSubscriptionSpec> members() {
+    public Map<String, MemberSubscriptionSpec> memberSubscriptions() {
         return members;
     }
 
@@ -113,9 +113,9 @@ public class GroupSpecImpl implements GroupSpec {
     @Override
     public int hashCode() {
         int result = members.hashCode();
-            result = 31 * result + subscriptionType.hashCode();
-            result = 31 * result + assignedPartitions.hashCode();
-            result = 31 * result + invertedTargetAssignment.hashCode();
+        result = 31 * result + subscriptionType.hashCode();
+        result = 31 * result + assignedPartitions.hashCode();
+        result = 31 * result + invertedTargetAssignment.hashCode();
         return result;
     }
 

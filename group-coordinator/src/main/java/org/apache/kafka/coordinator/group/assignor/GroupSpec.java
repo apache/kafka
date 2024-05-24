@@ -26,9 +26,9 @@ import java.util.Set;
  */
 public interface GroupSpec {
     /**
-     * @return Member metadata keyed by member Id.
+     * @return Member subscription metadata keyed by member Id.
      */
-    Map<String, MemberSubscriptionSpec> members();
+    Map<String, MemberSubscriptionSpec> memberSubscriptions();
 
     /**
      * @return The group's subscription type.

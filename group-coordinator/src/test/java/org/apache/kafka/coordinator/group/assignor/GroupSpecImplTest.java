@@ -35,12 +35,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class GroupSpecImplTest {
 
-    private Map<String, AssignmentMemberSpec> members;
+    private Map<String, MemberSubscriptionSpec> members;
     private SubscriptionType subscriptionType;
     private Map<String, Map<Uuid, Set<Integer>>> assignedPartitions;
     private Map<Uuid, Map<Integer, String>> invertedTargetAssignment;
     private GroupSpecImpl groupSpec;
     private Uuid topicId;
+    private String testMember;
 
     @BeforeEach
     void setUp() {
@@ -50,12 +51,10 @@ public class GroupSpecImplTest {
         invertedTargetAssignment = new HashMap<>();
         topicId = Uuid.randomUuid();
 
-        members.put("test-member",  new AssignmentMemberSpec(
+        members.put(testMember,  new MemberSubscriptionSpecImpl(
             Optional.empty(),
-            Optional.empty(),
-            new HashSet<>(Collections.singletonList(topicId)),
-            Collections.emptyMap())
-        );
+            new HashSet<>(Collections.singletonList(topicId))
+        ));
 
         groupSpec = new GroupSpecImpl(
             members,
@@ -67,7 +66,7 @@ public class GroupSpecImplTest {
 
     @Test
     void testMembers() {
-        assertEquals(members, groupSpec.members());
+        assertEquals(members, groupSpec.memberSubscriptions());
     }
 
     @Test

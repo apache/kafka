@@ -23,23 +23,16 @@ import java.util.Set;
 
 public interface MemberSubscriptionSpec {
     /**
-     * Gets the member ID.
+     * Gets the rack Id if present.
      *
-     * @return the member ID.
-     */
-    String memberId();
-
-    /**
-     * Gets the rack ID if present.
-     *
-     * @return an Optional containing the rack ID, or an empty Optional if not present.
+     * @return An Optional containing the rack ID, or an empty Optional if not present.
      */
     Optional<String> rackId();
 
     /**
-     * Gets the set of subscribed topic IDs.
+     * Gets the set of subscribed topic Ids.
      *
-     * @return the set of subscribed topic IDs.
+     * @return The set of subscribed topic Ids.
      */
     Set<Uuid> subscribedTopicIds();
 }
