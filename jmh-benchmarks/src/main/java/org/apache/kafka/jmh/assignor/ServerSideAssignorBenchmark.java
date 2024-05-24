@@ -25,9 +25,14 @@ import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
+import org.apache.kafka.coordinator.group.consumer.TopicIds;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
 import org.apache.kafka.coordinator.group.consumer.SubscribedTopicMetadata;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
+import org.apache.kafka.image.MetadataDelta;
+import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.image.MetadataProvenance;
+import org.apache.kafka.image.TopicsImage;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -44,7 +49,6 @@ import org.openjdk.jmh.annotations.Warmup;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -119,7 +123,9 @@ public class ServerSideAssignorBenchmark {
 
     private SubscribedTopicDescriber subscribedTopicDescriber;
 
-    private final List<Uuid> allTopicIds = new ArrayList<>();
+    private final List<String> allTopicNames = new ArrayList<>();
+
+    private TopicsImage topicsImage = TopicsImage.EMPTY;
 
     @Setup(Level.Trial)
     public void setup() {
@@ -136,6 +142,7 @@ public class ServerSideAssignorBenchmark {
     }
 
     private Map<Uuid, TopicMetadata> createTopicMetadata() {
+        MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
         Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
         int partitionsPerTopicCount = (memberCount * partitionsToMemberRatio) / topicCount;
 
@@ -146,15 +153,17 @@ public class ServerSideAssignorBenchmark {
         for (int i = 0; i < topicCount; i++) {
             Uuid topicUuid = Uuid.randomUuid();
             String topicName = "topic" + i;
-            allTopicIds.add(topicUuid);
+            allTopicNames.add(topicName);
             topicMetadata.put(topicUuid, new TopicMetadata(
                 topicUuid,
                 topicName,
                 partitionsPerTopicCount,
                 partitionRacks
             ));
+            TargetAssignmentBuilderBenchmark.addTopic(delta, topicUuid, topicName, partitionsPerTopicCount);
         }
 
+        topicsImage = delta.apply(MetadataProvenance.EMPTY).topics();
         return topicMetadata;
     }
 
@@ -167,7 +176,7 @@ public class ServerSideAssignorBenchmark {
 
         if (subscriptionType == HOMOGENEOUS) {
             for (int i = 0; i < numberOfMembers; i++) {
-                addMemberSpec(members, i, new HashSet<>(allTopicIds));
+                addMemberSpec(members, i, new TopicIds(new HashSet<>(allTopicNames), topicsImage));
             }
         } else {
             // Adjust bucket count based on member count when member count < max bucket count.
@@ -189,7 +198,7 @@ public class ServerSideAssignorBenchmark {
                 int topicStartIndex = bucket * bucketSizeTopics;
                 int topicEndIndex = Math.min((bucket + 1) * bucketSizeTopics, topicCount);
 
-                Set<Uuid> bucketTopics = new HashSet<>(allTopicIds.subList(topicStartIndex, topicEndIndex));
+                TopicIds bucketTopics = new TopicIds(new HashSet<>(allTopicNames.subList(topicStartIndex, topicEndIndex)), topicsImage);
 
                 // Assign topics to each member in the current bucket
                 for (int i = memberStartIndex; i < memberEndIndex; i++) {
@@ -248,11 +257,11 @@ public class ServerSideAssignorBenchmark {
             ));
         });
 
-        Collection<Uuid> subscribedTopicIdsForNewMember;
+        Set<Uuid> subscribedTopicIdsForNewMember;
         if (subscriptionType == HETEROGENEOUS) {
             subscribedTopicIdsForNewMember = updatedMembers.get("member" + (memberCount - 2)).subscribedTopicIds();
         } else {
-            subscribedTopicIdsForNewMember = allTopicIds;
+            subscribedTopicIdsForNewMember = new TopicIds(new HashSet<>(allTopicNames), topicsImage);
         }
 
         Optional<String> rackId = rackId(memberCount - 1);

@@ -31,9 +31,7 @@ import kafka.utils.CoreUtils
 import kafka.utils.FileLock
 import kafka.utils.Logging
 import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, NetworkClient}
-import org.apache.kafka.common.KafkaException
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.Uuid
+import org.apache.kafka.common.{KafkaException, Node, TopicPartition, Uuid}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ChannelBuilders, ListenerName, NetworkReceive, Selectable, Selector}
@@ -42,7 +40,7 @@ import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
-import org.apache.kafka.raft.{FileQuorumStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, LeaderAndEpoch, RaftClient, QuorumConfig, ReplicatedLog}
+import org.apache.kafka.raft.{FileQuorumStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, LeaderAndEpoch, QuorumConfig, RaftClient, ReplicatedLog}
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.server.util.KafkaScheduler
@@ -50,6 +48,7 @@ import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.server.util.timer.SystemTimer
 
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters._
 
 object KafkaRaftManager {
   private def createLogDirectory(logDir: File, logDirName: String): File = {
@@ -134,6 +133,8 @@ trait RaftManager[T] {
   def client: RaftClient[T]
 
   def replicatedLog: ReplicatedLog
+
+  def voterNode(id: Int, listener: ListenerName): Option[Node]
 }
 
 class KafkaRaftManager[T](
@@ -316,5 +317,9 @@ class KafkaRaftManager[T](
 
   override def leaderAndEpoch: LeaderAndEpoch = {
     client.leaderAndEpoch
+  }
+
+  override def voterNode(id: Int, listener: ListenerName): Option[Node] = {
+    client.voterNode(id, listener).toScala
   }
 }

@@ -40,6 +40,11 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
+
+import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.compress.GzipCompression;
+import org.apache.kafka.common.compress.Lz4Compression;
+import org.apache.kafka.common.compress.ZstdCompression;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.ConfigKey;
@@ -176,7 +181,7 @@ public class LogConfig extends AbstractConfig {
     public static final long DEFAULT_LOCAL_RETENTION_MS = -2; // It indicates the value to be derived from RetentionMs
 
     /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details
-    * Keep DEFAULT_MESSAGE_FORMAT_VERSION as a way to handlee the deprecated value */
+    * Keep DEFAULT_MESSAGE_FORMAT_VERSION as a way to handle the deprecated value */
     @Deprecated
     public static final String DEFAULT_MESSAGE_FORMAT_VERSION = ServerLogConfigs.LOG_MESSAGE_FORMAT_VERSION_DEFAULT;
 
@@ -241,6 +246,12 @@ public class LogConfig extends AbstractConfig {
                 TopicConfig.MIN_IN_SYNC_REPLICAS_DOC)
             .define(TopicConfig.COMPRESSION_TYPE_CONFIG, STRING, DEFAULT_COMPRESSION_TYPE, in(BrokerCompressionType.names().toArray(new String[0])),
                 MEDIUM, TopicConfig.COMPRESSION_TYPE_DOC)
+            .define(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG, INT, GzipCompression.DEFAULT_LEVEL,
+                new GzipCompression.LevelValidator(), MEDIUM, TopicConfig.COMPRESSION_GZIP_LEVEL_DOC)
+            .define(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG, INT, Lz4Compression.DEFAULT_LEVEL,
+                between(Lz4Compression.MIN_LEVEL, Lz4Compression.MAX_LEVEL), MEDIUM, TopicConfig.COMPRESSION_LZ4_LEVEL_DOC)
+            .define(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG, INT, ZstdCompression.DEFAULT_LEVEL,
+                between(ZstdCompression.MIN_LEVEL, ZstdCompression.MAX_LEVEL), MEDIUM, TopicConfig.COMPRESSION_ZSTD_LEVEL_DOC)
             .define(TopicConfig.PREALLOCATE_CONFIG, BOOLEAN, DEFAULT_PREALLOCATE, MEDIUM, TopicConfig.PREALLOCATE_DOC)
             .define(MESSAGE_FORMAT_VERSION_CONFIG, STRING, DEFAULT_MESSAGE_FORMAT_VERSION, new MetadataVersionValidator(), MEDIUM,
                 MESSAGE_FORMAT_VERSION_DOC)
@@ -290,7 +301,8 @@ public class LogConfig extends AbstractConfig {
     public final boolean delete;
     public final boolean uncleanLeaderElectionEnable;
     public final int minInSyncReplicas;
-    public final String compressionType;
+    public final BrokerCompressionType compressionType;
+    public final Optional<Compression> compression;
     public final boolean preallocate;
 
     /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details regarding the deprecation */
@@ -347,7 +359,8 @@ public class LogConfig extends AbstractConfig {
             .contains(TopicConfig.CLEANUP_POLICY_DELETE);
         this.uncleanLeaderElectionEnable = getBoolean(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG);
         this.minInSyncReplicas = getInt(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG);
-        this.compressionType = getString(TopicConfig.COMPRESSION_TYPE_CONFIG).toLowerCase(Locale.ROOT);
+        this.compressionType = BrokerCompressionType.forName(getString(TopicConfig.COMPRESSION_TYPE_CONFIG));
+        this.compression = getCompression();
         this.preallocate = getBoolean(TopicConfig.PREALLOCATE_CONFIG);
         this.messageFormatVersion = MetadataVersion.fromVersionString(getString(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG));
         this.messageTimestampType = TimestampType.forName(getString(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG));
@@ -359,6 +372,31 @@ public class LogConfig extends AbstractConfig {
         this.messageDownConversionEnable = getBoolean(TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG);
 
         remoteLogConfig = new RemoteLogConfig(this);
+    }
+
+    private Optional<Compression> getCompression() {
+        switch (compressionType) {
+            case GZIP:
+                return Optional.of(Compression.gzip()
+                        .level(getInt(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG))
+                        .build());
+            case LZ4:
+                return Optional.of(Compression.lz4()
+                        .level(getInt(TopicConfig.COMPRESSION_LZ4_LEVEL_CONFIG))
+                        .build());
+            case ZSTD:
+                return Optional.of(Compression.zstd()
+                        .level(getInt(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG))
+                        .build());
+            case SNAPPY:
+                return Optional.of(Compression.snappy().build());
+            case UNCOMPRESSED:
+                return Optional.of(Compression.NONE);
+            case PRODUCER:
+                return Optional.empty();
+            default:
+                throw new IllegalArgumentException("Invalid value for " + TopicConfig.COMPRESSION_TYPE_CONFIG);
+        }
     }
 
     //In the transition period before messageTimestampDifferenceMaxMs is removed, to maintain backward compatibility,
