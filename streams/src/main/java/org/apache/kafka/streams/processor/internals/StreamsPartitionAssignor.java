@@ -214,6 +214,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private RebalanceProtocol rebalanceProtocol;
     private AssignmentListener assignmentListener;
 
+    private Supplier<org.apache.kafka.streams.processor.assignment.TaskAssignor> userTaskAssignorSupplier;
     private Supplier<TaskAssignor> taskAssignorSupplier;
     private byte uniqueField;
     private Map<String, String> clientTags;
@@ -248,6 +249,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         internalTopicManager = assignorConfiguration.internalTopicManager();
         copartitionedTopicsEnforcer = assignorConfiguration.copartitionedTopicsEnforcer();
         rebalanceProtocol = assignorConfiguration.rebalanceProtocol();
+        userTaskAssignorSupplier = assignorConfiguration::userTaskAssignor;
         taskAssignorSupplier = assignorConfiguration::taskAssignor;
         assignmentListener = assignorConfiguration.assignmentListener();
         uniqueField = 0;
@@ -760,23 +762,39 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         log.debug("Assigning tasks and {} standby replicas to client nodes {}",
                   numStandbyReplicas(), clientStates);
 
-        final TaskAssignor taskAssignor = createTaskAssignor(lagComputationSuccessful);
-
-        final RackAwareTaskAssignor rackAwareTaskAssignor = new RackAwareTaskAssignor(
-            fullMetadata,
-            partitionsForTask,
-            changelogTopics.changelogPartionsForTask(),
-            tasksForTopicGroup,
-            racksForProcessConsumer,
-            internalTopicManager,
-            assignmentConfigs,
-            time
-        );
-        final boolean probingRebalanceNeeded = taskAssignor.assign(clientStates,
-                                                                   allTasks,
-                                                                   statefulTasks,
-                                                                   rackAwareTaskAssignor,
-                                                                   assignmentConfigs);
+        final org.apache.kafka.streams.processor.assignment.TaskAssignor userTaskAssignor =
+            createUserTaskAssignor(lagComputationSuccessful);
+        boolean probingRebalanceNeeded = false;
+        if (userTaskAssignor == null) {
+            final TaskAssignor taskAssignor = createTaskAssignor(lagComputationSuccessful);
+            final RackAwareTaskAssignor rackAwareTaskAssignor = new RackAwareTaskAssignor(
+                fullMetadata,
+                partitionsForTask,
+                changelogTopics.changelogPartionsForTask(),
+                tasksForTopicGroup,
+                racksForProcessConsumer,
+                internalTopicManager,
+                assignmentConfigs,
+                time
+            );
+            probingRebalanceNeeded = taskAssignor.assign(clientStates,
+                allTasks,
+                statefulTasks,
+                rackAwareTaskAssignor,
+                assignmentConfigs);
+        } else {
+            final ApplicationState applicationState = buildApplicationState(
+                taskManager.topologyMetadata(),
+                clientMetadataMap,
+                topicGroups,
+                fullMetadata
+            );
+            final TaskAssignment taskAssignment = userTaskAssignor.assign(applicationState);
+            probingRebalanceNeeded = taskAssignment.assignment().stream().anyMatch(assignment -> {
+                return assignment.followupRebalanceDeadline().isPresent();
+            });
+            processStreamsPartitionAssignment(clientMetadataMap, taskAssignment);
+        }
 
         // Break this up into multiple logs to make sure the summary info gets through, which helps avoid
         // info loss for example due to long line truncation with large apps
@@ -791,6 +809,14 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                      .collect(Collectors.joining(Utils.NL)));
 
         return probingRebalanceNeeded;
+    }
+
+    private org.apache.kafka.streams.processor.assignment.TaskAssignor createUserTaskAssignor(final boolean lagComputationSuccessful) {
+        if (!lagComputationSuccessful) {
+            log.info("Failed to fetch end offsets for changelogs, will return previous assignment to clients and "
+                     + "trigger another rebalance to retry.");
+        }
+        return userTaskAssignorSupplier.get();
     }
 
     private TaskAssignor createTaskAssignor(final boolean lagComputationSuccessful) {

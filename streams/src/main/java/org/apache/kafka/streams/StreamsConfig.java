@@ -820,6 +820,9 @@ public class StreamsConfig extends AbstractConfig {
         + "optimization algorithm favors minimizing cross rack traffic or minimize the movement of tasks in existing assignment. If set a larger value <code>" + RackAwareTaskAssignor.class.getName() + "</code> will "
         + "optimize to maintain the existing assignment. The default value is null which means it will use default non_overlap cost values in different assignors.";
 
+    @SuppressWarnings("WeakerAccess")
+    public static final String TASK_ASSIGNOR_CLASS_CONFIG = "task.assignor.class";
+    private static final String TASK_ASSIGNOR_CLASS_DOC = "A task assignor class or class name implementing the <@link TaskAssignor> interface. Defaults to the <@link HighAvailabilityTaskAssignor> class.";
 
     /**
      * {@code topology.optimization}
@@ -980,6 +983,11 @@ public class StreamsConfig extends AbstractConfig {
                     null,
                     Importance.MEDIUM,
                     RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_DOC)
+            .define(TASK_ASSIGNOR_CLASS_CONFIG,
+                    Type.STRING,
+                    null,
+                    Importance.MEDIUM,
+                    TASK_ASSIGNOR_CLASS_DOC)
             .define(REPLICATION_FACTOR_CONFIG,
                     Type.INT,
                     -1,

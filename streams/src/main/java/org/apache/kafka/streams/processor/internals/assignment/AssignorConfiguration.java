@@ -253,6 +253,21 @@ public final class AssignorConfiguration {
         }
     }
 
+    public org.apache.kafka.streams.processor.assignment.TaskAssignor userTaskAssignor() {
+        final String userTaskAssignorClassname = streamsConfig.getString(StreamsConfig.TASK_ASSIGNOR_CLASS_CONFIG);
+        if (userTaskAssignorClassname == null) {
+            return null;
+        }
+        try {
+            return Utils.newInstance(userTaskAssignorClassname, org.apache.kafka.streams.processor.assignment.TaskAssignor.class);
+        } catch (final ClassNotFoundException e) {
+            throw new IllegalArgumentException(
+                "Expected an instantiable class name for " + StreamsConfig.TASK_ASSIGNOR_CLASS_CONFIG,
+                e
+            );
+        }
+    }
+
     public AssignmentListener assignmentListener() {
         final Object o = internalConfigs.get(InternalConfig.ASSIGNMENT_LISTENER);
         if (o == null) {
