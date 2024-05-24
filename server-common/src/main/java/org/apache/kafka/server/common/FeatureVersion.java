@@ -32,14 +32,18 @@ public interface FeatureVersion {
     String featureName();
 
     /**
-     * When bootstrapping using only a metadata version, a reasonable default for all other features is chosen based
-     * on the metadata version. This method returns the minimum metadata version that sets this feature version as default.
-     * This should be defined as the metadata version released when this feature version becomes production ready.
-     * If feature level X is released when metadata version Y is the latest, a new MV should be released and this method should return Y + 1
-     * (Ie, if the current production MV is 17 when a feature version is released, its mapping should be to newly released MV 18)
+     * The MetadataVersion that corresponds to this feature. Setting this MV is not required to set the feature version,
+     * but this MV is marked production ready if and only if this feature version is production ready.
      *
-     * NOTE: The feature can be used without setting this metadata version (unless specified by {@link FeatureVersion#dependencies})
-     * This method is simply for choosing the default when only metadata version is specified.
+     * When bootstrapping, we can find the latest production feature version by finding the highest bootstrapMetadataVersion that is less than or equal
+     * to the given MetadataVersion ({@link MetadataVersion#LATEST_PRODUCTION} by default). Setting a feature explicitly
+     * will skip this mapping and allow setting the feature independently as long as it is a supported version.
+     *
+     * If feature level X is created when MetadataVersion Y is the latest production version, create a new MV Y + 1. When the feature version becomes
+     * production ready, set MetadataVersion Y + 1 as production ready.
+     * (Ie, if the current production MV is 17 when a feature version is created, create MV 18 and mark it as production ready when the feature version is production ready.)
+     *
+     * NOTE: The feature can be used without setting this metadata version. If we want to mark a dependency, do so in {@link FeatureVersion#dependencies}
      */
     MetadataVersion bootstrapMetadataVersion();
 

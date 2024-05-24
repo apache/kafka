@@ -21,7 +21,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.Collections;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -73,17 +72,15 @@ public class FeaturesTest {
     @EnumSource(Features.class)
     public void testDefaultValueAllFeatures(Features feature) {
         for (FeatureVersion featureImpl : feature.featureVersions()) {
-            assertEquals(feature.defaultValue(Optional.of(featureImpl.bootstrapMetadataVersion())), featureImpl.featureLevel(),
+            assertEquals(feature.defaultValue(featureImpl.bootstrapMetadataVersion()), featureImpl.featureLevel(),
                     "Failed to get the correct default for " + featureImpl);
         }
     }
 
     @ParameterizedTest
     @EnumSource(Features.class)
-    public void testDefaultNoMetadataVersionSupplied(Features features) {
-        if (features.latestProductionVersion() != null) {
-            assertEquals(features.latestProductionVersion().featureLevel(), features.defaultValue(Optional.empty()));
-        }
+    public void testLatestProductionMapsToLatestMetadataVersion(Features features) {
+        assertEquals(features.latestProduction(), features.defaultValue(MetadataVersion.LATEST_PRODUCTION));
     }
 
     @ParameterizedTest
@@ -97,11 +94,6 @@ public class FeaturesTest {
         } else {
             expectedVersion = 0;
         }
-        assertEquals(expectedVersion, Features.TEST_VERSION.defaultValue(Optional.of(metadataVersion)));
-    }
-
-    @Test
-    public void testTestVersionLatestProduction() {
-        assertEquals(Features.TEST_VERSION.latestProductionVersion().featureLevel(), Features.TEST_VERSION.defaultValue(Optional.empty()));
+        assertEquals(expectedVersion, Features.TEST_VERSION.defaultValue(metadataVersion));
     }
 }

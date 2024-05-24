@@ -79,7 +79,7 @@ public final class FinalizedFeatures {
     @Override
     public String toString() {
         return "Features" +
-                "(version=" + metadataVersion +
+                "(metadatVersion=" + metadataVersion +
                 ", finalizedFeatures=" + finalizedFeatures +
                 ", finalizedFeaturesEpoch=" + finalizedFeaturesEpoch +
                 ")";

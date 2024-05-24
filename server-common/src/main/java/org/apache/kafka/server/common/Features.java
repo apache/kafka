@@ -20,7 +20,6 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -40,7 +39,7 @@ public enum Features {
      *
      * See {@link TestFeatureVersion} as an example. See {@link FeatureVersion} when implementing a new feature.
      */
-    TEST_VERSION("test.feature.version", TestFeatureVersion.values(), TestFeatureVersion.LATEST_PRODUCTION);
+    TEST_VERSION("test.feature.version", TestFeatureVersion.values());
 
     public static final Features[] FEATURES;
     public static final List<Features> PRODUCTION_FEATURES;
@@ -48,14 +47,11 @@ public enum Features {
     public static final List<String> PRODUCTION_FEATURE_NAMES;
     private final String name;
     private final FeatureVersion[] featureVersions;
-    private final FeatureVersion latestProductionVersion;
 
     Features(String name,
-             FeatureVersion[] featureVersions,
-             FeatureVersion latestProductionVersion) {
+             FeatureVersion[] featureVersions) {
         this.name = name;
         this.featureVersions = featureVersions;
-        this.latestProductionVersion = latestProductionVersion;
     }
 
     static {
@@ -63,7 +59,7 @@ public enum Features {
         FEATURES = Arrays.copyOf(enumValues, enumValues.length);
 
         PRODUCTION_FEATURES = Arrays.stream(FEATURES).filter(feature ->
-                feature.latestProductionVersion != null).collect(Collectors.toList());
+                feature.name != TEST_VERSION.featureName()).collect(Collectors.toList());
         PRODUCTION_FEATURE_NAMES = PRODUCTION_FEATURES.stream().map(feature ->
                 feature.name).collect(Collectors.toList());
     }
@@ -74,6 +70,10 @@ public enum Features {
 
     public FeatureVersion[] featureVersions() {
         return featureVersions;
+    }
+
+    public short latestProduction() {
+        return defaultValue(MetadataVersion.LATEST_PRODUCTION);
     }
 
     /**
@@ -119,22 +119,17 @@ public enum Features {
     }
 
     /**
-     * A method to return the default version level of a feature based on the metadata version provided or the latest production
-     * version if none is specified.
+     * A method to return the default (latest production) level of a feature based on the metadata version provided.
      *
      * Every time a new feature is added, it should create a mapping from metadata version to feature version
-     * with {@link FeatureVersion#bootstrapMetadataVersion()}
+     * with {@link FeatureVersion#bootstrapMetadataVersion()}. When the feature version is production ready, the metadata
+     * version should be made production ready as well.
      *
-     * @param metadataVersionOpt the metadata version we want to use to set the default or none if we want to use the latest default.
+     * @param metadataVersion the metadata version we want to use to set the default.
      * @return the default version level for the feature and potential metadata version
      */
-    public short defaultValue(Optional<MetadataVersion> metadataVersionOpt) {
-        if (!metadataVersionOpt.isPresent()) {
-            return latestProductionVersion.featureLevel();
-        }
+    public short defaultValue(MetadataVersion metadataVersion) {
         short level = 0;
-
-        MetadataVersion metadataVersion = metadataVersionOpt.get();
         for (Iterator<FeatureVersion> it = Arrays.stream(featureVersions).iterator(); it.hasNext(); ) {
             FeatureVersion feature = it.next();
             if (feature.bootstrapMetadataVersion().isLessThan(metadataVersion) || feature.bootstrapMetadataVersion().equals(metadataVersion))
@@ -150,9 +145,5 @@ public enum Features {
      */
     public static Map<String, Short> featureImplsToMap(List<FeatureVersion> features) {
         return features.stream().collect(Collectors.toMap(FeatureVersion::featureName, FeatureVersion::featureLevel));
-    }
-
-    public FeatureVersion latestProductionVersion() {
-        return latestProductionVersion;
     }
 }

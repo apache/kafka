@@ -132,8 +132,8 @@ object StorageTool extends Logging {
                                             specifiedFeatures: Map[String, java.lang.Short],
                                             allFeatures: List[Features],
                                             usesVersionDefault: Boolean): Unit = {
-    // If we are using --release-version, the default is based on the metadata version.
-    val metadataVersionForDefault = if (usesVersionDefault) Optional.of(metadataVersion) else Optional.empty[MetadataVersion]()
+    // If we are using --version-default, the default is based on the metadata version.
+    val metadataVersionForDefault = if (usesVersionDefault) metadataVersion else MetadataVersion.LATEST_PRODUCTION
 
     val allNonZeroFeaturesAndLevels: ArrayBuffer[FeatureVersion] = mutable.ArrayBuffer[FeatureVersion]()
 
