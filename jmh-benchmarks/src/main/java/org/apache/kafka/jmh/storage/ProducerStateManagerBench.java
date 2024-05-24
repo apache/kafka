@@ -64,21 +64,21 @@ public class ProducerStateManagerBench {
     public void setup() throws IOException {
         tempDirectory = Files.createTempDirectory("kafka-logs");
         manager = new ProducerStateManager(
-                new TopicPartition("t1", 0),
-                tempDirectory.toFile(),
-                Integer.MAX_VALUE,
-                new ProducerStateManagerConfig(producerIdExpirationMs, false),
-                time
+            new TopicPartition("t1", 0),
+            tempDirectory.toFile(),
+            Integer.MAX_VALUE,
+            new ProducerStateManagerConfig(producerIdExpirationMs, false),
+            time
         );
         short epoch = 0;
         for (long i = 0L; i < numProducerIds; i++) {
             final ProducerStateEntry entry = new ProducerStateEntry(
-                    i,
-                    epoch,
-                    0,
-                    time.milliseconds(),
-                    OptionalLong.empty(),
-                    Optional.empty()
+                i,
+                epoch,
+                0,
+                time.milliseconds(),
+                OptionalLong.empty(),
+                Optional.empty()
             );
             manager.loadProducerEntry(entry);
         }
