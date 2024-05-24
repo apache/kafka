@@ -29,6 +29,7 @@ import org.apache.kafka.coordinator.group.consumer.SubscribedTopicMetadata;
 import org.apache.kafka.coordinator.group.consumer.TargetAssignmentBuilder;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
 
+import org.apache.kafka.jmh.util.AssignorUtils;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -53,7 +54,6 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOGENEOUS;
-import static org.apache.kafka.jmh.util.AssignorUtils.invertedTargetAssignment;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
@@ -162,7 +162,7 @@ public class TargetAssignmentBuilderBenchmark {
             groupSpec,
             new SubscribedTopicMetadata(topicMetadataMap)
         );
-        invertedTargetAssignment = invertedTargetAssignment(groupAssignment);
+        invertedTargetAssignment = AssignorUtils.invertedTargetAssignment(groupAssignment);
 
         Map<String, Assignment> initialTargetAssignment = new HashMap<>(memberCount);
 

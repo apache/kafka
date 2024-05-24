@@ -28,6 +28,7 @@ import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
 import org.apache.kafka.coordinator.group.consumer.SubscribedTopicMetadata;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
+import org.apache.kafka.jmh.util.AssignorUtils;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -56,7 +57,6 @@ import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HETEROGENEOUS;
 import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOGENEOUS;
-import static org.apache.kafka.jmh.util.AssignorUtils.invertedTargetAssignment;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
@@ -238,7 +238,7 @@ public class ServerSideAssignorBenchmark {
         GroupAssignment initialAssignment = partitionAssignor.assign(groupSpec, subscribedTopicDescriber);
         Map<String, MemberAssignment> members = initialAssignment.members();
 
-        Map<Uuid, Map<Integer, String>> invertedTargetAssignment = invertedTargetAssignment(initialAssignment);
+        Map<Uuid, Map<Integer, String>> invertedTargetAssignment = AssignorUtils.invertedTargetAssignment(initialAssignment);
 
         Map<String, AssignmentMemberSpec> updatedMembers = new HashMap<>();
 
