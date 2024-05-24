@@ -1002,20 +1002,22 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * Updates the subscription count with a list of members removed.
+     * Updates the subscription count with a set of members removed.
      *
-     * @param removedMembers        The list of removed members.
+     * @param removedMembers        The set of removed members.
      *
      * @return Copy of the map of topics to the count of number of subscribers.
      */
     public Map<String, Integer> computeSubscribedTopicNames(
-        List<ConsumerGroupMember> removedMembers
+        Set<ConsumerGroupMember> removedMembers
     ) {
         Map<String, Integer> subscribedTopicNames = new HashMap<>(this.subscribedTopicNames);
         if (removedMembers != null) {
             removedMembers.forEach(removedMember ->
-                removedMember.subscribedTopicNames().forEach(topicName ->
-                    subscribedTopicNames.compute(topicName, ConsumerGroup::decValue)
+                maybeUpdateSubscribedTopicNames(
+                    subscribedTopicNames,
+                    removedMember,
+                    null
                 )
             );
         }

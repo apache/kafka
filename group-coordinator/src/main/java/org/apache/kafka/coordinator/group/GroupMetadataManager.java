@@ -3985,9 +3985,9 @@ public class GroupMetadataManager {
         SyncGroupRequestData request,
         CompletableFuture<SyncGroupResponseData> responseFuture
     ) throws UnknownMemberIdException, GroupIdNotFoundException {
-        Group group = groups.get(request.groupId(), Long.MAX_VALUE);
+        Group group = group(request.groupId());
 
-        if (group == null || group.isEmpty()) {
+        if (group.isEmpty()) {
             responseFuture.complete(new SyncGroupResponseData()
                 .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code()));
             return EMPTY_RESULT;
@@ -4249,13 +4249,7 @@ public class GroupMetadataManager {
         RequestContext context,
         HeartbeatRequestData request
     ) {
-        Group group = groups.get(request.groupId(), Long.MAX_VALUE);
-
-        if (group == null) {
-            throw new UnknownMemberIdException(
-                String.format("Group %s not found.", request.groupId())
-            );
-        }
+        Group group = group(request.groupId());
 
         if (group.type() == CLASSIC) {
             return classicGroupHeartbeatToClassicGroup((ClassicGroup) group, context, request);
@@ -4431,11 +4425,7 @@ public class GroupMetadataManager {
         RequestContext context,
         LeaveGroupRequestData request
     ) throws UnknownMemberIdException, GroupIdNotFoundException {
-        Group group = groups.get(request.groupId(), Long.MAX_VALUE);
-
-        if (group == null) {
-            throw new UnknownMemberIdException(String.format("Group %s not found.", request.groupId()));
-        }
+        Group group = group(request.groupId());
 
         if (group.type() == CLASSIC) {
             return classicGroupLeaveToClassicGroup((ClassicGroup) group, context, request);
@@ -4463,7 +4453,7 @@ public class GroupMetadataManager {
         Set<ConsumerGroupMember> validLeaveGroupMembers = new HashSet<>();
         List<CoordinatorRecord> records = new ArrayList<>();
 
-        for (MemberIdentity memberIdentity: request.members()) {
+        for (MemberIdentity memberIdentity : request.members()) {
             String memberId = memberIdentity.memberId();
             String instanceId = memberIdentity.groupInstanceId();
             String reason = memberIdentity.reason() != null ? memberIdentity.reason() : "not provided";
@@ -4514,7 +4504,7 @@ public class GroupMetadataManager {
         if (!records.isEmpty()) {
             // Maybe update the subscription metadata.
             Map<String, TopicMetadata> subscriptionMetadata = group.computeSubscriptionMetadata(
-                group.computeSubscribedTopicNames(new ArrayList<>(validLeaveGroupMembers)),
+                group.computeSubscribedTopicNames(validLeaveGroupMembers),
                 metadataImage.topics(),
                 metadataImage.cluster()
             );
