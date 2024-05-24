@@ -2015,7 +2015,21 @@ public class GroupMetadataManager {
         if (validateOnlineDowngrade(group, member.memberId())) {
             return convertToClassicGroup(group, member.memberId(), response);
         } else {
-            List<CoordinatorRecord> records = removeMemberAndMaybeUpdateSubscriptionMetadata(group, member);
+            List<CoordinatorRecord> records = new ArrayList<>();
+            removeMember(records, group.groupId(), member.memberId());
+
+            // We update the subscription metadata without the leaving member.
+            Map<String, TopicMetadata> subscriptionMetadata = group.computeSubscriptionMetadata(
+                group.computeSubscribedTopicNames(member, null),
+                metadataImage.topics(),
+                metadataImage.cluster()
+            );
+
+            if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
+                log.info("[GroupId {}] Computed new subscription metadata: {}.",
+                    group.groupId(), subscriptionMetadata);
+                records.add(newGroupSubscriptionMetadataRecord(group.groupId(), subscriptionMetadata));
+            }
 
             // We bump the group epoch.
             int groupEpoch = group.groupEpoch() + 1;
@@ -2025,36 +2039,6 @@ public class GroupMetadataManager {
 
             return new CoordinatorResult<>(records, response);
         }
-    }
-
-    /**
-     * Remove the member and maybe update the subscription metadata without the removed member.
-     *
-     * @param group     The ConsumerGroup.
-     * @param member    The ConsumerGroupMember.
-     * @return The list of CoordinatorRecord.
-     */
-    private List<CoordinatorRecord> removeMemberAndMaybeUpdateSubscriptionMetadata(
-        ConsumerGroup group,
-        ConsumerGroupMember member
-    ) {
-        List<CoordinatorRecord> records = new ArrayList<>();
-        removeMember(records, group.groupId(), member.memberId());
-
-        // We update the subscription metadata without the leaving member.
-        Map<String, TopicMetadata> subscriptionMetadata = group.computeSubscriptionMetadata(
-            group.computeSubscribedTopicNames(member, null),
-            metadataImage.topics(),
-            metadataImage.cluster()
-        );
-
-        if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
-            log.info("[GroupId {}] Computed new subscription metadata: {}.",
-                group.groupId(), subscriptionMetadata);
-            records.add(newGroupSubscriptionMetadataRecord(group.groupId(), subscriptionMetadata));
-        }
-
-        return records;
     }
 
     /**
@@ -4474,9 +4458,10 @@ public class GroupMetadataManager {
         RequestContext context,
         LeaveGroupRequestData request
     ) throws UnknownMemberIdException, GroupIdNotFoundException {
+        String groupId = group.groupId();
         List<MemberResponse> memberResponses = new ArrayList<>();
+        Set<ConsumerGroupMember> validLeaveGroupMembers = new HashSet<>();
         List<CoordinatorRecord> records = new ArrayList<>();
-        boolean hasValidLeaveGroupMember = false;
 
         for (MemberIdentity memberIdentity: request.members()) {
             String memberId = memberIdentity.memberId();
@@ -4491,30 +4476,31 @@ public class GroupMetadataManager {
 
                     log.info("[Group {}] Static Member {} has left group " +
                             "through explicit `LeaveGroup` request; client reason: {}",
-                        group.groupId(), memberId, reason);
+                        groupId, memberId, reason);
                 } else {
                     member = group.staticMember(instanceId);
                     throwIfStaticMemberIsUnknown(member, memberId);
                     // The LeaveGroup API allows administrative removal of members by GroupInstanceId
                     // in which case we expect the MemberId to be undefined.
                     if (!UNKNOWN_MEMBER_ID.equals(memberId)) {
-                        throwIfInstanceIdIsFenced(member, group.groupId(), memberId, instanceId);
+                        throwIfInstanceIdIsFenced(member, groupId, memberId, instanceId);
                     }
                     throwIfMemberDoesNotUseClassicProtocol(member);
 
+                    memberId = member.memberId();
                     log.info("[Group {}] Static Member {} with instance id {} has left group " +
                             "through explicit `LeaveGroup` request; client reason: {}",
-                        group.groupId(), memberId, instanceId, reason);
+                        groupId, memberId, instanceId, reason);
                 }
 
-                records.addAll(removeMemberAndMaybeUpdateSubscriptionMetadata(group, member));
-                cancelTimers(group.groupId(), member.memberId());
+                removeMember(records, groupId, memberId);
+                cancelTimers(groupId, memberId);
                 memberResponses.add(
                     new MemberResponse()
-                        .setMemberId(member.memberId())
+                        .setMemberId(memberId)
                         .setGroupInstanceId(instanceId)
                 );
-                hasValidLeaveGroupMember = true;
+                validLeaveGroupMembers.add(member);
             } catch (KafkaException e) {
                 memberResponses.add(
                     new MemberResponse()
@@ -4525,9 +4511,22 @@ public class GroupMetadataManager {
             }
         }
 
-        if (hasValidLeaveGroupMember) {
+        if (!records.isEmpty()) {
+            // Maybe update the subscription metadata.
+            Map<String, TopicMetadata> subscriptionMetadata = group.computeSubscriptionMetadata(
+                group.computeSubscribedTopicNames(new ArrayList<>(validLeaveGroupMembers)),
+                metadataImage.topics(),
+                metadataImage.cluster()
+            );
+
+            if (!subscriptionMetadata.equals(group.subscriptionMetadata())) {
+                log.info("[GroupId {}] Computed new subscription metadata: {}.",
+                    group.groupId(), subscriptionMetadata);
+                records.add(newGroupSubscriptionMetadataRecord(group.groupId(), subscriptionMetadata));
+            }
+
             // Bump the group epoch.
-            records.add(newGroupEpochRecord(group.groupId(), group.groupEpoch() + 1));
+            records.add(newGroupEpochRecord(groupId, group.groupEpoch() + 1));
         }
 
         return new CoordinatorResult<>(records, new LeaveGroupResponseData().setMembers(memberResponses));
