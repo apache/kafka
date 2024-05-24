@@ -243,8 +243,9 @@ public class LeaderState<T> implements EpochState {
                         );
                         return true;
                     } else if (highWatermarkUpdateOffset < currentHighWatermarkMetadata.offset) {
-                        log.error("The latest computed high watermark {} is smaller than the current " +
-                                "value {}, which suggests that one of the voters has lost committed data. " +
+                        log.warn("The latest computed high watermark {} is smaller than the current " +
+                                "value {}, which should only happen when voter set membership changes. If the voter " +
+                                "set has not changed this suggests that one of the voters has lost committed data. " +
                                 "Full voter replication state: {}", highWatermarkUpdateOffset,
                             currentHighWatermarkMetadata.offset, voterStates.values());
                         return false;
@@ -341,9 +342,16 @@ public class LeaderState<T> implements EpochState {
                     state.nodeId, currentEndOffset.offset, fetchOffsetMetadata.offset);
             }
         });
-
-        Optional<LogOffsetMetadata> leaderEndOffsetOpt =
-            voterStates.get(localId).endOffset;
+        Optional<LogOffsetMetadata> leaderEndOffsetOpt;
+        if (voterStates.containsKey(localId)) {
+            leaderEndOffsetOpt = voterStates.get(localId).endOffset;
+        } else if (observerStates.containsKey(localId)) {
+            // The leader is not guaranteed to be in the voter set when in the process of being removed from the quorum.
+            log.info("Updating end offset for leader {} which is also an observer.", localId);
+            leaderEndOffsetOpt = observerStates.get(localId).endOffset;
+        } else {
+            throw new IllegalStateException("Leader state not found for localId " + localId);
+        }
 
         state.updateFollowerState(
             currentTimeMs,
@@ -443,6 +451,15 @@ public class LeaderState<T> implements EpochState {
 
     private boolean isVoter(int remoteNodeId) {
         return voterStates.containsKey(remoteNodeId);
+    }
+
+    // for testing purposes
+    boolean removeVoter(int nodeId) {
+        if (voterStates.containsKey(nodeId)) {
+            voterStates.remove(nodeId);
+            return true;
+        }
+        return false;
     }
 
     private static class ReplicaState implements Comparable<ReplicaState> {

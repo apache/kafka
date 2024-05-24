@@ -281,6 +281,60 @@ public class LeaderStateTest {
     }
 
     @Test
+    public void testUpdateHighWatermarkRemovingFollowerFromVoterStates() {
+        int node1 = 1;
+        int node2 = 2;
+        LeaderState<?> state = newLeaderState(mkSet(localId, node1, node2), 10L);
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(15L)));
+        assertTrue(state.updateReplicaState(node1, 0, new LogOffsetMetadata(15L)));
+        assertFalse(state.updateReplicaState(node2, 0, new LogOffsetMetadata(10L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+
+        // removing node1 should not decrement HW to 10L
+        assertTrue(state.removeVoter(node1));
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(17L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+
+        // HW cannot change until after node2 catches up to last HW
+        assertFalse(state.updateReplicaState(node2, 0, new LogOffsetMetadata(14L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+        assertFalse(state.updateReplicaState(node2, 0, new LogOffsetMetadata(15L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+
+        // HW should update to 16L
+        assertTrue(state.updateReplicaState(node2, 0, new LogOffsetMetadata(16L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(16L)), state.highWatermark());
+    }
+
+    @Test
+    public void testUpdateHighWatermarkQuorumRemovingLeaderFromVoterStates() {
+        int node1 = 1;
+        int node2 = 2;
+        LeaderState<?> state = newLeaderState(mkSet(localId, node1, node2), 10L);
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(15L)));
+        assertTrue(state.updateReplicaState(node1, 0, new LogOffsetMetadata(15L)));
+        assertFalse(state.updateReplicaState(node2, 0, new LogOffsetMetadata(10L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+
+        // removing leader should not decrement HW to 10L
+        assertTrue(state.removeVoter(localId));
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(17L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+
+        // HW cannot change until node2 catches up to last HW
+        assertFalse(state.updateReplicaState(node2, 0, new LogOffsetMetadata(14L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+        assertFalse(state.updateReplicaState(node2, 0, new LogOffsetMetadata(15L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+
+        // HW will not update to 16L until majority of remaining voterSet (node1, node2) are at least 16L
+        assertFalse(state.updateReplicaState(node2, 0, new LogOffsetMetadata(16L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+        assertTrue(state.updateReplicaState(node1, 0, new LogOffsetMetadata(16L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(16L)), state.highWatermark());
+    }
+
+    @Test
     public void testNonMonotonicHighWatermarkUpdate() {
         MockTime time = new MockTime();
         int node1 = 1;
