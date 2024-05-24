@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 
@@ -49,7 +50,7 @@ public class GroupSpecImplTest {
         members.put("test-member",  new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
-            Collections.singletonList(topicId),
+            new HashSet<>(Collections.singletonList(topicId)),
             Collections.emptyMap())
         );
 

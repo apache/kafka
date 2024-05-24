@@ -226,7 +226,7 @@ public class TargetAssignmentBuilderTest {
                 .withSubscriptionMetadata(subscriptionMetadata)
                 .withSubscriptionType(subscriptionType)
                 .withTargetAssignment(targetAssignment)
-                .withInvertedTargetAssignment(invertedTargetAssignment);
+                .withInvertedTargetAssignment(invertedTargetAssignment)
                 .withTopicsImage(topicsImage);
 
             // Add the updated members or delete the deleted members.

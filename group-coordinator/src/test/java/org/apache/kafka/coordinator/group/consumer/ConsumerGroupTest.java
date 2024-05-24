@@ -905,6 +905,17 @@ public class ConsumerGroupTest {
             ),
             consumerGroup.invertedTargetAssignment()
         );
+
+        // Test remove target assignment for member1
+        consumerGroup.removeTargetAssignment(memberId1);
+
+        // Verify that partition 0 is no longer assigned and partition 1 is still assigned to member2
+        assertEquals(
+            mkMap(
+                mkEntry(topicId, mkMap(mkEntry(1, memberId2)))
+            ),
+            consumerGroup.invertedTargetAssignment()
+        );
     }
 
     @Test

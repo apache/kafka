@@ -30,7 +30,6 @@ import org.apache.kafka.coordinator.group.consumer.SubscribedTopicMetadata;
 import org.apache.kafka.coordinator.group.consumer.TargetAssignmentBuilder;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
 
-import org.apache.kafka.jmh.util.AssignorBenchmarkUtils;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
@@ -61,6 +60,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOGENEOUS;
+import static org.apache.kafka.jmh.assignor.AssignorBenchmarkUtils.invertedTargetAssignment;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
@@ -178,7 +178,7 @@ public class TargetAssignmentBuilderBenchmark {
             groupSpec,
             new SubscribedTopicMetadata(topicMetadataMap)
         );
-        invertedTargetAssignment = AssignorBenchmarkUtils.invertedTargetAssignment(groupAssignment);
+        invertedTargetAssignment = invertedTargetAssignment(groupAssignment);
 
         Map<String, Assignment> initialTargetAssignment = new HashMap<>(memberCount);
 
@@ -209,8 +209,6 @@ public class TargetAssignmentBuilderBenchmark {
         }
         groupSpec = new GroupSpecImpl(members, HOMOGENEOUS, Collections.emptyMap());
     }
-
-
 
     @Benchmark
     @Threads(1)
