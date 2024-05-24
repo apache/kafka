@@ -15,34 +15,28 @@
  * limitations under the License.
  */
 
-package kafka.server
+package unit.kafka.server
 
+import kafka.server.{Fetching, LeaderEndPoint, MockTierStateMachine, PartitionFetchState, ReplicaManager}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.FetchResponseData
 
-import java.util.Optional
-
-class MockTierStateMachine(leader: LeaderEndPoint, replicaMgr: ReplicaManager = null) extends ReplicaFetcherTierStateMachine(leader, replicaMgr) {
-
-  var fetcher: MockFetcherThread = _
+class MockTierStateMachineWithRlm(leader: LeaderEndPoint, replicaMgr: ReplicaManager) extends MockTierStateMachine(leader, replicaMgr) {
 
   override def start(topicPartition: TopicPartition,
                      currentFetchState: PartitionFetchState,
                      fetchPartitionData: FetchResponseData.PartitionData): PartitionFetchState = {
-    val leaderEndOffset = leader.fetchLatestOffset(topicPartition, currentFetchState.currentLeaderEpoch).offset
-    val offsetToFetch = leader.fetchEarliestLocalOffset(topicPartition, currentFetchState.currentLeaderEpoch).offset
+    val epochAndLeaderLocalStartOffset = leader.fetchEarliestLocalOffset(topicPartition, currentFetchState.currentLeaderEpoch)
+    val epoch = epochAndLeaderLocalStartOffset.leaderEpoch
+    val leaderLocalStartOffset = epochAndLeaderLocalStartOffset.offset
+
+    val offsetToFetch = buildRemoteLogAuxState(topicPartition, currentFetchState.currentLeaderEpoch, leaderLocalStartOffset, epoch, fetchPartitionData.logStartOffset)
+
+    val fetchLatestOffsetResult = leader.fetchLatestOffset(topicPartition, currentFetchState.currentLeaderEpoch)
+    val leaderEndOffset = fetchLatestOffsetResult.offset
+
     val initialLag = leaderEndOffset - offsetToFetch
-    fetcher.truncateFullyAndStartAt(topicPartition, offsetToFetch)
-    PartitionFetchState(currentFetchState.topicId, offsetToFetch, Option.apply(initialLag), currentFetchState.currentLeaderEpoch,
-      Fetching, Some(currentFetchState.currentLeaderEpoch))
-  }
 
-  override def maybeAdvanceState(topicPartition: TopicPartition,
-                                 currentFetchState: PartitionFetchState): Optional[PartitionFetchState] = {
-    Optional.of(currentFetchState)
-  }
-
-  def setFetcher(mockFetcherThread: MockFetcherThread): Unit = {
-    fetcher = mockFetcherThread
+    PartitionFetchState.apply(currentFetchState.topicId, offsetToFetch, Option.apply(initialLag), currentFetchState.currentLeaderEpoch, Fetching, replicaMgr.localLogOrException(topicPartition).latestEpoch)
   }
 }

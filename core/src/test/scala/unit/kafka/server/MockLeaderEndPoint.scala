@@ -236,12 +236,11 @@ class MockLeaderEndPoint(sourceBroker: BrokerEndPoint = new BrokerEndPoint(1, ho
     var epochLowerBound = UNDEFINED_EPOCH
     for (batch <- partitionState.log) {
       if (batch.partitionLeaderEpoch > epochData.leaderEpoch) {
-        // If we don't have the requested epoch, return the next higher entry
         if (epochLowerBound == UNDEFINED_EPOCH)
           return new EpochEndOffset()
             .setPartition(topicPartition.partition)
             .setErrorCode(Errors.NONE.code)
-            .setLeaderEpoch(batch.partitionLeaderEpoch)
+            .setLeaderEpoch(epochData.leaderEpoch)
             .setEndOffset(batch.baseOffset)
         else
           return new EpochEndOffset()

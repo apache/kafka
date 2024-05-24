@@ -224,6 +224,10 @@ public class ProducerStateManager {
         return offsetToSnapshots;
     }
 
+    public void reloadSnapshots() throws IOException {
+        snapshots = loadSnapshots();
+    }
+
     /**
      * Scans the log directory, gathering all producer state snapshot files. Snapshot files which do not have an offset
      * corresponding to one of the provided offsets in segmentBaseOffsets will be removed, except in the case that there

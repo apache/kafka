@@ -701,27 +701,33 @@ public class RemoteIndexCache implements Closeable {
         return startOffset + "_" + segmentId.toString();
     }
 
+    // Visible for testing
     public static File remoteOffsetIndexFile(File dir, RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
         return new File(dir, remoteOffsetIndexFileName(remoteLogSegmentMetadata));
     }
 
+    // Visible for testing
     public static String remoteOffsetIndexFileName(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
         String prefix = generateFileNamePrefixForIndex(remoteLogSegmentMetadata);
         return prefix + LogFileUtils.INDEX_FILE_SUFFIX;
     }
 
+    // Visible for testing
     public static File remoteTimeIndexFile(File dir, RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
         return new File(dir, remoteTimeIndexFileName(remoteLogSegmentMetadata));
     }
 
+    // Visible for testing
     public static String remoteTimeIndexFileName(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
         return generateFileNamePrefixForIndex(remoteLogSegmentMetadata) + TIME_INDEX_FILE_SUFFIX;
     }
 
+    // Visible for testing
     public static File remoteTransactionIndexFile(File dir, RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
         return new File(dir, remoteTransactionIndexFileName(remoteLogSegmentMetadata));
     }
 
+    // Visible for testing
     public static String remoteTransactionIndexFileName(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
         return generateFileNamePrefixForIndex(remoteLogSegmentMetadata) + LogFileUtils.TXN_INDEX_FILE_SUFFIX;
     }
