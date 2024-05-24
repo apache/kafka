@@ -214,7 +214,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private RebalanceProtocol rebalanceProtocol;
     private AssignmentListener assignmentListener;
 
-    private Supplier<org.apache.kafka.streams.processor.assignment.TaskAssignor> userTaskAssignorSupplier;
+    private Supplier<Optional<org.apache.kafka.streams.processor.assignment.TaskAssignor>> userTaskAssignorSupplier;
     private Supplier<TaskAssignor> taskAssignorSupplier;
     private byte uniqueField;
     private Map<String, String> clientTags;
@@ -762,10 +762,22 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         log.debug("Assigning tasks and {} standby replicas to client nodes {}",
                   numStandbyReplicas(), clientStates);
 
-        final org.apache.kafka.streams.processor.assignment.TaskAssignor userTaskAssignor =
-            createUserTaskAssignor(lagComputationSuccessful);
-        boolean probingRebalanceNeeded = false;
-        if (userTaskAssignor == null) {
+        final Optional<org.apache.kafka.streams.processor.assignment.TaskAssignor> userTaskAssignor =
+            userTaskAssignorSupplier.get();
+        boolean probingRebalanceNeeded;
+        if (userTaskAssignor.isPresent()) {
+            final ApplicationState applicationState = buildApplicationState(
+                taskManager.topologyMetadata(),
+                clientMetadataMap,
+                topicGroups,
+                fullMetadata
+            );
+            final TaskAssignment taskAssignment = userTaskAssignor.get().assign(applicationState);
+            processStreamsPartitionAssignment(clientMetadataMap, taskAssignment);
+            probingRebalanceNeeded = taskAssignment.assignment().stream().anyMatch(assignment -> {
+                return assignment.followupRebalanceDeadline().isPresent();
+            });
+        } else {
             final TaskAssignor taskAssignor = createTaskAssignor(lagComputationSuccessful);
             final RackAwareTaskAssignor rackAwareTaskAssignor = new RackAwareTaskAssignor(
                 fullMetadata,
@@ -782,18 +794,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 statefulTasks,
                 rackAwareTaskAssignor,
                 assignmentConfigs);
-        } else {
-            final ApplicationState applicationState = buildApplicationState(
-                taskManager.topologyMetadata(),
-                clientMetadataMap,
-                topicGroups,
-                fullMetadata
-            );
-            final TaskAssignment taskAssignment = userTaskAssignor.assign(applicationState);
-            probingRebalanceNeeded = taskAssignment.assignment().stream().anyMatch(assignment -> {
-                return assignment.followupRebalanceDeadline().isPresent();
-            });
-            processStreamsPartitionAssignment(clientMetadataMap, taskAssignment);
         }
 
         // Break this up into multiple logs to make sure the summary info gets through, which helps avoid
@@ -809,14 +809,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                      .collect(Collectors.joining(Utils.NL)));
 
         return probingRebalanceNeeded;
-    }
-
-    private org.apache.kafka.streams.processor.assignment.TaskAssignor createUserTaskAssignor(final boolean lagComputationSuccessful) {
-        if (!lagComputationSuccessful) {
-            log.info("Failed to fetch end offsets for changelogs, will return previous assignment to clients and "
-                     + "trigger another rebalance to retry.");
-        }
-        return userTaskAssignorSupplier.get();
     }
 
     private TaskAssignor createTaskAssignor(final boolean lagComputationSuccessful) {
