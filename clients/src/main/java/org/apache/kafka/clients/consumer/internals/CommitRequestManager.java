@@ -1093,7 +1093,9 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         public String toStringBase() {
             return super.toStringBase() +
                     ", requestedPartitions=" + requestedPartitions +
-                    ", future=" + future;
+                    ", future=" + future +
+                    ", memberId=" + memberInfo.memberId.orElse("undefined") +
+                    ", memberEpoch=" + (memberInfo.memberEpoch.isPresent() ? memberInfo.memberEpoch : "undefined");
         }
     }
 

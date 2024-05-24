@@ -129,6 +129,10 @@ public class CommitRequestManagerTest {
     @Test
     public void testOffsetFetchRequestStateToStringBase() {
         ConsumerConfig config = mock(ConsumerConfig.class);
+        CommitRequestManager.MemberInfo memberInfo = mock(CommitRequestManager.MemberInfo.class);
+        memberInfo.memberId = Optional.empty();
+        memberInfo.memberEpoch = Optional.empty();
+
         this.commitRequestManager = new CommitRequestManager(
                 time,
                 logContext,
@@ -139,11 +143,13 @@ public class CommitRequestManagerTest {
                 "groupId",
                 Optional.of("groupInstanceId"),
                 metrics);
+
         this.offsetFetchRequestState = commitRequestManager.new OffsetFetchRequestState(
                 mock(Set.class),
                 10, 100, 1000,
-                mock(CommitRequestManager.MemberInfo.class)
+                memberInfo
         );
+
         this.requestState = new RequestState(
                 logContext,
                 "CommitRequestManager",
@@ -152,7 +158,10 @@ public class CommitRequestManagerTest {
 
         String target = requestState.toStringBase() +
                 ", requestedPartitions=" + offsetFetchRequestState.requestedPartitions +
-                ", future=" + offsetFetchRequestState.future();
+                ", future=" + offsetFetchRequestState.future() +
+                ", memberId=" + offsetFetchRequestState.memberInfo.memberId.orElse("undefined") +
+                ", memberEpoch=" + (offsetFetchRequestState.memberInfo.memberEpoch.isPresent() ? offsetFetchRequestState.memberInfo.memberEpoch : "undefined");
+
         assertEquals(target, offsetFetchRequestState.toStringBase());
     }
 
