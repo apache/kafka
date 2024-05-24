@@ -165,6 +165,8 @@ public class RemoteLogManager implements Closeable {
     private Optional<EndPoint> endpoint = Optional.empty();
     private boolean closed = false;
 
+    private volatile boolean remoteLogManagerConfigured = false;
+
     /**
      * Creates RemoteLogManager instance with the given arguments.
      *
@@ -298,6 +300,11 @@ public class RemoteLogManager implements Closeable {
         // in connecting to the brokers or remote storages.
         configureRSM();
         configureRLMM();
+        remoteLogManagerConfigured = true;
+    }
+
+    private boolean isRemoteLogManagerConfigured() {
+        return this.remoteLogManagerConfigured;
     }
 
     public RemoteStorageManager storageManager() {
@@ -339,6 +346,10 @@ public class RemoteLogManager implements Closeable {
 
         Set<TopicIdPartition> followerPartitions = filterPartitions(partitionsBecomeFollower)
                 .map(p -> new TopicIdPartition(topicIds.get(p.topic()), p.topicPartition())).collect(Collectors.toSet());
+
+        if (this.rlmConfig.enableRemoteStorageSystem() && !isRemoteLogManagerConfigured()) {
+            throw new KafkaException("RemoteLogManager is not configured when remote storage system is enabled");
+        }
 
         if (!leaderPartitions.isEmpty() || !followerPartitions.isEmpty()) {
             LOGGER.debug("Effective topic partitions after filtering compact and internal topics, leaders: {} and followers: {}",
