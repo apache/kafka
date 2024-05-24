@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group.runtime;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -423,7 +424,7 @@ public class CoordinatorRuntimeTest {
         MemoryRecordsBuilder builder = MemoryRecords.builder(
             buffer,
             RecordVersion.current().value,
-            CompressionType.NONE,
+            Compression.NONE,
             TimestampType.CREATE_TIME,
             0L,
             timestamp,
@@ -463,7 +464,7 @@ public class CoordinatorRuntimeTest {
         MemoryRecordsBuilder builder = MemoryRecords.builder(
             buffer,
             RecordVersion.current().value,
-            CompressionType.NONE,
+            Compression.NONE,
             TimestampType.CREATE_TIME,
             0L,
             timestamp,
@@ -2500,6 +2501,57 @@ public class CoordinatorRuntimeTest {
 
         // The timer should have been called and the timer should have no pending tasks
         // because the timer is not retried.
+        assertEquals(1, cnt.get());
+        assertEquals(0, ctx.timer.size());
+    }
+
+    @Test
+    public void testTimerScheduleIfAbsent() throws InterruptedException {
+        MockTimer timer = new MockTimer();
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(new MockPartitionWriter())
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .withSerializer(new StringSerializer())
+                .build();
+
+        // Loads the coordinator.
+        runtime.scheduleLoadOperation(TP, 10);
+
+        // Check initial state.
+        CoordinatorRuntime<MockCoordinatorShard, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+        assertEquals(0, ctx.timer.size());
+
+        // Timer #1.
+        AtomicInteger cnt = new AtomicInteger(0);
+        ctx.timer.scheduleIfAbsent("timer-1", 10, TimeUnit.MILLISECONDS, false, () -> {
+            cnt.incrementAndGet();
+            throw new KafkaException("error");
+        });
+
+        // The coordinator timer should have one pending task.
+        assertEquals(1, ctx.timer.size());
+
+        // Advance half of the time to fire the pending timer.
+        timer.advanceClock(10 / 2);
+
+        // Reschedule timer #1. Since the timer already exists, the timeout shouldn't be refreshed.
+        ctx.timer.scheduleIfAbsent("timer-1", 10, TimeUnit.MILLISECONDS, false, () -> {
+            cnt.incrementAndGet();
+            throw new KafkaException("error");
+        });
+
+        // Advance the time to fire the pending timer.
+        timer.advanceClock(10 / 2 + 1);
+
+        // The timer should have been called and the timer should have no pending tasks.
         assertEquals(1, cnt.get());
         assertEquals(0, ctx.timer.size());
     }
