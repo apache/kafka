@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -68,7 +69,7 @@ public class RestServerConfigTest {
 
         props.put(RestServerConfig.LISTENERS_CONFIG, "http://a.b:9999");
         config = RestServerConfig.forPublic(null, props);
-        assertEquals(Arrays.asList("http://a.b:9999"), config.listeners());
+        assertEquals(Collections.singletonList("http://a.b:9999"), config.listeners());
 
         props.put(RestServerConfig.LISTENERS_CONFIG, "http://a.b:9999, https://a.b:7812");
         config = RestServerConfig.forPublic(null, props);

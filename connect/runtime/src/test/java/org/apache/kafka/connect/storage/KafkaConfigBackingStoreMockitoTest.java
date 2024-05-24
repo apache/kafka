@@ -800,7 +800,7 @@ public class KafkaConfigBackingStoreMockitoTest {
         // Should see a single connector and its config should be the last one seen anywhere in the log
         ClusterConfigState configState = configStorage.snapshot();
         assertEquals(8, configState.offset()); // Should always be next to be read, even if uncommitted
-        assertEquals(Arrays.asList(CONNECTOR_IDS.get(0)), new ArrayList<>(configState.connectors()));
+        assertEquals(Collections.singletonList(CONNECTOR_IDS.get(0)), new ArrayList<>(configState.connectors()));
         // CONNECTOR_CONFIG_STRUCTS[2] -> SAMPLE_CONFIGS[2]
         assertEquals(SAMPLE_CONFIGS.get(2), configState.connectorConfig(CONNECTOR_IDS.get(0)));
         // Should see 0 tasks for that connector.
@@ -1053,7 +1053,7 @@ public class KafkaConfigBackingStoreMockitoTest {
         // After reading the log, it should have been in an inconsistent state
         ClusterConfigState configState = configStorage.snapshot();
         assertEquals(6, configState.offset()); // Should always be next to be read, not last committed
-        assertEquals(Arrays.asList(CONNECTOR_IDS.get(0)), new ArrayList<>(configState.connectors()));
+        assertEquals(Collections.singletonList(CONNECTOR_IDS.get(0)), new ArrayList<>(configState.connectors()));
         // Inconsistent data should leave us with no tasks listed for the connector and an entry in the inconsistent list
         assertEquals(Collections.emptyList(), configState.tasks(CONNECTOR_IDS.get(0)));
         // Both TASK_CONFIG_STRUCTS[0] -> SAMPLE_CONFIGS[0]
@@ -1086,8 +1086,8 @@ public class KafkaConfigBackingStoreMockitoTest {
         // This is only two more ahead of the last one because multiple calls fail, and so their configs are not written
         // to the topic. Only the last call with 1 task config + 1 commit actually gets written.
         assertEquals(8, configState.offset());
-        assertEquals(Arrays.asList(CONNECTOR_IDS.get(0)), new ArrayList<>(configState.connectors()));
-        assertEquals(Arrays.asList(TASK_IDS.get(0)), configState.tasks(CONNECTOR_IDS.get(0)));
+        assertEquals(Collections.singletonList(CONNECTOR_IDS.get(0)), new ArrayList<>(configState.connectors()));
+        assertEquals(Collections.singletonList(TASK_IDS.get(0)), configState.tasks(CONNECTOR_IDS.get(0)));
         assertEquals(SAMPLE_CONFIGS.get(0), configState.taskConfig(TASK_IDS.get(0)));
         assertEquals(Collections.EMPTY_SET, configState.inconsistentConnectors());
 

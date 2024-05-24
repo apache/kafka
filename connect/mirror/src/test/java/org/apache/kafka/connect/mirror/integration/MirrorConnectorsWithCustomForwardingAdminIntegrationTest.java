@@ -164,7 +164,7 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
         startClusters(additionalConfig);
 
         try (Admin adminClient = primary.kafka().createAdminClient()) {
-            adminClient.createAcls(Arrays.asList(
+            adminClient.createAcls(Collections.singletonList(
                     new AclBinding(
                             new ResourcePattern(ResourceType.TOPIC, "*", PatternType.LITERAL),
                             new AccessControlEntry("User:connector", "*", AclOperation.ALL, AclPermissionType.ALLOW)
@@ -172,7 +172,7 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
             )).all().get();
         }
         try (Admin adminClient = backup.kafka().createAdminClient()) {
-            adminClient.createAcls(Arrays.asList(
+            adminClient.createAcls(Collections.singletonList(
                     new AclBinding(
                             new ResourcePattern(ResourceType.TOPIC, "*", PatternType.LITERAL),
                             new AccessControlEntry("User:connector", "*", AclOperation.ALL, AclPermissionType.ALLOW)
@@ -293,7 +293,7 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
     public void testSyncTopicACLsUseProvidedForwardingAdmin() throws Exception {
         mm2Props.put("sync.topic.acls.enabled", "true");
         mm2Config = new MirrorMakerConfig(mm2Props);
-        List<AclBinding> aclBindings = Arrays.asList(
+        List<AclBinding> aclBindings = Collections.singletonList(
                 new AclBinding(
                         new ResourcePattern(ResourceType.TOPIC, "test-topic-1", PatternType.LITERAL),
                         new AccessControlEntry("User:dummy", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW)
