@@ -378,7 +378,7 @@ public class ProducerStateManager {
         removeProducerIds(keys);
 
         List<Long> verificationKeys = new ArrayList<>(keys.size());
-        verificationStates.entrySet().stream()
+        verificationStates.entrySet()
             .forEach(entry -> {
                 if (currentTimeMs - entry.getValue().timestamp() >= producerStateManagerConfig.producerIdExpirationMs()) {
                     verificationKeys.add(entry.getKey());
