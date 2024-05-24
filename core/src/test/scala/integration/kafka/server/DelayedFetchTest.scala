@@ -203,7 +203,7 @@ class DelayedFetchTest {
 
     val partition: Partition = mock(classOf[Partition])
     when(replicaManager.getPartitionOrException(topicIdPartition.topicPartition)).thenReturn(partition)
-    // Note that the high-watermark does not contain the complete metadata so the delayed-fetch won't be satisfied
+    // Note that the high-watermark does not contain the complete metadata
     val endOffsetMetadata = new LogOffsetMetadata(endOffset, -1L, -1)
     when(partition.fetchOffsetSnapshot(
       currentLeaderEpoch,
@@ -212,9 +212,15 @@ class DelayedFetchTest {
     when(replicaManager.isAddingReplica(any(), anyInt())).thenReturn(false)
     expectReadFromReplica(fetchParams, topicIdPartition, fetchStatus.fetchInfo, Errors.NONE)
 
-    assertFalse(delayedFetch.tryComplete())
-    assertFalse(delayedFetch.isCompleted)
-    assertFalse(fetchResultOpt.isDefined)
+    // 1. When `endOffset` is 0, it refers to the truncation case
+    // 2. When `endOffset` is 500, we won't complete because it doesn't contain offset metadata
+    val expected = endOffset == 0
+    assertEquals(expected, delayedFetch.tryComplete())
+    assertEquals(expected, delayedFetch.isCompleted)
+    assertEquals(expected, fetchResultOpt.isDefined)
+    if (fetchResultOpt.isDefined) {
+      assertEquals(Errors.NONE, fetchResultOpt.get.error)
+    }
   }
 
   private def buildFollowerFetchParams(
