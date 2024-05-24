@@ -23,15 +23,15 @@ public class RLMQuotaManagerConfig {
     private final int numQuotaSamples;
     private final int quotaWindowSizeSeconds;
 
-    public long getQuotaBytesPerSecond() {
+    public long quotaBytesPerSecond() {
         return quotaBytesPerSecond;
     }
 
-    public int getNumQuotaSamples() {
+    public int numQuotaSamples() {
         return numQuotaSamples;
     }
 
-    public int getQuotaWindowSizeSeconds() {
+    public int quotaWindowSizeSeconds() {
         return quotaWindowSizeSeconds;
     }
 

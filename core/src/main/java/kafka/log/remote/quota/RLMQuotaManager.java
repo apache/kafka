@@ -56,7 +56,7 @@ public class RLMQuotaManager {
         this.description = description;
         this.time = time;
 
-        this.quota = new Quota(config.getQuotaBytesPerSecond(), true);
+        this.quota = new Quota(config.quotaBytesPerSecond(), true);
         this.sensorAccess = new SensorAccess(lock, metrics);
     }
 
@@ -69,7 +69,7 @@ public class RLMQuotaManager {
             MetricName quotaMetricName = metricName();
             KafkaMetric metric = allMetrics.get(quotaMetricName);
             if (metric != null) {
-                LOGGER.warn("Sensor for quota-id {} already exists. Setting quota to {} in MetricConfig", quotaMetricName, newQuota);
+                LOGGER.info("Sensor for quota-id {} already exists. Setting quota to {} in MetricConfig", quotaMetricName, newQuota);
                 metric.config(getQuotaMetricConfig(newQuota));
             }
         } finally {
@@ -95,8 +95,8 @@ public class RLMQuotaManager {
 
     private MetricConfig getQuotaMetricConfig(Quota quota) {
         return new MetricConfig()
-            .timeWindow(config.getQuotaWindowSizeSeconds(), TimeUnit.SECONDS)
-            .samples(config.getNumQuotaSamples())
+            .timeWindow(config.quotaWindowSizeSeconds(), TimeUnit.SECONDS)
+            .samples(config.numQuotaSamples())
             .quota(quota);
     }
 

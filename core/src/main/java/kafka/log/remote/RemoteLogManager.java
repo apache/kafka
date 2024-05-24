@@ -186,6 +186,7 @@ public class RemoteLogManager implements Closeable {
      * @param fetchLog  function to get UnifiedLog instance for a given topic.
      * @param updateRemoteLogStartOffset function to update the log-start-offset for a given topic partition.
      * @param brokerTopicStats BrokerTopicStats instance to update the respective metrics.
+     * @param metrics  Metrics instance
      */
     public RemoteLogManager(RemoteLogManagerConfig rlmConfig,
                             int brokerId,

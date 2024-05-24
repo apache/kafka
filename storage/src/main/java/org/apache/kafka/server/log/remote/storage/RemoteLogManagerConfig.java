@@ -145,7 +145,7 @@ public final class RemoteLogManagerConfig {
 
     public static final String REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP = "remote.log.manager.copy.max.bytes.per.second";
     public static final String REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_DOC = "The maximum number of bytes that can be copied from local storage to remote storage per second. " +
-            "This is a global limit for all the partitions that are being copied from remote storage to local storage. " +
+            "This is a global limit for all the partitions that are being copied from local storage to remote storage. " +
             "The default value is Long.MAX_VALUE, which means there is no limit on the number of bytes that can be copied per second.";
     public static final Long DEFAULT_REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND = Long.MAX_VALUE;
 

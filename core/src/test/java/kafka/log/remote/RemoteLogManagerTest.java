@@ -2678,9 +2678,9 @@ public class RemoteLogManagerTest {
         Properties defaultProps = new Properties();
         RemoteLogManagerConfig defaultRlmConfig = createRLMConfig(defaultProps);
         RLMQuotaManagerConfig defaultConfig = RemoteLogManager.copyQuotaManagerConfig(defaultRlmConfig);
-        assertEquals(Long.MAX_VALUE, defaultConfig.getQuotaBytesPerSecond());
-        assertEquals(61, defaultConfig.getNumQuotaSamples());
-        assertEquals(1, defaultConfig.getQuotaWindowSizeSeconds());
+        assertEquals(Long.MAX_VALUE, defaultConfig.quotaBytesPerSecond());
+        assertEquals(61, defaultConfig.numQuotaSamples());
+        assertEquals(1, defaultConfig.quotaWindowSizeSeconds());
 
         Properties customProps = new Properties();
         customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP, 100);
@@ -2688,9 +2688,9 @@ public class RemoteLogManagerTest {
         customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_SIZE_SECONDS_PROP, 1);
         RemoteLogManagerConfig rlmConfig = createRLMConfig(customProps);
         RLMQuotaManagerConfig rlmCopyQuotaManagerConfig = RemoteLogManager.copyQuotaManagerConfig(rlmConfig);
-        assertEquals(100L, rlmCopyQuotaManagerConfig.getQuotaBytesPerSecond());
-        assertEquals(31, rlmCopyQuotaManagerConfig.getNumQuotaSamples());
-        assertEquals(1, rlmCopyQuotaManagerConfig.getQuotaWindowSizeSeconds());
+        assertEquals(100L, rlmCopyQuotaManagerConfig.quotaBytesPerSecond());
+        assertEquals(31, rlmCopyQuotaManagerConfig.numQuotaSamples());
+        assertEquals(1, rlmCopyQuotaManagerConfig.quotaWindowSizeSeconds());
     }
     
     @Test
@@ -2698,9 +2698,9 @@ public class RemoteLogManagerTest {
         Properties defaultProps = new Properties();
         RemoteLogManagerConfig defaultRlmConfig = createRLMConfig(defaultProps);
         RLMQuotaManagerConfig defaultConfig = RemoteLogManager.fetchQuotaManagerConfig(defaultRlmConfig);
-        assertEquals(Long.MAX_VALUE, defaultConfig.getQuotaBytesPerSecond());
-        assertEquals(11, defaultConfig.getNumQuotaSamples());
-        assertEquals(1, defaultConfig.getQuotaWindowSizeSeconds());
+        assertEquals(Long.MAX_VALUE, defaultConfig.quotaBytesPerSecond());
+        assertEquals(11, defaultConfig.numQuotaSamples());
+        assertEquals(1, defaultConfig.quotaWindowSizeSeconds());
 
         Properties customProps = new Properties();
         customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP, 100);
@@ -2708,9 +2708,9 @@ public class RemoteLogManagerTest {
         customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_SIZE_SECONDS_PROP, 1);
         RemoteLogManagerConfig rlmConfig = createRLMConfig(customProps);
         RLMQuotaManagerConfig rlmFetchQuotaManagerConfig = RemoteLogManager.fetchQuotaManagerConfig(rlmConfig);
-        assertEquals(100L, rlmFetchQuotaManagerConfig.getQuotaBytesPerSecond());
-        assertEquals(31, rlmFetchQuotaManagerConfig.getNumQuotaSamples());
-        assertEquals(1, rlmFetchQuotaManagerConfig.getQuotaWindowSizeSeconds());
+        assertEquals(100L, rlmFetchQuotaManagerConfig.quotaBytesPerSecond());
+        assertEquals(31, rlmFetchQuotaManagerConfig.numQuotaSamples());
+        assertEquals(1, rlmFetchQuotaManagerConfig.quotaWindowSizeSeconds());
     }
 
     private Partition mockPartition(TopicIdPartition topicIdPartition) {
