@@ -83,18 +83,18 @@ public class ImageDowngradeTest {
     @Test
     public void testPremodernVersion() {
         writeWithExpectedLosses(MetadataVersion.IBP_3_2_IV0,
-            Arrays.asList(
-                "feature flag(s): foo.feature"),
-            Arrays.asList(
-                metadataVersionRecord(MetadataVersion.IBP_3_3_IV0),
-                TEST_RECORDS.get(0),
-                TEST_RECORDS.get(1),
-                new ApiMessageAndVersion(new FeatureLevelRecord().
-                        setName("foo.feature").
-                        setFeatureLevel((short) 4), (short) 0)),
-            Arrays.asList(
-                TEST_RECORDS.get(0),
-                TEST_RECORDS.get(1)));
+                Collections.singletonList(
+                        "feature flag(s): foo.feature"),
+                Arrays.asList(
+                        metadataVersionRecord(MetadataVersion.IBP_3_3_IV0),
+                        TEST_RECORDS.get(0),
+                        TEST_RECORDS.get(1),
+                        new ApiMessageAndVersion(new FeatureLevelRecord().
+                                setName("foo.feature").
+                                setFeatureLevel((short) 4), (short) 0)),
+                Arrays.asList(
+                        TEST_RECORDS.get(0),
+                        TEST_RECORDS.get(1)));
     }
 
     /**
@@ -103,7 +103,7 @@ public class ImageDowngradeTest {
     @Test
     public void testPreControlledShutdownStateVersion() {
         writeWithExpectedLosses(MetadataVersion.IBP_3_3_IV2,
-                Arrays.asList(
+                Collections.singletonList(
                         "the inControlledShutdown state of one or more brokers"),
                 Arrays.asList(
                         metadataVersionRecord(MetadataVersion.IBP_3_3_IV3),
@@ -134,31 +134,31 @@ public class ImageDowngradeTest {
     @Test
     public void testPreZkMigrationSupportVersion() {
         writeWithExpectedLosses(MetadataVersion.IBP_3_3_IV3,
-            Arrays.asList(
-                "the isMigratingZkBroker state of one or more brokers"),
-            Arrays.asList(
-                metadataVersionRecord(MetadataVersion.IBP_3_4_IV0),
-                new ApiMessageAndVersion(new RegisterBrokerRecord().
-                    setBrokerId(123).
-                    setIncarnationId(Uuid.fromString("XgjKo16hRWeWrTui0iR5Nw")).
-                    setBrokerEpoch(456).
-                    setRack(null).
-                    setFenced(false).
-                    setInControlledShutdown(true).
-                    setIsMigratingZkBroker(true), (short) 2),
-                TEST_RECORDS.get(0),
-                TEST_RECORDS.get(1)),
-            Arrays.asList(
-                metadataVersionRecord(MetadataVersion.IBP_3_3_IV3),
-                new ApiMessageAndVersion(new RegisterBrokerRecord().
-                    setBrokerId(123).
-                    setIncarnationId(Uuid.fromString("XgjKo16hRWeWrTui0iR5Nw")).
-                    setBrokerEpoch(456).
-                    setRack(null).
-                    setFenced(false).
-                    setInControlledShutdown(true), (short) 1),
-                TEST_RECORDS.get(0),
-                TEST_RECORDS.get(1)));
+                Collections.singletonList(
+                        "the isMigratingZkBroker state of one or more brokers"),
+                Arrays.asList(
+                        metadataVersionRecord(MetadataVersion.IBP_3_4_IV0),
+                        new ApiMessageAndVersion(new RegisterBrokerRecord().
+                                setBrokerId(123).
+                                setIncarnationId(Uuid.fromString("XgjKo16hRWeWrTui0iR5Nw")).
+                                setBrokerEpoch(456).
+                                setRack(null).
+                                setFenced(false).
+                                setInControlledShutdown(true).
+                                setIsMigratingZkBroker(true), (short) 2),
+                        TEST_RECORDS.get(0),
+                        TEST_RECORDS.get(1)),
+                Arrays.asList(
+                        metadataVersionRecord(MetadataVersion.IBP_3_3_IV3),
+                        new ApiMessageAndVersion(new RegisterBrokerRecord().
+                                setBrokerId(123).
+                                setIncarnationId(Uuid.fromString("XgjKo16hRWeWrTui0iR5Nw")).
+                                setBrokerEpoch(456).
+                                setRack(null).
+                                setFenced(false).
+                                setInControlledShutdown(true), (short) 1),
+                        TEST_RECORDS.get(0),
+                        TEST_RECORDS.get(1)));
     }
 
     @Test

@@ -25,6 +25,7 @@ import org.apache.kafka.common.Uuid;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 public class TopicAssignmentTest {
@@ -44,18 +45,18 @@ public class TopicAssignmentTest {
     public void testConsistentEqualsAndHashCode() {
         List<TopicAssignment> topicAssignments = Arrays.asList(
             new TopicAssignment(
-                Arrays.asList(
-                    partitionAssignment(
-                        Arrays.asList(0, 1, 2)
+                    Collections.singletonList(
+                            partitionAssignment(
+                                    Arrays.asList(0, 1, 2)
+                            )
                     )
-                )
             ),
             new TopicAssignment(
-                Arrays.asList(
-                    partitionAssignment(
-                        Arrays.asList(1, 2, 0)
+                    Collections.singletonList(
+                            partitionAssignment(
+                                    Arrays.asList(1, 2, 0)
+                            )
                     )
-                )
             )
         );
 
@@ -81,8 +82,8 @@ public class TopicAssignmentTest {
                 Uuid.fromString("MvUIAsOiRlSePeiBHdZrSQ"),
                 Uuid.fromString("jUqCchHtTHqMxeVv4dw1RA")
         );
-        List<PartitionAssignment> partitionAssignments = Arrays.asList(
-            new PartitionAssignment(replicas, directories::get)
+        List<PartitionAssignment> partitionAssignments = Collections.singletonList(
+                new PartitionAssignment(replicas, directories::get)
         );
         TopicAssignment topicAssignment = new TopicAssignment(partitionAssignments);
         assertEquals("TopicAssignment(assignments=[PartitionAssignment(replicas=[0, 1, 2], " +

@@ -18,6 +18,7 @@
 package org.apache.kafka.controller;
 
 import java.util.Arrays;
+import java.util.Collections;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.metadata.LeaderRecoveryState;
@@ -78,7 +79,7 @@ public class PartitionReassignmentRevertTest {
             setAddingReplicas(new int[]{4, 5}).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(200).build();
         PartitionReassignmentRevert revert = new PartitionReassignmentRevert(registration);
         assertEquals(Arrays.asList(3, 2, 1), revert.replicas());
-        assertEquals(Arrays.asList(2), revert.isr());
+        assertEquals(Collections.singletonList(2), revert.isr());
         assertFalse(revert.unclean());
     }
 
@@ -96,7 +97,7 @@ public class PartitionReassignmentRevertTest {
             setRemovingReplicas(new int[]{2}).setAddingReplicas(new int[]{4, 5}).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(200).build();
         PartitionReassignmentRevert revert = new PartitionReassignmentRevert(registration);
         assertEquals(Arrays.asList(3, 2, 1), revert.replicas());
-        assertEquals(Arrays.asList(2), revert.isr());
+        assertEquals(Collections.singletonList(2), revert.isr());
         assertFalse(revert.unclean());
     }
 
@@ -114,7 +115,7 @@ public class PartitionReassignmentRevertTest {
             setRemovingReplicas(new int[]{2}).setAddingReplicas(new int[]{4, 5}).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(100).setPartitionEpoch(200).build();
         PartitionReassignmentRevert revert = new PartitionReassignmentRevert(registration);
         assertEquals(Arrays.asList(3, 2, 1), revert.replicas());
-        assertEquals(Arrays.asList(3), revert.isr());
+        assertEquals(Collections.singletonList(3), revert.isr());
         assertTrue(revert.unclean());
     }
 }
