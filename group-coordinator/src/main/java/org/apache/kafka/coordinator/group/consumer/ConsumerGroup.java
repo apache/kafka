@@ -1300,4 +1300,27 @@ public class ConsumerGroup implements Group {
         return numClassicProtocolMembers() == members().size() - 1 &&
             !getOrMaybeCreateMember(memberId, false).useClassicProtocol();
     }
+
+    /**
+     * Checks whether the member has any unreleased partition.
+     *
+     * @param member The member to check.
+     * @return A boolean indicating whether the member has partitions in the target
+     *         assignment that hasn't been revoked by other members.
+     */
+    public boolean waitingOnUnreleasedPartition(ConsumerGroupMember member) {
+        if (member.state() == MemberState.UNRELEASED_PARTITIONS) {
+            for (Map.Entry<Uuid, Set<Integer>> entry : targetAssignment().get(member.memberId()).partitions().entrySet()) {
+                Uuid topicId = entry.getKey();
+                Set<Integer> assignedPartitions = member.assignedPartitions().getOrDefault(topicId, Collections.emptySet());
+
+                for (int partition : entry.getValue()) {
+                    if (!assignedPartitions.contains(partition) && currentPartitionEpoch(topicId, partition) != -1) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
 }

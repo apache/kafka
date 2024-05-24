@@ -39,6 +39,7 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.KafkaMetric;
@@ -388,6 +389,41 @@ public class MeteredVersionedKeyValueStoreTest {
         }
 
         assertThat((Integer) openIteratorsMetric.metricValue(), equalTo(0));
+    }
+
+    @Test
+    public void shouldTimeIteratorDuration() {
+        final MultiVersionedKeyQuery<String, String> query = MultiVersionedKeyQuery.withKey(KEY);
+        final PositionBound bound = PositionBound.unbounded();
+        final QueryConfig config = new QueryConfig(false);
+        when(inner.query(any(), any(), any())).thenReturn(
+                QueryResult.forResult(new LogicalSegmentIterator(Collections.emptyListIterator(), RAW_KEY, 0L, 0L, ResultOrder.ANY)));
+
+        final KafkaMetric iteratorDurationAvgMetric = getMetric("iterator-duration-avg");
+        final KafkaMetric iteratorDurationMaxMetric = getMetric("iterator-duration-max");
+        assertThat(iteratorDurationAvgMetric, not(nullValue()));
+        assertThat(iteratorDurationMaxMetric, not(nullValue()));
+
+        assertThat((Double) iteratorDurationAvgMetric.metricValue(), equalTo(Double.NaN));
+        assertThat((Double) iteratorDurationMaxMetric.metricValue(), equalTo(Double.NaN));
+
+        final QueryResult<VersionedRecordIterator<String>> first = store.query(query, bound, config);
+        try (final VersionedRecordIterator<String> iterator = first.getResult()) {
+            // nothing to do, just close immediately
+            mockTime.sleep(2);
+        }
+
+        assertThat((double) iteratorDurationAvgMetric.metricValue(), equalTo(2.0 * TimeUnit.MILLISECONDS.toNanos(1)));
+        assertThat((double) iteratorDurationMaxMetric.metricValue(), equalTo(2.0 * TimeUnit.MILLISECONDS.toNanos(1)));
+
+        final QueryResult<VersionedRecordIterator<String>> second = store.query(query, bound, config);
+        try (final VersionedRecordIterator<String> iterator = second.getResult()) {
+            // nothing to do, just close immediately
+            mockTime.sleep(3);
+        }
+
+        assertThat((double) iteratorDurationAvgMetric.metricValue(), equalTo(2.5 * TimeUnit.MILLISECONDS.toNanos(1)));
+        assertThat((double) iteratorDurationMaxMetric.metricValue(), equalTo(3.0 * TimeUnit.MILLISECONDS.toNanos(1)));
     }
 
     private KafkaMetric getMetric(final String name) {

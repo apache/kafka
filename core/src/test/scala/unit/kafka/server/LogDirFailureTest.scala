@@ -21,13 +21,14 @@ import java.util.Collections
 import java.util.concurrent.{ExecutionException, TimeUnit}
 import kafka.api.IntegrationTestHarness
 import kafka.controller.{OfflineReplica, PartitionAndReplica}
-import kafka.utils.TestUtils.{Checkpoint, LogDirFailureType, Roll, waitUntilTrue}
+import kafka.utils.TestUtils.{waitUntilTrue, Checkpoint, LogDirFailureType, Roll}
 import kafka.utils.{CoreUtils, Exit, TestUtils}
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{KafkaStorageException, NotLeaderOrFollowerException}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
@@ -52,6 +53,8 @@ class LogDirFailureTest extends IntegrationTestHarness {
 
   this.serverConfig.setProperty(ReplicationConfigs.REPLICA_HIGH_WATERMARK_CHECKPOINT_INTERVAL_MS_CONFIG, "60000")
   this.serverConfig.setProperty(ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG, "1")
+  this.serverConfig.setProperty(ServerLogConfigs.LOG_DIR_FAILURE_TIMEOUT_MS_CONFIG, "5000")
+  this.serverConfig.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false")
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
@@ -64,6 +67,31 @@ class LogDirFailureTest extends IntegrationTestHarness {
   @ValueSource(strings = Array("zk", "kraft"))
   def testProduceErrorFromFailureOnLogRoll(quorum: String): Unit = {
     testProduceErrorsFromLogDirFailureOnLeader(Roll)
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testLogDirNotificationTimeout(quorum: String): Unit = {
+    // Disable retries to allow exception to bubble up for validation
+    this.producerConfig.setProperty(ProducerConfig.RETRIES_CONFIG, "0")
+    this.producerConfig.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false")
+    val producer = createProducer()
+
+    val partition = new TopicPartition(topic, 0)
+
+    val leaderServerId = producer.partitionsFor(topic).asScala.find(_.partition() == 0).get.leader().id()
+    val leaderServer = brokers.find(_.config.brokerId == leaderServerId).get
+
+    // shut down the controller to simulate the case where the broker is not able to send the log dir notification
+    controllerServer.shutdown()
+    controllerServer.awaitShutdown()
+
+    TestUtils.causeLogDirFailure(Checkpoint, leaderServer, partition)
+
+    TestUtils.waitUntilTrue(() => leaderServer.brokerState == BrokerState.SHUTTING_DOWN,
+      s"Expected broker to be in NOT_RUNNING state but was ${leaderServer.brokerState}", 15000)
+    // wait for actual shutdown (by default max 5 minutes for graceful shutdown)
+    leaderServer.awaitShutdown()
   }
 
   @ParameterizedTest

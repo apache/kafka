@@ -112,9 +112,6 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
      */
     private class EventProcessorThread extends Thread {
         private final Logger log;
-        private long pollStartMs;
-        private long timeSinceLastPollMs;
-        private long lastPollMs;
 
         EventProcessorThread(
             String name

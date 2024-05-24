@@ -18,7 +18,6 @@ package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
 
-import java.util.Collection;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -41,7 +40,7 @@ public class AssignmentMemberSpec {
     /**
      * Topics Ids that the member is subscribed to.
      */
-    private final Collection<Uuid> subscribedTopicIds;
+    private final Set<Uuid> subscribedTopicIds;
 
     /**
      * Partitions assigned keyed by topicId.
@@ -63,9 +62,9 @@ public class AssignmentMemberSpec {
     }
 
     /**
-     * @return Collection of subscribed topic Ids.
+     * @return Set of subscribed topic Ids.
      */
-    public Collection<Uuid> subscribedTopicIds() {
+    public Set<Uuid> subscribedTopicIds() {
         return subscribedTopicIds;
     }
 
@@ -79,7 +78,7 @@ public class AssignmentMemberSpec {
     public AssignmentMemberSpec(
         Optional<String> instanceId,
         Optional<String> rackId,
-        Collection<Uuid> subscribedTopicIds,
+        Set<Uuid> subscribedTopicIds,
         Map<Uuid, Set<Integer>> assignedPartitions
     ) {
         Objects.requireNonNull(instanceId);

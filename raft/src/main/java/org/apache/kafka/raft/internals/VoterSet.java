@@ -28,6 +28,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.message.VotersRecord;
@@ -365,5 +367,17 @@ final public class VoterSet {
             );
 
         return new VoterSet(voterNodes);
+    }
+
+    public Optional<Node> voterNode(int id, String listener) {
+        VoterNode voterNode = voters.get(id);
+        if (voterNode == null) {
+            return Optional.empty();
+        }
+        InetSocketAddress address = voterNode.listeners.get(listener);
+        if (address == null) {
+            return Optional.empty();
+        }
+        return Optional.of(new Node(id, address.getHostString(), address.getPort()));
     }
 }
