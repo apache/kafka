@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.processor.assignment;
 
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -29,7 +27,6 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment.AssignedTask;
 import org.apache.kafka.streams.processor.internals.assignment.Graph;
@@ -119,7 +116,7 @@ public final class TaskAssignmentUtils {
             return kafkaStreamsAssignments;
         }
 
-        final int crossRackTrafficCost= applicationState.assignmentConfigs().rackAwareTrafficCost();
+        final int crossRackTrafficCost = applicationState.assignmentConfigs().rackAwareTrafficCost();
         final int nonOverlapCost = applicationState.assignmentConfigs().rackAwareNonOverlapCost();
         final long currentCost = computeTaskCost(
             applicationState.allTasks().stream().filter(taskInfo -> tasks.contains(taskInfo.id())).collect(
@@ -205,7 +202,7 @@ public final class TaskAssignmentUtils {
             throw new IllegalStateException("Cannot perform rack-aware assignment optimizations with invalid rack information.");
         }
 
-        final int crossRackTrafficCost= applicationState.assignmentConfigs().rackAwareTrafficCost();
+        final int crossRackTrafficCost = applicationState.assignmentConfigs().rackAwareTrafficCost();
         final int nonOverlapCost = applicationState.assignmentConfigs().rackAwareNonOverlapCost();
         final long currentCost = computeTaskCost(
             applicationState.allTasks(),
@@ -282,7 +279,7 @@ public final class TaskAssignmentUtils {
                 final Set<TaskTopicPartition> topicPartitions = topicPartitionsByTaskId.get(taskId).stream().filter(tp -> {
                     return isStandby ? tp.isChangelog() : true;
                 }).collect(Collectors.toSet());
-                return (assignmentChangeCost + getCrossRackTrafficCost(topicPartitions, clientRack, crossRackTrafficCost));
+                return assignmentChangeCost + getCrossRackTrafficCost(topicPartitions, clientRack, crossRackTrafficCost);
             },
             crossRackTrafficCost,
             nonOverlapCost,
