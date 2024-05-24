@@ -21,7 +21,8 @@ import java.io.PrintWriter
 import com.yammer.metrics.core.{Gauge, MetricName}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.record.{CompressionType, RecordBatch}
+import org.apache.kafka.common.compress.Compression
+import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
 import org.junit.jupiter.api.Assertions._
@@ -35,7 +36,7 @@ import scala.jdk.CollectionConverters._
   */
 class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
 
-  val codec: CompressionType = CompressionType.LZ4
+  val codec: Compression = Compression.lz4().build()
 
   val time = new MockTime()
   val topicPartitions = Array(new TopicPartition("log", 0), new TopicPartition("log", 1), new TopicPartition("log", 2))
@@ -141,7 +142,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
     val log = cleaner.logs.get(topicPartitions(0))
 
     val T0 = time.milliseconds
-    writeKeyDups(numKeys = 100, numDups = 3, log, CompressionType.NONE, timestamp = T0, startValue = 0, step = 1)
+    writeKeyDups(numKeys = 100, numDups = 3, log, Compression.NONE, timestamp = T0, startValue = 0, step = 1)
 
     val startSizeBlock0 = log.size
 
@@ -159,7 +160,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
     val T1 = time.milliseconds
 
     // write the second block of data: all zero keys
-    val appends1 = writeKeyDups(numKeys = 100, numDups = 1, log, CompressionType.NONE, timestamp = T1, startValue = 0, step = 0)
+    val appends1 = writeKeyDups(numKeys = 100, numDups = 1, log, Compression.NONE, timestamp = T1, startValue = 0, step = 0)
 
     // roll the active segment
     log.roll()
@@ -199,7 +200,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
     }
   }
 
-  private def writeKeyDups(numKeys: Int, numDups: Int, log: UnifiedLog, codec: CompressionType, timestamp: Long,
+  private def writeKeyDups(numKeys: Int, numDups: Int, log: UnifiedLog, codec: Compression, timestamp: Long,
                            startValue: Int, step: Int): Seq[(Int, Int)] = {
     var valCounter = startValue
     for (_ <- 0 until numDups; key <- 0 until numKeys) yield {

@@ -16,41 +16,56 @@
  */
 package org.apache.kafka.server.log.remote.storage;
 
+import kafka.test.ClusterInstance;
+import kafka.test.annotation.ClusterTest;
+import kafka.test.annotation.ClusterTestDefaults;
+import kafka.test.junit.ClusterTestExtensions;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerWrapperWithHarness;
+import org.apache.kafka.server.log.remote.metadata.storage.RemoteLogMetadataManagerTestUtils;
+import org.apache.kafka.server.log.remote.metadata.storage.RemotePartitionMetadataStore;
+import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManager;
 import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.extension.ExtendWith;
 
+//import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
-/**
- * This class covers basic tests for {@link RemoteLogMetadataManager} implementations like
- * {@link TopicBasedRemoteLogMetadataManagerWrapperWithHarness}
- */
+@Tag("integration")
+@ExtendWith(ClusterTestExtensions.class)
+@ClusterTestDefaults(brokers = 3)
 public class RemoteLogMetadataManagerTest {
+    private final ClusterInstance clusterInstance;
 
-    private static final TopicIdPartition TP0 = new TopicIdPartition(Uuid.randomUuid(),
-                                                                     new TopicPartition("foo", 0));
+    private static final TopicIdPartition TP0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
     private static final int SEG_SIZE = 1024 * 1024;
     private static final int BROKER_ID_0 = 0;
     private static final int BROKER_ID_1 = 1;
 
     private final Time time = new MockTime(1);
 
-    private RemoteLogMetadataManager remoteLogMetadataManager = new TopicBasedRemoteLogMetadataManagerWrapperWithHarness();
+    RemoteLogMetadataManagerTest(ClusterInstance clusterInstance) {
+        this.clusterInstance = clusterInstance;
+    }
 
-    @Test
+    private TopicBasedRemoteLogMetadataManager topicBasedRlmm() {
+        return RemoteLogMetadataManagerTestUtils.builder()
+                .bootstrapServers(clusterInstance.bootstrapServers())
+                .startConsumerThread(true)
+                .remotePartitionMetadataStore(RemotePartitionMetadataStore::new)
+                .build();
+    }
+
+    @ClusterTest
     public void testFetchSegments() throws Exception {
-        try {
-            remoteLogMetadataManager.configure(Collections.emptyMap());
+        try (TopicBasedRemoteLogMetadataManager remoteLogMetadataManager = topicBasedRlmm()) {
             remoteLogMetadataManager.onPartitionLeadershipChanges(Collections.singleton(TP0), Collections.emptySet());
 
             // 1.Create a segment with state COPY_SEGMENT_STARTED, and this segment should not be available.
@@ -59,7 +74,7 @@ public class RemoteLogMetadataManagerTest {
             RemoteLogSegmentMetadata segmentMetadata = new RemoteLogSegmentMetadata(segmentId, 101L, 200L, -1L, BROKER_ID_0,
                                                                                     time.milliseconds(), SEG_SIZE, segmentLeaderEpochs);
             // Wait until the segment is added successfully.
-            remoteLogMetadataManager.addRemoteLogSegmentMetadata(segmentMetadata).get();
+            Assertions.assertDoesNotThrow(() -> remoteLogMetadataManager.addRemoteLogSegmentMetadata(segmentMetadata).get());
 
             // Search should not return the above segment.
             Assertions.assertFalse(remoteLogMetadataManager.remoteLogSegmentMetadata(TP0, 0, 150).isPresent());
@@ -68,22 +83,20 @@ public class RemoteLogMetadataManagerTest {
             RemoteLogSegmentMetadataUpdate segmentMetadataUpdate = new RemoteLogSegmentMetadataUpdate(segmentId, time.milliseconds(),
                     Optional.empty(),
                     RemoteLogSegmentState.COPY_SEGMENT_FINISHED,
-                                                                                                      BROKER_ID_1);
+                    BROKER_ID_1);
             // Wait until the segment is updated successfully.
-            remoteLogMetadataManager.updateRemoteLogSegmentMetadata(segmentMetadataUpdate).get();
+            Assertions.assertDoesNotThrow(() -> remoteLogMetadataManager.updateRemoteLogSegmentMetadata(segmentMetadataUpdate).get());
             RemoteLogSegmentMetadata expectedSegmentMetadata = segmentMetadata.createWithUpdates(segmentMetadataUpdate);
 
             // Search should return the above segment.
             Optional<RemoteLogSegmentMetadata> segmentMetadataForOffset150 = remoteLogMetadataManager.remoteLogSegmentMetadata(TP0, 0, 150);
             Assertions.assertEquals(Optional.of(expectedSegmentMetadata), segmentMetadataForOffset150);
-        } finally {
-            Utils.closeQuietly(remoteLogMetadataManager, "RemoteLogMetadataManager");
         }
     }
 
-    @Test
+    @ClusterTest
     public void testRemotePartitionDeletion() throws Exception {
-        try {
+        try (TopicBasedRemoteLogMetadataManager remoteLogMetadataManager = topicBasedRlmm()) {
             remoteLogMetadataManager.configure(Collections.emptyMap());
             remoteLogMetadataManager.onPartitionLeadershipChanges(Collections.singleton(TP0), Collections.emptySet());
 
@@ -102,12 +115,12 @@ public class RemoteLogMetadataManagerTest {
                                                                                     -1L, BROKER_ID_0, time.milliseconds(), SEG_SIZE,
                                                                                     segmentLeaderEpochs);
             // Wait until the segment is added successfully.
-            remoteLogMetadataManager.addRemoteLogSegmentMetadata(segmentMetadata).get();
+            Assertions.assertDoesNotThrow(() -> remoteLogMetadataManager.addRemoteLogSegmentMetadata(segmentMetadata).get());
 
             RemoteLogSegmentMetadataUpdate segmentMetadataUpdate = new RemoteLogSegmentMetadataUpdate(
                     segmentId, time.milliseconds(), Optional.empty(), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, BROKER_ID_1);
             // Wait until the segment is updated successfully.
-            remoteLogMetadataManager.updateRemoteLogSegmentMetadata(segmentMetadataUpdate).get();
+            Assertions.assertDoesNotThrow(() -> remoteLogMetadataManager.updateRemoteLogSegmentMetadata(segmentMetadataUpdate).get());
 
             RemoteLogSegmentMetadata expectedSegMetadata = segmentMetadata.createWithUpdates(segmentMetadataUpdate);
 
@@ -116,8 +129,8 @@ public class RemoteLogMetadataManagerTest {
             Assertions.assertEquals(Optional.of(expectedSegMetadata), segMetadataForOffset30Epoch1);
 
             // Mark the partition for deletion and wait for it to be updated successfully.
-            remoteLogMetadataManager.putRemotePartitionDeleteMetadata(
-                    createRemotePartitionDeleteMetadata(RemotePartitionDeleteState.DELETE_PARTITION_MARKED)).get();
+            Assertions.assertDoesNotThrow(() -> remoteLogMetadataManager.putRemotePartitionDeleteMetadata(
+                    createRemotePartitionDeleteMetadata(RemotePartitionDeleteState.DELETE_PARTITION_MARKED)).get());
 
             Optional<RemoteLogSegmentMetadata> segmentMetadataAfterDelMark = remoteLogMetadataManager.remoteLogSegmentMetadata(TP0,
                                                                                                                                1, 30L);
@@ -125,8 +138,8 @@ public class RemoteLogMetadataManagerTest {
 
             // Set the partition deletion state as started. Partition and segments should still be accessible as they are not
             // yet deleted. Wait until the segment state is updated successfully.
-            remoteLogMetadataManager.putRemotePartitionDeleteMetadata(
-                    createRemotePartitionDeleteMetadata(RemotePartitionDeleteState.DELETE_PARTITION_STARTED)).get();
+            Assertions.assertDoesNotThrow(() -> remoteLogMetadataManager.putRemotePartitionDeleteMetadata(
+                    createRemotePartitionDeleteMetadata(RemotePartitionDeleteState.DELETE_PARTITION_STARTED)).get());
 
             Optional<RemoteLogSegmentMetadata> segmentMetadataAfterDelStart = remoteLogMetadataManager.remoteLogSegmentMetadata(TP0,
                                                                                                                                 1, 30L);
@@ -134,13 +147,11 @@ public class RemoteLogMetadataManagerTest {
 
             // Set the partition deletion state as finished. RLMM should clear all its internal state for that partition.
             // Wait until the segment state is updated successfully.
-            remoteLogMetadataManager.putRemotePartitionDeleteMetadata(
-                    createRemotePartitionDeleteMetadata(RemotePartitionDeleteState.DELETE_PARTITION_FINISHED)).get();
+            Assertions.assertDoesNotThrow(() -> remoteLogMetadataManager.putRemotePartitionDeleteMetadata(
+                    createRemotePartitionDeleteMetadata(RemotePartitionDeleteState.DELETE_PARTITION_FINISHED)).get());
 
             Assertions.assertThrows(RemoteResourceNotFoundException.class,
                 () -> remoteLogMetadataManager.remoteLogSegmentMetadata(TP0, 1, 30L));
-        } finally {
-            Utils.closeQuietly(remoteLogMetadataManager, "RemoteLogMetadataManager");
         }
     }
 

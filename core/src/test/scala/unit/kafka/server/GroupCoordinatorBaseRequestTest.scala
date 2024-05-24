@@ -17,7 +17,7 @@
 package kafka.server
 
 import kafka.test.ClusterInstance
-import kafka.utils.{NotNothing, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.DeleteGroupsResponseData.{DeletableGroupResult, DeletableGroupResultCollection}
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
@@ -575,7 +575,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
 
   protected def connectAndReceive[T <: AbstractResponse](
     request: AbstractRequest
-  )(implicit classTag: ClassTag[T], nn: NotNothing[T]): T = {
+  )(implicit classTag: ClassTag[T]): T = {
     IntegrationTestUtils.connectAndReceive[T](
       request,
       cluster.anyBrokerSocketServer(),

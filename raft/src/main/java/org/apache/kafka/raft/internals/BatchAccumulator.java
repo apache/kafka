@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.raft.internals;
 
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.utils.Time;
@@ -57,7 +57,7 @@ public class BatchAccumulator<T> implements Closeable {
     private final SimpleTimer lingerTimer;
     private final int lingerMs;
     private final int maxBatchSize;
-    private final CompressionType compressionType;
+    private final Compression compression;
     private final MemoryPool memoryPool;
     private final ReentrantLock appendLock;
     private final RecordSerde<T> serde;
@@ -80,7 +80,7 @@ public class BatchAccumulator<T> implements Closeable {
         int maxBatchSize,
         MemoryPool memoryPool,
         Time time,
-        CompressionType compressionType,
+        Compression compression,
         RecordSerde<T> serde
     ) {
         this.epoch = epoch;
@@ -89,7 +89,7 @@ public class BatchAccumulator<T> implements Closeable {
         this.memoryPool = memoryPool;
         this.time = time;
         this.lingerTimer = new SimpleTimer();
-        this.compressionType = compressionType;
+        this.compression = compression;
         this.serde = serde;
         this.nextOffset = baseOffset;
         this.drainStatus = DrainStatus.NONE;
@@ -388,7 +388,7 @@ public class BatchAccumulator<T> implements Closeable {
             currentBatch = new BatchBuilder<>(
                 buffer,
                 serde,
-                compressionType,
+                compression,
                 nextOffset,
                 time.milliseconds(),
                 false,

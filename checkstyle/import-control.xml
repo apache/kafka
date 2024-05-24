@@ -76,8 +76,10 @@
       <allow pkg="com.github.luben.zstd" />
       <allow pkg="net.jpountz.lz4" />
       <allow pkg="net.jpountz.xxhash" />
-      <allow pkg="org.apache.kafka.common.compress" />
       <allow pkg="org.xerial.snappy" />
+      <allow pkg="org.apache.kafka.common.compress" />
+      <allow class="org.apache.kafka.common.record.CompressionType" exact-match="true" />
+      <allow class="org.apache.kafka.common.record.RecordBatch" exact-match="true" />
     </subpackage>
 
     <subpackage name="message">
@@ -138,6 +140,7 @@
 
     <subpackage name="protocol">
       <allow pkg="org.apache.kafka.common.errors" />
+      <allow class="org.apache.kafka.common.compress.Compression" exact-match="true" />
       <allow pkg="org.apache.kafka.common.message" />
       <allow pkg="org.apache.kafka.common.network" />
       <allow pkg="org.apache.kafka.common.protocol" />
@@ -166,6 +169,7 @@
 
     <subpackage name="requests">
       <allow pkg="org.apache.kafka.common.acl" />
+      <allow class="org.apache.kafka.common.compress.Compression" exact-match="true" />
       <allow pkg="org.apache.kafka.common.feature" />
       <allow pkg="org.apache.kafka.common.protocol" />
       <allow pkg="org.apache.kafka.common.message" />
@@ -426,6 +430,7 @@
     <allow pkg="org.apache.kafka.metadata" />
     <allow pkg="org.apache.kafka.snapshot" />
     <allow pkg="org.apache.kafka.clients" />
+    <allow class="org.apache.kafka.common.compress.Compression" exact-match="true" />
     <allow pkg="org.apache.kafka.common.config" />
     <allow pkg="org.apache.kafka.common.feature" />
     <allow pkg="org.apache.kafka.common.message" />
@@ -444,8 +449,9 @@
   </subpackage>
 
   <subpackage name="snapshot">
-    <allow pkg="org.apache.kafka.common.record" />
+    <allow class="org.apache.kafka.common.compress.Compression" exact-match="true" />
     <allow pkg="org.apache.kafka.common.message" />
+    <allow pkg="org.apache.kafka.common.record" />
     <allow pkg="org.apache.kafka.raft" />
     <allow pkg="org.apache.kafka.server.common" />
     <allow pkg="org.apache.kafka.test"/>

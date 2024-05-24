@@ -19,6 +19,7 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.memory.MemoryPool;
@@ -38,7 +39,6 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.UnalignedMemoryRecords;
@@ -485,7 +485,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
             MAX_BATCH_SIZE_BYTES,
             memoryPool,
             time,
-            CompressionType.NONE,
+            Compression.NONE,
             serde
         );
 
