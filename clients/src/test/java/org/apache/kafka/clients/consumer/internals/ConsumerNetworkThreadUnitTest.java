@@ -112,6 +112,25 @@ public class ConsumerNetworkThreadUnitTest {
             consumerNetworkThread.close();
     }
 
+    /**
+     * // Make sure the tests include testing poll with params of (pollWaitTime, currentTimeMs)
+     * 1. Add a test that have RM to return different poll times and ensure pollWaitTimeMs is computed correctly. i.e. takes the min of all
+     * 2. Test maxTimeToWait with different request manager returns
+     * 3. Remove the tests and create a commit for it so that we can look back later.
+     */
+
+    @Test
+    public void testRequestManagersPoll() {
+        consumerNetworkThread.runOnce();
+        when(coordinatorRequestManager.poll(anyLong())).thenReturn(new NetworkClientDelegate.PollResult(1040));
+        when(commitRequestManager.poll(anyLong())).thenReturn(new NetworkClientDelegate.PollResult(100));
+        when(heartbeatRequestManager.poll(anyLong())).thenReturn(new NetworkClientDelegate.PollResult(1020));
+        when(offsetsRequestManager.poll(anyLong())).thenReturn(new NetworkClientDelegate.PollResult(5100));
+        when(requestManagers.entries()).thenReturn(..);
+        //when(networkClientDelegate.addAll(new NetworkClientDelegate.PollResult(100))).thenReturn(100L);
+        consumerNetworkThread.runOnce();
+    }
+
     @Test
     public void testStartupAndTearDown() throws InterruptedException {
         consumerNetworkThread.start();
@@ -131,7 +150,7 @@ public class ConsumerNetworkThreadUnitTest {
 
     // can you rename this test? testEnsureApplicationEventProcessorProcesses....
     @Test
-    public void testApplicationEvent() {
+    public void testEnsureApplicationEventProcessorInvokesProcess() {
         //ApplicationEvent e = new PollEvent(100);
         //applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
@@ -309,13 +328,6 @@ public class ConsumerNetworkThreadUnitTest {
         // We just need to test networkClientDelegate not networkClient
         verify(networkClientDelegate, times(1)).poll(anyLong(), anyLong());
     }
-
-    /**
-     * // Make sure the tests include testing poll with params of (pollWaitTime, currentTimeMs)
-     * 1. Add a test that have RM to return different poll times and ensure pollWaitTimeMs is computed correctly. i.e. takes the min of all
-     * 2. Test maxTimeToWait with different request manager returns
-     * 3. Remove the tests and create a commit for it so taht we can look back later.
-     */
 
     // TODO: Remove test, place elsewhere
     // This test can probably go because it is testing metadata update in the NetworkClient module
