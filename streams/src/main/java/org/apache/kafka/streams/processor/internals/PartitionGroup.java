@@ -249,8 +249,8 @@ class PartitionGroup extends AbstractPartitionGroup {
 
         if (queue != null) {
             // get the first record from this queue.
-            record = queue.poll(wallClockTime);
             rawHeadRecord = queue.rawHeadRecord();
+            record = queue.poll(wallClockTime);
 
             if (record != null) {
                 --totalBuffered;

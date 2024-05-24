@@ -58,6 +58,7 @@ import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_DOC;
 import static org.apache.kafka.streams.StreamsConfig.ROCKS_DB;
 import static org.apache.kafka.streams.StreamsConfig.IN_MEMORY;
+import static org.apache.kafka.streams.StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.getTotalCacheSize;
 
 /**
