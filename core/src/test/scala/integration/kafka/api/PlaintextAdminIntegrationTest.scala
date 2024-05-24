@@ -91,7 +91,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testClose(quorum: String): Unit = {
-    val client = Admin.create(createConfig)
+    val client = createAdminClient
     client.close()
     client.close() // double close has no effect
   }
@@ -99,7 +99,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testListNodes(quorum: String): Unit = {
-    client = Admin.create(createConfig)
+    client = createAdminClient
     val brokerStrs = bootstrapServers().split(",").toList.sorted
     var nodeStrs: List[String] = null
     do {
@@ -127,7 +127,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreateExistingTopicsThrowTopicExistsException(quorum: String): Unit = {
-    client = Admin.create(createConfig)
+    client = createAdminClient
     val topic = "mytopic"
     val topics = Seq(topic)
     val newTopics = Seq(new NewTopic(topic, 1, 1.toShort))
@@ -144,7 +144,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDeleteTopicsWithIds(quorum: String): Unit = {
-    client = Admin.create(createConfig)
+    client = createAdminClient
     val topics = Seq("mytopic", "mytopic2", "mytopic3")
     val newTopics = Seq(
       new NewTopic("mytopic", Map((0: Integer) -> Seq[Integer](1, 2).asJava, (1: Integer) -> Seq[Integer](2, 0).asJava).asJava),
@@ -166,7 +166,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeNonExistingTopic(quorum: String): Unit = {
-    client = Admin.create(createConfig)
+    client = createAdminClient
 
     val existingTopic = "existing-topic"
     client.createTopics(Seq(existingTopic).map(new NewTopic(_, 1, 1.toShort)).asJava).all.get()
@@ -184,7 +184,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeTopicsWithIds(quorum: String): Unit = {
-    client = Admin.create(createConfig)
+    client = createAdminClient
 
     val existingTopic = "existing-topic"
     client.createTopics(Seq(existingTopic).map(new NewTopic(_, 1, 1.toShort)).asJava).all.get()
@@ -203,7 +203,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeCluster(quorum: String): Unit = {
-    client = Admin.create(createConfig)
+    client = createAdminClient
     val result = client.describeCluster
     val nodes = result.nodes.get()
     val clusterId = result.clusterId().get()
@@ -230,7 +230,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeLogDirs(quorum: String): Unit = {
-    client = Admin.create(createConfig)
+    client = createAdminClient
     val topic = "topic"
     val leaderByPartition = createTopic(topic, numPartitions = 10)
     val partitionsByBroker = leaderByPartition.groupBy { case (_, leaderId) => leaderId }.map { case (k, v) =>
@@ -262,7 +262,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeReplicaLogDirs(quorum: String): Unit = {
-    client = Admin.create(createConfig)
+    client = createAdminClient
     val topic = "topic"
     val leaderByPartition = createTopic(topic, numPartitions = 10)
     val replicas = leaderByPartition.map { case (partition, brokerId) =>
@@ -281,7 +281,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testAlterReplicaLogDirs(quorum: String): Unit = {
-    client = Admin.create(createConfig)
+    client = createAdminClient
     val topic = "topic"
     val tp = new TopicPartition(topic, 0)
     val randomNums = brokers.map(server => server -> Random.nextInt(2)).toMap
@@ -371,7 +371,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeAndAlterConfigs(quorum: String): Unit = {
-    client = Admin.create(createConfig)
+    client = createAdminClient
 
     // Create topics
     val topic1 = "describe-alter-configs-topic-1"
@@ -454,7 +454,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testCreatePartitions(quorum: String): Unit = {
-    client = Admin.create(createConfig)
+    client = createAdminClient
 
     // Create topics
     val topic1 = "create-partitions-topic-1"
@@ -727,7 +727,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   def testSeekAfterDeleteRecords(quorum: String): Unit = {
     createTopic(topic, numPartitions = 2, replicationFactor = brokerCount)
 
-    client = Admin.create(createConfig)
+    client = createAdminClient
 
     val consumer = createConsumer()
     subscribeAndWaitForAssignment(topic, consumer)
@@ -757,7 +757,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   def testLogStartOffsetCheckpoint(quorum: String): Unit = {
     createTopic(topic, numPartitions = 2, replicationFactor = brokerCount)
 
-    client = Admin.create(createConfig)
+    client = createAdminClient
 
     val consumer = createConsumer()
     subscribeAndWaitForAssignment(topic, consumer)
@@ -774,7 +774,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     restartDeadBrokers()
 
     client.close()
-    client = Admin.create(createConfig)
+    client = createAdminClient
 
     TestUtils.waitUntilTrue(() => {
       // Need to retry if leader is not available for the partition
@@ -797,7 +797,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   def testLogStartOffsetAfterDeleteRecords(quorum: String): Unit = {
     createTopic(topic, numPartitions = 2, replicationFactor = brokerCount)
 
-    client = Admin.create(createConfig)
+    client = createAdminClient
 
     val consumer = createConsumer()
     subscribeAndWaitForAssignment(topic, consumer)
@@ -836,7 +836,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     // we will produce to topic and delete records while one follower is down
     killBroker(followerIndex)
 
-    client = Admin.create(createConfig)
+    client = createAdminClient
     val producer = createProducer()
     sendRecords(producer, 100, topicPartition)
 
@@ -865,7 +865,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testAlterLogDirsAfterDeleteRecords(quorum: String): Unit = {
-    client = Admin.create(createConfig)
+    client = createAdminClient
     createTopic(topic, replicationFactor = brokerCount)
     val expectedLEO = 100
     val producer = createProducer()
@@ -900,7 +900,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   def testOffsetsForTimesAfterDeleteRecords(quorum: String): Unit = {
     createTopic(topic, numPartitions = 2, replicationFactor = brokerCount)
 
-    client = Admin.create(createConfig)
+    client = createAdminClient
 
     val consumer = createConsumer()
     subscribeAndWaitForAssignment(topic, consumer)
@@ -924,7 +924,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val consumer = createConsumer()
     subscribeAndWaitForAssignment(topic, consumer)
 
-    client = Admin.create(createConfig)
+    client = createAdminClient
 
     val producer = createProducer()
     sendRecords(producer, 10, topicPartition)
@@ -948,7 +948,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val consumer = createConsumer()
     subscribeAndWaitForAssignment(topic, consumer)
 
-    client = Admin.create(createConfig)
+    client = createAdminClient
 
     val producer = createProducer()
     sendRecords(producer, 10, topicPartition)
@@ -966,7 +966,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeConfigsForTopic(quorum: String): Unit = {
     createTopic(topic, numPartitions = 2, replicationFactor = brokerCount)
-    client = Admin.create(createConfig)
+    client = createAdminClient
 
     val existingTopic = new ConfigResource(ConfigResource.Type.TOPIC, topic)
     client.describeConfigs(Collections.singletonList(existingTopic)).values.get(existingTopic).get()
@@ -1002,7 +1002,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testInvalidAlterConfigs(quorum: String): Unit = {
-    client = Admin.create(createConfig)
+    client = createAdminClient
     checkInvalidAlterConfigs(this, client)
   }
 
@@ -1016,7 +1016,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   def testAclOperations(quorum: String): Unit = {
     val acl = new AclBinding(new ResourcePattern(ResourceType.TOPIC, "mytopic3", PatternType.LITERAL),
       new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW))
-    client = Admin.create(createConfig)
+    client = createAdminClient
     assertFutureExceptionTypeEquals(client.describeAcls(AclBindingFilter.ANY).values(), classOf[SecurityDisabledException])
     assertFutureExceptionTypeEquals(client.createAcls(Collections.singleton(acl)).all(),
       classOf[SecurityDisabledException])
@@ -1031,7 +1031,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDelayedClose(quorum: String): Unit = {
-    client = Admin.create(createConfig)
+    client = createAdminClient
     val topics = Seq("mytopic", "mytopic2")
     val newTopics = topics.map(new NewTopic(_, 1, 1.toShort))
     val future = client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true)).all()
@@ -1398,7 +1398,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testElectPreferredLeaders(quorum: String): Unit = {
-    client = Admin.create(createConfig)
+    client = createAdminClient
 
     val prefer0 = Seq(0, 1, 2)
     val prefer1 = Seq(1, 2, 0)
@@ -1558,7 +1558,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ValueSource(strings = Array("zk", "kraft"))
   def testElectUncleanLeadersForOnePartition(quorum: String): Unit = {
     // Case: unclean leader election with one topic partition
-    client = Admin.create(createConfig)
+    client = createAdminClient
 
     val broker1 = 1
     val broker2 = 2
@@ -1586,7 +1586,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ValueSource(strings = Array("zk", "kraft"))
   def testElectUncleanLeadersForManyPartitions(quorum: String): Unit = {
     // Case: unclean leader election with many topic partitions
-    client = Admin.create(createConfig)
+    client = createAdminClient
 
     val broker1 = 1
     val broker2 = 2
@@ -1626,7 +1626,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ValueSource(strings = Array("zk", "kraft"))
   def testElectUncleanLeadersForAllPartitions(quorum: String): Unit = {
     // Case: noop unclean leader election and valid unclean leader election for all partitions
-    client = Admin.create(createConfig)
+    client = createAdminClient
 
     val broker1 = 1
     val broker2 = 2
@@ -1666,7 +1666,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ValueSource(strings = Array("zk", "kraft"))
   def testElectUncleanLeadersForUnknownPartitions(quorum: String): Unit = {
     // Case: unclean leader election for unknown topic
-    client = Admin.create(createConfig)
+    client = createAdminClient
 
     val broker1 = 1
     val broker2 = 2
@@ -1692,7 +1692,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ValueSource(strings = Array("zk", "kraft"))
   def testElectUncleanLeadersWhenNoLiveBrokers(quorum: String): Unit = {
     // Case: unclean leader election with no live brokers
-    client = Admin.create(createConfig)
+    client = createAdminClient
 
     val broker1 = 1
     val broker2 = 2
@@ -1721,7 +1721,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ValueSource(strings = Array("zk", "kraft"))
   def testElectUncleanLeadersNoop(quorum: String): Unit = {
     // Case: noop unclean leader election with explicit topic partitions
-    client = Admin.create(createConfig)
+    client = createAdminClient
 
     val broker1 = 1
     val broker2 = 2
@@ -1749,7 +1749,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ValueSource(strings = Array("zk", "kraft"))
   def testElectUncleanLeadersAndNoop(quorum: String): Unit = {
     // Case: one noop unclean leader election and one valid unclean leader election
-    client = Admin.create(createConfig)
+    client = createAdminClient
 
     val broker1 = 1
     val broker2 = 2
@@ -1788,7 +1788,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testListReassignmentsDoesNotShowNonReassigningPartitions(quorum: String): Unit = {
-    client = Admin.create(createConfig)
+    client = createAdminClient
 
     // Create topics
     val topic = "list-reassignments-no-reassignments"
@@ -1805,7 +1805,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testListReassignmentsDoesNotShowDeletedPartitions(quorum: String): Unit = {
-    client = Admin.create(createConfig)
+    client = createAdminClient
 
     val topic = "list-reassignments-no-reassignments"
     val tp = new TopicPartition(topic, 0)
@@ -1820,7 +1820,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testValidIncrementalAlterConfigs(quorum: String): Unit = {
-    client = Admin.create(createConfig)
+    client = createAdminClient
 
     // Create topics
     val topic1 = "incremental-alter-configs-topic-1"
@@ -1940,7 +1940,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testAppendAlreadyExistsConfigsAndSubtractNotExistsConfigs(quorum: String): Unit = {
-    client = Admin.create(createConfig)
+    client = createAdminClient
 
     // Create topics
     val topic = "incremental-alter-configs-topic"
@@ -1981,7 +1981,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testIncrementalAlterConfigsDeleteAndSetBrokerConfigs(quorum: String): Unit = {
-    client = Admin.create(createConfig)
+    client = createAdminClient
     val broker0Resource = new ConfigResource(ConfigResource.Type.BROKER, "0")
     client.incrementalAlterConfigs(Map(broker0Resource ->
       Seq(new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, "123"),
@@ -2015,7 +2015,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testIncrementalAlterConfigsDeleteBrokerConfigs(quorum: String): Unit = {
-    client = Admin.create(createConfig)
+    client = createAdminClient
     val broker0Resource = new ConfigResource(ConfigResource.Type.BROKER, "0")
     client.incrementalAlterConfigs(Map(broker0Resource ->
       Seq(new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, "123"),
@@ -2052,7 +2052,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testInvalidIncrementalAlterConfigs(quorum: String): Unit = {
-    client = Admin.create(createConfig)
+    client = createAdminClient
 
     // Create topics
     val topic1 = "incremental-alter-configs-topic-1"
@@ -2148,7 +2148,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testInvalidAlterPartitionReassignments(quorum: String): Unit = {
-    client = Admin.create(createConfig)
+    client = createAdminClient
     val topic = "alter-reassignments-topic-1"
     val tp1 = new TopicPartition(topic, 0)
     val tp2 = new TopicPartition(topic, 1)
@@ -2188,7 +2188,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testLongTopicNames(quorum: String): Unit = {
-    val client = Admin.create(createConfig)
+    val client = createAdminClient
     val longTopicName = String.join("", Collections.nCopies(249, "x"));
     val invalidTopicName = String.join("", Collections.nCopies(250, "x"));
     val newTopics2 = Seq(new NewTopic(invalidTopicName, 3, 3.toShort),
@@ -2223,7 +2223,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       assertEquals(LogConfig.DEFAULT_RETENTION_BYTES, logConfig.retentionSize)
     }
 
-    client = Admin.create(createConfig)
+    client = createAdminClient
     val invalidConfigs = Map[String, String](
       TopicConfig.RETENTION_BYTES_CONFIG -> null,
       TopicConfig.COMPRESSION_TYPE_CONFIG -> "producer"
@@ -2256,7 +2256,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeConfigsForLog4jLogLevels(quorum: String): Unit = {
-    client = Admin.create(createConfig)
+    client = createAdminClient
     LoggerFactory.getLogger("kafka.cluster.Replica").trace("Message to create the logger")
     val loggerConfig = describeBrokerLoggers()
     val kafkaLogLevel = loggerConfig.get("kafka").value()
@@ -2274,7 +2274,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ValueSource(strings = Array("zk", "kraft"))
   @Disabled // To be re-enabled once KAFKA-8779 is resolved
   def testIncrementalAlterConfigsForLog4jLogLevels(quorum: String): Unit = {
-    client = Admin.create(createConfig)
+    client = createAdminClient
 
     val initialLoggerConfig = describeBrokerLoggers()
     val initialRootLogLevel = initialLoggerConfig.get(Log4jController.ROOT_LOGGER).value()
@@ -2339,7 +2339,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ValueSource(strings = Array("zk", "kraft"))
   @Disabled // To be re-enabled once KAFKA-8779 is resolved
   def testIncrementalAlterConfigsForLog4jLogLevelsCanResetLoggerToCurrentRoot(quorum: String): Unit = {
-    client = Admin.create(createConfig)
+    client = createAdminClient
     // step 1 - configure root logger
     val initialRootLogLevel = LogLevelConfig.TRACE_LOG_LEVEL
     val alterRootLoggerEntry = Seq(
@@ -2382,7 +2382,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ValueSource(strings = Array("zk", "kraft"))
   @Disabled // Zk to be re-enabled once KAFKA-8779 is resolved
   def testIncrementalAlterConfigsForLog4jLogLevelsCannotResetRootLogger(quorum: String): Unit = {
-    client = Admin.create(createConfig)
+    client = createAdminClient
     val deleteRootLoggerEntry = Seq(
       new AlterConfigOp(new ConfigEntry(Log4jController.ROOT_LOGGER, ""), AlterConfigOp.OpType.DELETE)
     ).asJavaCollection
@@ -2394,7 +2394,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ValueSource(strings = Array("zk", "kraft"))
   @Disabled // To be re-enabled once KAFKA-8779 is resolved
   def testIncrementalAlterConfigsForLog4jLogLevelsDoesNotWorkWithInvalidConfigs(quorum: String): Unit = {
-    client = Admin.create(createConfig)
+    client = createAdminClient
     val validLoggerName = "kafka.server.KafkaRequestHandler"
     val expectedValidLoggerLogLevel = describeBrokerLoggers().get(validLoggerName)
     def assertLogLevelDidNotChange(): Unit = {
@@ -2438,7 +2438,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("kraft")) // Zk to be re-enabled once KAFKA-8779 is resolved
   def testAlterConfigsForLog4jLogLevelsDoesNotWork(quorum: String): Unit = {
-    client = Admin.create(createConfig)
+    client = createAdminClient
 
     val alterLogLevelsEntries = Seq(
       new ConfigEntry("kafka.controller.KafkaController", LogLevelConfig.INFO_LOG_LEVEL)
@@ -2497,7 +2497,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   private def testAppendConfig(props: Properties, append: String, expected: String): Unit = {
-    client = Admin.create(createConfig)
+    client = createAdminClient
     createTopic(topic, topicConfig = props)
     val topicResource = new ConfigResource(ConfigResource.Type.TOPIC, topic)
     val topicAlterConfigs = Seq(
