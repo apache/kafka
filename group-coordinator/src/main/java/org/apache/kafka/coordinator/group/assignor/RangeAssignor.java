@@ -244,4 +244,3 @@ public class RangeAssignor implements PartitionAssignor {
         return new GroupAssignment(newTargetAssignment);
     }
 }
-
