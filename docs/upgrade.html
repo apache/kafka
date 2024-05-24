@@ -83,6 +83,15 @@
             Given your current and target versions, a downgrade is only possible if there are no metadata changes in the versions between.</li>
     </ol>
 
+    <h5><a id="upgrade_371_notable" href="#upgrade_371_notable">Notable changes in 3.7.1</a></h5>
+    <ul>
+        <li>MirrorMaker 2 can now emit checkpoints for offsets mirrored before the start of the Checkpoint task for improved offset translation.
+            This requires MirrorMaker 2 to have READ authorization to the Checkpoint topic.
+            If READ is not authorized, checkpointing is limited to offsets mirrorred after the start of the task.
+            See <a href="https://issues.apache.org/jira/browse/KAFKA-15905">KAFKA-15905</a> for more details.
+        </li>
+    </ul>
+
     <h5><a id="upgrade_370_notable" href="#upgrade_370_notable">Notable changes in 3.7.0</a></h5>
     <ul>
         <li>Java 11 support for the broker and tools has been deprecated and will be removed in Apache Kafka 4.0. This complements
