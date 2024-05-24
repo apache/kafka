@@ -18,6 +18,8 @@ package org.apache.kafka.streams.processor.assignment.assignors;
 
 import static java.util.Collections.unmodifiableMap;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -46,7 +48,6 @@ import org.slf4j.LoggerFactory;
 public class StickyTaskAssignor implements TaskAssignor {
     private static final Logger LOG = LoggerFactory.getLogger(StickyTaskAssignor.class);
 
-    private Map<String, ?> configs = new HashMap<>();
     private final boolean mustPreserveActiveTaskAssignment;
 
     public StickyTaskAssignor() {
@@ -58,19 +59,10 @@ public class StickyTaskAssignor implements TaskAssignor {
     }
 
     @Override
-    public void configure(final Map<String, ?> configs) {
-        // TODO: The application state already has the assignment configs object, why should this
-        //       assignor be configurable?
-        this.configs = configs;
-    }
+    public void configure(final Map<String, ?> configs) {}
 
     @Override
     public TaskAssignment assign(final ApplicationState applicationState) {
-        final int taskCount = applicationState.allTasks().size();
-        if (taskCount == 0) {
-            return new TaskAssignment(new ArrayList<>());
-        }
-
         final Map<ProcessId, KafkaStreamsState> clients = applicationState.kafkaStreamsStates(false);
         final Map<TaskId, ProcessId> previousActiveAssignment = mapPreviousActiveTasks(clients);
         final Map<TaskId, Set<ProcessId>> previousStandbyAssignment = mapPreviousStandbyTasks(clients);
@@ -81,12 +73,22 @@ public class StickyTaskAssignor implements TaskAssignor {
         optimizeActive(applicationState, assignmentState);
         assignStandby(applicationState, assignmentState);
         optimizeStandby(applicationState, assignmentState);
-        return null;
+
+        final Map<ProcessId, KafkaStreamsAssignment> finalAssignments = assignmentState.buildKafkaStreamsAssignments();
+        if (mustPreserveActiveTaskAssignment && !finalAssignments.isEmpty()) {
+            // We set the followup deadline for only one of the clients.
+            final long followupRebalanceDelay = applicationState.assignmentConfigs().probingRebalanceIntervalMs();
+            final Instant followupRebalanceDeadline = Instant.now().plus(followupRebalanceDelay, ChronoUnit.MILLIS);
+            final ProcessId clientId = finalAssignments.keySet().iterator().next();
+            final KafkaStreamsAssignment previousAssignment = finalAssignments.get(clientId);
+            finalAssignments.put(clientId, previousAssignment.withFollowupRebalance(followupRebalanceDeadline));
+        }
+        return new TaskAssignment(finalAssignments.values());
     }
 
     private void optimizeActive(final ApplicationState applicationState,
                                 final AssignmentState assignmentState) {
-        if (!TaskAssignmentUtils.hasValidRackInformation(applicationState)) {
+        if (mustPreserveActiveTaskAssignment) {
             return;
         }
 
@@ -106,7 +108,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         final Map<ProcessId, KafkaStreamsAssignment> optimizedAssignmentsForAllTasks = TaskAssignmentUtils.optimizeRackAwareActiveTasks(
             applicationState, optimizedAssignmentsForStatefulTasks, new TreeSet<>(statelessTasks));
 
-        assignmentState.processOptimizedAssignments(optimizedAssignmentsForStatefulTasks);
+        assignmentState.processOptimizedAssignments(optimizedAssignmentsForAllTasks);
     }
 
     private void optimizeStandby(final ApplicationState applicationState, final AssignmentState assignmentState) {
@@ -114,7 +116,7 @@ public class StickyTaskAssignor implements TaskAssignor {
             return;
         }
 
-        if (!TaskAssignmentUtils.hasValidRackInformation(applicationState)) {
+        if (mustPreserveActiveTaskAssignment) {
             return;
         }
 
@@ -143,8 +145,6 @@ public class StickyTaskAssignor implements TaskAssignor {
         // the same active task
         for (final TaskId taskId : assignmentState.previousActiveAssignment.keySet()) {
             final ProcessId previousClientForTask = assignmentState.previousActiveAssignment.get(taskId);
-
-            // TODO: Remove this check, why is it even necessary?
             if (allTaskIds.contains(taskId)) {
                 if (mustPreserveActiveTaskAssignment || assignmentState.hasRoomForActiveTask(previousClientForTask, activeTasksPerThread)) {
                     assignmentState.finalizeAssignment(taskId, previousClientForTask, AssignedTask.Type.ACTIVE);
@@ -157,11 +157,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         // have seen the task.
         for (final Iterator<TaskId> iterator = unassigned.iterator(); iterator.hasNext(); ) {
             final TaskId taskId = iterator.next();
-            final Set<ProcessId> previousClientsForStandbyTask = assignmentState.previousStandbyAssignment.get(taskId);
-            if (previousClientsForStandbyTask == null || previousClientsForStandbyTask.isEmpty()) {
-                continue;
-            }
-
+            final Set<ProcessId> previousClientsForStandbyTask = assignmentState.previousStandbyAssignment.getOrDefault(taskId, new HashSet<>());
             for (final ProcessId client: previousClientsForStandbyTask) {
                 if (assignmentState.hasRoomForActiveTask(client, activeTasksPerThread)) {
                     assignmentState.finalizeAssignment(taskId, client, AssignedTask.Type.ACTIVE);
@@ -280,7 +276,6 @@ public class StickyTaskAssignor implements TaskAssignor {
             for (final ProcessId processId : newAssignments.keySet()) {
                 final Set<AssignedTask> assignedTasks = newAssignments.get(processId);
                 final KafkaStreamsAssignment assignment = KafkaStreamsAssignment.of(processId, assignedTasks);
-                // TODO: Followup rebalance?
                 kafkaStreamsAssignments.put(processId, assignment);
             }
             return kafkaStreamsAssignments;
@@ -381,7 +376,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         }
 
         public ProcessId findLeastLoadedClientWithPreviousActiveOrStandbyTask(final TaskId taskId,
-                                                                     final Set<ProcessId> clientsWithin) {
+                                                                              final Set<ProcessId> clientsWithin) {
             final ProcessId previous = previousActiveAssignment.get(taskId);
             if (previous != null && clientsWithin.contains(previous)) {
                 return previous;
@@ -398,11 +393,11 @@ public class StickyTaskAssignor implements TaskAssignor {
         }
 
         public boolean shouldBalanceLoad(final ProcessId client) {
-            if (clientLoad(client) < 1) {
+            final double thisClientLoad = clientLoad(client);
+            if (thisClientLoad < 1) {
                 return false;
             }
 
-            final double thisClientLoad = clientLoad(client);
             for (final ProcessId otherClient : clients.keySet()) {
                 if (clientLoad(otherClient) < thisClientLoad) {
                     return true;
