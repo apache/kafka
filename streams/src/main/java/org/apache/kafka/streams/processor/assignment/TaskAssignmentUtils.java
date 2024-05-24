@@ -91,8 +91,6 @@ public final class TaskAssignmentUtils {
         final ApplicationState applicationState,
         final Map<ProcessId, KafkaStreamsAssignment> kafkaStreamsAssignments
     ) {
-        final long followupRebalanceDelay = applicationState.assignmentConfigs().probingRebalanceIntervalMs();
-        final Instant followupRebalanceDeadline = Instant.now().plus(followupRebalanceDelay, ChronoUnit.MILLIS);
         throw new UnsupportedOperationException("Not Implemented.");
     }
 
@@ -265,7 +263,7 @@ public final class TaskAssignmentUtils {
     private static AssignmentGraph buildTaskGraph(final List<UUID> clientIds,
                                                  final Map<UUID, Optional<String>> clientRacks,
                                                  final List<TaskId> taskIds,
-                                                 final Map<UUID, Set<TaskId>> taskIdsByProcess,
+                                                 final Map<UUID, Set<TaskId>> previousTaskIdsByProcess,
                                                  final Map<TaskId, Set<TaskTopicPartition>> topicPartitionsByTaskId,
                                                  final int crossRackTrafficCost,
                                                  final int nonOverlapCost,
@@ -282,7 +280,7 @@ public final class TaskAssignmentUtils {
             clientByTask,
             taskCountByClient,
             (processId, taskId) -> {
-                return taskIdsByProcess.get(processId).contains(taskId);
+                return previousTaskIdsByProcess.get(processId).contains(taskId);
             },
             (taskId, processId, inCurrentAssignment, unused0, unused1, unused2) -> {
                 final int assignmentChangeCost = !inCurrentAssignment ? nonOverlapCost : 0;
@@ -362,9 +360,8 @@ public final class TaskAssignmentUtils {
             }
         }
 
-        final boolean hasStandby = applicationState.assignmentConfigs().numStandbyReplicas() >= 1;
         for (final TaskInfo task : applicationState.allTasks()) {
-            if (!hasValidRackInformation(task, hasStandby)) {
+            if (!hasValidRackInformation(task)) {
                 return false;
             }
         }
@@ -379,34 +376,14 @@ public final class TaskAssignmentUtils {
         return true;
     }
 
-    private static boolean hasValidRackInformation(final TaskInfo task, final boolean hasStandby) {
-        final Map<TopicPartition, Set<String>> racksByTopicPartition = task.partitionToRackIds();
-        for (final TopicPartition topicPartition : task.sourceTopicPartitions()) {
-            final Set<String> racks = racksByTopicPartition.getOrDefault(topicPartition, null);
-            if (racks == null || racks.isEmpty()) {
+    private static boolean hasValidRackInformation(final TaskInfo task) {
+        for (final TaskTopicPartition topicPartition : task.topicPartitions()) {
+            final Optional<Set<String>> racks = topicPartition.rackIds();
+            if (!racks.isPresent() || racks.get().isEmpty()) {
                 LOG.error("Topic partition {} for task {} does not have racks configured.", topicPartition, task.id());
                 return false;
             }
         }
-
-        for (final TopicPartition topicPartition : task.changelogTopicPartitions()) {
-            final Set<String> racks = racksByTopicPartition.getOrDefault(topicPartition, null);
-            if (racks == null || racks.isEmpty()) {
-                LOG.error("Topic partition {} for task {} does not have racks configured.", topicPartition, task.id());
-                return false;
-            }
-        }
-
-        if (task.sourceTopicPartitions().isEmpty()) {
-            LOG.error("Task {} has no source TopicPartitions.", task.id());
-            return false;
-        }
-
-        if (hasStandby && task.changelogTopicPartitions().isEmpty()) {
-            LOG.error("Task {} has no changelog TopicPartitions.", task.id());
-            return false;
-        }
-
         return true;
     }
 
