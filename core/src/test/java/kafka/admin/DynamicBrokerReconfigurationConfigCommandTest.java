@@ -37,7 +37,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 import scala.Tuple2;
 import scala.collection.Map;
 import scala.collection.Map$;
-import scala.collection.Seq;
 
 import java.io.File;
 import java.io.IOException;
@@ -244,12 +243,12 @@ public class DynamicBrokerReconfigurationConfigCommandTest extends AbstractDynam
         });
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "raw"})
     @ParameterizedTest
     @ValueSource(strings = {"zk", "kraft"})
     public void testKeyStoreAlter(String quorum) throws Exception {
         String topic2 = "testtopic2";
-        TestUtils.createTopicWithAdmin(adminClients().head(), topic2, servers(), controllerServers(), numPartitions(), numServers(), (Map<Object, Seq<Object>>) Map$.MODULE$.empty(), new Properties());
+        TestUtils.createTopicWithAdmin(adminClients().head(), topic2, servers(), controllerServers(), numPartitions(), numServers(), (Map) Map$.MODULE$.empty(), new Properties());
 
         // Start a producer and consumer that work with the current broker keystore.
         // This should continue working while changes are made
