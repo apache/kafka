@@ -56,6 +56,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HETEROGENEOUS;
 import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOGENEOUS;
+import static org.apache.kafka.jmh.util.AssignorUtils.invertedTargetAssignment;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
@@ -237,7 +238,7 @@ public class ServerSideAssignorBenchmark {
         GroupAssignment initialAssignment = partitionAssignor.assign(groupSpec, subscribedTopicDescriber);
         Map<String, MemberAssignment> members = initialAssignment.members();
 
-        Map<Uuid, Map<Integer, String>> invertedTargetAssignment = updateInvertedTargetAssignment(initialAssignment);
+        Map<Uuid, Map<Integer, String>> invertedTargetAssignment = invertedTargetAssignment(initialAssignment);
 
         Map<String, AssignmentMemberSpec> updatedMembers = new HashMap<>();
 
@@ -271,29 +272,6 @@ public class ServerSideAssignorBenchmark {
         ));
 
         groupSpec = new GroupSpecImpl(updatedMembers, subscriptionType, invertedTargetAssignment);
-    }
-
-    private Map<Uuid, Map<Integer, String>> updateInvertedTargetAssignment(
-        GroupAssignment targetAssignment
-    ) {
-        Map<Uuid, Map<Integer, String>> invertedTargetAssignment = new HashMap<>(topicCount);
-        for (Uuid topicId : allTopicIds) {
-            invertedTargetAssignment.put(topicId, new HashMap<>(subscribedTopicDescriber.numPartitions(topicId)));
-        }
-
-        for (Map.Entry<String, MemberAssignment> e : targetAssignment.members().entrySet()) {
-            String memberId = e.getKey();
-            MemberAssignment memberAssignment = e.getValue();
-            for (Map.Entry<Uuid, Set<Integer>> entry : memberAssignment.targetPartitions().entrySet()) {
-                Uuid topicId = entry.getKey();
-                Set<Integer> partitions = entry.getValue();
-                Map<Integer, String> topicPartitionAssignment = invertedTargetAssignment.get(topicId);
-                for (int partition : partitions) {
-                    topicPartitionAssignment.put(partition, memberId);
-                }
-            }
-        }
-        return invertedTargetAssignment;
     }
 
     @Benchmark

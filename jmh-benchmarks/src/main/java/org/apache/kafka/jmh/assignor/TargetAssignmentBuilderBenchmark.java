@@ -53,6 +53,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOGENEOUS;
+import static org.apache.kafka.jmh.util.AssignorUtils.invertedTargetAssignment;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
@@ -191,28 +192,6 @@ public class TargetAssignmentBuilderBenchmark {
             ));
         }
         groupSpec = new GroupSpecImpl(members, HOMOGENEOUS, Collections.emptyMap());
-    }
-
-    public Map<Uuid, Map<Integer, String>> invertedTargetAssignment(
-        GroupAssignment groupAssignment
-    ) {
-        Map<Uuid, Map<Integer, String>> invertedTargetAssignment = new HashMap<>();
-        for (Map.Entry<String, MemberAssignment> memberEntry : groupAssignment.members().entrySet()) {
-            String memberId = memberEntry.getKey();
-            Map<Uuid, Set<Integer>> topicsAndPartitions = memberEntry.getValue().targetPartitions();
-
-            for (Map.Entry<Uuid, Set<Integer>> topicEntry : topicsAndPartitions.entrySet()) {
-                Uuid topicId = topicEntry.getKey();
-                Set<Integer> partitions = topicEntry.getValue();
-
-                Map<Integer, String> partitionMap = invertedTargetAssignment.computeIfAbsent(topicId, k -> new HashMap<>());
-
-                for (Integer partitionId : partitions) {
-                    partitionMap.put(partitionId, memberId);
-                }
-            }
-        }
-        return invertedTargetAssignment;
     }
 
     @Benchmark

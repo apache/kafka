@@ -602,6 +602,11 @@ public class ConsumerGroup implements Group {
      * @param memberId The member id.
      */
     public void removeTargetAssignment(String memberId) {
+        updateInvertedTargetAssignment(
+            memberId,
+            targetAssignment.getOrDefault(memberId, new Assignment(Collections.emptyMap())),
+            new Assignment(Collections.emptyMap())
+        );
         targetAssignment.remove(memberId);
     }
 
