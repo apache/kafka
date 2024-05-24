@@ -79,5 +79,6 @@ public class GroupSpecImplTest {
 
         assertTrue(groupSpec.isPartitionAssigned(topicId, 1));
         assertFalse(groupSpec.isPartitionAssigned(topicId, 2));
+        assertFalse(groupSpec.isPartitionAssigned(Uuid.randomUuid(), 2));
     }
 }

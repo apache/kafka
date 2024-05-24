@@ -47,6 +47,8 @@ public class GroupSpecImpl implements GroupSpec {
         Map<Uuid, Map<Integer, String>> invertedTargetAssignment
     ) {
         Objects.requireNonNull(members);
+        Objects.requireNonNull(subscriptionType);
+        Objects.requireNonNull(invertedTargetAssignment);
         this.members = members;
         this.subscriptionType = subscriptionType;
         this.invertedTargetAssignment = invertedTargetAssignment;
@@ -101,7 +103,7 @@ public class GroupSpecImpl implements GroupSpec {
     @Override
     public String toString() {
         return "GroupSpecImpl(members=" + members +
-            ", subscriptionType=" + subscriptionType.toString() +
+            ", subscriptionType=" + subscriptionType +
             ", invertedTargetAssignment=" + invertedTargetAssignment +
             ')';
     }

@@ -581,7 +581,7 @@ public class ConsumerGroup implements Group {
                 }
             }
 
-            // Add partitions that are in new assignment but not in old assignment.
+            // Add partitions that are in the new assignment but not in the old assignment.
             for (Integer partition : newPartitions) {
                 if (!oldPartitions.contains(partition)) {
                     topicPartitionAssignment.put(partition, memberId);
@@ -604,8 +604,8 @@ public class ConsumerGroup implements Group {
     public void removeTargetAssignment(String memberId) {
         updateInvertedTargetAssignment(
             memberId,
-            targetAssignment.getOrDefault(memberId, new Assignment(Collections.emptyMap())),
-            new Assignment(Collections.emptyMap())
+            targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
+            Assignment.EMPTY
         );
         targetAssignment.remove(memberId);
     }
