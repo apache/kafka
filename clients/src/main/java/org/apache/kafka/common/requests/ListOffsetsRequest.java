@@ -49,6 +49,8 @@ public class ListOffsetsRequest extends AbstractRequest {
 
     public static final long LATEST_TIERED_TIMESTAMP = -5L;
 
+    public static final long EARLIEST_PENDING_UPLOAD_TIMESTAMP = -6L;
+
     public static final int CONSUMER_REPLICA_ID = -1;
     public static final int DEBUGGING_REPLICA_ID = -2;
 
