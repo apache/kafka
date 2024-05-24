@@ -30,7 +30,7 @@ import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
 import org.apache.kafka.coordinator.group.consumer.SubscribedTopicMetadata;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
 
-import org.apache.kafka.jmh.util.AssignorUtils;
+import org.apache.kafka.jmh.util.AssignorBenchmarkUtils;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
@@ -163,7 +163,13 @@ public class ServerSideAssignorBenchmark {
                 partitionsPerTopicCount,
                 partitionRacks
             ));
-            AssignorUtils.addTopic(delta, topicUuid, topicName, partitionsPerTopicCount);
+
+            AssignorBenchmarkUtils.addTopic(
+                delta,
+                topicUuid,
+                topicName,
+                partitionsPerTopicCount
+            );
         }
 
         topicsImage = delta.apply(MetadataProvenance.EMPTY).topics();
@@ -249,7 +255,7 @@ public class ServerSideAssignorBenchmark {
         GroupAssignment initialAssignment = partitionAssignor.assign(groupSpec, subscribedTopicDescriber);
         Map<String, MemberAssignment> members = initialAssignment.members();
 
-        Map<Uuid, Map<Integer, String>> invertedTargetAssignment = AssignorUtils.invertedTargetAssignment(initialAssignment);
+        Map<Uuid, Map<Integer, String>> invertedTargetAssignment = AssignorBenchmarkUtils.invertedTargetAssignment(initialAssignment);
 
         Map<String, AssignmentMemberSpec> updatedMembers = new HashMap<>();
 

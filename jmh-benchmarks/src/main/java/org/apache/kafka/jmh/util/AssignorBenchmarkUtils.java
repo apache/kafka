@@ -17,14 +17,18 @@
 package org.apache.kafka.jmh.util;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.metadata.PartitionRecord;
+import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
+import org.apache.kafka.image.MetadataDelta;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
-public class AssignorUtils {
+public class AssignorBenchmarkUtils {
     /**
      * Generate a reverse look up map of partition to member target assignments from the given member spec.
      *
@@ -51,5 +55,23 @@ public class AssignorUtils {
             }
         }
         return invertedTargetAssignment;
+    }
+
+    public static void addTopic(
+        MetadataDelta delta,
+        Uuid topicId,
+        String topicName,
+        int numPartitions
+    ) {
+        // For testing purposes, the following criteria are used:
+        // - Number of replicas for each partition: 2
+        // - Number of brokers available in the cluster: 4
+        delta.replay(new TopicRecord().setTopicId(topicId).setName(topicName));
+        for (int i = 0; i < numPartitions; i++) {
+            delta.replay(new PartitionRecord()
+                .setTopicId(topicId)
+                .setPartitionId(i)
+                .setReplicas(Arrays.asList(i % 4, (i + 1) % 4)));
+        }
     }
 }

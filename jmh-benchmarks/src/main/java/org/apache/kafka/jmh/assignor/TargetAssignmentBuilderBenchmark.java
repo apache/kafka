@@ -17,8 +17,6 @@
 package org.apache.kafka.jmh.assignor;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.metadata.PartitionRecord;
-import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
@@ -32,7 +30,7 @@ import org.apache.kafka.coordinator.group.consumer.SubscribedTopicMetadata;
 import org.apache.kafka.coordinator.group.consumer.TargetAssignmentBuilder;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
 
-import org.apache.kafka.jmh.util.AssignorUtils;
+import org.apache.kafka.jmh.util.AssignorBenchmarkUtils;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
@@ -53,7 +51,6 @@ import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -153,7 +150,13 @@ public class TargetAssignmentBuilderBenchmark {
                 Collections.emptyMap()
             );
             subscriptionMetadata.put(topicName, metadata);
-            AssignorUtils.addTopic(delta, topicId, topicName, partitionsPerTopicCount);
+
+            AssignorBenchmarkUtils.addTopic(
+                delta,
+                topicId,
+                topicName,
+                partitionsPerTopicCount
+            );
         }
 
         topicsImage = delta.apply(MetadataProvenance.EMPTY).topics();
@@ -175,7 +178,7 @@ public class TargetAssignmentBuilderBenchmark {
             groupSpec,
             new SubscribedTopicMetadata(topicMetadataMap)
         );
-        invertedTargetAssignment = AssignorUtils.invertedTargetAssignment(groupAssignment);
+        invertedTargetAssignment = AssignorBenchmarkUtils.invertedTargetAssignment(groupAssignment);
 
         Map<String, Assignment> initialTargetAssignment = new HashMap<>(memberCount);
 
