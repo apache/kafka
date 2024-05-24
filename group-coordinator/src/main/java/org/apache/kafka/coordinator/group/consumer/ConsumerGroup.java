@@ -1002,7 +1002,7 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * Updates the subscription count.
+     * Updates the subscription count with a list of members removed.
      *
      * @param removedMembers        The list of removed members.
      *
