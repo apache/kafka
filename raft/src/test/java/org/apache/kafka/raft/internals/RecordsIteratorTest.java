@@ -34,6 +34,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import net.jqwik.api.ForAll;
 import net.jqwik.api.Property;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.LeaderChangeMessage;
@@ -153,7 +154,7 @@ public final class RecordsIteratorTest {
     }
 
     @Test
-    public void testControlRecordIterationWithKraftVerion0() {
+    public void testControlRecordIterationWithKraftVersion0() {
         AtomicReference<ByteBuffer> buffer = new AtomicReference<>(null);
         RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder()
             .setTime(new MockTime())
@@ -200,7 +201,7 @@ public final class RecordsIteratorTest {
     }
 
     @Test
-    public void testControlRecordIterationWithKraftVerion1() {
+    public void testControlRecordIterationWithKraftVersion1() {
         AtomicReference<ByteBuffer> buffer = new AtomicReference<>(null);
         VoterSet voterSet = new VoterSet(
             new HashMap<>(VoterSetTest.voterMap(Arrays.asList(1, 2, 3), true))
@@ -368,7 +369,7 @@ public final class RecordsIteratorTest {
         try (MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
                 buffer,
                 RecordBatch.CURRENT_MAGIC_VALUE,
-                CompressionType.NONE,
+                Compression.NONE,
                 TimestampType.CREATE_TIME,
                 0, // initialOffset
                 0, // timestamp
@@ -396,13 +397,14 @@ public final class RecordsIteratorTest {
         CompressionType compressionType,
         List<TestBatch<String>> batches
     ) {
+        Compression compression = Compression.of(compressionType).build();
         ByteBuffer buffer = ByteBuffer.allocate(102400);
 
         for (TestBatch<String> batch : batches) {
             BatchBuilder<String> builder = new BatchBuilder<>(
                 buffer,
                 STRING_SERDE,
-                compressionType,
+                compression,
                 batch.baseOffset,
                 batch.appendTimestamp,
                 false,

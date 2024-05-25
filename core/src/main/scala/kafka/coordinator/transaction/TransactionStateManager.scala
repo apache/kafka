@@ -165,7 +165,7 @@ class TransactionStateManager(brokerId: Int,
                 if (recordsBuilder == null) {
                   recordsBuilder = MemoryRecords.builder(
                     ByteBuffer.allocate(math.min(16384, maxBatchSize)),
-                    TransactionLog.EnforcedCompressionType,
+                    TransactionLog.EnforcedCompression,
                     TimestampType.CREATE_TIME,
                     0L,
                     maxBatchSize
@@ -621,7 +621,7 @@ class TransactionStateManager(brokerId: Int,
     val valueBytes = TransactionLog.valueToBytes(newMetadata)
     val timestamp = time.milliseconds()
 
-    val records = MemoryRecords.withRecords(TransactionLog.EnforcedCompressionType, new SimpleRecord(timestamp, keyBytes, valueBytes))
+    val records = MemoryRecords.withRecords(TransactionLog.EnforcedCompression, new SimpleRecord(timestamp, keyBytes, valueBytes))
     val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionFor(transactionalId))
     val recordsPerPartition = Map(topicPartition -> records)
 

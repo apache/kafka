@@ -18,7 +18,6 @@
 package org.apache.kafka.tools.consumer.group;
 
 import kafka.test.ClusterConfig;
-import kafka.test.ClusterGenerator;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.Utils;
@@ -29,6 +28,7 @@ import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Collections;
+import java.util.Arrays;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -50,7 +50,7 @@ class ConsumerGroupCommandTestUtils {
     private ConsumerGroupCommandTestUtils() {
     }
 
-    static void generator(ClusterGenerator clusterGenerator) {
+    static List<ClusterConfig> generator() {
         Map<String, String> serverProperties = new HashMap<>();
         serverProperties.put(OFFSETS_TOPIC_PARTITIONS_CONFIG, "1");
         serverProperties.put(OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
@@ -61,7 +61,6 @@ class ConsumerGroupCommandTestUtils {
                 .setServerProperties(serverProperties)
                 .setTags(Collections.singletonList("classicGroupCoordinator"))
                 .build();
-        clusterGenerator.accept(classicGroupCoordinator);
 
         // Following are test case config with new group coordinator
         serverProperties.put(NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "true");
@@ -71,7 +70,7 @@ class ConsumerGroupCommandTestUtils {
                 .setServerProperties(serverProperties)
                 .setTags(Collections.singletonList("newGroupCoordinator"))
                 .build();
-        clusterGenerator.accept(consumerGroupCoordinator);
+        return Arrays.asList(classicGroupCoordinator, consumerGroupCoordinator);
     }
 
     static <T> AutoCloseable buildConsumers(int numberOfConsumers,

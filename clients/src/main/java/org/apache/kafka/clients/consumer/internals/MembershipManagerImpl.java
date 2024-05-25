@@ -1337,6 +1337,7 @@ public class MembershipManagerImpl implements MembershipManager {
                                                                              Set<TopicPartition> partitions) {
         SortedSet<TopicPartition> sortedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
         sortedPartitions.addAll(partitions);
+
         CompletableBackgroundEvent<Void> event = new ConsumerRebalanceListenerCallbackNeededEvent(methodName, sortedPartitions);
         backgroundEventHandler.add(event);
         log.debug("The event to trigger the {} method execution was enqueued successfully", methodName.fullyQualifiedMethodName());

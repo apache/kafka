@@ -18,12 +18,12 @@ package org.apache.kafka.coordinator.group.runtime;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.record.EndTransactionMarker;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -114,7 +114,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         private CoordinatorRuntimeMetrics runtimeMetrics;
         private CoordinatorMetrics coordinatorMetrics;
         private Serializer<U> serializer;
-        private CompressionType compressionType;
+        private Compression compression;
 
         public Builder<S, U> withLogPrefix(String logPrefix) {
             this.logPrefix = logPrefix;
@@ -176,8 +176,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             return this;
         }
 
-        public Builder<S, U> withCompressionType(CompressionType compressionType) {
-            this.compressionType = compressionType;
+        public Builder<S, U> withCompression(Compression compression) {
+            this.compression = compression;
             return this;
         }
 
@@ -204,8 +204,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 throw new IllegalArgumentException("CoordinatorMetrics must be set.");
             if (serializer == null)
                 throw new IllegalArgumentException("Serializer must be set.");
-            if (compressionType == null)
-                compressionType = CompressionType.NONE;
+            if (compression == null)
+                compression = Compression.NONE;
 
             return new CoordinatorRuntime<>(
                 logPrefix,
@@ -220,7 +220,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 runtimeMetrics,
                 coordinatorMetrics,
                 serializer,
-                compressionType
+                compression
             );
         }
     }
@@ -400,6 +400,19 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             if (prevTask != null) prevTask.cancel();
 
             timer.add(task);
+        }
+
+        @Override
+        public void scheduleIfAbsent(
+            String key,
+            long delay,
+            TimeUnit unit,
+            boolean retry,
+            TimeoutOperation<Void, U> operation
+        ) {
+            if (!tasks.containsKey(key)) {
+                schedule(key, delay, unit, retry, 500, operation);
+            }
         }
 
         @Override
@@ -787,13 +800,13 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         byte magic = logConfig.recordVersion().value;
                         int maxBatchSize = logConfig.maxMessageSize();
                         long currentTimeMs = time.milliseconds();
-                        ByteBuffer buffer = context.bufferSupplier.get(Math.min(16384, maxBatchSize));
+                        ByteBuffer buffer = context.bufferSupplier.get(Math.min(MIN_BUFFER_SIZE, maxBatchSize));
 
                         try {
-                            MemoryRecordsBuilder builder = MemoryRecords.builder(
+                            MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
                                 buffer,
                                 magic,
-                                compressionType,
+                                compression,
                                 TimestampType.CREATE_TIME,
                                 0L,
                                 currentTimeMs,
@@ -801,7 +814,9 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                                 producerEpoch,
                                 0,
                                 producerId != RecordBatch.NO_PRODUCER_ID,
-                                RecordBatch.NO_PARTITION_LEADER_EPOCH
+                                false,
+                                RecordBatch.NO_PARTITION_LEADER_EPOCH,
+                                maxBatchSize
                             );
 
                             // Apply the records to the state machine and add them to the batch.
@@ -832,7 +847,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                                     );
                                 } else {
                                     throw new RecordTooLargeException("Message batch size is " + builder.estimatedSizeInBytes() +
-                                        " bytes in append to partition $tp which exceeds the maximum configured size of $maxBatchSize.");
+                                        " bytes in append to partition " + tp + " which exceeds the maximum " +
+                                        "configured size of " + maxBatchSize + ".");
                                 }
                             }
 
@@ -1353,6 +1369,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     }
 
     /**
+     * 16KB. Used for initial buffer size for write operations.
+     */
+    static final int MIN_BUFFER_SIZE = 16384;
+
+    /**
      * The log prefix.
      */
     private final String logPrefix;
@@ -1426,7 +1447,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     /**
      * The compression codec used when writing records.
      */
-    private final CompressionType compressionType;
+    private final Compression compression;
 
     /**
      * Atomic boolean indicating whether the runtime is running.
@@ -1453,7 +1474,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * @param runtimeMetrics                    The runtime metrics.
      * @param coordinatorMetrics                The coordinator metrics.
      * @param serializer                        The serializer.
-     * @param compressionType                   The compression type.
+     * @param compression                       The compression codec.
      */
     private CoordinatorRuntime(
         String logPrefix,
@@ -1468,7 +1489,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         CoordinatorRuntimeMetrics runtimeMetrics,
         CoordinatorMetrics coordinatorMetrics,
         Serializer<U> serializer,
-        CompressionType compressionType
+        Compression compression
     ) {
         this.logPrefix = logPrefix;
         this.logContext = logContext;
@@ -1484,7 +1505,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         this.runtimeMetrics = runtimeMetrics;
         this.coordinatorMetrics = coordinatorMetrics;
         this.serializer = serializer;
-        this.compressionType = compressionType;
+        this.compression = compression;
     }
 
     /**
