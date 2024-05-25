@@ -55,15 +55,22 @@ trait ControllerNodeProvider {
 
 class MetadataCacheControllerNodeProvider(
   val metadataCache: ZkMetadataCache,
-  val config: KafkaConfig,
-  val quorumControllerNodeProvider: () => Option[ControllerInformation]
+  val config: KafkaConfig
 ) extends ControllerNodeProvider {
 
   private val zkControllerListenerName = config.controlPlaneListenerName.getOrElse(config.interBrokerListenerName)
   private val zkControllerSecurityProtocol = config.controlPlaneSecurityProtocol.getOrElse(config.interBrokerSecurityProtocol)
   private val zkControllerSaslMechanism = config.saslMechanismInterBrokerProtocol
 
-  val emptyZkControllerInfo =  ControllerInformation(
+  private val kraftControllerListenerName = if (config.controllerListenerNames.nonEmpty)
+    new ListenerName(config.controllerListenerNames.head) else null
+  private val kraftControllerSecurityProtocol = Option(kraftControllerListenerName)
+    .map( listener => config.effectiveListenerSecurityProtocolMap.getOrElse(
+      listener, SecurityProtocol.forName(kraftControllerListenerName.value())))
+    .orNull
+  private val kraftControllerSaslMechanism = config.saslMechanismControllerProtocol
+
+  private val emptyZkControllerInfo =  ControllerInformation(
     None,
     zkControllerListenerName,
     zkControllerSecurityProtocol,
@@ -78,8 +85,12 @@ class MetadataCacheControllerNodeProvider(
         zkControllerSecurityProtocol,
         zkControllerSaslMechanism,
         isZkController = true)
-      case KRaftCachedControllerId(_) =>
-        quorumControllerNodeProvider.apply().getOrElse(emptyZkControllerInfo)
+      case KRaftCachedControllerId(id) => ControllerInformation(
+        metadataCache.getAliveBrokerNode(id, kraftControllerListenerName),
+        kraftControllerListenerName,
+        kraftControllerSecurityProtocol,
+        kraftControllerSaslMechanism,
+        isZkController = false)
     }.getOrElse(emptyZkControllerInfo)
   }
 }

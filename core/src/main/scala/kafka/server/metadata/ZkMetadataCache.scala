@@ -158,6 +158,7 @@ class ZkMetadataCache(
   brokerId: Int,
   metadataVersion: MetadataVersion,
   brokerFeatures: BrokerFeatures,
+  kraftControllerNodes: Seq[Node] = Seq.empty,
   zkMigrationEnabled: Boolean = false)
   extends MetadataCache with ZkFinalizedFeatureCache with Logging {
 
@@ -180,6 +181,8 @@ class ZkMetadataCache(
   @volatile private var _features: Option[Features] = Option.empty
   private val featureLock = new ReentrantLock()
   private val featureCond = featureLock.newCondition()
+
+  private val kraftControllerNodeMap = kraftControllerNodes.map(node => node.id() -> node).toMap
 
   // This method is the main hotspot when it comes to the performance of metadata requests,
   // we should be careful about adding additional logic here. Relatedly, `brokers` is
@@ -347,7 +350,11 @@ class ZkMetadataCache(
 
   override def getAliveBrokerNode(brokerId: Int, listenerName: ListenerName): Option[Node] = {
     val snapshot = metadataSnapshot
-    snapshot.aliveBrokers.get(brokerId).flatMap(_.getNode(listenerName))
+    brokerId match {
+      case id if snapshot.controllerId.filter(_.isInstanceOf[KRaftCachedControllerId]).exists(_.id == id) =>
+        kraftControllerNodeMap.get(id)
+      case _ => snapshot.aliveBrokers.get(brokerId).flatMap(_.getNode(listenerName))
+    }
   }
 
   override def getAliveBrokerNodes(listenerName: ListenerName): Iterable[Node] = {
