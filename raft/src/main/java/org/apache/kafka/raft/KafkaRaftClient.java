@@ -1194,7 +1194,6 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         return String.format("%s@%d", listener.getClass().getTypeName(), System.identityHashCode(listener));
     }
 
-    // TODO: check that it can handle multiple request from retry
     private boolean handleFetchResponse(
         RaftResponse.Inbound responseMetadata,
         long currentTimeMs
@@ -1492,7 +1491,6 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         );
     }
 
-    // TODO: check that it can handle multiple request from retry
     private boolean handleFetchSnapshotResponse(
         RaftResponse.Inbound responseMetadata,
         long currentTimeMs
@@ -1782,15 +1780,12 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
                 throw new IllegalArgumentException("Received unexpected response type: " + apiKey);
         }
 
-        if (handledSuccessfully) {
-            requestManager.onResponseReceived(response.source(), response.correlationId());
-        } else {
-            requestManager.onResponseError(
-                response.source(),
-                response.correlationId(),
-                currentTimeMs
-            );
-        }
+        requestManager.onResponseResult(
+            response.source(),
+            response.correlationId(),
+            handledSuccessfully,
+            currentTimeMs
+        );
     }
 
     /**

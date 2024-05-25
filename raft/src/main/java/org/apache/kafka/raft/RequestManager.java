@@ -26,6 +26,20 @@ import java.util.OptionalLong;
 import java.util.Random;
 import org.apache.kafka.common.Node;
 
+/**
+ * The request manager keeps tracks of the connection with remote replicas.
+ *
+ * When sending a request update this type by calling {@code onRequestSent(Node, long, long)}. When
+ * the RPC returns a response, update this manager with {@code onResponseResult(Node, long, boolean, long)}.
+ *
+ * Connections start in the ready state ({@code isReady(Node, long)} returns true).
+ *
+ * When a request times out or completes successfully the collection will transition back to the
+ * ready state.
+ *
+ * When a request completes with an error it still transition to the backoff state until
+ * {@code retryBackoffMs}.
+ */
 public class RequestManager {
     private final Map<String, ConnectionState> connections = new HashMap<>();
     private final ArrayList<Node> bootstrapServers;
@@ -46,6 +60,16 @@ public class RequestManager {
         this.random = random;
     }
 
+    /**
+     * Returns true if there any connection with pending requests.
+     *
+     * This is useful for satisfying the invariant that there are only one pending Fetch request.
+     * If there are more than one pending fetch request, it is possible for the follower to write
+     * the name offset twice.
+     *
+     * @param currentTimeMs the current time
+     * @return true if the request manager is tracking at least one request
+     */
     public boolean hasAnyInflightRequest(long currentTimeMs) {
         boolean result = false;
 
@@ -69,7 +93,16 @@ public class RequestManager {
         return result;
     }
 
-    // TODO: add a test similar to the kafkaclienttest unittest
+    /**
+     * Returns a random bootstrap node that is ready to receive a request.
+     *
+     * This method doesn't return a node if there at least one request pending. In general this
+     * method is used to send Fetch requests. Fetch request have the invariant that there can
+     * only be one pending Fetch request for the LEO.
+     *
+     * @param currentTimeMs the current time
+     * @return a random ready bootstrap node
+     */
     public Optional<Node> findReadyBootstrapServer(long currentTimeMs) {
         // Check that there are no infilght requests accross any of the known nodes not just
         // the bootstrap servers
@@ -92,7 +125,22 @@ public class RequestManager {
         return result;
     }
 
-    // TODO: maybe write some tests
+    /**
+     * Computes the amount of time needed to wait before a bootstrap server is ready for a Fetch
+     * request.
+     *
+     * If there is a connection with a pending request it returns the amount of time to wait until
+     * the request times out.
+     *
+     * Returns zero, if there are no pending request and at least one of the boorstrap servers is
+     * ready.
+     *
+     * If all of the bootstrap servers are backing off and there are no pending requests, return
+     * the minimum amount of time until a bootstrap server becomes ready.
+     *
+     * @param currentTimeMs the current time
+     * @return the amount of time to wait until bootstrap server can accept a Fetch request
+     */
     public long backoffBeforeAvailableBootstrapServer(long currentTimeMs) {
         long minBackoffMs = retryBackoffMs;
 
@@ -183,18 +231,33 @@ public class RequestManager {
         return state.isResponseExpected(correlationId);
     }
 
-    public void onResponseReceived(Node node, long correlationId) {
+    /**
+     * Updates the manager when a response is received.
+     *
+     * @param node the source of the response
+     * @param correlationId the correlation id of the response
+     * @param success true if the request was successful, false otherwise
+     * @param timeMs the current time
+     */
+    public void onResponseResult(Node node, long correlationId, boolean success, long timeMs) {
         if (isResponseExpected(node, correlationId)) {
-            reset(node);
+            if (success) {
+                // Mark the connection as ready by reseting it
+                reset(node);
+            } else {
+                // Backoff the connection
+                connections.get(node.idString()).onResponseError(correlationId, timeMs);
+            }
         }
     }
 
-    public void onResponseError(Node node, long correlationId, long timeMs) {
-        if (isResponseExpected(node, correlationId)) {
-            connections.get(node.idString()).onResponseError(correlationId, timeMs);
-        }
-    }
-
+    /**
+     * Updates the manager when a request is sent.
+     *
+     * @param node the destination of the request
+     * @param correlationId the correlation id of the request
+     * @param timeMs the current time
+     */
     public void onRequestSent(Node node, long correlationId, long timeMs) {
         ConnectionState state = connections.computeIfAbsent(
             node.idString(),
