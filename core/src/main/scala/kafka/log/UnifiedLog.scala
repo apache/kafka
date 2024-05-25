@@ -1016,7 +1016,15 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           updatedLogStartOffset = true
           updateLogStartOffset(newLogStartOffset)
           info(s"Incremented log start offset to $newLogStartOffset due to $reason")
-          leaderEpochCache.foreach(_.truncateFromStart(logStartOffset))
+          // We flush the change to the device in the background because:
+          // - To avoid fsync latency
+          //   * fsync latency could be huge on a disk glitch, which is not rare in spinning drives
+          //   * This method is called as part of deleteRecords with holding UnifiedLog#lock.
+          //      - Meanwhile all produces against the partition will be blocked, which causes req-handlers to exhaust
+          // - We still flush the change in #assign synchronously, meaning that it's guaranteed that the checkpoint file always has no missing entries.
+          //   * Even when stale epochs are restored from the checkpoint file after the unclean shutdown, it will be handled by
+          //     another truncateFromStart call on log loading procedure, so it won't be a problem
+          leaderEpochCache.foreach(_.truncateFromStart(logStartOffset, false))
           producerStateManager.onLogStartOffsetIncremented(newLogStartOffset)
           maybeIncrementFirstUnstableOffset()
         }
@@ -1807,7 +1815,15 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         // and inserted the first start offset entry, but then failed to append any entries
         // before another leader was elected.
         lock synchronized {
-          leaderEpochCache.foreach(_.truncateFromEnd(logEndOffset))
+          // We flush the change to the device in the background because:
+          // - To avoid fsync latency
+          //   * fsync latency could be huge on a disk glitch, which is not rare in spinning drives
+          //   * This method is called by ReplicaFetcher threads, which could block replica fetching
+          //     then causing ISR shrink or high produce response time degradation in remote scope on high fsync latency.
+          // - We still flush the change in #assign synchronously, meaning that it's guaranteed that the checkpoint file always has no missing entries.
+          //   * Even when stale epochs are restored from the checkpoint file after the unclean shutdown, it will be handled by
+          //     another truncateFromEnd call on log loading procedure, so it won't be a problem
+          leaderEpochCache.foreach(_.truncateFromEnd(logEndOffset, false))
         }
 
         false
@@ -1820,7 +1836,15 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           } else {
             val deletedSegments = localLog.truncateTo(targetOffset)
             deleteProducerSnapshots(deletedSegments, asyncDelete = true)
-            leaderEpochCache.foreach(_.truncateFromEnd(targetOffset))
+            // We flush the change to the device in the background because:
+            // - To avoid fsync latency
+            //   * fsync latency could be huge on a disk glitch, which is not rare in spinning drives
+            //   * This method is called by ReplicaFetcher threads, which could block replica fetching
+            //     then causing ISR shrink or high produce response time degradation in remote scope on high fsync latency.
+            // - We still flush the change in #assign synchronously, meaning that it's guaranteed that the checkpoint file always has no missing entries.
+            //   * Even when stale epochs are restored from the checkpoint file after the unclean shutdown, it will be handled by
+            //     another truncateFromEnd call on log loading procedure, so it won't be a problem
+            leaderEpochCache.foreach(_.truncateFromEnd(targetOffset, false))
             logStartOffset = math.min(targetOffset, logStartOffset)
             rebuildProducerState(targetOffset, producerStateManager)
             if (highWatermark >= localLog.logEndOffset)

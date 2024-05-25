@@ -575,9 +575,9 @@ public class RemoteLogManager implements Closeable {
         if (log.leaderEpochCache().isDefined()) {
             LeaderEpochFileCache cache = log.leaderEpochCache().get().writeTo(checkpoint);
             if (startOffset >= 0) {
-                cache.truncateFromStart(startOffset);
+                cache.truncateFromStart(startOffset, true);
             }
-            cache.truncateFromEnd(endOffset);
+            cache.truncateFromEnd(endOffset, true);
         }
         return checkpoint;
     }

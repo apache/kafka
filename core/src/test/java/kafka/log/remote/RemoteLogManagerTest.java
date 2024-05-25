@@ -2308,8 +2308,8 @@ public class RemoteLogManagerTest {
         InMemoryLeaderEpochCheckpoint myCheckpoint = new InMemoryLeaderEpochCheckpoint();
         myCheckpoint.write(entries);
         LeaderEpochFileCache cache = new LeaderEpochFileCache(null, myCheckpoint, scheduler);
-        cache.truncateFromStart(startOffset);
-        cache.truncateFromEnd(endOffset);
+        cache.truncateFromStart(startOffset, true);
+        cache.truncateFromEnd(endOffset, true);
         return myCheckpoint.read().stream().collect(Collectors.toMap(e -> e.epoch, e -> e.startOffset));
     }
 

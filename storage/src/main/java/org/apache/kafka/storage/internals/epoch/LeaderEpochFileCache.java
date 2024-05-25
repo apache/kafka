@@ -44,7 +44,7 @@ import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UND
  * Leader Epoch = epoch assigned to each leader by the controller.
  * Offset = offset of the first message in each epoch.
  * <p>
- * Note that {@link #truncateFromStart},{@link #truncateFromEnd} flush the epoch-entry changes to checkpoint asynchronously.
+ * Note that {@link #truncateFromStart},{@link #truncateFromEnd} may flush the epoch-entry changes to checkpoint asynchronously.
  * Hence, it is instantiater's responsibility to ensure restoring the cache to the correct state after instantiating
  * this class from checkpoint (which might contain stale epoch entries right after instantiation).
  */
@@ -335,25 +335,22 @@ public class LeaderEpochFileCache {
 
     /**
      * Removes all epoch entries from the store with start offsets greater than or equal to the passed offset.
-     * <p>
-     * Checkpoint-flushing is done asynchronously.
+     *
+     * @param endOffset  the offset to clear up to
+     * @param flushSync  if true, the method will block until the changes are flushed to file
      */
-    public void truncateFromEnd(long endOffset) {
+    public void truncateFromEnd(long endOffset, boolean flushSync) {
         lock.writeLock().lock();
         try {
             Optional<EpochEntry> epochEntry = latestEntry();
             if (endOffset >= 0 && epochEntry.isPresent() && epochEntry.get().startOffset >= endOffset) {
                 List<EpochEntry> removedEntries = removeFromEnd(x -> x.startOffset >= endOffset);
 
-                // We flush the change to the device in the background because:
-                // - To avoid fsync latency
-                //   * fsync latency could be huge on a disk glitch, which is not rare in spinning drives
-                //   * This method is called by ReplicaFetcher threads, which could block replica fetching
-                //     then causing ISR shrink or high produce response time degradation in remote scope on high fsync latency.
-                // - We still flush the change in #assign synchronously, meaning that it's guaranteed that the checkpoint file always has no missing entries.
-                //   * Even when stale epochs are restored from the checkpoint file after the unclean shutdown, it will be handled by
-                //     another truncateFromEnd call on log loading procedure, so it won't be a problem
-                scheduler.scheduleOnce("leader-epoch-cache-flush-" + topicPartition, this::writeToFileForTruncation);
+                if (flushSync) {
+                    writeToFileForTruncation();
+                } else {
+                    scheduler.scheduleOnce("leader-epoch-cache-flush-" + topicPartition, this::writeToFileForTruncation);
+                }
 
                 log.debug("Cleared entries {} from epoch cache after truncating to end offset {}, leaving {} entries in the cache.", removedEntries, endOffset, epochs.size());
             }
@@ -367,12 +364,11 @@ public class LeaderEpochFileCache {
      * be offset, then clears any previous epoch entries.
      * <p>
      * This method is exclusive: so truncateFromStart(6) will retain an entry at offset 6.
-     * <p>
-     * Checkpoint-flushing is done asynchronously.
      *
      * @param startOffset the offset to clear up to
+     * @param flushSync   if true, the method will block until the changes are flushed to file
      */
-    public void truncateFromStart(long startOffset) {
+    public void truncateFromStart(long startOffset, boolean flushSync) {
         lock.writeLock().lock();
         try {
             List<EpochEntry> removedEntries = removeFromStart(entry -> entry.startOffset <= startOffset);
@@ -382,15 +378,11 @@ public class LeaderEpochFileCache {
                 EpochEntry updatedFirstEntry = new EpochEntry(firstBeforeStartOffset.epoch, startOffset);
                 epochs.put(updatedFirstEntry.epoch, updatedFirstEntry);
 
-                // We flush the change to the device in the background because:
-                // - To avoid fsync latency
-                //   * fsync latency could be huge on a disk glitch, which is not rare in spinning drives
-                //   * This method is called as part of deleteRecords with holding UnifiedLog#lock.
-                //      - Meanwhile all produces against the partition will be blocked, which causes req-handlers to exhaust
-                // - We still flush the change in #assign synchronously, meaning that it's guaranteed that the checkpoint file always has no missing entries.
-                //   * Even when stale epochs are restored from the checkpoint file after the unclean shutdown, it will be handled by
-                //     another truncateFromStart call on log loading procedure, so it won't be a problem
-                scheduler.scheduleOnce("leader-epoch-cache-flush-" + topicPartition, this::writeToFileForTruncation);
+                if (flushSync) {
+                    writeToFileForTruncation();
+                } else {
+                    scheduler.scheduleOnce("leader-epoch-cache-flush-" + topicPartition, this::writeToFileForTruncation);
+                }
 
                 log.debug("Cleared entries {} and rewrote first entry {} after truncating to start offset {}, leaving {} in the cache.", removedEntries, updatedFirstEntry, startOffset, epochs.size());
             }

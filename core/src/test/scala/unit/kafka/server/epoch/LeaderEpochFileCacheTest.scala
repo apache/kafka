@@ -59,7 +59,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(10, 20)
     assertEquals(OptionalInt.of(4), cache.previousEpoch)
 
-    cache.truncateFromEnd(18)
+    cache.truncateFromEnd(18, false)
     assertEquals(OptionalInt.of(2), cache.previousEpoch)
   }
 
@@ -389,7 +389,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(4, 11)
 
     //When clear latest on epoch boundary
-    cache.truncateFromEnd(8)
+    cache.truncateFromEnd(8, false)
 
     //Then should remove two latest epochs (remove is inclusive)
     assertEquals(java.util.Arrays.asList(new EpochEntry(2, 6)), cache.epochEntries)
@@ -403,7 +403,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(4, 11)
 
     //When reset to offset ON epoch boundary
-    cache.truncateFromStart(8)
+    cache.truncateFromStart(8, false)
 
     //Then should preserve (3, 8)
     assertEquals(java.util.Arrays.asList(new EpochEntry(3, 8), new EpochEntry(4, 11)), cache.epochEntries)
@@ -417,7 +417,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(4, 11)
 
     //When reset to offset BETWEEN epoch boundaries
-    cache.truncateFromStart(9)
+    cache.truncateFromStart(9, false)
 
     //Then we should retain epoch 3, but update it's offset to 9 as 8 has been removed
     assertEquals(java.util.Arrays.asList(new EpochEntry(3, 9), new EpochEntry(4, 11)), cache.epochEntries)
@@ -431,7 +431,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(4, 11)
 
     //When reset to offset before first epoch offset
-    cache.truncateFromStart(1)
+    cache.truncateFromStart(1, false)
 
     //Then nothing should change
     assertEquals(java.util.Arrays.asList(new EpochEntry(2, 6),new EpochEntry(3, 8), new EpochEntry(4, 11)), cache.epochEntries)
@@ -445,7 +445,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(4, 11)
 
     //When reset to offset on earliest epoch boundary
-    cache.truncateFromStart(6)
+    cache.truncateFromStart(6, false)
 
     //Then nothing should change
     assertEquals(java.util.Arrays.asList(new EpochEntry(2, 6),new EpochEntry(3, 8), new EpochEntry(4, 11)), cache.epochEntries)
@@ -459,7 +459,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(4, 11)
 
     //When
-    cache.truncateFromStart(11)
+    cache.truncateFromStart(11, false)
 
     //Then retain the last
     assertEquals(Collections.singletonList(new EpochEntry(4, 11)), cache.epochEntries)
@@ -473,7 +473,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(4, 11)
 
     //When we clear from a position between offset 8 & offset 11
-    cache.truncateFromStart(9)
+    cache.truncateFromStart(9, false)
 
     //Then we should update the middle epoch entry's offset
     assertEquals(java.util.Arrays.asList(new EpochEntry(3, 9), new EpochEntry(4, 11)), cache.epochEntries)
@@ -487,7 +487,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(2, 10)
 
     //When we clear from a position between offset 0 & offset 7
-    cache.truncateFromStart(5)
+    cache.truncateFromStart(5, false)
 
     //Then we should keep epoch 0 but update the offset appropriately
     assertEquals(java.util.Arrays.asList(new EpochEntry(0,5), new EpochEntry(1, 7), new EpochEntry(2, 10)),
@@ -502,7 +502,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(4, 11)
 
     //When reset to offset beyond last epoch
-    cache.truncateFromStart(15)
+    cache.truncateFromStart(15, false)
 
     //Then update the last
     assertEquals(Collections.singletonList(new EpochEntry(4, 15)), cache.epochEntries)
@@ -516,7 +516,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(4, 11)
 
     //When reset to offset BETWEEN epoch boundaries
-    cache.truncateFromEnd( 9)
+    cache.truncateFromEnd(9, false)
 
     //Then should keep the preceding epochs
     assertEquals(OptionalInt.of(3), cache.latestEpoch)
@@ -545,7 +545,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(4, 11)
 
     //When reset to offset on epoch boundary
-    cache.truncateFromStart(UNDEFINED_EPOCH_OFFSET)
+    cache.truncateFromStart(UNDEFINED_EPOCH_OFFSET, false)
 
     //Then should do nothing
     assertEquals(3, cache.epochEntries.size)
@@ -559,7 +559,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(4, 11)
 
     //When reset to offset on epoch boundary
-    cache.truncateFromEnd(UNDEFINED_EPOCH_OFFSET)
+    cache.truncateFromEnd(UNDEFINED_EPOCH_OFFSET, false)
 
     //Then should do nothing
     assertEquals(3, cache.epochEntries.size)
@@ -580,13 +580,13 @@ class LeaderEpochFileCacheTest {
   @Test
   def shouldClearEarliestOnEmptyCache(): Unit = {
     //Then
-    cache.truncateFromStart(7)
+    cache.truncateFromStart(7, false)
   }
 
   @Test
   def shouldClearLatestOnEmptyCache(): Unit = {
     //Then
-    cache.truncateFromEnd(7)
+    cache.truncateFromEnd(7, false)
   }
 
   @Test
@@ -602,7 +602,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(10, 20)
     assertEquals(OptionalInt.of(4), cache.previousEpoch(10))
 
-    cache.truncateFromEnd(18)
+    cache.truncateFromEnd(18, false)
     assertEquals(OptionalInt.of(2), cache.previousEpoch(cache.latestEpoch.getAsInt))
   }
 
@@ -619,7 +619,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(10, 20)
     assertEquals(Optional.of(new EpochEntry(4, 15)), cache.previousEntry(10))
 
-    cache.truncateFromEnd(18)
+    cache.truncateFromEnd(18, false)
     assertEquals(Optional.of(new EpochEntry(2, 10)), cache.previousEntry(cache.latestEpoch.getAsInt))
   }
 
@@ -666,8 +666,8 @@ class LeaderEpochFileCacheTest {
     cache.assign(3, 8)
     cache.assign(4, 11)
 
-    cache.truncateFromEnd(11)
-    cache.truncateFromStart(8)
+    cache.truncateFromEnd(11, false)
+    cache.truncateFromStart(8, false)
 
     assertEquals(List(new EpochEntry(3, 8)).asJava, checkpoint.read())
   }
