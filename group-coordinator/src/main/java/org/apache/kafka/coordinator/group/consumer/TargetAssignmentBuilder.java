@@ -19,7 +19,7 @@ package org.apache.kafka.coordinator.group.consumer;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
-import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
+import org.apache.kafka.coordinator.group.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
@@ -127,6 +127,12 @@ public class TargetAssignmentBuilder {
     private Map<String, Assignment> targetAssignment = Collections.emptyMap();
 
     /**
+     * Reverse lookup map representing topic partitions with
+     * their current member assignments.
+     */
+    private Map<Uuid, Map<Integer, String>> invertedTargetAssignment = Collections.emptyMap();
+
+    /**
      * The topics image.
      */
     private TopicsImage topicsImage = TopicsImage.EMPTY;
@@ -225,6 +231,19 @@ public class TargetAssignmentBuilder {
     }
 
     /**
+     * Adds the existing topic partition assignments.
+     *
+     * @param invertedTargetAssignment   The reverse lookup map of the current target assignment.
+     * @return This object.
+     */
+    public TargetAssignmentBuilder withInvertedTargetAssignment(
+        Map<Uuid, Map<Integer, String>> invertedTargetAssignment
+    ) {
+        this.invertedTargetAssignment = invertedTargetAssignment;
+        return this;
+    }
+
+    /**
      * Adds the topics image.
      *
      * @param topicsImage    The topics image.
@@ -317,7 +336,11 @@ public class TargetAssignmentBuilder {
 
         // Compute the assignment.
         GroupAssignment newGroupAssignment = assignor.assign(
-            new AssignmentSpec(Collections.unmodifiableMap(memberSpecs), subscriptionType),
+            new GroupSpecImpl(
+                Collections.unmodifiableMap(memberSpecs),
+                subscriptionType,
+                invertedTargetAssignment
+            ),
             new SubscribedTopicMetadata(topicMetadataMap)
         );
 
