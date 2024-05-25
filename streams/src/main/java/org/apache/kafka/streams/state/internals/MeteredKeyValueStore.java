@@ -90,6 +90,7 @@ public class MeteredKeyValueStore<K, V>
     private Sensor prefixScanSensor;
     private Sensor flushSensor;
     private Sensor e2eLatencySensor;
+    protected Sensor iteratorDurationSensor;
     protected InternalProcessorContext context;
     private StreamsMetricsImpl streamsMetrics;
     private TaskId taskId;
@@ -165,6 +166,7 @@ public class MeteredKeyValueStore<K, V>
         flushSensor = StateStoreMetrics.flushSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         deleteSensor = StateStoreMetrics.deleteSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         e2eLatencySensor = StateStoreMetrics.e2ELatencySensor(taskId.toString(), metricsScope, name(), streamsMetrics);
+        iteratorDurationSensor = StateStoreMetrics.iteratorDurationSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         StateStoreMetrics.addNumOpenIteratorsGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
                 (config, now) -> numOpenIterators.get());
     }
@@ -486,7 +488,9 @@ public class MeteredKeyValueStore<K, V>
             try {
                 iter.close();
             } finally {
-                sensor.record(time.nanoseconds() - startNs);
+                final long duration = time.nanoseconds() - startNs;
+                sensor.record(duration);
+                iteratorDurationSensor.record(duration);
                 numOpenIterators.decrementAndGet();
             }
         }
@@ -532,7 +536,9 @@ public class MeteredKeyValueStore<K, V>
             try {
                 iter.close();
             } finally {
-                sensor.record(time.nanoseconds() - startNs);
+                final long duration = time.nanoseconds() - startNs;
+                sensor.record(duration);
+                iteratorDurationSensor.record(duration);
                 numOpenIterators.decrementAndGet();
             }
         }

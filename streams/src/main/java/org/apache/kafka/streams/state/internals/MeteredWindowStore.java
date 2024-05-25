@@ -72,6 +72,7 @@ public class MeteredWindowStore<K, V>
     private Sensor fetchSensor;
     private Sensor flushSensor;
     private Sensor e2eLatencySensor;
+    private Sensor iteratorDurationSensor;
     private InternalProcessorContext<?, ?> context;
     private TaskId taskId;
 
@@ -153,6 +154,7 @@ public class MeteredWindowStore<K, V>
         fetchSensor = StateStoreMetrics.fetchSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         flushSensor = StateStoreMetrics.flushSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         e2eLatencySensor = StateStoreMetrics.e2ELatencySensor(taskId.toString(), metricsScope, name(), streamsMetrics);
+        iteratorDurationSensor = StateStoreMetrics.iteratorDurationSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         StateStoreMetrics.addNumOpenIteratorsGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
                 (config, now) -> numOpenIterators.get());
     }
@@ -239,6 +241,7 @@ public class MeteredWindowStore<K, V>
         return new MeteredWindowStoreIterator<>(
             wrapped().fetch(keyBytes(key), timeFrom, timeTo),
             fetchSensor,
+            iteratorDurationSensor,
             streamsMetrics,
             serdes::valueFrom,
             time,
@@ -254,6 +257,7 @@ public class MeteredWindowStore<K, V>
         return new MeteredWindowStoreIterator<>(
             wrapped().backwardFetch(keyBytes(key), timeFrom, timeTo),
             fetchSensor,
+            iteratorDurationSensor,
             streamsMetrics,
             serdes::valueFrom,
             time,
@@ -273,6 +277,7 @@ public class MeteredWindowStore<K, V>
                 timeFrom,
                 timeTo),
             fetchSensor,
+            iteratorDurationSensor,
             streamsMetrics,
             serdes::keyFrom,
             serdes::valueFrom,
@@ -292,6 +297,7 @@ public class MeteredWindowStore<K, V>
                 timeFrom,
                 timeTo),
             fetchSensor,
+            iteratorDurationSensor,
             streamsMetrics,
             serdes::keyFrom,
             serdes::valueFrom,
@@ -305,6 +311,7 @@ public class MeteredWindowStore<K, V>
         return new MeteredWindowedKeyValueIterator<>(
             wrapped().fetchAll(timeFrom, timeTo),
             fetchSensor,
+            iteratorDurationSensor,
             streamsMetrics,
             serdes::keyFrom,
             serdes::valueFrom,
@@ -318,6 +325,7 @@ public class MeteredWindowStore<K, V>
         return new MeteredWindowedKeyValueIterator<>(
             wrapped().backwardFetchAll(timeFrom, timeTo),
             fetchSensor,
+            iteratorDurationSensor,
             streamsMetrics,
             serdes::keyFrom,
             serdes::valueFrom,
@@ -330,6 +338,7 @@ public class MeteredWindowStore<K, V>
         return new MeteredWindowedKeyValueIterator<>(
             wrapped().all(),
             fetchSensor,
+            iteratorDurationSensor,
             streamsMetrics,
             serdes::keyFrom,
             serdes::valueFrom,
@@ -343,6 +352,7 @@ public class MeteredWindowStore<K, V>
         return new MeteredWindowedKeyValueIterator<>(
             wrapped().backwardAll(),
             fetchSensor,
+            iteratorDurationSensor,
             streamsMetrics,
             serdes::keyFrom,
             serdes::valueFrom,
@@ -420,6 +430,7 @@ public class MeteredWindowStore<K, V>
                     new MeteredWindowedKeyValueIterator<>(
                         rawResult.getResult(),
                         fetchSensor,
+                        iteratorDurationSensor,
                         streamsMetrics,
                         serdes::keyFrom,
                         getDeserializeValue(serdes, wrapped()),
@@ -471,6 +482,7 @@ public class MeteredWindowStore<K, V>
                 final MeteredWindowStoreIterator<V> typedResult = new MeteredWindowStoreIterator<>(
                     rawResult.getResult(),
                     fetchSensor,
+                    iteratorDurationSensor,
                     streamsMetrics,
                     getDeserializeValue(serdes, wrapped()),
                     time,
