@@ -44,6 +44,7 @@ import org.junit.jupiter.params.provider.ValueSource
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
+import scala.util.Using
 
 class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
   var brokers: ListBuffer[KafkaBroker] = ListBuffer()
@@ -287,7 +288,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
   }
 
   private def createTopic(topic: String, partitionReplicaAssignment: collection.Map[Int, Seq[Int]]): Unit = {
-    resource(createAdminClient(brokers, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))) { admin =>
+    Using(createAdminClient(brokers, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))) { admin =>
       TestUtils.createTopicWithAdmin(
         admin = admin,
         topic = topic,

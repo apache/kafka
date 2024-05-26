@@ -43,6 +43,7 @@ import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.apache.kafka.raft.errors.BufferAllocationException;
 import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.raft.errors.UnexpectedBaseOffsetException;
+import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -134,7 +135,7 @@ public class KafkaRaftClientTest {
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
-            .withVotedCandidate(epoch, localId)
+            .withVotedCandidate(epoch, ReplicaKey.of(localId, Optional.empty()))
             .build();
 
         assertEquals(0L, context.log.endOffset().offset);
@@ -185,7 +186,7 @@ public class KafkaRaftClientTest {
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
-            .withVotedCandidate(epoch, localId)
+            .withVotedCandidate(epoch, ReplicaKey.of(localId, Optional.empty()))
             .build();
 
         // Resign from candidate, will restart in candidate state
@@ -661,7 +662,7 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Utils.mkSet(localId, 1, 2);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withVotedCandidate(2, localId)
+            .withVotedCandidate(2, ReplicaKey.of(localId, Optional.empty()))
             .build();
         context.assertVotedCandidate(2, localId);
         assertEquals(0L, context.log.endOffset().offset);
@@ -759,7 +760,7 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withVotedCandidate(votedCandidateEpoch, otherNodeId)
+            .withVotedCandidate(votedCandidateEpoch, ReplicaKey.of(otherNodeId, Optional.empty()))
             .build();
 
         context.deliverRequest(context.beginEpochRequest(votedCandidateEpoch, otherNodeId));
@@ -1166,7 +1167,7 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId, votedCandidateId);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withVotedCandidate(epoch, votedCandidateId)
+            .withVotedCandidate(epoch, ReplicaKey.of(votedCandidateId, Optional.empty()))
             .build();
 
         context.deliverRequest(context.voteRequest(epoch, otherNodeId, epoch - 1, 1));
@@ -1209,8 +1210,8 @@ public class KafkaRaftClientTest {
         context.deliverRequest(context.voteRequest(epoch + 1, otherNodeId, epoch, 1));
         context.pollUntilResponse();
 
-        context.assertSentVoteResponse(Errors.INCONSISTENT_VOTER_SET, epoch, OptionalInt.empty(), false);
-        context.assertUnknownLeader(epoch);
+        context.assertSentVoteResponse(Errors.NONE, epoch + 1, OptionalInt.empty(), true);
+        context.assertVotedCandidate(epoch + 1, otherNodeId);
     }
 
     @Test
@@ -1307,7 +1308,7 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withVotedCandidate(leaderEpoch, localId)
+            .withVotedCandidate(leaderEpoch, ReplicaKey.of(localId, Optional.empty()))
             .build();
 
         context.pollUntilRequest();
@@ -1690,7 +1691,7 @@ public class KafkaRaftClientTest {
     }
 
     @Test
-    public void testVoterOnlyRequestValidation() throws Exception {
+    public void testLeaderAcceptVoteFromNonVoter() throws Exception {
         int localId = 0;
         int otherNodeId = 1;
         int epoch = 5;
@@ -1699,19 +1700,13 @@ public class KafkaRaftClientTest {
         RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
 
         int nonVoterId = 2;
+        context.deliverRequest(context.voteRequest(epoch - 1, nonVoterId, 0, 0));
+        context.client.poll();
+        context.assertSentVoteResponse(Errors.FENCED_LEADER_EPOCH, epoch, OptionalInt.of(localId), false);
+
         context.deliverRequest(context.voteRequest(epoch, nonVoterId, 0, 0));
         context.client.poll();
-        context.assertSentVoteResponse(Errors.INCONSISTENT_VOTER_SET, epoch, OptionalInt.of(localId), false);
-
-        context.deliverRequest(context.beginEpochRequest(epoch, nonVoterId));
-        context.client.poll();
-        context.assertSentBeginQuorumEpochResponse(Errors.INCONSISTENT_VOTER_SET, epoch, OptionalInt.of(localId));
-
-        context.deliverRequest(context.endEpochRequest(epoch, nonVoterId, Collections.singletonList(otherNodeId)));
-        context.client.poll();
-
-        // The sent request has no localId as a preferable voter.
-        context.assertSentEndQuorumEpochResponse(Errors.INCONSISTENT_VOTER_SET, epoch, OptionalInt.of(localId));
+        context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.of(localId), false);
     }
 
     @Test

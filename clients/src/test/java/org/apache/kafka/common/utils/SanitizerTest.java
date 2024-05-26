@@ -74,7 +74,7 @@ public class SanitizerTest {
         int getValue();
     }
 
-    public class TestStat implements TestStatMBean {
+    public static class TestStat implements TestStatMBean {
         public int getValue() {
             return 1;
         }

@@ -55,22 +55,15 @@ trait ControllerNodeProvider {
 
 class MetadataCacheControllerNodeProvider(
   val metadataCache: ZkMetadataCache,
-  val config: KafkaConfig
+  val config: KafkaConfig,
+  val quorumControllerNodeProvider: () => Option[ControllerInformation]
 ) extends ControllerNodeProvider {
 
   private val zkControllerListenerName = config.controlPlaneListenerName.getOrElse(config.interBrokerListenerName)
   private val zkControllerSecurityProtocol = config.controlPlaneSecurityProtocol.getOrElse(config.interBrokerSecurityProtocol)
   private val zkControllerSaslMechanism = config.saslMechanismInterBrokerProtocol
 
-  private val kraftControllerListenerName = if (config.controllerListenerNames.nonEmpty)
-    new ListenerName(config.controllerListenerNames.head) else null
-  private val kraftControllerSecurityProtocol = Option(kraftControllerListenerName)
-    .map( listener => config.effectiveListenerSecurityProtocolMap.getOrElse(
-      listener, SecurityProtocol.forName(kraftControllerListenerName.value())))
-    .orNull
-  private val kraftControllerSaslMechanism = config.saslMechanismControllerProtocol
-
-  private val emptyZkControllerInfo =  ControllerInformation(
+  val emptyZkControllerInfo =  ControllerInformation(
     None,
     zkControllerListenerName,
     zkControllerSecurityProtocol,
@@ -85,12 +78,8 @@ class MetadataCacheControllerNodeProvider(
         zkControllerSecurityProtocol,
         zkControllerSaslMechanism,
         isZkController = true)
-      case KRaftCachedControllerId(id) => ControllerInformation(
-        metadataCache.getAliveBrokerNode(id, kraftControllerListenerName),
-        kraftControllerListenerName,
-        kraftControllerSecurityProtocol,
-        kraftControllerSaslMechanism,
-        isZkController = false)
+      case KRaftCachedControllerId(_) =>
+        quorumControllerNodeProvider.apply().getOrElse(emptyZkControllerInfo)
     }.getOrElse(emptyZkControllerInfo)
   }
 }
@@ -99,14 +88,12 @@ object RaftControllerNodeProvider {
   def apply(
     raftManager: RaftManager[ApiMessageAndVersion],
     config: KafkaConfig,
-    controllerQuorumVoterNodes: Seq[Node]
   ): RaftControllerNodeProvider = {
     val controllerListenerName = new ListenerName(config.controllerListenerNames.head)
     val controllerSecurityProtocol = config.effectiveListenerSecurityProtocolMap.getOrElse(controllerListenerName, SecurityProtocol.forName(controllerListenerName.value()))
     val controllerSaslMechanism = config.saslMechanismControllerProtocol
     new RaftControllerNodeProvider(
       raftManager,
-      controllerQuorumVoterNodes,
       controllerListenerName,
       controllerSecurityProtocol,
       controllerSaslMechanism
@@ -120,15 +107,15 @@ object RaftControllerNodeProvider {
  */
 class RaftControllerNodeProvider(
   val raftManager: RaftManager[ApiMessageAndVersion],
-  controllerQuorumVoterNodes: Seq[Node],
   val listenerName: ListenerName,
   val securityProtocol: SecurityProtocol,
   val saslMechanism: String
 ) extends ControllerNodeProvider with Logging {
-  private val idToNode = controllerQuorumVoterNodes.map(node => node.id() -> node).toMap
+
+  private def idToNode(id: Int): Option[Node] = raftManager.voterNode(id, listenerName.value())
 
   override def getControllerInfo(): ControllerInformation =
-    ControllerInformation(raftManager.leaderAndEpoch.leaderId.asScala.map(idToNode),
+    ControllerInformation(raftManager.leaderAndEpoch.leaderId.asScala.flatMap(idToNode),
       listenerName, securityProtocol, saslMechanism, isZkController = false)
 }
 

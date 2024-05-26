@@ -53,7 +53,9 @@ public class StreamsRebalanceListener implements ConsumerRebalanceListener {
         // NB: all task management is already handled by:
         // org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor.onAssignment
         if (assignmentErrorCode.get() == AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.code()) {
-            log.error("Received error code {}", AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA);
+            log.error("Received error code {}. {}",
+                    AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.codeName(),
+                    AssignorError.INCOMPLETE_SOURCE_TOPIC_METADATA.description());
             taskManager.handleRebalanceComplete();
             throw new MissingSourceTopicException("One or more source topics were missing during rebalance");
         } else if (assignmentErrorCode.get() == AssignorError.VERSION_PROBING.code()) {

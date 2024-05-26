@@ -90,7 +90,7 @@ public class RemoveMembersFromConsumerGroupHandlerTest {
     }
 
     private LeaveGroupResponse buildResponse(Errors error) {
-        LeaveGroupResponse response = new LeaveGroupResponse(
+        return new LeaveGroupResponse(
             new LeaveGroupResponseData()
                 .setErrorCode(error.code())
                 .setMembers(singletonList(
@@ -98,11 +98,10 @@ public class RemoveMembersFromConsumerGroupHandlerTest {
                         .setErrorCode(Errors.NONE.code())
                         .setMemberId("m1")
                         .setGroupInstanceId("m1-gii"))));
-        return response;
     }
 
     private LeaveGroupResponse buildResponseWithMemberError(Errors error) {
-        LeaveGroupResponse response = new LeaveGroupResponse(
+        return new LeaveGroupResponse(
             new LeaveGroupResponseData()
                 .setErrorCode(Errors.NONE.code())
                 .setMembers(singletonList(
@@ -110,7 +109,6 @@ public class RemoveMembersFromConsumerGroupHandlerTest {
                         .setErrorCode(error.code())
                         .setMemberId("m1")
                         .setGroupInstanceId("m1-gii"))));
-        return response;
     }
 
     private AdminApiHandler.ApiResult<CoordinatorKey, Map<MemberIdentity, Errors>> handleWithGroupError(

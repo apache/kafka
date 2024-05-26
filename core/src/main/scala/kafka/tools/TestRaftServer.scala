@@ -52,6 +52,7 @@ import scala.jdk.CollectionConverters._
  */
 class TestRaftServer(
   val config: KafkaConfig,
+  val nodeDirectoryId: Uuid,
   val throughput: Int,
   val recordSize: Int
 ) extends Logging {
@@ -86,6 +87,7 @@ class TestRaftServer(
     raftManager = new KafkaRaftManager[Array[Byte]](
       Uuid.ZERO_UUID.toString,
       config,
+      nodeDirectoryId,
       new ByteArraySerde,
       partition,
       topicId,
@@ -431,6 +433,11 @@ object TestRaftServer extends Logging {
       .ofType(classOf[Int])
       .defaultsTo(256)
 
+    val directoryId: OptionSpec[String] = parser.accepts("replica-directory-id", "The directory id of the replica")
+      .withRequiredArg
+      .describedAs("directory id")
+      .ofType(classOf[String])
+
     options = parser.parse(args : _*)
   }
 
@@ -444,6 +451,11 @@ object TestRaftServer extends Logging {
       if (configFile == null) {
         throw new InvalidConfigurationException("Missing configuration file. Should specify with '--config'")
       }
+
+      val directoryIdAsString = opts.options.valueOf(opts.directoryId)
+      if (directoryIdAsString == null) {
+        throw new InvalidConfigurationException("Missing replica directory id. Should specify with --replica-directory-id")
+      }
       val serverProps = Utils.loadProps(configFile)
 
       // KafkaConfig requires either `process.roles` or `zookeeper.connect`. Neither are
@@ -453,7 +465,7 @@ object TestRaftServer extends Logging {
       val config = KafkaConfig.fromProps(serverProps, doLog = false)
       val throughput = opts.options.valueOf(opts.throughputOpt)
       val recordSize = opts.options.valueOf(opts.recordSizeOpt)
-      val server = new TestRaftServer(config, throughput, recordSize)
+      val server = new TestRaftServer(config, Uuid.fromString(directoryIdAsString), throughput, recordSize)
 
       Exit.addShutdownHook("raft-shutdown-hook", server.shutdown())
 

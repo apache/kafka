@@ -255,11 +255,12 @@ public class HeartbeatRequestManager implements RequestManager {
      * member to {@link MemberState#JOINING}, so that it rejoins the group.
      */
     public void resetPollTimer(final long pollMs) {
+        pollTimer.update(pollMs);
         if (pollTimer.isExpired()) {
-            logger.debug("Poll timer has been reset after it had expired");
+            logger.warn("Time between subsequent calls to poll() was longer than the configured " +
+                "max.poll.interval.ms, exceeded approximately by {} ms.", pollTimer.isExpiredBy());
             membershipManager.maybeRejoinStaleMember();
         }
-        pollTimer.update(pollMs);
         pollTimer.reset(maxPollIntervalMs);
     }
 
@@ -382,7 +383,15 @@ public class HeartbeatRequestManager implements RequestManager {
             case UNRELEASED_INSTANCE_ID:
                 logger.error("GroupHeartbeatRequest failed due to unreleased instance id {}: {}",
                         membershipManager.groupInstanceId().orElse("null"), errorMessage);
-                handleFatalFailure(Errors.UNRELEASED_INSTANCE_ID.exception(errorMessage));
+                handleFatalFailure(error.exception(errorMessage));
+                break;
+
+            case FENCED_INSTANCE_ID:
+                logger.error("GroupHeartbeatRequest failed due to fenced instance id {}: {}. " +
+                        "This is expected in the case that the member was removed from the group " +
+                        "by an admin client, and another member joined using the same group instance id.",
+                    membershipManager.groupInstanceId().orElse("null"), errorMessage);
+                handleFatalFailure(error.exception(errorMessage));
                 break;
 
             case INVALID_REQUEST:

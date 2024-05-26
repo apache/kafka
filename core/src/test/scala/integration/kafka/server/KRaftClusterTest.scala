@@ -402,7 +402,7 @@ class KRaftClusterTest {
     val nodes = new TestKitNodes.Builder()
       .setNumControllerNodes(1)
       .setNumBrokerNodes(3)
-      .setPerBrokerProperties(brokerPropertyOverrides)
+      .setPerServerProperties(brokerPropertyOverrides)
       .build()
 
     doOnStartedKafkaCluster(nodes) { implicit cluster =>
@@ -430,7 +430,7 @@ class KRaftClusterTest {
       .setNumControllerNodes(1)
       .setNumBrokerNodes(3)
       .setNumDisksPerBroker(1)
-      .setPerBrokerProperties(brokerPropertyOverrides)
+      .setPerServerProperties(brokerPropertyOverrides)
       .build()
 
     doOnStartedKafkaCluster(nodes) { implicit cluster =>
@@ -1534,6 +1534,44 @@ class KRaftClusterTest {
           assertFalse(targetDirFile.exists())
           assertTrue(originalLogFile.exists())
         }
+      } finally {
+        admin.close()
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testControllerFailover(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(5).build()).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      cluster.waitForReadyBrokers()
+      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).brokerState == BrokerState.RUNNING,
+        "Broker never made it to RUNNING state.")
+      TestUtils.waitUntilTrue(() => cluster.raftManagers().get(0).client.leaderAndEpoch().leaderId.isPresent,
+        "RaftManager was not initialized.")
+
+      val admin = Admin.create(cluster.clientProperties())
+      try {
+        // Create a test topic
+        admin.createTopics(Collections.singletonList(
+          new NewTopic("test-topic", 1, 1.toShort))).all().get()
+        waitForTopicListing(admin, Seq("test-topic"), Seq())
+
+        // Shut down active controller
+        val active = cluster.waitForActiveController()
+        cluster.raftManagers().get(active.asInstanceOf[QuorumController].nodeId()).shutdown()
+
+        // Create a test topic on the new active controller
+        admin.createTopics(Collections.singletonList(
+          new NewTopic("test-topic2", 1, 1.toShort))).all().get()
+        waitForTopicListing(admin, Seq("test-topic2"), Seq())
       } finally {
         admin.close()
       }

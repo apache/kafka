@@ -209,6 +209,10 @@ public class KafkaClusterTestKit implements AutoCloseable {
             if (brokerNode != null) {
                 props.putAll(brokerNode.propertyOverrides());
             }
+            // Add associated controller node property overrides
+            if (controllerNode != null) {
+                props.putAll(controllerNode.propertyOverrides());
+            }
             props.putIfAbsent(KafkaConfig$.MODULE$.UnstableMetadataVersionsEnableProp(), "true");
             props.putIfAbsent(KafkaConfig$.MODULE$.UnstableApiVersionsEnableProp(), "true");
             return new KafkaConfig(props, false, Option.empty());
@@ -250,7 +254,6 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     } catch (Throwable e) {
                         log.error("Error creating controller {}", node.id(), e);
                         Utils.swallow(log, Level.WARN, "sharedServer.stopForController error", () -> sharedServer.stopForController());
-                        if (controller != null) controller.shutdown();
                         throw e;
                     }
                     controllers.put(node.id(), controller);
@@ -277,7 +280,6 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     } catch (Throwable e) {
                         log.error("Error creating broker {}", node.id(), e);
                         Utils.swallow(log, Level.WARN, "sharedServer.stopForBroker error", () -> sharedServer.stopForBroker());
-                        if (broker != null) broker.shutdown();
                         throw e;
                     }
                     brokers.put(node.id(), broker);
