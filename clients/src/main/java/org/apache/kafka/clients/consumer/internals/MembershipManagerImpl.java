@@ -422,7 +422,7 @@ public class MembershipManagerImpl implements MembershipManager {
         if (state == MemberState.LEAVING) {
             log.debug("Ignoring heartbeat response received from broker. Member {} with epoch {} is " +
                     "already leaving the group.", memberId, memberEpoch);
-//            return;
+            return;
         }
         if (isNotInGroup()) {
             log.debug("Ignoring heartbeat response received from broker. Member {} is in {} state" +

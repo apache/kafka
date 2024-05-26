@@ -45,7 +45,6 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult.EMPTY;
 
 /**
  * <p>Manages the request creation and response handling for the heartbeat. The module creates a
@@ -191,7 +190,7 @@ public class HeartbeatRequestManager implements RequestManager {
         if (!coordinatorRequestManager.coordinator().isPresent() ||
             membershipManager.shouldSkipHeartbeat()) {
             membershipManager.onHeartbeatRequestSkipped();
-            return EMPTY;
+            return NetworkClientDelegate.PollResult.EMPTY;
         }
         pollTimer.update(currentTimeMs);
         if (pollTimer.isExpired() && !membershipManager.isLeavingGroup()) {
@@ -210,7 +209,7 @@ public class HeartbeatRequestManager implements RequestManager {
             return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs, Collections.singletonList(leaveHeartbeat));
         }
 
-        boolean heartbeatNow = membershipManager.shouldHeartbeatNow() && (!heartbeatRequestState.requestInFlight() || membershipManager.isLeavingGroup());
+        boolean heartbeatNow = membershipManager.shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight();
         if (!heartbeatRequestState.canSendRequest(currentTimeMs) && !heartbeatNow) {
             return new NetworkClientDelegate.PollResult(heartbeatRequestState.timeToNextHeartbeatMs(currentTimeMs));
         }
