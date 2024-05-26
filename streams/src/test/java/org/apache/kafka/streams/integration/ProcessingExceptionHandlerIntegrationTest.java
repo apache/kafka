@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor;
+package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.serialization.Serdes;
@@ -22,17 +22,20 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.ErrorHandlerContext;
+import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.junit.experimental.categories.Category;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -50,11 +53,11 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
-public class ProcessingExceptionHandlerTest {
+@Category(IntegrationTest.class)
+public class ProcessingExceptionHandlerIntegrationTest {
     private final String threadId = Thread.currentThread().getName();
 
-    @Test
+    @org.junit.Test
     public void shouldContinueInProcessorOnProcessingRecordAtBeginningExceptions() {
         final List<KeyValue<String, String>> events = Arrays.asList(
             new KeyValue<>("ID123-1", "ID123-A1"),
@@ -77,7 +80,7 @@ public class ProcessingExceptionHandlerTest {
             .process(processor);
 
         final Properties properties = new Properties();
-        properties.put("processing.exception.handler", ContinueProcessingExceptionHandlerMockTest.class);
+        properties.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, ContinueProcessingExceptionHandlerMockTest.class);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties, Instant.ofEpochMilli(0L))) {
             final TestInputTopic<String, String> inputTopic = driver.createInputTopic("TOPIC_NAME", new StringSerializer(), new StringSerializer());
@@ -94,7 +97,7 @@ public class ProcessingExceptionHandlerTest {
         }
     }
 
-    @Test
+    @org.junit.Test
     public void shouldContinueInProcessorOnProcessingRecordInMiddleExceptions() {
         final List<KeyValue<String, String>> events = Arrays.asList(
             new KeyValue<>("ID123-2", "ID123-A2"),
@@ -117,7 +120,7 @@ public class ProcessingExceptionHandlerTest {
             .process(processor);
 
         final Properties properties = new Properties();
-        properties.put("processing.exception.handler", ContinueProcessingExceptionHandlerMockTest.class);
+        properties.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, ContinueProcessingExceptionHandlerMockTest.class);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties, Instant.ofEpochMilli(0L))) {
             final TestInputTopic<String, String> inputTopic = driver.createInputTopic("TOPIC_NAME", new StringSerializer(), new StringSerializer());
@@ -134,7 +137,7 @@ public class ProcessingExceptionHandlerTest {
         }
     }
 
-    @Test
+    @org.junit.Test
     public void shouldContinueInProcessorOnProcessingRecordAtEndExceptions() {
         final List<KeyValue<String, String>> events = Arrays.asList(
             new KeyValue<>("ID123-2", "ID123-A2"),
@@ -157,7 +160,7 @@ public class ProcessingExceptionHandlerTest {
             .process(processor);
 
         final Properties properties = new Properties();
-        properties.put("processing.exception.handler", ContinueProcessingExceptionHandlerMockTest.class);
+        properties.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, ContinueProcessingExceptionHandlerMockTest.class);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties, Instant.ofEpochMilli(0L))) {
             final TestInputTopic<String, String> inputTopic = driver.createInputTopic("TOPIC_NAME", new StringSerializer(), new StringSerializer());
@@ -174,7 +177,7 @@ public class ProcessingExceptionHandlerTest {
         }
     }
 
-    @Test
+    @org.junit.Test
     public void shouldFailInProcessorOnProcessingRecordAtBeginningExceptions() {
         final List<KeyValue<String, String>> events = Arrays.asList(
             new KeyValue<>("ID123-1", "ID123-A1"),
@@ -193,7 +196,7 @@ public class ProcessingExceptionHandlerTest {
             .process(processor);
 
         final Properties properties = new Properties();
-        properties.put("processing.exception.handler", FailProcessingExceptionHandlerMockTest.class);
+        properties.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, FailProcessingExceptionHandlerMockTest.class);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties, Instant.ofEpochMilli(0L))) {
             final TestInputTopic<String, String> inputTopic = driver.createInputTopic("TOPIC_NAME", new StringSerializer(), new StringSerializer());
@@ -213,7 +216,7 @@ public class ProcessingExceptionHandlerTest {
         }
     }
 
-    @Test
+    @org.junit.Test
     public void shouldFailInProcessorOnProcessingRecordInMiddleExceptions() {
         final List<KeyValue<String, String>> events = Arrays.asList(
             new KeyValue<>("ID123-2", "ID123-A2"),
@@ -234,7 +237,7 @@ public class ProcessingExceptionHandlerTest {
             .process(processor);
 
         final Properties properties = new Properties();
-        properties.put("processing.exception.handler", FailProcessingExceptionHandlerMockTest.class);
+        properties.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, FailProcessingExceptionHandlerMockTest.class);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties, Instant.ofEpochMilli(0L))) {
             final TestInputTopic<String, String> inputTopic = driver.createInputTopic("TOPIC_NAME", new StringSerializer(), new StringSerializer());
@@ -254,7 +257,7 @@ public class ProcessingExceptionHandlerTest {
         }
     }
 
-    @Test
+    @org.junit.Test
     public void shouldFailInProcessorOnProcessingRecordAtEndExceptions() {
         final List<KeyValue<String, String>> events = Arrays.asList(
             new KeyValue<>("ID123-2", "ID123-A2"),
@@ -277,7 +280,7 @@ public class ProcessingExceptionHandlerTest {
             .process(processor);
 
         final Properties properties = new Properties();
-        properties.put("processing.exception.handler", FailProcessingExceptionHandlerMockTest.class);
+        properties.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, FailProcessingExceptionHandlerMockTest.class);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties, Instant.ofEpochMilli(0L))) {
             final TestInputTopic<String, String> inputTopic = driver.createInputTopic("TOPIC_NAME", new StringSerializer(), new StringSerializer());
@@ -297,7 +300,7 @@ public class ProcessingExceptionHandlerTest {
         }
     }
 
-    @Test
+    @org.junit.Test
     public void shouldContinueOnPunctuateExceptions() {
         final List<KeyValue<String, String>> events = Arrays.asList(
             new KeyValue<>("ID123-1", "ID123-A1"),
@@ -321,7 +324,7 @@ public class ProcessingExceptionHandlerTest {
             .process(processor);
 
         final Properties properties = new Properties();
-        properties.put("processing.exception.handler", ContinuePunctuateProcessingExceptionHandlerMockTest.class);
+        properties.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, ContinuePunctuateProcessingExceptionHandlerMockTest.class);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties, Instant.ofEpochMilli(0L))) {
             final TestInputTopic<String, String> inputTopic = driver.createInputTopic("TOPIC_NAME", new StringSerializer(), new StringSerializer());
@@ -361,7 +364,7 @@ public class ProcessingExceptionHandlerTest {
             .process(processor);
 
         final Properties properties = new Properties();
-        properties.put("processing.exception.handler", FailPunctuateProcessingExceptionHandlerMockTest.class);
+        properties.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, FailPunctuateProcessingExceptionHandlerMockTest.class);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties, Instant.ofEpochMilli(0L))) {
             final TestInputTopic<String, String> inputTopic = driver.createInputTopic("TOPIC_NAME", new StringSerializer(), new StringSerializer());
@@ -527,21 +530,14 @@ public class ProcessingExceptionHandlerTest {
      * @return the processor supplier
      */
     private ProcessorSupplier<String, String, String, String> runtimeErrorProcessorSupplierMock() {
-        return () -> new Processor<String, String, String, String>() {
-            org.apache.kafka.streams.processor.api.ProcessorContext<String, String> context;
-
-            @Override
-            public void init(final org.apache.kafka.streams.processor.api.ProcessorContext<String, String> context) {
-                this.context = context;
-            }
-
+        return () -> new ContextualProcessor<String, String, String, String>() {
             @Override
             public void process(final Record<String, String> record) {
                 if (record.key().equals("ID123-1")) {
                     throw new RuntimeException("Exception should be handled by processing exception handler");
                 }
 
-                context.forward(new Record<>(record.key(), record.value(), record.timestamp()));
+                context().forward(new Record<>(record.key(), record.value(), record.timestamp()));
             }
         };
     }
