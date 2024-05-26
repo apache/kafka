@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor;
 
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValue;
@@ -41,7 +42,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
-import static org.junit.Assert.assertArrayEquals;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
@@ -50,6 +52,8 @@ import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class ProcessingExceptionHandlerTest {
+    private final String threadId = Thread.currentThread().getName();
+
     @Test
     public void shouldContinueInProcessorOnProcessingRecordAtBeginningExceptions() {
         final List<KeyValue<String, String>> events = Arrays.asList(
@@ -81,6 +85,12 @@ public class ProcessingExceptionHandlerTest {
 
             assertEquals(expected.size(), processor.theCapturedProcessor().processed().size());
             assertIterableEquals(expected, processor.theCapturedProcessor().processed());
+
+            final MetricName dropTotal = droppedRecordsTotalMetric();
+            final MetricName dropRate = droppedRecordsRateMetric();
+
+            assertEquals(1.0, driver.metrics().get(dropTotal).metricValue());
+            assertTrue((Double) driver.metrics().get(dropRate).metricValue() > 0.0);
         }
     }
 
@@ -114,7 +124,13 @@ public class ProcessingExceptionHandlerTest {
             inputTopic.pipeKeyValueList(events, Instant.EPOCH, Duration.ZERO);
 
             assertEquals(expected.size(), processor.theCapturedProcessor().processed().size());
-            assertArrayEquals(expected.toArray(), processor.theCapturedProcessor().processed().toArray());
+            assertIterableEquals(expected, processor.theCapturedProcessor().processed());
+
+            final MetricName dropTotal = droppedRecordsTotalMetric();
+            final MetricName dropRate = droppedRecordsRateMetric();
+
+            assertEquals(1.0, driver.metrics().get(dropTotal).metricValue());
+            assertTrue((Double) driver.metrics().get(dropRate).metricValue() > 0.0);
         }
     }
 
@@ -148,7 +164,13 @@ public class ProcessingExceptionHandlerTest {
             inputTopic.pipeKeyValueList(events, Instant.EPOCH, Duration.ZERO);
 
             assertEquals(expected.size(), processor.theCapturedProcessor().processed().size());
-            assertArrayEquals(expected.toArray(), processor.theCapturedProcessor().processed().toArray());
+            assertIterableEquals(expected, processor.theCapturedProcessor().processed());
+
+            final MetricName dropTotal = droppedRecordsTotalMetric();
+            final MetricName dropRate = droppedRecordsRateMetric();
+
+            assertEquals(1.0, driver.metrics().get(dropTotal).metricValue());
+            assertTrue((Double) driver.metrics().get(dropRate).metricValue() > 0.0);
         }
     }
 
@@ -181,7 +203,13 @@ public class ProcessingExceptionHandlerTest {
 
             assertEquals("Exception should be handled by processing exception handler", exception.getCause().getMessage());
             assertEquals(0, processor.theCapturedProcessor().processed().size());
-            assertArrayEquals(expected.toArray(), processor.theCapturedProcessor().processed().toArray());
+            assertIterableEquals(expected, processor.theCapturedProcessor().processed());
+
+            final MetricName dropTotal = droppedRecordsTotalMetric();
+            final MetricName dropRate = droppedRecordsRateMetric();
+
+            assertEquals(0.0, driver.metrics().get(dropTotal).metricValue());
+            assertEquals(0.0, driver.metrics().get(dropRate).metricValue());
         }
     }
 
@@ -216,7 +244,13 @@ public class ProcessingExceptionHandlerTest {
 
             assertEquals("Exception should be handled by processing exception handler", exception.getCause().getMessage());
             assertEquals(expected.size(), processor.theCapturedProcessor().processed().size());
-            assertArrayEquals(expected.toArray(), processor.theCapturedProcessor().processed().toArray());
+            assertIterableEquals(expected, processor.theCapturedProcessor().processed());
+
+            final MetricName dropTotal = droppedRecordsTotalMetric();
+            final MetricName dropRate = droppedRecordsRateMetric();
+
+            assertEquals(0.0, driver.metrics().get(dropTotal).metricValue());
+            assertEquals(0.0, driver.metrics().get(dropRate).metricValue());
         }
     }
 
@@ -253,7 +287,13 @@ public class ProcessingExceptionHandlerTest {
 
             assertEquals("Exception should be handled by processing exception handler", exception.getCause().getMessage());
             assertEquals(expected.size(), processor.theCapturedProcessor().processed().size());
-            assertArrayEquals(expected.toArray(), processor.theCapturedProcessor().processed().toArray());
+            assertIterableEquals(expected, processor.theCapturedProcessor().processed());
+
+            final MetricName dropTotal = droppedRecordsTotalMetric();
+            final MetricName dropRate = droppedRecordsRateMetric();
+
+            assertEquals(0.0, driver.metrics().get(dropTotal).metricValue());
+            assertEquals(0.0, driver.metrics().get(dropRate).metricValue());
         }
     }
 
@@ -286,9 +326,16 @@ public class ProcessingExceptionHandlerTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), properties, Instant.ofEpochMilli(0L))) {
             final TestInputTopic<String, String> inputTopic = driver.createInputTopic("TOPIC_NAME", new StringSerializer(), new StringSerializer());
             inputTopic.pipeKeyValueList(events, Instant.EPOCH, Duration.ZERO);
+            driver.advanceWallClockTime(Duration.ofSeconds(2));
 
             assertEquals(expected.size(), processor.theCapturedProcessor().processed().size());
-            assertArrayEquals(expected.toArray(), processor.theCapturedProcessor().processed().toArray());
+            assertIterableEquals(expected, processor.theCapturedProcessor().processed());
+
+            final MetricName dropTotal = droppedRecordsTotalMetric();
+            final MetricName dropRate = droppedRecordsRateMetric();
+
+            assertEquals(1.0, driver.metrics().get(dropTotal).metricValue());
+            assertTrue((Double) driver.metrics().get(dropRate).metricValue() > 0.0);
         }
     }
 
@@ -328,7 +375,13 @@ public class ProcessingExceptionHandlerTest {
 
             assertEquals("Exception should be handled by processing exception handler", exception.getCause().getMessage());
             assertEquals(expected.size(), processor.theCapturedProcessor().processed().size());
-            assertArrayEquals(expected.toArray(), processor.theCapturedProcessor().processed().toArray());
+            assertIterableEquals(expected, processor.theCapturedProcessor().processed());
+
+            final MetricName dropTotal = droppedRecordsTotalMetric();
+            final MetricName dropRate = droppedRecordsRateMetric();
+
+            assertEquals(0.0, driver.metrics().get(dropTotal).metricValue());
+            assertEquals(0.0, driver.metrics().get(dropRate).metricValue());
         }
     }
 
@@ -408,6 +461,40 @@ public class ProcessingExceptionHandlerTest {
         public void configure(final Map<String, ?> configs) {
             // No-op
         }
+    }
+
+    /**
+     * Metric name for dropped records total.
+     *
+     * @return the metric name
+     */
+    private MetricName droppedRecordsTotalMetric() {
+        return new MetricName(
+            "dropped-records-total",
+            "stream-task-metrics",
+            "The total number of dropped records",
+            mkMap(
+                mkEntry("thread-id", threadId),
+                mkEntry("task-id", "0_0")
+            )
+        );
+    }
+
+    /**
+     * Metric name for dropped records rate.
+     *
+     * @return the metric name
+     */
+    private MetricName droppedRecordsRateMetric() {
+        return new MetricName(
+            "dropped-records-rate",
+            "stream-task-metrics",
+            "The average number of dropped records per second",
+            mkMap(
+                mkEntry("thread-id", threadId),
+                mkEntry("task-id", "0_0")
+            )
+        );
     }
 
     /**

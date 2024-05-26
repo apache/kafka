@@ -656,26 +656,8 @@ public class ProcessorContextImplTest {
 
         context.forward("key", "value");
 
-        final MetricName dropTotal;
-        final MetricName dropRate;
-        dropTotal = new MetricName(
-            "dropped-records-total",
-            "stream-task-metrics",
-            "The total number of dropped records",
-            mkMap(
-                mkEntry("thread-id", threadId),
-                mkEntry("task-id", "0_0")
-            )
-        );
-        dropRate = new MetricName(
-            "dropped-records-rate",
-            "stream-task-metrics",
-            "The average number of dropped records per second",
-            mkMap(
-                mkEntry("thread-id", threadId),
-                mkEntry("task-id", "0_0")
-            )
-        );
+        final MetricName dropTotal = droppedRecordsTotalMetric();
+        final MetricName dropRate = droppedRecordsRateMetric();
 
         assertEquals(1.0, metrics.metrics().get(dropTotal).metricValue());
         assertTrue((Double) metrics.metrics().get(dropRate).metricValue() > 0.0);
@@ -729,26 +711,8 @@ public class ProcessorContextImplTest {
             + "If you would rather have the streaming pipeline continue after a processing error, "
             + "please set the processing.exception.handler appropriately.", exception.getMessage());
 
-        final MetricName dropTotal;
-        final MetricName dropRate;
-        dropTotal = new MetricName(
-            "dropped-records-total",
-            "stream-task-metrics",
-            "The total number of dropped records",
-            mkMap(
-                mkEntry("thread-id", threadId),
-                mkEntry("task-id", "0_0")
-            )
-        );
-        dropRate = new MetricName(
-            "dropped-records-rate",
-            "stream-task-metrics",
-            "The average number of dropped records per second",
-            mkMap(
-                mkEntry("thread-id", threadId),
-                mkEntry("task-id", "0_0")
-            )
-        );
+        final MetricName dropTotal = droppedRecordsTotalMetric();
+        final MetricName dropRate = droppedRecordsRateMetric();
 
         assertEquals(0.0, metrics.metrics().get(dropTotal).metricValue());
         assertEquals(0.0, metrics.metrics().get(dropRate).metricValue());
@@ -779,6 +743,40 @@ public class ProcessorContextImplTest {
                 // No-op
             }
         };
+    }
+
+    /**
+     * Metric name for dropped records total.
+     *
+     * @return the metric name
+     */
+    private MetricName droppedRecordsTotalMetric() {
+        return new MetricName(
+            "dropped-records-total",
+            "stream-task-metrics",
+            "The total number of dropped records",
+            mkMap(
+                mkEntry("thread-id", threadId),
+                mkEntry("task-id", "0_0")
+            )
+        );
+    }
+
+    /**
+     * Metric name for dropped records rate.
+     *
+     * @return the metric name
+     */
+    private MetricName droppedRecordsRateMetric() {
+        return new MetricName(
+            "dropped-records-rate",
+            "stream-task-metrics",
+            "The average number of dropped records per second",
+            mkMap(
+                mkEntry("thread-id", threadId),
+                mkEntry("task-id", "0_0")
+            )
+        );
     }
 
     @SuppressWarnings("unchecked")

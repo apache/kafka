@@ -102,6 +102,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private final Sensor restoreRemainingSensor;
     private final Sensor punctuateLatencySensor;
     private final Sensor bufferedRecordsSensor;
+    private final Sensor droppedRecordsSensor;
     private final Map<String, Sensor> e2eLatencySensors = new HashMap<>();
 
     private final RecordQueueCreator recordQueueCreator;
@@ -162,6 +163,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         processLatencySensor = TaskMetrics.processLatencySensor(threadId, taskId, streamsMetrics);
         punctuateLatencySensor = TaskMetrics.punctuateSensor(threadId, taskId, streamsMetrics);
         bufferedRecordsSensor = TaskMetrics.activeBufferedRecordsSensor(threadId, taskId, streamsMetrics);
+        droppedRecordsSensor = TaskMetrics.droppedRecordsSensor(threadId, taskId, streamsMetrics);
 
         for (final String terminalNodeName : topology.terminalNodes()) {
             e2eLatencySensors.put(
@@ -925,6 +927,15 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     " continue after a processing error, please set the " +
                     PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.", logPrefix, node.name()),
                     e);
+            } else {
+                log.warn(
+                    "Skipping punctuation due to processing error. topic=[{}] partition=[{}] offset=[{}]",
+                    recordContext.topic(),
+                    recordContext.partition(),
+                    recordContext.offset(),
+                    e
+                );
+                droppedRecordsSensor.record();
             }
         } finally {
             processorContext.setCurrentNode(null);
