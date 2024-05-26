@@ -63,9 +63,9 @@ public class RequestManager {
     /**
      * Returns true if there any connection with pending requests.
      *
-     * This is useful for satisfying the invariant that there are only one pending Fetch request.
+     * This is useful for satisfying the invariant that there is only one pending Fetch request.
      * If there are more than one pending fetch request, it is possible for the follower to write
-     * the name offset twice.
+     * the same offset twice.
      *
      * @param currentTimeMs the current time
      * @return true if the request manager is tracking at least one request
@@ -96,8 +96,8 @@ public class RequestManager {
     /**
      * Returns a random bootstrap node that is ready to receive a request.
      *
-     * This method doesn't return a node if there at least one request pending. In general this
-     * method is used to send Fetch requests. Fetch request have the invariant that there can
+     * This method doesn't return a node if there is at least one request pending. In general this
+     * method is used to send Fetch requests. Fetch requests have the invariant that there can
      * only be one pending Fetch request for the LEO.
      *
      * @param currentTimeMs the current time

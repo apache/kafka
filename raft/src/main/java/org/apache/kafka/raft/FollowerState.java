@@ -40,9 +40,6 @@ public class FollowerState implements EpochState {
      */
     private Optional<RawSnapshotWriter> fetchingSnapshot = Optional.empty();
 
-    // TODO: remove this when done debuggin CI failures
-    private Optional<RaftResponse.Inbound> previousFetchResponse = Optional.empty();
-
     private final Logger log;
 
     public FollowerState(
@@ -152,14 +149,6 @@ public class FollowerState implements EpochState {
     public void setFetchingSnapshot(Optional<RawSnapshotWriter> newSnapshot) {
         fetchingSnapshot.ifPresent(RawSnapshotWriter::close);
         fetchingSnapshot = newSnapshot;
-    }
-
-    public Optional<RaftResponse.Inbound> previousFetchResponse() {
-        return previousFetchResponse;
-    }
-
-    public void setPreviousFetchResponse(RaftResponse.Inbound fetchResponse) {
-        previousFetchResponse = Optional.of(fetchResponse);
     }
 
     @Override

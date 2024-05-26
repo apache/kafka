@@ -1286,22 +1286,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
             } else {
                 Records records = FetchResponse.recordsOrFail(partitionResponse);
                 if (records.sizeInBytes() > 0) {
-                    // TODO: remove all of this code when done debugging
-                    try {
-                        appendAsFollower(records);
-
-                        state.setPreviousFetchResponse(responseMetadata);
-                    } catch (RuntimeException e) {
-                        logger.error("Previous response was {}", state.previousFetchResponse());
-                        logger.error("Failed response is {}", responseMetadata);
-
-                        String errorMessage = String.format(
-                            "Previous response was: %s%nFailed response is %s",
-                            state.previousFetchResponse(),
-                            responseMetadata
-                        );
-                        throw new IllegalStateException(errorMessage, e);
-                    }
+                    appendAsFollower(records);
                 }
 
                 OptionalLong highWatermark = partitionResponse.highWatermark() < 0 ?
@@ -1935,8 +1920,6 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
             requestManager.onRequestSent(destination, correlationId, currentTimeMs);
             channel.send(requestMessage);
             logger.trace("Sent outbound request: {}", requestMessage);
-
-            return requestManager.remainingRequestTimeMs(destination, currentTimeMs);
         }
 
         return requestManager.remainingRequestTimeMs(destination, currentTimeMs);

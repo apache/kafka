@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.raft;
 
-import java.util.Optional;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.protocol.ApiMessage;
 
@@ -41,20 +40,10 @@ public abstract class RaftResponse implements RaftMessage {
 
     public final static class Inbound extends RaftResponse {
         private final Node source;
-        // TODO: remove this code
-        private final Optional<RaftRequest.Outbound> request;
 
         public Inbound(int correlationId, ApiMessage data, Node source) {
             super(correlationId, data);
             this.source = source;
-            this.request = Optional.empty();
-        }
-
-        // TODO: remove this code
-        public Inbound(int correlationId, ApiMessage data, Node source, RaftRequest.Outbound request) {
-            super(correlationId, data);
-            this.source = source;
-            this.request = Optional.of(request);
         }
 
         public Node source() {
@@ -64,11 +53,10 @@ public abstract class RaftResponse implements RaftMessage {
         @Override
         public String toString() {
             return String.format(
-                "InboundResponse(correlationId=%d, data=%s, source=%s, request=%s)",
+                "InboundResponse(correlationId=%d, data=%s, source=%s)",
                 correlationId(),
                 data(),
-                source,
-                request
+                source
             );
         }
     }

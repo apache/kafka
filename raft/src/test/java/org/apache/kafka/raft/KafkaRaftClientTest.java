@@ -1563,7 +1563,10 @@ public class KafkaRaftClientTest {
     }
 
     @Test
-    public void testObserverHandleRetryFetchResponse() throws Exception {
+    public void testObserverHandleRetryFetchtToBootstrapServer() throws Exception {
+        // This test tries to check that KRaft is able to handle a retrying Fetch request to
+        // a boostrap server after a Fetch request to the leader.
+
         int localId = 0;
         int leaderId = 1;
         int otherNodeId = 2;
@@ -1633,7 +1636,10 @@ public class KafkaRaftClientTest {
     }
 
     @Test
-    public void testObserverHandleRetryFetchResponse2() throws Exception {
+    public void testObserverHandleRetryFetchToLeader() throws Exception {
+        // This test tries to check that KRaft is able to handle a retrying Fetch request to
+        // the leader after a Fetch request to the bootstrap server.
+
         int localId = 0;
         int leaderId = 1;
         int otherNodeId = 2;
@@ -2195,7 +2201,7 @@ public class KafkaRaftClientTest {
         // voter connection will be backing off.
         RaftRequest.Outbound fetchRequest2 = context.assertSentFetchRequest();
         assertNotEquals(leaderId, fetchRequest2.destination().id());
-        assertTrue(Arrays.asList(-2, -3).contains(fetchRequest2.destination().id()));
+        assertTrue(context.bootstrapIds.contains(fetchRequest2.destination().id()));
         context.assertFetchRequestData(fetchRequest2, epoch, 0L, 0);
 
         context.deliverResponse(
