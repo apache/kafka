@@ -22,9 +22,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TaskId;
 
 public class ErrorHandlerContextImpl implements ErrorHandlerContext {
-
     private InternalProcessorContext processorContext;
-
     private final String topic;
     private final int partition;
     private final long offset;

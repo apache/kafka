@@ -20,6 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
@@ -35,10 +36,13 @@ import org.apache.kafka.streams.processor.api.FixedKeyRecord;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.metrics.TaskMetrics;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.internals.PositionSerde;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.state.internals.ThreadCache.DirtyEntryFlushListener;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.HashMap;
@@ -53,6 +57,8 @@ import static org.apache.kafka.streams.processor.internals.AbstractReadOnlyDecor
 import static org.apache.kafka.streams.processor.internals.AbstractReadWriteDecorator.getReadWriteStore;
 
 public class ProcessorContextImpl extends AbstractProcessorContext<Object, Object> implements RecordCollector.Supplier {
+    private static final Logger log = LoggerFactory.getLogger(ProcessorContextImpl.class);
+
     // the below are null for standby tasks
     private StreamTask streamTask;
     private RecordCollector collector;
@@ -64,6 +70,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
     private boolean processingExceptionOccurred;
 
     final Map<String, DirtyEntryFlushListener> cacheNameToFlushListener = new HashMap<>();
+    private final Sensor droppedRecordsSensor;
 
     @SuppressWarnings("this-escape")
     public ProcessorContextImpl(final TaskId id,
@@ -78,6 +85,9 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
                 IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
                 false);
         processingExceptionHandler = config.processingExceptionHandler();
+
+        final String threadId = Thread.currentThread().getName();
+        droppedRecordsSensor = TaskMetrics.droppedRecordsSensor(threadId, taskId().toString(), metrics());
     }
 
     @Override
@@ -316,6 +326,15 @@ public class ProcessorContextImpl extends AbstractProcessorContext<Object, Objec
                             " continue after a processing error, please set the " +
                             PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.",
                             e);
+                } else {
+                    log.warn(
+                        "Skipping record due to processing error. topic=[{}] partition=[{}] offset=[{}]",
+                        topic(),
+                        partition(),
+                        offset(),
+                        e
+                    );
+                    droppedRecordsSensor.record();
                 }
             }
         }

@@ -17,23 +17,18 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.serialization.IntegerSerializer;
-import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.KeyValueTimestamp;
-import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.TestInputTopic;
-import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ErrorHandlerContext;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -43,14 +38,9 @@ import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.api.Processor;
-import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.processor.internals.testutil.LogAndContinueOnInvalidProcessor;
-import org.apache.kafka.streams.processor.internals.testutil.LogAndContinueOnInvalidPunctuate;
-import org.apache.kafka.streams.processor.internals.testutil.LogAndFailOnInvalidProcessor;
-import org.apache.kafka.streams.processor.internals.testutil.LogAndFailOnInvalidPunctuate;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -62,17 +52,13 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.PositionSerde;
 import org.apache.kafka.streams.state.internals.ThreadCache;
-import org.apache.kafka.test.MockProcessorSupplier;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.time.Duration;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -80,7 +66,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
-import java.util.Properties;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -106,6 +91,10 @@ public class ProcessorContextImplTest {
     private ProcessorContextImpl context;
 
     private final StreamsConfig streamsConfig = streamsConfigMock();
+
+    private final Metrics metrics = new Metrics();
+    private final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST, new MockTime());
+    private final String threadId = Thread.currentThread().getName();
 
     @Mock
     private RecordCollector recordCollector;
@@ -180,7 +169,7 @@ public class ProcessorContextImplTest {
             mock(TaskId.class),
             streamsConfig,
             stateManager,
-            mock(StreamsMetricsImpl.class),
+            streamsMetrics,
             mock(ThreadCache.class)
         );
 
@@ -212,7 +201,7 @@ public class ProcessorContextImplTest {
             mock(TaskId.class),
             streamsConfig,
             stateManager,
-            mock(StreamsMetricsImpl.class),
+            streamsMetrics,
             mock(ThreadCache.class)
         );
     }
@@ -451,7 +440,7 @@ public class ProcessorContextImplTest {
                 mock(TaskId.class),
                 streamsConfigWithConsistencyMock(),
                 stateManager,
-                mock(StreamsMetricsImpl.class),
+                streamsMetrics,
                 mock(ThreadCache.class)
         );
 
@@ -624,35 +613,25 @@ public class ProcessorContextImplTest {
 
     @Test
     public void shouldContinueOnProcessingExceptions() {
-        when(streamsConfig.processingExceptionHandler()).thenReturn(new ProcessingExceptionHandler() {
-            @Override
-            public ProcessingHandlerResponse handle(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
-                assertArrayEquals(new byte[] {107, 101, 121}, context.sourceRawKey());
-                assertArrayEquals(new byte[] {118, 97, 108, 117, 101}, context.sourceRawValue());
-                assertEquals("fakeChild", context.processorNodeId());
-                assertEquals("key", record.key());
-                assertEquals("value", record.value());
-                assertEquals("Exception should be handled by processing exception handler", exception.getMessage());
+        when(streamsConfig.processingExceptionHandler())
+            .thenReturn(processingExceptionHandlerMock(ProcessingExceptionHandler.ProcessingHandlerResponse.CONTINUE));
 
-                return ProcessingHandlerResponse.CONTINUE;
-            }
+        final TaskId taskId = mock(TaskId.class);
+        when(taskId.toString()).thenReturn("0_0");
 
-            @Override
-            public void configure(final Map<String, ?> configs) {
-                // No-op
-            }
-        });
+        final StreamTask task = mock(StreamTask.class);
+        when(task.rawRecord()).thenReturn(new ConsumerRecord<>("topic", 0, 0, KEY_BYTES.get(), VALUE_BYTES));
 
-        context = new ProcessorContextImpl(
-            mock(TaskId.class),
+        final Metrics metrics = new Metrics();
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST, new MockTime());
+        final ProcessorContextImpl context = new ProcessorContextImpl(
+            taskId,
             streamsConfig,
             stateManager,
-            mock(StreamsMetricsImpl.class),
+            streamsMetrics,
             mock(ThreadCache.class)
         );
 
-        final StreamTask task = mock(StreamTask.class);
-        when(task.rawRecord()).thenReturn(new ConsumerRecord<>("topic", 0, 0, "key".getBytes(), "value".getBytes()));
         context.transitionToActive(task, null, null);
 
         final ProcessorNode<String, Long, Object, Object> processorNode = new ProcessorNode<>(
@@ -676,39 +655,53 @@ public class ProcessorContextImplTest {
         context.setCurrentNode(processorNode);
 
         context.forward("key", "value");
+
+        final MetricName dropTotal;
+        final MetricName dropRate;
+        dropTotal = new MetricName(
+            "dropped-records-total",
+            "stream-task-metrics",
+            "The total number of dropped records",
+            mkMap(
+                mkEntry("thread-id", threadId),
+                mkEntry("task-id", "0_0")
+            )
+        );
+        dropRate = new MetricName(
+            "dropped-records-rate",
+            "stream-task-metrics",
+            "The average number of dropped records per second",
+            mkMap(
+                mkEntry("thread-id", threadId),
+                mkEntry("task-id", "0_0")
+            )
+        );
+
+        assertEquals(1.0, metrics.metrics().get(dropTotal).metricValue());
+        assertTrue((Double) metrics.metrics().get(dropRate).metricValue() > 0.0);
     }
 
     @Test
     public void shouldFailOnProcessingExceptions() {
-        when(streamsConfig.processingExceptionHandler()).thenReturn(new ProcessingExceptionHandler() {
-            @Override
-            public ProcessingHandlerResponse handle(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
-                assertArrayEquals(new byte[] {107, 101, 121}, context.sourceRawKey());
-                assertArrayEquals(new byte[] {118, 97, 108, 117, 101}, context.sourceRawValue());
-                assertEquals("fakeChild", context.processorNodeId());
-                assertEquals("key", record.key());
-                assertEquals("value", record.value());
-                assertEquals("Exception should be handled by processing exception handler", exception.getMessage());
+        when(streamsConfig.processingExceptionHandler())
+            .thenReturn(processingExceptionHandlerMock(ProcessingExceptionHandler.ProcessingHandlerResponse.FAIL));
 
-                return ProcessingHandlerResponse.FAIL;
-            }
+        final TaskId taskId = mock(TaskId.class);
+        when(taskId.toString()).thenReturn("0_0");
 
-            @Override
-            public void configure(final Map<String, ?> configs) {
-                // No-op
-            }
-        });
+        final StreamTask task = mock(StreamTask.class);
+        when(task.rawRecord()).thenReturn(new ConsumerRecord<>("topic", 0, 0, KEY_BYTES.get(), VALUE_BYTES));
 
-        context = new ProcessorContextImpl(
-            mock(TaskId.class),
+        final Metrics metrics = new Metrics();
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST, new MockTime());
+        final ProcessorContextImpl context = new ProcessorContextImpl(
+            taskId,
             streamsConfig,
             stateManager,
-            mock(StreamsMetricsImpl.class),
+            streamsMetrics,
             mock(ThreadCache.class)
         );
 
-        final StreamTask task = mock(StreamTask.class);
-        when(task.rawRecord()).thenReturn(new ConsumerRecord<>("topic", 0, 0, "key".getBytes(), "value".getBytes()));
         context.transitionToActive(task, null, null);
 
         final ProcessorNode<String, Long, Object, Object> processorNode = new ProcessorNode<>(
@@ -735,488 +728,59 @@ public class ProcessorContextImplTest {
         assertEquals("Processing exception handler is set to fail upon a processing error. "
             + "If you would rather have the streaming pipeline continue after a processing error, "
             + "please set the processing.exception.handler appropriately.", exception.getMessage());
+
+        final MetricName dropTotal;
+        final MetricName dropRate;
+        dropTotal = new MetricName(
+            "dropped-records-total",
+            "stream-task-metrics",
+            "The total number of dropped records",
+            mkMap(
+                mkEntry("thread-id", threadId),
+                mkEntry("task-id", "0_0")
+            )
+        );
+        dropRate = new MetricName(
+            "dropped-records-rate",
+            "stream-task-metrics",
+            "The average number of dropped records per second",
+            mkMap(
+                mkEntry("thread-id", threadId),
+                mkEntry("task-id", "0_0")
+            )
+        );
+
+        assertEquals(0.0, metrics.metrics().get(dropTotal).metricValue());
+        assertEquals(0.0, metrics.metrics().get(dropRate).metricValue());
     }
 
-    @Test
-    public void shouldContinueInProcessorOnProcessingRecordAtBeginningExceptions() {
+    /**
+     * Processing exception handler mock
+     *
+     * @param response the processing handler response
+     * @return the processing exception handler mock
+     */
+    private ProcessingExceptionHandler processingExceptionHandlerMock(final ProcessingExceptionHandler.ProcessingHandlerResponse response) {
+        return new ProcessingExceptionHandler() {
+            @Override
+            public ProcessingHandlerResponse handle(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception) {
+                assertArrayEquals(KEY_BYTES.get(), context.sourceRawKey());
+                assertArrayEquals(VALUE_BYTES, context.sourceRawValue());
+                assertEquals("fakeChild", context.processorNodeId());
+                assertEquals("key", record.key());
+                assertEquals("value", record.value());
+                assertEquals("Exception should be handled by processing exception handler", exception.getMessage());
 
-        final int[] expectedKeys = {0, 1, 2, 10};
-
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final ProcessorSupplier<Number, Number, String, String> processorSupplier =
-                () -> new Processor<Number, Number, String, String>() {
-
-                    org.apache.kafka.streams.processor.api.ProcessorContext<String, String> context;
-
-                    @Override
-                    public void init(org.apache.kafka.streams.processor.api.ProcessorContext<String, String> context) {
-                        this.context = context;
-                    }
-
-                    @Override
-                    public void process(Record<Number, Number> record) {
-                        int value = 100 / (10 * record.value().intValue());
-                        context.forward(new Record<>(record.key().toString(), Integer.toString(value), record.timestamp()));
-                    }
-
-                    @Override
-                    public void close() {
-                    }
-                };
-
-        final MockProcessorSupplier<String, String, Void, Void> processor = new MockProcessorSupplier<>();
-        final KStream<Integer, Integer> stream = builder.stream("TOPIC_NAME", Consumed.with(Serdes.Integer(), Serdes.Integer()));
-        stream.process(processorSupplier).process(processor);
-
-        Properties properties = new Properties();
-        properties.put("processing.exception.handler", LogAndContinueOnInvalidProcessor.class);
-
-        try (final TopologyTestDriver driver = new TopologyTestDriver(
-                builder.build(), properties,
-                Instant.ofEpochMilli(0L))) {
-            final TestInputTopic<Integer, Integer> inputTopic =
-                    driver.createInputTopic("TOPIC_NAME", new IntegerSerializer(), new IntegerSerializer());
-
-            for (final int expectedKey : expectedKeys) {
-                inputTopic.pipeInput(expectedKey, expectedKey, 0);
+                return response;
             }
 
-            final KeyValueTimestamp[] expected = {
-                    new KeyValueTimestamp<>("1", "10", 0),
-                    new KeyValueTimestamp<>("2", "5", 0),
-                    new KeyValueTimestamp<>("10", "1", 0),
-            };
-            assertEquals(expected.length, processor.theCapturedProcessor().processed().size());
-            for (int i = 0; i < expected.length; i++) {
-                assertEquals(expected[i], processor.theCapturedProcessor().processed().get(i));
+            @Override
+            public void configure(final Map<String, ?> configs) {
+                // No-op
             }
-        }
+        };
     }
 
-    @Test
-    public void shouldContinueInProcessorOnProcessingRecordInMiddleExceptions() {
-
-        final int[] expectedKeys = {1, 0, 2, 10};
-
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final ProcessorSupplier<Number, Number, String, String> processorSupplier =
-                () -> new Processor<Number, Number, String, String>() {
-
-                    org.apache.kafka.streams.processor.api.ProcessorContext<String, String> context;
-
-                    @Override
-                    public void init(org.apache.kafka.streams.processor.api.ProcessorContext<String, String> context) {
-                        this.context = context;
-                    }
-
-                    @Override
-                    public void process(Record<Number, Number> record) {
-                        int value = 100 / (10 * record.value().intValue());
-                        context.forward(new Record<>(record.key().toString(), Integer.toString(value), record.timestamp()));
-                    }
-
-                    @Override
-                    public void close() {
-                    }
-                };
-
-        final MockProcessorSupplier<String, String, Void, Void> processor = new MockProcessorSupplier<>();
-        final KStream<Integer, Integer> stream = builder.stream("TOPIC_NAME", Consumed.with(Serdes.Integer(), Serdes.Integer()));
-        stream.process(processorSupplier).process(processor);
-
-        Properties properties = new Properties();
-        properties.put("processing.exception.handler", LogAndContinueOnInvalidProcessor.class);
-
-        try (final TopologyTestDriver driver = new TopologyTestDriver(
-                builder.build(), properties,
-                Instant.ofEpochMilli(0L))) {
-            final TestInputTopic<Integer, Integer> inputTopic =
-                    driver.createInputTopic("TOPIC_NAME", new IntegerSerializer(), new IntegerSerializer());
-
-            for (final int expectedKey : expectedKeys) {
-                inputTopic.pipeInput(expectedKey, expectedKey, 0);
-            }
-
-            final KeyValueTimestamp[] expected = {
-                    new KeyValueTimestamp<>("1", "10", 0),
-                    new KeyValueTimestamp<>("2", "5", 0),
-                    new KeyValueTimestamp<>("10", "1", 0),
-            };
-            assertEquals(expected.length, processor.theCapturedProcessor().processed().size());
-            for (int i = 0; i < expected.length; i++) {
-                assertEquals(expected[i], processor.theCapturedProcessor().processed().get(i));
-            }
-        }
-    }
-
-    @Test
-    public void shouldContinueInProcessorOnProcessingRecordAtEndExceptions() {
-
-        final int[] expectedKeys = {1, 2, 10, 0};
-
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final ProcessorSupplier<Number, Number, String, String> processorSupplier =
-                () -> new Processor<Number, Number, String, String>() {
-
-                    org.apache.kafka.streams.processor.api.ProcessorContext<String, String> context;
-
-                    @Override
-                    public void init(org.apache.kafka.streams.processor.api.ProcessorContext<String, String> context) {
-                        this.context = context;
-                    }
-
-                    @Override
-                    public void process(Record<Number, Number> record) {
-                        int value = 100 / (10 * record.value().intValue());
-                        context.forward(new Record<>(record.key().toString(), Integer.toString(value), record.timestamp()));
-                    }
-
-                    @Override
-                    public void close() {
-                    }
-                };
-
-
-        final MockProcessorSupplier<String, String, Void, Void> processor = new MockProcessorSupplier<>();
-        final KStream<Integer, Integer> stream = builder.stream("TOPIC_NAME", Consumed.with(Serdes.Integer(), Serdes.Integer()));
-        stream.process(processorSupplier).process(processor);
-
-        Properties properties = new Properties();
-        properties.put("processing.exception.handler", LogAndContinueOnInvalidProcessor.class);
-
-        try (final TopologyTestDriver driver = new TopologyTestDriver(
-                builder.build(), properties,
-                Instant.ofEpochMilli(0L))) {
-            final TestInputTopic<Integer, Integer> inputTopic =
-                    driver.createInputTopic("TOPIC_NAME", new IntegerSerializer(), new IntegerSerializer());
-
-            for (final int expectedKey : expectedKeys) {
-                inputTopic.pipeInput(expectedKey, expectedKey, 0);
-            }
-
-            final KeyValueTimestamp[] expected = {
-                    new KeyValueTimestamp<>("1", "10", 0),
-                    new KeyValueTimestamp<>("2", "5", 0),
-                    new KeyValueTimestamp<>("10", "1", 0),
-            };
-            assertEquals(expected.length, processor.theCapturedProcessor().processed().size());
-            for (int i = 0; i < expected.length; i++) {
-                assertEquals(expected[i], processor.theCapturedProcessor().processed().get(i));
-            }
-        }
-    }
-
-    @Test
-    public void shouldFailInProcessorOnProcessingRecordAtBeginningExceptions() {
-
-        final int[] expectedKeys = {0, 1, 2, 10};
-
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final ProcessorSupplier<Number, Number, String, String> processorSupplier =
-                () -> new Processor<Number, Number, String, String>() {
-
-                    org.apache.kafka.streams.processor.api.ProcessorContext<String, String> context;
-
-                    @Override
-                    public void init(org.apache.kafka.streams.processor.api.ProcessorContext<String, String> context) {
-                        this.context = context;
-                    }
-
-                    @Override
-                    public void process(Record<Number, Number> record) {
-                        int value = 100 / (10 * record.value().intValue());
-                        context.forward(new Record<>(record.key().toString(), Integer.toString(value), record.timestamp()));
-                    }
-
-                    @Override
-                    public void close() {
-                    }
-                };
-
-        final MockProcessorSupplier<String, String, Void, Void> processor = new MockProcessorSupplier<>();
-        final KStream<Integer, Integer> stream = builder.stream("TOPIC_NAME", Consumed.with(Serdes.Integer(), Serdes.Integer()));
-        stream.process(processorSupplier).process(processor);
-
-        Properties properties = new Properties();
-        properties.put("processing.exception.handler", LogAndFailOnInvalidProcessor.class);
-
-        try (final TopologyTestDriver driver = new TopologyTestDriver(
-                builder.build(), properties,
-                Instant.ofEpochMilli(0L))) {
-            final TestInputTopic<Integer, Integer> inputTopic =
-                    driver.createInputTopic("TOPIC_NAME", new IntegerSerializer(), new IntegerSerializer());
-
-            try {
-                for (final int expectedKey : expectedKeys) {
-                    inputTopic.pipeInput(expectedKey, expectedKey, 0);
-                }
-            } catch (Exception exception) {
-                StringWriter sw = new StringWriter();
-                PrintWriter pw = new PrintWriter(sw);
-                exception.printStackTrace(pw);
-                assertTrue(sw.toString().contains("java.lang.ArithmeticException: / by zero"));
-            }
-            final KeyValueTimestamp[] expected = {};
-            assertEquals(0, processor.theCapturedProcessor().processed().size());
-        }
-    }
-
-    @Test
-    public void shouldFailInProcessorOnProcessingRecordInMiddleExceptions() {
-
-        final int[] expectedKeys = {1, 0, 2, 10};
-
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final ProcessorSupplier<Number, Number, String, String> processorSupplier =
-                () -> new Processor<Number, Number, String, String>() {
-
-                    org.apache.kafka.streams.processor.api.ProcessorContext<String, String> context;
-
-                    @Override
-                    public void init(org.apache.kafka.streams.processor.api.ProcessorContext<String, String> context) {
-                        this.context = context;
-                    }
-
-                    @Override
-                    public void process(Record<Number, Number> record) {
-                        int value = 100 / (10 * record.value().intValue());
-                        context.forward(new Record<>(record.key().toString(), Integer.toString(value), record.timestamp()));
-                    }
-
-                    @Override
-                    public void close() {
-                    }
-                };
-
-        final MockProcessorSupplier<String, String, Void, Void> processor = new MockProcessorSupplier<>();
-        final KStream<Integer, Integer> stream = builder.stream("TOPIC_NAME", Consumed.with(Serdes.Integer(), Serdes.Integer()));
-        stream.process(processorSupplier).process(processor);
-
-        Properties properties = new Properties();
-        properties.put("processing.exception.handler", LogAndFailOnInvalidProcessor.class);
-
-        try (final TopologyTestDriver driver = new TopologyTestDriver(
-                builder.build(), properties,
-                Instant.ofEpochMilli(0L))) {
-            final TestInputTopic<Integer, Integer> inputTopic =
-                    driver.createInputTopic("TOPIC_NAME", new IntegerSerializer(), new IntegerSerializer());
-
-            try {
-                for (final int expectedKey : expectedKeys) {
-                    inputTopic.pipeInput(expectedKey, expectedKey, 0);
-                }
-            } catch (Exception exception) {
-                StringWriter sw = new StringWriter();
-                PrintWriter pw = new PrintWriter(sw);
-                exception.printStackTrace(pw);
-                assertTrue(sw.toString().contains("java.lang.ArithmeticException: / by zero"));
-            }
-            final KeyValueTimestamp[] expected = {
-                    new KeyValueTimestamp<>("1", "10", 0),
-            };
-            assertEquals(expected.length, processor.theCapturedProcessor().processed().size());
-            for (int i = 0; i < expected.length; i++) {
-                assertEquals(expected[i], processor.theCapturedProcessor().processed().get(i));
-            }
-        }
-    }
-
-    @Test
-    public void shouldFailInProcessorOnProcessingRecordAtEndExceptions() {
-
-        final int[] expectedKeys = {1, 2, 10, 0};
-
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final ProcessorSupplier<Number, Number, String, String> processorSupplier =
-                () -> new Processor<Number, Number, String, String>() {
-
-                    org.apache.kafka.streams.processor.api.ProcessorContext<String, String> context;
-
-                    @Override
-                    public void init(org.apache.kafka.streams.processor.api.ProcessorContext<String, String> context) {
-                        this.context = context;
-                    }
-
-                    @Override
-                    public void process(Record<Number, Number> record) {
-                        int value = 100 / (10 * record.value().intValue());
-                        context.forward(new Record<>(record.key().toString(), Integer.toString(value), record.timestamp()));
-                    }
-
-                    @Override
-                    public void close() {
-                    }
-                };
-
-
-        final MockProcessorSupplier<String, String, Void, Void> processor = new MockProcessorSupplier<>();
-        final KStream<Integer, Integer> stream = builder.stream("TOPIC_NAME", Consumed.with(Serdes.Integer(), Serdes.Integer()));
-        stream.process(processorSupplier).process(processor);
-
-        Properties properties = new Properties();
-        properties.put("processing.exception.handler", LogAndFailOnInvalidProcessor.class);
-
-        try (final TopologyTestDriver driver = new TopologyTestDriver(
-                builder.build(), properties,
-                Instant.ofEpochMilli(0L))) {
-            final TestInputTopic<Integer, Integer> inputTopic =
-                    driver.createInputTopic("TOPIC_NAME", new IntegerSerializer(), new IntegerSerializer());
-
-            try {
-                for (final int expectedKey : expectedKeys) {
-                    inputTopic.pipeInput(expectedKey, expectedKey, 0);
-                }
-            } catch (Exception exception) {
-                StringWriter sw = new StringWriter();
-                PrintWriter pw = new PrintWriter(sw);
-                exception.printStackTrace(pw);
-                assertTrue(sw.toString().contains("java.lang.ArithmeticException: / by zero"));
-            }
-            final KeyValueTimestamp[] expected = {
-                    new KeyValueTimestamp<>("1", "10", 0),
-                    new KeyValueTimestamp<>("2", "5", 0),
-                    new KeyValueTimestamp<>("10", "1", 0),
-            };
-            assertEquals(expected.length, processor.theCapturedProcessor().processed().size());
-            for (int i = 0; i < expected.length; i++) {
-                assertEquals(expected[i], processor.theCapturedProcessor().processed().get(i));
-            }
-        }
-    }
-
-    @Test
-    public void shouldContinueOnPunctuateExceptions() {
-
-        final int[] expectedKeys = {1, 2, 10};
-
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final ProcessorSupplier<Number, Number, Number, Number> processorSupplier =
-                () -> new Processor<Number, Number, Number, Number>() {
-
-                    org.apache.kafka.streams.processor.api.ProcessorContext<Number, Number> context;
-
-                    @Override
-                    public void init(org.apache.kafka.streams.processor.api.ProcessorContext<Number, Number> context) {
-                        this.context = context;
-                        this.context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, ts -> {
-                            String zero = "0";
-                            int i = 1 / Integer.parseInt(zero);
-                        });
-                    }
-
-                    @Override
-                    public void process(Record<Number, Number> record) {
-                        context.forward(record);
-                    }
-
-                    @Override
-                    public void close() {
-                    }
-                };
-
-        final MockProcessorSupplier<Number, Number, Void, Void> processor = new MockProcessorSupplier<>();
-        final KStream<Integer, Integer> stream = builder.stream("TOPIC_NAME", Consumed.with(Serdes.Integer(), Serdes.Integer()));
-        stream.process(processorSupplier).process(processor);
-
-        Properties properties = new Properties();
-        properties.put("processing.exception.handler", LogAndContinueOnInvalidPunctuate.class);
-
-        try (final TopologyTestDriver driver = new TopologyTestDriver(
-                builder.build(), properties,
-                Instant.ofEpochMilli(0L))) {
-            final TestInputTopic<Integer, Integer> inputTopic =
-                    driver.createInputTopic("TOPIC_NAME", new IntegerSerializer(), new IntegerSerializer());
-            for (final int expectedKey : expectedKeys) {
-                driver.advanceWallClockTime(Duration.ofSeconds(2));
-                inputTopic.pipeInput(expectedKey, expectedKey, 0);
-            }
-
-            final KeyValueTimestamp[] expected = {
-                    new KeyValueTimestamp<>(1, 1, 0),
-                    new KeyValueTimestamp<>(2, 2, 0),
-                    new KeyValueTimestamp<>(10, 10, 0),
-            };
-            assertEquals(expected.length, processor.theCapturedProcessor().processed().size());
-            for (int i = 0; i < expected.length; i++) {
-                assertEquals(expected[i], processor.theCapturedProcessor().processed().get(i));
-            }
-        }
-    }
-
-    @Test
-    public void shouldFailOnPunctuateExceptions() {
-
-        final int[] expectedKeys = {0, 1, 2, 10};
-
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final ProcessorSupplier<Number, Number, Number, Number> processorSupplier =
-                () -> new Processor<Number, Number, Number, Number>() {
-
-                    org.apache.kafka.streams.processor.api.ProcessorContext<Number, Number> context;
-
-                    @Override
-                    public void init(org.apache.kafka.streams.processor.api.ProcessorContext<Number, Number> context) {
-                        this.context = context;
-                        this.context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, ts -> {
-                            String zero = "0";
-                            int i = 1 / Integer.parseInt(zero);
-                        });
-                    }
-
-                    @Override
-                    public void process(Record<Number, Number> record) {
-                        context.forward(record);
-                    }
-
-                    @Override
-                    public void close() {
-                    }
-                };
-
-        final MockProcessorSupplier<Number, Number, Void, Void> processor = new MockProcessorSupplier<>();
-        final KStream<Integer, Integer> stream = builder.stream("TOPIC_NAME", Consumed.with(Serdes.Integer(), Serdes.Integer()));
-        stream.process(processorSupplier).process(processor);
-
-        Properties properties = new Properties();
-        properties.put("processing.exception.handler", LogAndFailOnInvalidPunctuate.class);
-
-        try (final TopologyTestDriver driver = new TopologyTestDriver(
-                builder.build(), properties,
-                Instant.ofEpochMilli(0L))) {
-            final TestInputTopic<Integer, Integer> inputTopic =
-                    driver.createInputTopic("TOPIC_NAME", new IntegerSerializer(), new IntegerSerializer());
-
-            try {
-                inputTopic.pipeInput(expectedKeys[0], expectedKeys[0], 0);
-                inputTopic.pipeInput(expectedKeys[1], expectedKeys[1], 0);
-                driver.advanceWallClockTime(Duration.ofSeconds(2));
-                inputTopic.pipeInput(expectedKeys[2], expectedKeys[2], 0);
-
-            } catch (Exception exception) {
-                StringWriter sw = new StringWriter();
-                PrintWriter pw = new PrintWriter(sw);
-                exception.printStackTrace(pw);
-                assertTrue(sw.toString().contains("java.lang.ArithmeticException: / by zero"));
-            }
-
-            final KeyValueTimestamp[] expected = {
-                    new KeyValueTimestamp<>(0, 0, 0),
-                    new KeyValueTimestamp<>(1, 1, 0),
-            };
-            assertEquals(expected.length, processor.theCapturedProcessor().processed().size());
-            for (int i = 0; i < expected.length; i++) {
-                assertEquals(expected[i], processor.theCapturedProcessor().processed().get(i));
-            }
-        }
-    }
     @SuppressWarnings("unchecked")
     private KeyValueStore<String, Long> keyValueStoreMock() {
         final KeyValueStore<String, Long> keyValueStoreMock = mock(KeyValueStore.class);
