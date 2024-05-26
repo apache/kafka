@@ -28,9 +28,9 @@ import org.apache.kafka.common.TopicPartition;
  * This is applicable when the consumer is having Kafka auto-manage group membership. If the consumer directly assigns partitions,
  * those partitions will never be reassigned and this callback is not applicable.
  * <p>
- * When Kafka is managing the group membership, a partition re-assignment will be triggered any time the members of the group change or the subscription
+ * When Kafka is managing the group membership, a partition re-assignment will be triggered whenever the members of the group change or the subscription
  * of the members changes. This can occur when processes die, new process instances are added or old instances come back to life after failure.
- * Partition re-assignments can also be triggered by changes affecting the subscribed topics (e.g. when the number of partitions is
+ * Partition re-assignments can also be triggered by changing affecting the subscribed topics (e.g. when the number of partitions is
  * administratively adjusted).
  * <p>
  * There are many uses for this functionality. One common use is saving offsets in a custom store. By saving offsets in
@@ -38,11 +38,11 @@ import org.apache.kafka.common.TopicPartition;
  * the offset gets saved.
  * <p>
  * Another use is flushing out any kind of cache of intermediate results the consumer may be keeping. For example,
- * consider a case where the consumer is subscribed to a topic containing user page views, and the goal is to count the
- * number of page views per user for each five minute window. Let's say the topic is partitioned by the user id so that
+ * consider a case where the consumer is subscribing to a topic containing user page views, and the goal is to count the
+ * number of page views per user for each five minutes window. Let's say the topic is partitioned by the user id so that
  * all events for a particular user go to a single consumer instance. The consumer can keep in memory a running
- * tally of actions per user and only flush these out to a remote data store when its cache gets too big. However if a
- * partition is reassigned it may want to automatically trigger a flush of this cache, before the new owner takes over
+ * tally of actions per user and only flush these out to a remote data store when its cache gets too big. However, if a
+ * partition is reassigned, it may want to automatically trigger a flush of this cache, before the new owner takes over
  * consumption.
  * <p>
  * This callback will only execute in the user thread as part of the {@link Consumer#poll(java.time.Duration) poll(long)} call
@@ -50,15 +50,15 @@ import org.apache.kafka.common.TopicPartition;
  * <p>
  * Under normal conditions, if a partition is reassigned from one consumer to another, then the old consumer will
  * always invoke {@link #onPartitionsRevoked(Collection) onPartitionsRevoked} for that partition prior to the new consumer
- * invoking {@link #onPartitionsAssigned(Collection) onPartitionsAssigned} for the same partition. So if offsets or other state is saved in the
- * {@link #onPartitionsRevoked(Collection) onPartitionsRevoked} call by one consumer member, it will be always accessible by the time the
+ * invoking {@link #onPartitionsAssigned(Collection) onPartitionsAssigned} for the same partition. So if offsets or other states are saved in the
+ * {@link #onPartitionsRevoked(Collection) onPartitionsRevoked} call by one consumer member, it will be always accessible by the time, the
  * other consumer member taking over that partition and triggering its {@link #onPartitionsAssigned(Collection) onPartitionsAssigned} callback to load the state.
  * <p>
- * You can think of revocation as a graceful way to give up ownership of a partition. In some cases, the consumer may not have an opportunity to do so.
+ * You can think of revocation as a graceful way to give up ownership of a partition. In some cases, a consumer may not have an opportunity to do so.
  * For example, if the session times out, then the partitions may be reassigned before we have a chance to revoke them gracefully.
- * For this case, we have a third callback {@link #onPartitionsLost(Collection)}. The difference between this function and
+ * In this case, we have a third callback {@link #onPartitionsLost(Collection)}. The difference between this function and
  * {@link #onPartitionsRevoked(Collection)} is that upon invocation of {@link #onPartitionsLost(Collection)}, the partitions
- * may already be owned by some other members in the group and therefore users would not be able to commit its consumed offsets for example.
+ * may already be owned by some other members in the same group and therefore users would not be able to commit its consumed offsets for example.
  * Users could implement these two functions differently (by default,
  * {@link #onPartitionsLost(Collection)} will be calling {@link #onPartitionsRevoked(Collection)} directly); for example, in the
  * {@link #onPartitionsLost(Collection)} we should not need to store the offsets since we know these partitions are no longer owned by the consumer
@@ -77,12 +77,12 @@ import org.apache.kafka.common.TopicPartition;
  * to be raised from one of these nested invocations. In this case, the exception will be propagated to the current
  * invocation of {@link KafkaConsumer#poll(java.time.Duration)} in which this callback is being executed. This means it is not
  * necessary to catch these exceptions and re-attempt to wakeup or interrupt the consumer thread.
- * Also if the callback function implementation itself throws an exception, this exception will be propagated to the current
+ * Also, if the callback function implementation itself throws an exception, this exception will be propagated to the current
  * invocation of {@link KafkaConsumer#poll(java.time.Duration)} as well.
  * <p>
- * Note that callbacks only serve as notification of an assignment change.
+ * Note those callbacks only serve as notification of an assignment change.
  * They cannot be used to express acceptance of the change.
- * Hence throwing an exception from a callback does not affect the assignment in any way,
+ * Hence, throwing an exception from a callback does not affect the assignment in any way,
  * as it will be propagated all the way up to the {@link KafkaConsumer#poll(java.time.Duration)} call.
  * If user captures the exception in the caller, the callback is still assumed successful and no further retries will be attempted.
  * <p>
@@ -119,7 +119,7 @@ import org.apache.kafka.common.TopicPartition;
 public interface ConsumerRebalanceListener {
 
     /**
-     * A callback method the user can implement to provide handling of offset commits to a customized store.
+     * A callback method which users can implement to provide handling of offset commits for a customized store.
      * This method will be called during a rebalance operation when the consumer has to give up some partitions.
      * It can also be called when consumer is being closed ({@link KafkaConsumer#close(Duration)})
      * or is unsubscribing ({@link KafkaConsumer#unsubscribe()}).
@@ -127,7 +127,7 @@ public interface ConsumerRebalanceListener {
      * custom offset store to prevent duplicate data.
      * <p>
      * In eager rebalancing, it will always be called at the start of a rebalance and after the consumer stops fetching data.
-     * In cooperative rebalancing, it will be called at the end of a rebalance on the set of partitions being revoked iff the set is non-empty.
+     * In cooperative rebalancing, it will be called at the end of a rebalance on the set of partitions being revoked if and only if the set is non-empty.
      * For examples on usage of this API, see Usage Examples section of {@link KafkaConsumer KafkaConsumer}.
      * <p>
      * It is common for the revocation callback to use the consumer instance in order to commit offsets. It is possible
@@ -178,7 +178,7 @@ public interface ConsumerRebalanceListener {
      * For example, this function is called if a consumer's session timeout has expired, or if a fatal error has been
      * received indicating the consumer is no longer part of the group.
      * <p>
-     * By default it will just trigger {@link ConsumerRebalanceListener#onPartitionsRevoked}; for users who want to distinguish
+     * By default, it just triggers {@link ConsumerRebalanceListener#onPartitionsRevoked}; for users who want to distinguish
      * the handling logic of revoked partitions v.s. lost partitions, they can override the default implementation.
      * <p>
      * It is possible
