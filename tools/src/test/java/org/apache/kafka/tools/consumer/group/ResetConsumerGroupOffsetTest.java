@@ -24,7 +24,8 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.test.TestUtils;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -48,6 +49,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
+import static org.apache.kafka.tools.ToolsTestUtils.TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -90,8 +92,9 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
         return res.toArray(new String[0]);
     }
 
-    @Test
-    public void testResetOffsetsNotExistingGroup() throws Exception {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
+    public void testResetOffsetsNotExistingGroup(String quorum, String groupProtocol) throws Exception {
         String group = "missing.group";
         String[] args = buildArgsForGroup(group, "--all-topics", "--to-current", "--execute");
         ConsumerGroupCommand.ConsumerGroupService consumerGroupCommand = getConsumerGroupService(args);
@@ -104,8 +107,9 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
         assertTrue(committedOffsets(TOPIC, group).isEmpty());
     }
 
-    @Test
-    public void testResetOffsetsExistingTopic() {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
+    public void testResetOffsetsExistingTopic(String quorum, String groupProtocol) {
         String group = "new.group";
         String[] args = buildArgsForGroup(group, "--topic", TOPIC, "--to-offset", "50");
         produceMessages(TOPIC, 100);
@@ -114,8 +118,9 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
         resetAndAssertOffsets(addTo(args, "--execute"), 50, false, Collections.singletonList(TOPIC));
     }
 
-    @Test
-    public void testResetOffsetsExistingTopicSelectedGroups() throws Exception {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
+    public void testResetOffsetsExistingTopicSelectedGroups(String quorum, String groupProtocol) throws Exception {
         produceMessages(TOPIC, 100);
         List<String> groups = IntStream.rangeClosed(1, 3).mapToObj(id -> GROUP + id).collect(Collectors.toList());
         for (String group : groups) {
@@ -129,8 +134,9 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
         resetAndAssertOffsets(addTo(args, "--execute"), 50, false, Collections.singletonList(TOPIC));
     }
 
-    @Test
-    public void testResetOffsetsExistingTopicAllGroups() throws Exception {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
+    public void testResetOffsetsExistingTopicAllGroups(String quorum, String groupProtocol) throws Exception {
         String[] args = buildArgsForAllGroups("--topic", TOPIC, "--to-offset", "50");
         produceMessages(TOPIC, 100);
         for (int i = 1; i <= 3; i++) {
@@ -144,8 +150,9 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
         resetAndAssertOffsets(addTo(args, "--execute"), 50, false, Collections.singletonList(TOPIC));
     }
 
-    @Test
-    public void testResetOffsetsAllTopicsAllGroups() throws Exception {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
+    public void testResetOffsetsAllTopicsAllGroups(String quorum, String groupProtocol) throws Exception {
         String[] args = buildArgsForAllGroups("--all-topics", "--to-offset", "50");
         List<String> topics = IntStream.rangeClosed(1, 3).mapToObj(i -> TOPIC + i).collect(Collectors.toList());
         List<String> groups = IntStream.rangeClosed(1, 3).mapToObj(i -> GROUP + i).collect(Collectors.toList());
@@ -163,8 +170,9 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
         resetAndAssertOffsets(addTo(args, "--execute"), 50, false, topics);
     }
 
-    @Test
-    public void testResetOffsetsToLocalDateTime() throws Exception {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
+    public void testResetOffsetsToLocalDateTime(String quorum, String groupProtocol) throws Exception {
         SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS");
         Calendar calendar = Calendar.getInstance();
         calendar.add(Calendar.DATE, -1);
@@ -179,8 +187,9 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
         resetAndAssertOffsets(args, 0);
     }
 
-    @Test
-    public void testResetOffsetsToZonedDateTime() throws Exception {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
+    public void testResetOffsetsToZonedDateTime(String quorum, String groupProtocol) throws Exception {
         SimpleDateFormat format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
 
         produceMessages(TOPIC, 50);
@@ -195,22 +204,25 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
         resetAndAssertOffsets(args, 50);
     }
 
-    @Test
-    public void testResetOffsetsByDuration() throws Exception {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
+    public void testResetOffsetsByDuration(String quorum, String groupProtocol) throws Exception {
         String[] args = buildArgsForGroup(GROUP, "--all-topics", "--by-duration", "PT1M", "--execute");
         produceConsumeAndShutdown(TOPIC, GROUP, 100, 1);
         resetAndAssertOffsets(args, 0);
     }
 
-    @Test
-    public void testResetOffsetsByDurationToEarliest() throws Exception {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
+    public void testResetOffsetsByDurationToEarliest(String quorum, String groupProtocol) throws Exception {
         String[] args = buildArgsForGroup(GROUP, "--all-topics", "--by-duration", "PT0.1S", "--execute");
         produceConsumeAndShutdown(TOPIC, GROUP, 100, 1);
         resetAndAssertOffsets(args, 100);
     }
 
-    @Test
-    public void testResetOffsetsByDurationFallbackToLatestWhenNoRecords() {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
+    public void testResetOffsetsByDurationFallbackToLatestWhenNoRecords(String quorum, String groupProtocol) {
         String topic = "foo2";
         String[] args = buildArgsForGroup(GROUP, "--topic", topic, "--by-duration", "PT1M", "--execute");
         createTopic(topic, 1, 1, new Properties(), listenerName(), new Properties());
@@ -219,77 +231,87 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
         adminZkClient().deleteTopic(topic);
     }
 
-    @Test
-    public void testResetOffsetsToEarliest() throws Exception {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
+    public void testResetOffsetsToEarliest(String quorum, String groupProtocol) throws Exception {
         String[] args = buildArgsForGroup(GROUP, "--all-topics", "--to-earliest", "--execute");
         produceConsumeAndShutdown(TOPIC, GROUP, 100, 1);
         resetAndAssertOffsets(args, 0);
     }
 
-    @Test
-    public void testResetOffsetsToLatest() throws Exception {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
+    public void testResetOffsetsToLatest(String quorum, String groupProtocol) throws Exception {
         String[] args = buildArgsForGroup(GROUP, "--all-topics", "--to-latest", "--execute");
         produceConsumeAndShutdown(TOPIC, GROUP, 100, 1);
         produceMessages(TOPIC, 100);
         resetAndAssertOffsets(args, 200);
     }
 
-    @Test
-    public void testResetOffsetsToCurrentOffset() throws Exception {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
+    public void testResetOffsetsToCurrentOffset(String quorum, String groupProtocol) throws Exception {
         String[] args = buildArgsForGroup(GROUP, "--all-topics", "--to-current", "--execute");
         produceConsumeAndShutdown(TOPIC, GROUP, 100, 1);
         produceMessages(TOPIC, 100);
         resetAndAssertOffsets(args, 100);
     }
 
-    @Test
-    public void testResetOffsetsToSpecificOffset() throws Exception {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
+    public void testResetOffsetsToSpecificOffset(String quorum, String groupProtocol) throws Exception {
         String[] args = buildArgsForGroup(GROUP, "--all-topics", "--to-offset", "1", "--execute");
         produceConsumeAndShutdown(TOPIC, GROUP, 100, 1);
         resetAndAssertOffsets(args, 1);
     }
 
-    @Test
-    public void testResetOffsetsShiftPlus() throws Exception {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
+    public void testResetOffsetsShiftPlus(String quorum, String groupProtocol) throws Exception {
         String[] args = buildArgsForGroup(GROUP, "--all-topics", "--shift-by", "50", "--execute");
         produceConsumeAndShutdown(TOPIC, GROUP, 100, 1);
         produceMessages(TOPIC, 100);
         resetAndAssertOffsets(args, 150);
     }
 
-    @Test
-    public void testResetOffsetsShiftMinus() throws Exception {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
+    public void testResetOffsetsShiftMinus(String quorum, String groupProtocol) throws Exception {
         String[] args = buildArgsForGroup(GROUP, "--all-topics", "--shift-by", "-50", "--execute");
         produceConsumeAndShutdown(TOPIC, GROUP, 100, 1);
         produceMessages(TOPIC, 100);
         resetAndAssertOffsets(args, 50);
     }
 
-    @Test
-    public void testResetOffsetsShiftByLowerThanEarliest() throws Exception {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
+    public void testResetOffsetsShiftByLowerThanEarliest(String quorum, String groupProtocol) throws Exception {
         String[] args = buildArgsForGroup(GROUP, "--all-topics", "--shift-by", "-150", "--execute");
         produceConsumeAndShutdown(TOPIC, GROUP, 100, 1);
         produceMessages(TOPIC, 100);
         resetAndAssertOffsets(args, 0);
     }
 
-    @Test
-    public void testResetOffsetsShiftByHigherThanLatest() throws Exception {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
+    public void testResetOffsetsShiftByHigherThanLatest(String quorum, String groupProtocol) throws Exception {
         String[] args = buildArgsForGroup(GROUP, "--all-topics", "--shift-by", "150", "--execute");
         produceConsumeAndShutdown(TOPIC, GROUP, 100, 1);
         produceMessages(TOPIC, 100);
         resetAndAssertOffsets(args, 200);
     }
 
-    @Test
-    public void testResetOffsetsToEarliestOnOneTopic() throws Exception {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
+    public void testResetOffsetsToEarliestOnOneTopic(String quorum, String groupProtocol) throws Exception {
         String[] args = buildArgsForGroup(GROUP, "--topic", TOPIC, "--to-earliest", "--execute");
         produceConsumeAndShutdown(TOPIC, GROUP, 100, 1);
         resetAndAssertOffsets(args, 0);
     }
 
-    @Test
-    public void testResetOffsetsToEarliestOnOneTopicAndPartition() throws Exception {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
+    public void testResetOffsetsToEarliestOnOneTopicAndPartition(String quorum, String groupProtocol) throws Exception {
         String topic = "bar";
         createTopic(topic, 2, 1, new Properties(), listenerName(), new Properties());
 
@@ -309,8 +331,9 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
         adminZkClient().deleteTopic(topic);
     }
 
-    @Test
-    public void testResetOffsetsToEarliestOnTopics() throws Exception {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
+    public void testResetOffsetsToEarliestOnTopics(String quorum, String groupProtocol) throws Exception {
         String topic1 = "topic1";
         String topic2 = "topic2";
         createTopic(topic1, 1, 1, new Properties(), listenerName(), new Properties());
@@ -337,8 +360,9 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
         adminZkClient().deleteTopic(topic2);
     }
 
-    @Test
-    public void testResetOffsetsToEarliestOnTopicsAndPartitions() throws Exception {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
+    public void testResetOffsetsToEarliestOnTopicsAndPartitions(String quorum, String groupProtocol) throws Exception {
         String topic1 = "topic1";
         String topic2 = "topic2";
 
@@ -370,9 +394,10 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
         adminZkClient().deleteTopic(topic2);
     }
 
-    @Test
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
     // This one deals with old CSV export/import format for a single --group arg: "topic,partition,offset" to support old behavior
-    public void testResetOffsetsExportImportPlanSingleGroupArg() throws Exception {
+    public void testResetOffsetsExportImportPlanSingleGroupArg(String quorum, String groupProtocol) throws Exception {
         String topic = "bar";
         TopicPartition tp0 = new TopicPartition(topic, 0);
         TopicPartition tp1 = new TopicPartition(topic, 1);
@@ -403,10 +428,11 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
         adminZkClient().deleteTopic(topic);
     }
 
-    @Test
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
     // This one deals with universal CSV export/import file format "group,topic,partition,offset",
     // supporting multiple --group args or --all-groups arg
-    public void testResetOffsetsExportImportPlan() throws Exception {
+    public void testResetOffsetsExportImportPlan(String quorum, String groupProtocol) throws Exception {
         String group1 = GROUP + "1";
         String group2 = GROUP + "2";
         String topic1 = "bar1";
@@ -459,8 +485,9 @@ public class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
         adminZkClient().deleteTopic(TOPIC);
     }
 
-    @Test
-    public void testResetWithUnrecognizedNewConsumerOption() {
+    @ParameterizedTest(name = TEST_WITH_PARAMETERIZED_QUORUM_AND_GROUP_PROTOCOL_NAMES)
+    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
+    public void testResetWithUnrecognizedNewConsumerOption(String quorum, String groupProtocol) {
         String[] cgcArgs = new String[]{"--new-consumer", "--bootstrap-server", bootstrapServers(listenerName()), "--reset-offsets",
             "--group", GROUP, "--all-topics", "--to-offset", "2", "--export"};
         assertThrows(OptionException.class, () -> getConsumerGroupService(cgcArgs));
