@@ -82,6 +82,14 @@
       <property name="file" value="${config_loc}/${importControlFile}"/>
     </module>
 
+    <module name="ImportOrder">
+      <property name="groups" value="kafka,org.apache.kafka,com,net,org,java,javax"/>
+      <property name="ordered" value="true"/>
+      <property name="separated" value="true"/>
+      <property name="option" value="bottom"/>
+      <property name="sortStaticImportsAlphabetically" value="true"/>
+    </module>
+
     <!-- whitespace -->
     <module name="GenericWhitespace"/>
     <module name="NoWhitespaceBefore"/>
