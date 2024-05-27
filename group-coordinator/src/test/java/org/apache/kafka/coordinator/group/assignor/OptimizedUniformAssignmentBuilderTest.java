@@ -74,7 +74,7 @@ public class OptimizedUniformAssignmentBuilderTest {
                 Optional.empty(),
                 Optional.empty(),
                 Collections.emptySet(),
-                Collections.unmodifiableMap(Collections.emptyMap())
+                Collections.emptyMap()
             )
         );
 
@@ -112,7 +112,7 @@ public class OptimizedUniformAssignmentBuilderTest {
                 Optional.empty(),
                 Optional.empty(),
                 Collections.singleton(topic2Uuid),
-                Collections.unmodifiableMap(Collections.emptyMap())
+                Collections.emptyMap()
             )
         );
 
@@ -147,13 +147,13 @@ public class OptimizedUniformAssignmentBuilderTest {
             Optional.empty(),
             Optional.empty(),
             mkSet(topic1Uuid, topic3Uuid),
-            Collections.unmodifiableMap(Collections.emptyMap())
+            Collections.emptyMap()
         ));
         members.put(memberB, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
             mkSet(topic1Uuid, topic3Uuid),
-            Collections.unmodifiableMap(Collections.emptyMap())
+            Collections.emptyMap()
         ));
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
@@ -196,19 +196,19 @@ public class OptimizedUniformAssignmentBuilderTest {
             Optional.empty(),
             Optional.empty(),
             mkSet(topic3Uuid),
-            Collections.unmodifiableMap(Collections.emptyMap())
+            Collections.emptyMap()
         ));
         members.put(memberB, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
             mkSet(topic3Uuid),
-            Collections.unmodifiableMap(Collections.emptyMap())
+            Collections.emptyMap()
         ));
         members.put(memberC, new AssignmentMemberSpec(
             Optional.empty(),
             Optional.empty(),
             mkSet(topic3Uuid),
-            Collections.unmodifiableMap(Collections.emptyMap())
+            Collections.emptyMap()
         ));
 
         // Topic 3 has 2 partitions but three members subscribed to it - one of them should not get an assignment.
@@ -220,7 +220,7 @@ public class OptimizedUniformAssignmentBuilderTest {
             mkTopicAssignment(topic3Uuid, 1)
         ));
         expectedAssignment.put(memberC,
-            Collections.unmodifiableMap(Collections.emptyMap())
+            Collections.emptyMap()
         );
 
         GroupSpec groupSpec = new GroupSpecImpl(
@@ -258,7 +258,7 @@ public class OptimizedUniformAssignmentBuilderTest {
                 Optional.empty(),
                 Optional.empty(),
                 topicMetadata.keySet(),
-                Collections.unmodifiableMap(Collections.emptyMap())
+                Collections.emptyMap()
             ));
         }
 
@@ -463,7 +463,7 @@ public class OptimizedUniformAssignmentBuilderTest {
             Optional.empty(),
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
-            Collections.unmodifiableMap(Collections.emptyMap())
+            Collections.emptyMap()
         ));
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
