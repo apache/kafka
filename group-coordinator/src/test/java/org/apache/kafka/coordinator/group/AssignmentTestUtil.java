@@ -26,9 +26,9 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeSet;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -43,13 +43,13 @@ public class AssignmentTestUtil {
         );
     }
 
-    public static Map.Entry<Uuid, Set<Integer>> mkSortedTopicAssignment(
+    public static Map.Entry<Uuid, Set<Integer>> mkOrderedTopicAssignment(
         Uuid topicId,
         Integer... partitions
     ) {
         return new AbstractMap.SimpleEntry<>(
             topicId,
-            new TreeSet<>(Arrays.asList(partitions))
+            new LinkedHashSet<>(Arrays.asList(partitions))
         );
     }
 
@@ -63,7 +63,7 @@ public class AssignmentTestUtil {
     }
 
     @SafeVarargs
-    public static Map<Uuid, Set<Integer>> mkSortedAssignment(Map.Entry<Uuid, Set<Integer>>... entries) {
+    public static Map<Uuid, Set<Integer>> mkOrderedAssignment(Map.Entry<Uuid, Set<Integer>>... entries) {
         Map<Uuid, Set<Integer>> assignment = new LinkedHashMap<>();
         for (Map.Entry<Uuid, Set<Integer>> entry : entries) {
             assignment.put(entry.getKey(), Collections.unmodifiableSet(entry.getValue()));

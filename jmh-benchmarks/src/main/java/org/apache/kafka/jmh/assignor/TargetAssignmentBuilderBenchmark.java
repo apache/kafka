@@ -69,13 +69,13 @@ import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOG
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 public class TargetAssignmentBuilderBenchmark {
 
-    @Param({"10000"})
+    @Param({"100", "500", "1000", "5000", "10000"})
     private int memberCount;
 
-    @Param({"10"})
+    @Param({"5", "10", "50"})
     private int partitionsToMemberRatio;
 
-    @Param({"100"})
+    @Param({"10", "100", "1000"})
     private int topicCount;
 
     private static final String GROUP_ID = "benchmark-group";
@@ -184,10 +184,7 @@ public class TargetAssignmentBuilderBenchmark {
         for (Map.Entry<String, MemberAssignment> entry : groupAssignment.members().entrySet()) {
             String memberId = entry.getKey();
             Map<Uuid, Set<Integer>> topicPartitions = entry.getValue().targetPartitions();
-
-            Assignment assignment = new Assignment(topicPartitions);
-
-            initialTargetAssignment.put(memberId, assignment);
+            initialTargetAssignment.put(memberId, new Assignment(topicPartitions));
         }
 
         return initialTargetAssignment;
@@ -203,7 +200,7 @@ public class TargetAssignmentBuilderBenchmark {
                 Optional.empty(),
                 Optional.empty(),
                 new TopicIds(new HashSet<>(allTopicNames), topicsImage),
-                Collections.unmodifiableMap(Collections.emptyMap())
+                Collections.emptyMap()
             ));
         }
         groupSpec = new GroupSpecImpl(members, HOMOGENEOUS, Collections.emptyMap());

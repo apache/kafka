@@ -94,25 +94,25 @@ public class ServerSideAssignorBenchmark {
         FULL, INCREMENTAL
     }
 
-    @Param({"10000"})
+    @Param({"100", "500", "1000", "5000", "10000"})
     private int memberCount;
 
-    @Param({"10"})
+    @Param({"5", "10", "50"})
     private int partitionsToMemberRatio;
 
-    @Param({"100"})
+    @Param({"10", "100", "1000"})
     private int topicCount;
 
-    @Param({"true"})
+    @Param({"true", "false"})
     private boolean isRackAware;
 
-    @Param({"HOMOGENEOUS"})
+    @Param({"HOMOGENEOUS", "HETEROGENEOUS"})
     private SubscriptionType subscriptionType;
 
-    @Param({"UNIFORM"})
+    @Param({"RANGE", "UNIFORM"})
     private AssignorType assignorType;
 
-    @Param({"INCREMENTAL"})
+    @Param({"FULL", "INCREMENTAL"})
     private AssignmentType assignmentType;
 
     private PartitionAssignor partitionAssignor;
@@ -234,7 +234,7 @@ public class ServerSideAssignorBenchmark {
             Optional.empty(),
             rackId,
             subscribedTopicIds,
-            Collections.unmodifiableMap(Collections.emptyMap())
+            Collections.emptyMap()
         ));
     }
 
@@ -284,7 +284,7 @@ public class ServerSideAssignorBenchmark {
             Optional.empty(),
             rackId,
             subscribedTopicIdsForNewMember,
-            Collections.unmodifiableMap(Collections.emptyMap())
+            Collections.emptyMap()
         ));
 
         groupSpec = new GroupSpecImpl(updatedMembers, subscriptionType, invertedTargetAssignment);
