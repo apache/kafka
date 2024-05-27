@@ -33,16 +33,14 @@ import static org.mockito.Mockito.when;
 
 public class ClusterTestExtensionsUnitTest {
 
-    static class StubTest {
-        static List<ClusterConfig> cfgEmpty() {
-            return new ArrayList<ClusterConfig>();
-        }
+    static List<ClusterConfig> cfgEmpty() {
+        return new ArrayList<ClusterConfig>();
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     private ExtensionContext buildExtensionContext(String methodName) throws Exception {
         ExtensionContext extensionContext = mock(ExtensionContext.class);
-        Class clazz = ClusterTestExtensionsUnitTest.StubTest.class;
+        Class clazz = ClusterTestExtensionsUnitTest.class;
         Method method = clazz.getDeclaredMethod(methodName);
         when(extensionContext.getRequiredTestClass()).thenReturn(clazz);
         when(extensionContext.getRequiredTestMethod()).thenReturn(method);
