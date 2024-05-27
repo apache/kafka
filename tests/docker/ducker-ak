@@ -47,6 +47,9 @@ default_jdk="openjdk:8"
 # The default ducker-ak image name.
 default_image_name="ducker-ak"
 
+# The default kafka server mode.
+default_kafka_mode="jvm"
+
 # Port to listen on when debugging
 debugpy_port=5678
 
@@ -247,6 +250,7 @@ ducker_build() {
         --build-arg "ducker_creator=${user_name}" \
         --build-arg "jdk_version=${jdk_version}" \
         --build-arg "UID=${UID}" \
+        --build-arg "KAFKA_MODE=${kafka_mode}" \
         -t "${image_name}" \
         -f "${ducker_dir}/Dockerfile" ${docker_args} -- .
     docker_status=$?
@@ -314,11 +318,13 @@ ducker_up() {
             -n|--num-nodes) set_once num_nodes "${2}" "number of nodes"; shift 2;;
             -j|--jdk) set_once jdk_version "${2}" "the OpenJDK base image"; shift 2;;
             -e|--expose-ports) set_once expose_ports "${2}" "the ports to expose"; shift 2;;
+            -m|--kafka_mode) set_once kafka_mode "${2}" "the mode in which kafka will run"; shift 2;;
             *) set_once image_name "${1}" "docker image name"; shift;;
         esac
     done
     [[ -n "${num_nodes}" ]] || num_nodes="${default_num_nodes}"
     [[ -n "${jdk_version}" ]] || jdk_version="${default_jdk}"
+    [[ -n "${kafka_mode}" ]] || kafka_mode="${default_kafka_mode}"
     [[ -n "${image_name}" ]] || image_name="${default_image_name}-${jdk_version/:/-}"
     [[ "${num_nodes}" =~ ^-?[0-9]+$ ]] || \
         die "ducker_up: the number of nodes must be an integer."
@@ -384,6 +390,10 @@ attempting to start new ones."
             bash -c "grep -v ${node} /opt/kafka-dev/tests/docker/build/node_hosts >> /etc/hosts"
         [[ $? -ne 0 ]] && die "failed to append to the /etc/hosts file on ${node}"
     done
+
+    if [ "$kafka_mode" == "native" ]; then
+      docker exec --user=root ducker01 bash -c 'cp /opt/kafka-binary/kafka.Kafka /opt/kafka-dev/kafka.Kafka'
+    fi
 
     echo "ducker_up: added the latest entries to /etc/hosts on each node."
     generate_cluster_json_file "${num_nodes}" "${ducker_dir}/build/cluster.json"
