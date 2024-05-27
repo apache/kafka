@@ -925,22 +925,26 @@ class RemoteIndexCacheTest {
   }
 
   @Test
-  def testReopenClosedTxnIndex(): Unit = {
+  def testCheckTxnIndexIsEmpty(): Unit = {
     val tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0))
     val metadataList = generateRemoteLogSegmentMetadata(size = 1, tpId)
 
-    assertCacheSize(0)
     // getIndex for first time will call rsm#fetchIndex
     val cacheEntry = cache.getIndexEntry(metadataList.head)
-    assertCacheSize(1)
-    assertTrue(getIndexFileFromRemoteCacheDir(cache, LogFileUtils.INDEX_FILE_SUFFIX).isPresent)
-    assertTrue(getIndexFileFromRemoteCacheDir(cache, LogFileUtils.TXN_INDEX_FILE_SUFFIX).isPresent)
-    assertTrue(getIndexFileFromRemoteCacheDir(cache, LogFileUtils.TIME_INDEX_FILE_SUFFIX).isPresent)
+    assertFalse(cacheEntry.hasTxnIndex)
+  }
+
+  @Test
+  def testReopenClosedTxnIndex(): Unit = {
+    val cacheEntry = generateSpyCacheEntry()
+    assertTrue(cacheEntry.hasTxnIndex)
+    cacheEntry.completeAbortedTxnsSearch(0L, 1L, _ => {})
 
     // Close cached transaction index
     cacheEntry.txnIndex.close()
 
-    // Reopen cached transaction index
+    // Index is reopened if accessed again, as when searching for aborted txns
+    cacheEntry.completeAbortedTxnsSearch(0L, 1L, _ => {})
     assertFalse(cacheEntry.txnIndex.isClosed)
   }
 
