@@ -209,17 +209,12 @@ Found problem:
     val availableDirs = Seq(TestUtils.tempDir(), TestUtils.tempDir(), TestUtils.tempDir()).map(dir => dir.toString)
     val stream = new ByteArrayOutputStream()
     assertEquals(0, runFormatCommand(stream, availableDirs))
-    val printStringArray = stream.toString().split("\\r?\\n")
-    assertEquals(availableDirs.size, printStringArray.size)
-    var availableSet = availableDirs.to(mutable.Set)
-    printStringArray.foreach(printLine => {
-      val newSet = availableSet.filterNot(dir => {
-        printLine.startsWith("Formatting %s".format(dir))
-      })
-      assertEquals(availableSet.size - 1, newSet.size)
-      availableSet = newSet
+    val actual = stream.toString().split("\\r?\\n")
+    val expect = availableDirs.map("Formatting %s".format(_))
+    assertEquals(availableDirs.size, actual.size)
+    expect.foreach(dir => {
+      assertEquals(1, actual.count(_.startsWith(dir)))
     })
-    assertTrue(availableSet.isEmpty)
   }
 
   @Test
