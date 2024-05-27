@@ -211,7 +211,6 @@ object ConfigCommand extends Logging {
   }
 
   def createPasswordEncoder(encoderConfigs: java.util.Map[String, String]): PasswordEncoder = {
-    encoderConfigs.get(PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG)
     val encoderSecret = Optional.ofNullable(encoderConfigs.get(PasswordEncoderConfigs.PASSWORD_ENCODER_SECRET_CONFIG))
       .orElseThrow(() => new IllegalArgumentException("Password encoder secret not specified"))
     PasswordEncoder.encrypting(new Password(encoderSecret),
