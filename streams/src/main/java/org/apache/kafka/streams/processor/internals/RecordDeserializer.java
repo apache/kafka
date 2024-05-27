@@ -68,7 +68,7 @@ public class RecordDeserializer {
                 Optional.empty()
             );
         } catch (final Exception deserializationException) {
-            handleDeserializationFailure(deserializationExceptionHandler, processorContext, deserializationException, rawRecord, log, droppedRecordsSensor);
+            handleDeserializationFailure(deserializationExceptionHandler, processorContext, deserializationException, rawRecord, log, droppedRecordsSensor, sourceNode.name());
             return null; //  'handleDeserializationFailure' would either throw or swallow -- if we swallow we need to skip the record by returning 'null'
         }
     }
@@ -78,7 +78,8 @@ public class RecordDeserializer {
                                                     final Exception deserializationException,
                                                     final ConsumerRecord<byte[], byte[]> rawRecord,
                                                     final Logger log,
-                                                    final Sensor droppedRecordsSensor) {
+                                                    final Sensor droppedRecordsSensor,
+                                                    final String sourceNodeName) {
         final DeserializationExceptionHandler.DeserializationHandlerResponse response;
         try {
             final ErrorHandlerContextImpl errorHandlerContext = new ErrorHandlerContextImpl(
@@ -89,7 +90,7 @@ public class RecordDeserializer {
                 rawRecord.headers(),
                 rawRecord.key(),
                 rawRecord.value(),
-                null,
+                sourceNodeName,
                 processorContext.taskId());
             response = deserializationExceptionHandler.handle(errorHandlerContext, rawRecord, deserializationException);
         } catch (final Exception fatalUserException) {
