@@ -225,8 +225,8 @@ public class CommonClientConfigs {
             "the client repeats the bootstrap process using <code>bootstrap.servers</code>. " +
             "Rebootstrapping is useful when a client communicates with brokers so infrequently " +
             "that the set of brokers may change entirely before the client refreshes metadata. " +
-            "Opportunities to rebootstrapping depend on connection establishing and reconnect timeouts and the broker count. " +
-            "The timeouts may prevent identifying brokers as unavailable simultaneously, which is necessary to trigger rebootstrapping. " +
+            "Metadata recovery is triggered when all last-known brokers appear unavailable simultaneously. " +
+            "Brokers appear unavailable when disconnected and no current retry attempt is in-progress. " +
             "Consider increasing <code>reconnect.backoff.ms</code> and <code>reconnect.backoff.max.ms</code> and " +
             "decreasing <code>socket.connection.setup.timeout.ms</code> and <code>reconnect.backoff.max.ms</code> " +
             "for the client.";
