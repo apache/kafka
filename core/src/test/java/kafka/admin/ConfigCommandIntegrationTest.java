@@ -39,7 +39,6 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.platform.commons.util.StringUtils;
-import scala.collection.JavaConverters;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
@@ -171,11 +170,11 @@ public class ConfigCommandIntegrationTest {
         // Password config update without encoder secret should fail
         assertThrows(IllegalArgumentException.class,
                 () -> alterConfigWithZk(zkClient, adminZkClient, Optional.of(brokerId),
-                        singletonMap("listener.name.internal.ssl.keystore.password", "secret")));
+                        singletonMap("listener.name.external.ssl.keystore.password", "secret")));
 
         // Password config update with encoder secret should succeed and encoded password must be stored in ZK
         Map<String, String> configs = new HashMap<>();
-        configs.put("listener.name.internal.ssl.keystore.password", "secret");
+        configs.put("listener.name.external.ssl.keystore.password", "secret");
         configs.put("log.cleaner.threads", "2");
         Map<String, String> encoderConfigs = new HashMap<>(configs);
         encoderConfigs.put(PASSWORD_ENCODER_SECRET_CONFIG, "encoder-secret");
@@ -183,8 +182,8 @@ public class ConfigCommandIntegrationTest {
         Properties brokerConfigs = zkClient.getEntityConfigs("brokers", brokerId);
         assertFalse(brokerConfigs.contains(PASSWORD_ENCODER_SECRET_CONFIG), "Encoder secret stored in ZooKeeper");
         assertEquals("2", brokerConfigs.getProperty("log.cleaner.threads")); // not encoded
-        String encodedPassword = brokerConfigs.getProperty("listener.name.internal.ssl.keystore.password");
-        PasswordEncoder passwordEncoder = ConfigCommand.createPasswordEncoder(JavaConverters.mapAsScalaMap(encoderConfigs));
+        String encodedPassword = brokerConfigs.getProperty("listener.name.external.ssl.keystore.password");
+        PasswordEncoder passwordEncoder = ConfigCommand.createPasswordEncoder(encoderConfigs);
         assertEquals("secret", passwordEncoder.decode(encodedPassword).value());
         assertEquals(configs.size(), brokerConfigs.size());
 
@@ -192,11 +191,11 @@ public class ConfigCommandIntegrationTest {
         Map<String, String> encoderConfigs2 = generateEncodeConfig();
         alterConfigWithZk(zkClient, adminZkClient, Optional.of(brokerId), encoderConfigs2);
         Properties brokerConfigs2 = zkClient.getEntityConfigs("brokers", brokerId);
-        String encodedPassword2 = brokerConfigs2.getProperty("listener.name.internal.ssl.keystore.password");
-        assertEquals("secret2", ConfigCommand.createPasswordEncoder(
-                JavaConverters.mapAsScalaMap(encoderConfigs)).decode(encodedPassword2).value());
-        assertEquals("secret2", ConfigCommand.createPasswordEncoder(
-                JavaConverters.mapAsScalaMap(encoderConfigs2)).decode(encodedPassword2).value());
+        String encodedPassword2 = brokerConfigs2.getProperty("listener.name.external.ssl.keystore.password");
+        assertEquals("secret2", ConfigCommand.createPasswordEncoder(encoderConfigs)
+                .decode(encodedPassword2).value());
+        assertEquals("secret2", ConfigCommand.createPasswordEncoder(encoderConfigs2)
+                .decode(encodedPassword2).value());
 
         // Password config update at default cluster-level should fail
         assertThrows(ConfigException.class,
@@ -239,11 +238,11 @@ public class ConfigCommandIntegrationTest {
             deleteAndVerifyConfig(client, Optional.of(defaultBrokerId),
                     singleton("listener.name.internal.ssl.keystore.location"));
             alterConfigWithKraft(client, Optional.of(defaultBrokerId),
-                    singletonMap("listener.name.internal.ssl.keystore.password", "secret"));
+                    singletonMap("listener.name.external.ssl.keystore.password", "secret"));
 
             // Password config update with encoder secret should succeed and encoded password must be stored in ZK
             Map<String, String> configs = new HashMap<>();
-            configs.put("listener.name.internal.ssl.keystore.password", "secret");
+            configs.put("listener.name.external.ssl.keystore.password", "secret");
             configs.put("log.cleaner.threads", "2");
             // Password encoder configs
             configs.put(PASSWORD_ENCODER_SECRET_CONFIG, "encoder-secret");
@@ -462,7 +461,7 @@ public class ConfigCommandIntegrationTest {
         map.put(PASSWORD_ENCODER_ITERATIONS_CONFIG, "1024");
         map.put(PASSWORD_ENCODER_KEYFACTORY_ALGORITHM_CONFIG, "PBKDF2WithHmacSHA1");
         map.put(PASSWORD_ENCODER_KEY_LENGTH_CONFIG, "64");
-        map.put("listener.name.internal.ssl.keystore.password", "secret2");
+        map.put("listener.name.external.ssl.keystore.password", "secret2");
         return map;
     }
 
@@ -536,7 +535,7 @@ public class ConfigCommandIntegrationTest {
     }
 
     private String captureStandardMsg(Runnable runnable) {
-        return captureStandardStream(true, runnable);
+        return captureStandardStream(runnable);
     }
 
     private String transferConfigMapToString(Map<String, String> configs) {
@@ -546,22 +545,16 @@ public class ConfigCommandIntegrationTest {
                 .collect(Collectors.joining(","));
     }
 
-    private String captureStandardStream(boolean isErr, Runnable runnable) {
+    private String captureStandardStream(Runnable runnable) {
         ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        PrintStream currentStream = isErr ? System.err : System.out;
+        PrintStream currentStream = System.err;
         try (PrintStream tempStream = new PrintStream(outputStream)) {
-            if (isErr)
-                System.setErr(tempStream);
-            else
-                System.setOut(tempStream);
+            System.setErr(tempStream);
             try {
                 runnable.run();
                 return outputStream.toString().trim();
             } finally {
-                if (isErr)
-                    System.setErr(currentStream);
-                else
-                    System.setOut(currentStream);
+                System.setErr(currentStream);
             }
         }
     }
