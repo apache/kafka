@@ -18,8 +18,6 @@ package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.server.common.TopicIdPartition;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -30,10 +28,8 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * The optimized uniform assignment builder is used to generate the target assignment for a consumer group with
+ * The homogenous uniform assignment builder is used to generate the target assignment for a consumer group with
  * all its members subscribed to the same set of topics.
- * It is optimized since the assignment can be done in fewer, less complicated steps compared to when
- * the subscriptions are different across the members.
  *
  * Assignments are done according to the following principles:
  *
@@ -46,12 +42,14 @@ import java.util.Set;
  * The assignment builder prioritizes the properties in the following order:
  *      Balance > Stickiness.
  */
-public class OptimizedUniformAssignmentBuilder {
-    private static final Logger LOG = LoggerFactory.getLogger(OptimizedUniformAssignmentBuilder.class);
-
+public class UniformHomogenousAssignmentBuilder {
     private static final Class<?> UNMODIFIALBE_MAP_CLASS = Collections.unmodifiableMap(new HashMap<>()).getClass();
     private static final Class<?> EMPTY_MAP_CLASS = Collections.emptyMap().getClass();
 
+    /**
+     * @return True if the provided map is an UnmodifiableMap or EmptyMap. Those classes are not
+     * public hence we cannot use the `instanceof` operator.
+     */
     private static boolean isImmutableMap(Map<?, ?> map) {
         return UNMODIFIALBE_MAP_CLASS.isInstance(map) || EMPTY_MAP_CLASS.isInstance(map);
     }
@@ -73,7 +71,6 @@ public class OptimizedUniformAssignmentBuilder {
 
     /**
      * Members mapped to the remaining number of partitions needed to meet the minimum quota.
-     * Minimum quota = total partitions / total members.
      */
     private final List<MemberWithRemainingQuota> potentiallyUnfilledMembers;
 
@@ -90,18 +87,18 @@ public class OptimizedUniformAssignmentBuilder {
 
     /**
      * The minimum number of partitions that a member must have.
+     * Minimum quota = total partitions / total members.
      */
     private int minimumMemberQuota;
 
     /**
      * The number of members to receive an extra partition beyond the minimum quota.
-     * Minimum Quota = Total Partitions / Total Members
      * Example: If there are 11 partitions to be distributed among 3 members,
      *          each member gets 3 (11 / 3) [minQuota] partitions and 2 (11 % 3) members get an extra partition.
      */
     private int remainingMembersToGetAnExtraPartition;
 
-    OptimizedUniformAssignmentBuilder(GroupSpec groupSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
+    UniformHomogenousAssignmentBuilder(GroupSpec groupSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
         this.groupSpec = groupSpec;
         this.subscribedTopicDescriber = subscribedTopicDescriber;
         this.subscribedTopicIds = new HashSet<>(groupSpec.members().values().iterator().next().subscribedTopicIds());
@@ -111,25 +108,14 @@ public class OptimizedUniformAssignmentBuilder {
     }
 
     /**
-     * Here's the step-by-step breakdown of the assignment process:
-     *
-     * <li> Compute the quotas of partitions for each member based on the total partitions and member count.</li>
-     * <li> Initialize unassigned partitions with all the topic partitions that aren't present in the
-     *      current target assignment.</li>
-     * <li> For existing assignments, retain partitions based on the determined quota. Add extras to unassigned partitions.</li>
-     * <li> Identify members that haven't fulfilled their partition quota or are eligible to receive extra partitions.</li>
-     * <li> Proceed with a round-robin assignment according to quotas.
-     *      For each unassigned partition, locate the first compatible member from the potentially unfilled list.</li>
+     * Compute the new assignment for the group.
      */
     public GroupAssignment build() throws PartitionAssignorException {
         if (subscribedTopicIds.isEmpty()) {
-            LOG.debug("The subscription list is empty, returning an empty assignment");
             return new GroupAssignment(Collections.emptyMap());
         }
 
-        // Check if the subscribed topicId is still valid.
-        // Update unassigned partitions based on the current target assignment
-        // and topic metadata.
+        // Compute the list of unassigned partitions.
         int totalPartitionsCount = 0;
         for (Uuid topicId : subscribedTopicIds) {
             int partitionCount = subscribedTopicDescriber.numPartitions(topicId);
@@ -147,13 +133,17 @@ public class OptimizedUniformAssignmentBuilder {
             }
         }
 
-        // The minimum required quota that each member needs to meet for a balanced assignment.
-        // This is the same for all members.
+        // Compute the minimum required quota per member and the number of members
+        // who should receive an extra partition.
         int numberOfMembers = groupSpec.members().size();
         minimumMemberQuota = totalPartitionsCount / numberOfMembers;
         remainingMembersToGetAnExtraPartition = totalPartitionsCount % numberOfMembers;
 
+        // Revoke the partitions which are either not part of the subscriptions or above
+        // the maximum quota.
         maybeRevokePartitions();
+
+        // Assign the unassigned partitions to the members with space.
         assignRemainingPartitions();
 
         return new GroupAssignment(targetAssignment);
@@ -166,6 +156,8 @@ public class OptimizedUniformAssignmentBuilder {
             Map<Uuid, Set<Integer>> oldAssignment = assignmentMemberSpec.assignedPartitions();
             Map<Uuid, Set<Integer>> newAssignment = null;
 
+            // The assignor expects to receive the assignment as an immutable map. It leverages
+            // this knowledge in order to avoid having to copy all assignments.
             if (!isImmutableMap(oldAssignment)) {
                 throw new IllegalStateException("The assignor expect an immutable map.");
             }
@@ -189,21 +181,28 @@ public class OptimizedUniformAssignmentBuilder {
                                 quota--;
                             } else {
                                 if (newAssignment == null) {
+                                    // If the new assignment is null, we create a deep copy of the
+                                    // original assignment so that we can alter it.
                                     newAssignment = deepCopy(oldAssignment);
                                 }
+                                // Remove the partition from the new assignment.
                                 Set<Integer> parts = newAssignment.get(topicId);
                                 parts.remove(partition);
                                 if (parts.isEmpty()) {
                                     newAssignment.remove(topicId);
                                 }
+                                // Add the partition to the unassigned set to be re-assigned later on.
                                 unassignedPartitions.add(new TopicIdPartition(topicId, partition));
                             }
                         }
                     }
                 } else {
                     if (newAssignment == null) {
+                        // If the new assignment is null, we create a deep copy of the
+                        // original assignment so that we can alter it.
                         newAssignment = deepCopy(oldAssignment);
                     }
+                    // Remove the entire topic.
                     newAssignment.remove(topicId);
                 }
             }
