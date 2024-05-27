@@ -159,15 +159,18 @@ public class StreamsAssignmentInterface {
 
         public final Set<String> sinkTopics;
         public final Set<String> sourceTopics;
+        public final int numPartitions;
         public final Map<String, TopicInfo> stateChangelogTopics;
         public final Map<String, TopicInfo> repartitionSourceTopics;
 
        public SubTopology(final Set<String> sinkTopics,
                           final Set<String> sourceTopics,
+                          final int numPartitions,
                           final Map<String, TopicInfo> repartitionSourceTopics,
                           final Map<String, TopicInfo> stateChangelogTopics) {
             this.sinkTopics = sinkTopics;
             this.sourceTopics = sourceTopics;
+            this.numPartitions = numPartitions;
             this.stateChangelogTopics = stateChangelogTopics;
             this.repartitionSourceTopics = repartitionSourceTopics;
         }
