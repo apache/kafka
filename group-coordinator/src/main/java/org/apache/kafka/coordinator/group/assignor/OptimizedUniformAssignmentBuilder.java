@@ -25,7 +25,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -73,18 +72,10 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
     private final Set<Uuid> subscribedTopicIds;
 
     /**
-     * The number of members to receive an extra partition beyond the minimum quota.
-     * Minimum Quota = Total Partitions / Total Members
-     * Example: If there are 11 partitions to be distributed among 3 members,
-     *          each member gets 3 (11 / 3) [minQuota] partitions and 2 (11 % 3) members get an extra partition.
-     */
-    private int remainingMembersToGetAnExtraPartition;
-
-    /**
      * Members mapped to the remaining number of partitions needed to meet the minimum quota.
      * Minimum quota = total partitions / total members.
      */
-    private Map<String, Integer> potentiallyUnfilledMembers;
+    private final List<MemberWithRemainingQuota> potentiallyUnfilledMembers;
 
     /**
      * The partitions that still need to be assigned.
@@ -97,11 +88,24 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
      */
     private final Map<String, MemberAssignment> targetAssignment;
 
+    /**
+     * The minimum number of partitions that a member must have.
+     */
+    private int minimumMemberQuota;
+
+    /**
+     * The number of members to receive an extra partition beyond the minimum quota.
+     * Minimum Quota = Total Partitions / Total Members
+     * Example: If there are 11 partitions to be distributed among 3 members,
+     *          each member gets 3 (11 / 3) [minQuota] partitions and 2 (11 % 3) members get an extra partition.
+     */
+    private int remainingMembersToGetAnExtraPartition;
+
     OptimizedUniformAssignmentBuilder(GroupSpec groupSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
         this.groupSpec = groupSpec;
         this.subscribedTopicDescriber = subscribedTopicDescriber;
         this.subscribedTopicIds = new HashSet<>(groupSpec.members().values().iterator().next().subscribedTopicIds());
-        this.potentiallyUnfilledMembers = new HashMap<>();
+        this.potentiallyUnfilledMembers = new ArrayList<>();
         this.unassignedPartitions = new ArrayList<>();
         this.targetAssignment = new HashMap<>();
     }
@@ -146,17 +150,17 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
 
         // The minimum required quota that each member needs to meet for a balanced assignment.
         // This is the same for all members.
-        final int numberOfMembers = groupSpec.members().size();
-        final int minQuota = totalPartitionsCount / numberOfMembers;
+        int numberOfMembers = groupSpec.members().size();
+        minimumMemberQuota = totalPartitionsCount / numberOfMembers;
         remainingMembersToGetAnExtraPartition = totalPartitionsCount % numberOfMembers;
 
-        maybeRevokePartitions(minQuota);
+        maybeRevokePartitions();
         assignRemainingPartitions();
 
         return new GroupAssignment(targetAssignment);
     }
 
-    private void maybeRevokePartitions(int minQuota) {
+    private void maybeRevokePartitions() {
         for (Map.Entry<String, AssignmentMemberSpec> entry : groupSpec.members().entrySet()) {
             String memberId = entry.getKey();
             AssignmentMemberSpec assignmentMemberSpec = entry.getValue();
@@ -167,7 +171,7 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
                 throw new IllegalStateException("The assignor expect an immutable map.");
             }
 
-            int quota = minQuota;
+            int quota = minimumMemberQuota;
             if (remainingMembersToGetAnExtraPartition > 0) {
                 quota++;
                 remainingMembersToGetAnExtraPartition--;
@@ -196,7 +200,7 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
             }
 
             if (quota > 0) {
-                potentiallyUnfilledMembers.put(memberId, quota);
+                potentiallyUnfilledMembers.add(new MemberWithRemainingQuota(memberId, quota));
             }
 
             if (newAssignment == null) {
@@ -208,11 +212,11 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
     }
 
     private void assignRemainingPartitions() {
-        Iterator<TopicIdPartition> it = unassignedPartitions.iterator();
+        int unassignedPartitionIndex = 0;
 
-        for (Map.Entry<String, Integer> unfilledMemberEntry : potentiallyUnfilledMembers.entrySet()) {
-            String memberId = unfilledMemberEntry.getKey();
-            int remaining = unfilledMemberEntry.getValue();
+        for (MemberWithRemainingQuota unfilledMember : potentiallyUnfilledMembers) {
+            String memberId = unfilledMember.memberId;
+            int remainingQuota = unfilledMember.remainingQuota;
 
             Map<Uuid, Set<Integer>> newAssignment = targetAssignment.get(memberId).targetPartitions();
             if (isImmutableMap(newAssignment)) {
@@ -220,15 +224,16 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
                 targetAssignment.put(memberId, new MemberAssignment(newAssignment));
             }
 
-            for (int i = 0; i < remaining && it.hasNext(); i++) {
-                TopicIdPartition unassignedTopicIdPartition = it.next();
+            for (int i = 0; i < remainingQuota && unassignedPartitionIndex < unassignedPartitions.size(); i++) {
+                TopicIdPartition unassignedTopicIdPartition = unassignedPartitions.get(unassignedPartitionIndex);
+                unassignedPartitionIndex++;
                 newAssignment
                     .computeIfAbsent(unassignedTopicIdPartition.topicId(), __ -> new HashSet<>())
                     .add(unassignedTopicIdPartition.partitionId());
             }
         }
 
-        if (it.hasNext()) {
+        if (unassignedPartitionIndex < unassignedPartitions.size()) {
             throw new PartitionAssignorException("Partitions were left unassigned");
         }
     }
@@ -239,5 +244,18 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
             copy.put(entry.getKey(), new HashSet<>(entry.getValue()));
         }
         return copy;
+    }
+
+    private static class MemberWithRemainingQuota {
+        final String memberId;
+        final int remainingQuota;
+
+        MemberWithRemainingQuota(
+            String memberId,
+            int remainingQuota
+        ) {
+            this.memberId = memberId;
+            this.remainingQuota = remainingQuota;
+        }
     }
 }
