@@ -240,6 +240,22 @@ public class RequestManagers implements Closeable {
                     membershipManager.registerStateListener(commitRequestManager);
                     membershipManager.registerStateListener(applicationThreadMemberStateListener);
 
+                    if (streamsInstanceMetadata.isPresent()) {
+                        streamsInitializeRequestManager = new StreamsInitializeRequestManager(
+                            logContext,
+                            groupRebalanceConfig.groupId,
+                            streamsInstanceMetadata.get(),
+                            coordinator);
+                        streamsPrepareAssignmentRequestManager = new StreamsPrepareAssignmentRequestManager(
+                            streamsInstanceMetadata.get());
+                        streamsInstallAssignmentRequestManager = new StreamsInstallAssignmentRequestManager(
+                            streamsInstanceMetadata.get());
+                        streamsHeartbeatRequestManager = new StreamsHeartbeatRequestManager(
+                            streamsInitializeRequestManager,
+                            streamsPrepareAssignmentRequestManager,
+                            streamsInstanceMetadata.get());
+                    } else {
+                        heartbeatRequestManager = new HeartbeatRequestManager(
                             logContext,
                             time,
                             config,
