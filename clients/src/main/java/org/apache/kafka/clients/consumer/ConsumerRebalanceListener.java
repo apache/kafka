@@ -54,7 +54,7 @@ import org.apache.kafka.common.TopicPartition;
  * {@link #onPartitionsRevoked(Collection) onPartitionsRevoked} call by one consumer member, it will be always accessible by the time other consumer
  * taking over that partition **gets a call to** its {@link #onPartitionsAssigned(Collection) onPartitionsAssigned} callback to load the state.
  * <p>
- * You can think of revocation as a graceful way to give up ownership of a partition. In some cases, a consumer may not have an opportunity to do so.
+ * You can think of revocation as a graceful way to give up ownership of a partition. In some cases, the consumer may not have an opportunity to do so.
  * For example, if the session times out, then the partitions may be reassigned before we have a chance to revoke them gracefully.
  * In this case, we have a third callback {@link #onPartitionsLost(Collection)}. The difference between this function and
  * {@link #onPartitionsRevoked(Collection)} is that upon invocation of {@link #onPartitionsLost(Collection)}, the partitions
