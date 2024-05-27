@@ -24,6 +24,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Random;
 import java.util.function.Supplier;
+
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;

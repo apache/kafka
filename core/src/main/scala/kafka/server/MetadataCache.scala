@@ -116,10 +116,9 @@ object MetadataCache {
   def zkMetadataCache(brokerId: Int,
                       metadataVersion: MetadataVersion,
                       brokerFeatures: BrokerFeatures = BrokerFeatures.createEmpty(),
-                      kraftControllerNodes: collection.Seq[Node] = collection.Seq.empty[Node],
                       zkMigrationEnabled: Boolean = false)
   : ZkMetadataCache = {
-    new ZkMetadataCache(brokerId, metadataVersion, brokerFeatures, kraftControllerNodes, zkMigrationEnabled)
+    new ZkMetadataCache(brokerId, metadataVersion, brokerFeatures, zkMigrationEnabled)
   }
 
   def kRaftMetadataCache(brokerId: Int): KRaftMetadataCache = {
