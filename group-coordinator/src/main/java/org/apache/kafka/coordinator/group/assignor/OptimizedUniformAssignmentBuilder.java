@@ -21,10 +21,12 @@ import org.apache.kafka.server.common.TopicIdPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -48,8 +50,12 @@ import java.util.Set;
 public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignmentBuilder {
     private static final Logger LOG = LoggerFactory.getLogger(OptimizedUniformAssignmentBuilder.class);
 
-    // TODO: Handle emptyMap too.
     private static final Class<?> UNMODIFIALBE_MAP_CLASS = Collections.unmodifiableMap(new HashMap<>()).getClass();
+    private static final Class<?> EMPTY_MAP_CLASS = Collections.emptyMap().getClass();
+
+    private static boolean isImmutableMap(Map<?, ?> map) {
+        return UNMODIFIALBE_MAP_CLASS.isInstance(map) || EMPTY_MAP_CLASS.isInstance(map);
+    }
 
     /**
      * The assignment specification which includes member metadata.
@@ -84,7 +90,7 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
      * The partitions that still need to be assigned.
      * Initially this contains all the subscribed topics' partitions.
      */
-    private final Set<TopicIdPartition> unassignedPartitions;
+    private final List<TopicIdPartition> unassignedPartitions;
 
     /**
      * The target assignment.
@@ -96,7 +102,7 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
         this.subscribedTopicDescriber = subscribedTopicDescriber;
         this.subscribedTopicIds = new HashSet<>(groupSpec.members().values().iterator().next().subscribedTopicIds());
         this.potentiallyUnfilledMembers = new HashMap<>();
-        this.unassignedPartitions = new HashSet<>();
+        this.unassignedPartitions = new ArrayList<>();
         this.targetAssignment = new HashMap<>();
     }
 
@@ -147,10 +153,6 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
         maybeRevokePartitions(minQuota);
         assignRemainingPartitions();
 
-        if (!unassignedPartitions.isEmpty()) {
-            throw new PartitionAssignorException("Partitions were left unassigned");
-        }
-
         return new GroupAssignment(targetAssignment);
     }
 
@@ -161,7 +163,7 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
             Map<Uuid, Set<Integer>> oldAssignment = assignmentMemberSpec.assignedPartitions();
             Map<Uuid, Set<Integer>> newAssignment = null;
 
-            if (!UNMODIFIALBE_MAP_CLASS.isInstance(oldAssignment)) {
+            if (!isImmutableMap(oldAssignment)) {
                 throw new IllegalStateException("The assignor expect an immutable map.");
             }
 
@@ -213,18 +215,21 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
             int remaining = unfilledMemberEntry.getValue();
 
             Map<Uuid, Set<Integer>> newAssignment = targetAssignment.get(memberId).targetPartitions();
-            if (UNMODIFIALBE_MAP_CLASS.isInstance(newAssignment)) {
+            if (isImmutableMap(newAssignment)) {
                 newAssignment = deepCopy(newAssignment);
                 targetAssignment.put(memberId, new MemberAssignment(newAssignment));
             }
 
             for (int i = 0; i < remaining && it.hasNext(); i++) {
                 TopicIdPartition unassignedTopicIdPartition = it.next();
-                it.remove();
                 newAssignment
                     .computeIfAbsent(unassignedTopicIdPartition.topicId(), __ -> new HashSet<>())
                     .add(unassignedTopicIdPartition.partitionId());
             }
+        }
+
+        if (it.hasNext()) {
+            throw new PartitionAssignorException("Partitions were left unassigned");
         }
     }
 
