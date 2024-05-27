@@ -52,7 +52,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Function;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -95,7 +95,7 @@ public class MeteredKeyValueStore<K, V>
     private StreamsMetricsImpl streamsMetrics;
     private TaskId taskId;
 
-    protected AtomicInteger numOpenIterators = new AtomicInteger(0);
+    protected LongAdder numOpenIterators = new LongAdder();
 
     @SuppressWarnings("rawtypes")
     private final Map<Class, QueryHandler> queryHandlers =
@@ -168,7 +168,7 @@ public class MeteredKeyValueStore<K, V>
         e2eLatencySensor = StateStoreMetrics.e2ELatencySensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         iteratorDurationSensor = StateStoreMetrics.iteratorDurationSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         StateStoreMetrics.addNumOpenIteratorsGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
-                (config, now) -> numOpenIterators.get());
+                (config, now) -> numOpenIterators.sum());
     }
 
     protected Serde<V> prepareValueSerdeForStore(final Serde<V> valueSerde, final SerdeGetter getter) {
@@ -467,7 +467,7 @@ public class MeteredKeyValueStore<K, V>
             this.iter = iter;
             this.sensor = sensor;
             this.startNs = time.nanoseconds();
-            numOpenIterators.incrementAndGet();
+            numOpenIterators.increment();
         }
 
         @Override
@@ -491,7 +491,7 @@ public class MeteredKeyValueStore<K, V>
                 final long duration = time.nanoseconds() - startNs;
                 sensor.record(duration);
                 iteratorDurationSensor.record(duration);
-                numOpenIterators.decrementAndGet();
+                numOpenIterators.decrement();
             }
         }
 
@@ -515,7 +515,7 @@ public class MeteredKeyValueStore<K, V>
             this.sensor = sensor;
             this.valueDeserializer = valueDeserializer;
             this.startNs = time.nanoseconds();
-            numOpenIterators.incrementAndGet();
+            numOpenIterators.increment();
         }
 
         @Override
@@ -539,7 +539,7 @@ public class MeteredKeyValueStore<K, V>
                 final long duration = time.nanoseconds() - startNs;
                 sensor.record(duration);
                 iteratorDurationSensor.record(duration);
-                numOpenIterators.decrementAndGet();
+                numOpenIterators.decrement();
             }
         }
 

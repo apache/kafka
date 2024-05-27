@@ -16,30 +16,27 @@
  */
 package org.apache.kafka.coordinator.group.assignor;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.Uuid;
+
+import java.util.Map;
 
 /**
- * Server side partition assignor used by the GroupCoordinator.
- *
- * The interface is kept in an internal module until KIP-848 is fully
- * implemented and ready to be released.
+ * The group metadata specifications required to compute the target assignment.
  */
-@InterfaceStability.Unstable
-public interface PartitionAssignor {
+public interface GroupSpec {
     /**
-     * Unique name for this assignor.
+     * @return Member metadata keyed by member Id.
      */
-    String name();
+    Map<String, AssignmentMemberSpec> members();
 
     /**
-     * Assigns partitions to group members based on the given assignment specification and topic metadata.
-     *
-     * @param groupSpec           The assignment spec which includes member metadata.
-     * @param subscribedTopicDescriber The topic and partition metadata describer.
-     * @return The new assignment for the group.
+     * @return The group's subscription type.
      */
-    GroupAssignment assign(
-        GroupSpec groupSpec,
-        SubscribedTopicDescriber subscribedTopicDescriber
-    ) throws PartitionAssignorException;
+    SubscriptionType subscriptionType();
+
+    /**
+     * @return True, if the partition is currently assigned to a member.
+     *         False, otherwise.
+     */
+    boolean isPartitionAssigned(Uuid topicId, int partitionId);
 }

@@ -18,7 +18,7 @@ package org.apache.kafka.jmh.assignor;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
-import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
+import org.apache.kafka.coordinator.group.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
@@ -29,10 +29,12 @@ import org.apache.kafka.coordinator.group.consumer.TopicIds;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
 import org.apache.kafka.coordinator.group.consumer.SubscribedTopicMetadata;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
+
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.image.TopicsImage;
+
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -119,7 +121,7 @@ public class ServerSideAssignorBenchmark {
 
     private static final int MAX_BUCKET_COUNT = 5;
 
-    private AssignmentSpec assignmentSpec;
+    private GroupSpecImpl groupSpec;
 
     private SubscribedTopicDescriber subscribedTopicDescriber;
 
@@ -160,7 +162,13 @@ public class ServerSideAssignorBenchmark {
                 partitionsPerTopicCount,
                 partitionRacks
             ));
-            TargetAssignmentBuilderBenchmark.addTopic(delta, topicUuid, topicName, partitionsPerTopicCount);
+
+            AssignorBenchmarkUtils.addTopic(
+                delta,
+                topicUuid,
+                topicName,
+                partitionsPerTopicCount
+            );
         }
 
         topicsImage = delta.apply(MetadataProvenance.EMPTY).topics();
@@ -207,7 +215,7 @@ public class ServerSideAssignorBenchmark {
             }
         }
 
-        this.assignmentSpec = new AssignmentSpec(members, subscriptionType);
+        this.groupSpec = new GroupSpecImpl(members, subscriptionType, Collections.emptyMap());
     }
 
     private Optional<String> rackId(int memberIndex) {
@@ -243,16 +251,23 @@ public class ServerSideAssignorBenchmark {
     }
 
     private void simulateIncrementalRebalance() {
-        GroupAssignment initialAssignment = partitionAssignor.assign(assignmentSpec, subscribedTopicDescriber);
+        GroupAssignment initialAssignment = partitionAssignor.assign(groupSpec, subscribedTopicDescriber);
         Map<String, MemberAssignment> members = initialAssignment.members();
 
+        Map<Uuid, Map<Integer, String>> invertedTargetAssignment = AssignorBenchmarkUtils.computeInvertedTargetAssignment(initialAssignment);
+
         Map<String, AssignmentMemberSpec> updatedMembers = new HashMap<>();
-        members.forEach((memberId, memberAssignment) -> {
-            AssignmentMemberSpec memberSpec = assignmentSpec.members().get(memberId);
+
+        groupSpec.members().forEach((memberId, assignmentMemberSpec) -> {
+            MemberAssignment memberAssignment = members.getOrDefault(
+                memberId,
+                new MemberAssignment(Collections.emptyMap())
+            );
+
             updatedMembers.put(memberId, new AssignmentMemberSpec(
-                memberSpec.instanceId(),
-                memberSpec.rackId(),
-                memberSpec.subscribedTopicIds(),
+                assignmentMemberSpec.instanceId(),
+                assignmentMemberSpec.rackId(),
+                assignmentMemberSpec.subscribedTopicIds(),
                 memberAssignment.targetPartitions()
             ));
         });
@@ -272,13 +287,13 @@ public class ServerSideAssignorBenchmark {
             Collections.emptyMap()
         ));
 
-        assignmentSpec = new AssignmentSpec(updatedMembers, subscriptionType);
+        groupSpec = new GroupSpecImpl(updatedMembers, subscriptionType, invertedTargetAssignment);
     }
 
     @Benchmark
     @Threads(1)
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
     public void doAssignment() {
-        partitionAssignor.assign(assignmentSpec, subscribedTopicDescriber);
+        partitionAssignor.assign(groupSpec, subscribedTopicDescriber);
     }
 }
