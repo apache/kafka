@@ -217,7 +217,7 @@ public class ReplicaFetcherThreadBenchmark {
 
         // TODO: fix to support raft
         ZkMetadataCache metadataCache = MetadataCache.zkMetadataCache(0,
-            config.interBrokerProtocolVersion(), BrokerFeatures.createEmpty(), null, false);
+            config.interBrokerProtocolVersion(), BrokerFeatures.createEmpty(), false);
         metadataCache.updateMetadata(0, updateMetadataRequest);
 
         replicaManager = new ReplicaManagerBuilder().

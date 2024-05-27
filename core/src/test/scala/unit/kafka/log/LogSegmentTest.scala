@@ -30,7 +30,7 @@ import org.apache.kafka.storage.internals.log._
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.CsvSource
+import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
 import java.io.{File, RandomAccessFile}
 import java.util
@@ -142,6 +142,34 @@ class LogSegmentTest {
     seg.append(61, RecordBatch.NO_TIMESTAMP, -1L, ms2)
     val read = seg.read(55, 200)
     checkEquals(ms2.records.iterator, read.records.records.iterator)
+  }
+
+  @ParameterizedTest(name = "testReadWhenNoMaxPosition minOneMessage = {0}")
+  @ValueSource(booleans = Array(true, false))
+  def testReadWhenNoMaxPosition(minOneMessage: Boolean): Unit = {
+    val maxPosition: Optional[java.lang.Long] = Optional.empty()
+    val maxSize = 1
+    val seg = createSegment(40)
+    val ms = records(50, "hello", "there")
+    seg.append(51, RecordBatch.NO_TIMESTAMP, -1L, ms)
+    // read before first offset
+    var read = seg.read(48, maxSize, maxPosition, minOneMessage)
+    assertEquals(new LogOffsetMetadata(48, 40, 0), read.fetchOffsetMetadata)
+    assertTrue(read.records.records().iterator().asScala.isEmpty)
+    // read at first offset
+    read = seg.read(50, maxSize, maxPosition, minOneMessage)
+    assertEquals(new LogOffsetMetadata(50, 40, 0), read.fetchOffsetMetadata)
+    assertTrue(read.records.records().iterator().asScala.isEmpty)
+    // read at last offset
+    read = seg.read(51, maxSize, maxPosition, minOneMessage)
+    assertEquals(new LogOffsetMetadata(51, 40, 39), read.fetchOffsetMetadata)
+    assertTrue(read.records.records().iterator().asScala.isEmpty)
+    // read at log-end-offset
+    read = seg.read(52, maxSize, maxPosition, minOneMessage)
+    assertNull(read)
+    // read beyond log-end-offset
+    read = seg.read(53, maxSize, maxPosition, minOneMessage)
+    assertNull(read)
   }
 
   /**
@@ -331,7 +359,7 @@ class LogSegmentTest {
     writeNonsenseToFile(indexFile, 5, indexFile.length.toInt)
     seg.recover(newProducerStateManager(), Optional.empty())
     for (i <- 0 until 100) {
-      val records = seg.read(i, 1, seg.size(), true).records.records
+      val records = seg.read(i, 1, Optional.of(seg.size()), true).records.records
       assertEquals(i, records.iterator.next().offset)
     }
   }
