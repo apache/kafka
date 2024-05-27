@@ -1445,8 +1445,9 @@ public class StreamThreadTest {
             new LinkedList<>(),
             null,
             HANDLER,
-            null
-        ).updateThreadMetadata(adminClientId(CLIENT_ID));
+            null,
+            null,
+            null).updateThreadMetadata(adminClientId(CLIENT_ID));
 
         final StreamsException thrown = assertThrows(StreamsException.class, thread::run);
 
@@ -2676,8 +2677,9 @@ public class StreamThreadTest {
             new LinkedList<>(),
             null,
             HANDLER,
-            null
-        ) {
+            null,
+            null,
+            null) {
             @Override
             void runOnceWithProcessingThreads() {
                 setState(State.PENDING_SHUTDOWN);
@@ -2734,8 +2736,9 @@ public class StreamThreadTest {
             new LinkedList<>(),
             null,
             HANDLER,
-            null
-        ) {
+            null,
+            null,
+            null) {
             @Override
             void runOnceWithProcessingThreads() {
                 setState(State.PENDING_SHUTDOWN);
@@ -2801,8 +2804,9 @@ public class StreamThreadTest {
             new LinkedList<>(),
             null,
             HANDLER,
-            null
-        ) {
+            null,
+            null,
+            null) {
             @Override
             void runOnceWithProcessingThreads() {
                 setState(State.PENDING_SHUTDOWN);
@@ -2864,8 +2868,9 @@ public class StreamThreadTest {
             new LinkedList<>(),
             null,
             HANDLER,
-            null
-        ) {
+            null,
+            null,
+            null) {
             @Override
             void runOnceWithProcessingThreads() {
                 setState(State.PENDING_SHUTDOWN);
@@ -2924,8 +2929,9 @@ public class StreamThreadTest {
             new LinkedList<>(),
             null,
             HANDLER,
-            null
-        ) {
+            null,
+            null,
+            null) {
             @Override
             void runOnceWithProcessingThreads() {
                 setState(State.PENDING_SHUTDOWN);
@@ -3133,8 +3139,9 @@ public class StreamThreadTest {
             new LinkedList<>(),
             null,
             HANDLER,
-            null
-        );
+            null,
+            null,
+            null);
         final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<>());
         final Metric testMetric = new KafkaMetric(
             new Object(),
@@ -3189,8 +3196,9 @@ public class StreamThreadTest {
             new LinkedList<>(),
             null,
             (e, b) -> { },
-            null
-        ) {
+            null,
+            null,
+            null) {
             @Override
             void runOnceWithProcessingThreads() {
                 setState(StreamThread.State.PENDING_SHUTDOWN);
@@ -3592,8 +3600,9 @@ public class StreamThreadTest {
             new LinkedList<>(),
             null,
             null,
-            null
-        );
+            null,
+            null,
+            null);
     }
 
     private TaskManager mockTaskManager(final Task runningTask) {
@@ -3713,8 +3722,9 @@ public class StreamThreadTest {
             new LinkedList<>(),
             null,
             HANDLER,
-            null
-        );
+            null,
+            null,
+            null);
     }
     
     private void runOnce(final boolean processingThreadsEnabled) {

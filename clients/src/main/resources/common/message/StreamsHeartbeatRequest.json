@@ -34,11 +34,11 @@
     { "name": "RebalanceTimeoutMs", "type": "int32", "versions": "0+", "default": -1,
       "about": "-1 if it didn't change since the last heartbeat; the maximum time in milliseconds that the coordinator will wait on the member to revoke its partitions otherwise." },
 
-    // If the topology hash does not match the server's topology hash, return INVALID_TOPOLOGY and send ShouldInitializeTopology to one consumer
     { "name": "TopologyHash", "type": "bytes", "versions": "0+", "nullableVersions": "0+", "default": null,
       "about": "The hash of the topology. Only sent when memberEpoch = 0. Null otherwise. Used to check if topology corresponds to server-topology. " },
+    { "name": "Assignor", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": null,
+      "about": "The desired assignor. Picked by majority vote among clients. If null, the client votes for the broker to pick the assignor." },
 
-    // The coordinator knows which partitions to fetch from given this information
     { "name": "ActiveTasks", "type": "[]TaskId", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "Local assignment for this consumer. Null if unchanged since last heartbeat." },
     { "name": "StandbyTasks", "type": "[]TaskId", "versions": "0+", "nullableVersions": "0+", "default": "null",
@@ -80,8 +80,6 @@
   ],
   "commonStructs": [
     { "name": "TaskId", "versions": "0+", "fields": [
-      // We are using strings here, to avoid fixing a structure on task IDs which will
-      // allow introducing stable naming for subtopologies in the future.
       { "name": "Subtopology", "type": "string", "versions": "0+",
         "about": "subtopology ID" },
       { "name": "Partitions", "type": "[]int32", "versions": "0+",

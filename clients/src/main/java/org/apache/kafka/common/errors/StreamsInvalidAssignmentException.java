@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.common.errors;
 
-public class StreamsMissingInternalTopicsException extends ApiException {
-    public StreamsMissingInternalTopicsException(String message) {
+public class StreamsInvalidAssignmentException extends ApiException {
+    public StreamsInvalidAssignmentException(String message) {
         super(message);
     }
 }

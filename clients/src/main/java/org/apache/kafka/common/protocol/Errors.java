@@ -21,9 +21,9 @@ import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
 import org.apache.kafka.common.errors.BrokerNotAvailableException;
 import org.apache.kafka.common.errors.StreamsInconsistentTopologyException;
-import org.apache.kafka.common.errors.StreamsInvalidAssignment;
+import org.apache.kafka.common.errors.StreamsInvalidAssignmentException;
 import org.apache.kafka.common.errors.StreamsInvalidTopologyException;
-import org.apache.kafka.common.errors.StreamsMissingInternalTopicsException;
+import org.apache.kafka.common.errors.StreamsGroupUninitializedException;
 import org.apache.kafka.common.errors.StreamsMissingSourceTopicsException;
 import org.apache.kafka.common.errors.StreamsShutdownApplicationException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
@@ -426,7 +426,9 @@ public enum Errors {
         StreamsMissingSourceTopicsException::new),
     STREAMS_MISSING_INTERNAL_TOPICS(132, "One or more internal topics are missing.",
         StreamsMissingInternalTopicsException::new),
-    STREAMS_SHUTDOWN_APPLICATION(133, "A client requested the shutdown of the whole application.",
+    STREAMS_GROUP_UNINITIALIZED(133, "The group is not (fully) initialized, broker-side topology information or internal topics are missing.",
+        StreamsGroupUninitializedException::new),
+    STREAMS_SHUTDOWN_APPLICATION(134, "A client requested the shutdown of the whole application.",
         StreamsShutdownApplicationException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);

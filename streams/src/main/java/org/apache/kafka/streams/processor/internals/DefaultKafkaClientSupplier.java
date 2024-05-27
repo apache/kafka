@@ -49,9 +49,9 @@ public class DefaultKafkaClientSupplier implements KafkaClientSupplier {
     }
 
     @Override
-    public Consumer<byte[], byte[]> getStreamsRebalanceProtocolConsumer(final Map<String, Object> config, StreamsAssignmentInterface assignmentInterface) {
-        ByteArrayDeserializer keyDeserializer = new ByteArrayDeserializer();
-        ByteArrayDeserializer valueDeserializer = new ByteArrayDeserializer();
+    public Consumer<byte[], byte[]> getStreamsRebalanceProtocolConsumer(final Map<String, Object> config, final StreamsAssignmentInterface assignmentInterface) {
+        final ByteArrayDeserializer keyDeserializer = new ByteArrayDeserializer();
+        final ByteArrayDeserializer valueDeserializer = new ByteArrayDeserializer();
         return new AsyncKafkaConsumer<>(new ConsumerConfig(ConsumerConfig.appendDeserializerToConfig(config, keyDeserializer, valueDeserializer)),
             keyDeserializer, valueDeserializer, Optional.of(assignmentInterface));
     }
