@@ -30,7 +30,7 @@ import org.apache.kafka.common.TopicPartition;
  * <p>
  * When Kafka is managing the group membership, a partition re-assignment will be triggered whenever the members of the group change or the subscription
  * of the members changes. This can occur when processes die, new process instances are added or old instances come back to life after failure.
- * Partition re-assignments can also be triggered by changing the subscribed topics (e.g. when the number of partitions is
+ * Partition re-assignments can also be triggered by changing affecting the subscribed topics (e.g. when the number of partitions is
  * administratively adjusted).
  * <p>
  * There are many uses for this functionality. One common use is saving offsets in a custom store. By saving offsets in
@@ -39,7 +39,7 @@ import org.apache.kafka.common.TopicPartition;
  * <p>
  * Another use is flushing out any kind of cache of intermediate results the consumer may be keeping. For example,
  * consider a case where the consumer is subscribing to a topic containing user page views, and the goal is to count the
- * number of page views per user for each five minutes window. Let's say the topic is partitioned by the user id so that
+ * number of page views per user for each five-minute window. Let's say the topic is partitioned by the user id so that
  * all events for a particular user go to a single consumer instance. The consumer can keep in memory a running
  * tally of actions per user and only flush these out to a remote data store when its cache gets too big. However, if a
  * partition is reassigned, it may want to automatically trigger a flush of this cache, before the new owner takes over
@@ -51,8 +51,8 @@ import org.apache.kafka.common.TopicPartition;
  * Under normal conditions, if a partition is reassigned from one consumer to another, then the old consumer will
  * always invoke {@link #onPartitionsRevoked(Collection) onPartitionsRevoked} for that partition prior to the new consumer
  * invoking {@link #onPartitionsAssigned(Collection) onPartitionsAssigned} for the same partition. So if offsets or other states are saved in the
- * {@link #onPartitionsRevoked(Collection) onPartitionsRevoked} call by one consumer member, it will be always accessible by the time, the
- * other consumer member taking over that partition and triggering its {@link #onPartitionsAssigned(Collection) onPartitionsAssigned} callback to load the state.
+ * {@link #onPartitionsRevoked(Collection) onPartitionsRevoked} call by one consumer member, it will be always accessible by the time other consumer
+ * taking over that partition **gets a call to** its {@link #onPartitionsAssigned(Collection) onPartitionsAssigned} callback to load the state.
  * <p>
  * You can think of revocation as a graceful way to give up ownership of a partition. In some cases, a consumer may not have an opportunity to do so.
  * For example, if the session times out, then the partitions may be reassigned before we have a chance to revoke them gracefully.
@@ -119,7 +119,7 @@ import org.apache.kafka.common.TopicPartition;
 public interface ConsumerRebalanceListener {
 
     /**
-     * A callback method which users can implement to provide handling of offset commits for a customized store.
+     * A callback method the user can implement to provide handling of offset commits **sent to** a customized store
      * This method will be called during a rebalance operation when the consumer has to give up some partitions.
      * It can also be called when consumer is being closed ({@link KafkaConsumer#close(Duration)})
      * or is unsubscribing ({@link KafkaConsumer#unsubscribe()}).
