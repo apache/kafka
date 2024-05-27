@@ -46,7 +46,7 @@ import java.util.Set;
  * The assignment builder prioritizes the properties in the following order:
  *      Balance > Stickiness.
  */
-public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignmentBuilder {
+public class OptimizedUniformAssignmentBuilder {
     private static final Logger LOG = LoggerFactory.getLogger(OptimizedUniformAssignmentBuilder.class);
 
     private static final Class<?> UNMODIFIALBE_MAP_CLASS = Collections.unmodifiableMap(new HashMap<>()).getClass();
@@ -121,8 +121,7 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
      * <li> Proceed with a round-robin assignment according to quotas.
      *      For each unassigned partition, locate the first compatible member from the potentially unfilled list.</li>
      */
-    @Override
-    protected GroupAssignment buildAssignment() throws PartitionAssignorException {
+    public GroupAssignment build() throws PartitionAssignorException {
         if (subscribedTopicIds.isEmpty()) {
             LOG.debug("The subscription list is empty, returning an empty assignment");
             return new GroupAssignment(Collections.emptyMap());
@@ -182,19 +181,29 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
                 Set<Integer> partitions = topicPartitions.getValue();
 
                 if (subscribedTopicIds.contains(topicId)) {
-                    for (Integer partition : partitions) {
-                        if (quota > 0) {
-                            quota--;
-                        } else {
-                            if (newAssignment == null) newAssignment = deepCopy(oldAssignment);
-                            Set<Integer> parts = newAssignment.get(topicId);
-                            parts.remove(partition);
-                            if (parts.isEmpty()) newAssignment.remove(topicId);
-                            unassignedPartitions.add(new TopicIdPartition(topicId, partition));
+                    if (partitions.size() <= quota) {
+                        quota -= partitions.size();
+                    } else {
+                        for (Integer partition : partitions) {
+                            if (quota > 0) {
+                                quota--;
+                            } else {
+                                if (newAssignment == null) {
+                                    newAssignment = deepCopy(oldAssignment);
+                                }
+                                Set<Integer> parts = newAssignment.get(topicId);
+                                parts.remove(partition);
+                                if (parts.isEmpty()) {
+                                    newAssignment.remove(topicId);
+                                }
+                                unassignedPartitions.add(new TopicIdPartition(topicId, partition));
+                            }
                         }
                     }
                 } else {
-                    if (newAssignment == null) newAssignment = deepCopy(oldAssignment);
+                    if (newAssignment == null) {
+                        newAssignment = deepCopy(oldAssignment);
+                    }
                     newAssignment.remove(topicId);
                 }
             }
