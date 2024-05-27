@@ -74,6 +74,7 @@ public class MonitorableSourceConnector extends SampleSourceConnector {
     private String connectorName;
     private ConnectorHandle connectorHandle;
     private Map<String, String> commonConfigs;
+    private ResourceHandler resourceHandler;
 
     @Override
     public void start(Map<String, String> props) {
@@ -81,6 +82,11 @@ public class MonitorableSourceConnector extends SampleSourceConnector {
         connectorName = connectorHandle.name();
         commonConfigs = props;
         log.info("Started {} connector {}", this.getClass().getSimpleName(), connectorName);
+        if (Boolean.parseBoolean(props.getOrDefault("connector.create.resource", "false"))) {
+            resourceHandler = new ResourceHandler();
+            resourceHandler.createResource();
+            connectorHandle.setResourceStatus(resourceHandler.isResourceAlive());
+        }
         connectorHandle.recordConnectorStart();
         if (Boolean.parseBoolean(props.getOrDefault("connector.start.inject.error", "false"))) {
             throw new RuntimeException("Injecting errors during connector start");
@@ -118,6 +124,10 @@ public class MonitorableSourceConnector extends SampleSourceConnector {
     @Override
     public void stop() {
         log.info("Stopped {} connector {}", this.getClass().getSimpleName(), connectorName);
+        if (resourceHandler != null) {
+            resourceHandler.closeResource();
+            connectorHandle.setResourceStatus(resourceHandler.isResourceAlive());
+        }
         connectorHandle.recordConnectorStop();
         if (Boolean.parseBoolean(commonConfigs.getOrDefault("connector.stop.inject.error", "false"))) {
             throw new RuntimeException("Injecting errors during connector stop");

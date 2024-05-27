@@ -231,6 +231,12 @@ public class WorkerConnector implements Runnable {
         if (this.state == State.FAILED)
             return;
 
+        // Call stop() on the connector to release its resources. Connector
+        // could fail in the start() method, which is why we call stop() on
+        // INIT state as well.
+        if (this.state == State.STARTED || this.state == State.INIT)
+            connector.stop();
+
         statusListener.onFailure(connName, t);
         this.state = State.FAILED;
     }
