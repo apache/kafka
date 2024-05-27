@@ -332,7 +332,7 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
     private MessageFormatter buildFormatter() {
         MessageFormatter formatter = null;
         try {
-            Class<?> messageFormatterClass = Class.forName(options.valueOf(messageFormatterOpt));
+            Class<?> messageFormatterClass = Class.forName(convertDeprecatedClass(options.valueOf(messageFormatterOpt)));
             formatter = (MessageFormatter) messageFormatterClass.getDeclaredConstructor().newInstance();
 
             Properties formatterArgs = formatterArgs();
@@ -347,6 +347,25 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
             CommandLineUtils.printUsageAndExit(parser, e.getMessage());
         }
         return formatter;
+    }
+
+    private static String convertDeprecatedClass(String className) {
+        switch (className) {
+            case "kafka.tools.DefaultMessageFormatter":
+                System.err.println("WARNING: kafka.tools.DefaultMessageFormatter is deprecated and will be removed in the next major release. " +
+                        "Please use org.apache.kafka.tools.consumer.DefaultMessageFormatter instead");
+                return DefaultMessageFormatter.class.getName();
+            case "kafka.tools.LoggingMessageFormatter":
+                System.err.println("WARNING: kafka.tools.LoggingMessageFormatter is deprecated and will be removed in the next major release. " +
+                        "Please use org.apache.kafka.tools.consumer.LoggingMessageFormatter instead");
+                return LoggingMessageFormatter.class.getName();
+            case "kafka.tools.NoOpMessageFormatter":
+                System.err.println("WARNING: kafka.tools.NoOpMessageFormatter is deprecated and will be removed in the next major release. " +
+                        "Please use org.apache.kafka.tools.consumer.NoOpMessageFormatter instead");
+                return NoOpMessageFormatter.class.getName();
+            default:
+                return className;
+        }
     }
 
     Properties consumerProps() {
