@@ -1263,14 +1263,16 @@ class ReplicaManager(val config: KafkaConfig,
                     .setIsFutureKey(log.isFuture)
                 }.toList.asJava)
             }.filterNot(_.partitions().isEmpty).toList.asJava
-
-            new DescribeLogDirsResponseData.DescribeLogDirsResult().setLogDir(absolutePath)
-              .setErrorCode(Errors.NONE.code).setTopics(topicInfos)
-              .setTotalBytes(totalBytes).setUsableBytes(usableBytes)
+            if (topicInfos.isEmpty) {
+              createDescribeLogDirsResultWithoutTopicsInfo(absolutePath, totalBytes, usableBytes)
+            } else {
+              new DescribeLogDirsResponseData.DescribeLogDirsResult().setLogDir(absolutePath)
+                .setErrorCode(Errors.NONE.code)
+                .setTopics(topicInfos)
+                .setTotalBytes(totalBytes).setUsableBytes(usableBytes)
+            }
           case None =>
-            new DescribeLogDirsResponseData.DescribeLogDirsResult().setLogDir(absolutePath)
-              .setErrorCode(Errors.NONE.code)
-              .setTotalBytes(totalBytes).setUsableBytes(usableBytes)
+            createDescribeLogDirsResultWithoutTopicsInfo(absolutePath, totalBytes, usableBytes)
         }
 
       } catch {
@@ -1287,6 +1289,15 @@ class ReplicaManager(val config: KafkaConfig,
       }
     }.toList
   }
+
+  private def createDescribeLogDirsResultWithoutTopicsInfo(absolutePath: String,
+                                                           totalBytes: Long,
+                                                           usableBytes: Long): DescribeLogDirsResponseData.DescribeLogDirsResult =
+    new DescribeLogDirsResponseData.DescribeLogDirsResult()
+      .setLogDir(absolutePath)
+      .setErrorCode(Errors.NONE.code)
+      .setTotalBytes(totalBytes).setUsableBytes(usableBytes)
+
 
   // See: https://bugs.openjdk.java.net/browse/JDK-8162520
   private def adjustForLargeFileSystems(space: Long): Long = {
