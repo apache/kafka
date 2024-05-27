@@ -310,30 +310,30 @@ Found problem:
     "SCRAM-SHA-256=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",saltedpassword=\"mT0yyUUxnlJaC99HXgRTSYlbuqa4FSGtJCJfTMvjYCE=\",iterations=8192]",
     "-S",
     "SCRAM-SHA-256=[name=george,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",saltedpassword=\"mT0yyUUxnlJaC99HXgRTSYlbuqa4FSGtJCJfTMvjYCE=\",iterations=8192]")
-
+    
     assertEquals(2, scramRecords.get.size)
 
     // Require name subfield.
-    try assertEquals(1, parseAddScram("-S",
+    try assertEquals(1, parseAddScram("-S", 
       "SCRAM-SHA-256=[salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",saltedpassword=\"mT0yyUUxnlJaC99HXgRTSYlbuqa4FSGtJCJfTMvjYCE=\",iterations=8192]")) catch {
       case e: TerseFailure => assertEquals(s"You must supply 'name' to add-scram", e.getMessage)
     }
 
     // Require password xor saltedpassword
-    try assertEquals(1, parseAddScram("-S",
+    try assertEquals(1, parseAddScram("-S", 
       "SCRAM-SHA-256=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",password=alice,saltedpassword=\"mT0yyUUxnlJaC99HXgRTSYlbuqa4FSGtJCJfTMvjYCE=\",iterations=8192]"))
     catch {
       case e: TerseFailure => assertEquals(s"You must only supply one of 'password' or 'saltedpassword' to add-scram", e.getMessage)
     }
 
-    try assertEquals(1, parseAddScram("-S",
+    try assertEquals(1, parseAddScram("-S", 
       "SCRAM-SHA-256=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",iterations=8192]"))
     catch {
       case e: TerseFailure => assertEquals(s"You must supply one of 'password' or 'saltedpassword' to add-scram", e.getMessage)
     }
 
     // Validate salt is required with saltedpassword
-    try assertEquals(1, parseAddScram("-S",
+    try assertEquals(1, parseAddScram("-S", 
       "SCRAM-SHA-256=[name=alice,saltedpassword=\"mT0yyUUxnlJaC99HXgRTSYlbuqa4FSGtJCJfTMvjYCE=\",iterations=8192]"))
     catch {
       case e: TerseFailure => assertEquals(s"You must supply 'salt' with 'saltedpassword' to add-scram", e.getMessage)
@@ -343,7 +343,7 @@ Found problem:
     assertEquals(1, parseAddScram("-S", "SCRAM-SHA-256=[name=alice,password=alice,iterations=4096]").get.size)
 
     // Require 4096 <= iterations <= 16384
-    try assertEquals(1, parseAddScram("-S",
+    try assertEquals(1, parseAddScram("-S", 
       "SCRAM-SHA-256=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",password=alice,iterations=16385]"))
     catch {
       case e: TerseFailure => assertEquals(s"The 'iterations' value must be <= 16384 for add-scram", e.getMessage)
@@ -353,7 +353,7 @@ Found problem:
       "SCRAM-SHA-256=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",password=alice,iterations=16384]")
       .get.size)
 
-    try assertEquals(1, parseAddScram("-S",
+    try assertEquals(1, parseAddScram("-S", 
       "SCRAM-SHA-256=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",password=alice,iterations=4095]"))
     catch {
       case e: TerseFailure => assertEquals(s"The 'iterations' value must be >= 4096 for add-scram", e.getMessage)
@@ -385,7 +385,7 @@ Found problem:
     properties.store(propsStream, "config.props")
     propsStream.close()
 
-    val args = Array("format", "-c", s"${propsFile.toPath}", "-t", "XcZZOzUqS4yHOjhMQB6JLQ", "--release-version", "3.4", "-S",
+    val args = Array("format", "-c", s"${propsFile.toPath}", "-t", "XcZZOzUqS4yHOjhMQB6JLQ", "--release-version", "3.4", "-S", 
       "SCRAM-SHA-256=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",password=alice,iterations=8192]")
 
     try {
@@ -492,3 +492,4 @@ Found problem:
     }
   }
 }
+
