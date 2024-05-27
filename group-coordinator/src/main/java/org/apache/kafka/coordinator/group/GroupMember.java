@@ -80,7 +80,7 @@ public abstract class GroupMember {
     /**
      * The list of subscriptions (topic names) configured by the member.
      */
-    protected List<String> subscribedTopicNames;
+    protected Set<String> subscribedTopicNames;
 
     /**
      * The partitions assigned to this member.
@@ -96,7 +96,7 @@ public abstract class GroupMember {
         int rebalanceTimeoutMs,
         String clientId,
         String clientHost,
-        List<String> subscribedTopicNames,
+        Set<String> subscribedTopicNames,
         MemberState state,
         Map<Uuid, Set<Integer>> assignedPartitions
     ) {
@@ -172,7 +172,7 @@ public abstract class GroupMember {
     /**
      * @return The list of subscribed topic names.
      */
-    public List<String> subscribedTopicNames() {
+    public Set<String> subscribedTopicNames() {
         return subscribedTopicNames;
     }
 

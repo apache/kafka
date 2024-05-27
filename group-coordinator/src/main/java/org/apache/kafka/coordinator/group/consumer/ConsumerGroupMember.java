@@ -60,7 +60,7 @@ public class ConsumerGroupMember extends GroupMember {
         private int rebalanceTimeoutMs = -1;
         private String clientId = "";
         private String clientHost = "";
-        private List<String> subscribedTopicNames = Collections.emptyList();
+        private Set<String> subscribedTopicNames = Collections.emptySet();
         private String subscribedTopicRegex = "";
         private String serverAssignorName = null;
         private Map<Uuid, Set<Integer>> assignedPartitions = Collections.emptyMap();
@@ -148,15 +148,13 @@ public class ConsumerGroupMember extends GroupMember {
             return this;
         }
 
-        public Builder setSubscribedTopicNames(List<String> subscribedTopicNames) {
-            this.subscribedTopicNames = subscribedTopicNames;
-            this.subscribedTopicNames.sort(Comparator.naturalOrder());
+        public Builder setSubscribedTopicNames(List<String> subscribedTopicList) {
+            if (subscribedTopicNames != null) this.subscribedTopicNames = new HashSet<>(subscribedTopicList);
             return this;
         }
 
-        public Builder maybeUpdateSubscribedTopicNames(Optional<List<String>> subscribedTopicNames) {
-            this.subscribedTopicNames = subscribedTopicNames.orElse(this.subscribedTopicNames);
-            this.subscribedTopicNames.sort(Comparator.naturalOrder());
+        public Builder maybeUpdateSubscribedTopicNames(Optional<List<String>> subscribedTopicList) {
+            subscribedTopicList.ifPresent(list -> this.subscribedTopicNames = new HashSet<>(list));
             return this;
         }
 
@@ -273,7 +271,7 @@ public class ConsumerGroupMember extends GroupMember {
         int rebalanceTimeoutMs,
         String clientId,
         String clientHost,
-        List<String> subscribedTopicNames,
+        Set<String> subscribedTopicNames,
         String subscribedTopicRegex,
         String serverAssignorName,
         MemberState state,
@@ -389,7 +387,7 @@ public class ConsumerGroupMember extends GroupMember {
             .setClientId(clientId)
             .setInstanceId(instanceId)
             .setRackId(rackId)
-            .setSubscribedTopicNames(subscribedTopicNames)
+            .setSubscribedTopicNames(subscribedTopicNames == null ? null : new ArrayList<>(subscribedTopicNames))
             .setSubscribedTopicRegex(subscribedTopicRegex);
     }
 
