@@ -383,7 +383,15 @@ public class HeartbeatRequestManager implements RequestManager {
             case UNRELEASED_INSTANCE_ID:
                 logger.error("GroupHeartbeatRequest failed due to unreleased instance id {}: {}",
                         membershipManager.groupInstanceId().orElse("null"), errorMessage);
-                handleFatalFailure(Errors.UNRELEASED_INSTANCE_ID.exception(errorMessage));
+                handleFatalFailure(error.exception(errorMessage));
+                break;
+
+            case FENCED_INSTANCE_ID:
+                logger.error("GroupHeartbeatRequest failed due to fenced instance id {}: {}. " +
+                        "This is expected in the case that the member was removed from the group " +
+                        "by an admin client, and another member joined using the same group instance id.",
+                    membershipManager.groupInstanceId().orElse("null"), errorMessage);
+                handleFatalFailure(error.exception(errorMessage));
                 break;
 
             case INVALID_REQUEST:

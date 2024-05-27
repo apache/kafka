@@ -54,7 +54,7 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
     /**
      * The assignment specification which includes member metadata.
      */
-    private final AssignmentSpec assignmentSpec;
+    private final GroupSpec groupSpec;
 
     /**
      * The topic and partition metadata describer.
@@ -84,18 +84,19 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
      * The partitions that still need to be assigned.
      * Initially this contains all the subscribed topics' partitions.
      */
-    private Set<TopicIdPartition> unassignedPartitions;
+    private final Set<TopicIdPartition> unassignedPartitions;
 
     /**
      * The target assignment.
      */
     private final Map<String, MemberAssignment> targetAssignment;
 
-    OptimizedUniformAssignmentBuilder(AssignmentSpec assignmentSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
-        this.assignmentSpec = assignmentSpec;
+    OptimizedUniformAssignmentBuilder(GroupSpec groupSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
+        this.groupSpec = groupSpec;
         this.subscribedTopicDescriber = subscribedTopicDescriber;
-        this.subscribedTopicIds = new HashSet<>(assignmentSpec.members().values().iterator().next().subscribedTopicIds());
+        this.subscribedTopicIds = new HashSet<>(groupSpec.members().values().iterator().next().subscribedTopicIds());
         this.potentiallyUnfilledMembers = new HashMap<>();
+        this.unassignedPartitions = new HashSet<>();
         this.targetAssignment = new HashMap<>();
     }
 
@@ -103,9 +104,9 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
      * Here's the step-by-step breakdown of the assignment process:
      *
      * <li> Compute the quotas of partitions for each member based on the total partitions and member count.</li>
-     * <li> Initialize unassigned partitions to all the topic partitions and
-     *      remove partitions from the list as and when they are assigned.</li>
-     * <li> For existing assignments, retain partitions based on the determined quota.</li>
+     * <li> Initialize unassigned partitions with all the topic partitions that aren't present in the
+     *      current target assignment.</li>
+     * <li> For existing assignments, retain partitions based on the determined quota. Add extras to unassigned partitions.</li>
      * <li> Identify members that haven't fulfilled their partition quota or are eligible to receive extra partitions.</li>
      * <li> Proceed with a round-robin assignment according to quotas.
      *      For each unassigned partition, locate the first compatible member from the potentially unfilled list.</li>
@@ -117,6 +118,9 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
             return new GroupAssignment(Collections.emptyMap());
         }
 
+        // Check if the subscribed topicId is still valid.
+        // Update unassigned partitions based on the current target assignment
+        // and topic metadata.
         int totalPartitionsCount = 0;
         for (Uuid topicId : subscribedTopicIds) {
             int partitionCount = subscribedTopicDescriber.numPartitions(topicId);
@@ -125,17 +129,21 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
                     "Members are subscribed to topic " + topicId + " which doesn't exist in the topic metadata."
                 );
             } else {
+                for (int i = 0; i < partitionCount; i++) {
+                    if (!groupSpec.isPartitionAssigned(topicId, i)) {
+                        unassignedPartitions.add(new TopicIdPartition(topicId, i));
+                    }
+                }
                 totalPartitionsCount += partitionCount;
             }
         }
 
         // The minimum required quota that each member needs to meet for a balanced assignment.
         // This is the same for all members.
-        final int numberOfMembers = assignmentSpec.members().size();
+        final int numberOfMembers = groupSpec.members().size();
         final int minQuota = totalPartitionsCount / numberOfMembers;
         remainingMembersToGetAnExtraPartition = totalPartitionsCount % numberOfMembers;
 
-        unassignedPartitions = topicIdPartitions(subscribedTopicIds, subscribedTopicDescriber);
         maybeRevokePartitions(minQuota);
         assignRemainingPartitions();
 
@@ -147,7 +155,7 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
     }
 
     private void maybeRevokePartitions(int minQuota) {
-        for (Map.Entry<String, AssignmentMemberSpec> entry : assignmentSpec.members().entrySet()) {
+        for (Map.Entry<String, AssignmentMemberSpec> entry : groupSpec.members().entrySet()) {
             String memberId = entry.getKey();
             AssignmentMemberSpec assignmentMemberSpec = entry.getValue();
             Map<Uuid, Set<Integer>> oldAssignment = assignmentMemberSpec.assignedPartitions();
@@ -171,12 +179,12 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
                     for (Integer partition : partitions) {
                         if (quota > 0) {
                             quota--;
-                            unassignedPartitions.remove(new TopicIdPartition(topicId, partition));
                         } else {
                             if (newAssignment == null) newAssignment = deepCopy(oldAssignment);
                             Set<Integer> parts = newAssignment.get(topicId);
                             parts.remove(partition);
                             if (parts.isEmpty()) newAssignment.remove(topicId);
+                            unassignedPartitions.add(new TopicIdPartition(topicId, partition));
                         }
                     }
                 } else {

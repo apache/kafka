@@ -165,8 +165,10 @@ class KafkaServer(
 
   var kafkaScheduler: KafkaScheduler = _
 
-  var kraftControllerNodes: Seq[Node] = _
   @volatile var metadataCache: ZkMetadataCache = _
+
+  @volatile var quorumControllerNodeProvider: RaftControllerNodeProvider = _
+
   var quotaManagers: QuotaFactory.QuotaManagers = _
 
   val zkClientConfig: ZKClientConfig = KafkaServer.zkClientConfigFromKafkaConfig(config)
@@ -324,20 +326,13 @@ class KafkaServer(
 
         remoteLogManagerOpt = createRemoteLogManager()
 
-        if (config.migrationEnabled) {
-          kraftControllerNodes = QuorumConfig.voterConnectionsToNodes(
-            QuorumConfig.parseVoterConnections(config.quorumVoters)
-          ).asScala
-        } else {
-          kraftControllerNodes = Seq.empty
-        }
         metadataCache = MetadataCache.zkMetadataCache(
           config.brokerId,
           config.interBrokerProtocolVersion,
           brokerFeatures,
-          kraftControllerNodes,
           config.migrationEnabled)
-        val controllerNodeProvider = new MetadataCacheControllerNodeProvider(metadataCache, config)
+        val controllerNodeProvider = new MetadataCacheControllerNodeProvider(metadataCache, config,
+          () => Option(quorumControllerNodeProvider).map(_.getControllerInfo()))
 
         /* initialize feature change listener */
         _featureChangeListener = new FinalizedFeatureChangeListener(metadataCache, _zkClient)
@@ -446,8 +441,7 @@ class KafkaServer(
             CompletableFuture.completedFuture(quorumVoters),
             fatalFaultHandler = new LoggingFaultHandler("raftManager", () => shutdown())
           )
-          val controllerNodes = QuorumConfig.voterConnectionsToNodes(quorumVoters).asScala
-          val quorumControllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)
+          val quorumControllerNodeProvider = RaftControllerNodeProvider(raftManager, config)
           val brokerToQuorumChannelManager = new NodeToControllerChannelManagerImpl(
             controllerNodeProvider = quorumControllerNodeProvider,
             time = time,
@@ -1075,6 +1069,8 @@ class KafkaServer(
           lifecycleManager.close()
         }
         _brokerState = BrokerState.NOT_RUNNING
+
+        quorumControllerNodeProvider = null
 
         startupComplete.set(false)
         isShuttingDown.set(false)
