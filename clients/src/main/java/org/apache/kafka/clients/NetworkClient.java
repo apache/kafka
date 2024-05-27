@@ -995,7 +995,11 @@ public class NetworkClient implements KafkaClient {
     private void handleDisconnections(List<ClientResponse> responses, long now) {
         for (Map.Entry<String, ChannelState> entry : this.selector.disconnected().entrySet()) {
             String node = entry.getKey();
-            log.info("Node {} disconnected.", node);
+            if (null != entry.getValue() && entry.getValue() == ChannelState.EXPIRED) {
+                log.debug("Idle connection to node {} disconnected.", node);
+            } else {
+                log.info("Node {} disconnected.", node);
+            }
             processDisconnection(responses, node, now, entry.getValue());
         }
     }
