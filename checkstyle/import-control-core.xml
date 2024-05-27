@@ -123,9 +123,11 @@
     <allow pkg="kafka.cluster"/>
     <allow pkg="kafka.server"/>
     <allow pkg="kafka.zk"/>
-    <allow pkg="org.apache.kafka.clients.admin"/>
+    <allow pkg="org.apache.kafka.coordinator.transaction"/>
+    <allow pkg="org.apache.kafka.clients"/>
     <allow pkg="org.apache.kafka.security"/>
     <allow pkg="org.apache.kafka.server"/>
+    <allow pkg="org.apache.kafka.storage.internals.log"/>
     <allow pkg="org.apache.kafka.test"/>
     <allow pkg="kafka.test"/>
     <allow pkg="kafka.test.annotation"/>
