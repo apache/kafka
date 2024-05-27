@@ -84,7 +84,8 @@ public class DescribeQuorumResponse extends AbstractResponse {
                 .setTopicName(topicPartition.topic())
                 .setPartitions(Collections.singletonList(new DescribeQuorumResponseData.PartitionData()
                     .setPartitionIndex(topicPartition.partition())
-                    .setErrorCode(error.code())))));
+                    .setErrorCode(error.code())
+                    .setErrorMessage(error.message())))));
     }
 
 

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.memory.MemoryPool;
@@ -2088,6 +2089,7 @@ public class KafkaRaftClientTest {
 
         DescribeQuorumResponseData responseData = context.collectDescribeQuorumResponse();
         assertEquals(Errors.NONE, Errors.forCode(responseData.errorCode()));
+        assertEquals("", responseData.errorMessage());
 
         assertEquals(1, responseData.topics().size());
         DescribeQuorumResponseData.TopicData topicData = responseData.topics().get(0);
@@ -2097,6 +2099,7 @@ public class KafkaRaftClientTest {
         DescribeQuorumResponseData.PartitionData partitionData = topicData.partitions().get(0);
         assertEquals(context.metadataPartition.partition(), partitionData.partitionIndex());
         assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, Errors.forCode(partitionData.errorCode()));
+        assertEquals(Errors.NOT_LEADER_OR_FOLLOWER.message(), partitionData.errorMessage());
     }
 
     @Test
@@ -2104,6 +2107,9 @@ public class KafkaRaftClientTest {
         int localId = 0;
         int closeFollower = 2;
         int laggingFollower = 1;
+        Uuid localDirectory = Uuid.randomUuid();
+        Uuid closeFollowerDirectory = Uuid.randomUuid();
+        Uuid laggingFollowerDirectory = Uuid.randomUuid();
         int epoch = 1;
         Set<Integer> voters = Utils.mkSet(localId, closeFollower, laggingFollower);
 
@@ -2125,6 +2131,7 @@ public class KafkaRaftClientTest {
 
         // Create observer
         int observerId = 3;
+        Uuid observerDirectory = Uuid.randomUuid();
         context.time.sleep(100);
         long observerFetchTime = context.time.milliseconds();
         context.deliverRequest(context.fetchRequest(epoch, observerId, 0L, 0, 0));
@@ -2139,6 +2146,7 @@ public class KafkaRaftClientTest {
             Arrays.asList(
                 new ReplicaState()
                     .setReplicaId(localId)
+                    .setReplicaDirectoryId(localDirectory)
                     // As we are appending the records directly to the log,
                     // the leader end offset hasn't been updated yet.
                     .setLogEndOffset(3L)
@@ -2146,17 +2154,20 @@ public class KafkaRaftClientTest {
                     .setLastCaughtUpTimestamp(context.time.milliseconds()),
                 new ReplicaState()
                     .setReplicaId(laggingFollower)
+                    .setReplicaDirectoryId(laggingFollowerDirectory)
                     .setLogEndOffset(1L)
                     .setLastFetchTimestamp(laggingFollowerFetchTime)
                     .setLastCaughtUpTimestamp(laggingFollowerFetchTime),
                 new ReplicaState()
                     .setReplicaId(closeFollower)
+                    .setReplicaDirectoryId(closeFollowerDirectory)
                     .setLogEndOffset(3L)
                     .setLastFetchTimestamp(closeFollowerFetchTime)
                     .setLastCaughtUpTimestamp(closeFollowerFetchTime)),
             singletonList(
                 new ReplicaState()
                     .setReplicaId(observerId)
+                    .setReplicaDirectoryId(observerDirectory)
                     .setLogEndOffset(0L)
                     .setLastFetchTimestamp(observerFetchTime)
                     .setLastCaughtUpTimestamp(-1L)));

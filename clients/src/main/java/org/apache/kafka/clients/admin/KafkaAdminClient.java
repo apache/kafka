@@ -58,6 +58,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.ConsumerGroupState;
+import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.KafkaException;
@@ -239,6 +240,7 @@ import org.apache.kafka.common.requests.UnregisterBrokerResponse;
 import org.apache.kafka.common.requests.UpdateFeaturesRequest;
 import org.apache.kafka.common.requests.UpdateFeaturesResponse;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.scram.internals.ScramFormatter;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
@@ -4410,12 +4412,13 @@ public class KafkaAdminClient extends AdminClient {
             private QuorumInfo.ReplicaState translateReplicaState(DescribeQuorumResponseData.ReplicaState replica) {
                 return new QuorumInfo.ReplicaState(
                         replica.replicaId(),
+                        Optional.ofNullable(replica.replicaDirectoryId()),
                         replica.logEndOffset(),
                         replica.lastFetchTimestamp() == -1 ? OptionalLong.empty() : OptionalLong.of(replica.lastFetchTimestamp()),
                         replica.lastCaughtUpTimestamp() == -1 ? OptionalLong.empty() : OptionalLong.of(replica.lastCaughtUpTimestamp()));
             }
 
-            private QuorumInfo createQuorumResult(final DescribeQuorumResponseData.PartitionData partition) {
+            private QuorumInfo createQuorumResult(final DescribeQuorumResponseData.PartitionData partition, DescribeQuorumResponseData.NodeCollection nodeCollection) {
                 List<QuorumInfo.ReplicaState> voters = partition.currentVoters().stream()
                     .map(this::translateReplicaState)
                     .collect(Collectors.toList());
@@ -4424,12 +4427,21 @@ public class KafkaAdminClient extends AdminClient {
                     .map(this::translateReplicaState)
                     .collect(Collectors.toList());
 
+                List<QuorumInfo.Node> nodes = nodeCollection.stream().map(n -> {
+                    List<Endpoint> endpoints = n.listeners().stream()
+                        .map(l -> new Endpoint(l.name(), SecurityProtocol.forId(l.securityProtocol()), l.host(), l.port()))
+                        .collect(Collectors.toList());
+
+                    return new QuorumInfo.Node(n.nodeId(), endpoints);
+                }).collect(Collectors.toList());
+
                 return new QuorumInfo(
                     partition.leaderId(),
                     partition.leaderEpoch(),
                     partition.highWatermark(),
                     voters,
-                    observers
+                    observers,
+                    nodes
                 );
             }
 
@@ -4443,7 +4455,7 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse response) {
                 final DescribeQuorumResponse quorumResponse = (DescribeQuorumResponse) response;
                 if (quorumResponse.data().errorCode() != Errors.NONE.code()) {
-                    throw Errors.forCode(quorumResponse.data().errorCode()).exception();
+                    throw Errors.forCode(quorumResponse.data().errorCode()).exception(quorumResponse.data().errorMessage());
                 }
                 if (quorumResponse.data().topics().size() != 1) {
                     String msg = String.format("DescribeMetadataQuorum received %d topics when 1 was expected",
@@ -4472,9 +4484,9 @@ public class KafkaAdminClient extends AdminClient {
                     throw new UnknownServerException(msg);
                 }
                 if (partition.errorCode() != Errors.NONE.code()) {
-                    throw Errors.forCode(partition.errorCode()).exception();
+                    throw Errors.forCode(partition.errorCode()).exception(partition.errorMessage());
                 }
-                future.complete(createQuorumResult(partition));
+                future.complete(createQuorumResult(partition, quorumResponse.data().nodes()));
             }
 
             @Override

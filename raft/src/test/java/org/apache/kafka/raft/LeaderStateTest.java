@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -45,6 +46,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class LeaderStateTest {
     private final int localId = 0;
+    private final Uuid localDirectoryId = Uuid.randomUuid();
     private final int epoch = 5;
     private final LogContext logContext = new LogContext();
     private final BatchAccumulator<?> accumulator = Mockito.mock(BatchAccumulator.class);
@@ -59,6 +61,7 @@ public class LeaderStateTest {
         return new LeaderState<>(
             time,
             localId,
+            localDirectoryId,
             epoch,
             epochStartOffset,
             voters,
@@ -74,6 +77,7 @@ public class LeaderStateTest {
         assertThrows(NullPointerException.class, () -> new LeaderState<>(
             new MockTime(),
             localId,
+            localDirectoryId,
             epoch,
             0,
             Collections.emptySet(),

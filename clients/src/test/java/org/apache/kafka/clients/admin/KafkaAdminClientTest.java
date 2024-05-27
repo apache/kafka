@@ -30,6 +30,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.ElectionType;
+import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
@@ -222,6 +223,7 @@ import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -732,12 +734,18 @@ public class KafkaAdminClientTest {
 
     private static QuorumInfo defaultQuorumInfo(boolean emptyOptionals) {
         return new QuorumInfo(1, 1, 1L,
-                singletonList(new QuorumInfo.ReplicaState(1, 100,
+                singletonList(new QuorumInfo.ReplicaState(1,
+                    emptyOptionals ? Optional.empty() : Optional.of(Uuid.randomUuid()),
+                    100,
                         emptyOptionals ? OptionalLong.empty() : OptionalLong.of(1000),
                         emptyOptionals ? OptionalLong.empty() : OptionalLong.of(1000))),
-                singletonList(new QuorumInfo.ReplicaState(1, 100,
+                singletonList(new QuorumInfo.ReplicaState(1,
+                        emptyOptionals ? Optional.empty() : Optional.of(Uuid.randomUuid()),
+                        100,
                         emptyOptionals ? OptionalLong.empty() : OptionalLong.of(1000),
-                        emptyOptionals ? OptionalLong.empty() : OptionalLong.of(1000))));
+                        emptyOptionals ? OptionalLong.empty() : OptionalLong.of(1000))),
+                singletonList(new QuorumInfo.Node(1,
+                        singletonList(new Endpoint("test", SecurityProtocol.PLAINTEXT, "localhost", 1)))));
     }
 
     private static DescribeQuorumResponse prepareDescribeQuorumResponse(
@@ -755,6 +763,7 @@ public class KafkaAdminClientTest {
         for (int i = 0; i < (partitionCountError ? 2 : 1); i++) {
             DescribeQuorumResponseData.ReplicaState replica = new DescribeQuorumResponseData.ReplicaState()
                     .setReplicaId(1)
+                    .setReplicaDirectoryId(Uuid.randomUuid())
                     .setLogEndOffset(100);
             replica.setLastFetchTimestamp(emptyOptionals ? -1 : 1000);
             replica.setLastCaughtUpTimestamp(emptyOptionals ? -1 : 1000);
@@ -764,12 +773,16 @@ public class KafkaAdminClientTest {
                     .setHighWatermark(1)
                     .setCurrentVoters(singletonList(replica))
                     .setObservers(singletonList(replica))
-                    .setErrorCode(partitionLevelError.code()));
+                    .setErrorCode(partitionLevelError.code())
+                    .setErrorMessage(partitionLevelError.message()));
         }
         for (int i = 0; i < (topicCountError ? 2 : 1); i++) {
             topics.add(new DescribeQuorumResponseData.TopicData().setTopicName(topicName).setPartitions(partitions));
         }
-        return new DescribeQuorumResponse(new DescribeQuorumResponseData().setTopics(topics).setErrorCode(topLevelError.code()));
+        return new DescribeQuorumResponse(new DescribeQuorumResponseData()
+            .setTopics(topics)
+            .setErrorCode(topLevelError.code())
+            .setErrorMessage(topLevelError.message()));
     }
 
     /**

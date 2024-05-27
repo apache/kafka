@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.message.LeaderChangeMessage;
@@ -50,6 +51,7 @@ public class LeaderState<T> implements EpochState {
     static final double CHECK_QUORUM_TIMEOUT_FACTOR = 1.5;
 
     private final int localId;
+    private final Uuid localDirectoryId;
     private final int epoch;
     private final long epochStartOffset;
     private final Set<Integer> grantingVoters;
@@ -70,6 +72,7 @@ public class LeaderState<T> implements EpochState {
     protected LeaderState(
         Time time,
         int localId,
+        Uuid localDirectoryId,
         int epoch,
         long epochStartOffset,
         Set<Integer> voters,
@@ -79,6 +82,7 @@ public class LeaderState<T> implements EpochState {
         LogContext logContext
     ) {
         this.localId = localId;
+        this.localDirectoryId = localDirectoryId;
         this.epoch = epoch;
         this.epochStartOffset = epochStartOffset;
 
@@ -197,6 +201,10 @@ public class LeaderState<T> implements EpochState {
 
     public int localId() {
         return localId;
+    }
+
+    public Uuid localDirectoryId() {
+        return localDirectoryId;
     }
 
     public Set<Integer> nonAcknowledgingVoters() {
@@ -532,8 +540,9 @@ public class LeaderState<T> implements EpochState {
     @Override
     public String toString() {
         return String.format(
-            "Leader(localId=%d, epoch=%d, epochStartOffset=%d, highWatermark=%s, voterStates=%s)",
+            "Leader(localId=%d, localDirectoryId=%s, epoch=%d, epochStartOffset=%d, highWatermark=%s, voterStates=%s)",
             localId,
+            localDirectoryId,
             epoch,
             epochStartOffset,
             highWatermark,

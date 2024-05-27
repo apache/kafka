@@ -496,6 +496,7 @@ public class QuorumState {
         LeaderState<T> state = new LeaderState<>(
             time,
             localIdOrThrow(),
+            localDirectoryId(),
             epoch(),
             epochStartOffset,
             latestVoterSet.get().voterIds(),

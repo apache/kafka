@@ -18,7 +18,10 @@ package org.apache.kafka.clients.admin;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.OptionalLong;
+import org.apache.kafka.common.Endpoint;
+import org.apache.kafka.common.Uuid;
 
 /**
  * This class is used to describe the state of the quorum received in DescribeQuorumResponse.
@@ -29,19 +32,22 @@ public class QuorumInfo {
     private final long highWatermark;
     private final List<ReplicaState> voters;
     private final List<ReplicaState> observers;
+    private final List<Node> nodes;
 
     QuorumInfo(
         int leaderId,
         long leaderEpoch,
         long highWatermark,
         List<ReplicaState> voters,
-        List<ReplicaState> observers
+        List<ReplicaState> observers,
+        List<Node> nodes
     ) {
         this.leaderId = leaderId;
         this.leaderEpoch = leaderEpoch;
         this.highWatermark = highWatermark;
         this.voters = voters;
         this.observers = observers;
+        this.nodes = nodes;
     }
 
     public int leaderId() {
@@ -62,6 +68,10 @@ public class QuorumInfo {
 
     public List<ReplicaState> observers() {
         return observers;
+    }
+
+    public List<Node> nodes() {
+        return nodes;
     }
 
     @Override
@@ -94,21 +104,24 @@ public class QuorumInfo {
 
     public static class ReplicaState {
         private final int replicaId;
+        private final Optional<Uuid> replicaDirectoryId;
         private final long logEndOffset;
         private final OptionalLong lastFetchTimestamp;
         private final OptionalLong lastCaughtUpTimestamp;
 
         ReplicaState() {
-            this(0, 0, OptionalLong.empty(), OptionalLong.empty());
+            this(0, Optional.empty(), 0, OptionalLong.empty(), OptionalLong.empty());
         }
 
         ReplicaState(
             int replicaId,
+            Optional<Uuid> replicaDirectoryId,
             long logEndOffset,
             OptionalLong lastFetchTimestamp,
             OptionalLong lastCaughtUpTimestamp
         ) {
             this.replicaId = replicaId;
+            this.replicaDirectoryId = replicaDirectoryId;
             this.logEndOffset = logEndOffset;
             this.lastFetchTimestamp = lastFetchTimestamp;
             this.lastCaughtUpTimestamp = lastCaughtUpTimestamp;
@@ -120,6 +133,13 @@ public class QuorumInfo {
          */
         public int replicaId() {
             return replicaId;
+        }
+
+        /**
+         * Return the directory id of the replica if configured.
+         */
+        public Optional<Uuid> replicaDirectoryId() {
+            return replicaDirectoryId;
         }
 
         /**
@@ -172,6 +192,24 @@ public class QuorumInfo {
                 ", lastFetchTimestamp=" + lastFetchTimestamp +
                 ", lastCaughtUpTimestamp=" + lastCaughtUpTimestamp +
                 ')';
+        }
+    }
+
+    public static class Node {
+        private int nodeId;
+        private List<Endpoint> endpoints;
+
+        Node(int nodeId, List<Endpoint> endpoints) {
+            this.nodeId = nodeId;
+            this.endpoints = endpoints;
+        }
+
+        public int nodeId() {
+            return nodeId;
+        }
+
+        public List<Endpoint> endpoints() {
+            return endpoints;
         }
     }
 }

@@ -622,6 +622,7 @@ class KafkaApisTest extends Logging {
 
     val response = verifyNoThrottling[DescribeQuorumResponse](request)
     assertEquals(Errors.UNKNOWN_SERVER_ERROR, Errors.forCode(response.data.errorCode))
+    assertEquals(Errors.UNKNOWN_SERVER_ERROR.message(), response.data.errorMessage)
   }
 
   @Test
