@@ -232,7 +232,6 @@ public class ConsumerGroup extends AbstractGroup<ConsumerGroupMember> {
         if (newMember == null) {
             throw new IllegalArgumentException("newMember cannot be null.");
         }
-
         ConsumerGroupMember oldMember = members.put(newMember.memberId(), newMember);
         maybeUpdateSubscribedTopicNamesAndGroupSubscriptionType(oldMember, newMember);
         maybeUpdateServerAssignors(oldMember, newMember);
@@ -595,7 +594,7 @@ public class ConsumerGroup extends AbstractGroup<ConsumerGroupMember> {
             .setAssignmentEpoch(targetAssignmentEpoch.get(committedOffset));
         members.entrySet(committedOffset).forEach(
             entry -> describedGroup.members().add(
-                (entry.getValue()).asConsumerGroupDescribeMember(
+                entry.getValue().asConsumerGroupDescribeMember(
                     targetAssignment.get(entry.getValue().memberId(), committedOffset),
                     topicsImage
                 )
