@@ -26,7 +26,8 @@ import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.StreamsAssignmentInterface;
-import org.apache.kafka.clients.consumer.internals.StreamsAssignmentInterface.SubTopology;
+import org.apache.kafka.clients.consumer.internals.StreamsAssignmentInterface.Assignment;
+import org.apache.kafka.clients.consumer.internals.StreamsAssignmentInterface.Subtopology;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
@@ -55,7 +56,6 @@ import org.apache.kafka.streams.processor.StandbyUpdateListener;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.TopicsInfo;
-import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -83,6 +83,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.eosEnabled;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.processingMode;
@@ -343,6 +344,9 @@ public class StreamThread extends Thread implements ProcessingThread {
     // handler for, eg MissingSourceTopicException with named topologies
     private final Queue<StreamsException> nonFatalExceptionsToHandle;
 
+    // These are used only with the Streams Rebalance Protocol client
+    private final StreamsAssignmentInterface streamsAssignmentInterface;
+
     // These are used to signal from outside the stream thread, but the variables themselves are internal to the thread
     private final AtomicLong cacheResizeSize = new AtomicLong(-1L);
     private final AtomicBoolean leaveGroupRequested = new AtomicBoolean(false);
@@ -475,6 +479,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         }
 
         final Consumer<byte[], byte[]> mainConsumer;
+        final StreamsAssignmentInterface streamsAssignmentInterface;
         if (consumerConfigs.containsKey(ConsumerConfig.GROUP_PROTOCOL_CONFIG) &&
             consumerConfigs.get(ConsumerConfig.GROUP_PROTOCOL_CONFIG).toString().equalsIgnoreCase(GroupProtocol.CONSUMER.name)) {
             if (topologyMetadata.hasNamedTopologies()) {
@@ -482,7 +487,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             }
             log.info("Streams rebalance protocol enabled");
 
-            StreamsAssignmentInterface streamsAssignmentInterface =
+            streamsAssignmentInterface =
                 initAssignmentInterface(processId,
                 config,
                 parseHostInfo(config.getString(StreamsConfig.APPLICATION_SERVER_CONFIG)),
@@ -491,6 +496,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             mainConsumer = clientSupplier.getStreamsRebalanceProtocolConsumer(consumerConfigs, streamsAssignmentInterface);
         } else {
             mainConsumer = clientSupplier.getConsumer(consumerConfigs);
+            streamsAssignmentInterface = null;
         }
 
         taskManager.setMainConsumer(mainConsumer);
@@ -515,7 +521,8 @@ public class StreamThread extends Thread implements ProcessingThread {
             referenceContainer.nonFatalExceptionsToHandle,
             shutdownErrorHook,
             streamsUncaughtExceptionHandler,
-            cache::resize
+            cache::resize,
+            streamsAssignmentInterface
         );
 
         return streamThread.updateThreadMetadata(getSharedAdminClientId(clientId));
@@ -536,11 +543,11 @@ public class StreamThread extends Thread implements ProcessingThread {
                                                                       final TopologyMetadata topologyMetadata) {
         final InternalTopologyBuilder internalTopologyBuilder = topologyMetadata.lookupBuilderForNamedTopology(null);
 
-        Map<String, SubTopology> subtopologyMap = new HashMap<>();
-        for (Map.Entry<Subtopology, TopicsInfo> topicsInfoEntry: internalTopologyBuilder.subtopologyToTopicsInfo().entrySet()) {
+        Map<String, Subtopology> subtopologyMap = new HashMap<>();
+        for (Map.Entry<TopologyMetadata.Subtopology, TopicsInfo> topicsInfoEntry: internalTopologyBuilder.subtopologyToTopicsInfo().entrySet()) {
             subtopologyMap.put(
                 String.valueOf(topicsInfoEntry.getKey().nodeGroupId),
-                new SubTopology(
+                new Subtopology(
                     topicsInfoEntry.getValue().sourceTopics,
                     topicsInfoEntry.getValue().sinkTopics,
                     topicsInfoEntry.getValue().repartitionSourceTopics.entrySet()
@@ -572,8 +579,8 @@ public class StreamThread extends Thread implements ProcessingThread {
 
         return new StreamsAssignmentInterface(
             processId,
-            hostInfo.host(),
-            hostInfo.port(),
+            new StreamsAssignmentInterface.HostInfo(hostInfo.host(), hostInfo.port()),
+            null,
             subtopologyMap,
             assignmentProperties,
             config.getClientTags()
@@ -651,7 +658,8 @@ public class StreamThread extends Thread implements ProcessingThread {
                         final Queue<StreamsException> nonFatalExceptionsToHandle,
                         final Runnable shutdownErrorHook,
                         final BiConsumer<Throwable, Boolean> streamsUncaughtExceptionHandler,
-                        final java.util.function.Consumer<Long> cacheResizer
+                        final java.util.function.Consumer<Long> cacheResizer,
+                        final StreamsAssignmentInterface streamsAssignmentInterface
                         ) {
         super(threadId);
         this.stateLock = new Object();
@@ -673,6 +681,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         this.shutdownErrorHook = shutdownErrorHook;
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
         this.cacheResizer = cacheResizer;
+        this.streamsAssignmentInterface = streamsAssignmentInterface;
 
         // The following sensors are created here but their references are not stored in this object, since within
         // this object they are not recorded. The sensors are created here so that the stream threads starts with all
@@ -1315,6 +1324,8 @@ public class StreamThread extends Thread implements ProcessingThread {
             throw new StreamsException(logPrefix + "Unexpected state " + state + " during normal iteration");
         }
 
+        handleAssignmentFromStreamsRebalanceProtocol();
+
         final long pollLatency = advanceNowAndComputeLatency();
 
         final int numRecords = records.count();
@@ -1341,6 +1352,48 @@ public class StreamThread extends Thread implements ProcessingThread {
             streamsUncaughtExceptionHandler.accept(nonFatalExceptionsToHandle.poll(), true);
         }
         return pollLatency;
+    }
+
+    private void handleAssignmentFromStreamsRebalanceProtocol() {
+        // Process assignment from Streams Rebalance Protocol
+        Assignment newAssignment = streamsAssignmentInterface.targetAssignment.get();
+        if (!newAssignment.equals(streamsAssignmentInterface.reconciledAssignment.get())) {
+
+            final Map<TaskId, Set<TopicPartition>> activeTasksWithPartitions =
+                pairWithTopicPartitions(newAssignment.activeTasks.stream());
+            final Map<TaskId, Set<TopicPartition>> standbyTasksWithPartitions =
+                pairWithTopicPartitions(Stream.concat(newAssignment.standbyTasks.stream(), newAssignment.warmupTasks.stream()));
+
+            log.info("Processing new assignment {} from Streams Rebalance Protocol", newAssignment);
+
+            taskManager.handleAssignment(
+                activeTasksWithPartitions,
+                standbyTasksWithPartitions
+            );
+        }
+    }
+
+    private Map<TaskId, Set<TopicPartition>> pairWithTopicPartitions(final Stream<StreamsAssignmentInterface.TaskId> taskIdStream) {
+        return taskIdStream
+            .collect(Collectors.toMap(
+                this::toTaskId,
+                task -> toTopicPartitions(task, streamsAssignmentInterface.subtopologyMap().get(task.subtopologyId))
+            ));
+    }
+
+    private TaskId toTaskId(final StreamsAssignmentInterface.TaskId task) {
+        return new TaskId(Integer.parseInt(task.subtopologyId), task.partitionId);
+    }
+
+    private Set<TopicPartition> toTopicPartitions(final StreamsAssignmentInterface.TaskId task,
+                                                  final Subtopology subTopology) {
+        return
+            Stream.concat(
+                subTopology.sourceTopics.stream(),
+                subTopology.repartitionSourceTopics.keySet().stream()
+            )
+            .map(t -> new TopicPartition(t, task.partitionId))
+            .collect(Collectors.toSet());
     }
 
     /**

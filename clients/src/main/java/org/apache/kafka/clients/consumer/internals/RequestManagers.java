@@ -227,9 +227,18 @@ public class RequestManagers implements Closeable {
                         streamsInstallAssignmentRequestManager = new StreamsInstallAssignmentRequestManager(
                             streamsInstanceMetadata.get());
                         streamsHeartbeatRequestManager = new StreamsHeartbeatRequestManager(
+                            logContext,
+                            time,
+                            config,
+                            coordinator,
                             streamsInitializeRequestManager,
                             streamsPrepareAssignmentRequestManager,
-                            streamsInstanceMetadata.get());
+                            membershipManager,
+                            backgroundEventHandler,
+                            metrics,
+                            streamsInstanceMetadata.get(),
+                            metadata
+                            );
                     } else {
                         heartbeatRequestManager = new HeartbeatRequestManager(
                             logContext,

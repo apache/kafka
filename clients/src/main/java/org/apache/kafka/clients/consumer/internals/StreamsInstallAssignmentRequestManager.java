@@ -28,7 +28,7 @@ public class StreamsInstallAssignmentRequestManager implements RequestManager {
 
     @Override
     public PollResult poll(final long currentTimeMs) {
-        return null;
+        return PollResult.EMPTY;
     }
 
 }

@@ -41,7 +41,7 @@ import java.util.Map;
  * - {@link Errors#STREAMS_SHUTDOWN_APPLICATION}
  * - {@link Errors#STREAMS_INCONSISTENT_TOPOLOGY}
  * - {@link Errors#STREAMS_MISSING_SOURCE_TOPICS}
- * - {@link Errors#STREAMS_MISSING_INTERNAL_TOPICS}
+ * - {@link Errors#STREAMS_GROUP_UNINITIALIZED}
  */
 public class StreamsHeartbeatResponse extends AbstractResponse {
     private final StreamsHeartbeatResponseData data;
@@ -69,6 +69,18 @@ public class StreamsHeartbeatResponse extends AbstractResponse {
     @Override
     public void maybeSetThrottleTimeMs(int throttleTimeMs) {
         data.setThrottleTimeMs(throttleTimeMs);
+    }
+
+    /**
+     * Possible error codes.
+     *
+     * - {@link Errors#STREAMS_SHUTDOWN_APPLICATION}
+     * - {@link Errors#STREAMS_INCONSISTENT_TOPOLOGY}
+     * - {@link Errors#STREAMS_MISSING_SOURCE_TOPICS}
+     * - {@link Errors#STREAMS_GROUP_UNINITIALIZED}
+     */
+    public Errors assignmentError() {
+        return Errors.forCode(data.assignmentErrorCode());
     }
 
     public static StreamsHeartbeatResponse parse(ByteBuffer buffer, short version) {

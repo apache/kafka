@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.common.errors;
 
-public class StreamsInvalidAssignment extends ApiException {
-    public StreamsInvalidAssignment(String message) {
+public class StreamsGroupUninitializedException extends ApiException {
+    public StreamsGroupUninitializedException(String message) {
         super(message);
     }
 }

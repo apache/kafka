@@ -21,9 +21,9 @@ import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
 import org.apache.kafka.common.errors.BrokerNotAvailableException;
 import org.apache.kafka.common.errors.StreamsInconsistentTopologyException;
-import org.apache.kafka.common.errors.StreamsInvalidAssignment;
+import org.apache.kafka.common.errors.StreamsInvalidAssignmentException;
 import org.apache.kafka.common.errors.StreamsInvalidTopologyException;
-import org.apache.kafka.common.errors.StreamsMissingInternalTopicsException;
+import org.apache.kafka.common.errors.StreamsGroupUninitializedException;
 import org.apache.kafka.common.errors.StreamsMissingSourceTopicsException;
 import org.apache.kafka.common.errors.StreamsShutdownApplicationException;
 import org.apache.kafka.common.errors.TelemetryTooLargeException;
@@ -407,12 +407,12 @@ public enum Errors {
         StreamsInconsistentTopologyException::new),
     STREAMS_MISSING_SOURCE_TOPICS(123, "One or more source topics are missing.",
         StreamsMissingSourceTopicsException::new),
-    STREAMS_MISSING_INTERNAL_TOPICS(124, "One or more internal topics are missing.",
-        StreamsMissingInternalTopicsException::new),
+    STREAMS_GROUP_UNINITIALIZED(124, "The group is not (fully) initialized, broker-side topology information or internal topics are missing.",
+        StreamsGroupUninitializedException::new),
     STREAMS_SHUTDOWN_APPLICATION(125, "A client requested the shutdown of the whole application.",
         StreamsShutdownApplicationException::new),
     STREAMS_INVALID_ASSIGNMENT(126, "The assignment produced the by the client-side assignment is invalid.",
-        StreamsInvalidAssignment::new);
+        StreamsInvalidAssignmentException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

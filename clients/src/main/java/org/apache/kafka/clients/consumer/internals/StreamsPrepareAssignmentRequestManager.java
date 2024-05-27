@@ -28,7 +28,7 @@ public class StreamsPrepareAssignmentRequestManager implements RequestManager {
 
     @Override
     public PollResult poll(final long currentTimeMs) {
-        return null;
+        return PollResult.EMPTY;
     }
 
     public void prepareAssignment() {
