@@ -42,7 +42,6 @@ import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.CoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicImage;
@@ -1399,9 +1398,9 @@ public class ClassicGroup implements Group {
                         member.clientId(),
                         member.clientHost(),
                         member.rebalanceTimeoutMs(),
-                        ((ConsumerGroupMember) member).classicProtocolSessionTimeout().get(),
+                        member.classicProtocolSessionTimeout().get(),
                         ConsumerProtocol.PROTOCOL_TYPE,
-                        ((ConsumerGroupMember) member).supportedJoinGroupRequestProtocols(),
+                        member.supportedJoinGroupRequestProtocols(),
                         null
                     )
                 );

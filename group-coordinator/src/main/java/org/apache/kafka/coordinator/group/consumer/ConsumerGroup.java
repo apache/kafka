@@ -59,7 +59,7 @@ import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.Consumer
  * A Consumer Group. All the metadata in this class are backed by
  * records in the __consumer_offsets partitions.
  */
-public class ConsumerGroup extends AbstractGroup {
+public class ConsumerGroup extends AbstractGroup<ConsumerGroupMember> {
 
     public enum ConsumerGroupState {
         EMPTY("Empty"),
@@ -191,7 +191,7 @@ public class ConsumerGroup extends AbstractGroup {
 
     /**
      * Gets or creates a new member but without adding it to the group. Adding a member
-     * is done via the {@link ConsumerGroup#updateMember(GroupMember)} method.
+     * is done via the {@link ConsumerGroup#updateMember(ConsumerGroupMember)} method.
      *
      * @param memberId          The member id.
      * @param createIfNotExists Booleans indicating whether the member must be
@@ -203,7 +203,7 @@ public class ConsumerGroup extends AbstractGroup {
         String memberId,
         boolean createIfNotExists
     ) {
-        ConsumerGroupMember member = (ConsumerGroupMember) members.get(memberId);
+        ConsumerGroupMember member = members.get(memberId);
         if (member != null) return member;
 
         if (!createIfNotExists) {
@@ -228,20 +228,19 @@ public class ConsumerGroup extends AbstractGroup {
     }
 
     @Override
-    public void updateMember(GroupMember newMember) {
+    public void updateMember(ConsumerGroupMember newMember) {
         if (newMember == null) {
             throw new IllegalArgumentException("newMember cannot be null.");
         }
 
-        ConsumerGroupMember newConsumerGroupMember = (ConsumerGroupMember) newMember;
-        ConsumerGroupMember oldMember = (ConsumerGroupMember) members.put(newMember.memberId(), newMember);
+        ConsumerGroupMember oldMember = members.put(newMember.memberId(), newMember);
         maybeUpdateSubscribedTopicNamesAndGroupSubscriptionType(oldMember, newMember);
-        maybeUpdateServerAssignors(oldMember, newConsumerGroupMember);
-        maybeUpdatePartitionEpoch(oldMember, newConsumerGroupMember);
-        updateStaticMember(newConsumerGroupMember);
+        maybeUpdateServerAssignors(oldMember, newMember);
+        maybeUpdatePartitionEpoch(oldMember, newMember);
+        updateStaticMember(newMember);
         maybeUpdateGroupState();
-        maybeUpdateNumClassicProtocolMembers(oldMember, newConsumerGroupMember);
-        maybeUpdateClassicProtocolMembersSupportedProtocols(oldMember, newConsumerGroupMember);
+        maybeUpdateNumClassicProtocolMembers(oldMember, newMember);
+        maybeUpdateClassicProtocolMembersSupportedProtocols(oldMember, newMember);
     }
 
     /**
@@ -257,7 +256,7 @@ public class ConsumerGroup extends AbstractGroup {
 
     @Override
     public void removeMember(String memberId) {
-        ConsumerGroupMember oldMember = (ConsumerGroupMember) members.remove(memberId);
+        ConsumerGroupMember oldMember = members.remove(memberId);
         maybeUpdateSubscribedTopicNamesAndGroupSubscriptionType(oldMember, null);
         maybeUpdateServerAssignors(oldMember, null);
         maybeRemovePartitionEpoch(oldMember);
@@ -596,7 +595,7 @@ public class ConsumerGroup extends AbstractGroup {
             .setAssignmentEpoch(targetAssignmentEpoch.get(committedOffset));
         members.entrySet(committedOffset).forEach(
             entry -> describedGroup.members().add(
-                ((ConsumerGroupMember) entry.getValue()).asConsumerGroupDescribeMember(
+                (entry.getValue()).asConsumerGroupDescribeMember(
                     targetAssignment.get(entry.getValue().memberId(), committedOffset),
                     topicsImage
                 )
@@ -674,7 +673,7 @@ public class ConsumerGroup extends AbstractGroup {
         List<CoordinatorRecord> records
     ) {
         members().forEach((__, consumerGroupMember) ->
-            records.add(CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId(), (ConsumerGroupMember) consumerGroupMember))
+            records.add(CoordinatorRecordHelpers.newMemberSubscriptionRecord(groupId(), consumerGroupMember))
         );
 
         records.add(CoordinatorRecordHelpers.newGroupEpochRecord(groupId(), groupEpoch()));
@@ -690,7 +689,7 @@ public class ConsumerGroup extends AbstractGroup {
         records.add(CoordinatorRecordHelpers.newTargetAssignmentEpochRecord(groupId(), groupEpoch()));
 
         members().forEach((__, consumerGroupMember) ->
-            records.add(CoordinatorRecordHelpers.newCurrentAssignmentRecord(groupId(), (ConsumerGroupMember) consumerGroupMember))
+            records.add(CoordinatorRecordHelpers.newCurrentAssignmentRecord(groupId(), consumerGroupMember))
         );
     }
 

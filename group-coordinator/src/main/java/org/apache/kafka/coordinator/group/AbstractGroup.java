@@ -44,7 +44,10 @@ import java.util.Set;
 import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HETEROGENEOUS;
 import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOGENEOUS;
 
-public abstract class AbstractGroup implements Group {
+/**
+ * The abstract group provides definitions for the consumer and share group.
+ */
+public abstract class AbstractGroup<T extends GroupMember> implements Group {
 
     public static class DeadlineAndEpoch {
         static final DeadlineAndEpoch EMPTY = new DeadlineAndEpoch(0L, 0);
@@ -78,7 +81,7 @@ public abstract class AbstractGroup implements Group {
     /**
      * The group members.
      */
-    protected final TimelineHashMap<String, GroupMember> members;
+    protected final TimelineHashMap<String, T> members;
 
     /**
      * The number of subscribers per topic.
@@ -215,7 +218,7 @@ public abstract class AbstractGroup implements Group {
     /**
      * @return An immutable Map containing all the members keyed by their id.
      */
-    public Map<String, GroupMember> members() {
+    public Map<String, T> members() {
         return Collections.unmodifiableMap(members);
     }
 
@@ -430,7 +433,7 @@ public abstract class AbstractGroup implements Group {
         // the request can commit offsets if the group is empty.
         if (memberEpoch < 0 && members().isEmpty()) return;
 
-        final GroupMember member = getOrMaybeCreateMember(memberId, false);
+        final T member = getOrMaybeCreateMember(memberId, false);
         validateMemberEpoch(memberEpoch, member.memberEpoch());
     }
 
@@ -602,14 +605,14 @@ public abstract class AbstractGroup implements Group {
      *
      * @return A ConsumerGroupMember.
      */
-    public abstract GroupMember getOrMaybeCreateMember(String memberId, boolean createIfNotExists);
+    public abstract T getOrMaybeCreateMember(String memberId, boolean createIfNotExists);
 
     /**
      * Adds or updates the member.
      *
      * @param newMember The new member state.
      */
-    public abstract void updateMember(GroupMember newMember);
+    public abstract void updateMember(T newMember);
 
     /**
      * Remove the member from the group.
