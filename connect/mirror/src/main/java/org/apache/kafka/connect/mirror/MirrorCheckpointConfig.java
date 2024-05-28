@@ -77,6 +77,7 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
     public static final String OFFSET_SYNCS_TARGET_CONSUMER_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "target-consumer";
     public static final String OFFSET_SYNCS_SOURCE_ADMIN_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "source-admin";
     public static final String OFFSET_SYNCS_TARGET_ADMIN_ROLE = OFFSET_SYNCS_CLIENT_ROLE_PREFIX + "target-admin";
+    public static final String CHECKPOINTS_TARGET_CONSUMER_ROLE = "checkpoints-target-consumer";
 
     public MirrorCheckpointConfig(Map<String, String> props) {
         super(CONNECTOR_CONFIG_DEF, ConfigUtils.translateDeprecatedConfigs(props, new String[][]{

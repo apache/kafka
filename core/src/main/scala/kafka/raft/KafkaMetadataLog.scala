@@ -223,7 +223,7 @@ final class KafkaMetadataLog private (
 
   override def highWatermark: LogOffsetMetadata = {
     val hwm = log.fetchOffsetSnapshot.highWatermark
-    val segmentPosition: Optional[OffsetMetadata] = if (hwm.messageOffsetOnly) {
+    val segmentPosition: Optional[OffsetMetadata] = if (!hwm.messageOffsetOnly) {
       Optional.of(SegmentPosition(hwm.segmentBaseOffset, hwm.relativePositionInSegment))
     } else {
       Optional.empty()
