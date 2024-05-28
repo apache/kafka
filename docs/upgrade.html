@@ -19,6 +19,17 @@
 
 <script id="upgrade-template" type="text/x-handlebars-template">
 
+<h4><a id="upgrade_3_8_0" href="#upgrade_3_8_0">Upgrading to 3.8.0 from any version 0.8.x through 3.6.x</a></h4>
+
+    <h5><a id="upgrade_380_notable" href="#upgrade_380_notable">Notable changes in 3.8.0</a></h5>
+    <ul>
+        <li>MirrorMaker 2 can now emit checkpoints for offsets mirrored before the start of the Checkpoint task for improved offset translation.
+            This requires MirrorMaker 2 to have READ authorization to the Checkpoint topic.
+            If READ is not authorized, checkpointing is limited to offsets mirrorred after the start of the task.
+            See <a href="https://issues.apache.org/jira/browse/KAFKA-15905">KAFKA-15905</a> for more details.
+        </li>
+    </ul>
+
 <h4><a id="upgrade_3_7_1" href="#upgrade_3_7_1">Upgrading to 3.7.1 from any version 0.8.x through 3.6.x</a></h4>
 
 
@@ -82,6 +93,15 @@
             after 3.2.x has a boolean parameter that indicates if there are metadata changes (i.e. <code>IBP_3_3_IV3(7, "3.3", "IV3", true)</code> means this version has metadata changes).
             Given your current and target versions, a downgrade is only possible if there are no metadata changes in the versions between.</li>
     </ol>
+
+    <h5><a id="upgrade_371_notable" href="#upgrade_371_notable">Notable changes in 3.7.1</a></h5>
+    <ul>
+        <li>MirrorMaker 2 can now emit checkpoints for offsets mirrored before the start of the Checkpoint task for improved offset translation.
+            This requires MirrorMaker 2 to have READ authorization to the Checkpoint topic.
+            If READ is not authorized, checkpointing is limited to offsets mirrorred after the start of the task.
+            See <a href="https://issues.apache.org/jira/browse/KAFKA-15905">KAFKA-15905</a> for more details.
+        </li>
+    </ul>
 
     <h5><a id="upgrade_370_notable" href="#upgrade_370_notable">Notable changes in 3.7.0</a></h5>
     <ul>

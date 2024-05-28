@@ -26,7 +26,6 @@ import org.apache.kafka.image.TopicsImage;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -60,7 +59,7 @@ public class ConsumerGroupMember {
         private int rebalanceTimeoutMs = -1;
         private String clientId = "";
         private String clientHost = "";
-        private List<String> subscribedTopicNames = Collections.emptyList();
+        private Set<String> subscribedTopicNames = Collections.emptySet();
         private String subscribedTopicRegex = "";
         private String serverAssignorName = null;
         private Map<Uuid, Set<Integer>> assignedPartitions = Collections.emptyMap();
@@ -148,15 +147,13 @@ public class ConsumerGroupMember {
             return this;
         }
 
-        public Builder setSubscribedTopicNames(List<String> subscribedTopicNames) {
-            this.subscribedTopicNames = subscribedTopicNames;
-            this.subscribedTopicNames.sort(Comparator.naturalOrder());
+        public Builder setSubscribedTopicNames(List<String> subscribedTopicList) {
+            if (subscribedTopicNames != null) this.subscribedTopicNames = new HashSet<>(subscribedTopicList);
             return this;
         }
 
-        public Builder maybeUpdateSubscribedTopicNames(Optional<List<String>> subscribedTopicNames) {
-            this.subscribedTopicNames = subscribedTopicNames.orElse(this.subscribedTopicNames);
-            this.subscribedTopicNames.sort(Comparator.naturalOrder());
+        public Builder maybeUpdateSubscribedTopicNames(Optional<List<String>> subscribedTopicList) {
+            subscribedTopicList.ifPresent(list -> this.subscribedTopicNames = new HashSet<>(list));
             return this;
         }
 
@@ -299,7 +296,7 @@ public class ConsumerGroupMember {
     /**
      * The list of subscriptions (topic names) configured by the member.
      */
-    private final List<String> subscribedTopicNames;
+    private final Set<String> subscribedTopicNames;
 
     /**
      * The subscription pattern configured by the member.
@@ -335,7 +332,7 @@ public class ConsumerGroupMember {
         int rebalanceTimeoutMs,
         String clientId,
         String clientHost,
-        List<String> subscribedTopicNames,
+        Set<String> subscribedTopicNames,
         String subscribedTopicRegex,
         String serverAssignorName,
         MemberState state,
@@ -419,7 +416,7 @@ public class ConsumerGroupMember {
     /**
      * @return The list of subscribed topic names.
      */
-    public List<String> subscribedTopicNames() {
+    public Set<String> subscribedTopicNames() {
         return subscribedTopicNames;
     }
 
@@ -533,7 +530,7 @@ public class ConsumerGroupMember {
             .setClientId(clientId)
             .setInstanceId(instanceId)
             .setRackId(rackId)
-            .setSubscribedTopicNames(subscribedTopicNames)
+            .setSubscribedTopicNames(subscribedTopicNames == null ? null : new ArrayList<>(subscribedTopicNames))
             .setSubscribedTopicRegex(subscribedTopicRegex);
     }
 

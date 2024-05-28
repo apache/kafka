@@ -20,7 +20,7 @@ package kafka.log
 import kafka.common.{OffsetsOutOfOrderException, UnexpectedAppendOffsetException}
 import kafka.log.remote.RemoteLogManager
 import kafka.server.{BrokerTopicStats, KafkaConfig}
-import kafka.utils._
+import kafka.utils.TestUtils
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.{InvalidRecordException, TopicPartition, Uuid}
@@ -39,6 +39,7 @@ import org.apache.kafka.server.util.{KafkaScheduler, MockTime, Scheduler}
 import org.apache.kafka.storage.internals.checkpoint.{LeaderEpochCheckpointFile, PartitionMetadataFile}
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, EpochEntry, FetchIsolation, LogConfig, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, RecordValidationException, VerificationGuard}
+import org.apache.kafka.storage.internals.utils.Throttler
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -1046,7 +1047,7 @@ class UnifiedLogTest {
       ioBufferSize = 64 * 1024,
       maxIoBufferSize = 64 * 1024,
       dupBufferLoadFactor = 0.75,
-      throttler = new Throttler(Double.MaxValue, Long.MaxValue, false, time = mockTime),
+      throttler = new Throttler(Double.MaxValue, Long.MaxValue, "throttler", "entries", mockTime),
       time = mockTime,
       checkDone = _ => {})
 
@@ -3245,7 +3246,7 @@ class UnifiedLogTest {
 
     val readInfo = segment.read(offsetMetadata.messageOffset,
       2048,
-      segment.size,
+      Optional.of(segment.size),
       false)
 
     if (offsetMetadata.relativePositionInSegment < segment.size)
@@ -4208,6 +4209,46 @@ class UnifiedLogTest {
     assertEquals(2, log.logSegments.size())
     assertEquals(0, log.logStartOffset)
     assertEquals(31, log.localLogStartOffset())
+  }
+
+  @Test
+  def testConvertToOffsetMetadataDoesNotThrowOffsetOutOfRangeError(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig(localRetentionBytes = 1, fileDeleteDelayMs = 0, remoteLogStorageEnable = true)
+    val log = createLog(logDir, logConfig, remoteStorageSystemEnable = true)
+
+    var offset = 0L
+    for(_ <- 0 until 50) {
+      val records = TestUtils.singletonRecords("test".getBytes())
+      val info = log.appendAsLeader(records, leaderEpoch = 0)
+      offset = info.lastOffset
+      if (offset != 0 && offset % 10 == 0)
+        log.roll()
+    }
+    assertEquals(5, log.logSegments.size)
+    log.updateHighWatermark(log.logEndOffset)
+    // simulate calls to upload 3 segments to remote storage
+    log.updateHighestOffsetInRemoteStorage(30)
+
+    log.deleteOldSegments()
+    assertEquals(2, log.logSegments.size())
+    assertEquals(0, log.logStartOffset)
+    assertEquals(31, log.localLogStartOffset())
+
+    log.updateLogStartOffsetFromRemoteTier(15)
+    assertEquals(15, log.logStartOffset)
+
+    // case-1: offset is higher than the local-log-start-offset.
+    // log-start-offset < local-log-start-offset < offset-to-be-converted < log-end-offset
+    assertEquals(new LogOffsetMetadata(35, 31, 288), log.maybeConvertToOffsetMetadata(35))
+    // case-2: offset is less than the local-log-start-offset
+    // log-start-offset < offset-to-be-converted < local-log-start-offset < log-end-offset
+    assertEquals(new LogOffsetMetadata(29, -1L, -1), log.maybeConvertToOffsetMetadata(29))
+    // case-3: offset is higher than the log-end-offset
+    // log-start-offset < local-log-start-offset < log-end-offset < offset-to-be-converted
+    assertEquals(new LogOffsetMetadata(log.logEndOffset + 1, -1L, -1), log.maybeConvertToOffsetMetadata(log.logEndOffset + 1))
+    // case-4: offset is less than the log-start-offset
+    // offset-to-be-converted < log-start-offset < local-log-start-offset < log-end-offset
+    assertEquals(new LogOffsetMetadata(14, -1L, -1), log.maybeConvertToOffsetMetadata(14))
   }
 
   private def appendTransactionalToBuffer(buffer: ByteBuffer,

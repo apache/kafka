@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.coordinator.group;
 
-import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
+import org.apache.kafka.coordinator.group.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
@@ -34,8 +34,8 @@ public class NoOpPartitionAssignor implements PartitionAssignor {
     }
 
     @Override
-    public GroupAssignment assign(AssignmentSpec assignmentSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
-        return new GroupAssignment(assignmentSpec.members().entrySet()
+    public GroupAssignment assign(GroupSpec groupSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
+        return new GroupAssignment(groupSpec.members().entrySet()
             .stream()
             .collect(Collectors.toMap(
                 Map.Entry::getKey,

@@ -18,16 +18,23 @@ package org.apache.kafka.jmh.assignor;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
-import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
+import org.apache.kafka.coordinator.group.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
+import org.apache.kafka.coordinator.group.consumer.TopicIds;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
 import org.apache.kafka.coordinator.group.consumer.SubscribedTopicMetadata;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
+
+import org.apache.kafka.image.MetadataDelta;
+import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.image.MetadataProvenance;
+import org.apache.kafka.image.TopicsImage;
+
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -44,7 +51,6 @@ import org.openjdk.jmh.annotations.Warmup;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -115,11 +121,13 @@ public class ServerSideAssignorBenchmark {
 
     private static final int MAX_BUCKET_COUNT = 5;
 
-    private AssignmentSpec assignmentSpec;
+    private GroupSpecImpl groupSpec;
 
     private SubscribedTopicDescriber subscribedTopicDescriber;
 
-    private final List<Uuid> allTopicIds = new ArrayList<>();
+    private final List<String> allTopicNames = new ArrayList<>();
+
+    private TopicsImage topicsImage = TopicsImage.EMPTY;
 
     @Setup(Level.Trial)
     public void setup() {
@@ -136,6 +144,7 @@ public class ServerSideAssignorBenchmark {
     }
 
     private Map<Uuid, TopicMetadata> createTopicMetadata() {
+        MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
         Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
         int partitionsPerTopicCount = (memberCount * partitionsToMemberRatio) / topicCount;
 
@@ -146,15 +155,23 @@ public class ServerSideAssignorBenchmark {
         for (int i = 0; i < topicCount; i++) {
             Uuid topicUuid = Uuid.randomUuid();
             String topicName = "topic" + i;
-            allTopicIds.add(topicUuid);
+            allTopicNames.add(topicName);
             topicMetadata.put(topicUuid, new TopicMetadata(
                 topicUuid,
                 topicName,
                 partitionsPerTopicCount,
                 partitionRacks
             ));
+
+            AssignorBenchmarkUtils.addTopic(
+                delta,
+                topicUuid,
+                topicName,
+                partitionsPerTopicCount
+            );
         }
 
+        topicsImage = delta.apply(MetadataProvenance.EMPTY).topics();
         return topicMetadata;
     }
 
@@ -167,7 +184,7 @@ public class ServerSideAssignorBenchmark {
 
         if (subscriptionType == HOMOGENEOUS) {
             for (int i = 0; i < numberOfMembers; i++) {
-                addMemberSpec(members, i, new HashSet<>(allTopicIds));
+                addMemberSpec(members, i, new TopicIds(new HashSet<>(allTopicNames), topicsImage));
             }
         } else {
             // Adjust bucket count based on member count when member count < max bucket count.
@@ -189,7 +206,7 @@ public class ServerSideAssignorBenchmark {
                 int topicStartIndex = bucket * bucketSizeTopics;
                 int topicEndIndex = Math.min((bucket + 1) * bucketSizeTopics, topicCount);
 
-                Set<Uuid> bucketTopics = new HashSet<>(allTopicIds.subList(topicStartIndex, topicEndIndex));
+                TopicIds bucketTopics = new TopicIds(new HashSet<>(allTopicNames.subList(topicStartIndex, topicEndIndex)), topicsImage);
 
                 // Assign topics to each member in the current bucket
                 for (int i = memberStartIndex; i < memberEndIndex; i++) {
@@ -198,7 +215,7 @@ public class ServerSideAssignorBenchmark {
             }
         }
 
-        this.assignmentSpec = new AssignmentSpec(members, subscriptionType);
+        this.groupSpec = new GroupSpecImpl(members, subscriptionType, Collections.emptyMap());
     }
 
     private Optional<String> rackId(int memberIndex) {
@@ -234,25 +251,32 @@ public class ServerSideAssignorBenchmark {
     }
 
     private void simulateIncrementalRebalance() {
-        GroupAssignment initialAssignment = partitionAssignor.assign(assignmentSpec, subscribedTopicDescriber);
+        GroupAssignment initialAssignment = partitionAssignor.assign(groupSpec, subscribedTopicDescriber);
         Map<String, MemberAssignment> members = initialAssignment.members();
 
+        Map<Uuid, Map<Integer, String>> invertedTargetAssignment = AssignorBenchmarkUtils.computeInvertedTargetAssignment(initialAssignment);
+
         Map<String, AssignmentMemberSpec> updatedMembers = new HashMap<>();
-        members.forEach((memberId, memberAssignment) -> {
-            AssignmentMemberSpec memberSpec = assignmentSpec.members().get(memberId);
+
+        groupSpec.members().forEach((memberId, assignmentMemberSpec) -> {
+            MemberAssignment memberAssignment = members.getOrDefault(
+                memberId,
+                new MemberAssignment(Collections.emptyMap())
+            );
+
             updatedMembers.put(memberId, new AssignmentMemberSpec(
-                memberSpec.instanceId(),
-                memberSpec.rackId(),
-                memberSpec.subscribedTopicIds(),
+                assignmentMemberSpec.instanceId(),
+                assignmentMemberSpec.rackId(),
+                assignmentMemberSpec.subscribedTopicIds(),
                 memberAssignment.targetPartitions()
             ));
         });
 
-        Collection<Uuid> subscribedTopicIdsForNewMember;
+        Set<Uuid> subscribedTopicIdsForNewMember;
         if (subscriptionType == HETEROGENEOUS) {
             subscribedTopicIdsForNewMember = updatedMembers.get("member" + (memberCount - 2)).subscribedTopicIds();
         } else {
-            subscribedTopicIdsForNewMember = allTopicIds;
+            subscribedTopicIdsForNewMember = new TopicIds(new HashSet<>(allTopicNames), topicsImage);
         }
 
         Optional<String> rackId = rackId(memberCount - 1);
@@ -263,13 +287,13 @@ public class ServerSideAssignorBenchmark {
             Collections.emptyMap()
         ));
 
-        assignmentSpec = new AssignmentSpec(updatedMembers, subscriptionType);
+        groupSpec = new GroupSpecImpl(updatedMembers, subscriptionType, invertedTargetAssignment);
     }
 
     @Benchmark
     @Threads(1)
     @OutputTimeUnit(TimeUnit.MILLISECONDS)
     public void doAssignment() {
-        partitionAssignor.assign(assignmentSpec, subscribedTopicDescriber);
+        partitionAssignor.assign(groupSpec, subscribedTopicDescriber);
     }
 }

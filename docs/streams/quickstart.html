@@ -200,7 +200,6 @@ and inspect the output of the WordCount demo application by reading from its out
 <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \
     --topic streams-wordcount-output \
     --from-beginning \
-    --formatter kafka.tools.DefaultMessageFormatter \
     --property print.key=true \
     --property print.value=true \
     --property key.deserializer=org.apache.kafka.common.serialization.StringDeserializer \
@@ -223,7 +222,6 @@ This message will be processed by the Wordcount application and the following ou
 <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \
     --topic streams-wordcount-output \
     --from-beginning \
-    --formatter kafka.tools.DefaultMessageFormatter \
     --property print.key=true \
     --property print.value=true \
     --property key.deserializer=org.apache.kafka.common.serialization.StringDeserializer \
@@ -252,7 +250,6 @@ In your other terminal in which the console consumer is running, you will observ
 <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \
     --topic streams-wordcount-output \
     --from-beginning \
-    --formatter kafka.tools.DefaultMessageFormatter \
     --property print.key=true \
     --property print.value=true \
     --property key.deserializer=org.apache.kafka.common.serialization.StringDeserializer \
@@ -283,7 +280,6 @@ The <b>streams-wordcount-output</b> topic will subsequently show the correspondi
 <pre class="line-numbers"><code class="language-bash">&gt; bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \
     --topic streams-wordcount-output \
     --from-beginning \
-    --formatter kafka.tools.DefaultMessageFormatter \
     --property print.key=true \
     --property print.value=true \
     --property key.deserializer=org.apache.kafka.common.serialization.StringDeserializer \
