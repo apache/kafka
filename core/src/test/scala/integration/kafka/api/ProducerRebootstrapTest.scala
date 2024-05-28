@@ -16,34 +16,15 @@
  */
 package kafka.api
 
-import kafka.server.{KafkaConfig, KafkaServer}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.producer.ProducerRecord
-import org.apache.kafka.common.config.TopicConfig
-import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
 import java.util.Properties
 import java.util.concurrent.TimeUnit
 
-class ProducerRebootstrapTest extends AbstractConsumerTest {
-  override def brokerCount: Int = 2
-
-  def server0: KafkaServer = serverForId(0).get
-  def server1: KafkaServer = serverForId(1).get
-
-  override def generateConfigs: Seq[KafkaConfig] = {
-    val overridingProps = new Properties()
-    overridingProps.put(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, brokerCount.toString)
-    overridingProps.put(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "true")
-
-    // In this test, fixed ports are necessary, because brokers must have the
-    // same port after the restart.
-    FixedPortTestUtils.createBrokerConfigs(brokerCount, zkConnect, enableControlledShutdown = false)
-      .map(KafkaConfig.fromProps(_, overridingProps))
-  }
-
+class ProducerRebootstrapTest extends RebootstrapTest {
   @Test
   def testRebootstrap(): Unit = {
     server1.shutdown()
