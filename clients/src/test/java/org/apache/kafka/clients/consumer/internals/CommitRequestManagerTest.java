@@ -97,8 +97,8 @@ import static org.mockito.Mockito.when;
 public class CommitRequestManagerTest {
 
     private final int requestTimeoutMs = 1000;
-    private long retryBackoffMs = 100;
-    private long retryBackoffMaxMs = 1000;
+    private final long retryBackoffMs = 100;
+    private final long retryBackoffMaxMs = 1000;
     private static final String CONSUMER_COORDINATOR_METRICS = "consumer-coordinator-metrics";
     private final Node mockedNode = new Node(1, "host1", 9092);
     private SubscriptionState subscriptionState;

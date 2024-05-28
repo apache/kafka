@@ -38,7 +38,6 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -270,14 +269,6 @@ public class TopicMetadataRequestManager implements RequestManager {
 
         public String topic() {
             return topic;
-        }
-
-        @Override
-        protected String toStringBase() {
-            return super.toStringBase() +
-                    ", topic=" + Objects.toString(topic, "<all>") +
-                    ", allTopics=" + allTopics +
-                    ", future=" + future;
         }
     }
 }

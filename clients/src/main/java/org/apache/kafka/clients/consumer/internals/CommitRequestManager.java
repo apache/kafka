@@ -1049,6 +1049,17 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 }
             });
         }
+
+        @Override
+        public String toString() {
+            return "OffsetFetchRequestState{" +
+                    "requestedPartitions=" + requestedPartitions +
+                    ", memberId=" + memberInfo.memberId.orElse("undefined") +
+                    ", memberEpoch=" + (memberInfo.memberEpoch.isPresent() ? memberInfo.memberEpoch.get() : "undefined") +
+                    ", future=" + future +
+                    ", " + toStringBase() +
+                    '}';
+        }
     }
 
     /**
@@ -1216,14 +1227,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         MemberInfo() {
             this.memberId = Optional.empty();
             this.memberEpoch = Optional.empty();
-        }
-
-        @Override
-        public String toString() {
-            return "MemberInfo{" +
-                    "memberId=" + memberId.orElse("undefined") +
-                    ", memberEpoch=" + memberEpoch.map(String::valueOf).orElse("undefined") +
-                    '}';
         }
     }
 }
