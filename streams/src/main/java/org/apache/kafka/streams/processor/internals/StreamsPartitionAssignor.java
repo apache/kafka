@@ -38,6 +38,9 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.ApplicationState;
+import org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment;
+import org.apache.kafka.streams.processor.assignment.KafkaStreamsState;
+import org.apache.kafka.streams.processor.assignment.TaskAssignor.AssignmentError;
 import org.apache.kafka.streams.processor.assignment.TaskInfo;
 import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment;
@@ -1520,6 +1523,92 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             log.info("No followup rebalance was requested, resetting the rebalance schedule.");
             nextScheduledRebalanceMs.set(Long.MAX_VALUE);
         }
+    }
+
+    private AssignmentError validateTaskAssignment(final ApplicationState applicationState,
+                                                   final TaskAssignment taskAssignment) {
+        final Collection<KafkaStreamsAssignment> assignments = taskAssignment.assignment();
+
+        // Check for AssignmentError.ACTIVE_TASK_ASSIGNED_MULTIPLE_TIMES
+        final Set<TaskId> activeTasks = new HashSet<>();
+        for (final KafkaStreamsAssignment assignment : assignments) {
+            for (final KafkaStreamsAssignment.AssignedTask task : assignment.assignment()) {
+                if (task.type() != KafkaStreamsAssignment.AssignedTask.Type.ACTIVE) {
+                    continue;
+                }
+
+                if (activeTasks.contains(task.id())) {
+                    return AssignmentError.ACTIVE_TASK_ASSIGNED_MULTIPLE_TIMES;
+                }
+                activeTasks.add(task.id());
+            }
+        }
+
+        // Check for ACTIVE_AND_STANDBY_TASK_ASSIGNED_TO_SAME_KAFKASTREAMS
+        for (final KafkaStreamsAssignment assignment : assignments) {
+            final Set<TaskId> activeTasksForAssignment = new HashSet<>();
+            for (final KafkaStreamsAssignment.AssignedTask task : assignment.assignment()) {
+                if (task.type() == KafkaStreamsAssignment.AssignedTask.Type.ACTIVE) {
+                    activeTasksForAssignment.add(task.id());
+                }
+            }
+
+            for (final KafkaStreamsAssignment.AssignedTask task : assignment.assignment()) {
+                if (task.type() == KafkaStreamsAssignment.AssignedTask.Type.STANDBY) {
+                    if (activeTasksForAssignment.contains(task.id())) {
+                        return AssignmentError.ACTIVE_AND_STANDBY_TASK_ASSIGNED_TO_SAME_KAFKASTREAMS;
+                    }
+                }
+            }
+        }
+
+        // Check for INVALID_STANDBY_TASK
+        final Set<TaskId> standbyTasksInOutput = new HashSet<>();
+        for (final KafkaStreamsAssignment assignment : assignments) {
+            for (final KafkaStreamsAssignment.AssignedTask task : assignment.assignment()) {
+                if (task.type() == KafkaStreamsAssignment.AssignedTask.Type.STANDBY) {
+                    standbyTasksInOutput.add(task.id());
+                }
+            }
+        }
+        for (final TaskInfo task : applicationState.allTasks()) {
+            if (!task.isStateful() && standbyTasksInOutput.contains(task.id())) {
+                return AssignmentError.INVALID_STANDBY_TASK;
+            }
+        }
+
+        // Check for MISSING_PROCESS_ID
+        final Map<ProcessId, KafkaStreamsState> clientStates = applicationState.kafkaStreamsStates(false);
+        final Set<ProcessId> clientsInOutput = assignments.stream().map(KafkaStreamsAssignment::processId)
+            .collect(Collectors.toSet());
+        for (final Map.Entry<ProcessId, KafkaStreamsState> entry : clientStates.entrySet()) {
+            final ProcessId processIdInInput = entry.getKey();
+            if (!clientsInOutput.contains(processIdInInput)) {
+                return AssignmentError.MISSING_PROCESS_ID;
+            }
+        }
+
+        // Check for UNKNOWN_PROCESS_ID
+        final Set<ProcessId> clientsInInput = clientStates.entrySet().stream().map(Map.Entry::getKey)
+            .collect(Collectors.toSet());
+        for (final ProcessId processIdInOutput : clientsInOutput) {
+            if (!clientsInInput.contains(processIdInOutput)) {
+                return AssignmentError.UNKNOWN_PROCESS_ID;
+            }
+        }
+
+        // Check for UNKNOWN_TASK_ID
+        final Set<TaskId> taskIdsInInput = applicationState.allTasks().stream().map(TaskInfo::id)
+            .collect(Collectors.toSet());
+        for (final KafkaStreamsAssignment assignment : assignments) {
+            for (final KafkaStreamsAssignment.AssignedTask task : assignment.assignment()) {
+                if (!taskIdsInInput.contains(task.id())) {
+                    return AssignmentError.UNKNOWN_TASK_ID;
+                }
+            }
+        }
+
+        return AssignmentError.NONE;
     }
 
     /**
