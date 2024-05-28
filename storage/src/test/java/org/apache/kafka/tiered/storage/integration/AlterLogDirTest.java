@@ -20,6 +20,7 @@ import org.apache.kafka.tiered.storage.TieredStorageTestBuilder;
 import org.apache.kafka.tiered.storage.TieredStorageTestHarness;
 import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
 
+import java.util.Arrays;
 import java.util.Collections;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -29,7 +30,7 @@ public final class AlterLogDirTest extends TieredStorageTestHarness {
 
     @Override
     public int brokerCount() {
-        return 1;
+        return 2;
     }
 
     @Override
@@ -37,23 +38,25 @@ public final class AlterLogDirTest extends TieredStorageTestHarness {
         final String topicB = "topicB";
         final int p0 = 0;
         final int partitionCount = 1;
-        final int replicationFactor = 1;
+        final int replicationFactor = 2;
         final int maxBatchCountPerSegment = 1;
         final boolean enableRemoteLogStorage = true;
         final int broker0 = 0;
+        final int broker1 = 1;
 
         builder
                 // create topicB with 1 partition and 1 RF
                 .createTopic(topicB, partitionCount, replicationFactor, maxBatchCountPerSegment,
-                        mkMap(mkEntry(p0, Collections.singletonList(broker0))), enableRemoteLogStorage)
+                        mkMap(mkEntry(p0, Arrays.asList(broker1, broker0))), enableRemoteLogStorage)
                 // send records to partition 0
-                .expectSegmentToBeOffloaded(broker0, topicB, p0, 0, new KeyValueSpec("k0", "v0"))
-                .expectSegmentToBeOffloaded(broker0, topicB, p0, 1, new KeyValueSpec("k1", "v1"))
+                .expectSegmentToBeOffloaded(broker1, topicB, p0, 0, new KeyValueSpec("k0", "v0"))
+                .expectSegmentToBeOffloaded(broker1, topicB, p0, 1, new KeyValueSpec("k1", "v1"))
                 .expectEarliestLocalOffsetInLogDirectory(topicB, p0, 2L)
                 .produce(topicB, p0, new KeyValueSpec("k0", "v0"), new KeyValueSpec("k1", "v1"),
                         new KeyValueSpec("k2", "v2"))
                 // alter dir within the replica, we only expect one replicaId
                 .alterLogDir(topicB, p0, Collections.singletonList(broker0).get(0))
+                // make sure the altered replica can still be elected as the leader
                 .expectLeader(topicB, p0, broker0, true)
                 // produce some more events and verify the earliest local offset
                 .expectEarliestLocalOffsetInLogDirectory(topicB, p0, 3L)
