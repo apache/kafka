@@ -58,7 +58,7 @@ public class SocketServerConfigs {
 
     public static final String ADVERTISED_LISTENERS_CONFIG = "advertised.listeners";
     public static final String ADVERTISED_LISTENERS_DOC = String.format(
-            "Listeners to publish to ZooKeeper for clients to use, if different than the <code>%s</code> config property." +
+            "Listeners to publish to ZooKeeper or KRaft for clients to use, if different than the <code>%s</code> config property." +
                     " In IaaS environments, this may need to be different from the interface to which the broker binds." +
                     " If this is not set, the value for <code>%1$1s</code> will be used." +
                     " Unlike <code>%1$1s</code>, it is not valid to advertise the 0.0.0.0 meta-address.%n" +
