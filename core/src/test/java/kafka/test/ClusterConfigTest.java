@@ -29,6 +29,9 @@ import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
+import java.util.Set;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -95,5 +98,17 @@ public class ClusterConfigTest {
                 .setControllers(1)
                 .setDisksPerBroker(0)
                 .build());
+    }
+
+    @Test
+    public void testDisplayTags() {
+        List<String> tags = Collections.singletonList("example tag");
+        ClusterConfig clusterConfig = ClusterConfig.defaultBuilder().setTags(tags).build();
+
+        Set<String> expectedDisplayTags = new LinkedHashSet<>(tags);
+        expectedDisplayTags.add("MetadataVersion=" + MetadataVersion.latestTesting());
+        expectedDisplayTags.add("Security=" + SecurityProtocol.PLAINTEXT);
+
+        Assertions.assertEquals(expectedDisplayTags, clusterConfig.displayTags());
     }
 }
