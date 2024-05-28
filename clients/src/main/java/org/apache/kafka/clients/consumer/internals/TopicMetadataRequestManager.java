@@ -140,7 +140,7 @@ public class TopicMetadataRequestManager implements RequestManager {
                                          final long retryBackoffMs,
                                          final long retryBackoffMaxMs) {
             super(logContext, TopicMetadataRequestState.class.getSimpleName(), retryBackoffMs,
-                    retryBackoffMaxMs, initialTimer(time, deadlineMs));
+                    retryBackoffMaxMs, deadlineTimer(time, deadlineMs));
             future = new CompletableFuture<>();
             this.topic = null;
             this.allTopics = true;
@@ -152,7 +152,7 @@ public class TopicMetadataRequestManager implements RequestManager {
                                          final long retryBackoffMs,
                                          final long retryBackoffMaxMs) {
             super(logContext, TopicMetadataRequestState.class.getSimpleName(), retryBackoffMs,
-                retryBackoffMaxMs, initialTimer(time, deadlineMs));
+                retryBackoffMaxMs, deadlineTimer(time, deadlineMs));
             future = new CompletableFuture<>();
             this.topic = topic;
             this.allTopics = false;

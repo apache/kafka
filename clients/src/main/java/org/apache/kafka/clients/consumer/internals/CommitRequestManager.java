@@ -621,7 +621,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                                  final long retryBackoffMaxMs,
                                  final MemberInfo memberInfo) {
             super(logContext, CommitRequestManager.class.getSimpleName(), retryBackoffMs,
-                retryBackoffMaxMs, memberInfo, initialTimer(time, deadlineMs));
+                retryBackoffMaxMs, memberInfo, deadlineTimer(time, deadlineMs));
             this.offsets = offsets;
             this.groupId = groupId;
             this.groupInstanceId = groupInstanceId;
@@ -638,7 +638,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                                  final double jitter,
                                  final MemberInfo memberInfo) {
             super(logContext, CommitRequestManager.class.getSimpleName(), retryBackoffMs, 2,
-                retryBackoffMaxMs, jitter, memberInfo, initialTimer(time, deadlineMs));
+                retryBackoffMaxMs, jitter, memberInfo, deadlineTimer(time, deadlineMs));
             this.offsets = offsets;
             this.groupId = groupId;
             this.groupInstanceId = groupInstanceId;
@@ -866,7 +866,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                                        final long deadlineMs,
                                        final MemberInfo memberInfo) {
             super(logContext, CommitRequestManager.class.getSimpleName(), retryBackoffMs,
-                retryBackoffMaxMs, memberInfo, initialTimer(time, deadlineMs));
+                retryBackoffMaxMs, memberInfo, deadlineTimer(time, deadlineMs));
             this.requestedPartitions = partitions;
             this.future = new CompletableFuture<>();
         }
@@ -878,7 +878,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                                        final double jitter,
                                        final MemberInfo memberInfo) {
             super(logContext, CommitRequestManager.class.getSimpleName(), retryBackoffMs, 2,
-                retryBackoffMaxMs, jitter, memberInfo, initialTimer(time, deadlineMs));
+                retryBackoffMaxMs, jitter, memberInfo, deadlineTimer(time, deadlineMs));
             this.requestedPartitions = partitions;
             this.future = new CompletableFuture<>();
         }

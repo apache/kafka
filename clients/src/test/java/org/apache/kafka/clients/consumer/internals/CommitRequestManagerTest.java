@@ -308,7 +308,8 @@ public class CommitRequestManagerTest {
             new OffsetAndMetadata(0));
 
         // Send sync offset commit that fails and verify it propagates the expected exception.
-        CompletableFuture<Void> commitResult = commitRequestManager.commitSync(offsets, retryBackoffMs);
+        long deadlineMs = time.milliseconds() + retryBackoffMs;
+        CompletableFuture<Void> commitResult = commitRequestManager.commitSync(offsets, deadlineMs);
         completeOffsetCommitRequestWithError(commitRequestManager, commitError);
         assertFutureThrows(commitResult, expectedException);
     }
