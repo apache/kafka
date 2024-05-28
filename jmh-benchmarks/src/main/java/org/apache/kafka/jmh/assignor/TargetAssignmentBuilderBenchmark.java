@@ -17,7 +17,6 @@
 package org.apache.kafka.jmh.assignor;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.group.GroupMember;
 import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
@@ -87,7 +86,7 @@ public class TargetAssignmentBuilderBenchmark {
 
     private Map<String, TopicMetadata> subscriptionMetadata = Collections.emptyMap();
 
-    private TargetAssignmentBuilder targetAssignmentBuilder;
+    private TargetAssignmentBuilder<ConsumerGroupMember> targetAssignmentBuilder;
 
     private GroupSpecImpl groupSpec;
 
@@ -104,14 +103,14 @@ public class TargetAssignmentBuilderBenchmark {
         partitionAssignor = new UniformAssignor();
 
         subscriptionMetadata = generateMockSubscriptionMetadata();
-        Map<String, GroupMember> members = generateMockMembers();
+        Map<String, ConsumerGroupMember> members = generateMockMembers();
         Map<String, Assignment> existingTargetAssignment = generateMockInitialTargetAssignmentAndUpdateInvertedTargetAssignment();
 
         ConsumerGroupMember newMember = new ConsumerGroupMember.Builder("newMember")
             .setSubscribedTopicNames(allTopicNames)
             .build();
 
-        targetAssignmentBuilder = new TargetAssignmentBuilder(GROUP_ID, GROUP_EPOCH, partitionAssignor)
+        targetAssignmentBuilder = new TargetAssignmentBuilder<ConsumerGroupMember>(GROUP_ID, GROUP_EPOCH, partitionAssignor)
             .withMembers(members)
             .withSubscriptionMetadata(subscriptionMetadata)
             .withSubscriptionType(HOMOGENEOUS)
@@ -121,8 +120,8 @@ public class TargetAssignmentBuilderBenchmark {
             .addOrUpdateMember(newMember.memberId(), newMember);
     }
 
-    private Map<String, GroupMember> generateMockMembers() {
-        Map<String, GroupMember> members = new HashMap<>();
+    private Map<String, ConsumerGroupMember> generateMockMembers() {
+        Map<String, ConsumerGroupMember> members = new HashMap<>();
 
         for (int i = 0; i < memberCount - 1; i++) {
             ConsumerGroupMember member = new ConsumerGroupMember.Builder("member" + i)

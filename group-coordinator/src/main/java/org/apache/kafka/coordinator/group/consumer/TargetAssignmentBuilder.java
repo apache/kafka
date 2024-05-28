@@ -238,7 +238,7 @@ public class TargetAssignmentBuilder<T extends GroupMember> {
      * @param invertedTargetAssignment   The reverse lookup map of the current target assignment.
      * @return This object.
      */
-    public TargetAssignmentBuilder withInvertedTargetAssignment(
+    public TargetAssignmentBuilder<T> withInvertedTargetAssignment(
         Map<Uuid, Map<Integer, String>> invertedTargetAssignment
     ) {
         this.invertedTargetAssignment = invertedTargetAssignment;
@@ -251,7 +251,7 @@ public class TargetAssignmentBuilder<T extends GroupMember> {
      * @param topicsImage    The topics image.
      * @return This object.
      */
-    public TargetAssignmentBuilder withTopicsImage(
+    public TargetAssignmentBuilder<T> withTopicsImage(
         TopicsImage topicsImage
     ) {
         this.topicsImage = topicsImage;
