@@ -209,7 +209,8 @@ public class HeartbeatRequestManager implements RequestManager {
             return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs, Collections.singletonList(leaveHeartbeat));
         }
 
-        boolean heartbeatNow = membershipManager.shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight();
+//        boolean heartbeatNow = membershipManager.shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight();
+        boolean heartbeatNow = membershipManager.state() == MemberState.LEAVING || membershipManager.shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight();
         if (!heartbeatRequestState.canSendRequest(currentTimeMs) && !heartbeatNow) {
             return new NetworkClientDelegate.PollResult(heartbeatRequestState.timeToNextHeartbeatMs(currentTimeMs));
         }

@@ -17,7 +17,6 @@
 package org.apache.kafka.tools.consumer.group;
 
 import kafka.test.ClusterConfig;
-import kafka.test.ClusterGenerator;
 import kafka.test.ClusterInstance;
 import kafka.test.annotation.ClusterTemplate;
 import kafka.test.junit.ClusterTestExtensions;
@@ -33,6 +32,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -60,7 +60,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @ExtendWith(value = ClusterTestExtensions.class)
 public class ReproduceHeartbeatFailTest {
 
-    private static void generator(ClusterGenerator clusterGenerator) {
+    private static List<ClusterConfig> generator() {
         Map<String, String> serverProperties = new HashMap<>();
         serverProperties.put(OFFSETS_TOPIC_PARTITIONS_CONFIG, "1");
         serverProperties.put(OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
@@ -71,7 +71,7 @@ public class ReproduceHeartbeatFailTest {
             .setServerProperties(serverProperties)
             .setTags(Collections.singletonList("newGroupCoordinator"))
             .build();
-        clusterGenerator.accept(consumerGroupCoordinator);
+        return Collections.singletonList(consumerGroupCoordinator);
     }
 
 

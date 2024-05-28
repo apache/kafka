@@ -880,4 +880,25 @@ public class HeartbeatRequestManagerTest {
                 backgroundEventHandler,
                 metrics);
     }
+
+
+    @Test
+    public void reproduceHeartbeatFail() throws InterruptedException {
+        mockStableMember();
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size());
+
+        result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(0, result.unsentRequests.size(), "No heartbeat should be sent while a previous one is in-flight");
+
+        membershipManager.transitionToSendingLeaveGroup(true);
+        assertTrue(membershipManager.isLeavingGroup());
+
+        NetworkClientDelegate.PollResult resultAfterLeaving = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, resultAfterLeaving.unsentRequests.size());
+        NetworkClientDelegate.PollResult pollAgain = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(0, pollAgain.unsentRequests.size());
+        assertEquals(ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH, membershipManager.memberEpoch());
+    }
 }
