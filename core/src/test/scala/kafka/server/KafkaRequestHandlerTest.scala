@@ -36,17 +36,18 @@ import org.mockito.Mockito.{mock, times, verify, when}
 
 import java.net.InetAddress
 import java.nio.ByteBuffer
+import java.util.Properties
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicInteger
 
 class KafkaRequestHandlerTest {
-  val props = kafka.utils.TestUtils.createDummyBrokerConfig()
+  val props: Properties = kafka.utils.TestUtils.createDummyBrokerConfig()
   props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true.toString)
-  val brokerTopicStats = new BrokerTopicStats(java.util.Optional.of(KafkaConfig.fromProps(props)))
+  val brokerTopicStats = new BrokerTopicStats(KafkaConfig.fromProps(props).remoteLogManagerConfig.enableRemoteStorageSystem)
   val topic = "topic"
   val topic2 = "topic2"
-  val brokerTopicMetrics = brokerTopicStats.topicStats(topic)
-  val allTopicMetrics = brokerTopicStats.allTopicsStats
+  val brokerTopicMetrics: BrokerTopicMetrics = brokerTopicStats.topicStats(topic)
+  val allTopicMetrics: BrokerTopicMetrics = brokerTopicStats.allTopicsStats
 
   @Test
   def testCallbackTiming(): Unit = {
@@ -65,7 +66,7 @@ class KafkaRequestHandlerTest {
         time.sleep(2)
         // Prepare the callback.
         val callback = KafkaRequestHandler.wrapAsyncCallback(
-          (reqLocal: RequestLocal, ms: Int) => {
+          (_: RequestLocal, ms: Int) => {
             time.sleep(ms)
             handler.stop()
           },
@@ -104,7 +105,7 @@ class KafkaRequestHandlerTest {
       handledCount = handledCount + 1
       // Prepare the callback.
       val callback = KafkaRequestHandler.wrapAsyncCallback(
-        (reqLocal: RequestLocal, ms: Int) => {
+        (_: RequestLocal, _: Int) => {
           handler.stop()
         },
         RequestLocal.NoCaching)
@@ -140,7 +141,7 @@ class KafkaRequestHandlerTest {
     when(apiHandler.handle(ArgumentMatchers.eq(request), any())).thenAnswer { _ =>
       // Prepare the callback.
       val callback = KafkaRequestHandler.wrapAsyncCallback(
-        (reqLocal: RequestLocal, ms: Int) => {
+        (reqLocal: RequestLocal, _: Int) => {
           reqLocal.bufferSupplier.close()
           handledCount = handledCount + 1
           handler.stop()
@@ -175,7 +176,7 @@ class KafkaRequestHandlerTest {
     when(apiHandler.handle(ArgumentMatchers.eq(request), any())).thenAnswer { _ =>
       // Prepare the callback.
       val callback = KafkaRequestHandler.wrapAsyncCallback(
-        (reqLocal: RequestLocal, ms: Int) => {
+        (reqLocal: RequestLocal, _: Int) => {
           reqLocal.bufferSupplier.close()
           handledCount = handledCount + 1
           handler.stop()
@@ -197,7 +198,7 @@ class KafkaRequestHandlerTest {
   def testTopicStats(systemRemoteStorageEnabled: Boolean): Unit = {
     val props = kafka.utils.TestUtils.createDummyBrokerConfig()
     props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, systemRemoteStorageEnabled.toString)
-    val brokerTopicStats = new BrokerTopicStats(java.util.Optional.of(KafkaConfig.fromProps(props)))
+    val brokerTopicStats = new BrokerTopicStats(KafkaConfig.fromProps(props).remoteLogManagerConfig.enableRemoteStorageSystem)
     val brokerTopicMetrics = brokerTopicStats.topicStats(topic)
     val gaugeMetrics = Set(
       RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName,
@@ -245,7 +246,7 @@ class KafkaRequestHandlerTest {
     val topic = "topic"
     val props = kafka.utils.TestUtils.createDummyBrokerConfig()
     props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, systemRemoteStorageEnabled.toString)
-    new BrokerTopicMetrics(Option.apply(topic), java.util.Optional.of(KafkaConfig.fromProps(props)))
+    new BrokerTopicMetrics(Option.apply(topic), KafkaConfig.fromProps(props).remoteLogManagerConfig.enableRemoteStorageSystem)
   }
 
   @ParameterizedTest
@@ -253,7 +254,7 @@ class KafkaRequestHandlerTest {
   def testSingularCopyLagBytesMetric(systemRemoteStorageEnabled: Boolean): Unit = {
     val props = kafka.utils.TestUtils.createDummyBrokerConfig()
     props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, systemRemoteStorageEnabled.toString)
-    val brokerTopicStats = new BrokerTopicStats(java.util.Optional.of(KafkaConfig.fromProps(props)))
+    val brokerTopicStats = new BrokerTopicStats(KafkaConfig.fromProps(props).remoteLogManagerConfig.enableRemoteStorageSystem)
     val brokerTopicMetrics = brokerTopicStats.topicStats(topic)
 
     if (systemRemoteStorageEnabled) {
@@ -595,7 +596,7 @@ class KafkaRequestHandlerTest {
   def testSingularLogSizeBytesMetric(systemRemoteStorageEnabled: Boolean): Unit = {
     val props = kafka.utils.TestUtils.createDummyBrokerConfig()
     props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, systemRemoteStorageEnabled.toString)
-    val brokerTopicStats = new BrokerTopicStats(java.util.Optional.of(KafkaConfig.fromProps(props)))
+    val brokerTopicStats = new BrokerTopicStats(KafkaConfig.fromProps(props).remoteLogManagerConfig.enableRemoteStorageSystem)
     val brokerTopicMetrics = brokerTopicStats.topicStats(topic)
     if (systemRemoteStorageEnabled) {
       brokerTopicStats.recordRemoteLogSizeBytes(topic, 0, 100)

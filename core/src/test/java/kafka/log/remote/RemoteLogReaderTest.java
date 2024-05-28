@@ -32,7 +32,6 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.io.IOException;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.function.Consumer;
 
@@ -57,7 +56,7 @@ public class RemoteLogReaderTest {
         TestUtils.clearYammerMetrics();
         Properties props = kafka.utils.TestUtils.createDummyBrokerConfig();
         props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true");
-        brokerTopicStats = new BrokerTopicStats(Optional.of(KafkaConfig.fromProps(props)));
+        brokerTopicStats = new BrokerTopicStats(KafkaConfig.fromProps(props).remoteLogManagerConfig().enableRemoteStorageSystem());
     }
 
     @Test
