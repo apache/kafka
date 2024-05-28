@@ -20,6 +20,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.message.StreamsInitializeRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.StreamsInitializeRequest;
+import org.apache.kafka.common.utils.LogContext;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -43,13 +44,15 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class StreamsInitializeRequestManagerTest {
 
-    final String groupId = "groupId";
+    final private String groupId = "groupId";
+    final private LogContext logContext = new LogContext("test");
 
     @Test
     public void shouldPollEmptyResult() {
         final CoordinatorRequestManager coordinatorRequestManager = mock(CoordinatorRequestManager.class);
         final StreamsAssignmentInterface streamsAssignmentInterface = mock(StreamsAssignmentInterface.class);
         final StreamsInitializeRequestManager streamsInitializeRequestManager = new StreamsInitializeRequestManager(
+            logContext,
             groupId,
             streamsAssignmentInterface,
             coordinatorRequestManager
@@ -80,7 +83,6 @@ class StreamsInitializeRequestManagerTest {
         final StreamsAssignmentInterface.SubTopology subtopology1 = new StreamsAssignmentInterface.SubTopology(
             sinkTopics,
             sourceTopics,
-            0,
             repartitionTopics,
             changelogTopics
         );
@@ -89,6 +91,7 @@ class StreamsInitializeRequestManagerTest {
             mkMap(mkEntry(subtopologyName1, subtopology1))
         );
         final StreamsInitializeRequestManager streamsInitializeRequestManager = new StreamsInitializeRequestManager(
+            logContext,
             groupId,
             streamsAssignmentInterface,
             coordinatorRequestManager

@@ -20,6 +20,8 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.common.message.StreamsInitializeRequestData;
 import org.apache.kafka.common.requests.StreamsInitializeRequest;
+import org.apache.kafka.common.utils.LogContext;
+import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -28,6 +30,7 @@ import java.util.Optional;
 
 public class StreamsInitializeRequestManager implements RequestManager {
 
+    private final Logger logger;
     private final String groupId;
     private final StreamsAssignmentInterface streamsAssignmentInterface;
     private final CoordinatorRequestManager coordinatorRequestManager;
@@ -35,9 +38,11 @@ public class StreamsInitializeRequestManager implements RequestManager {
     private Optional<NetworkClientDelegate.UnsentRequest> unsentRequest = Optional.empty();
 
 
-    StreamsInitializeRequestManager(final String groupId,
+    StreamsInitializeRequestManager(final LogContext logContext,
+                                    final String groupId,
                                     final StreamsAssignmentInterface streamsAssignmentInterface,
                                     final CoordinatorRequestManager coordinatorRequestManager) {
+        this.logger = logContext.logger(getClass());
         this.groupId = groupId;
         this.streamsAssignmentInterface = streamsAssignmentInterface;
         this.coordinatorRequestManager = coordinatorRequestManager;
@@ -114,8 +119,10 @@ public class StreamsInitializeRequestManager implements RequestManager {
     private void onResponse(final ClientResponse response, final Throwable exception) {
         if (exception != null) {
             // todo: handle error
+            logger.error("Error during Streams initialization: ", exception);
         } else {
             // todo: handle success
+            logger.info("Streams initialization successful", exception);
         }
     }
 }
