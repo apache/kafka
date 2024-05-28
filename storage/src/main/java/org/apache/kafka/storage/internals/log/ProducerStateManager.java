@@ -176,11 +176,6 @@ public class ProducerStateManager {
         producerIdCount = producers.size();
     }
 
-    private void removeProducerIds(List<Long> keys) {
-        keys.forEach(producers::remove);
-        producerIdCount = producers.size();
-    }
-
     private void clearProducerIds() {
         producers.clear();
         producerIdCount = 0;
@@ -369,22 +364,12 @@ public class ProducerStateManager {
      * Also expire any verification state entries that are lingering as unverified.
      */
     public void removeExpiredProducers(long currentTimeMs) {
-        List<Long> keys = new ArrayList<>();
-        producers.entrySet().forEach(entry -> {
-            if (isProducerExpired(currentTimeMs, entry.getValue())) {
-                keys.add(entry.getKey());
-            }
-        });
-        removeProducerIds(keys);
+        producers.entrySet().removeIf(entry -> isProducerExpired(currentTimeMs, entry.getValue()));
+        producerIdCount = producers.size();
 
-        List<Long> verificationKeys = new ArrayList<>(keys.size());
-        verificationStates.entrySet()
-            .forEach(entry -> {
-                if (currentTimeMs - entry.getValue().timestamp() >= producerStateManagerConfig.producerIdExpirationMs()) {
-                    verificationKeys.add(entry.getKey());
-                }
-            });
-        verificationKeys.forEach(verificationStates::remove);
+        verificationStates.entrySet().removeIf(entry ->
+            (currentTimeMs - entry.getValue().timestamp()) >= producerStateManagerConfig.producerIdExpirationMs()
+        );
     }
 
     /**
