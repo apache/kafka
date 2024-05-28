@@ -380,15 +380,15 @@ public class MeteredVersionedKeyValueStoreTest {
         final KafkaMetric openIteratorsMetric = getMetric("num-open-iterators");
         assertThat(openIteratorsMetric, not(nullValue()));
 
-        assertThat((Integer) openIteratorsMetric.metricValue(), equalTo(0));
+        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
 
         final QueryResult<VersionedRecordIterator<String>> result = store.query(query, bound, config);
 
         try (final VersionedRecordIterator<String> iterator = result.getResult()) {
-            assertThat((Integer) openIteratorsMetric.metricValue(), equalTo(1));
+            assertThat((Long) openIteratorsMetric.metricValue(), equalTo(1L));
         }
 
-        assertThat((Integer) openIteratorsMetric.metricValue(), equalTo(0));
+        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
     }
 
     @Test
