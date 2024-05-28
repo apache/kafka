@@ -81,20 +81,20 @@ public class RangeAssignor implements PartitionAssignor {
      * Returns a map of topic Ids to a list of members subscribed to them,
      * based on the given assignment specification and metadata.
      *
-     * @param assignmentSpec                The specification for member assignments.
+     * @param groupSpec                     The specification for member assignments.
      * @param subscribedTopicDescriber      The metadata describer for subscribed topics and clusters.
      * @return A map of topic Ids to a list of member Ids subscribed to them.
      *
      * @throws PartitionAssignorException If a member is subscribed to a non-existent topic.
      */
     private Map<Uuid, Collection<String>> membersPerTopic(
-        final AssignmentSpec assignmentSpec,
+        final GroupSpec groupSpec,
         final SubscribedTopicDescriber subscribedTopicDescriber
     ) {
         Map<Uuid, Collection<String>> membersPerTopic = new HashMap<>();
-        Map<String, AssignmentMemberSpec> membersData = assignmentSpec.members();
+        Map<String, AssignmentMemberSpec> membersData = groupSpec.members();
 
-        if (assignmentSpec.subscriptionType().equals(HOMOGENEOUS)) {
+        if (groupSpec.subscriptionType().equals(HOMOGENEOUS)) {
             Set<String> allMembers = membersData.keySet();
             Collection<Uuid> topics = membersData.values().iterator().next().subscribedTopicIds();
 
@@ -139,7 +139,7 @@ public class RangeAssignor implements PartitionAssignor {
      */
     @Override
     public GroupAssignment assign(
-        final AssignmentSpec assignmentSpec,
+        final GroupSpec groupSpec,
         final SubscribedTopicDescriber subscribedTopicDescriber
     ) throws PartitionAssignorException {
 
@@ -147,7 +147,7 @@ public class RangeAssignor implements PartitionAssignor {
 
         // Step 1
         Map<Uuid, Collection<String>> membersPerTopic = membersPerTopic(
-            assignmentSpec,
+            groupSpec,
             subscribedTopicDescriber
         );
 
@@ -162,7 +162,7 @@ public class RangeAssignor implements PartitionAssignor {
             List<MemberWithRemainingAssignments> potentiallyUnfilledMembers = new ArrayList<>();
 
             for (String memberId : membersForTopic) {
-                Set<Integer> assignedPartitionsForTopic = assignmentSpec.members().get(memberId)
+                Set<Integer> assignedPartitionsForTopic = groupSpec.members().get(memberId)
                     .assignedPartitions().getOrDefault(topicId, Collections.emptySet());
 
                 int currentAssignmentSize = assignedPartitionsForTopic.size();

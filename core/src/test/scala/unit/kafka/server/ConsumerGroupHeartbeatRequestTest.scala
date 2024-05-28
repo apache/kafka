@@ -25,11 +25,9 @@ import org.apache.kafka.common.message.{ConsumerGroupHeartbeatRequestData, Consu
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNotNull}
-import org.junit.jupiter.api.Tag
-import org.junit.jupiter.api.Timeout
+import org.junit.jupiter.api.{Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
 
-import java.util.stream.Collectors
 import scala.jdk.CollectionConverters._
 
 @Timeout(120)
@@ -61,8 +59,8 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     // in this test because it does not use FindCoordinator API.
     TestUtils.createOffsetsTopicWithAdmin(
       admin = admin,
-      brokers = raftCluster.brokers.collect(Collectors.toList[BrokerServer]).asScala,
-      controllers = raftCluster.controllerServers().asScala.toSeq
+      brokers = raftCluster.brokers.values().asScala.toSeq,
+      controllers = raftCluster.controllers().values().asScala.toSeq
     )
 
     // Heartbeat request to join the group. Note that the member subscribes
@@ -150,8 +148,8 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     // in this test because it does not use FindCoordinator API.
     TestUtils.createOffsetsTopicWithAdmin(
       admin = admin,
-      brokers = raftCluster.brokers.collect(Collectors.toList[BrokerServer]).asScala,
-      controllers = raftCluster.controllerServers().asScala.toSeq
+      brokers = raftCluster.brokers.values().asScala.toSeq,
+      controllers = raftCluster.controllers().values().asScala.toSeq
     )
 
     // Heartbeat request so that a static member joins the group
@@ -266,8 +264,8 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     // in this test because it does not use FindCoordinator API.
     TestUtils.createOffsetsTopicWithAdmin(
       admin = admin,
-      brokers = raftCluster.brokers.collect(Collectors.toList[BrokerServer]).asScala,
-      controllers = raftCluster.controllerServers().asScala.toSeq
+      brokers = raftCluster.brokers.values().asScala.toSeq,
+      controllers = raftCluster.controllers().values().asScala.toSeq
     )
 
     // Heartbeat request to join the group. Note that the member subscribes

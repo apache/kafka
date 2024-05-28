@@ -165,8 +165,10 @@ class KafkaServer(
 
   var kafkaScheduler: KafkaScheduler = _
 
-  var kraftControllerNodes: Seq[Node] = _
   @volatile var metadataCache: ZkMetadataCache = _
+
+  @volatile var quorumControllerNodeProvider: RaftControllerNodeProvider = _
+
   var quotaManagers: QuotaFactory.QuotaManagers = _
 
   val zkClientConfig: ZKClientConfig = KafkaServer.zkClientConfigFromKafkaConfig(config)
@@ -236,6 +238,9 @@ class KafkaServer(
         val initialMetaPropsEnsemble = {
           val loader = new MetaPropertiesEnsemble.Loader()
           config.logDirs.foreach(loader.addLogDir)
+          if (config.migrationEnabled) {
+            loader.addMetadataLogDir(config.metadataLogDir)
+          }
           loader.load()
         }
 
@@ -321,20 +326,13 @@ class KafkaServer(
 
         remoteLogManagerOpt = createRemoteLogManager()
 
-        if (config.migrationEnabled) {
-          kraftControllerNodes = QuorumConfig.voterConnectionsToNodes(
-            QuorumConfig.parseVoterConnections(config.quorumVoters)
-          ).asScala
-        } else {
-          kraftControllerNodes = Seq.empty
-        }
         metadataCache = MetadataCache.zkMetadataCache(
           config.brokerId,
           config.interBrokerProtocolVersion,
           brokerFeatures,
-          kraftControllerNodes,
           config.migrationEnabled)
-        val controllerNodeProvider = new MetadataCacheControllerNodeProvider(metadataCache, config)
+        val controllerNodeProvider = new MetadataCacheControllerNodeProvider(metadataCache, config,
+          () => Option(quorumControllerNodeProvider).map(_.getControllerInfo()))
 
         /* initialize feature change listener */
         _featureChangeListener = new FinalizedFeatureChangeListener(metadataCache, _zkClient)
@@ -432,6 +430,8 @@ class KafkaServer(
           raftManager = new KafkaRaftManager[ApiMessageAndVersion](
             metaPropsEnsemble.clusterId().get(),
             config,
+            // metadata log dir and directory.id must exist because migration is enabled
+            metaPropsEnsemble.logDirProps.get(metaPropsEnsemble.metadataLogDir.get).directoryId.get,
             new MetadataRecordSerde,
             KafkaRaftServer.MetadataPartition,
             KafkaRaftServer.MetadataTopicId,
@@ -441,8 +441,7 @@ class KafkaServer(
             CompletableFuture.completedFuture(quorumVoters),
             fatalFaultHandler = new LoggingFaultHandler("raftManager", () => shutdown())
           )
-          val controllerNodes = QuorumConfig.voterConnectionsToNodes(quorumVoters).asScala
-          val quorumControllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)
+          quorumControllerNodeProvider = RaftControllerNodeProvider(raftManager, config)
           val brokerToQuorumChannelManager = new NodeToControllerChannelManagerImpl(
             controllerNodeProvider = quorumControllerNodeProvider,
             time = time,
@@ -1070,6 +1069,8 @@ class KafkaServer(
           lifecycleManager.close()
         }
         _brokerState = BrokerState.NOT_RUNNING
+
+        quorumControllerNodeProvider = null
 
         startupComplete.set(false)
         isShuttingDown.set(false)

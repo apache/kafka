@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 
 import java.util.AbstractMap;
@@ -81,5 +82,34 @@ public class AssignmentTestUtil {
             Map<Uuid, Set<Integer>> computedAssignmentForMember = memberAssignment.targetPartitions();
             assertEquals(expectedAssignment.get(memberId), computedAssignmentForMember);
         });
+    }
+
+    /**
+     * Generate a reverse look up map of partition to member target assignments from the given member spec.
+     *
+     * @param memberSpec        A map where the key is the member Id and the value is an
+     *                          AssignmentMemberSpec object containing the member's partition assignments.
+     * @return Map of topic partition to member assignments.
+     */
+    public static Map<Uuid, Map<Integer, String>> invertedTargetAssignment(
+        Map<String, AssignmentMemberSpec> memberSpec
+    ) {
+        Map<Uuid, Map<Integer, String>> invertedTargetAssignment = new HashMap<>();
+        for (Map.Entry<String, AssignmentMemberSpec> memberEntry : memberSpec.entrySet()) {
+            String memberId = memberEntry.getKey();
+            Map<Uuid, Set<Integer>> topicsAndPartitions = memberEntry.getValue().assignedPartitions();
+
+            for (Map.Entry<Uuid, Set<Integer>> topicEntry : topicsAndPartitions.entrySet()) {
+                Uuid topicId = topicEntry.getKey();
+                Set<Integer> partitions = topicEntry.getValue();
+
+                Map<Integer, String> partitionMap = invertedTargetAssignment.computeIfAbsent(topicId, k -> new HashMap<>());
+
+                for (Integer partitionId : partitions) {
+                    partitionMap.put(partitionId, memberId);
+                }
+            }
+        }
+        return invertedTargetAssignment;
     }
 }

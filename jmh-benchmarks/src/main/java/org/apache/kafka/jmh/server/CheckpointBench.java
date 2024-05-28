@@ -116,7 +116,7 @@ public class CheckpointBench {
         final MetadataCache metadataCache =
                 MetadataCache.zkMetadataCache(this.brokerProperties.brokerId(),
                     this.brokerProperties.interBrokerProtocolVersion(),
-                    BrokerFeatures.createEmpty(), null, false);
+                    BrokerFeatures.createEmpty(), false);
         this.quotaManagers =
                 QuotaFactory.instantiate(this.brokerProperties,
                         this.metrics,

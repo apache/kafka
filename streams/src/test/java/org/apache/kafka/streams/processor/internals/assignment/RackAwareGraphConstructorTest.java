@@ -35,6 +35,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.SortedSet;
+import java.util.TreeMap;
 import java.util.UUID;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.TaskId;
@@ -68,7 +69,7 @@ public class RackAwareGraphConstructorTest {
     private final Map<UUID, Integer> originalAssignedTaskNumber = new HashMap<>();
     private final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = getTasksForTopicGroup(TP_SIZE,
         PARTITION_SIZE);
-    private RackAwareGraphConstructor constructor;
+    private RackAwareGraphConstructor<ClientState> constructor;
 
     @Parameter
     public String constructorType;
@@ -86,9 +87,10 @@ public class RackAwareGraphConstructorTest {
         randomAssignTasksToClient(taskIdList, clientStateMap);
 
         if (constructorType.equals(MIN_COST)) {
-            constructor = new MinTrafficGraphConstructor();
+            constructor = new MinTrafficGraphConstructor<>();
         } else if (constructorType.equals(BALANCE_SUBTOPOLOGY)) {
-            constructor = new BalanceSubtopologyGraphConstructor(tasksForTopicGroup);
+            final List<Set<TaskId>> taskSetsPerTopicGroup = new ArrayList<>(new TreeMap<>(tasksForTopicGroup).values());
+            constructor = new BalanceSubtopologyGraphConstructor<>(taskSetsPerTopicGroup);
         }
         graph = constructor.constructTaskGraph(
             clientList, taskIdList, clientStateMap, taskClientMap, originalAssignedTaskNumber, ClientState::hasAssignedTask, this::getCost, 10, 1, false, false);

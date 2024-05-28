@@ -110,6 +110,7 @@ class RaftManagerTest {
     new KafkaRaftManager[Array[Byte]](
       Uuid.randomUuid.toString,
       config,
+      Uuid.randomUuid,
       new ByteArraySerde,
       topicPartition,
       topicId,

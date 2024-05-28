@@ -2982,7 +2982,25 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldCloseActiveTasksAndPropagateExceptionsOnCleanShutdown() {
+    public void shouldCloseActiveTasksAndPropagateExceptionsOnCleanShutdownWithAlos() {
+        shouldCloseActiveTasksAndPropagateExceptionsOnCleanShutdown(ProcessingMode.AT_LEAST_ONCE);
+    }
+
+    @Test
+    public void shouldCloseActiveTasksAndPropagateExceptionsOnCleanShutdownWithExactlyOnceV1() {
+        when(activeTaskCreator.streamsProducerForTask(any())).thenReturn(mock(StreamsProducer.class));
+        shouldCloseActiveTasksAndPropagateExceptionsOnCleanShutdown(ProcessingMode.EXACTLY_ONCE_ALPHA);
+    }
+
+    @Test
+    public void shouldCloseActiveTasksAndPropagateExceptionsOnCleanShutdownWithExactlyOnceV2() {
+        when(activeTaskCreator.threadProducer()).thenReturn(mock(StreamsProducer.class));
+        shouldCloseActiveTasksAndPropagateExceptionsOnCleanShutdown(ProcessingMode.EXACTLY_ONCE_V2);
+    }
+
+    private void shouldCloseActiveTasksAndPropagateExceptionsOnCleanShutdown(final ProcessingMode processingMode) {
+        final TaskManager taskManager = setUpTaskManager(processingMode, null, false);
+
         final TopicPartition changelog = new TopicPartition("changelog", 0);
         final Map<TaskId, Set<TopicPartition>> assignment = mkMap(
             mkEntry(taskId00, taskId00Partitions),

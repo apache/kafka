@@ -19,22 +19,21 @@ package org.apache.kafka.coordinator.group.consumer;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
-import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
+import org.apache.kafka.coordinator.group.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignorException;
+import org.apache.kafka.image.TopicsImage;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTargetAssignmentEpochRecord;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTargetAssignmentRecord;
@@ -126,6 +125,17 @@ public class TargetAssignmentBuilder {
      * The existing target assignment.
      */
     private Map<String, Assignment> targetAssignment = Collections.emptyMap();
+
+    /**
+     * Reverse lookup map representing topic partitions with
+     * their current member assignments.
+     */
+    private Map<Uuid, Map<Integer, String>> invertedTargetAssignment = Collections.emptyMap();
+
+    /**
+     * The topics image.
+     */
+    private TopicsImage topicsImage = TopicsImage.EMPTY;
 
     /**
      * The members which have been updated or deleted. Deleted members
@@ -221,6 +231,32 @@ public class TargetAssignmentBuilder {
     }
 
     /**
+     * Adds the existing topic partition assignments.
+     *
+     * @param invertedTargetAssignment   The reverse lookup map of the current target assignment.
+     * @return This object.
+     */
+    public TargetAssignmentBuilder withInvertedTargetAssignment(
+        Map<Uuid, Map<Integer, String>> invertedTargetAssignment
+    ) {
+        this.invertedTargetAssignment = invertedTargetAssignment;
+        return this;
+    }
+
+    /**
+     * Adds the topics image.
+     *
+     * @param topicsImage    The topics image.
+     * @return This object.
+     */
+    public TargetAssignmentBuilder withTopicsImage(
+        TopicsImage topicsImage
+    ) {
+        this.topicsImage = topicsImage;
+        return this;
+    }
+
+    /**
      * Adds or updates a member. This is useful when the updated member is
      * not yet materialized in memory.
      *
@@ -263,7 +299,7 @@ public class TargetAssignmentBuilder {
         members.forEach((memberId, member) -> memberSpecs.put(memberId, createAssignmentMemberSpec(
             member,
             targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
-            subscriptionMetadata
+            topicsImage
         )));
 
         // Update the member spec if updated or deleted members.
@@ -284,7 +320,7 @@ public class TargetAssignmentBuilder {
                 memberSpecs.put(memberId, createAssignmentMemberSpec(
                     updatedMemberOrNull,
                     assignment,
-                    subscriptionMetadata
+                    topicsImage
                 ));
             }
         });
@@ -300,7 +336,11 @@ public class TargetAssignmentBuilder {
 
         // Compute the assignment.
         GroupAssignment newGroupAssignment = assignor.assign(
-            new AssignmentSpec(Collections.unmodifiableMap(memberSpecs), subscriptionType),
+            new GroupSpecImpl(
+                Collections.unmodifiableMap(memberSpecs),
+                subscriptionType,
+                invertedTargetAssignment
+            ),
             new SubscribedTopicMetadata(topicMetadataMap)
         );
 
@@ -353,23 +393,15 @@ public class TargetAssignmentBuilder {
         }
     }
 
-    public static AssignmentMemberSpec createAssignmentMemberSpec(
+    static AssignmentMemberSpec createAssignmentMemberSpec(
         ConsumerGroupMember member,
         Assignment targetAssignment,
-        Map<String, TopicMetadata> subscriptionMetadata
+        TopicsImage topicsImage
     ) {
-        Set<Uuid> subscribedTopics = new HashSet<>();
-        member.subscribedTopicNames().forEach(topicName -> {
-            TopicMetadata topicMetadata = subscriptionMetadata.get(topicName);
-            if (topicMetadata != null) {
-                subscribedTopics.add(topicMetadata.id());
-            }
-        });
-
         return new AssignmentMemberSpec(
             Optional.ofNullable(member.instanceId()),
             Optional.ofNullable(member.rackId()),
-            subscribedTopics,
+            new TopicIds(member.subscribedTopicNames(), topicsImage),
             targetAssignment.partitions()
         );
     }
