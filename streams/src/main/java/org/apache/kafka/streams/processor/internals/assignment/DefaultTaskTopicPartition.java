@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import org.apache.kafka.common.TopicPartition;
@@ -35,7 +36,9 @@ public class DefaultTaskTopicPartition implements TaskTopicPartition {
     private final TopicPartition topicPartition;
     private final boolean isSourceTopic;
     private final boolean isChangelogTopic;
-    private final Optional<Set<String>> rackIds;
+
+    private Optional<Set<String>> rackIds;
+  
 
     public DefaultTaskTopicPartition(final TopicPartition topicPartition,
                                      final boolean isSourceTopic,
@@ -65,5 +68,32 @@ public class DefaultTaskTopicPartition implements TaskTopicPartition {
     @Override
     public Optional<Set<String>> rackIds() {
         return rackIds;
+    }
+
+    @Override
+    public int hashCode() {
+        int result = topicPartition.hashCode();
+        result = 31 * result + Objects.hashCode(isSourceTopic);
+        result = 31 * result + Objects.hashCode(isChangelogTopic);
+        return result;
+    }
+
+    @Override
+    public boolean equals(final Object obj) {
+        if (this == obj)
+            return true;
+        if (obj == null)
+            return false;
+        if (getClass() != obj.getClass())
+            return false;
+        final TaskTopicPartition other = (TaskTopicPartition) obj;
+        return topicPartition.equals(other.topicPartition()) &&
+               isSourceTopic == other.isSource() &&
+               isChangelogTopic == other.isChangelog() &&
+               rackIds.equals(other.rackIds());
+    }
+
+    public void annotateWithRackIds(final Set<String> rackIds) {
+        this.rackIds = Optional.of(rackIds);
     }
 }
