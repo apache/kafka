@@ -800,10 +800,10 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         byte magic = logConfig.recordVersion().value;
                         int maxBatchSize = logConfig.maxMessageSize();
                         long currentTimeMs = time.milliseconds();
-                        ByteBuffer buffer = context.bufferSupplier.get(Math.min(16384, maxBatchSize));
+                        ByteBuffer buffer = context.bufferSupplier.get(Math.min(MIN_BUFFER_SIZE, maxBatchSize));
 
                         try {
-                            MemoryRecordsBuilder builder = MemoryRecords.builder(
+                            MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
                                 buffer,
                                 magic,
                                 compression,
@@ -814,7 +814,9 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                                 producerEpoch,
                                 0,
                                 producerId != RecordBatch.NO_PRODUCER_ID,
-                                RecordBatch.NO_PARTITION_LEADER_EPOCH
+                                false,
+                                RecordBatch.NO_PARTITION_LEADER_EPOCH,
+                                maxBatchSize
                             );
 
                             // Apply the records to the state machine and add them to the batch.
@@ -845,7 +847,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                                     );
                                 } else {
                                     throw new RecordTooLargeException("Message batch size is " + builder.estimatedSizeInBytes() +
-                                        " bytes in append to partition $tp which exceeds the maximum configured size of $maxBatchSize.");
+                                        " bytes in append to partition " + tp + " which exceeds the maximum " +
+                                        "configured size of " + maxBatchSize + ".");
                                 }
                             }
 
@@ -1364,6 +1367,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             }
         }
     }
+
+    /**
+     * 16KB. Used for initial buffer size for write operations.
+     */
+    static final int MIN_BUFFER_SIZE = 16384;
 
     /**
      * The log prefix.

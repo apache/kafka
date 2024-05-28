@@ -615,13 +615,13 @@ public class MeteredSessionStoreTest {
         final KafkaMetric openIteratorsMetric = metric("num-open-iterators");
         assertThat(openIteratorsMetric, not(nullValue()));
 
-        assertThat((Integer) openIteratorsMetric.metricValue(), equalTo(0));
+        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
 
         try (final KeyValueIterator<Windowed<String>, String> iterator = store.backwardFetch(KEY)) {
-            assertThat((Integer) openIteratorsMetric.metricValue(), equalTo(1));
+            assertThat((Long) openIteratorsMetric.metricValue(), equalTo(1L));
         }
 
-        assertThat((Integer) openIteratorsMetric.metricValue(), equalTo(0));
+        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
     }
 
     @Test

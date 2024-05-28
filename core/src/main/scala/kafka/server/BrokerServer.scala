@@ -39,7 +39,6 @@ import org.apache.kafka.coordinator.group.metrics.{GroupCoordinatorMetrics, Grou
 import org.apache.kafka.coordinator.group.{CoordinatorRecord, GroupCoordinator, GroupCoordinatorConfig, GroupCoordinatorService, CoordinatorRecordSerde}
 import org.apache.kafka.image.publisher.MetadataPublisher
 import org.apache.kafka.metadata.{BrokerState, ListenerInfo, VersionRange}
-import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.{AssignmentsManager, ClientMetricsManager, NodeToControllerChannelManager}
 import org.apache.kafka.server.authorizer.Authorizer
@@ -57,7 +56,7 @@ import java.util
 import java.util.Optional
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.{Condition, ReentrantLock}
-import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
+import java.util.concurrent.{CompletableFuture, ExecutionException, TimeoutException, TimeUnit}
 import scala.collection.Map
 import scala.compat.java8.OptionConverters.RichOptionForJava8
 import scala.jdk.CollectionConverters._
@@ -210,19 +209,19 @@ class BrokerServer(
         time,
         s"broker-${config.nodeId}-",
         isZkBroker = false,
-        logDirs = logManager.directoryIdsSet)
+        logDirs = logManager.directoryIdsSet,
+        () => new Thread(() => shutdown(), "kafka-shutdown-thread").start())
 
       // Enable delegation token cache for all SCRAM mechanisms to simplify dynamic update.
       // This keeps the cache up-to-date if new SCRAM mechanisms are enabled dynamically.
       tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
       credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
-      val voterConnections = FutureUtils.waitWithLogging(logger.underlying, logIdent,
+      FutureUtils.waitWithLogging(logger.underlying, logIdent,
         "controller quorum voters future",
         sharedServer.controllerQuorumVotersFuture,
         startupDeadline, time)
-      val controllerNodes = QuorumConfig.voterConnectionsToNodes(voterConnections).asScala
-      val controllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)
+      val controllerNodeProvider = RaftControllerNodeProvider(raftManager, config)
 
       clientToControllerChannelManager = new NodeToControllerChannelManagerImpl(
         controllerNodeProvider,
@@ -304,7 +303,7 @@ class BrokerServer(
           assignmentsManager.onAssignment(partition, directoryId, reason, callback)
 
         override def handleFailure(directoryId: Uuid): Unit =
-          lifecycleManager.propagateDirectoryFailure(directoryId)
+          lifecycleManager.propagateDirectoryFailure(directoryId, config.logDirFailureTimeoutMs)
       }
 
       this._replicaManager = new ReplicaManager(

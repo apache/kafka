@@ -233,7 +233,8 @@ if (repo != null) {
         '**/generated/**',
         'clients/src/test/resources/serializedData/*',
         'docker/test/fixtures/secrets/*',
-        'docker/examples/fixtures/secrets/*'
+        'docker/examples/fixtures/secrets/*',
+        'docker/docker_official_images/.gitkeep'
     ])
   }
 } else {
@@ -356,7 +357,7 @@ subprojects {
                 artifact task
             }
 
-            artifactId = archivesBaseName
+            artifactId = base.archivesName.get()
             pom {
               name = 'Apache Kafka'
               url = 'https://kafka.apache.org'
@@ -850,7 +851,9 @@ tasks.create(name: "jarConnect", dependsOn: connectPkgs.collect { it + ":jar" })
 tasks.create(name: "testConnect", dependsOn: connectPkgs.collect { it + ":test" }) {}
 
 project(':server') {
-  archivesBaseName = "kafka-server"
+  base {
+    archivesName = "kafka-server"
+  }
 
   dependencies {
     implementation project(':clients')
@@ -922,7 +925,10 @@ project(':core') {
   }
   if (userEnableTestCoverage)
     apply plugin: "org.scoverage"
-  archivesBaseName = "kafka_${versions.baseScala}"
+
+  base {
+    archivesName = "kafka_${versions.baseScala}"
+  }
 
   configurations {
     generator
@@ -1250,7 +1256,9 @@ project(':core') {
 }
 
 project(':metadata') {
-  archivesBaseName = "kafka-metadata"
+  base {
+    archivesName = "kafka-metadata"
+  }
 
   configurations {
     generator
@@ -1317,7 +1325,9 @@ project(':metadata') {
 }
 
 project(':group-coordinator') {
-  archivesBaseName = "kafka-group-coordinator"
+  base {
+    archivesName = "kafka-group-coordinator"
+  }
 
   configurations {
     generator
@@ -1384,7 +1394,9 @@ project(':group-coordinator') {
 }
 
 project(':transaction-coordinator') {
-  archivesBaseName = "kafka-transaction-coordinator"
+  base {
+    archivesName = "kafka-transaction-coordinator"
+  }
 
   sourceSets {
     main {
@@ -1405,7 +1417,9 @@ project(':transaction-coordinator') {
 }
 
 project(':examples') {
-  archivesBaseName = "kafka-examples"
+  base {
+    archivesName = "kafka-examples"
+  }
 
   dependencies {
     implementation project(':clients')
@@ -1435,7 +1449,9 @@ project(':generator') {
 }
 
 project(':clients') {
-  archivesBaseName = "kafka-clients"
+  base {
+    archivesName = "kafka-clients"
+  }
 
   configurations {
     generator
@@ -1610,7 +1626,9 @@ project(':clients') {
 }
 
 project(':raft') {
-  archivesBaseName = "kafka-raft"
+  base {
+    archivesName = "kafka-raft"
+  }
 
   configurations {
     generator
@@ -1706,7 +1724,9 @@ project(':raft') {
 }
 
 project(':server-common') {
-  archivesBaseName = "kafka-server-common"
+  base {
+    archivesName = "kafka-server-common"
+  }
 
   dependencies {
     api project(':clients')
@@ -1764,7 +1784,9 @@ project(':server-common') {
 }
 
 project(':storage:storage-api') {
-  archivesBaseName = "kafka-storage-api"
+  base {
+    archivesName = "kafka-storage-api"
+  }
 
   dependencies {
     implementation project(':clients')
@@ -1832,7 +1854,9 @@ project(':storage:storage-api') {
 }
 
 project(':storage') {
-  archivesBaseName = "kafka-storage"
+  base {
+    archivesName = "kafka-storage"
+  }
 
   configurations {
     generator
@@ -1954,7 +1978,9 @@ project(':storage') {
 }
 
 project(':tools:tools-api') {
-  archivesBaseName = "kafka-tools-api"
+  base {
+    archivesName = "kafka-tools-api"
+  }
 
   dependencies {
     implementation project(':clients')
@@ -2009,7 +2035,10 @@ project(':tools:tools-api') {
 }
 
 project(':tools') {
-  archivesBaseName = "kafka-tools"
+  base {
+    archivesName = "kafka-tools"
+  }
+
   dependencies {
     implementation project(':clients')
     implementation project(':storage')
@@ -2073,7 +2102,9 @@ project(':tools') {
 }
 
 project(':trogdor') {
-  archivesBaseName = "trogdor"
+  base {
+    archivesName = "trogdor"
+  }
 
   dependencies {
     implementation project(':clients')
@@ -2123,7 +2154,9 @@ project(':trogdor') {
 }
 
 project(':shell') {
-  archivesBaseName = "kafka-shell"
+  base {
+    archivesName = "kafka-shell"
+  }
 
   dependencies {
     implementation libs.argparse4j
@@ -2173,7 +2206,10 @@ project(':shell') {
 }
 
 project(':streams') {
-  archivesBaseName = "kafka-streams"
+  base {
+    archivesName = "kafka-streams"
+  }
+
   ext.buildStreamsVersionFileName = "kafka-streams-version.properties"
 
   configurations {
@@ -2335,7 +2371,11 @@ project(':streams') {
 
 project(':streams:streams-scala') {
   apply plugin: 'scala'
-  archivesBaseName = "kafka-streams-scala_${versions.baseScala}"
+
+  base {
+    archivesName = "kafka-streams-scala_${versions.baseScala}"
+  }
+
   dependencies {
     api project(':streams')
 
@@ -2397,7 +2437,9 @@ project(':streams:streams-scala') {
 }
 
 project(':streams:test-utils') {
-  archivesBaseName = "kafka-streams-test-utils"
+  base {
+    archivesName = "kafka-streams-test-utils"
+  }
 
   dependencies {
     api project(':streams')
@@ -2432,7 +2474,9 @@ project(':streams:test-utils') {
 }
 
 project(':streams:examples') {
-  archivesBaseName = "kafka-streams-examples"
+  base {
+    archivesName = "kafka-streams-examples"
+  }
 
   dependencies {
     // this dependency should be removed after we unify data API
@@ -2469,7 +2513,9 @@ project(':streams:examples') {
 }
 
 project(':streams:upgrade-system-tests-0100') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-0100"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-0100"
+  }
 
   dependencies {
     testImplementation(libs.kafkaStreams_0100) {
@@ -2485,7 +2531,9 @@ project(':streams:upgrade-system-tests-0100') {
 }
 
 project(':streams:upgrade-system-tests-0101') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-0101"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-0101"
+  }
 
   dependencies {
     testImplementation(libs.kafkaStreams_0101) {
@@ -2501,7 +2549,9 @@ project(':streams:upgrade-system-tests-0101') {
 }
 
 project(':streams:upgrade-system-tests-0102') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-0102"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-0102"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_0102
@@ -2514,7 +2564,9 @@ project(':streams:upgrade-system-tests-0102') {
 }
 
 project(':streams:upgrade-system-tests-0110') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-0110"
+  base{
+    archivesName = "kafka-streams-upgrade-system-tests-0110"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_0110
@@ -2527,7 +2579,9 @@ project(':streams:upgrade-system-tests-0110') {
 }
 
 project(':streams:upgrade-system-tests-10') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-10"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-10"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_10
@@ -2540,7 +2594,9 @@ project(':streams:upgrade-system-tests-10') {
 }
 
 project(':streams:upgrade-system-tests-11') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-11"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-11"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_11
@@ -2553,7 +2609,9 @@ project(':streams:upgrade-system-tests-11') {
 }
 
 project(':streams:upgrade-system-tests-20') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-20"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-20"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_20
@@ -2566,7 +2624,9 @@ project(':streams:upgrade-system-tests-20') {
 }
 
 project(':streams:upgrade-system-tests-21') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-21"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-21"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_21
@@ -2579,7 +2639,9 @@ project(':streams:upgrade-system-tests-21') {
 }
 
 project(':streams:upgrade-system-tests-22') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-22"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-22"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_22
@@ -2592,7 +2654,9 @@ project(':streams:upgrade-system-tests-22') {
 }
 
 project(':streams:upgrade-system-tests-23') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-23"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-23"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_23
@@ -2605,7 +2669,9 @@ project(':streams:upgrade-system-tests-23') {
 }
 
 project(':streams:upgrade-system-tests-24') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-24"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-24"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_24
@@ -2618,7 +2684,9 @@ project(':streams:upgrade-system-tests-24') {
 }
 
 project(':streams:upgrade-system-tests-25') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-25"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-25"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_25
@@ -2631,7 +2699,9 @@ project(':streams:upgrade-system-tests-25') {
 }
 
 project(':streams:upgrade-system-tests-26') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-26"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-26"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_26
@@ -2644,7 +2714,9 @@ project(':streams:upgrade-system-tests-26') {
 }
 
 project(':streams:upgrade-system-tests-27') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-27"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-27"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_27
@@ -2657,7 +2729,9 @@ project(':streams:upgrade-system-tests-27') {
 }
 
 project(':streams:upgrade-system-tests-28') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-28"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-28"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_28
@@ -2670,7 +2744,9 @@ project(':streams:upgrade-system-tests-28') {
 }
 
 project(':streams:upgrade-system-tests-30') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-30"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-30"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_30
@@ -2683,7 +2759,9 @@ project(':streams:upgrade-system-tests-30') {
 }
 
 project(':streams:upgrade-system-tests-31') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-31"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-31"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_31
@@ -2696,7 +2774,9 @@ project(':streams:upgrade-system-tests-31') {
 }
 
 project(':streams:upgrade-system-tests-32') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-32"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-32"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_32
@@ -2709,7 +2789,9 @@ project(':streams:upgrade-system-tests-32') {
 }
 
 project(':streams:upgrade-system-tests-33') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-33"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-33"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_33
@@ -2722,7 +2804,9 @@ project(':streams:upgrade-system-tests-33') {
 }
 
 project(':streams:upgrade-system-tests-34') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-34"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-34"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_34
@@ -2735,7 +2819,9 @@ project(':streams:upgrade-system-tests-34') {
 }
 
 project(':streams:upgrade-system-tests-35') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-35"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-35"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_35
@@ -2748,7 +2834,9 @@ project(':streams:upgrade-system-tests-35') {
 }
 
 project(':streams:upgrade-system-tests-36') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-36"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-36"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_36
@@ -2761,7 +2849,9 @@ project(':streams:upgrade-system-tests-36') {
 }
 
 project(':streams:upgrade-system-tests-37') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-37"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-37"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_37
@@ -2846,7 +2936,9 @@ project(':jmh-benchmarks') {
 }
 
 project(':log4j-appender') {
-  archivesBaseName = "kafka-log4j-appender"
+  base {
+    archivesName = "kafka-log4j-appender"
+  }
 
   dependencies {
     implementation project(':clients')
@@ -2865,7 +2957,9 @@ project(':log4j-appender') {
 }
 
 project(':connect:api') {
-  archivesBaseName = "connect-api"
+  base {
+    archivesName = "connect-api"
+  }
 
   dependencies {
     api project(':clients')
@@ -2900,7 +2994,9 @@ project(':connect:api') {
 }
 
 project(':connect:transforms') {
-  archivesBaseName = "connect-transforms"
+  base {
+    archivesName = "connect-transforms"
+  }
 
   dependencies {
     api project(':connect:api')
@@ -2936,7 +3032,9 @@ project(':connect:transforms') {
 }
 
 project(':connect:json') {
-  archivesBaseName = "connect-json"
+  base {
+    archivesName = "connect-json"
+  }
 
   dependencies {
     api project(':connect:api')
@@ -2980,7 +3078,9 @@ project(':connect:runtime') {
     swagger
   }
 
-  archivesBaseName = "connect-runtime"
+  base {
+    archivesName = "connect-runtime"
+  }
 
   dependencies {
     // connect-runtime is used in tests, use `api` for modules below for backwards compatibility even though
@@ -3122,7 +3222,9 @@ project(':connect:runtime') {
 }
 
 project(':connect:file') {
-  archivesBaseName = "connect-file"
+  base {
+    archivesName = "connect-file"
+  }
 
   dependencies {
     implementation project(':connect:api')
@@ -3162,7 +3264,9 @@ project(':connect:file') {
 }
 
 project(':connect:basic-auth-extension') {
-  archivesBaseName = "connect-basic-auth-extension"
+  base {
+    archivesName = "connect-basic-auth-extension"
+  }
 
   dependencies {
     implementation project(':connect:api')
@@ -3202,7 +3306,9 @@ project(':connect:basic-auth-extension') {
 }
 
 project(':connect:mirror') {
-  archivesBaseName = "connect-mirror"
+  base {
+    archivesName = "connect-mirror"
+  }
 
   dependencies {
     implementation project(':connect:api')
@@ -3290,7 +3396,9 @@ project(':connect:mirror') {
 }
 
 project(':connect:mirror-client') {
-  archivesBaseName = "connect-mirror-client"
+  base {
+    archivesName = "connect-mirror-client"
+  }
 
   dependencies {
     implementation project(':clients')
@@ -3325,7 +3433,9 @@ project(':connect:mirror-client') {
 }
 
 project(':connect:test-plugins') {
-  archivesBaseName = "connect-test-plugins"
+  base {
+    archivesName = "connect-test-plugins"
+  }
 
   dependencies {
     api project(':connect:api')
