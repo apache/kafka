@@ -122,21 +122,21 @@ public class ConsumerNetworkThreadUnitTest {
     @ParameterizedTest
     @ValueSource(longs = {1, 100, 1000, 4999, 5001})
     public void testConsumerNetworkThreadWaitTimeComputations(long exampleTime) {
-        List<Optional<? extends RequestManager>> rmsList = new ArrayList<>();
-        rmsList.add(Optional.of(coordinatorRequestManager));
+        List<Optional<? extends RequestManager>> requestManagersList = new ArrayList<>();
+        requestManagersList.add(Optional.of(coordinatorRequestManager));
 //        rmsList.add(Optional.of(commitRequestManager));
 //        rmsList.add(Optional.of(heartbeatRequestManager));
 //        rmsList.add(Optional.of(offsetsRequestManager));
-        when(requestManagers.entries()).thenReturn(rmsList);
+        when(requestManagers.entries()).thenReturn(requestManagersList);
 
-        NetworkClientDelegate.PollResult pr = new NetworkClientDelegate.PollResult(exampleTime);
+        NetworkClientDelegate.PollResult pollResult = new NetworkClientDelegate.PollResult(exampleTime);
 
-        when(coordinatorRequestManager.poll(anyLong())).thenReturn(pr);
+        when(coordinatorRequestManager.poll(anyLong())).thenReturn(pollResult);
         when(coordinatorRequestManager.maximumTimeToWait(anyLong())).thenReturn(exampleTime);
 //        when(commitRequestManager.poll(anyLong())).thenReturn(new NetworkClientDelegate.PollResult(10000L));
 //        when(heartbeatRequestManager.poll(anyLong())).thenReturn(new NetworkClientDelegate.PollResult(10000L));
 //        when(offsetsRequestManager.poll(anyLong())).thenReturn(new NetworkClientDelegate.PollResult(10000L));
-        when(networkClientDelegate.addAll(pr)).thenReturn(pr.timeUntilNextPollMs);
+        when(networkClientDelegate.addAll(pollResult)).thenReturn(pollResult.timeUntilNextPollMs);
         consumerNetworkThread.runOnce();
 
         assertEquals(consumerNetworkThread.maximumTimeToWait(), exampleTime);
