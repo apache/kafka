@@ -441,7 +441,7 @@ class KafkaServer(
             CompletableFuture.completedFuture(quorumVoters),
             fatalFaultHandler = new LoggingFaultHandler("raftManager", () => shutdown())
           )
-          val quorumControllerNodeProvider = RaftControllerNodeProvider(raftManager, config)
+          quorumControllerNodeProvider = RaftControllerNodeProvider(raftManager, config)
           val brokerToQuorumChannelManager = new NodeToControllerChannelManagerImpl(
             controllerNodeProvider = quorumControllerNodeProvider,
             time = time,
