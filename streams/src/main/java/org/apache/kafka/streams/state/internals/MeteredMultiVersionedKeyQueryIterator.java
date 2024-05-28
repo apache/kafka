@@ -25,7 +25,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.VersionedRecordIterator;
 import org.apache.kafka.streams.state.VersionedRecord;
 
-public class MeteredMultiVersionedKeyQueryIterator<V> implements VersionedRecordIterator<V>, MeteredIterator {
+class MeteredMultiVersionedKeyQueryIterator<V> implements VersionedRecordIterator<V>, MeteredIterator {
 
     private final VersionedRecordIterator<byte[]> iterator;
     private final Function<VersionedRecord<byte[]>, VersionedRecord<V>> deserializeValue;
