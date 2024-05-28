@@ -32,6 +32,8 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -66,6 +68,7 @@ import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Queue;
 import java.util.function.BiConsumer;
 import org.slf4j.Logger;
@@ -346,6 +349,7 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     // These are used only with the Streams Rebalance Protocol client
     private final StreamsAssignmentInterface streamsAssignmentInterface;
+    private final StreamsMetadataState streamsMetadataState;
 
     // These are used to signal from outside the stream thread, but the variables themselves are internal to the thread
     private final AtomicLong cacheResizeSize = new AtomicLong(-1L);
@@ -522,8 +526,8 @@ public class StreamThread extends Thread implements ProcessingThread {
             shutdownErrorHook,
             streamsUncaughtExceptionHandler,
             cache::resize,
-            streamsAssignmentInterface
-        );
+            streamsAssignmentInterface,
+            referenceContainer.streamsMetadataState);
 
         return streamThread.updateThreadMetadata(getSharedAdminClientId(clientId));
     }
@@ -659,8 +663,8 @@ public class StreamThread extends Thread implements ProcessingThread {
                         final Runnable shutdownErrorHook,
                         final BiConsumer<Throwable, Boolean> streamsUncaughtExceptionHandler,
                         final java.util.function.Consumer<Long> cacheResizer,
-                        final StreamsAssignmentInterface streamsAssignmentInterface
-                        ) {
+                        final StreamsAssignmentInterface streamsAssignmentInterface,
+                        final StreamsMetadataState streamsMetadataState) {
         super(threadId);
         this.stateLock = new Object();
         this.adminClient = adminClient;
@@ -682,6 +686,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         this.streamsUncaughtExceptionHandler = streamsUncaughtExceptionHandler;
         this.cacheResizer = cacheResizer;
         this.streamsAssignmentInterface = streamsAssignmentInterface;
+        this.streamsMetadataState = streamsMetadataState;
 
         // The following sensors are created here but their references are not stored in this object, since within
         // this object they are not recorded. The sensors are created here so that the stream threads starts with all
@@ -1324,8 +1329,6 @@ public class StreamThread extends Thread implements ProcessingThread {
             throw new StreamsException(logPrefix + "Unexpected state " + state + " during normal iteration");
         }
 
-        handleAssignmentFromStreamsRebalanceProtocol();
-
         final long pollLatency = advanceNowAndComputeLatency();
 
         final int numRecords = records.count();
@@ -1354,24 +1357,62 @@ public class StreamThread extends Thread implements ProcessingThread {
         return pollLatency;
     }
 
-    private void handleAssignmentFromStreamsRebalanceProtocol() {
-        // Process assignment from Streams Rebalance Protocol
-        Assignment newAssignment = streamsAssignmentInterface.targetAssignment.get();
-        if (!newAssignment.equals(streamsAssignmentInterface.reconciledAssignment.get())) {
+    public void maybeHandleAssignmentFromStreamsRebalanceProtocol() {
+        if (streamsAssignmentInterface != null) {
 
-            final Map<TaskId, Set<TopicPartition>> activeTasksWithPartitions =
-                pairWithTopicPartitions(newAssignment.activeTasks.stream());
-            final Map<TaskId, Set<TopicPartition>> standbyTasksWithPartitions =
-                pairWithTopicPartitions(Stream.concat(newAssignment.standbyTasks.stream(), newAssignment.warmupTasks.stream()));
+            if (streamsAssignmentInterface.shutdownRequested()) {
+                assignmentErrorCode.set(AssignorError.SHUTDOWN_REQUESTED.code());
+            }
 
-            log.info("Processing new assignment {} from Streams Rebalance Protocol", newAssignment);
-
-            taskManager.handleAssignment(
-                activeTasksWithPartitions,
-                standbyTasksWithPartitions
+            // Process metadata from Streams Rebalance Protocol
+            final Map<StreamsAssignmentInterface.HostInfo, List<TopicPartition>> hostInfoListMap = streamsAssignmentInterface.partitionsByHost.get();
+            final Map<HostInfo, Set<TopicPartition>> convertedHostInfoMap = new HashMap<>();
+            hostInfoListMap.forEach((hostInfo, topicPartitions) ->
+                convertedHostInfoMap.put(new HostInfo(hostInfo.host, hostInfo.port), new HashSet<>(topicPartitions)));
+            streamsMetadataState.onChange(
+                convertedHostInfoMap,
+                Collections.emptyMap(), // TODO: We cannot differentiate between standby and active tasks here?!
+                getTopicPartitionInfo(convertedHostInfoMap)
             );
+
+            // Process assignment from Streams Rebalance Protocol
+            Assignment newAssignment = streamsAssignmentInterface.targetAssignment.get();
+            if (!newAssignment.equals(streamsAssignmentInterface.reconciledAssignment.get())) {
+
+                final Map<TaskId, Set<TopicPartition>> activeTasksWithPartitions =
+                    pairWithTopicPartitions(newAssignment.activeTasks.stream());
+                final Map<TaskId, Set<TopicPartition>> standbyTasksWithPartitions =
+                    pairWithTopicPartitions(Stream.concat(newAssignment.standbyTasks.stream(), newAssignment.warmupTasks.stream()));
+
+                log.info("Processing new assignment {} from Streams Rebalance Protocol", newAssignment);
+
+                taskManager.handleAssignment(
+                    activeTasksWithPartitions,
+                    standbyTasksWithPartitions
+                );
+            }
         }
     }
+
+    static Map<TopicPartition, PartitionInfo> getTopicPartitionInfo(final Map<HostInfo, Set<TopicPartition>> partitionsByHost) {
+        final Map<TopicPartition, PartitionInfo> topicToPartitionInfo = new HashMap<>();
+        for (final Set<TopicPartition> value : partitionsByHost.values()) {
+            for (final TopicPartition topicPartition : value) {
+                topicToPartitionInfo.put(
+                    topicPartition,
+                    new PartitionInfo(
+                        topicPartition.topic(),
+                        topicPartition.partition(),
+                        null,
+                        new Node[0],
+                        new Node[0]
+                    )
+                );
+            }
+        }
+        return topicToPartitionInfo;
+    }
+
 
     private Map<TaskId, Set<TopicPartition>> pairWithTopicPartitions(final Stream<StreamsAssignmentInterface.TaskId> taskIdStream) {
         return taskIdStream

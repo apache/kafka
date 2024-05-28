@@ -1,10 +1,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.StreamsPrepareAssignmentResponseData;
-import org.apache.kafka.common.message.StreamsInstallAssignmentResponseData;
-import org.apache.kafka.common.message.StreamsPrepareAssignmentResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
