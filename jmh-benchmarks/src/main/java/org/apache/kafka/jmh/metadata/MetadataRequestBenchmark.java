@@ -61,7 +61,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupCoordinator;
 import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.MetadataVersion;
-import org.apache.kafka.server.config.KafkaServerConfigs;
+import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ZkConfigs;
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
@@ -178,7 +178,7 @@ public class MetadataRequestBenchmark {
     private KafkaApis createKafkaApis() {
         Properties kafkaProps =  new Properties();
         kafkaProps.put(ZkConfigs.ZK_CONNECT_CONFIG, "zk");
-        kafkaProps.put(KafkaServerConfigs.BROKER_ID_CONFIG, brokerId + "");
+        kafkaProps.put(ServerConfigs.BROKER_ID_CONFIG, brokerId + "");
         KafkaConfig config = new KafkaConfig(kafkaProps);
         return new KafkaApisBuilder().
             setRequestChannel(requestChannel).

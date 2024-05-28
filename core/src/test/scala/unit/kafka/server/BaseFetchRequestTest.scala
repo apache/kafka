@@ -24,7 +24,7 @@ import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.record.Record
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.serialization.StringSerializer
-import org.apache.kafka.server.config.KafkaServerConfigs
+import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.AfterEach
 
 import java.util
@@ -37,7 +37,7 @@ class BaseFetchRequestTest extends BaseRequestTest {
   protected var producer: KafkaProducer[String, String] = _
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.put(KafkaServerConfigs.FETCH_MAX_BYTES_CONFIG, Int.MaxValue.toString)
+    properties.put(ServerConfigs.FETCH_MAX_BYTES_CONFIG, Int.MaxValue.toString)
   }
 
   @AfterEach

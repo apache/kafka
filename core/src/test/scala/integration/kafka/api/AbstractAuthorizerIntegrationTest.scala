@@ -31,7 +31,7 @@ import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuild
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
-import org.apache.kafka.server.config.KafkaServerConfigs
+import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 
 import java.util.Properties
@@ -94,7 +94,7 @@ class AbstractAuthorizerIntegrationTest extends BaseRequestTest {
   consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, group)
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.put(KafkaServerConfigs.BROKER_ID_CONFIG, brokerId.toString)
+    properties.put(ServerConfigs.BROKER_ID_CONFIG, brokerId.toString)
     addNodeProperties(properties)
   }
 
@@ -106,10 +106,10 @@ class AbstractAuthorizerIntegrationTest extends BaseRequestTest {
 
   private def addNodeProperties(properties: Properties): Unit = {
     if (isKRaftTest()) {
-      properties.put(KafkaServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[StandardAuthorizer].getName)
+      properties.put(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[StandardAuthorizer].getName)
       properties.put(StandardAuthorizer.SUPER_USERS_CONFIG, BrokerPrincipal.toString)
     } else {
-      properties.put(KafkaServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[AclAuthorizer].getName)
+      properties.put(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[AclAuthorizer].getName)
     }
 
     properties.put(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "1")
@@ -117,7 +117,7 @@ class AbstractAuthorizerIntegrationTest extends BaseRequestTest {
     properties.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, "1")
     properties.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, "1")
     properties.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_MIN_ISR_CONFIG, "1")
-    properties.put(KafkaServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, "true")
+    properties.put(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, "true")
     properties.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[PrincipalBuilder].getName)
   }
 

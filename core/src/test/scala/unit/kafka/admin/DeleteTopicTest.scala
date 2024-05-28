@@ -28,7 +28,7 @@ import org.apache.kafka.common.errors.{TopicDeletionDisabledException, UnknownTo
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.metadata.BrokerState
-import org.apache.kafka.server.config.KafkaServerConfigs
+import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -490,7 +490,7 @@ class DeleteTopicTest extends QuorumTestHarness {
     if (isKRaftTest()) {
       // Restart KRaft quorum with the updated config
       val overridingProps = new Properties()
-      overridingProps.put(KafkaServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, false.toString)
+      overridingProps.put(ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, false.toString)
       if (implementation != null)
         implementation.shutdown()
       implementation = newKRaftQuorum(overridingProps)

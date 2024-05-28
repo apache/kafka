@@ -34,7 +34,7 @@ import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrinci
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult}
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.config.{KafkaSecurityConfigs, KafkaServerConfigs}
+import org.apache.kafka.server.config.{KafkaSecurityConfigs, ServerConfigs}
 import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
@@ -55,16 +55,16 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     if (TestInfoUtils.isKRaft(testInfo)) {
-      this.serverConfig.setProperty(KafkaServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[StandardAuthorizer].getName)
+      this.serverConfig.setProperty(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[StandardAuthorizer].getName)
       if (testInfo.getDisplayName.contains("quorum=kraft-IBP_3_4")) {
         testMetadataVersion = MetadataVersion.IBP_3_4_IV0
       }
     } else {
-      this.serverConfig.setProperty(KafkaServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[AlterCredentialsTest.TestAuthorizer].getName)
+      this.serverConfig.setProperty(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[AlterCredentialsTest.TestAuthorizer].getName)
 
     }
     this.serverConfig.setProperty(KafkaSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[AlterCredentialsTest.TestPrincipalBuilderReturningAuthorized].getName)
-    this.serverConfig.setProperty(KafkaServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, "false")
+    this.serverConfig.setProperty(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, "false")
 
     super.setUp(testInfo)
   }

@@ -19,7 +19,7 @@ package org.apache.kafka.server.config;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.server.authorizer.Authorizer;
-public class KafkaServerConfigs {
+public class ServerConfigs {
     /** ********* General Configuration ***********/
     public static final String RESERVED_BROKER_MAX_ID_CONFIG = "reserved.broker.max.id";
     public static final int RESERVED_BROKER_MAX_ID_DEFAULT = 1000;

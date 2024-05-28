@@ -47,7 +47,7 @@ import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{MetadataVersion, MetadataVersionValidator}
 import org.apache.kafka.server.common.MetadataVersion._
-import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, KRaftConfigs, KafkaSecurityConfigs, KafkaServerConfigs, QuotaConfigs, ReplicationConfigs, ServerLogConfigs, ZkConfigs}
+import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, KRaftConfigs, KafkaSecurityConfigs, ServerConfigs, QuotaConfigs, ReplicationConfigs, ServerLogConfigs, ZkConfigs}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.MetricConfigs
 import org.apache.kafka.server.record.BrokerCompressionType
@@ -123,19 +123,19 @@ object KafkaConfig {
       .define(ZkConfigs.ZK_SSL_OCSP_ENABLE_CONFIG, BOOLEAN, ZkConfigs.ZK_SSL_OCSP_ENABLE, LOW, ZkConfigs.ZK_SSL_OCSP_ENABLE_DOC)
 
       /** ********* General Configuration ***********/
-      .define(KafkaServerConfigs.BROKER_ID_GENERATION_ENABLE_CONFIG, BOOLEAN, KafkaServerConfigs.BROKER_ID_GENERATION_ENABLE_DEFAULT, MEDIUM, KafkaServerConfigs.BROKER_ID_GENERATION_ENABLE_DOC)
-      .define(KafkaServerConfigs.RESERVED_BROKER_MAX_ID_CONFIG, INT, KafkaServerConfigs.RESERVED_BROKER_MAX_ID_DEFAULT, atLeast(0), MEDIUM, KafkaServerConfigs.RESERVED_BROKER_MAX_ID_DOC)
-      .define(KafkaServerConfigs.BROKER_ID_CONFIG, INT, KafkaServerConfigs.BROKER_ID_DEFAULT, HIGH, KafkaServerConfigs.BROKER_ID_DOC)
-      .define(KafkaServerConfigs.MESSAGE_MAX_BYTES_CONFIG, INT, LogConfig.DEFAULT_MAX_MESSAGE_BYTES, atLeast(0), HIGH, KafkaServerConfigs.MESSAGE_MAX_BYTES_DOC)
-      .define(KafkaServerConfigs.NUM_NETWORK_THREADS_CONFIG, INT, KafkaServerConfigs.NUM_NETWORK_THREADS_DEFAULT, atLeast(1), HIGH, KafkaServerConfigs.NUM_NETWORK_THREADS_DOC)
-      .define(KafkaServerConfigs.NUM_IO_THREADS_CONFIG, INT, KafkaServerConfigs.NUM_IO_THREADS_DEFAULT, atLeast(1), HIGH, KafkaServerConfigs.NUM_IO_THREADS_DOC)
-      .define(KafkaServerConfigs.NUM_REPLICA_ALTER_LOG_DIRS_THREADS_CONFIG, INT, null, HIGH, KafkaServerConfigs.NUM_REPLICA_ALTER_LOG_DIRS_THREADS_DOC)
-      .define(KafkaServerConfigs.BACKGROUND_THREADS_CONFIG, INT, KafkaServerConfigs.BACKGROUND_THREADS_DEFAULT, atLeast(1), HIGH, KafkaServerConfigs.BACKGROUND_THREADS_DOC)
-      .define(KafkaServerConfigs.QUEUED_MAX_REQUESTS_CONFIG, INT, KafkaServerConfigs.QUEUED_MAX_REQUESTS_DEFAULT, atLeast(1), HIGH, KafkaServerConfigs.QUEUED_MAX_REQUESTS_DOC)
-      .define(KafkaServerConfigs.QUEUED_MAX_BYTES_CONFIG, LONG, KafkaServerConfigs.QUEUED_MAX_REQUEST_BYTES_DEFAULT, MEDIUM, KafkaServerConfigs.QUEUED_MAX_REQUEST_BYTES_DOC)
-      .define(KafkaServerConfigs.REQUEST_TIMEOUT_MS_CONFIG, INT, KafkaServerConfigs.REQUEST_TIMEOUT_MS_DEFAULT, HIGH, KafkaServerConfigs.REQUEST_TIMEOUT_MS_DOC)
-      .define(KafkaServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG, LONG, KafkaServerConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MS, MEDIUM, KafkaServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DOC)
-      .define(KafkaServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG, LONG, KafkaServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS, MEDIUM, KafkaServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC)
+      .define(ServerConfigs.BROKER_ID_GENERATION_ENABLE_CONFIG, BOOLEAN, ServerConfigs.BROKER_ID_GENERATION_ENABLE_DEFAULT, MEDIUM, ServerConfigs.BROKER_ID_GENERATION_ENABLE_DOC)
+      .define(ServerConfigs.RESERVED_BROKER_MAX_ID_CONFIG, INT, ServerConfigs.RESERVED_BROKER_MAX_ID_DEFAULT, atLeast(0), MEDIUM, ServerConfigs.RESERVED_BROKER_MAX_ID_DOC)
+      .define(ServerConfigs.BROKER_ID_CONFIG, INT, ServerConfigs.BROKER_ID_DEFAULT, HIGH, ServerConfigs.BROKER_ID_DOC)
+      .define(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG, INT, LogConfig.DEFAULT_MAX_MESSAGE_BYTES, atLeast(0), HIGH, ServerConfigs.MESSAGE_MAX_BYTES_DOC)
+      .define(ServerConfigs.NUM_NETWORK_THREADS_CONFIG, INT, ServerConfigs.NUM_NETWORK_THREADS_DEFAULT, atLeast(1), HIGH, ServerConfigs.NUM_NETWORK_THREADS_DOC)
+      .define(ServerConfigs.NUM_IO_THREADS_CONFIG, INT, ServerConfigs.NUM_IO_THREADS_DEFAULT, atLeast(1), HIGH, ServerConfigs.NUM_IO_THREADS_DOC)
+      .define(ServerConfigs.NUM_REPLICA_ALTER_LOG_DIRS_THREADS_CONFIG, INT, null, HIGH, ServerConfigs.NUM_REPLICA_ALTER_LOG_DIRS_THREADS_DOC)
+      .define(ServerConfigs.BACKGROUND_THREADS_CONFIG, INT, ServerConfigs.BACKGROUND_THREADS_DEFAULT, atLeast(1), HIGH, ServerConfigs.BACKGROUND_THREADS_DOC)
+      .define(ServerConfigs.QUEUED_MAX_REQUESTS_CONFIG, INT, ServerConfigs.QUEUED_MAX_REQUESTS_DEFAULT, atLeast(1), HIGH, ServerConfigs.QUEUED_MAX_REQUESTS_DOC)
+      .define(ServerConfigs.QUEUED_MAX_BYTES_CONFIG, LONG, ServerConfigs.QUEUED_MAX_REQUEST_BYTES_DEFAULT, MEDIUM, ServerConfigs.QUEUED_MAX_REQUEST_BYTES_DOC)
+      .define(ServerConfigs.REQUEST_TIMEOUT_MS_CONFIG, INT, ServerConfigs.REQUEST_TIMEOUT_MS_DEFAULT, HIGH, ServerConfigs.REQUEST_TIMEOUT_MS_DOC)
+      .define(ServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG, LONG, ServerConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MS, MEDIUM, ServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DOC)
+      .define(ServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG, LONG, ServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS, MEDIUM, ServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC)
 
       /*
        * KRaft mode configs.
@@ -163,8 +163,8 @@ object KafkaConfig {
         MEDIUM, KRaftConfigs.MIGRATION_METADATA_MIN_BATCH_SIZE_DOC)
 
       /************* Authorizer Configuration ***********/
-      .define(KafkaServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, STRING, KafkaServerConfigs.AUTHORIZER_CLASS_NAME_DEFAULT, new ConfigDef.NonNullValidator(), LOW, KafkaServerConfigs.AUTHORIZER_CLASS_NAME_DOC)
-      .define(KafkaServerConfigs.EARLY_START_LISTENERS_CONFIG, STRING, null,  HIGH, KafkaServerConfigs.EARLY_START_LISTENERS_DOC)
+      .define(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, STRING, ServerConfigs.AUTHORIZER_CLASS_NAME_DEFAULT, new ConfigDef.NonNullValidator(), LOW, ServerConfigs.AUTHORIZER_CLASS_NAME_DOC)
+      .define(ServerConfigs.EARLY_START_LISTENERS_CONFIG, STRING, null,  HIGH, ServerConfigs.EARLY_START_LISTENERS_DOC)
 
       /** ********* Socket Server Configuration ***********/
       .define(SocketServerConfigs.LISTENERS_CONFIG, STRING, SocketServerConfigs.LISTENERS_DEFAULT, HIGH, SocketServerConfigs.LISTENERS_DOC)
@@ -183,7 +183,7 @@ object KafkaConfig {
       .define(SocketServerConfigs.FAILED_AUTHENTICATION_DELAY_MS_CONFIG, INT, SocketServerConfigs.FAILED_AUTHENTICATION_DELAY_MS_DEFAULT, atLeast(0), LOW, SocketServerConfigs.FAILED_AUTHENTICATION_DELAY_MS_DOC)
 
       /************ Rack Configuration ******************/
-      .define(KafkaServerConfigs.BROKER_RACK_CONFIG, STRING, null, MEDIUM, KafkaServerConfigs.BROKER_RACK_DOC)
+      .define(ServerConfigs.BROKER_RACK_CONFIG, STRING, null, MEDIUM, ServerConfigs.BROKER_RACK_DOC)
 
       /** ********* Log Configuration ***********/
       .define(ServerLogConfigs.NUM_PARTITIONS_CONFIG, INT, ServerLogConfigs.NUM_PARTITIONS_DEFAULT, atLeast(1), MEDIUM, ServerLogConfigs.NUM_PARTITIONS_DOC)
@@ -264,9 +264,9 @@ object KafkaConfig {
 
 
       /** ********* Controlled shutdown configuration ***********/
-      .define(KafkaServerConfigs.CONTROLLED_SHUTDOWN_MAX_RETRIES_CONFIG, INT, KafkaServerConfigs.CONTROLLED_SHUTDOWN_MAX_RETRIES_DEFAULT, MEDIUM, KafkaServerConfigs.CONTROLLED_SHUTDOWN_MAX_RETRIES_DOC)
-      .define(KafkaServerConfigs.CONTROLLED_SHUTDOWN_RETRY_BACKOFF_MS_CONFIG, LONG, KafkaServerConfigs.CONTROLLED_SHUTDOWN_RETRY_BACKOFF_MS_DEFAULT, MEDIUM, KafkaServerConfigs.CONTROLLED_SHUTDOWN_RETRY_BACKOFF_MS_DOC)
-      .define(KafkaServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, BOOLEAN, KafkaServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_DEFAULT, MEDIUM, KafkaServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_DOC)
+      .define(ServerConfigs.CONTROLLED_SHUTDOWN_MAX_RETRIES_CONFIG, INT, ServerConfigs.CONTROLLED_SHUTDOWN_MAX_RETRIES_DEFAULT, MEDIUM, ServerConfigs.CONTROLLED_SHUTDOWN_MAX_RETRIES_DOC)
+      .define(ServerConfigs.CONTROLLED_SHUTDOWN_RETRY_BACKOFF_MS_CONFIG, LONG, ServerConfigs.CONTROLLED_SHUTDOWN_RETRY_BACKOFF_MS_DEFAULT, MEDIUM, ServerConfigs.CONTROLLED_SHUTDOWN_RETRY_BACKOFF_MS_DOC)
+      .define(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, BOOLEAN, ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_DEFAULT, MEDIUM, ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_DOC)
 
       /** ********* Group coordinator configuration ***********/
       .define(GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, INT, GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_DEFAULT, MEDIUM, GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_DOC)
@@ -303,11 +303,11 @@ object KafkaConfig {
       .define(GroupCoordinatorConfig.OFFSETS_RETENTION_CHECK_INTERVAL_MS_CONFIG, LONG, GroupCoordinatorConfig.OFFSETS_RETENTION_CHECK_INTERVAL_MS_DEFAULT, atLeast(1), HIGH, GroupCoordinatorConfig.OFFSETS_RETENTION_CHECK_INTERVAL_MS_DOC)
       .define(GroupCoordinatorConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG, INT, GroupCoordinatorConfig.OFFSET_COMMIT_TIMEOUT_MS_DEFAULT, atLeast(1), HIGH, GroupCoordinatorConfig.OFFSET_COMMIT_TIMEOUT_MS_DOC)
       .define(GroupCoordinatorConfig.OFFSET_COMMIT_REQUIRED_ACKS_CONFIG, SHORT, GroupCoordinatorConfig.OFFSET_COMMIT_REQUIRED_ACKS_DEFAULT, HIGH, GroupCoordinatorConfig.OFFSET_COMMIT_REQUIRED_ACKS_DOC)
-      .define(KafkaServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, BOOLEAN, KafkaServerConfigs.DELETE_TOPIC_ENABLE_DEFAULT, HIGH, KafkaServerConfigs.DELETE_TOPIC_ENABLE_DOC)
-      .define(KafkaServerConfigs.COMPRESSION_TYPE_CONFIG, STRING, LogConfig.DEFAULT_COMPRESSION_TYPE, in(BrokerCompressionType.names.asScala.toSeq:_*), HIGH, KafkaServerConfigs.COMPRESSION_TYPE_DOC)
-      .define(KafkaServerConfigs.COMPRESSION_GZIP_LEVEL_CONFIG, INT, GzipCompression.DEFAULT_LEVEL, new GzipCompression.LevelValidator(), MEDIUM, KafkaServerConfigs.COMPRESSION_GZIP_LEVEL_DOC)
-      .define(KafkaServerConfigs.COMPRESSION_LZ4_LEVEL_CONFIG, INT, Lz4Compression.DEFAULT_LEVEL, between(Lz4Compression.MIN_LEVEL, Lz4Compression.MAX_LEVEL), MEDIUM, KafkaServerConfigs.COMPRESSION_LZ4_LEVEL_DOC)
-      .define(KafkaServerConfigs.COMPRESSION_ZSTD_LEVEL_CONFIG, INT, ZstdCompression.DEFAULT_LEVEL, between(ZstdCompression.MIN_LEVEL, ZstdCompression.MAX_LEVEL), MEDIUM, KafkaServerConfigs.COMPRESSION_ZSTD_LEVEL_DOC)
+      .define(ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, BOOLEAN, ServerConfigs.DELETE_TOPIC_ENABLE_DEFAULT, HIGH, ServerConfigs.DELETE_TOPIC_ENABLE_DOC)
+      .define(ServerConfigs.COMPRESSION_TYPE_CONFIG, STRING, LogConfig.DEFAULT_COMPRESSION_TYPE, in(BrokerCompressionType.names.asScala.toSeq:_*), HIGH, ServerConfigs.COMPRESSION_TYPE_DOC)
+      .define(ServerConfigs.COMPRESSION_GZIP_LEVEL_CONFIG, INT, GzipCompression.DEFAULT_LEVEL, new GzipCompression.LevelValidator(), MEDIUM, ServerConfigs.COMPRESSION_GZIP_LEVEL_DOC)
+      .define(ServerConfigs.COMPRESSION_LZ4_LEVEL_CONFIG, INT, Lz4Compression.DEFAULT_LEVEL, between(Lz4Compression.MIN_LEVEL, Lz4Compression.MAX_LEVEL), MEDIUM, ServerConfigs.COMPRESSION_LZ4_LEVEL_DOC)
+      .define(ServerConfigs.COMPRESSION_ZSTD_LEVEL_CONFIG, INT, ZstdCompression.DEFAULT_LEVEL, between(ZstdCompression.MIN_LEVEL, ZstdCompression.MAX_LEVEL), MEDIUM, ServerConfigs.COMPRESSION_ZSTD_LEVEL_DOC)
 
       /** ********* Transaction management configuration ***********/
       .define(TransactionStateManagerConfigs.TRANSACTIONAL_ID_EXPIRATION_MS_CONFIG, INT, TransactionStateManagerConfigs.TRANSACTIONAL_ID_EXPIRATION_MS_DEFAULT, atLeast(1), HIGH, TransactionStateManagerConfigs.TRANSACTIONAL_ID_EXPIRATION_MS_DOC)
@@ -327,11 +327,11 @@ object KafkaConfig {
       .defineInternal(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_CONFIG, INT, TransactionLogConfigs.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT, atLeast(1), LOW, TransactionLogConfigs.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DOC)
 
       /** ********* Fetch Configuration **************/
-      .define(KafkaServerConfigs.MAX_INCREMENTAL_FETCH_SESSION_CACHE_SLOTS_CONFIG, INT, KafkaServerConfigs.MAX_INCREMENTAL_FETCH_SESSION_CACHE_SLOTS_DEFAULT, atLeast(0), MEDIUM, KafkaServerConfigs.MAX_INCREMENTAL_FETCH_SESSION_CACHE_SLOTS_DOC)
-      .define(KafkaServerConfigs.FETCH_MAX_BYTES_CONFIG, INT, KafkaServerConfigs.FETCH_MAX_BYTES_DEFAULT, atLeast(1024), MEDIUM, KafkaServerConfigs.FETCH_MAX_BYTES_DOC)
+      .define(ServerConfigs.MAX_INCREMENTAL_FETCH_SESSION_CACHE_SLOTS_CONFIG, INT, ServerConfigs.MAX_INCREMENTAL_FETCH_SESSION_CACHE_SLOTS_DEFAULT, atLeast(0), MEDIUM, ServerConfigs.MAX_INCREMENTAL_FETCH_SESSION_CACHE_SLOTS_DOC)
+      .define(ServerConfigs.FETCH_MAX_BYTES_CONFIG, INT, ServerConfigs.FETCH_MAX_BYTES_DEFAULT, atLeast(1024), MEDIUM, ServerConfigs.FETCH_MAX_BYTES_DOC)
 
       /** ********* Request Limit Configuration ***********/
-      .define(KafkaServerConfigs.MAX_REQUEST_PARTITION_SIZE_LIMIT_CONFIG, INT, KafkaServerConfigs.MAX_REQUEST_PARTITION_SIZE_LIMIT_DEFAULT, atLeast(1), MEDIUM, KafkaServerConfigs.MAX_REQUEST_PARTITION_SIZE_LIMIT_DOC)
+      .define(ServerConfigs.MAX_REQUEST_PARTITION_SIZE_LIMIT_CONFIG, INT, ServerConfigs.MAX_REQUEST_PARTITION_SIZE_LIMIT_DEFAULT, atLeast(1), MEDIUM, ServerConfigs.MAX_REQUEST_PARTITION_SIZE_LIMIT_DOC)
 
       /** ********* Kafka Metrics Configuration ***********/
       .define(MetricConfigs.METRIC_NUM_SAMPLES_CONFIG, INT, MetricConfigs.METRIC_NUM_SAMPLES_DEFAULT, atLeast(1), LOW, MetricConfigs.METRIC_NUM_SAMPLES_DOC)
@@ -448,9 +448,9 @@ object KafkaConfig {
 
       /** Internal Configurations **/
       // This indicates whether unreleased APIs should be advertised by this node.
-      .defineInternal(KafkaServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, BOOLEAN, false, HIGH)
+      .defineInternal(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, BOOLEAN, false, HIGH)
       // This indicates whether unreleased MetadataVersions should be enabled on this node.
-      .defineInternal(KafkaServerConfigs.UNSTABLE_METADATA_VERSIONS_ENABLE_CONFIG, BOOLEAN, false, HIGH)
+      .defineInternal(ServerConfigs.UNSTABLE_METADATA_VERSIONS_ENABLE_CONFIG, BOOLEAN, false, HIGH)
   }
 
   /** ********* Remote Log Management Configuration *********/
@@ -527,10 +527,10 @@ object KafkaConfig {
    */
   def populateSynonyms(input: util.Map[_, _]): util.Map[Any, Any] = {
     val output = new util.HashMap[Any, Any](input)
-    val brokerId = output.get(KafkaServerConfigs.BROKER_ID_CONFIG)
+    val brokerId = output.get(ServerConfigs.BROKER_ID_CONFIG)
     val nodeId = output.get(KRaftConfigs.NODE_ID_CONFIG)
     if (brokerId == null && nodeId != null) {
-      output.put(KafkaServerConfigs.BROKER_ID_CONFIG, nodeId)
+      output.put(ServerConfigs.BROKER_ID_CONFIG, nodeId)
     } else if (brokerId != null && nodeId == null) {
       output.put(KRaftConfigs.NODE_ID_CONFIG, brokerId)
     }
@@ -664,9 +664,9 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val ZkSslCrlEnable = zkBooleanConfigOrSystemPropertyWithDefaultValue(ZkConfigs.ZK_SSL_CRL_ENABLE_CONFIG)
   val ZkSslOcspEnable = zkBooleanConfigOrSystemPropertyWithDefaultValue(ZkConfigs.ZK_SSL_OCSP_ENABLE_CONFIG)
   /** ********* General Configuration ***********/
-  val brokerIdGenerationEnable: Boolean = getBoolean(KafkaServerConfigs.BROKER_ID_GENERATION_ENABLE_CONFIG)
-  val maxReservedBrokerId: Int = getInt(KafkaServerConfigs.RESERVED_BROKER_MAX_ID_CONFIG)
-  var brokerId: Int = getInt(KafkaServerConfigs.BROKER_ID_CONFIG)
+  val brokerIdGenerationEnable: Boolean = getBoolean(ServerConfigs.BROKER_ID_GENERATION_ENABLE_CONFIG)
+  val maxReservedBrokerId: Int = getInt(ServerConfigs.RESERVED_BROKER_MAX_ID_CONFIG)
+  var brokerId: Int = getInt(ServerConfigs.BROKER_ID_CONFIG)
   val nodeId: Int = getInt(KRaftConfigs.NODE_ID_CONFIG)
   val initialRegistrationTimeoutMs: Int = getInt(KRaftConfigs.INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_CONFIG)
   val brokerHeartbeatIntervalMs: Int = getInt(KRaftConfigs.BROKER_HEARTBEAT_INTERVAL_MS_CONFIG)
@@ -716,18 +716,18 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   def metadataLogSegmentMinBytes = getInt(KRaftConfigs.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG)
   val serverMaxStartupTimeMs = getLong(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG)
 
-  def numNetworkThreads = getInt(KafkaServerConfigs.NUM_NETWORK_THREADS_CONFIG)
-  def backgroundThreads = getInt(KafkaServerConfigs.BACKGROUND_THREADS_CONFIG)
-  val queuedMaxRequests = getInt(KafkaServerConfigs.QUEUED_MAX_REQUESTS_CONFIG)
-  val queuedMaxBytes = getLong(KafkaServerConfigs.QUEUED_MAX_BYTES_CONFIG)
-  def numIoThreads = getInt(KafkaServerConfigs.NUM_IO_THREADS_CONFIG)
-  def messageMaxBytes = getInt(KafkaServerConfigs.MESSAGE_MAX_BYTES_CONFIG)
-  val requestTimeoutMs = getInt(KafkaServerConfigs.REQUEST_TIMEOUT_MS_CONFIG)
-  val connectionSetupTimeoutMs = getLong(KafkaServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG)
-  val connectionSetupTimeoutMaxMs = getLong(KafkaServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG)
+  def numNetworkThreads = getInt(ServerConfigs.NUM_NETWORK_THREADS_CONFIG)
+  def backgroundThreads = getInt(ServerConfigs.BACKGROUND_THREADS_CONFIG)
+  val queuedMaxRequests = getInt(ServerConfigs.QUEUED_MAX_REQUESTS_CONFIG)
+  val queuedMaxBytes = getLong(ServerConfigs.QUEUED_MAX_BYTES_CONFIG)
+  def numIoThreads = getInt(ServerConfigs.NUM_IO_THREADS_CONFIG)
+  def messageMaxBytes = getInt(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG)
+  val requestTimeoutMs = getInt(ServerConfigs.REQUEST_TIMEOUT_MS_CONFIG)
+  val connectionSetupTimeoutMs = getLong(ServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG)
+  val connectionSetupTimeoutMaxMs = getLong(ServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG)
 
   def getNumReplicaAlterLogDirsThreads: Int = {
-    val numThreads: Integer = Option(getInt(KafkaServerConfigs.NUM_REPLICA_ALTER_LOG_DIRS_THREADS_CONFIG)).getOrElse(logDirs.size)
+    val numThreads: Integer = Option(getInt(ServerConfigs.NUM_REPLICA_ALTER_LOG_DIRS_THREADS_CONFIG)).getOrElse(logDirs.size)
     numThreads
   }
 
@@ -741,7 +741,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
 
   /************* Authorizer Configuration ***********/
   def createNewAuthorizer(): Option[Authorizer] = {
-    val className = getString(KafkaServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG)
+    val className = getString(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG)
     if (className == null || className.isEmpty)
       None
     else {
@@ -752,13 +752,13 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val earlyStartListeners: Set[ListenerName] = {
     val listenersSet = listeners.map(_.listenerName).toSet
     val controllerListenersSet = controllerListeners.map(_.listenerName).toSet
-    Option(getString(KafkaServerConfigs.EARLY_START_LISTENERS_CONFIG)) match {
+    Option(getString(ServerConfigs.EARLY_START_LISTENERS_CONFIG)) match {
       case None => controllerListenersSet
       case Some(str) =>
         str.split(",").map(_.trim()).filterNot(_.isEmpty).map { str =>
           val listenerName = new ListenerName(str)
           if (!listenersSet.contains(listenerName) && !controllerListenersSet.contains(listenerName))
-            throw new ConfigException(s"${KafkaServerConfigs.EARLY_START_LISTENERS_CONFIG} contains " +
+            throw new ConfigException(s"${ServerConfigs.EARLY_START_LISTENERS_CONFIG} contains " +
               s"listener ${listenerName.value()}, but this is not contained in " +
               s"${SocketServerConfigs.LISTENERS_CONFIG} or ${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG}")
           listenerName
@@ -780,7 +780,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val failedAuthenticationDelayMs = getInt(SocketServerConfigs.FAILED_AUTHENTICATION_DELAY_MS_CONFIG)
 
   /***************** rack configuration **************/
-  val rack = Option(getString(KafkaServerConfigs.BROKER_RACK_CONFIG))
+  val rack = Option(getString(ServerConfigs.BROKER_RACK_CONFIG))
   val replicaSelectorClassName = Option(getString(ReplicationConfigs.REPLICA_SELECTOR_CLASS_CONFIG))
 
   /** ********* Log Configuration ***********/
@@ -911,9 +911,9 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   }
 
   /** ********* Controlled shutdown configuration ***********/
-  val controlledShutdownMaxRetries = getInt(KafkaServerConfigs.CONTROLLED_SHUTDOWN_MAX_RETRIES_CONFIG)
-  val controlledShutdownRetryBackoffMs = getLong(KafkaServerConfigs.CONTROLLED_SHUTDOWN_RETRY_BACKOFF_MS_CONFIG)
-  val controlledShutdownEnable = getBoolean(KafkaServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG)
+  val controlledShutdownMaxRetries = getInt(ServerConfigs.CONTROLLED_SHUTDOWN_MAX_RETRIES_CONFIG)
+  val controlledShutdownRetryBackoffMs = getLong(ServerConfigs.CONTROLLED_SHUTDOWN_RETRY_BACKOFF_MS_CONFIG)
+  val controlledShutdownEnable = getBoolean(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG)
 
   /** ********* Feature configuration ***********/
   def isFeatureVersioningSupported = interBrokerProtocolVersion.isFeatureVersioningSupported
@@ -1035,18 +1035,18 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val controllerQuotaWindowSizeSeconds = getInt(QuotaConfigs.CONTROLLER_QUOTA_WINDOW_SIZE_SECONDS_CONFIG)
 
   /** ********* Fetch Configuration **************/
-  val maxIncrementalFetchSessionCacheSlots = getInt(KafkaServerConfigs.MAX_INCREMENTAL_FETCH_SESSION_CACHE_SLOTS_CONFIG)
-  val fetchMaxBytes = getInt(KafkaServerConfigs.FETCH_MAX_BYTES_CONFIG)
+  val maxIncrementalFetchSessionCacheSlots = getInt(ServerConfigs.MAX_INCREMENTAL_FETCH_SESSION_CACHE_SLOTS_CONFIG)
+  val fetchMaxBytes = getInt(ServerConfigs.FETCH_MAX_BYTES_CONFIG)
 
   /** ********* Request Limit Configuration ***********/
-  val maxRequestPartitionSizeLimit = getInt(KafkaServerConfigs.MAX_REQUEST_PARTITION_SIZE_LIMIT_CONFIG)
+  val maxRequestPartitionSizeLimit = getInt(ServerConfigs.MAX_REQUEST_PARTITION_SIZE_LIMIT_CONFIG)
 
-  val deleteTopicEnable = getBoolean(KafkaServerConfigs.DELETE_TOPIC_ENABLE_CONFIG)
-  def compressionType = getString(KafkaServerConfigs.COMPRESSION_TYPE_CONFIG)
+  val deleteTopicEnable = getBoolean(ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG)
+  def compressionType = getString(ServerConfigs.COMPRESSION_TYPE_CONFIG)
 
-  def gzipCompressionLevel = getInt(KafkaServerConfigs.COMPRESSION_GZIP_LEVEL_CONFIG)
-  def lz4CompressionLevel = getInt(KafkaServerConfigs.COMPRESSION_LZ4_LEVEL_CONFIG)
-  def zstdCompressionLevel = getInt(KafkaServerConfigs.COMPRESSION_ZSTD_LEVEL_CONFIG)
+  def gzipCompressionLevel = getInt(ServerConfigs.COMPRESSION_GZIP_LEVEL_CONFIG)
+  def lz4CompressionLevel = getInt(ServerConfigs.COMPRESSION_LZ4_LEVEL_CONFIG)
+  def zstdCompressionLevel = getInt(ServerConfigs.COMPRESSION_ZSTD_LEVEL_CONFIG)
 
   /** ********* Raft Quorum Configuration *********/
   val quorumVoters = getList(QuorumConfig.QUORUM_VOTERS_CONFIG)
@@ -1058,8 +1058,8 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val quorumRetryBackoffMs = getInt(QuorumConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG)
 
   /** Internal Configurations **/
-  val unstableApiVersionsEnabled = getBoolean(KafkaServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG)
-  val unstableMetadataVersionsEnabled = getBoolean(KafkaServerConfigs.UNSTABLE_METADATA_VERSIONS_ENABLE_CONFIG)
+  val unstableApiVersionsEnabled = getBoolean(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG)
+  val unstableMetadataVersionsEnabled = getBoolean(ServerConfigs.UNSTABLE_METADATA_VERSIONS_ENABLE_CONFIG)
 
   def addReconfigurable(reconfigurable: Reconfigurable): Unit = {
     dynamicConfig.addReconfigurable(reconfigurable)
@@ -1211,7 +1211,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   @nowarn("cat=deprecation")
   private def validateValues(): Unit = {
     if (nodeId != brokerId) {
-      throw new ConfigException(s"You must set `${KRaftConfigs.NODE_ID_CONFIG}` to the same value as `${KafkaServerConfigs.BROKER_ID_CONFIG}`.")
+      throw new ConfigException(s"You must set `${KRaftConfigs.NODE_ID_CONFIG}` to the same value as `${ServerConfigs.BROKER_ID_CONFIG}`.")
     }
     if (requiresZookeeper) {
       if (zkConnect == null) {
@@ -1411,7 +1411,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     require(!interBrokerUsesSasl || saslEnabledMechanisms(interBrokerListenerName).contains(saslMechanismInterBrokerProtocol),
       s"${KafkaSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG} must be included in ${KafkaSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG} when SASL is used for inter-broker communication")
     require(queuedMaxBytes <= 0 || queuedMaxBytes >= socketRequestMaxBytes,
-      s"${KafkaServerConfigs.QUEUED_MAX_BYTES_CONFIG} must be larger or equal to ${SocketServerConfigs.SOCKET_REQUEST_MAX_BYTES_CONFIG}")
+      s"${ServerConfigs.QUEUED_MAX_BYTES_CONFIG} must be larger or equal to ${SocketServerConfigs.SOCKET_REQUEST_MAX_BYTES_CONFIG}")
 
     if (maxConnectionsPerIp == 0)
       require(maxConnectionsPerIpOverrides.nonEmpty, s"${SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG} can be set to zero only if" +

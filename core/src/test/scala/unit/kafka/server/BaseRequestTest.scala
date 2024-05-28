@@ -24,7 +24,7 @@ import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, RequestHeader, ResponseHeader}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.BrokerState
-import org.apache.kafka.server.config.KafkaServerConfigs
+import org.apache.kafka.server.config.ServerConfigs
 
 import java.io.{DataInputStream, DataOutputStream}
 import java.net.Socket
@@ -44,7 +44,7 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
 
   override def modifyConfigs(props: Seq[Properties]): Unit = {
     props.foreach { p =>
-      p.put(KafkaServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, "false")
+      p.put(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, "false")
       brokerPropertyOverrides(p)
     }
   }
