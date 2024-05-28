@@ -19,7 +19,7 @@ package kafka.coordinator.transaction
 
 import kafka.network.SocketServer
 import kafka.server.IntegrationTestUtils
-import kafka.test.{ClusterConfig, ClusterGenerator, ClusterInstance}
+import kafka.test.{ClusterConfig, ClusterInstance}
 import kafka.test.annotation.{AutoStart, ClusterConfigProperty, ClusterTemplate, ClusterTest, ClusterTestDefaults, ClusterTests, Type}
 import kafka.test.junit.ClusterTestExtensions
 import org.apache.kafka.common.message.InitProducerIdRequestData
@@ -38,19 +38,19 @@ import scala.concurrent.duration.DurationInt
 import scala.jdk.CollectionConverters._
 
 object ProducerIdsIntegrationTest {
-  def uniqueProducerIdsBumpIBP(clusterGenerator: ClusterGenerator): Unit = {
+  def uniqueProducerIdsBumpIBP(): java.util.List[ClusterConfig] = {
     val serverProperties = java.util.Collections.singletonMap(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "2.8")
     val perBrokerProperties: java.util.Map[Integer, java.util.Map[String, String]] =
       java.util.Collections.singletonMap(0,
         java.util.Collections.singletonMap(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "3.0-IV0"))
 
-    clusterGenerator.accept(ClusterConfig.defaultBuilder()
+    List(ClusterConfig.defaultBuilder()
       .setTypes(Set(Type.ZK).asJava)
       .setBrokers(3)
       .setAutoStart(false)
       .setServerProperties(serverProperties)
       .setPerServerProperties(perBrokerProperties)
-      .build())
+      .build()).asJava
   }
 }
 

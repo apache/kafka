@@ -38,18 +38,18 @@ import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemo
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_RETENTION_MS_PROP;
 
-class RemoteLogMetadataManagerTestUtils {
+public class RemoteLogMetadataManagerTestUtils {
     private static final Logger log = LoggerFactory.getLogger(RemoteLogMetadataManagerTestUtils.class);
 
     private static final int METADATA_TOPIC_PARTITIONS_COUNT = 3;
     private static final short METADATA_TOPIC_REPLICATION_FACTOR = 2;
     private static final long METADATA_TOPIC_RETENTION_MS = 24 * 60 * 60 * 1000L;
 
-    static Builder builder() {
+    public static Builder builder() {
         return new Builder();
     }
 
-    static class Builder {
+    public static class Builder {
         private String bootstrapServers;
         private boolean startConsumerThread;
         private Map<String, Object> overrideRemoteLogMetadataManagerProps = Collections.emptyMap();
