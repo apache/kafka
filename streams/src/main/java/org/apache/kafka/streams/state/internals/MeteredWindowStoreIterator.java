@@ -22,7 +22,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Function;
 
 class MeteredWindowStoreIterator<V> implements WindowStoreIterator<V> {
@@ -34,7 +34,7 @@ class MeteredWindowStoreIterator<V> implements WindowStoreIterator<V> {
     private final Function<byte[], V> valueFrom;
     private final long startNs;
     private final Time time;
-    private final AtomicInteger numOpenIterators;
+    private final LongAdder numOpenIterators;
 
     MeteredWindowStoreIterator(final WindowStoreIterator<byte[]> iter,
                                final Sensor operationSensor,
@@ -42,7 +42,7 @@ class MeteredWindowStoreIterator<V> implements WindowStoreIterator<V> {
                                final StreamsMetrics metrics,
                                final Function<byte[], V> valueFrom,
                                final Time time,
-                               final AtomicInteger numOpenIterators) {
+                               final LongAdder numOpenIterators) {
         this.iter = iter;
         this.operationSensor = operationSensor;
         this.iteratorSensor = iteratorSensor;
@@ -51,7 +51,7 @@ class MeteredWindowStoreIterator<V> implements WindowStoreIterator<V> {
         this.startNs = time.nanoseconds();
         this.time = time;
         this.numOpenIterators = numOpenIterators;
-        numOpenIterators.incrementAndGet();
+        numOpenIterators.increment();
     }
 
     @Override
@@ -73,7 +73,7 @@ class MeteredWindowStoreIterator<V> implements WindowStoreIterator<V> {
             final long duration = time.nanoseconds() - startNs;
             operationSensor.record(duration);
             iteratorSensor.record(duration);
-            numOpenIterators.decrementAndGet();
+            numOpenIterators.decrement();
         }
     }
 

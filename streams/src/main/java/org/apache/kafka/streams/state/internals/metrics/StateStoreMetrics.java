@@ -438,7 +438,7 @@ public class StateStoreMetrics {
                                                 final String storeType,
                                                 final String storeName,
                                                 final StreamsMetricsImpl streamsMetrics,
-                                                final Gauge<Integer> numOpenIteratorsGauge) {
+                                                final Gauge<Long> numOpenIteratorsGauge) {
         streamsMetrics.addStoreLevelMutableMetric(
                 taskId,
                 storeType,

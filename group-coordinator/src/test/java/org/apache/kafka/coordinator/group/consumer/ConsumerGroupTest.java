@@ -835,6 +835,90 @@ public class ConsumerGroupTest {
     }
 
     @Test
+    public void testUpdateInvertedAssignment() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        GroupCoordinatorMetricsShard metricsShard = mock(GroupCoordinatorMetricsShard.class);
+        ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, "test-group", metricsShard);
+        Uuid topicId = Uuid.randomUuid();
+        String memberId1 = "member1";
+        String memberId2 = "member2";
+
+        // Initial assignment for member1
+        Assignment initialAssignment = new Assignment(Collections.singletonMap(
+            topicId,
+            new HashSet<>(Collections.singletonList(0))
+        ));
+        consumerGroup.updateTargetAssignment(memberId1, initialAssignment);
+
+        // Verify that partition 0 is assigned to member1.
+        assertEquals(
+            mkMap(
+                mkEntry(topicId, mkMap(mkEntry(0, memberId1)))
+            ),
+            consumerGroup.invertedTargetAssignment()
+        );
+
+        // New assignment for member1
+        Assignment newAssignment = new Assignment(Collections.singletonMap(
+            topicId,
+            new HashSet<>(Collections.singletonList(1))
+        ));
+        consumerGroup.updateTargetAssignment(memberId1, newAssignment);
+
+        // Verify that partition 0 is no longer assigned and partition 1 is assigned to member1
+        assertEquals(
+            mkMap(
+                mkEntry(topicId, mkMap(mkEntry(1, memberId1)))
+            ),
+            consumerGroup.invertedTargetAssignment()
+        );
+
+        // New assignment for member2 to add partition 1
+        Assignment newAssignment2 = new Assignment(Collections.singletonMap(
+            topicId,
+            new HashSet<>(Collections.singletonList(1))
+        ));
+        consumerGroup.updateTargetAssignment(memberId2, newAssignment2);
+
+        // Verify that partition 1 is assigned to member2
+        assertEquals(
+            mkMap(
+                mkEntry(topicId, mkMap(mkEntry(1, memberId2)))
+            ),
+            consumerGroup.invertedTargetAssignment()
+        );
+
+        // New assignment for member1 to revoke partition 1 and assign partition 0
+        Assignment newAssignment1 = new Assignment(Collections.singletonMap(
+            topicId,
+            new HashSet<>(Collections.singletonList(0))
+        ));
+        consumerGroup.updateTargetAssignment(memberId1, newAssignment1);
+
+        // Verify that partition 1 is still assigned to member2 and partition 0 is assigned to member1
+        assertEquals(
+            mkMap(
+                mkEntry(topicId, mkMap(
+                    mkEntry(0, memberId1),
+                    mkEntry(1, memberId2)
+                ))
+            ),
+            consumerGroup.invertedTargetAssignment()
+        );
+
+        // Test remove target assignment for member1
+        consumerGroup.removeTargetAssignment(memberId1);
+
+        // Verify that partition 0 is no longer assigned and partition 1 is still assigned to member2
+        assertEquals(
+            mkMap(
+                mkEntry(topicId, mkMap(mkEntry(1, memberId2)))
+            ),
+            consumerGroup.invertedTargetAssignment()
+        );
+    }
+
+    @Test
     public void testMetadataRefreshDeadline() {
         MockTime time = new MockTime();
         ConsumerGroup group = createConsumerGroup("group-foo");

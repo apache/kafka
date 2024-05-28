@@ -17,10 +17,8 @@
 package org.apache.kafka.jmh.assignor;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.metadata.PartitionRecord;
-import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
-import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
+import org.apache.kafka.coordinator.group.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
@@ -36,6 +34,7 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.image.TopicsImage;
+
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -51,7 +50,6 @@ import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -90,7 +88,9 @@ public class TargetAssignmentBuilderBenchmark {
 
     private TargetAssignmentBuilder targetAssignmentBuilder;
 
-    private AssignmentSpec assignmentSpec;
+    private GroupSpecImpl groupSpec;
+
+    private Map<Uuid, Map<Integer, String>> invertedTargetAssignment;
 
     private final List<String> allTopicNames = new ArrayList<>();
 
@@ -104,7 +104,7 @@ public class TargetAssignmentBuilderBenchmark {
 
         subscriptionMetadata = generateMockSubscriptionMetadata();
         Map<String, ConsumerGroupMember> members = generateMockMembers();
-        Map<String, Assignment> existingTargetAssignment = generateMockInitialTargetAssignment();
+        Map<String, Assignment> existingTargetAssignment = generateMockInitialTargetAssignmentAndUpdateInvertedTargetAssignment();
 
         ConsumerGroupMember newMember = new ConsumerGroupMember.Builder("newMember")
             .setSubscribedTopicNames(allTopicNames)
@@ -113,8 +113,9 @@ public class TargetAssignmentBuilderBenchmark {
         targetAssignmentBuilder = new TargetAssignmentBuilder(GROUP_ID, GROUP_EPOCH, partitionAssignor)
             .withMembers(members)
             .withSubscriptionMetadata(subscriptionMetadata)
-            .withTargetAssignment(existingTargetAssignment)
             .withSubscriptionType(HOMOGENEOUS)
+            .withTargetAssignment(existingTargetAssignment)
+            .withInvertedTargetAssignment(invertedTargetAssignment)
             .withTopicsImage(topicsImage)
             .addOrUpdateMember(newMember.memberId(), newMember);
     }
@@ -148,14 +149,20 @@ public class TargetAssignmentBuilderBenchmark {
                 Collections.emptyMap()
             );
             subscriptionMetadata.put(topicName, metadata);
-            addTopic(delta, topicId, topicName, partitionsPerTopicCount);
+
+            AssignorBenchmarkUtils.addTopic(
+                delta,
+                topicId,
+                topicName,
+                partitionsPerTopicCount
+            );
         }
 
         topicsImage = delta.apply(MetadataProvenance.EMPTY).topics();
         return subscriptionMetadata;
     }
 
-    private Map<String, Assignment> generateMockInitialTargetAssignment() {
+    private Map<String, Assignment> generateMockInitialTargetAssignmentAndUpdateInvertedTargetAssignment() {
         Map<Uuid, TopicMetadata> topicMetadataMap = new HashMap<>(topicCount);
         subscriptionMetadata.forEach((topicName, topicMetadata) ->
             topicMetadataMap.put(
@@ -167,9 +174,10 @@ public class TargetAssignmentBuilderBenchmark {
         createAssignmentSpec();
 
         GroupAssignment groupAssignment = partitionAssignor.assign(
-            assignmentSpec,
+            groupSpec,
             new SubscribedTopicMetadata(topicMetadataMap)
         );
+        invertedTargetAssignment = AssignorBenchmarkUtils.computeInvertedTargetAssignment(groupAssignment);
 
         Map<String, Assignment> initialTargetAssignment = new HashMap<>(memberCount);
 
@@ -198,25 +206,7 @@ public class TargetAssignmentBuilderBenchmark {
                 Collections.emptyMap()
             ));
         }
-        assignmentSpec = new AssignmentSpec(members, HOMOGENEOUS);
-    }
-
-    public static void addTopic(
-        MetadataDelta delta,
-        Uuid topicId,
-        String topicName,
-        int numPartitions
-    ) {
-        // For testing purposes, the following criteria are used:
-        // - Number of replicas for each partition: 2
-        // - Number of brokers available in the cluster: 4
-        delta.replay(new TopicRecord().setTopicId(topicId).setName(topicName));
-        for (int i = 0; i < numPartitions; i++) {
-            delta.replay(new PartitionRecord()
-                .setTopicId(topicId)
-                .setPartitionId(i)
-                .setReplicas(Arrays.asList(i % 4, (i + 1) % 4)));
-        }
+        groupSpec = new GroupSpecImpl(members, HOMOGENEOUS, Collections.emptyMap());
     }
 
     @Benchmark
