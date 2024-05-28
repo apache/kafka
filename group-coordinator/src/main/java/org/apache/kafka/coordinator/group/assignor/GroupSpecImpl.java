@@ -16,13 +16,15 @@
  */
 package org.apache.kafka.coordinator.group.assignor;
 
+import org.apache.kafka.common.Uuid;
+
 import java.util.Map;
 import java.util.Objects;
 
 /**
  * The assignment specification for a consumer group.
  */
-public class AssignmentSpec {
+public class GroupSpecImpl implements GroupSpec {
     /**
      * The member metadata keyed by member Id.
      */
@@ -33,44 +35,76 @@ public class AssignmentSpec {
      */
     private final SubscriptionType subscriptionType;
 
-    public AssignmentSpec(
+    /**
+     * Reverse lookup map representing topic partitions with
+     * their current member assignments.
+     */
+    private final Map<Uuid, Map<Integer, String>> invertedTargetAssignment;
+
+    public GroupSpecImpl(
         Map<String, AssignmentMemberSpec> members,
-        SubscriptionType subscriptionType
+        SubscriptionType subscriptionType,
+        Map<Uuid, Map<Integer, String>> invertedTargetAssignment
     ) {
         Objects.requireNonNull(members);
+        Objects.requireNonNull(subscriptionType);
+        Objects.requireNonNull(invertedTargetAssignment);
         this.members = members;
         this.subscriptionType = subscriptionType;
+        this.invertedTargetAssignment = invertedTargetAssignment;
     }
 
     /**
-     * @return Member metadata keyed by member Id.
+     * {@inheritDoc}
      */
+    @Override
     public Map<String, AssignmentMemberSpec> members() {
         return members;
     }
 
     /**
-     * @return The group's subscription type.
+     * {@inheritDoc}
      */
+    @Override
     public SubscriptionType subscriptionType() {
         return subscriptionType;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public boolean isPartitionAssigned(Uuid topicId, int partitionId) {
+        Map<Integer, String> partitionMap = invertedTargetAssignment.get(topicId);
+        if (partitionMap == null) {
+            return false;
+        }
+        return partitionMap.containsKey(partitionId);
     }
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        AssignmentSpec that = (AssignmentSpec) o;
+        GroupSpecImpl that = (GroupSpecImpl) o;
         return subscriptionType == that.subscriptionType &&
-            members.equals(that.members);
+            members.equals(that.members) &&
+            invertedTargetAssignment.equals(that.invertedTargetAssignment);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(members, subscriptionType);
+        int result = members.hashCode();
+        result = 31 * result + subscriptionType.hashCode();
+        result = 31 * result + invertedTargetAssignment.hashCode();
+        return result;
     }
 
+    @Override
     public String toString() {
-        return "AssignmentSpec(members=" + members + ", subscriptionType=" + subscriptionType.toString() + ')';
+        return "GroupSpecImpl(members=" + members +
+            ", subscriptionType=" + subscriptionType +
+            ", invertedTargetAssignment=" + invertedTargetAssignment +
+            ')';
     }
 }

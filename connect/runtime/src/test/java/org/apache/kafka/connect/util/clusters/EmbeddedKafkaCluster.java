@@ -57,6 +57,7 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.metadata.BrokerState;
 import org.apache.kafka.network.SocketServerConfigs;
+import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ZkConfigs;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.slf4j.Logger;
@@ -163,7 +164,7 @@ public class EmbeddedKafkaCluster {
     private void doStart() {
         brokerConfig.put(ZkConfigs.ZK_CONNECT_CONFIG, zKConnectString());
 
-        putIfAbsent(brokerConfig, KafkaConfig.DeleteTopicEnableProp(), true);
+        putIfAbsent(brokerConfig, ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, true);
         putIfAbsent(brokerConfig, GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0);
         putIfAbsent(brokerConfig, GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, (short) brokers.length);
         putIfAbsent(brokerConfig, AUTO_CREATE_TOPICS_ENABLE_CONFIG, false);
@@ -178,7 +179,7 @@ public class EmbeddedKafkaCluster {
         listenerName = new ListenerName(listenerConfig.toString());
 
         for (int i = 0; i < brokers.length; i++) {
-            brokerConfig.put(KafkaConfig.BrokerIdProp(), i);
+            brokerConfig.put(ServerConfigs.BROKER_ID_CONFIG, i);
             currentBrokerLogDirs[i] = currentBrokerLogDirs[i] == null ? createLogDir() : currentBrokerLogDirs[i];
             brokerConfig.put(LOG_DIR_CONFIG, currentBrokerLogDirs[i]);
             if (!hasListenerConfig)
