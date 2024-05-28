@@ -58,9 +58,6 @@ public class StickyTaskAssignor implements TaskAssignor {
     }
 
     @Override
-    public void configure(final Map<String, ?> configs) {}
-
-    @Override
     public TaskAssignment assign(final ApplicationState applicationState) {
         final Map<ProcessId, KafkaStreamsState> clients = applicationState.kafkaStreamsStates(false);
         final Map<TaskId, ProcessId> previousActiveAssignment = mapPreviousActiveTasks(clients);
@@ -76,11 +73,14 @@ public class StickyTaskAssignor implements TaskAssignor {
         final Map<ProcessId, KafkaStreamsAssignment> finalAssignments = assignmentState.buildKafkaStreamsAssignments();
         if (mustPreserveActiveTaskAssignment && !finalAssignments.isEmpty()) {
             // We set the followup deadline for only one of the clients.
-            final ProcessId clientId = finalAssignments.keySet().iterator().next();
+            final ProcessId clientId = finalAssignments.entrySet().iterator().next().getKey();
             final KafkaStreamsAssignment previousAssignment = finalAssignments.get(clientId);
             finalAssignments.put(clientId, previousAssignment.withFollowupRebalance(Instant.ofEpochMilli(0)));
         }
-        return new TaskAssignment(finalAssignments.values());
+
+        final Collection<KafkaStreamsAssignment> taskAssignments = finalAssignments.entrySet().stream()
+            .map(Map.Entry::getValue).collect(Collectors.toList());
+        return new TaskAssignment(taskAssignments);
     }
 
     private void optimizeActive(final ApplicationState applicationState,
@@ -266,7 +266,8 @@ public class StickyTaskAssignor implements TaskAssignor {
 
         public Map<ProcessId, KafkaStreamsAssignment> buildKafkaStreamsAssignments() {
             final Map<ProcessId, KafkaStreamsAssignment> kafkaStreamsAssignments = new HashMap<>();
-            for (final ProcessId processId : newAssignments.keySet()) {
+            for (final Map.Entry<ProcessId, Set<AssignedTask>> entry : newAssignments.entrySet()) {
+                final ProcessId processId = entry.getKey();
                 final Set<AssignedTask> assignedTasks = newAssignments.get(processId);
                 final KafkaStreamsAssignment assignment = KafkaStreamsAssignment.of(processId, assignedTasks);
                 kafkaStreamsAssignments.put(processId, assignment);
@@ -278,7 +279,8 @@ public class StickyTaskAssignor implements TaskAssignor {
             final Map<TaskId, Set<ProcessId>> newTaskLocations = new HashMap<>();
             final Map<ProcessId, Set<AssignedTask>> newAssignments = new HashMap<>();
 
-            for (final ProcessId processId : optimizedAssignments.keySet()) {
+            for (final Map.Entry<ProcessId, KafkaStreamsAssignment> entry : optimizedAssignments.entrySet()) {
+                final ProcessId processId = entry.getKey();
                 final Set<AssignedTask> assignedTasks = optimizedAssignments.get(processId).assignment();
                 newAssignments.put(processId, assignedTasks);
 
