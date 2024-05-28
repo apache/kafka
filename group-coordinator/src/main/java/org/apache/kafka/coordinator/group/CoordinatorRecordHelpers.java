@@ -65,6 +65,8 @@ public class CoordinatorRecordHelpers {
         String groupId,
         ConsumerGroupMember member
     ) {
+        List<String> topicNames = new ArrayList<>(member.subscribedTopicNames());
+        Collections.sort(topicNames);
         return new CoordinatorRecord(
             new ApiMessageAndVersion(
                 new ConsumerGroupMemberMetadataKey()
@@ -78,7 +80,7 @@ public class CoordinatorRecordHelpers {
                     .setInstanceId(member.instanceId())
                     .setClientId(member.clientId())
                     .setClientHost(member.clientHost())
-                    .setSubscribedTopicNames(member.subscribedTopicNames())
+                    .setSubscribedTopicNames(topicNames)
                     .setSubscribedTopicRegex(member.subscribedTopicRegex())
                     .setServerAssignor(member.serverAssignorName().orElse(null))
                     .setRebalanceTimeoutMs(member.rebalanceTimeoutMs())
