@@ -499,7 +499,7 @@ public class QuorumState {
             localDirectoryId(),
             epoch(),
             epochStartOffset,
-            latestVoterSet.get().voterIds(),
+            latestVoterSet.get().voters(),
             candidateState.grantingVoters(),
             accumulator,
             fetchTimeoutMs,
