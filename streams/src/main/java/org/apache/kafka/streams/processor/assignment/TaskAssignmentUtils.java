@@ -199,7 +199,8 @@ public final class TaskAssignmentUtils {
         final Map<ProcessId, KafkaStreamsAssignment> kafkaStreamsAssignments
     ) {
         if (!hasValidRackInformation(applicationState)) {
-            throw new IllegalStateException("Cannot perform rack-aware assignment optimizations with invalid rack information.");
+            LOG.warn("Cannot optimize standby tasks with invalid rack information.");
+            return kafkaStreamsAssignments;
         }
 
         final int crossRackTrafficCost = applicationState.assignmentConfigs().rackAwareTrafficCost();
