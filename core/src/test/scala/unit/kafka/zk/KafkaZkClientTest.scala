@@ -22,7 +22,7 @@ import java.util.{Collections, Properties}
 import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, EndPoint}
 import kafka.controller.{LeaderIsrAndControllerEpoch, ReplicaAssignment}
-import kafka.server.{KafkaConfig, QuorumTestHarness}
+import kafka.server.QuorumTestHarness
 import kafka.utils.CoreUtils
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zookeeper._
@@ -109,14 +109,14 @@ class KafkaZkClientTest extends QuorumTestHarness {
     val clientConfig = new ZKClientConfig()
     val propKey = ZkConfigs.ZK_CLIENT_CNXN_SOCKET_CONFIG
     val propVal = "org.apache.zookeeper.ClientCnxnSocketNetty"
-    KafkaConfig.setZooKeeperClientProperty(clientConfig, propKey, propVal)
+    ZkConfigs.setZooKeeperClientProperty(clientConfig, propKey, propVal)
     val client = KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
       zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, name = "KafkaZkClient", zkClientConfig = clientConfig)
     try {
-      assertEquals(Some(propVal), KafkaConfig.zooKeeperClientProperty(client.currentZooKeeper.getClientConfig, propKey))
+      assertEquals(Some(propVal), ZkConfigs.zooKeeperClientProperty(client.currentZooKeeper.getClientConfig, propKey))
       // For a sanity check, make sure a bad client connection socket class name generates an exception
       val badClientConfig = new ZKClientConfig()
-      KafkaConfig.setZooKeeperClientProperty(badClientConfig, propKey, propVal + "BadClassName")
+      ZkConfigs.setZooKeeperClientProperty(badClientConfig, propKey, propVal + "BadClassName")
       assertThrows(classOf[Exception],
         () => KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
           zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM, name = "KafkaZkClientTest", zkClientConfig = badClientConfig))

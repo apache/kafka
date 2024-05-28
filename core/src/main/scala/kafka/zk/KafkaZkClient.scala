@@ -2395,7 +2395,7 @@ object KafkaZkClient {
 
   def createZkClient(name: String, time: Time, config: KafkaConfig, zkClientConfig: ZKClientConfig): KafkaZkClient = {
     val secureAclsEnabled = config.zkEnableSecureAcls
-    val isZkSecurityEnabled = JaasUtils.isZkSaslEnabled || KafkaConfig.zkTlsClientAuthEnabled(zkClientConfig)
+    val isZkSecurityEnabled = JaasUtils.isZkSaslEnabled || ZkConfigs.zkTlsClientAuthEnabled(zkClientConfig)
 
     if (secureAclsEnabled && !isZkSecurityEnabled)
       throw new java.lang.SecurityException(

@@ -22,7 +22,6 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{ArrayBlockingQueue, ConcurrentLinkedQueue, CountDownLatch, Executors, Semaphore, TimeUnit}
 import scala.collection.Seq
 import com.yammer.metrics.core.{Gauge, Meter, MetricName}
-import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import kafka.server.QuorumTestHarness
 import org.apache.kafka.common.security.JaasUtils
@@ -105,13 +104,13 @@ class ZooKeeperClientTest extends QuorumTestHarness {
     val clientConfig = new ZKClientConfig()
     val propKey = ZkConfigs.ZK_CLIENT_CNXN_SOCKET_CONFIG
     val propVal = "org.apache.zookeeper.ClientCnxnSocketNetty"
-    KafkaConfig.setZooKeeperClientProperty(clientConfig, propKey, propVal)
+    ZkConfigs.setZooKeeperClientProperty(clientConfig, propKey, propVal)
     val client = newZooKeeperClient(clientConfig = clientConfig)
     try {
-      assertEquals(Some(propVal), KafkaConfig.zooKeeperClientProperty(client.clientConfig, propKey))
+      assertEquals(Some(propVal), ZkConfigs.zooKeeperClientProperty(client.clientConfig, propKey))
       // For a sanity check, make sure a bad client connection socket class name generates an exception
       val badClientConfig = new ZKClientConfig()
-      KafkaConfig.setZooKeeperClientProperty(badClientConfig, propKey, propVal + "BadClassName")
+      ZkConfigs.setZooKeeperClientProperty(badClientConfig, propKey, propVal + "BadClassName")
       assertThrows(classOf[Exception], () => newZooKeeperClient(clientConfig = badClientConfig))
     } finally {
       client.close()

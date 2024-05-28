@@ -18,7 +18,6 @@
 package kafka.admin
 
 import joptsimple.{OptionSet, OptionSpec, OptionSpecBuilder}
-import kafka.server.KafkaConfig
 import kafka.utils.{Exit, Logging, ToolsUtils}
 import kafka.utils.Implicits._
 import kafka.zk.{ControllerZNode, KafkaZkClient, ZkData, ZkSecurityMigratorUtils}
@@ -78,7 +77,7 @@ object ZkSecurityMigrator extends Logging {
     // Instantiate the client config we will use so that we take into account config provided via the CLI option
     // and system properties passed via -D parameters if no CLI option is given.
     val zkClientConfig = createZkClientConfigFromOption(opts.options, opts.zkTlsConfigFile).getOrElse(new ZKClientConfig())
-    val tlsClientAuthEnabled = KafkaConfig.zkTlsClientAuthEnabled(zkClientConfig)
+    val tlsClientAuthEnabled = ZkConfigs.zkTlsClientAuthEnabled(zkClientConfig)
     if (jaasFile == null && !tlsClientAuthEnabled) {
       val errorMsg = s"No JAAS configuration file has been specified and no TLS client certificate has been specified. Please make sure that you set " +
         s"the system property ${JaasUtils.JAVA_LOGIN_CONFIG_PARAM} or provide a ZooKeeper client TLS configuration via --$tlsConfigFileOption <filename> " +
@@ -132,7 +131,7 @@ object ZkSecurityMigrator extends Logging {
     info(s"Found ${zkTlsConfigFileProps.size()} ZooKeeper client configuration properties in file $filename")
     zkTlsConfigFileProps.asScala.forKeyValue { (key, value) =>
       info(s"Setting $key")
-      KafkaConfig.setZooKeeperClientProperty(zkClientConfig, key, value)
+      ZkConfigs.setZooKeeperClientProperty(zkClientConfig, key, value)
     }
     zkClientConfig
   }

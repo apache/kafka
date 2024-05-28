@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.server.config;
 
+import org.apache.zookeeper.client.ZKClientConfig;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 public final class ZkConfigs {
@@ -142,4 +145,28 @@ public final class ZkConfigs {
             " Overrides any explicit value set via the <code>" + ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.get(ZK_SSL_OCSP_ENABLE_CONFIG) + "</code> system property (note the shorter name).";
     }
 
+    public static Optional<String> zooKeeperClientProperty(ZKClientConfig clientConfig, String kafkaPropName) {
+        return Optional.ofNullable(clientConfig.getProperty(ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.get(kafkaPropName)));
+    }
+
+    public static void setZooKeeperClientProperty(ZKClientConfig clientConfig, String kafkaPropName, Object kafkaPropValue) {
+        clientConfig.setProperty(zkSslConfigToSystemPropertyMap().get(kafkaPropName),
+                (kafkaPropName.equals(ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG) && kafkaPropValue.toString().equalsIgnoreCase("HTTPS"))
+                        ? String.valueOf(kafkaPropValue.toString().equalsIgnoreCase("HTTPS"))
+                        : (kafkaPropName.equals(ZK_SSL_ENABLED_PROTOCOLS_CONFIG) || kafkaPropName.equals(ZK_SSL_CIPHER_SUITES_CONFIG))
+                        ? ((List<?>) kafkaPropValue).stream().map(Object::toString).collect(Collectors.joining(","))
+                        : kafkaPropValue.toString());
+    }
+
+    public static Map<String, String> zkSslConfigToSystemPropertyMap() {
+        return ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP;
+    }
+
+    // For ZooKeeper TLS client authentication to be enabled, the client must (at a minimum)
+    // configure itself as using TLS with both a client connection socket and a key store location explicitly set.
+    public static boolean zkTlsClientAuthEnabled(ZKClientConfig zkClientConfig) {
+        return zooKeeperClientProperty(zkClientConfig, ZK_SSL_CLIENT_ENABLE_CONFIG).filter(value -> value.equals("true")).isPresent() &&
+                zooKeeperClientProperty(zkClientConfig, ZK_CLIENT_CNXN_SOCKET_CONFIG).isPresent() &&
+                zooKeeperClientProperty(zkClientConfig, ZK_SSL_KEY_STORE_LOCATION_CONFIG).isPresent();
+    }
 }

@@ -898,12 +898,12 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     // confirm we get all the values we expect
     ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.asScala.keys.foreach(prop => prop match {
       case ZkConfigs.ZK_SSL_CLIENT_ENABLE_CONFIG | ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG =>
-        assertEquals("true", KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
+        assertEquals("true", ZkConfigs.zooKeeperClientProperty(zkClientConfig, prop).orElse("<None>"))
       case ZkConfigs.ZK_SSL_CRL_ENABLE_CONFIG | ZkConfigs.ZK_SSL_OCSP_ENABLE_CONFIG =>
-        assertEquals("false", KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
+        assertEquals("false", ZkConfigs.zooKeeperClientProperty(zkClientConfig, prop).orElse("<None>"))
       case ZkConfigs.ZK_SSL_PROTOCOL_CONFIG =>
-        assertEquals("TLSv1.2", KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
-      case _ => assertEquals(kafkaValue, KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
+        assertEquals("TLSv1.2", ZkConfigs.zooKeeperClientProperty(zkClientConfig, prop).orElse("<None>"))
+      case _ => assertEquals(kafkaValue, ZkConfigs.zooKeeperClientProperty(zkClientConfig, prop).orElse("<None>"))
     })
   }
 
@@ -933,10 +933,10 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     // confirm we get all the values we expect
     ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.asScala.keys.foreach(prop => prop match {
         case ZkConfigs.ZK_SSL_CLIENT_ENABLE_CONFIG | ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG =>
-          assertEquals("true", KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
+          assertEquals("true", ZkConfigs.zooKeeperClientProperty(zkClientConfig, prop).orElse("<None>"))
         case ZkConfigs.ZK_SSL_CRL_ENABLE_CONFIG | ZkConfigs.ZK_SSL_OCSP_ENABLE_CONFIG =>
-          assertEquals("false", KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
-        case _ => assertEquals(kafkaValue, KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
+          assertEquals("false", ZkConfigs.zooKeeperClientProperty(zkClientConfig, prop).orElse("<None>"))
+        case _ => assertEquals(kafkaValue, ZkConfigs.zooKeeperClientProperty(zkClientConfig, prop).orElse("<None>"))
       })
   }
 
@@ -982,10 +982,10 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     // confirm we get all the values we expect
     ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.asScala.keys.foreach(prop => prop match {
       case ZkConfigs.ZK_SSL_CLIENT_ENABLE_CONFIG | ZkConfigs.ZK_SSL_CRL_ENABLE_CONFIG | ZkConfigs.ZK_SSL_OCSP_ENABLE_CONFIG =>
-        assertEquals("true", KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
+        assertEquals("true", ZkConfigs.zooKeeperClientProperty(zkClientConfig, prop).orElse("<None>"))
       case ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG =>
-        assertEquals("false", KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
-      case _ => assertEquals(prefixedValue, KafkaConfig.zooKeeperClientProperty(zkClientConfig, prop).getOrElse("<None>"))
+        assertEquals("false", ZkConfigs.zooKeeperClientProperty(zkClientConfig, prop).orElse("<None>"))
+      case _ => assertEquals(prefixedValue, ZkConfigs.zooKeeperClientProperty(zkClientConfig, prop).orElse("<None>"))
     })
   }
 

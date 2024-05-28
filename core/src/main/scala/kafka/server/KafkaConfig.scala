@@ -67,30 +67,6 @@ object KafkaConfig {
       DynamicBrokerConfig.dynamicConfigUpdateModes))
   }
 
-  private[kafka] def zooKeeperClientProperty(clientConfig: ZKClientConfig, kafkaPropName: String): Option[String] = {
-    Option(clientConfig.getProperty(ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.get(kafkaPropName)))
-  }
-
-  private[kafka] def setZooKeeperClientProperty(clientConfig: ZKClientConfig, kafkaPropName: String, kafkaPropValue: Any): Unit = {
-    clientConfig.setProperty(ZkConfigs.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.get(kafkaPropName),
-      kafkaPropName match {
-        case ZkConfigs.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG => (kafkaPropValue.toString.toUpperCase == "HTTPS").toString
-        case ZkConfigs.ZK_SSL_ENABLED_PROTOCOLS_CONFIG | ZkConfigs.ZK_SSL_CIPHER_SUITES_CONFIG => kafkaPropValue match {
-          case list: java.util.List[_] => list.asScala.mkString(",")
-          case _ => kafkaPropValue.toString
-        }
-        case _ => kafkaPropValue.toString
-    })
-  }
-
-  // For ZooKeeper TLS client authentication to be enabled the client must (at a minimum) configure itself as using TLS
-  // with both a client connection socket and a key store location explicitly set.
-  private[kafka] def zkTlsClientAuthEnabled(zkClientConfig: ZKClientConfig): Boolean = {
-    zooKeeperClientProperty(zkClientConfig, ZkConfigs.ZK_SSL_CLIENT_ENABLE_CONFIG).contains("true") &&
-      zooKeeperClientProperty(zkClientConfig, ZkConfigs.ZK_CLIENT_CNXN_SOCKET_CONFIG).isDefined &&
-      zooKeeperClientProperty(zkClientConfig, ZkConfigs.ZK_SSL_KEY_STORE_LOCATION_CONFIG).isDefined
-  }
-
   @nowarn("cat=deprecation")
   val configDef = {
     import ConfigDef.Importance._
@@ -597,7 +573,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     // Need to translate any system property value from true/false (String) to true/false (Boolean)
     val actuallyProvided = originals.containsKey(propKey)
     if (actuallyProvided) getBoolean(propKey) else {
-      val sysPropValue = KafkaConfig.zooKeeperClientProperty(zkClientConfigViaSystemProperties, propKey)
+      val sysPropValue = ZkConfigs.zooKeeperClientProperty(zkClientConfigViaSystemProperties, propKey).asScala
       sysPropValue match {
         case Some("true") => true
         case Some(_) => false
@@ -610,7 +586,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     // Use the system property if it exists and the Kafka config value was defaulted rather than actually provided
     val actuallyProvided = originals.containsKey(propKey)
     if (actuallyProvided) getString(propKey) else {
-      KafkaConfig.zooKeeperClientProperty(zkClientConfigViaSystemProperties, propKey) match {
+      ZkConfigs.zooKeeperClientProperty(zkClientConfigViaSystemProperties, propKey).asScala match {
         case Some(v) => v
         case _ => getString(propKey) // not specified so use the default value
       }
@@ -619,17 +595,17 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
 
   private def zkOptionalStringConfigOrSystemProperty(propKey: String): Option[String] = {
     Option(getString(propKey)).orElse {
-      KafkaConfig.zooKeeperClientProperty(zkClientConfigViaSystemProperties, propKey)
+      ZkConfigs.zooKeeperClientProperty(zkClientConfigViaSystemProperties, propKey).asScala
     }
   }
   private def zkPasswordConfigOrSystemProperty(propKey: String): Option[Password] = {
     Option(getPassword(propKey)).orElse {
-      KafkaConfig.zooKeeperClientProperty(zkClientConfigViaSystemProperties, propKey).map(new Password(_))
+      ZkConfigs.zooKeeperClientProperty(zkClientConfigViaSystemProperties, propKey).map(new Password(_)).asScala
     }
   }
   private def zkListConfigOrSystemProperty(propKey: String): Option[util.List[String]] = {
     Option(getList(propKey)).orElse {
-      KafkaConfig.zooKeeperClientProperty(zkClientConfigViaSystemProperties, propKey).map { sysProp =>
+      ZkConfigs.zooKeeperClientProperty(zkClientConfigViaSystemProperties, propKey).asScala.map { sysProp =>
         sysProp.split("\\s*,\\s*").toBuffer.asJava
       }
     }
@@ -654,7 +630,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     if (actuallyProvided)
       getString(kafkaProp)
     else {
-      KafkaConfig.zooKeeperClientProperty(zkClientConfigViaSystemProperties, kafkaProp) match {
+      ZkConfigs.zooKeeperClientProperty(zkClientConfigViaSystemProperties, kafkaProp).asScala match {
         case Some("true") => "HTTPS"
         case Some(_) => ""
         case None => getString(kafkaProp) // not specified so use the default value

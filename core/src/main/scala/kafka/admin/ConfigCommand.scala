@@ -21,7 +21,7 @@ import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
 import java.util.{Collections, Properties}
 import joptsimple._
-import kafka.server.{DynamicBrokerConfig, DynamicConfig, KafkaConfig}
+import kafka.server.{DynamicBrokerConfig, DynamicConfig}
 import kafka.utils.Implicits._
 import kafka.utils.{Exit, Logging}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
@@ -114,7 +114,7 @@ object ConfigCommand extends Logging {
   private def processCommandWithZk(zkConnectString: String, opts: ConfigCommandOptions): Unit = {
     val zkClientConfig = ZkSecurityMigrator.createZkClientConfigFromOption(opts.options, opts.zkTlsConfigFile)
       .getOrElse(new ZKClientConfig())
-    val zkClient = KafkaZkClient(zkConnectString, JaasUtils.isZkSaslEnabled || KafkaConfig.zkTlsClientAuthEnabled(zkClientConfig), 30000, 30000,
+    val zkClient = KafkaZkClient(zkConnectString, JaasUtils.isZkSaslEnabled || ZkConfigs.zkTlsClientAuthEnabled(zkClientConfig), 30000, 30000,
       Int.MaxValue, Time.SYSTEM, zkClientConfig = zkClientConfig, name = "ConfigCommand", enableEntityConfigControllerCheck = false)
     val adminZkClient = new AdminZkClient(zkClient)
     try {
