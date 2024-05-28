@@ -234,6 +234,14 @@ import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState;
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaTopicState;
 import org.apache.kafka.common.message.StopReplicaResponseData;
+import org.apache.kafka.common.message.StreamsHeartbeatRequestData;
+import org.apache.kafka.common.message.StreamsHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsInitializeRequestData;
+import org.apache.kafka.common.message.StreamsInitializeResponseData;
+import org.apache.kafka.common.message.StreamsInstallAssignmentRequestData;
+import org.apache.kafka.common.message.StreamsInstallAssignmentResponseData;
+import org.apache.kafka.common.message.StreamsPrepareAssignmentRequestData;
+import org.apache.kafka.common.message.StreamsPrepareAssignmentResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment;
 import org.apache.kafka.common.message.SyncGroupResponseData;
@@ -1123,6 +1131,8 @@ public class RequestResponseTest {
             case WRITE_SHARE_GROUP_STATE: return createWriteShareGroupStateRequest(version);
             case DELETE_SHARE_GROUP_STATE: return createDeleteShareGroupStateRequest(version);
             case READ_SHARE_GROUP_STATE_SUMMARY: return createReadShareGroupStateSummaryRequest(version);
+            case STREAMS_HEARTBEAT: return createStreamsHeartbeatRequest(version);
+            case STREAMS_INITIALIZE: return createStreamsInitializeRequest(version);
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1217,6 +1227,8 @@ public class RequestResponseTest {
             case WRITE_SHARE_GROUP_STATE: return createWriteShareGroupStateResponse();
             case DELETE_SHARE_GROUP_STATE: return createDeleteShareGroupStateResponse();
             case READ_SHARE_GROUP_STATE_SUMMARY: return createReadShareGroupStateSummaryResponse();
+            case STREAMS_HEARTBEAT: return createStreamsHeartbeatResponse();
+            case STREAMS_INITIALIZE: return createStreamsInitializeResponse();
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -4012,6 +4024,37 @@ public class RequestResponseTest {
                                 .setStateEpoch(0)))));
         return new ReadShareGroupStateSummaryResponse(data);
     }
+
+    private AbstractRequest createStreamsPrepareAssignmentRequest(final short version) {
+        return new StreamsPrepareAssignmentRequest.Builder(new StreamsPrepareAssignmentRequestData()).build(version);
+    }
+
+    private AbstractRequest createStreamsInstallAssignmentRequest(final short version) {
+        return new StreamsInstallAssignmentRequest.Builder(new StreamsInstallAssignmentRequestData()).build(version);
+    }
+
+    private AbstractRequest createStreamsInitializeRequest(final short version) {
+        return new StreamsInitializeRequest.Builder(new StreamsInitializeRequestData()).build(version);
+    }
+
+    private AbstractRequest createStreamsHeartbeatRequest(final short version) {
+        return new StreamsHeartbeatRequest.Builder(new StreamsHeartbeatRequestData()).build(version);
+    }
+
+    private AbstractResponse createStreamsPrepareAssignmentResponse() {
+        return new StreamsPrepareAssignmentResponse(new StreamsPrepareAssignmentResponseData());
+    }
+
+    private AbstractResponse createStreamsInstallAssignmentResponse() {
+        return new StreamsInstallAssignmentResponse(new StreamsInstallAssignmentResponseData());
+    }
+
+    private AbstractResponse createStreamsInitializeResponse() {
+        return new StreamsInitializeResponse(new StreamsInitializeResponseData());
+    }
+
+    private AbstractResponse createStreamsHeartbeatResponse() {
+        return new StreamsHeartbeatResponse(new StreamsHeartbeatResponseData());
 
     @Test
     public void testInvalidSaslHandShakeRequest() {

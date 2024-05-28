@@ -76,16 +76,16 @@ public class StreamsInitializeRequestManager implements RequestManager {
     }
 
     private List<StreamsInitializeRequestData.Subtopology> getTopologyFromStreams() {
-        final Map<String, StreamsAssignmentInterface.SubTopology> subTopologyMap = streamsAssignmentInterface.subtopologyMap();
+        final Map<String, StreamsAssignmentInterface.Subtopology> subTopologyMap = streamsAssignmentInterface.subtopologyMap();
         final List<StreamsInitializeRequestData.Subtopology> topology = new ArrayList<>(subTopologyMap.size());
-        for (final Map.Entry<String, StreamsAssignmentInterface.SubTopology> subtopology : subTopologyMap.entrySet()) {
+        for (final Map.Entry<String, StreamsAssignmentInterface.Subtopology> subtopology : subTopologyMap.entrySet()) {
             topology.add(getSubtopologyFromStreams(subtopology.getKey(), subtopology.getValue()));
         }
         return topology;
     }
 
     private static StreamsInitializeRequestData.Subtopology getSubtopologyFromStreams(final String subtopologyName,
-                                                                                      final StreamsAssignmentInterface.SubTopology subtopology) {
+                                                                                      final StreamsAssignmentInterface.Subtopology subtopology) {
         final StreamsInitializeRequestData.Subtopology subtopologyData = new StreamsInitializeRequestData.Subtopology();
         subtopologyData.setSubtopology(subtopologyName);
         subtopologyData.setSourceTopics(new ArrayList<>(subtopology.sourceTopics));
@@ -95,7 +95,7 @@ public class StreamsInitializeRequestManager implements RequestManager {
         return subtopologyData;
     }
 
-    private static List<StreamsInitializeRequestData.TopicInfo> getRepartitionTopicsInfoFromStreams(final StreamsAssignmentInterface.SubTopology subtopologyDataFromStreams) {
+    private static List<StreamsInitializeRequestData.TopicInfo> getRepartitionTopicsInfoFromStreams(final StreamsAssignmentInterface.Subtopology subtopologyDataFromStreams) {
         final List<StreamsInitializeRequestData.TopicInfo> repartitionTopicsInfo = new ArrayList<>();
         for (final Map.Entry<String, StreamsAssignmentInterface.TopicInfo> repartitionTopic : subtopologyDataFromStreams.repartitionSourceTopics.entrySet()) {
             final StreamsInitializeRequestData.TopicInfo repartitionTopicInfo = new StreamsInitializeRequestData.TopicInfo();
@@ -106,7 +106,7 @@ public class StreamsInitializeRequestManager implements RequestManager {
         return repartitionTopicsInfo;
     }
 
-    private static List<StreamsInitializeRequestData.TopicInfo> getChangelogTopicsInfoFromStreams(final StreamsAssignmentInterface.SubTopology subtopologyDataFromStreams) {
+    private static List<StreamsInitializeRequestData.TopicInfo> getChangelogTopicsInfoFromStreams(final StreamsAssignmentInterface.Subtopology subtopologyDataFromStreams) {
         final List<StreamsInitializeRequestData.TopicInfo> changelogTopicsInfo = new ArrayList<>();
         for (final Map.Entry<String, StreamsAssignmentInterface.TopicInfo> changelogTopic : subtopologyDataFromStreams.stateChangelogTopics.entrySet()) {
             final StreamsInitializeRequestData.TopicInfo changelogTopicInfo = new StreamsInitializeRequestData.TopicInfo();
