@@ -151,8 +151,8 @@ public class ClientState {
         return followupRebalanceDeadline;
     }
 
-    public void setFollowupRebalanceDeadline(final Optional<Instant> followupRebalanceDeadline) {
-        this.followupRebalanceDeadline = followupRebalanceDeadline;
+    public void setFollowupRebalanceDeadline(final Instant followupRebalanceDeadline) {
+        this.followupRebalanceDeadline = Optional.of(followupRebalanceDeadline);
     }
 
     public Set<TaskId> activeTasks() {

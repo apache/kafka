@@ -571,7 +571,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             final ProcessId processId = kafkaStreamsAssignment.processId();
             final ClientMetadata clientMetadata = clientMetadataMap.get(processId.id());
             clientMetadata.state.setAssignedTasks(kafkaStreamsAssignment);
-            clientMetadata.state.setFollowupRebalanceDeadline(kafkaStreamsAssignment.followupRebalanceDeadline());
+            if (kafkaStreamsAssignment.followupRebalanceDeadline().isPresent()) {
+                clientMetadata.state.setFollowupRebalanceDeadline(kafkaStreamsAssignment.followupRebalanceDeadline().get());
+            }
         });
     }
 
@@ -796,7 +798,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 final ClientMetadata rebalanceClientMetadata = clientMetadataMap.get(taskManager.processId());
                 if (rebalanceClientMetadata != null) {
                     final Instant rebalanceDeadline = Instant.ofEpochMilli(time.milliseconds() + probingRebalanceIntervalMs());
-                    rebalanceClientMetadata.state.setFollowupRebalanceDeadline(Optional.of(rebalanceDeadline));
+                    rebalanceClientMetadata.state.setFollowupRebalanceDeadline(rebalanceDeadline);
                 }
             }
         }
