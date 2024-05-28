@@ -774,15 +774,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         void resetFuture() {
             future = new CompletableFuture<>();
         }
-
-        @Override
-        protected String toStringBase() {
-            return super.toStringBase() +
-                    ", offsets=" + offsets +
-                    ", groupId=" + groupId +
-                    ", groupInstanceId=" + groupInstanceId.orElse("undefined") +
-                    ", future=" + future;
-        }
     }
 
     /**
@@ -857,10 +848,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
         abstract void onResponse(final ClientResponse response);
 
-        @Override
-        protected String toStringBase() {
-            return super.toStringBase() + ", memberInfo=" + memberInfo;
-        }
     }
 
     class OffsetFetchRequestState extends RetriableRequestState {
@@ -1061,11 +1048,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                     otherFuture.complete(r);
                 }
             });
-        }
-
-        @Override
-        public String toStringBase() {
-            return super.toStringBase() + ", requestedPartitions=" + requestedPartitions + ", future=" + future;
         }
     }
 
