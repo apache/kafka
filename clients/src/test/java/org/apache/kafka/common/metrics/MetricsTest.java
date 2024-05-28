@@ -464,10 +464,10 @@ public class MetricsTest {
         Metric p50 = this.metrics.metrics().get(metrics.metricName("test.p50", "grp1"));
         Metric p75 = this.metrics.metrics().get(metrics.metricName("test.p75", "grp1"));
 
-        // record 1-100 sequential values
-        for (int i = 0; i < buckets; i++) {
+        // record 100 sequential values
+        for (int i = 0; i < buckets; i++)
             sensor.record(i);
-        }
+
         assertEquals(25, (Double) p25.metricValue());
         assertEquals(50, (Double) p50.metricValue());
         assertEquals(75, (Double) p75.metricValue());

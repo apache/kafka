@@ -73,8 +73,8 @@ public class FrequenciesTest {
 
     @Test
     public void testBooleanFrequenciesStrategy1() {
-        MetricName metricTrue = name("true");
-        MetricName metricFalse = name("false");
+        MetricName metricTrue = metricName("true");
+        MetricName metricFalse = metricName("false");
         Frequencies frequencies = Frequencies.forBooleanValues(metricFalse, metricTrue);
         final NamedMeasurable falseMetric = frequencies.stats().get(0);
         final NamedMeasurable trueMetric = frequencies.stats().get(1);
@@ -92,8 +92,8 @@ public class FrequenciesTest {
 
     @Test
     public void testBooleanFrequenciesStrategy2() {
-        MetricName metricTrue = name("true");
-        MetricName metricFalse = name("false");
+        MetricName metricTrue = metricName("true");
+        MetricName metricFalse = metricName("false");
         Frequencies frequencies = Frequencies.forBooleanValues(metricFalse, metricTrue);
         final NamedMeasurable falseMetric = frequencies.stats().get(0);
         final NamedMeasurable trueMetric = frequencies.stats().get(1);
@@ -120,10 +120,10 @@ public class FrequenciesTest {
         for (int i = 0; i < 100; ++i) {
             frequencies.record(config, i % 4 + 1, time.milliseconds());
         }
-        assertEquals(0.25, metricValueFor("1"), DELTA);
-        assertEquals(0.25, metricValueFor("2"), DELTA);
-        assertEquals(0.25, metricValueFor("3"), DELTA);
-        assertEquals(0.25, metricValueFor("4"), DELTA);
+        assertEquals(0.25, metricValue("1"), DELTA);
+        assertEquals(0.25, metricValue("2"), DELTA);
+        assertEquals(0.25, metricValue("3"), DELTA);
+        assertEquals(0.25, metricValue("4"), DELTA);
     }
 
     @Test
@@ -137,10 +137,10 @@ public class FrequenciesTest {
         for (int i = 0; i < 100; ++i) {
             frequencies.record(config, i % 2 + 1, time.milliseconds());
         }
-        assertEquals(0.50, metricValueFor("1"), DELTA);
-        assertEquals(0.50, metricValueFor("2"), DELTA);
-        assertEquals(0.00, metricValueFor("3"), DELTA);
-        assertEquals(0.00, metricValueFor("4"), DELTA);
+        assertEquals(0.50, metricValue("1"), DELTA);
+        assertEquals(0.50, metricValue("2"), DELTA);
+        assertEquals(0.00, metricValue("3"), DELTA);
+        assertEquals(0.00, metricValue("4"), DELTA);
     }
 
     @Test
@@ -158,21 +158,21 @@ public class FrequenciesTest {
         for (int i = 0; i < 50; ++i) {
             frequencies.record(config, 4.0, time.milliseconds());
         }
-        assertEquals(0.25, metricValueFor("1"), DELTA);
-        assertEquals(0.25, metricValueFor("2"), DELTA);
-        assertEquals(0.00, metricValueFor("3"), DELTA);
-        assertEquals(0.50, metricValueFor("4"), DELTA);
+        assertEquals(0.25, metricValue("1"), DELTA);
+        assertEquals(0.25, metricValue("2"), DELTA);
+        assertEquals(0.00, metricValue("3"), DELTA);
+        assertEquals(0.50, metricValue("4"), DELTA);
     }
 
-    private MetricName name(String metricName) {
-        return new MetricName(metricName, "group-id", "desc", Collections.emptyMap());
+    private MetricName metricName(String name) {
+        return new MetricName(name, "group-id", "desc", Collections.emptyMap());
     }
 
     private Frequency freq(String name, double value) {
-        return new Frequency(name(name), value);
+        return new Frequency(metricName(name), value);
     }
 
-    private double metricValueFor(String name) {
-        return (double) metrics.metrics().get(name(name)).metricValue();
+    private double metricValue(String name) {
+        return (double) metrics.metrics().get(metricName(name)).metricValue();
     }
 }
