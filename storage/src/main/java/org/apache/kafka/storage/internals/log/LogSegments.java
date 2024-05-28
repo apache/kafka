@@ -346,8 +346,4 @@ public class LogSegments {
     public static long sizeInBytes(Collection<LogSegment> segments) {
         return segments.stream().mapToLong(LogSegment::size).sum();
     }
-
-    public static Collection<Long> getFirstBatchTimestampForSegments(Collection<LogSegment> segments) {
-        return segments.stream().map(LogSegment::getFirstBatchTimestamp).collect(Collectors.toList());
-    }
 }

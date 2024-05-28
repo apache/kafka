@@ -19,15 +19,12 @@ package kafka.log
 import java.io.File
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.compress.Compression
-import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.storage.internals.log.{LogSegment, LogSegments}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.Mockito.{mock, when}
 
-import java.util
 import java.util.Arrays.asList
 import java.util.Optional
 import java.util.OptionalLong
@@ -268,19 +265,5 @@ class LogSegmentsTest {
     assertEquals(newDir, seg1.txnIndex().file().getParentFile)
 
     Utils.delete(newDir)
-  }
-
-  @Test
-  def testGetFirstBatchTimestampForSegments(): Unit = {
-    val segments: java.util.List[LogSegment] = new util.ArrayList[LogSegment]()
-    val seg1 = createSegment(1)
-    val seg2 = createSegment(2)
-    segments.add(seg1)
-    segments.add(seg2)
-    assertEquals(Seq(Long.MaxValue, Long.MaxValue), LogSegments.getFirstBatchTimestampForSegments(segments).asScala.toSeq)
-
-    seg1.append(1, 1000L, 1, MemoryRecords.withRecords(1, Compression.NONE, new SimpleRecord("one".getBytes)))
-    seg2.append(2, 2000L, 1, MemoryRecords.withRecords(2, Compression.NONE, new SimpleRecord("two".getBytes)))
-    assertEquals(Seq(1000L, 2000L), LogSegments.getFirstBatchTimestampForSegments(segments).asScala.toSeq)
   }
 }

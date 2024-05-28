@@ -36,6 +36,7 @@ import java.io.{File, RandomAccessFile}
 import java.util
 import java.util.{Optional, OptionalLong}
 import scala.collection._
+import scala.collection.immutable.Seq
 import scala.jdk.CollectionConverters._
 
 class LogSegmentTest {
@@ -630,6 +631,15 @@ class LogSegmentTest {
     assertEquals(overflowBytesAppended, overflowSegment.size)
 
     Utils.delete(tempDir)
+  }
+
+  @Test
+  def testGetFirstBatchTimestampForSegments(): Unit = {
+    val segment = createSegment(1)
+    assertEquals(Long.MaxValue, segment.getFirstBatchTimestamp)
+
+    segment.append(1, 1000L, 1, MemoryRecords.withRecords(1, Compression.NONE, new SimpleRecord("one".getBytes)))
+    assertEquals(1000L, segment.getFirstBatchTimestamp)
   }
 
   private def newProducerStateManager(): ProducerStateManager = {
