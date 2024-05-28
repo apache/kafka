@@ -751,20 +751,19 @@ public class CommitRequestManagerTest {
             new OffsetAndMetadata(0));
 
         // Send sync offset commit request that fails with retriable error.
+        // Send sync offset commit request.
         Timer timer = time.timer(retryBackoffMs * 2);
         CompletableFuture<Void> commitResult = commitRequestManager.commitSync(offsets, timer);
-        completeOffsetCommitRequestWithError(commitRequestManager, Errors.REQUEST_TIMED_OUT);
 
-        // Request retried after backoff, and fails with retriable again. Should not complete yet
+        // Make the first request fail with a retriable error. Should not complete yet
         // given that the request timeout hasn't expired.
-        time.sleep(retryBackoffMs);
+        timer.sleep(retryBackoffMs);
         completeOffsetCommitRequestWithError(commitRequestManager, Errors.REQUEST_TIMED_OUT);
         assertFalse(commitResult.isDone());
 
         // Sleep to expire the request timeout. Request should fail on the next poll.
-        time.sleep(retryBackoffMs);
-        NetworkClientDelegate.PollResult res = commitRequestManager.poll(time.milliseconds());
-        assertEquals(0, res.unsentRequests.size());
+        timer.sleep(retryBackoffMs);
+        completeOffsetCommitRequestWithError(commitRequestManager, Errors.REQUEST_TIMED_OUT);
         assertTrue(commitResult.isDone());
         assertTrue(commitResult.isCompletedExceptionally());
     }
@@ -782,17 +781,18 @@ public class CommitRequestManagerTest {
             new TopicPartition("topic", 1),
             new OffsetAndMetadata(0));
 
-        // Send offset commit request that fails with retriable error.
+        // Send offset commit request.
         long timeoutMs = retryBackoffMs * 2;
         Timer timer = time.timer(timeoutMs);
         CompletableFuture<Void> commitResult = commitRequestManager.commitSync(offsets, timer);
+
+        // Make the first request fail due to a missing coordinator.
         completeOffsetCommitRequestWithError(commitRequestManager, Errors.COORDINATOR_NOT_AVAILABLE);
 
         // Sleep to expire the request timeout. Request should fail on the next poll with a
         // TimeoutException.
         timer.sleep(timeoutMs);
-        NetworkClientDelegate.PollResult res = commitRequestManager.poll(time.milliseconds());
-        assertEquals(0, res.unsentRequests.size());
+        completeOffsetCommitRequestWithError(commitRequestManager, Errors.REQUEST_TIMED_OUT);
         assertTrue(commitResult.isDone());
         assertFutureThrows(commitResult, TimeoutException.class);
     }

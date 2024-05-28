@@ -827,7 +827,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             NetworkClientDelegate.UnsentRequest request = new NetworkClientDelegate.UnsentRequest(
                 builder,
                 coordinatorRequestManager.coordinator(),
-                time.timer(requestTimeoutMs)
+                remainingTimer(time, requestTimeoutMs)
             );
             request.whenComplete(
                 (response, throwable) -> {
