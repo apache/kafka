@@ -28,8 +28,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Timer;
 import org.slf4j.Logger;
 
 import java.util.List;
@@ -48,16 +46,13 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     private final Logger log;
     private final ConsumerMetadata metadata;
     private final RequestManagers requestManagers;
-    private final Time time;
 
     public ApplicationEventProcessor(final LogContext logContext,
                                      final RequestManagers requestManagers,
-                                     final ConsumerMetadata metadata,
-                                     final Time time) {
+                                     final ConsumerMetadata metadata) {
         this.log = logContext.logger(ApplicationEventProcessor.class);
         this.requestManagers = requestManagers;
         this.metadata = metadata;
-        this.time = time;
     }
 
     @SuppressWarnings({"CyclomaticComplexity"})
@@ -158,7 +153,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         }
 
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        CompletableFuture<Void> future = manager.commitSync(event.offsets(), eventTimer(event));
+        CompletableFuture<Void> future = manager.commitSync(event.offsets(), event.deadlineMs());
         future.whenComplete(complete(event.future()));
     }
 
@@ -169,7 +164,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             return;
         }
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = manager.fetchOffsets(event.partitions(), eventTimer(event));
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = manager.fetchOffsets(event.partitions(), event.deadlineMs());
         future.whenComplete(complete(event.future()));
     }
 
@@ -244,13 +239,13 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
 
     private void process(final TopicMetadataEvent event) {
         final CompletableFuture<Map<String, List<PartitionInfo>>> future =
-                requestManagers.topicMetadataRequestManager.requestTopicMetadata(event.topic(), eventTimer(event));
+                requestManagers.topicMetadataRequestManager.requestTopicMetadata(event.topic(), event.deadlineMs());
         future.whenComplete(complete(event.future()));
     }
 
     private void process(final AllTopicsMetadataEvent event) {
         final CompletableFuture<Map<String, List<PartitionInfo>>> future =
-                requestManagers.topicMetadataRequestManager.requestAllTopicsMetadata(eventTimer(event));
+                requestManagers.topicMetadataRequestManager.requestAllTopicsMetadata(event.deadlineMs());
         future.whenComplete(complete(event.future()));
     }
 
@@ -297,22 +292,12 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     /**
-     * Recreate a {@link Timer} from the event's {@link CompletableApplicationEvent#deadlineMs() deadline}.
-     */
-    private Timer eventTimer(final CompletableApplicationEvent<?> event) {
-        // Prevent the timer from being negative.
-        long diff = Math.max(0, event.deadlineMs() - time.milliseconds());
-        return time.timer(diff);
-    }
-
-    /**
      * Creates a {@link Supplier} for deferred creation during invocation by
      * {@link ConsumerNetworkThread}.
      */
     public static Supplier<ApplicationEventProcessor> supplier(final LogContext logContext,
                                                                final ConsumerMetadata metadata,
-                                                               final Supplier<RequestManagers> requestManagersSupplier,
-                                                               final Time time) {
+                                                               final Supplier<RequestManagers> requestManagersSupplier) {
         return new CachedSupplier<ApplicationEventProcessor>() {
             @Override
             protected ApplicationEventProcessor create() {
@@ -320,8 +305,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
                 return new ApplicationEventProcessor(
                         logContext,
                         requestManagers,
-                        metadata,
-                        time
+                        metadata
                 );
             }
         };

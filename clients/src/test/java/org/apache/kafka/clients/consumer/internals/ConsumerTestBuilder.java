@@ -273,8 +273,7 @@ public class ConsumerTestBuilder implements Closeable {
         this.applicationEventProcessor = spy(new ApplicationEventProcessor(
                 logContext,
                 requestManagers,
-                metadata,
-                time
+                metadata
             )
         );
 

@@ -78,7 +78,7 @@ public class TopicMetadataRequestManagerTest {
     @Test
     public void testPoll_SuccessfulRequestTopicMetadata() {
         String topic = "hello";
-        this.topicMetadataRequestManager.requestTopicMetadata(topic, time.timer(Long.MAX_VALUE));
+        this.topicMetadataRequestManager.requestTopicMetadata(topic, Long.MAX_VALUE);
         this.time.sleep(100);
         NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
@@ -86,7 +86,7 @@ public class TopicMetadataRequestManagerTest {
 
     @Test
     public void testPoll_SuccessfulRequestAllTopicsMetadata() {
-        this.topicMetadataRequestManager.requestAllTopicsMetadata(time.timer(Long.MAX_VALUE));
+        this.topicMetadataRequestManager.requestAllTopicsMetadata(Long.MAX_VALUE);
         this.time.sleep(100);
         NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
@@ -96,7 +96,7 @@ public class TopicMetadataRequestManagerTest {
     @MethodSource("exceptionProvider")
     public void testTopicExceptionAndInflightRequests(final Errors error, final boolean shouldRetry) {
         String topic = "hello";
-        this.topicMetadataRequestManager.requestTopicMetadata(topic, time.timer(Long.MAX_VALUE));
+        this.topicMetadataRequestManager.requestTopicMetadata(topic, Long.MAX_VALUE);
         this.time.sleep(100);
         NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
         res.unsentRequests.get(0).future().complete(buildTopicMetadataClientResponse(
@@ -116,7 +116,7 @@ public class TopicMetadataRequestManagerTest {
     @ParameterizedTest
     @MethodSource("exceptionProvider")
     public void testAllTopicsExceptionAndInflightRequests(final Errors error, final boolean shouldRetry) {
-        this.topicMetadataRequestManager.requestAllTopicsMetadata(time.timer(Long.MAX_VALUE));
+        this.topicMetadataRequestManager.requestAllTopicsMetadata(Long.MAX_VALUE);
         this.time.sleep(100);
         NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
         res.unsentRequests.get(0).future().complete(buildAllTopicsMetadataClientResponse(
@@ -136,7 +136,7 @@ public class TopicMetadataRequestManagerTest {
     public void testHardFailures(Exception exception) {
         String topic = "hello";
 
-        this.topicMetadataRequestManager.requestTopicMetadata(topic, time.timer(Long.MAX_VALUE));
+        this.topicMetadataRequestManager.requestTopicMetadata(topic, Long.MAX_VALUE);
         NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
 
@@ -153,7 +153,7 @@ public class TopicMetadataRequestManagerTest {
     public void testNetworkTimeout() {
         String topic = "hello";
 
-        topicMetadataRequestManager.requestTopicMetadata(topic, time.timer(Long.MAX_VALUE));
+        topicMetadataRequestManager.requestTopicMetadata(topic, Long.MAX_VALUE);
         NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
         NetworkClientDelegate.PollResult res2 = this.topicMetadataRequestManager.poll(this.time.milliseconds());

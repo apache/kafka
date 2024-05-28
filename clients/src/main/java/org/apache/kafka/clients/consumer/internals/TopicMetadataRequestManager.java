@@ -30,7 +30,6 @@ import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Timer;
 import org.slf4j.Logger;
 
 import java.util.Collections;
@@ -99,10 +98,10 @@ public class TopicMetadataRequestManager implements RequestManager {
      *
      * @return the future of the metadata request.
      */
-    public CompletableFuture<Map<String, List<PartitionInfo>>> requestAllTopicsMetadata(final Timer timer) {
+    public CompletableFuture<Map<String, List<PartitionInfo>>> requestAllTopicsMetadata(final long deadlineMs) {
         TopicMetadataRequestState newRequest = new TopicMetadataRequestState(
                 logContext,
-                timer,
+                deadlineMs,
                 retryBackoffMs,
                 retryBackoffMaxMs);
         inflightRequests.add(newRequest);
@@ -115,11 +114,11 @@ public class TopicMetadataRequestManager implements RequestManager {
      * @param topic to be requested.
      * @return the future of the metadata request.
      */
-    public CompletableFuture<Map<String, List<PartitionInfo>>> requestTopicMetadata(final String topic, final Timer timer) {
+    public CompletableFuture<Map<String, List<PartitionInfo>>> requestTopicMetadata(final String topic, final long deadlineMs) {
         TopicMetadataRequestState newRequest = new TopicMetadataRequestState(
                 logContext,
                 topic,
-                timer,
+                deadlineMs,
                 retryBackoffMs,
                 retryBackoffMaxMs);
         inflightRequests.add(newRequest);
@@ -137,11 +136,11 @@ public class TopicMetadataRequestManager implements RequestManager {
         CompletableFuture<Map<String, List<PartitionInfo>>> future;
 
         public TopicMetadataRequestState(final LogContext logContext,
-                                         final Timer timer,
+                                         final long deadlineMs,
                                          final long retryBackoffMs,
                                          final long retryBackoffMaxMs) {
             super(logContext, TopicMetadataRequestState.class.getSimpleName(), retryBackoffMs,
-                    retryBackoffMaxMs, timer);
+                    retryBackoffMaxMs, initialTimer(time, deadlineMs));
             future = new CompletableFuture<>();
             this.topic = null;
             this.allTopics = true;
@@ -149,11 +148,11 @@ public class TopicMetadataRequestManager implements RequestManager {
 
         public TopicMetadataRequestState(final LogContext logContext,
                                          final String topic,
-                                         final Timer timer,
+                                         final long deadlineMs,
                                          final long retryBackoffMs,
                                          final long retryBackoffMaxMs) {
             super(logContext, TopicMetadataRequestState.class.getSimpleName(), retryBackoffMs,
-                retryBackoffMaxMs, timer);
+                retryBackoffMaxMs, initialTimer(time, deadlineMs));
             future = new CompletableFuture<>();
             this.topic = topic;
             this.allTopics = false;

@@ -78,8 +78,7 @@ public class ApplicationEventProcessorTest {
         processor = new ApplicationEventProcessor(
             new LogContext(),
             requestManagers,
-            metadata,
-            time
+            metadata
         );
     }
 
