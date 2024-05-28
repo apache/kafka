@@ -76,7 +76,7 @@ class OffsetSyncWriter implements AutoCloseable {
         });
     }
 
-    protected void firePendingOffsetSyncs() {
+    void firePendingOffsetSyncs() {
         while (true) {
             OffsetSync pendingOffsetSync;
             synchronized (this) {
@@ -101,13 +101,13 @@ class OffsetSyncWriter implements AutoCloseable {
         }
     }
 
-    protected synchronized void promoteDelayedOffsetSyncs() {
+    synchronized void promoteDelayedOffsetSyncs() {
         pendingOffsetSyncs.putAll(delayedOffsetSyncs);
         delayedOffsetSyncs.clear();
     }
 
     // updates partition state and queues up OffsetSync if necessary
-    protected void maybeQueueOffsetSyncs(MirrorSourceTask.PartitionState partitionState,
+    void maybeQueueOffsetSyncs(MirrorSourceTask.PartitionState partitionState,
                                        TopicPartition topicPartition,
                                        long upstreamOffset,
                                        long downstreamOffset) {
