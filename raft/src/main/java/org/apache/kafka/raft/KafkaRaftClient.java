@@ -1022,7 +1022,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         int replicaId = FetchRequest.replicaId(request);
-        FetchResponseData response = tryCompleteFetchRequest(replicaId, null, fetchPartition, currentTimeMs);
+        FetchResponseData response = tryCompleteFetchRequest(replicaId, fetchPartition, currentTimeMs);
         FetchResponseData.PartitionData partitionResponse =
             response.responses().get(0).partitions().get(0);
 
@@ -1072,13 +1072,12 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
             // It is safe to call tryCompleteFetchRequest because only the polling thread completes this
             // future successfully. This is true because only the polling thread appends record batches to
             // the log from maybeAppendBatches.
-            return tryCompleteFetchRequest(replicaId, fetchPartition.replicaDirectoryId(), fetchPartition, time.milliseconds());
+            return tryCompleteFetchRequest(replicaId, fetchPartition, time.milliseconds());
         });
     }
 
     private FetchResponseData tryCompleteFetchRequest(
         int replicaId,
-        Uuid replicaDirectoryId,
         FetchRequestData.FetchPartition request,
         long currentTimeMs
     ) {
@@ -1106,7 +1105,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
             if (validOffsetAndEpoch.kind() == ValidOffsetAndEpoch.Kind.VALID) {
                 LogFetchInfo info = log.read(fetchOffset, Isolation.UNCOMMITTED);
 
-                if (state.updateReplicaState(replicaId, replicaDirectoryId, currentTimeMs, info.startOffsetMetadata)) {
+                if (state.updateReplicaState(replicaId, request.replicaDirectoryId(), currentTimeMs, info.startOffsetMetadata)) {
                     onUpdateLeaderHighWatermark(state, currentTimeMs);
                 }
 
