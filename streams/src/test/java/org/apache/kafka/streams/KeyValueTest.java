@@ -71,4 +71,18 @@ public class KeyValueTest {
         assertNotEquals(differentKeyAndValue, kv, "must be false if key and value are different");
     }
 
+    @Test
+    public void shouldReturnCorrectToString() {
+        final KeyValue<String, Long> kv = KeyValue.pair("key1", 1L);
+        assertEquals("KeyValue(key1, 1)", kv.toString());
+
+        final KeyValue<String, Long> kvNullKey = KeyValue.pair(null, 1L);
+        assertEquals("KeyValue(null, 1)", kvNullKey.toString());
+
+        final KeyValue<String, Long> kvNullValue = KeyValue.pair("key1", null);
+        assertEquals("KeyValue(key1, null)", kvNullValue.toString());
+
+        final KeyValue<String, Long> kvNullKeyValue = KeyValue.pair(null, null);
+        assertEquals("KeyValue(null, null)", kvNullKeyValue.toString());
+    }
 }
