@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.assignment.assignors;
 import static java.util.Collections.unmodifiableMap;
 
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -128,11 +127,7 @@ public class StickyTaskAssignor implements TaskAssignor {
                                      final Collection<KafkaStreamsState> clients,
                                      final AssignmentState assignmentState,
                                      final boolean mustPreserveActiveTaskAssignment) {
-        final int totalCapacity = computeStreamThreadCount(clients);
-        if (totalCapacity == 0) {
-            throw new IllegalStateException("`totalCapacity` should never be zero.");
-        }
-
+        final int totalCapacity = computeTotalProcessingThreads(clients);
         final Set<TaskId> allTaskIds = applicationState.allTasks().stream()
             .map(TaskInfo::id).collect(Collectors.toSet());
         final int taskCount = allTaskIds.size();
@@ -223,7 +218,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         return previousStandbyTasks;
     }
 
-    private static int computeStreamThreadCount(final Collection<KafkaStreamsState> clients) {
+    private static int computeTotalProcessingThreads(final Collection<KafkaStreamsState> clients) {
         int count = 0;
         for (final KafkaStreamsState client : clients) {
             count += client.numProcessingThreads();
