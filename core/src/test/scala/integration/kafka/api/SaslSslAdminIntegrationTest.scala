@@ -13,7 +13,6 @@
 package kafka.api
 
 import kafka.security.authorizer.AclAuthorizer
-import kafka.server.KafkaConfig
 import kafka.utils.TestUtils._
 import kafka.utils.{JaasTestUtils, TestUtils}
 import org.apache.kafka.clients.admin._
