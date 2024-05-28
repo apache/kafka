@@ -40,7 +40,7 @@ import org.apache.kafka.network.Session
 import org.apache.kafka.security.authorizer.AclEntry.WILDCARD_HOST
 import org.apache.kafka.security.authorizer.AuthorizerUtils
 import org.apache.kafka.server.authorizer._
-import org.apache.kafka.server.config.{Defaults, KafkaSecurityConfigs}
+import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, KafkaSecurityConfigs}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
@@ -59,8 +59,8 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
   val tokenManagers = mutable.Buffer[DelegationTokenManager]()
 
   val secretKey = "secretKey"
-  val maxLifeTimeMsDefault = Defaults.DELEGATION_TOKEN_MAX_LIFE_TIME_MS
-  val renewTimeMsDefault = Defaults.DELEGATION_TOKEN_EXPIRY_TIME_MS
+  val maxLifeTimeMsDefault = DelegationTokenManagerConfigs.DELEGATION_TOKEN_MAX_LIFE_TIME_MS_DEFAULT
+  val renewTimeMsDefault = DelegationTokenManagerConfigs.DELEGATION_TOKEN_EXPIRY_TIME_MS_DEFAULT
   var tokenCache: DelegationTokenCache = _
   var props: Properties = _
 
@@ -73,7 +73,7 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
     super.setUp(testInfo)
     props = TestUtils.createBrokerConfig(0, zkConnect, enableToken = true)
     props.put(KafkaSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, ScramMechanism.mechanismNames().asScala.mkString(","))
-    props.put(KafkaConfig.DelegationTokenSecretKeyProp, secretKey)
+    props.put(DelegationTokenManagerConfigs.DELEGATION_TOKEN_SECRET_KEY_CONFIG, secretKey)
     tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames())
   }
 

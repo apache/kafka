@@ -1181,7 +1181,7 @@ class KafkaApisTest extends Logging {
 
     val requestTimeout = 10
     val topicConfigOverride = mutable.Map.empty[String, String]
-    topicConfigOverride.put(KafkaConfig.RequestTimeoutMsProp, requestTimeout.toString)
+    topicConfigOverride.put(ServerConfigs.REQUEST_TIMEOUT_MS_CONFIG, requestTimeout.toString)
 
     val groupId = "group"
     val topicName =
@@ -3156,7 +3156,7 @@ class KafkaApisTest extends Logging {
       ArgumentMatchers.eq(1.toShort),
       ArgumentMatchers.eq(0),
       ArgumentMatchers.eq(TransactionResult.COMMIT),
-      ArgumentMatchers.eq(Duration.ofMillis(Defaults.REQUEST_TIMEOUT_MS))
+      ArgumentMatchers.eq(Duration.ofMillis(ServerConfigs.REQUEST_TIMEOUT_MS_DEFAULT))
     )).thenReturn(CompletableFuture.completedFuture[Void](null))
 
     when(groupCoordinator.completeTransaction(
@@ -3165,7 +3165,7 @@ class KafkaApisTest extends Logging {
       ArgumentMatchers.eq(1.toShort),
       ArgumentMatchers.eq(0),
       ArgumentMatchers.eq(TransactionResult.ABORT),
-      ArgumentMatchers.eq(Duration.ofMillis(Defaults.REQUEST_TIMEOUT_MS))
+      ArgumentMatchers.eq(Duration.ofMillis(ServerConfigs.REQUEST_TIMEOUT_MS_DEFAULT))
     )).thenReturn(CompletableFuture.completedFuture[Void](null))
 
     val entriesPerPartition: ArgumentCaptor[Map[TopicPartition, MemoryRecords]] =
@@ -3174,7 +3174,7 @@ class KafkaApisTest extends Logging {
       ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
 
     when(replicaManager.appendRecords(
-      ArgumentMatchers.eq(Defaults.REQUEST_TIMEOUT_MS.toLong),
+      ArgumentMatchers.eq(ServerConfigs.REQUEST_TIMEOUT_MS_DEFAULT.toLong),
       ArgumentMatchers.eq(-1),
       ArgumentMatchers.eq(true),
       ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
@@ -3275,7 +3275,7 @@ class KafkaApisTest extends Logging {
       ArgumentMatchers.eq(1.toShort),
       ArgumentMatchers.eq(0),
       ArgumentMatchers.eq(TransactionResult.COMMIT),
-      ArgumentMatchers.eq(Duration.ofMillis(Defaults.REQUEST_TIMEOUT_MS))
+      ArgumentMatchers.eq(Duration.ofMillis(ServerConfigs.REQUEST_TIMEOUT_MS_DEFAULT))
     )).thenReturn(FutureUtils.failedFuture[Void](error.exception()))
     kafkaApis = createKafkaApis(overrideProperties = Map(
       GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "true"

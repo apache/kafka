@@ -41,6 +41,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.OffsetAndEpoch;
+import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.log.remote.storage.ClassLoaderAwareRemoteStorageManager;
 import org.apache.kafka.server.log.remote.storage.LogSegmentData;
 import org.apache.kafka.server.log.remote.storage.NoOpRemoteLogMetadataManager;
@@ -356,7 +357,7 @@ public class RemoteLogManagerTest {
         assertEquals(host + ":" + port, capture.getValue().get(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "bootstrap.servers"));
         assertEquals(securityProtocol, capture.getValue().get(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "security.protocol"));
         assertEquals(clusterId, capture.getValue().get("cluster.id"));
-        assertEquals(brokerId, capture.getValue().get(KafkaConfig.BrokerIdProp()));
+        assertEquals(brokerId, capture.getValue().get(ServerConfigs.BROKER_ID_CONFIG));
     }
 
     @Test
@@ -395,7 +396,7 @@ public class RemoteLogManagerTest {
             // should be overridden as SSL
             assertEquals("SSL", capture.getValue().get(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "security.protocol"));
             assertEquals(clusterId, capture.getValue().get("cluster.id"));
-            assertEquals(brokerId, capture.getValue().get(KafkaConfig.BrokerIdProp()));
+            assertEquals(brokerId, capture.getValue().get(ServerConfigs.BROKER_ID_CONFIG));
         }
     }
 
