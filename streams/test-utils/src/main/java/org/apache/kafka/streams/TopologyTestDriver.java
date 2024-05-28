@@ -360,7 +360,7 @@ public class TopologyTestDriver implements Closeable {
                     throw new IllegalStateException();
                 }
                 @Override
-                public Consumer<byte[], byte[]> getStreamsRebalanceProtocolConsumer(final Map<String, Object> config, StreamsAssignmentInterface assignmentInterface) {
+                public Consumer<byte[], byte[]> getStreamsRebalanceProtocolConsumer(final Map<String, Object> config, final StreamsAssignmentInterface assignmentInterface) {
                     throw new IllegalStateException();
                 }
                 @Override

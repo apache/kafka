@@ -94,6 +94,7 @@ import static org.apache.kafka.streams.processor.internals.ClientUtils.getConsum
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getRestoreConsumerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getSharedAdminClientId;
 
+@SuppressWarnings("ClassDataAbstractionCoupling")
 public class StreamThread extends Thread implements ProcessingThread {
 
     /**
@@ -541,14 +542,15 @@ public class StreamThread extends Thread implements ProcessingThread {
         }
     }
 
-    private static StreamsAssignmentInterface initAssignmentInterface(UUID processId,
-                                                                      StreamsConfig config,
-                                                                      HostInfo hostInfo,
+    private static StreamsAssignmentInterface initAssignmentInterface(final UUID processId,
+                                                                      final StreamsConfig config,
+                                                                      final HostInfo hostInfo,
                                                                       final TopologyMetadata topologyMetadata) {
         final InternalTopologyBuilder internalTopologyBuilder = topologyMetadata.lookupBuilderForNamedTopology(null);
 
-        Map<String, Subtopology> subtopologyMap = new HashMap<>();
-        for (Map.Entry<TopologyMetadata.Subtopology, TopicsInfo> topicsInfoEntry: internalTopologyBuilder.subtopologyToTopicsInfo().entrySet()) {
+        final Map<String, Subtopology> subtopologyMap = new HashMap<>();
+        for (final Map.Entry<TopologyMetadata.Subtopology, TopicsInfo> topicsInfoEntry : internalTopologyBuilder.subtopologyToTopicsInfo()
+            .entrySet()) {
             subtopologyMap.put(
                 String.valueOf(topicsInfoEntry.getKey().nodeGroupId),
                 new Subtopology(
@@ -556,11 +558,11 @@ public class StreamThread extends Thread implements ProcessingThread {
                     topicsInfoEntry.getValue().sinkTopics,
                     topicsInfoEntry.getValue().repartitionSourceTopics.entrySet()
                         .stream()
-                        .collect(Collectors.toMap(Map.Entry::getKey , e->
+                        .collect(Collectors.toMap(Map.Entry::getKey, e ->
                             new StreamsAssignmentInterface.TopicInfo(e.getValue().numberOfPartitions(), e.getValue().topicConfigs))),
                     topicsInfoEntry.getValue().stateChangelogTopics.entrySet()
                         .stream()
-                        .collect(Collectors.toMap(Map.Entry::getKey , e->
+                        .collect(Collectors.toMap(Map.Entry::getKey, e ->
                             new StreamsAssignmentInterface.TopicInfo(e.getValue().numberOfPartitions(), e.getValue().topicConfigs)))
 
                 )
@@ -569,17 +571,23 @@ public class StreamThread extends Thread implements ProcessingThread {
 
         // TODO: Which of these are actually needed?
         // TODO: Maybe we want to split this into assignment properties and internal topic configuration properties
-        HashMap<String, Object> assignmentProperties = new HashMap<>();
+        final HashMap<String, Object> assignmentProperties = new HashMap<>();
         assignmentProperties.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, config.getInt(StreamsConfig.REPLICATION_FACTOR_CONFIG));
         assignmentProperties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, config.getString(StreamsConfig.APPLICATION_SERVER_CONFIG));
         assignmentProperties.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, config.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG));
-        assignmentProperties.put(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, config.getLong(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG));
+        assignmentProperties.put(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG,
+            config.getLong(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG));
         assignmentProperties.put(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, config.getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG));
-        assignmentProperties.put(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG, config.getLong(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG));
-        assignmentProperties.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG, config.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG));
-        assignmentProperties.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG, config.getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG));
-        assignmentProperties.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, config.getList(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG));
-        assignmentProperties.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG, config.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG));
+        assignmentProperties.put(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG,
+            config.getLong(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG));
+        assignmentProperties.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG,
+            config.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG));
+        assignmentProperties.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG,
+            config.getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG));
+        assignmentProperties.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
+            config.getList(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG));
+        assignmentProperties.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG,
+            config.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG));
 
         return new StreamsAssignmentInterface(
             processId,
@@ -1376,7 +1384,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             );
 
             // Process assignment from Streams Rebalance Protocol
-            Assignment newAssignment = streamsAssignmentInterface.targetAssignment.get();
+            final Assignment newAssignment = streamsAssignmentInterface.targetAssignment.get();
             if (!newAssignment.equals(streamsAssignmentInterface.reconciledAssignment.get())) {
 
                 final Map<TaskId, Set<TopicPartition>> activeTasksWithPartitions =
