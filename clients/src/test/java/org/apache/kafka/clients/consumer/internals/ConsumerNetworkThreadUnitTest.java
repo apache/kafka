@@ -71,9 +71,6 @@ public class ConsumerNetworkThreadUnitTest {
     private final NetworkClientDelegate networkClientDelegate;
     private final RequestManagers requestManagers;
 
-    static final int DEFAULT_REQUEST_TIMEOUT_MS = 500;
-    static final int DEFAULT_HEARTBEAT_INTERVAL_MS = 1000;
-
     ConsumerNetworkThreadUnitTest() {
         LogContext logContext = new LogContext();
         this.time = new MockTime();
@@ -174,55 +171,5 @@ public class ConsumerNetworkThreadUnitTest {
         requestManagers.entries().forEach(rmo -> rmo.ifPresent(rm -> verify(rm, times(1)).maximumTimeToWait(anyLong())));
         // We just need to test networkClientDelegate not networkClient
         verify(networkClientDelegate, times(1)).poll(anyLong(), anyLong());
-    }
-
-    private void prepareOffsetCommitRequest(final Map<TopicPartition, Long> expectedOffsets,
-                                            final Errors error,
-                                            final boolean disconnected) {
-        Map<TopicPartition, Errors> errors = partitionErrors(expectedOffsets.keySet(), error);
-        client.prepareResponse(offsetCommitRequestMatcher(expectedOffsets), offsetCommitResponse(errors), disconnected);
-    }
-
-    private Map<TopicPartition, Errors> partitionErrors(final Collection<TopicPartition> partitions,
-                                                        final Errors error) {
-        final Map<TopicPartition, Errors> errors = new HashMap<>();
-        for (TopicPartition partition : partitions) {
-            errors.put(partition, error);
-        }
-        return errors;
-    }
-
-    private OffsetCommitResponse offsetCommitResponse(final Map<TopicPartition, Errors> responseData) {
-        return new OffsetCommitResponse(responseData);
-    }
-
-    private MockClient.RequestMatcher offsetCommitRequestMatcher(final Map<TopicPartition, Long> expectedOffsets) {
-        return body -> {
-            OffsetCommitRequest req = (OffsetCommitRequest) body;
-            Map<TopicPartition, Long> offsets = req.offsets();
-            if (offsets.size() != expectedOffsets.size())
-                return false;
-
-            for (Map.Entry<TopicPartition, Long> expectedOffset : expectedOffsets.entrySet()) {
-                if (!offsets.containsKey(expectedOffset.getKey())) {
-                    return false;
-                } else {
-                    Long actualOffset = offsets.get(expectedOffset.getKey());
-                    if (!actualOffset.equals(expectedOffset.getValue())) {
-                        return false;
-                    }
-                }
-            }
-            return true;
-        };
-    }
-
-    private HashMap<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {
-        final TopicPartition t0 = new TopicPartition("t0", 2);
-        final TopicPartition t1 = new TopicPartition("t0", 3);
-        HashMap<TopicPartition, OffsetAndMetadata> topicPartitionOffsets = new HashMap<>();
-        topicPartitionOffsets.put(t0, new OffsetAndMetadata(10L));
-        topicPartitionOffsets.put(t1, new OffsetAndMetadata(20L));
-        return topicPartitionOffsets;
     }
 }
