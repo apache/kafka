@@ -263,6 +263,14 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return ListClientMetricsResourcesResponse.parse(responseBuffer, version);
             case DESCRIBE_TOPIC_PARTITIONS:
                 return DescribeTopicPartitionsResponse.parse(responseBuffer, version);
+            case STREAMS_HEARTBEAT:
+                return StreamsHeartbeatResponse.parse(responseBuffer, version);
+            case STREAMS_INITIALIZE:
+                return StreamsInitializeResponse.parse(responseBuffer, version);
+            case STREAMS_PREPARE_ASSIGNMENT:
+                return StreamsPrepareAssignmentResponse.parse(responseBuffer, version);
+            case STREAMS_INSTALL_ASSIGNMENT:
+                return StreamsInstallAssignmentResponse.parse(responseBuffer, version);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));

@@ -213,6 +213,14 @@ import org.apache.kafka.common.message.SaslHandshakeResponseData;
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState;
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaTopicState;
 import org.apache.kafka.common.message.StopReplicaResponseData;
+import org.apache.kafka.common.message.StreamsHeartbeatRequestData;
+import org.apache.kafka.common.message.StreamsHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsInitializeRequestData;
+import org.apache.kafka.common.message.StreamsInitializeResponseData;
+import org.apache.kafka.common.message.StreamsInstallAssignmentRequestData;
+import org.apache.kafka.common.message.StreamsInstallAssignmentResponseData;
+import org.apache.kafka.common.message.StreamsPrepareAssignmentRequestData;
+import org.apache.kafka.common.message.StreamsPrepareAssignmentResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment;
 import org.apache.kafka.common.message.SyncGroupResponseData;
@@ -1081,6 +1089,10 @@ public class RequestResponseTest {
             case ASSIGN_REPLICAS_TO_DIRS: return createAssignReplicasToDirsRequest(version);
             case LIST_CLIENT_METRICS_RESOURCES: return createListClientMetricsResourcesRequest(version);
             case DESCRIBE_TOPIC_PARTITIONS: return createDescribeTopicPartitionsRequest(version);
+            case STREAMS_HEARTBEAT: return createStreamsHeartbeatRequest(version);
+            case STREAMS_INITIALIZE: return createStreamsInitializeRequest(version);
+            case STREAMS_INSTALL_ASSIGNMENT: return createStreamsInstallAssignmentRequest(version);
+            case STREAMS_PREPARE_ASSIGNMENT: return createStreamsPrepareAssignmentRequest(version);
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1163,6 +1175,10 @@ public class RequestResponseTest {
             case ASSIGN_REPLICAS_TO_DIRS: return createAssignReplicasToDirsResponse();
             case LIST_CLIENT_METRICS_RESOURCES: return createListClientMetricsResourcesResponse();
             case DESCRIBE_TOPIC_PARTITIONS: return createDescribeTopicPartitionsResponse();
+            case STREAMS_HEARTBEAT: return createStreamsHeartbeatResponse();
+            case STREAMS_INITIALIZE: return createStreamsInitializeResponse();
+            case STREAMS_INSTALL_ASSIGNMENT: return createStreamsInstallAssignmentResponse();
+            case STREAMS_PREPARE_ASSIGNMENT: return createStreamsPrepareAssignmentResponse();
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -3671,6 +3687,38 @@ public class RequestResponseTest {
         response.setErrorCode(Errors.NONE.code());
         response.setThrottleTimeMs(10);
         return new ListClientMetricsResourcesResponse(response);
+    }
+
+    private AbstractRequest createStreamsPrepareAssignmentRequest(final short version) {
+        return new StreamsPrepareAssignmentRequest.Builder(new StreamsPrepareAssignmentRequestData()).build(version);
+    }
+
+    private AbstractRequest createStreamsInstallAssignmentRequest(final short version) {
+        return new StreamsInstallAssignmentRequest.Builder(new StreamsInstallAssignmentRequestData()).build(version);
+    }
+
+    private AbstractRequest createStreamsInitializeRequest(final short version) {
+        return new StreamsInitializeRequest.Builder(new StreamsInitializeRequestData()).build(version);
+    }
+
+    private AbstractRequest createStreamsHeartbeatRequest(final short version) {
+        return new StreamsHeartbeatRequest.Builder(new StreamsHeartbeatRequestData()).build(version);
+    }
+
+    private AbstractResponse createStreamsPrepareAssignmentResponse() {
+        return new StreamsPrepareAssignmentResponse(new StreamsPrepareAssignmentResponseData());
+    }
+
+    private AbstractResponse createStreamsInstallAssignmentResponse() {
+        return new StreamsInstallAssignmentResponse(new StreamsInstallAssignmentResponseData());
+    }
+
+    private AbstractResponse createStreamsInitializeResponse() {
+        return new StreamsInitializeResponse(new StreamsInitializeResponseData());
+    }
+
+    private AbstractResponse createStreamsHeartbeatResponse() {
+        return new StreamsHeartbeatResponse(new StreamsHeartbeatResponseData());
     }
 
     @Test
