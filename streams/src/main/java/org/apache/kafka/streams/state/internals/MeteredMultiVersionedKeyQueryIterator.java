@@ -16,7 +16,11 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Function;
+
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.VersionedRecordIterator;
 import org.apache.kafka.streams.state.VersionedRecord;
 
@@ -24,18 +28,34 @@ public class MeteredMultiVersionedKeyQueryIterator<V> implements VersionedRecord
 
     private final VersionedRecordIterator<byte[]> iterator;
     private final Function<VersionedRecord<byte[]>, VersionedRecord<V>> deserializeValue;
-
+    private final LongAdder numOpenIterators;
+    private final Sensor sensor;
+    private final Time time;
+    private final long startNs;
 
     public MeteredMultiVersionedKeyQueryIterator(final VersionedRecordIterator<byte[]> iterator,
-                                                 final Function<VersionedRecord<byte[]>, VersionedRecord<V>> deserializeValue) {
+                                                 final Sensor sensor,
+                                                 final Time time,
+                                                 final Function<VersionedRecord<byte[]>, VersionedRecord<V>> deserializeValue,
+                                                 final LongAdder numOpenIterators) {
         this.iterator = iterator;
         this.deserializeValue = deserializeValue;
+        this.numOpenIterators = numOpenIterators;
+        this.sensor = sensor;
+        this.time = time;
+        this.startNs = time.nanoseconds();
+        numOpenIterators.increment();
     }
 
 
     @Override
     public void close() {
-        iterator.close();
+        try {
+            iterator.close();
+        } finally {
+            sensor.record(time.nanoseconds() - startNs);
+            numOpenIterators.decrement();
+        }
     }
 
     @Override

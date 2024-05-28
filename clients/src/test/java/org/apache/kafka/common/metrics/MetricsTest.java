@@ -68,10 +68,10 @@ import org.slf4j.LoggerFactory;
 
 public class MetricsTest {
     private static final Logger log = LoggerFactory.getLogger(MetricsTest.class);
-
     private static final double EPS = 0.000001;
-    private MockTime time = new MockTime();
-    private MetricConfig config = new MetricConfig();
+
+    private final MockTime time = new MockTime();
+    private final MetricConfig config = new MetricConfig();
     private Metrics metrics;
     private ExecutorService executorService;
 
@@ -850,7 +850,7 @@ public class MetricsTest {
         alive.set(false);
     }
 
-    private class ConcurrentMetricOperation implements Runnable {
+    private static class ConcurrentMetricOperation implements Runnable {
         private final AtomicBoolean alive;
         private final String opName;
         private final Runnable op;
@@ -884,7 +884,7 @@ public class MetricsTest {
         PERCENTILES(9),
         METER(10);
 
-        int id;
+        final int id;
         StatType(int id) {
             this.id = id;
         }

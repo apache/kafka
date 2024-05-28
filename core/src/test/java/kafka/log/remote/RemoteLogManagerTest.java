@@ -27,10 +27,10 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.errors.ReplicaNotAvailableException;
 import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.RecordBatch;
@@ -41,6 +41,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.OffsetAndEpoch;
+import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.log.remote.storage.ClassLoaderAwareRemoteStorageManager;
 import org.apache.kafka.server.log.remote.storage.LogSegmentData;
 import org.apache.kafka.server.log.remote.storage.NoOpRemoteLogMetadataManager;
@@ -356,7 +357,7 @@ public class RemoteLogManagerTest {
         assertEquals(host + ":" + port, capture.getValue().get(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "bootstrap.servers"));
         assertEquals(securityProtocol, capture.getValue().get(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "security.protocol"));
         assertEquals(clusterId, capture.getValue().get("cluster.id"));
-        assertEquals(brokerId, capture.getValue().get(KafkaConfig.BrokerIdProp()));
+        assertEquals(brokerId, capture.getValue().get(ServerConfigs.BROKER_ID_CONFIG));
     }
 
     @Test
@@ -395,7 +396,7 @@ public class RemoteLogManagerTest {
             // should be overridden as SSL
             assertEquals("SSL", capture.getValue().get(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "security.protocol"));
             assertEquals(clusterId, capture.getValue().get("cluster.id"));
-            assertEquals(brokerId, capture.getValue().get(KafkaConfig.BrokerIdProp()));
+            assertEquals(brokerId, capture.getValue().get(ServerConfigs.BROKER_ID_CONFIG));
         }
     }
 
@@ -1210,7 +1211,7 @@ public class RemoteLogManagerTest {
     private MemoryRecords records(long timestamp,
                                   long initialOffset,
                                   int partitionLeaderEpoch) {
-        return MemoryRecords.withRecords(initialOffset, CompressionType.NONE, partitionLeaderEpoch,
+        return MemoryRecords.withRecords(initialOffset, Compression.NONE, partitionLeaderEpoch,
             new SimpleRecord(timestamp - 1, "first message".getBytes()),
             new SimpleRecord(timestamp + 1, "second message".getBytes()),
             new SimpleRecord(timestamp + 2, "third message".getBytes())

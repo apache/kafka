@@ -22,28 +22,36 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
+import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Function;
 
 class MeteredWindowStoreIterator<V> implements WindowStoreIterator<V> {
 
     private final WindowStoreIterator<byte[]> iter;
-    private final Sensor sensor;
+    private final Sensor operationSensor;
+    private final Sensor iteratorSensor;
     private final StreamsMetrics metrics;
     private final Function<byte[], V> valueFrom;
     private final long startNs;
     private final Time time;
+    private final LongAdder numOpenIterators;
 
     MeteredWindowStoreIterator(final WindowStoreIterator<byte[]> iter,
-                               final Sensor sensor,
+                               final Sensor operationSensor,
+                               final Sensor iteratorSensor,
                                final StreamsMetrics metrics,
                                final Function<byte[], V> valueFrom,
-                               final Time time) {
+                               final Time time,
+                               final LongAdder numOpenIterators) {
         this.iter = iter;
-        this.sensor = sensor;
+        this.operationSensor = operationSensor;
+        this.iteratorSensor = iteratorSensor;
         this.metrics = metrics;
         this.valueFrom = valueFrom;
         this.startNs = time.nanoseconds();
         this.time = time;
+        this.numOpenIterators = numOpenIterators;
+        numOpenIterators.increment();
     }
 
     @Override
@@ -62,7 +70,10 @@ class MeteredWindowStoreIterator<V> implements WindowStoreIterator<V> {
         try {
             iter.close();
         } finally {
-            sensor.record(time.nanoseconds() - startNs);
+            final long duration = time.nanoseconds() - startNs;
+            operationSensor.record(duration);
+            iteratorSensor.record(duration);
+            numOpenIterators.decrement();
         }
     }
 

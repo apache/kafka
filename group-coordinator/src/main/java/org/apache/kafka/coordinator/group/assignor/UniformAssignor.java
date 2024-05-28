@@ -57,28 +57,28 @@ public class UniformAssignor implements PartitionAssignor {
      * Perform the group assignment given the current members and
      * topics metadata.
      *
-     * @param assignmentSpec                The assignment specification that included member metadata.
+     * @param groupSpec                     The assignment specification that included member metadata.
      * @param subscribedTopicDescriber      The topic and cluster metadata describer {@link SubscribedTopicDescriber}.
      * @return The new target assignment for the group.
      */
     @Override
     public GroupAssignment assign(
-        AssignmentSpec assignmentSpec,
+        GroupSpec groupSpec,
         SubscribedTopicDescriber subscribedTopicDescriber
     ) throws PartitionAssignorException {
         AbstractUniformAssignmentBuilder assignmentBuilder;
 
-        if (assignmentSpec.members().isEmpty())
+        if (groupSpec.members().isEmpty())
             return new GroupAssignment(Collections.emptyMap());
 
-        if (assignmentSpec.subscriptionType().equals(HOMOGENEOUS)) {
+        if (groupSpec.subscriptionType().equals(HOMOGENEOUS)) {
             LOG.debug("Detected that all members are subscribed to the same set of topics, invoking the "
                 + "optimized assignment algorithm");
-            assignmentBuilder = new OptimizedUniformAssignmentBuilder(assignmentSpec, subscribedTopicDescriber);
+            assignmentBuilder = new OptimizedUniformAssignmentBuilder(groupSpec, subscribedTopicDescriber);
         } else {
             LOG.debug("Detected that the members are subscribed to different sets of topics, invoking the "
                 + "general assignment algorithm");
-            assignmentBuilder = new GeneralUniformAssignmentBuilder(assignmentSpec, subscribedTopicDescriber);
+            assignmentBuilder = new GeneralUniformAssignmentBuilder(groupSpec, subscribedTopicDescriber);
         }
 
         return assignmentBuilder.buildAssignment();

@@ -994,7 +994,7 @@ public class UtilsTest {
         };
     }
 
-    private class TestException extends Exception {
+    private static class TestException extends Exception {
         final String key;
         TestException(String key) {
             this.key = key;

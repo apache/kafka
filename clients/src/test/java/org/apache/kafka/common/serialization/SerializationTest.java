@@ -26,6 +26,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -62,7 +63,7 @@ public class SerializationTest {
         }
     };
 
-    private class DummyClass {
+    private static class DummyClass {
     }
 
     @SuppressWarnings("unchecked")
@@ -147,7 +148,7 @@ public class SerializationTest {
     @SuppressWarnings("unchecked")
     @Test
     public void listSerdeShouldReturnEmptyCollection() {
-        List<Integer> testData = Arrays.asList();
+        List<Integer> testData = Collections.emptyList();
         Serde<List<Integer>> listSerde = Serdes.ListSerde(ArrayList.class, Serdes.Integer());
         assertEquals(testData,
             listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)),
