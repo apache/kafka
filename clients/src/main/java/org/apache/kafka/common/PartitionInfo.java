@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common;
 
+import java.util.Arrays;
 import java.util.Objects;
 
 /**
@@ -92,7 +93,8 @@ public class PartitionInfo {
 
     @Override
     public int hashCode() {
-        return Objects.hash(topic, partition, leader, replicas, inSyncReplicas, offlineReplicas);
+        return Objects.hash(topic, partition, leader, Arrays.hashCode(replicas),
+            Arrays.hashCode(inSyncReplicas), Arrays.hashCode(offlineReplicas));
     }
 
     @Override
