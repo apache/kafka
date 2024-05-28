@@ -55,6 +55,7 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent;
 import org.apache.kafka.storage.internals.log.EpochEntry;
 
+import java.io.FilenameFilter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -287,6 +288,13 @@ public final class TieredStorageTestBuilder {
 
     public TieredStorageTestBuilder eraseBrokerStorage(Integer brokerId) {
         actions.add(new EraseBrokerStorageAction(brokerId));
+        return this;
+    }
+
+    public TieredStorageTestBuilder eraseBrokerStorage(Integer brokerId,
+                                                       FilenameFilter filenameFilter,
+                                                       boolean isStopped) {
+        actions.add(new EraseBrokerStorageAction(brokerId, filenameFilter, isStopped));
         return this;
     }
 

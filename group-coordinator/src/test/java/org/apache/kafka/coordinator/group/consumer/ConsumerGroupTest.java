@@ -369,6 +369,42 @@ public class ConsumerGroupTest {
     }
 
     @Test
+    public void testWaitingOnUnreleasedPartition() {
+        Uuid fooTopicId = Uuid.randomUuid();
+        Uuid barTopicId = Uuid.randomUuid();
+        Uuid zarTopicId = Uuid.randomUuid();
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+        consumerGroup.updateTargetAssignment(memberId1, new Assignment(mkAssignment(
+            mkTopicAssignment(fooTopicId, 1, 2, 3),
+            mkTopicAssignment(zarTopicId, 7, 8, 9)
+        )));
+
+        ConsumerGroupMember member1 = new ConsumerGroupMember.Builder(memberId1)
+            .setMemberEpoch(10)
+            .setState(MemberState.UNRELEASED_PARTITIONS)
+            .setAssignedPartitions(mkAssignment(
+                mkTopicAssignment(fooTopicId, 1, 2, 3)))
+            .setPartitionsPendingRevocation(mkAssignment(
+                mkTopicAssignment(barTopicId, 4, 5, 6)))
+            .build();
+        consumerGroup.updateMember(member1);
+
+        assertFalse(consumerGroup.waitingOnUnreleasedPartition(member1));
+
+        ConsumerGroupMember member2 = new ConsumerGroupMember.Builder(memberId2)
+            .setMemberEpoch(10)
+            .setPartitionsPendingRevocation(mkAssignment(
+                mkTopicAssignment(zarTopicId, 7)))
+            .build();
+        consumerGroup.updateMember(member2);
+
+        assertTrue(consumerGroup.waitingOnUnreleasedPartition(member1));
+    }
+
+    @Test
     public void testGroupState() {
         Uuid fooTopicId = Uuid.randomUuid();
         ConsumerGroup consumerGroup = createConsumerGroup("foo");
@@ -795,6 +831,90 @@ public class ConsumerGroupTest {
         assertEquals(
             HETEROGENEOUS,
             consumerGroup.subscriptionType()
+        );
+    }
+
+    @Test
+    public void testUpdateInvertedAssignment() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        GroupCoordinatorMetricsShard metricsShard = mock(GroupCoordinatorMetricsShard.class);
+        ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, "test-group", metricsShard);
+        Uuid topicId = Uuid.randomUuid();
+        String memberId1 = "member1";
+        String memberId2 = "member2";
+
+        // Initial assignment for member1
+        Assignment initialAssignment = new Assignment(Collections.singletonMap(
+            topicId,
+            new HashSet<>(Collections.singletonList(0))
+        ));
+        consumerGroup.updateTargetAssignment(memberId1, initialAssignment);
+
+        // Verify that partition 0 is assigned to member1.
+        assertEquals(
+            mkMap(
+                mkEntry(topicId, mkMap(mkEntry(0, memberId1)))
+            ),
+            consumerGroup.invertedTargetAssignment()
+        );
+
+        // New assignment for member1
+        Assignment newAssignment = new Assignment(Collections.singletonMap(
+            topicId,
+            new HashSet<>(Collections.singletonList(1))
+        ));
+        consumerGroup.updateTargetAssignment(memberId1, newAssignment);
+
+        // Verify that partition 0 is no longer assigned and partition 1 is assigned to member1
+        assertEquals(
+            mkMap(
+                mkEntry(topicId, mkMap(mkEntry(1, memberId1)))
+            ),
+            consumerGroup.invertedTargetAssignment()
+        );
+
+        // New assignment for member2 to add partition 1
+        Assignment newAssignment2 = new Assignment(Collections.singletonMap(
+            topicId,
+            new HashSet<>(Collections.singletonList(1))
+        ));
+        consumerGroup.updateTargetAssignment(memberId2, newAssignment2);
+
+        // Verify that partition 1 is assigned to member2
+        assertEquals(
+            mkMap(
+                mkEntry(topicId, mkMap(mkEntry(1, memberId2)))
+            ),
+            consumerGroup.invertedTargetAssignment()
+        );
+
+        // New assignment for member1 to revoke partition 1 and assign partition 0
+        Assignment newAssignment1 = new Assignment(Collections.singletonMap(
+            topicId,
+            new HashSet<>(Collections.singletonList(0))
+        ));
+        consumerGroup.updateTargetAssignment(memberId1, newAssignment1);
+
+        // Verify that partition 1 is still assigned to member2 and partition 0 is assigned to member1
+        assertEquals(
+            mkMap(
+                mkEntry(topicId, mkMap(
+                    mkEntry(0, memberId1),
+                    mkEntry(1, memberId2)
+                ))
+            ),
+            consumerGroup.invertedTargetAssignment()
+        );
+
+        // Test remove target assignment for member1
+        consumerGroup.removeTargetAssignment(memberId1);
+
+        // Verify that partition 0 is no longer assigned and partition 1 is still assigned to member2
+        assertEquals(
+            mkMap(
+                mkEntry(topicId, mkMap(mkEntry(1, memberId2)))
+            ),
+            consumerGroup.invertedTargetAssignment()
         );
     }
 

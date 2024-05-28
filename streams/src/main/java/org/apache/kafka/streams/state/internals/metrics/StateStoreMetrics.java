@@ -149,6 +149,14 @@ public class StateStoreMetrics {
     private static final String NUM_OPEN_ITERATORS_DESCRIPTION =
             "The current number of iterators on the store that have been created, but not yet closed";
 
+    private static final String ITERATOR_DURATION = "iterator-duration";
+    private static final String ITERATOR_DURATION_DESCRIPTION =
+            "time spent between creating an iterator and closing it, in nanoseconds";
+    private static final String ITERATOR_DURATION_AVG_DESCRIPTION =
+            AVG_DESCRIPTION_PREFIX + ITERATOR_DURATION_DESCRIPTION;
+    private static final String ITERATOR_DURATION_MAX_DESCRIPTION =
+            MAX_DESCRIPTION_PREFIX + ITERATOR_DURATION_DESCRIPTION;
+
     public static Sensor putSensor(final String taskId,
                                    final String storeType,
                                    final String storeName,
@@ -409,11 +417,28 @@ public class StateStoreMetrics {
         return sensor;
     }
 
+    public static Sensor iteratorDurationSensor(final String taskId,
+                                                final String storeType,
+                                                final String storeName,
+                                                final StreamsMetricsImpl streamsMetrics) {
+        final Sensor sensor = streamsMetrics.storeLevelSensor(taskId, storeName, ITERATOR_DURATION, RecordingLevel.DEBUG);
+        final Map<String, String> tagMap = streamsMetrics.storeLevelTagMap(taskId, storeType, storeName);
+        addAvgAndMaxToSensor(
+            sensor,
+            STATE_STORE_LEVEL_GROUP,
+            tagMap,
+            ITERATOR_DURATION,
+            ITERATOR_DURATION_AVG_DESCRIPTION,
+            ITERATOR_DURATION_MAX_DESCRIPTION
+        );
+        return sensor;
+    }
+
     public static void addNumOpenIteratorsGauge(final String taskId,
                                                 final String storeType,
                                                 final String storeName,
                                                 final StreamsMetricsImpl streamsMetrics,
-                                                final Gauge<Integer> numOpenIteratorsGauge) {
+                                                final Gauge<Long> numOpenIteratorsGauge) {
         streamsMetrics.addStoreLevelMutableMetric(
                 taskId,
                 storeType,
