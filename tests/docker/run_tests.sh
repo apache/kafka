@@ -27,6 +27,7 @@ get_mode() {
   else
     export KAFKA_MODE="jvm"
   fi
+  echo "Mode provided for system tests run: $KAFKA_MODE"
 }
 
 cleanup() {
@@ -51,7 +52,7 @@ cleanup && mkdir "${TMP_NATIVE_DIR}"
 if [ "$KAFKA_MODE" == "native" ]; then
   kafka_tarball_filename=(core/build/distributions/kafka*SNAPSHOT.tgz)
   if [ ! -e "${kafka_tarball_filename[0]}" ] || [ "$REBUILD" == "t" ]; then
-    echo "Building Kafka tarball."
+    echo "Building Kafka tarball for native image."
     ./gradlew clean releaseTarGz
   fi
 
