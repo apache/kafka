@@ -220,88 +220,99 @@ public class StreamsHeartbeatRequestManager implements RequestManager {
 
     private void onResponse(final StreamsHeartbeatResponse response, long currentTimeMs) {
         if (Errors.forCode(response.data().errorCode()) == Errors.NONE) {
-            final StreamsHeartbeatResponseData data = response.data();
-
-            heartbeatRequestState.updateHeartbeatIntervalMs(data.heartbeatIntervalMs());
-            heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
-            heartbeatRequestState.resetTimer();
-
-            if (data.shouldInitializeTopology()) {
-                streamsInitializeRequestManager.initialize();
-            }
-            if (data.shouldComputeAssignment()) {
-                streamsPrepareAssignmentRequestManager.prepareAssignment();
-            }
-            if (data.partitionsByHost() != null) {
-                streamsInterface.partitionsByHost.set(convertHostInfoMap(data));
-            }
-
-            ConsumerGroupHeartbeatResponseData cgData = new ConsumerGroupHeartbeatResponseData();
-            cgData.setMemberId(data.memberId());
-            cgData.setMemberEpoch(data.memberEpoch());
-            cgData.setErrorCode(data.errorCode());
-            cgData.setErrorMessage(data.errorMessage());
-            cgData.setThrottleTimeMs(data.throttleTimeMs());
-            cgData.setHeartbeatIntervalMs(data.heartbeatIntervalMs());
-
-            Errors assignmentError = response.assignmentError();
-            String assignmentErrorMessage = response.data().errorMessage();
-            if (assignmentError != Errors.NONE) {
-                logger.warn("Assignment incomplete. {}. {}", assignmentError.message(), assignmentErrorMessage);
-                switch (assignmentError) {
-                    case STREAMS_SHUTDOWN_APPLICATION:
-                        streamsInterface.requestShutdown();
-                        break;
-                    case STREAMS_INCONSISTENT_TOPOLOGY:
-                    case STREAMS_MISSING_SOURCE_TOPICS:
-                    case STREAMS_GROUP_UNINITIALIZED:
-                        break;
-                }
-            }
-
-            if (data.activeTasks() != null && data.standbyTasks() != null && data.warmupTasks() != null) {
-
-                Assignment targetAssignment = new Assignment();
-                updateTaskIdCollection(data.activeTasks(), targetAssignment.activeTasks);
-                updateTaskIdCollection(data.standbyTasks(), targetAssignment.standbyTasks);
-                updateTaskIdCollection(data.warmupTasks(), targetAssignment.warmupTasks);
-                streamsInterface.targetAssignment.set(targetAssignment);
-
-                Map<String, ConsumerGroupHeartbeatResponseData.TopicPartitions> tps = new HashMap<>();
-                data.activeTasks().forEach(taskId -> Stream.concat(
-                        streamsInterface.subtopologyMap().get(taskId.subtopology()).sourceTopics.stream(),
-                        streamsInterface.subtopologyMap().get(taskId.subtopology()).repartitionSourceTopics.keySet().stream()
-                    )
-                    .forEach(topic -> {
-                        final TopicPartitions toInsert = tps.computeIfAbsent(topic, k -> {
-                            final Optional<Uuid> uuid = findTopicIdInGlobalOrLocalCache(topic);
-                            if (uuid.isPresent()) {
-                                ConsumerGroupHeartbeatResponseData.TopicPartitions t =
-                                    new ConsumerGroupHeartbeatResponseData.TopicPartitions();
-                                t.setTopicId(uuid.get());
-                                return t;
-                            } else {
-                                return null;
-                            }
-                        });
-                        if (toInsert != null) {
-                            toInsert.partitions().addAll(taskId.partitions());
-                        }
-                    }));
-                ConsumerGroupHeartbeatResponseData.Assignment cgAssignment = new ConsumerGroupHeartbeatResponseData.Assignment();
-                cgAssignment.setTopicPartitions(new ArrayList<>(tps.values()));
-                cgData.setAssignment(cgAssignment);
-
-            } else {
-                if (data.activeTasks() != null || data.standbyTasks() != null || data.warmupTasks() != null) {
-                    throw new IllegalStateException("Invalid response data, task collections must be all null or all non-null: " + data);
-                }
-            }
-
-            membershipManager.onHeartbeatSuccess(cgData);
+            onSuccessResponse(response, currentTimeMs);
         } else {
             onErrorResponse(response, currentTimeMs);
         }
+    }
+
+    private void onSuccessResponse(final StreamsHeartbeatResponse response, final long currentTimeMs) {
+        final StreamsHeartbeatResponseData data = response.data();
+
+        heartbeatRequestState.updateHeartbeatIntervalMs(data.heartbeatIntervalMs());
+        heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
+        heartbeatRequestState.resetTimer();
+
+        if (data.shouldInitializeTopology()) {
+            streamsInitializeRequestManager.initialize();
+        }
+        if (data.shouldComputeAssignment()) {
+            streamsPrepareAssignmentRequestManager.prepareAssignment();
+        }
+        if (data.partitionsByHost() != null) {
+            streamsInterface.partitionsByHost.set(convertHostInfoMap(data));
+        }
+
+        ConsumerGroupHeartbeatResponseData cgData = new ConsumerGroupHeartbeatResponseData();
+        cgData.setMemberId(data.memberId());
+        cgData.setMemberEpoch(data.memberEpoch());
+        cgData.setErrorCode(data.errorCode());
+        cgData.setErrorMessage(data.errorMessage());
+        cgData.setThrottleTimeMs(data.throttleTimeMs());
+        cgData.setHeartbeatIntervalMs(data.heartbeatIntervalMs());
+
+        Errors assignmentError = response.assignmentError();
+        String assignmentErrorMessage = response.data().errorMessage();
+        if (assignmentError != Errors.NONE) {
+            logger.warn("Assignment incomplete. {}. {}", assignmentError.message(), assignmentErrorMessage);
+            switch (assignmentError) {
+                case STREAMS_SHUTDOWN_APPLICATION:
+                    streamsInterface.requestShutdown();
+                    break;
+                case STREAMS_INCONSISTENT_TOPOLOGY:
+                case STREAMS_MISSING_SOURCE_TOPICS:
+                case STREAMS_GROUP_UNINITIALIZED:
+                    break;
+            }
+        }
+
+        if (data.activeTasks() != null && data.standbyTasks() != null && data.warmupTasks() != null) {
+
+            setTargetAssignment(data);
+            setTargetAssignmentForConsumerGroup(data, cgData);
+
+        } else {
+            if (data.activeTasks() != null || data.standbyTasks() != null || data.warmupTasks() != null) {
+                throw new IllegalStateException("Invalid response data, task collections must be all null or all non-null: " + data);
+            }
+        }
+
+        membershipManager.onHeartbeatSuccess(cgData);
+    }
+
+    private void setTargetAssignmentForConsumerGroup(final StreamsHeartbeatResponseData data, final ConsumerGroupHeartbeatResponseData cgData) {
+        Map<String, TopicPartitions> tps = new HashMap<>();
+        data.activeTasks().forEach(taskId -> Stream.concat(
+                streamsInterface.subtopologyMap().get(taskId.subtopology()).sourceTopics.stream(),
+                streamsInterface.subtopologyMap().get(taskId.subtopology()).repartitionSourceTopics.keySet().stream()
+            )
+            .forEach(topic -> {
+                final TopicPartitions toInsert = tps.computeIfAbsent(topic, k -> {
+                    final Optional<Uuid> uuid = findTopicIdInGlobalOrLocalCache(topic);
+                    if (uuid.isPresent()) {
+                        TopicPartitions t =
+                            new TopicPartitions();
+                        t.setTopicId(uuid.get());
+                        return t;
+                    } else {
+                        return null;
+                    }
+                });
+                if (toInsert != null) {
+                    toInsert.partitions().addAll(taskId.partitions());
+                }
+            }));
+        ConsumerGroupHeartbeatResponseData.Assignment cgAssignment = new ConsumerGroupHeartbeatResponseData.Assignment();
+        cgAssignment.setTopicPartitions(new ArrayList<>(tps.values()));
+        cgData.setAssignment(cgAssignment);
+    }
+
+    private void setTargetAssignment(final StreamsHeartbeatResponseData data) {
+        Assignment targetAssignment = new Assignment();
+        updateTaskIdCollection(data.activeTasks(), targetAssignment.activeTasks);
+        updateTaskIdCollection(data.standbyTasks(), targetAssignment.standbyTasks);
+        updateTaskIdCollection(data.warmupTasks(), targetAssignment.warmupTasks);
+        streamsInterface.targetAssignment.set(targetAssignment);
     }
 
     private static Map<StreamsAssignmentInterface.HostInfo, List<TopicPartition>> convertHostInfoMap(

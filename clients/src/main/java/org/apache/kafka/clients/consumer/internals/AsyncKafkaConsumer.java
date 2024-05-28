@@ -258,10 +258,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private final AtomicInteger refCount = new AtomicInteger(0);
 
     public AsyncKafkaConsumer(final ConsumerConfig config,
-                       final Deserializer<K> keyDeserializer,
-                       final Deserializer<V> valueDeserializer,
-                       Optional<StreamsAssignmentInterface> streamsAssignmentInterface
-                       ) {
+                              final Deserializer<K> keyDeserializer,
+                              final Deserializer<V> valueDeserializer,
+                              Optional<StreamsAssignmentInterface> streamsAssignmentInterface
+    ) {
         this(
             config,
             keyDeserializer,
