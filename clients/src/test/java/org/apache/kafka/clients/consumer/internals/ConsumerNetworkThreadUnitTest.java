@@ -119,16 +119,27 @@ public class ConsumerNetworkThreadUnitTest {
      * 3. Remove the tests and create a commit for it so that we can look back later.
      */
 
-    @Test
-    public void testRequestManagersPoll() {
+    @ParameterizedTest
+    @ValueSource(longs = {1, 100, 1000, 4999, 5001})
+    public void testConsumerNetworkThreadWaitTimeComputations(long exampleTime) {
+        List<Optional<? extends RequestManager>> rmsList = new ArrayList<>();
+        rmsList.add(Optional.of(coordinatorRequestManager));
+//        rmsList.add(Optional.of(commitRequestManager));
+//        rmsList.add(Optional.of(heartbeatRequestManager));
+//        rmsList.add(Optional.of(offsetsRequestManager));
+        when(requestManagers.entries()).thenReturn(rmsList);
+
+        NetworkClientDelegate.PollResult pr = new NetworkClientDelegate.PollResult(exampleTime);
+
+        when(coordinatorRequestManager.poll(anyLong())).thenReturn(pr);
+        when(coordinatorRequestManager.maximumTimeToWait(anyLong())).thenReturn(exampleTime);
+//        when(commitRequestManager.poll(anyLong())).thenReturn(new NetworkClientDelegate.PollResult(10000L));
+//        when(heartbeatRequestManager.poll(anyLong())).thenReturn(new NetworkClientDelegate.PollResult(10000L));
+//        when(offsetsRequestManager.poll(anyLong())).thenReturn(new NetworkClientDelegate.PollResult(10000L));
+        when(networkClientDelegate.addAll(pr)).thenReturn(pr.timeUntilNextPollMs);
         consumerNetworkThread.runOnce();
-        when(coordinatorRequestManager.poll(anyLong())).thenReturn(new NetworkClientDelegate.PollResult(1040));
-        when(commitRequestManager.poll(anyLong())).thenReturn(new NetworkClientDelegate.PollResult(100));
-        when(heartbeatRequestManager.poll(anyLong())).thenReturn(new NetworkClientDelegate.PollResult(1020));
-        when(offsetsRequestManager.poll(anyLong())).thenReturn(new NetworkClientDelegate.PollResult(5100));
-        when(requestManagers.entries()).thenReturn(..);
-        //when(networkClientDelegate.addAll(new NetworkClientDelegate.PollResult(100))).thenReturn(100L);
-        consumerNetworkThread.runOnce();
+
+        assertEquals(consumerNetworkThread.maximumTimeToWait(), exampleTime);
     }
 
     @Test
