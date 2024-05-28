@@ -362,6 +362,6 @@
               files="(ReplicaFetcherThreadBenchmark).java"/>
 
     <!--import order -->
-    <suppress checks="ImportOrder" files="^(?!.*kafka/tools/).*$"/>
+    <suppress checks="ImportOrder" files="^*$"/>
 
 </suppressions>
