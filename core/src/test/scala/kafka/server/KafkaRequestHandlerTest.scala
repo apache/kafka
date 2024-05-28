@@ -43,7 +43,7 @@ import java.util.concurrent.atomic.AtomicInteger
 class KafkaRequestHandlerTest {
   val props: Properties = kafka.utils.TestUtils.createDummyBrokerConfig()
   props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true.toString)
-  val brokerTopicStats = new BrokerTopicStats(KafkaConfig.fromProps(props).remoteLogManagerConfig.enableRemoteStorageSystem)
+  val brokerTopicStats = new BrokerTopicStats(KafkaConfig.fromProps(props).isRemoteLogStorageSystemEnabled)
   val topic = "topic"
   val topic2 = "topic2"
   val brokerTopicMetrics: BrokerTopicMetrics = brokerTopicStats.topicStats(topic)
@@ -198,7 +198,7 @@ class KafkaRequestHandlerTest {
   def testTopicStats(systemRemoteStorageEnabled: Boolean): Unit = {
     val props = kafka.utils.TestUtils.createDummyBrokerConfig()
     props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, systemRemoteStorageEnabled.toString)
-    val brokerTopicStats = new BrokerTopicStats(KafkaConfig.fromProps(props).remoteLogManagerConfig.enableRemoteStorageSystem)
+    val brokerTopicStats = new BrokerTopicStats(KafkaConfig.fromProps(props).isRemoteLogStorageSystemEnabled)
     val brokerTopicMetrics = brokerTopicStats.topicStats(topic)
     val gaugeMetrics = Set(
       RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName,
@@ -254,7 +254,7 @@ class KafkaRequestHandlerTest {
   def testSingularCopyLagBytesMetric(systemRemoteStorageEnabled: Boolean): Unit = {
     val props = kafka.utils.TestUtils.createDummyBrokerConfig()
     props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, systemRemoteStorageEnabled.toString)
-    val brokerTopicStats = new BrokerTopicStats(KafkaConfig.fromProps(props).remoteLogManagerConfig.enableRemoteStorageSystem)
+    val brokerTopicStats = new BrokerTopicStats(KafkaConfig.fromProps(props).isRemoteLogStorageSystemEnabled)
     val brokerTopicMetrics = brokerTopicStats.topicStats(topic)
 
     if (systemRemoteStorageEnabled) {
@@ -596,7 +596,7 @@ class KafkaRequestHandlerTest {
   def testSingularLogSizeBytesMetric(systemRemoteStorageEnabled: Boolean): Unit = {
     val props = kafka.utils.TestUtils.createDummyBrokerConfig()
     props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, systemRemoteStorageEnabled.toString)
-    val brokerTopicStats = new BrokerTopicStats(KafkaConfig.fromProps(props).remoteLogManagerConfig.enableRemoteStorageSystem)
+    val brokerTopicStats = new BrokerTopicStats(KafkaConfig.fromProps(props).isRemoteLogStorageSystemEnabled)
     val brokerTopicMetrics = brokerTopicStats.topicStats(topic)
     if (systemRemoteStorageEnabled) {
       brokerTopicStats.recordRemoteLogSizeBytes(topic, 0, 100)
