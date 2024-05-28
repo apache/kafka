@@ -40,7 +40,7 @@ public class StreamsInitializeResponse extends AbstractResponse {
     private final StreamsInitializeResponseData data;
 
     public StreamsInitializeResponse(StreamsInitializeResponseData data) {
-        super(ApiKeys.STREAMS_HEARTBEAT);
+        super(ApiKeys.STREAMS_INITIALIZE);
         this.data = data;
     }
 

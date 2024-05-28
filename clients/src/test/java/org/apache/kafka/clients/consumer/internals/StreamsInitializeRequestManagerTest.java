@@ -80,9 +80,9 @@ class StreamsInitializeRequestManagerTest {
             mkEntry("changelogTopic2", new StreamsAssignmentInterface.TopicInfo(Optional.empty(), Collections.emptyMap())),
             mkEntry("changelogTopic3", new StreamsAssignmentInterface.TopicInfo(Optional.empty(), Collections.emptyMap()))
         );
-        final StreamsAssignmentInterface.SubTopology subtopology1 = new StreamsAssignmentInterface.SubTopology(
-            sinkTopics,
+        final StreamsAssignmentInterface.Subtopology subtopology1 = new StreamsAssignmentInterface.Subtopology(
             sourceTopics,
+            sinkTopics,
             repartitionTopics,
             changelogTopics
         );

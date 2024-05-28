@@ -52,7 +52,7 @@ public class StreamsInitializeRequest extends AbstractRequest {
     private final StreamsInitializeRequestData data;
 
     public StreamsInitializeRequest(StreamsInitializeRequestData data, short version) {
-        super(ApiKeys.STREAMS_HEARTBEAT, version);
+        super(ApiKeys.STREAMS_INITIALIZE, version);
         this.data = data;
     }
 
