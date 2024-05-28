@@ -31,7 +31,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Defines a self-contained object to exchange assignment-related metadata with the Kafka Streams instance.
- *
+ * <p>
  * It's used to exchange information between the streams module and the clients module, and should be mostly self-contained
  */
 public class StreamsAssignmentInterface {
@@ -105,8 +105,7 @@ public class StreamsAssignmentInterface {
     public final AtomicReference<Assignment> targetAssignment = new AtomicReference<>();
 
     /**
-     * List of partitions available on each host.
-     * Updated by the streams protocol client.
+     * List of partitions available on each host. Updated by the streams protocol client.
      */
     public final AtomicReference<Map<HostInfo, List<TopicPartition>>> partitionsByHost = new AtomicReference<>();
 
@@ -194,6 +193,7 @@ public class StreamsAssignmentInterface {
     }
 
     public static class TaskId {
+
         public final String subtopologyId;
         public final int partitionId;
 
@@ -226,10 +226,10 @@ public class StreamsAssignmentInterface {
         public final Map<String, TopicInfo> stateChangelogTopics;
         public final Map<String, TopicInfo> repartitionSourceTopics;
 
-       public Subtopology(final Set<String> sourceTopics,
-                          final Set<String> sinkTopics,
-                          final Map<String, TopicInfo> repartitionSourceTopics,
-                          final Map<String, TopicInfo> stateChangelogTopics) {
+        public Subtopology(final Set<String> sourceTopics,
+                           final Set<String> sinkTopics,
+                           final Map<String, TopicInfo> repartitionSourceTopics,
+                           final Map<String, TopicInfo> stateChangelogTopics) {
             this.sourceTopics = sourceTopics;
             this.sinkTopics = sinkTopics;
             this.stateChangelogTopics = stateChangelogTopics;
@@ -253,7 +253,7 @@ public class StreamsAssignmentInterface {
                                       Map<String, Subtopology> subtopologyMap,
                                       Map<String, Object> assignmentConfiguration,
                                       Map<String, String> clientTags
-                                      ) {
+    ) {
         this.processID = processID;
         this.endPoint = endPoint;
         this.assignor = assignor;
