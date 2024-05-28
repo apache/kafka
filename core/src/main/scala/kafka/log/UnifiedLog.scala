@@ -1919,8 +1919,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    */
   private[log] def getFirstBatchTimestampForSegments(segments: util.Collection[LogSegment]): util.Collection[java.lang.Long] = {
     segments.asScala
-      .map(_.getFirstBatchTimestamp)
-      .map(java.lang.Long.valueOf)
+      .map(segment => java.lang.Long.valueOf(segment.getFirstBatchTimestamp))
       .toSeq.asJava
   }
 
