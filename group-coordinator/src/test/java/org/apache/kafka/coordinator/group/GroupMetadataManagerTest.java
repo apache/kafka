@@ -6924,13 +6924,17 @@ public class GroupMetadataManagerTest {
             .build();
 
         // SyncGroup with the provided Protocol Type and Name
-        assertThrows(GroupIdNotFoundException.class, () -> context.sendClassicGroupSync(
+        GroupMetadataManagerTestContext.SyncResult syncResult = context.sendClassicGroupSync(
             new GroupMetadataManagerTestContext.SyncGroupRequestBuilder()
                 .withGroupId("group-id")
                 .withMemberId("member-id")
                 .withGenerationId(1)
                 .build()
-        ));
+        );
+
+        assertTrue(syncResult.records.isEmpty());
+        assertTrue(syncResult.syncFuture.isDone());
+        assertEquals(Errors.UNKNOWN_MEMBER_ID.code(), syncResult.syncFuture.get().errorCode());
     }
 
     @Test
@@ -7469,7 +7473,7 @@ public class GroupMetadataManagerTest {
             .setMemberId("member-id")
             .setGenerationId(-1);
 
-        assertThrows(GroupIdNotFoundException.class, () -> context.sendClassicGroupHeartbeat(heartbeatRequest));
+        assertThrows(UnknownMemberIdException.class, () -> context.sendClassicGroupHeartbeat(heartbeatRequest));
     }
 
     @Test
@@ -8691,7 +8695,7 @@ public class GroupMetadataManagerTest {
             .build();
         context.createClassicGroup("group-id");
 
-        assertThrows(GroupIdNotFoundException.class, () -> context.sendClassicGroupLeave(
+        assertThrows(UnknownMemberIdException.class, () -> context.sendClassicGroupLeave(
             new LeaveGroupRequestData()
                 .setGroupId("invalid-group-id")
         ));
@@ -8702,7 +8706,7 @@ public class GroupMetadataManagerTest {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
 
-        assertThrows(GroupIdNotFoundException.class, () -> context.sendClassicGroupLeave(
+        assertThrows(UnknownMemberIdException.class, () -> context.sendClassicGroupLeave(
             new LeaveGroupRequestData()
                 .setGroupId("unknown-group-id")
                 .setMembers(Collections.singletonList(
@@ -8927,7 +8931,7 @@ public class GroupMetadataManagerTest {
             "follower-instance-id"
         );
 
-        assertThrows(GroupIdNotFoundException.class, () -> context.sendClassicGroupLeave(
+        assertThrows(UnknownMemberIdException.class, () -> context.sendClassicGroupLeave(
             new LeaveGroupRequestData()
                 .setGroupId("invalid-group-id") // Invalid group id
                 .setMembers(

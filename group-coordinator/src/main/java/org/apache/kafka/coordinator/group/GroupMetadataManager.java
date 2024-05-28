@@ -3984,8 +3984,15 @@ public class GroupMetadataManager {
         RequestContext context,
         SyncGroupRequestData request,
         CompletableFuture<SyncGroupResponseData> responseFuture
-    ) throws UnknownMemberIdException, GroupIdNotFoundException {
-        Group group = group(request.groupId());
+    ) throws UnknownMemberIdException {
+        Group group;
+        try {
+            group = group(request.groupId());
+        } catch (GroupIdNotFoundException e) {
+            responseFuture.complete(new SyncGroupResponseData()
+                .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code()));
+            return EMPTY_RESULT;
+        }
 
         if (group.isEmpty()) {
             responseFuture.complete(new SyncGroupResponseData()
@@ -4249,7 +4256,14 @@ public class GroupMetadataManager {
         RequestContext context,
         HeartbeatRequestData request
     ) {
-        Group group = group(request.groupId());
+        Group group;
+        try {
+            group = group(request.groupId());
+        } catch (GroupIdNotFoundException e) {
+            throw new UnknownMemberIdException(
+                String.format("Group %s not found.", request.groupId())
+            );
+        }
 
         if (group.type() == CLASSIC) {
             return classicGroupHeartbeatToClassicGroup((ClassicGroup) group, context, request);
@@ -4424,8 +4438,13 @@ public class GroupMetadataManager {
     public CoordinatorResult<LeaveGroupResponseData, CoordinatorRecord> classicGroupLeave(
         RequestContext context,
         LeaveGroupRequestData request
-    ) throws UnknownMemberIdException, GroupIdNotFoundException {
-        Group group = group(request.groupId());
+    ) throws UnknownMemberIdException {
+        Group group;
+        try {
+            group = group(request.groupId());
+        } catch (GroupIdNotFoundException e) {
+            throw new UnknownMemberIdException(String.format("Group %s not found.", request.groupId()));
+        }
 
         if (group.type() == CLASSIC) {
             return classicGroupLeaveToClassicGroup((ClassicGroup) group, context, request);
@@ -4536,7 +4555,7 @@ public class GroupMetadataManager {
         ClassicGroup group,
         RequestContext context,
         LeaveGroupRequestData request
-    ) throws UnknownMemberIdException, GroupIdNotFoundException {
+    ) throws UnknownMemberIdException {
         if (group.isInState(DEAD)) {
             return new CoordinatorResult<>(
                 Collections.emptyList(),
