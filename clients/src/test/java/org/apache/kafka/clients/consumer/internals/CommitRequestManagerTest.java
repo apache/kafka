@@ -168,7 +168,6 @@ public class CommitRequestManagerTest {
                 ", memberId=" + memberInfo.memberId.orElse("undefined") +
                 ", memberEpoch=" + (memberInfo.memberEpoch.isPresent() ? memberInfo.memberEpoch : "undefined");
 
-        System.out.println(target);
         assertEquals(target, offsetFetchRequestState.toStringBase());
     }
 
