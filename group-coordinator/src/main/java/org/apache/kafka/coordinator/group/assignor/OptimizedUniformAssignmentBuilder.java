@@ -42,7 +42,7 @@ import java.util.Set;
  * The assignment builder prioritizes the properties in the following order:
  *      Balance > Stickiness.
  */
-public class UniformHomogenousAssignmentBuilder {
+public class OptimizedUniformAssignmentBuilder {
     private static final Class<?> UNMODIFIALBE_MAP_CLASS = Collections.unmodifiableMap(new HashMap<>()).getClass();
     private static final Class<?> EMPTY_MAP_CLASS = Collections.emptyMap().getClass();
 
@@ -98,7 +98,7 @@ public class UniformHomogenousAssignmentBuilder {
      */
     private int remainingMembersToGetAnExtraPartition;
 
-    UniformHomogenousAssignmentBuilder(GroupSpec groupSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
+    OptimizedUniformAssignmentBuilder(GroupSpec groupSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
         this.groupSpec = groupSpec;
         this.subscribedTopicDescriber = subscribedTopicDescriber;
         this.subscribedTopicIds = new HashSet<>(groupSpec.members().values().iterator().next().subscribedTopicIds());
