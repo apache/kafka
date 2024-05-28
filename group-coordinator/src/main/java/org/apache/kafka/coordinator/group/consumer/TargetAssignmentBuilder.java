@@ -18,7 +18,6 @@ package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.CoordinatorRecord;
-import org.apache.kafka.coordinator.group.GroupMember;
 import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
 import org.apache.kafka.coordinator.group.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
@@ -26,6 +25,7 @@ import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignorException;
+import org.apache.kafka.coordinator.group.modern.ModernGroupMember;
 import org.apache.kafka.image.TopicsImage;
 
 import java.util.ArrayList;
@@ -51,7 +51,7 @@ import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTar
  * is deleted as part of the member deletion process. In other words, this class
  * does not yield a tombstone for removed members.
  */
-public class TargetAssignmentBuilder<T extends GroupMember> {
+public class TargetAssignmentBuilder<T extends ModernGroupMember> {
 
     /**
      * The assignment result returned by {{@link TargetAssignmentBuilder#build()}}.
@@ -395,7 +395,7 @@ public class TargetAssignmentBuilder<T extends GroupMember> {
         }
     }
 
-    static <T extends GroupMember> AssignmentMemberSpec createAssignmentMemberSpec(
+    static <T extends ModernGroupMember> AssignmentMemberSpec createAssignmentMemberSpec(
         T member,
         Assignment targetAssignment,
         TopicsImage topicsImage

@@ -14,13 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group;
+package org.apache.kafka.coordinator.group.modern;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.coordinator.group.Group;
+import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
+import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
+import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.consumer.Assignment;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
@@ -46,7 +50,7 @@ import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOG
 /**
  * The abstract group provides definitions for the consumer and share group.
  */
-public abstract class AbstractGroup<T extends GroupMember> implements Group {
+public abstract class AbstractModernGroup<T extends ModernGroupMember> implements Group {
 
     public static class DeadlineAndEpoch {
         static final DeadlineAndEpoch EMPTY = new DeadlineAndEpoch(0L, 0);
@@ -135,7 +139,7 @@ public abstract class AbstractGroup<T extends GroupMember> implements Group {
      */
     protected DeadlineAndEpoch metadataRefreshDeadline = DeadlineAndEpoch.EMPTY;
 
-    protected AbstractGroup(
+    protected AbstractModernGroup(
         SnapshotRegistry snapshotRegistry,
         String groupId
     ) {
@@ -529,7 +533,7 @@ public abstract class AbstractGroup<T extends GroupMember> implements Group {
         // the fetch request is accepted.
         if (memberId == null && memberEpoch < 0) return;
 
-        final GroupMember member = members.get(memberId, lastCommittedOffset);
+        final ModernGroupMember member = members.get(memberId, lastCommittedOffset);
         if (member == null) {
             throw new UnknownMemberIdException(String.format("Member %s is not a member of group %s.",
                 memberId, groupId));
@@ -577,8 +581,8 @@ public abstract class AbstractGroup<T extends GroupMember> implements Group {
      * @param newMember The new member.
      */
     protected void maybeUpdateSubscribedTopicNamesAndGroupSubscriptionType(
-        GroupMember oldMember,
-        GroupMember newMember
+        ModernGroupMember oldMember,
+        ModernGroupMember newMember
     ) {
         maybeUpdateSubscribedTopicNames(subscribedTopicNames, oldMember, newMember);
         subscriptionType.set(subscriptionType(subscribedTopicNames, members.size()));
@@ -593,8 +597,8 @@ public abstract class AbstractGroup<T extends GroupMember> implements Group {
      */
     private static void maybeUpdateSubscribedTopicNames(
         Map<String, Integer> subscribedTopicCount,
-        GroupMember oldMember,
-        GroupMember newMember
+        ModernGroupMember oldMember,
+        ModernGroupMember newMember
     ) {
         if (oldMember != null) {
             oldMember.subscribedTopicNames().forEach(topicName ->
@@ -618,8 +622,8 @@ public abstract class AbstractGroup<T extends GroupMember> implements Group {
      * @return Copy of the map of topics to the count of number of subscribers.
      */
     public Map<String, Integer> computeSubscribedTopicNames(
-        GroupMember oldMember,
-        GroupMember newMember
+        ModernGroupMember oldMember,
+        ModernGroupMember newMember
     ) {
         Map<String, Integer> subscribedTopicNames = new HashMap<>(this.subscribedTopicNames);
         maybeUpdateSubscribedTopicNames(

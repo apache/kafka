@@ -19,10 +19,10 @@ package org.apache.kafka.coordinator.group.consumer;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
-import org.apache.kafka.coordinator.group.GroupMember;
-import org.apache.kafka.coordinator.group.common.MemberState;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
+import org.apache.kafka.coordinator.group.modern.ModernGroupMember;
+import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 
@@ -41,7 +41,7 @@ import java.util.Set;
  * within a consumer group. This class is immutable and is fully backed
  * by records stored in the __consumer_offsets topic.
  */
-public class ConsumerGroupMember extends GroupMember {
+public class ConsumerGroupMember extends ModernGroupMember {
 
     /**
      * A builder that facilitates the creation of a new member or the update of

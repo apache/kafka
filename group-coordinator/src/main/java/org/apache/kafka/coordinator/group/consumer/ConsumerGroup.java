@@ -24,15 +24,15 @@ import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.coordinator.group.AbstractGroup;
-import org.apache.kafka.coordinator.group.GroupMember;
 import org.apache.kafka.coordinator.group.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.CoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
-import org.apache.kafka.coordinator.group.common.MemberState;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
+import org.apache.kafka.coordinator.group.modern.AbstractModernGroup;
+import org.apache.kafka.coordinator.group.modern.MemberState;
+import org.apache.kafka.coordinator.group.modern.ModernGroupMember;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -60,7 +60,7 @@ import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.Consumer
  * A Consumer Group. All the metadata in this class are backed by
  * records in the __consumer_offsets partitions.
  */
-public class ConsumerGroup extends AbstractGroup<ConsumerGroupMember> {
+public class ConsumerGroup extends AbstractModernGroup<ConsumerGroupMember> {
 
     public enum ConsumerGroupState {
         EMPTY("Empty"),
@@ -391,7 +391,7 @@ public class ConsumerGroup extends AbstractGroup<ConsumerGroupMember> {
         } else if (groupEpoch.get() > targetAssignmentEpoch.get()) {
             newState = ASSIGNING;
         } else {
-            for (GroupMember member : members.values()) {
+            for (ModernGroupMember member : members.values()) {
                 if (!member.isReconciledTo(targetAssignmentEpoch.get())) {
                     newState = RECONCILING;
                     break;

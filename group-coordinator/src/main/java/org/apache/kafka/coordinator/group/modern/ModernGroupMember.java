@@ -14,10 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group;
+package org.apache.kafka.coordinator.group.modern;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.group.common.MemberState;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 
 import java.util.Collections;
@@ -30,7 +29,7 @@ import java.util.stream.Collectors;
 /**
  * Abstract member common for group members.
  */
-public abstract class GroupMember {
+public abstract class ModernGroupMember {
 
     /**
      * The member id.
@@ -87,7 +86,7 @@ public abstract class GroupMember {
      */
     protected Map<Uuid, Set<Integer>> assignedPartitions;
 
-    protected GroupMember(
+    protected ModernGroupMember(
         String memberId,
         int memberEpoch,
         int previousMemberEpoch,
@@ -201,8 +200,8 @@ public abstract class GroupMember {
      * @return True of the two provided members have different assigned partitions.
      */
     public static boolean hasAssignedPartitionsChanged(
-        GroupMember member1,
-        GroupMember member2
+        ModernGroupMember member1,
+        ModernGroupMember member2
     ) {
         return !member1.assignedPartitions().equals(member2.assignedPartitions());
     }
