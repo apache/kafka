@@ -934,10 +934,10 @@ public class StreamsConfig extends AbstractConfig {
                     Importance.MEDIUM,
                     DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_DOC)
             .define(PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
-                Type.CLASS,
-                ProcessingLogAndFailExceptionHandler.class.getName(),
-                Importance.MEDIUM,
-                PROCESSING_EXCEPTION_HANDLER_CLASS_DOC)
+                    Type.CLASS,
+                    ProcessingLogAndFailExceptionHandler.class.getName(),
+                    Importance.MEDIUM,
+                    PROCESSING_EXCEPTION_HANDLER_CLASS_DOC)
             .define(DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
                     Type.CLASS,
                     FailOnInvalidTimestamp.class.getName(),
@@ -1927,7 +1927,6 @@ public class StreamsConfig extends AbstractConfig {
         return getConfiguredInstance(DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG, ProductionExceptionHandler.class);
     }
 
-    @SuppressWarnings("WeakerAccess")
     public ProcessingExceptionHandler processingExceptionHandler() {
         return getConfiguredInstance(PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, ProcessingExceptionHandler.class);
     }
