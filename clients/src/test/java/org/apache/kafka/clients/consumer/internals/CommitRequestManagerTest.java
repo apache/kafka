@@ -750,7 +750,6 @@ public class CommitRequestManagerTest {
             new TopicPartition("topic", 1),
             new OffsetAndMetadata(0));
 
-        // Send sync offset commit request that fails with retriable error.
         // Send sync offset commit request.
         Timer timer = time.timer(retryBackoffMs * 2);
         CompletableFuture<Void> commitResult = commitRequestManager.commitSync(offsets, timer);
