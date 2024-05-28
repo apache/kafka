@@ -30,7 +30,7 @@ public interface ProcessingExceptionHandler extends Configurable {
      * @param record record where the exception occurred
      * @param exception the actual exception
      */
-    ProcessingHandlerResponse handle(ErrorHandlerContext context, Record<?, ?> record, Exception exception);
+    ProcessingHandlerResponse handle(final ErrorHandlerContext context, final Record<?, ?> record, final Exception exception);
 
     enum ProcessingHandlerResponse {
         /* continue with processing */

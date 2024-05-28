@@ -42,18 +42,18 @@ public interface ErrorHandlerContext {
     String topic();
 
     /**
-     * Return the partition id of the current input record; could be {@code -1} if it is not
+     * Return the partition ID of the current input record; could be {@code -1} if it is not
      * available.
      *
      * <p> For example, if this method is invoked within a {@link Punctuator#punctuate(long)
      * punctuation callback}, or while processing a record that was forwarded by a punctuation
-     * callback, the record won't have an associated partition id.
+     * callback, the record won't have an associated partition ID.
      * Another example is
      * {@link org.apache.kafka.streams.kstream.KTable#transformValues(ValueTransformerWithKeySupplier, String...)}
-     * (and siblings), that do not always guarantee to provide a valid partition id, as they might be
+     * (and siblings), that do not always guarantee to provide a valid partition ID, as they might be
      * executed "out-of-band" due to some internal optimizations applied by the Kafka Streams DSL.
      *
-     * @return the partition id
+     * @return the partition ID
      */
     int partition();
 
@@ -94,7 +94,7 @@ public interface ErrorHandlerContext {
      *
      * <p> If this method is invoked within a {@link Punctuator#punctuate(long)
      * punctuation callback}, or while processing a record that was forwarded by a punctuation
-     * callback, it will return null.
+     * callback, it will return {@code null}.
      *
      * <p> If this method is invoked in a sub-topology due to a repartition, the returned key would be one sent
      * to the repartition topic.
@@ -108,7 +108,7 @@ public interface ErrorHandlerContext {
      *
      * <p> If this method is invoked within a {@link Punctuator#punctuate(long)
      * punctuation callback}, or while processing a record that was forwarded by a punctuation
-     * callback, it will return null.
+     * callback, it will return {@code null}.
      *
      * <p> If this method is invoked in a sub-topology due to a repartition, the returned value would be one sent
      * to the repartition topic.
@@ -118,16 +118,16 @@ public interface ErrorHandlerContext {
     byte[] sourceRawValue();
 
     /**
-     * Return the current processor node id.
+     * Return the current processor node ID.
      *
-     * @return the processor node id
+     * @return the processor node ID
      */
     String processorNodeId();
 
     /**
-     * Return the task id.
+     * Return the task ID.
      *
-     * @return the task id
+     * @return the task ID
      */
     TaskId taskId();
 }
