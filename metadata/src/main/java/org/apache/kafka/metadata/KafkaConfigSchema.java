@@ -246,6 +246,11 @@ public class KafkaConfigSchema {
             configKey.documentation);
     }
 
+    /**
+     * OrderedConfigResolver helps to find the configs in the order of the list config maps.
+     * One thing to notice that, when calling containsKey, if a config contains a null value entry,
+     * it will return false as null value means the config value should be ignored.
+     **/
     public static class OrderedConfigResolver {
         List<Map<String, ?>> configs;
         public OrderedConfigResolver(List<Map<String, ?>> maps) {
@@ -258,7 +263,7 @@ public class KafkaConfigSchema {
         }
         public boolean containsKey(String key) {
             for (Map<String, ?> config : configs) {
-                if (config.containsKey(key)) return true;
+                if (config.containsKey(key)) return config.get(key) != null;
             }
             return false;
         }

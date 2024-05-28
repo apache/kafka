@@ -332,7 +332,7 @@ public class ConfigurationControlManager {
 
     void maybeTriggerPartitionUpdateOnMinIsrChange(List<ApiMessageAndVersion> records) {
         List<ConfigRecord> minIsrRecords = new ArrayList<>();
-        Map<String, String> topicMap = new HashMap<>();
+        Map<String, String> topicToMinIsrValueMap = new HashMap<>();
         Map<String, String> configRemovedTopicMap = new HashMap<>();
         records.forEach(record -> {
             if (MetadataRecordType.fromId(record.message().apiKey()) == MetadataRecordType.CONFIG_RECORD) {
@@ -340,7 +340,7 @@ public class ConfigurationControlManager {
                 if (configRecord.name().equals(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG)) {
                     minIsrRecords.add(configRecord);
                     if (Type.forId(configRecord.resourceType()) == Type.TOPIC) {
-                        if (configRecord.value() == null) topicMap.put(configRecord.resourceName(), configRecord.value());
+                        if (configRecord.value() != null) topicToMinIsrValueMap.put(configRecord.resourceName(), configRecord.value());
                         else configRemovedTopicMap.put(configRecord.resourceName(), configRecord.value());
                     }
                 }
@@ -348,26 +348,32 @@ public class ConfigurationControlManager {
         });
 
         if (minIsrRecords.isEmpty()) return;
-        if (topicMap.size() == minIsrRecords.size()) {
+        if (topicToMinIsrValueMap.size() == minIsrRecords.size()) {
             // If all the min isr config updates are on the topic level, we can trigger a simpler update just on the
             // updated topics.
             records.addAll(minIsrConfigUpdatePartitionHandler.addRecordsForMinIsrUpdate(
-                new ArrayList<>(topicMap.keySet()),
-                topicName -> topicMap.get(topicName))
+                new ArrayList<>(topicToMinIsrValueMap.keySet()),
+                topicName -> topicToMinIsrValueMap.get(topicName))
             );
             return;
         }
 
         // Because it may require multiple layer look up for the min ISR config value. Build a config data copy and apply
         // the config updates to it. Use this config copy for the min ISR look up.
-        Map<ConfigResource, TimelineHashMap<String, String>> pendingConfigData = new HashMap<>();
-        SnapshotRegistry localSnapshotRegistry = new SnapshotRegistry(new LogContext("dummy-config-update"));
+        Map<ConfigResource, Map<String, String>> pendingConfigData = new HashMap<>();
+
         for (ConfigRecord record : minIsrRecords) {
-            replayInternal(record, pendingConfigData, localSnapshotRegistry);
+            replayForPendingConfig(record, pendingConfigData);
+        }
+
+        ArrayList<String> topicList = new ArrayList<>();
+        // If all the updates are on the Topic level, we can avoid perform a full scan of the partitions.
+        if (configRemovedTopicMap.size() + topicToMinIsrValueMap.size() == minIsrRecords.size()) {
+            topicList.addAll(configRemovedTopicMap.keySet());
+            topicList.addAll(topicToMinIsrValueMap.keySet());
         }
         records.addAll(minIsrConfigUpdatePartitionHandler.addRecordsForMinIsrUpdate(
-            configRemovedTopicMap.size() == minIsrRecords.size() ?
-                new ArrayList<>(configRemovedTopicMap.keySet()) : Collections.emptyList(),
+            topicList,
             topicName -> getTopicConfigWithPendingChange(topicName, TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, pendingConfigData))
         );
     }
@@ -466,9 +472,21 @@ public class ConfigurationControlManager {
      * @param record            The ConfigRecord.
      */
     public void replay(ConfigRecord record) {
-        replayInternal(record, configData, snapshotRegistry);
         Type type = Type.forId(record.resourceType());
         ConfigResource configResource = new ConfigResource(type, record.resourceName());
+        TimelineHashMap<String, String> configs = configData.get(configResource);
+        if (configs == null) {
+            configs = new TimelineHashMap<>(snapshotRegistry, 0);
+            configData.put(configResource, configs);
+        }
+        if (record.value() == null) {
+            configs.remove(record.name());
+        } else {
+            configs.put(record.name(), record.value());
+        }
+        if (configs.isEmpty()) {
+            configData.remove(configResource);
+        }
         if (configSchema.isSensitive(record)) {
             log.info("Replayed ConfigRecord for {} which set configuration {} to {}",
                     configResource, record.name(), Password.HIDDEN);
@@ -479,26 +497,26 @@ public class ConfigurationControlManager {
     }
 
     /**
-     * Apply a configuration record to the given config data.
+     * Apply a configuration record to the given config data. Note that, it will store null for the config to be removed.
      *
      * @param record                 The ConfigRecord.
      * @param localConfigData        The config data is going to be updated.
-     * @param localSnapshotRegistry  The snapshot registry to use when adding configs.
      */
-    public void replayInternal(
+    public void replayForPendingConfig(
         ConfigRecord record,
-        Map<ConfigResource, TimelineHashMap<String, String>> localConfigData,
-        SnapshotRegistry localSnapshotRegistry
+        Map<ConfigResource, Map<String, String>> localConfigData
     ) {
         Type type = Type.forId(record.resourceType());
         ConfigResource configResource = new ConfigResource(type, record.resourceName());
-        TimelineHashMap<String, String> configs = localConfigData.get(configResource);
+        Map<String, String> configs = localConfigData.get(configResource);
         if (configs == null) {
-            configs = new TimelineHashMap<>(localSnapshotRegistry, 0);
+            configs = new HashMap<>();
             localConfigData.put(configResource, configs);
         }
+
+        // If the record removes a config, we keep an empty value here to indicate the value is removed.
         if (record.value() == null) {
-            configs.remove(record.name());
+            configs.put(record.name(), null);
         } else {
             configs.put(record.name(), record.value());
         }
@@ -525,7 +543,15 @@ public class ConfigurationControlManager {
      * @param configKey            The key for the config.
      */
     String getTopicConfig(String topicName, String configKey) throws NoSuchElementException {
-        return getTopicConfigWithPendingChange(topicName, configKey, configData);
+        Map<String, String> map = configData.get(new ConfigResource(Type.TOPIC, topicName));
+        if (map == null || !map.containsKey(configKey)) {
+            Map<String, ConfigEntry> effectiveConfigMap = computeEffectiveTopicConfigs(Collections.emptyMap());
+            if (!effectiveConfigMap.containsKey(configKey)) {
+                return null;
+            }
+            return effectiveConfigMap.get(configKey).value();
+        }
+        return map.get(configKey);
     }
 
     /**
@@ -541,23 +567,22 @@ public class ConfigurationControlManager {
     String getTopicConfigWithPendingChange(
         String topicName,
         String configKey,
-        Map<ConfigResource, TimelineHashMap<String, String>> pendingConfigData
+        Map<ConfigResource, Map<String, String>> pendingConfigData
     ) throws NoSuchElementException {
-        // First check if there is any pending changes on the topic level.
-        Map<String, String> map = pendingConfigData.get(new ConfigResource(Type.TOPIC, topicName));
-        if (map != null && map.containsKey(configKey)) {
-            return map.get(configKey);
-        }
+        Map<String, String> pendingTopicConfigs =
+            pendingConfigData.getOrDefault(new ConfigResource(Type.TOPIC, topicName), Collections.emptyMap());
+        Map<String, String> currentTopicConfigs = configData.get(new ConfigResource(Type.TOPIC, topicName));
+        if (currentTopicConfigs == null) currentTopicConfigs = Collections.emptyMap();
+        OrderedConfigResolver configResolver = new OrderedConfigResolver(Arrays.asList(pendingTopicConfigs, currentTopicConfigs));
 
-        map = configData.get(new ConfigResource(Type.TOPIC, topicName));
-        if (map == null || !map.containsKey(configKey)) {
+        if (!configResolver.containsKey(configKey)) {
             Map<String, ConfigEntry> effectiveConfigMap = computeEffectiveTopicConfigsWithPendingChange(pendingConfigData);
             if (!effectiveConfigMap.containsKey(configKey)) {
                 return null;
             }
             return effectiveConfigMap.get(configKey).value();
         }
-        return map.get(configKey);
+        return (String) configResolver.get(configKey);
     }
 
     public Map<ConfigResource, ResultOrError<Map<String, String>>> describeConfigs(
@@ -606,7 +631,7 @@ public class ConfigurationControlManager {
     }
 
     Map<String, ConfigEntry> computeEffectiveTopicConfigsWithPendingChange(
-        Map<ConfigResource, TimelineHashMap<String, String>> pendingConfigData
+        Map<ConfigResource, Map<String, String>> pendingConfigData
     ) {
         Map<String, String> pendingClusterConfig =
             pendingConfigData.containsKey(DEFAULT_NODE) ? pendingConfigData.get(DEFAULT_NODE) : Collections.emptyMap();
