@@ -880,6 +880,10 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         abstract void removeRequest();
+
+        protected Optional<Long> expirationTimeMs() {
+            return expirationTimeMs;
+        }
     }
 
     class OffsetFetchRequestState extends RetriableRequestState {
@@ -1111,6 +1115,9 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         @Override
         public String toStringBase() {
             return super.toStringBase() +
+                    ", memberInfo=" + memberInfo +
+                    ", expirationTimeMs=" + (expirationTimeMs().isPresent() ? expirationTimeMs() : "undefined") +
+                    ", isExpired=" + isExpired +
                     ", requestedPartitions=" + requestedPartitions +
                     ", future=" + future +
                     ", memberId=" + memberInfo.memberId.orElse("undefined") +

@@ -128,6 +128,9 @@ public class CommitRequestManagerTest {
 
     @Test
     public void testOffsetFetchRequestStateToStringBase() {
+        final long retryBackoffMs = 10;
+        final long retryBackoffMaxMs = 100;
+        final long expirationTimeMs = 1000;
         ConsumerConfig config = mock(ConsumerConfig.class);
         CommitRequestManager.MemberInfo memberInfo = mock(CommitRequestManager.MemberInfo.class);
         memberInfo.memberId = Optional.empty();
@@ -146,22 +149,26 @@ public class CommitRequestManagerTest {
 
         this.offsetFetchRequestState = commitRequestManager.new OffsetFetchRequestState(
                 mock(Set.class),
-                10, 100, 1000,
+                retryBackoffMs, retryBackoffMaxMs, expirationTimeMs,
                 memberInfo
         );
 
         this.requestState = new RequestState(
                 logContext,
                 "CommitRequestManager",
-                10,
-                100);
+                retryBackoffMs,
+                retryBackoffMaxMs);
 
         String target = requestState.toStringBase() +
+                ", memberInfo=" + memberInfo +
+                ", expirationTimeMs=" + (offsetFetchRequestState.expirationTimeMs().isPresent() ? offsetFetchRequestState.expirationTimeMs() : "undefined") +
+                ", isExpired=" + offsetFetchRequestState.isExpired +
                 ", requestedPartitions=" + offsetFetchRequestState.requestedPartitions +
                 ", future=" + offsetFetchRequestState.future() +
-                ", memberId=" + offsetFetchRequestState.memberInfo.memberId.orElse("undefined") +
-                ", memberEpoch=" + (offsetFetchRequestState.memberInfo.memberEpoch.isPresent() ? offsetFetchRequestState.memberInfo.memberEpoch : "undefined");
+                ", memberId=" + memberInfo.memberId.orElse("undefined") +
+                ", memberEpoch=" + (memberInfo.memberEpoch.isPresent() ? memberInfo.memberEpoch : "undefined");
 
+        System.out.println(target);
         assertEquals(target, offsetFetchRequestState.toStringBase());
     }
 
