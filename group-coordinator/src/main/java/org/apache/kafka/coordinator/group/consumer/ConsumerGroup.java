@@ -28,6 +28,7 @@ import org.apache.kafka.coordinator.group.AbstractGroup;
 import org.apache.kafka.coordinator.group.GroupMember;
 import org.apache.kafka.coordinator.group.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.CoordinatorRecordHelpers;
+import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.common.MemberState;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
@@ -429,12 +430,12 @@ public class ConsumerGroup extends AbstractGroup<ConsumerGroupMember> {
     ) {
         if (oldMember != null) {
             oldMember.serverAssignorName().ifPresent(name ->
-                serverAssignorCount.compute(name, ConsumerGroup::decValue)
+                serverAssignorCount.compute(name, Utils::decValue)
             );
         }
         if (newMember != null) {
             newMember.serverAssignorName().ifPresent(name ->
-                serverAssignorCount.compute(name, ConsumerGroup::incValue)
+                serverAssignorCount.compute(name, Utils::incValue)
             );
         }
     }
@@ -472,14 +473,14 @@ public class ConsumerGroup extends AbstractGroup<ConsumerGroupMember> {
         if (oldMember != null) {
             oldMember.supportedClassicProtocols().ifPresent(protocols ->
                 protocols.forEach(protocol ->
-                    classicProtocolMembersSupportedProtocols.compute(protocol.name(), ConsumerGroup::decValue)
+                    classicProtocolMembersSupportedProtocols.compute(protocol.name(), Utils::decValue)
                 )
             );
         }
         if (newMember != null) {
             newMember.supportedClassicProtocols().ifPresent(protocols ->
                 protocols.forEach(protocol ->
-                    classicProtocolMembersSupportedProtocols.compute(protocol.name(), ConsumerGroup::incValue)
+                    classicProtocolMembersSupportedProtocols.compute(protocol.name(), Utils::incValue)
                 )
             );
         }

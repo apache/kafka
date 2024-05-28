@@ -23,7 +23,6 @@ import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.consumer.Assignment;
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
 import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.TopicImage;
@@ -599,13 +598,13 @@ public abstract class AbstractGroup<T extends GroupMember> implements Group {
     ) {
         if (oldMember != null) {
             oldMember.subscribedTopicNames().forEach(topicName ->
-                subscribedTopicCount.compute(topicName, ConsumerGroup::decValue)
+                subscribedTopicCount.compute(topicName, Utils::decValue)
             );
         }
 
         if (newMember != null) {
             newMember.subscribedTopicNames().forEach(topicName ->
-                subscribedTopicCount.compute(topicName, ConsumerGroup::incValue)
+                subscribedTopicCount.compute(topicName, Utils::incValue)
             );
         }
     }
@@ -653,22 +652,6 @@ public abstract class AbstractGroup<T extends GroupMember> implements Group {
             }
         }
         return HOMOGENEOUS;
-    }
-
-    /**
-     * Decrements value by 1; returns null when reaching zero. This helper is
-     * meant to be used with Map#compute.
-     */
-    protected static Integer decValue(String key, Integer value) {
-        if (value == null) return null;
-        return value == 1 ? null : value - 1;
-    }
-
-    /**
-     * Increments value by 1; This helper is meant to be used with Map#compute.
-     */
-    protected static Integer incValue(String key, Integer value) {
-        return value == null ? 1 : value + 1;
     }
 
     /**

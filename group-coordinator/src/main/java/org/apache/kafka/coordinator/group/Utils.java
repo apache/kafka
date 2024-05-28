@@ -69,4 +69,20 @@ public class Utils {
         builder.append("]");
         return builder.toString();
     }
+
+    /**
+     * Decrements value by 1; returns null when reaching zero. This helper is
+     * meant to be used with Map#compute.
+     */
+    public static Integer decValue(String key, Integer value) {
+        if (value == null) return null;
+        return value == 1 ? null : value - 1;
+    }
+
+    /**
+     * Increments value by 1; This helper is meant to be used with Map#compute.
+     */
+    public static Integer incValue(String key, Integer value) {
+        return value == null ? 1 : value + 1;
+    }
 }
