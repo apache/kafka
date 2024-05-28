@@ -325,7 +325,7 @@ public class MeteredTimestampedKeyValueStore<K, V>
             this.valueAndTimestampDeserializer = valueAndTimestampDeserializer;
             this.startNs = time.nanoseconds();
             this.returnPlainValue = returnPlainValue;
-            numOpenIterators.incrementAndGet();
+            numOpenIterators.increment();
         }
 
         @Override
@@ -353,7 +353,7 @@ public class MeteredTimestampedKeyValueStore<K, V>
                 final long duration = time.nanoseconds() - startNs;
                 sensor.record(duration);
                 iteratorDurationSensor.record(duration);
-                numOpenIterators.decrementAndGet();
+                numOpenIterators.decrement();
             }
         }
 

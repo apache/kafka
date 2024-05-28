@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.storage.internals.log.LogFileUtils;
 
 import java.io.File;
+import java.io.FilenameFilter;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
@@ -156,8 +157,8 @@ public final class BrokerLocalStorage {
         return false;
     }
 
-    public void eraseStorage() throws IOException {
-        for (File file : Objects.requireNonNull(brokerStorageDirectory.listFiles())) {
+    public void eraseStorage(FilenameFilter filter) throws IOException {
+        for (File file : Objects.requireNonNull(brokerStorageDirectory.listFiles(filter))) {
             Utils.delete(file);
         }
     }
