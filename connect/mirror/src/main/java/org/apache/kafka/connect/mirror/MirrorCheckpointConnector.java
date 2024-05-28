@@ -111,11 +111,12 @@ public class MirrorCheckpointConnector extends SourceConnector {
     @Override
     public Config validate(Map<String, String> props) {
         List<ConfigValue> configValues = super.validate(props).configValues();
-        String emitCheckpointsValue = Optional.ofNullable(props.get(MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED)).orElse(Boolean.toString(MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED_DEFAULT));
-        String syncGroupOffsetsValue = Optional.ofNullable(props.get(MirrorCheckpointConfig.SYNC_GROUP_OFFSETS_ENABLED)).orElse(Boolean.toString(MirrorCheckpointConfig.SYNC_GROUP_OFFSETS_ENABLED_DEFAULT));
-        String emitOffsetSyncsValue = Optional.ofNullable(props.get(MirrorConnectorConfig.EMIT_OFFSET_SYNCS_ENABLED)).orElse(Boolean.toString(MirrorConnectorConfig.EMIT_OFFSET_SYNCS_ENABLED_DEFAULT));
+        MirrorCheckpointConfig config = new MirrorCheckpointConfig(props);
+        Boolean emitCheckpointsValue = config.getBoolean(MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED);
+        Boolean syncGroupOffsetsValue = config.getBoolean(MirrorCheckpointConfig.SYNC_GROUP_OFFSETS_ENABLED);
+        Boolean emitOffsetSyncsValue = config.getBoolean(MirrorConnectorConfig.EMIT_OFFSET_SYNCS_ENABLED);
 
-        if ("false".equals(emitCheckpointsValue) && "false".equals(syncGroupOffsetsValue)) {
+        if (!emitCheckpointsValue && !syncGroupOffsetsValue) {
             ConfigValue syncGroupOffsets = configValues.stream().filter(prop -> MirrorCheckpointConfig.SYNC_GROUP_OFFSETS_ENABLED.equals(prop.name()))
                     .findAny()
                     .orElseGet(() -> {
@@ -137,7 +138,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
             syncGroupOffsets.addErrorMessage(errorMessage);
             emitCheckpoints.addErrorMessage(errorMessage);
         }
-        if ("false".equals(emitOffsetSyncsValue) && ("true".equals(emitCheckpointsValue) || "true".equals(syncGroupOffsetsValue))) {
+        if (!emitOffsetSyncsValue && (emitCheckpointsValue || syncGroupOffsetsValue)) {
             ConfigValue emitOffsetSyncs = configValues.stream().filter(prop -> MirrorConnectorConfig.EMIT_OFFSET_SYNCS_ENABLED.equals(prop.name()))
                     .findAny()
                     .orElseGet(() -> {
