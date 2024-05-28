@@ -18,6 +18,7 @@
   "type": "response",
   "name": "DescribeQuorumResponse",
   // Version 1 adds LastFetchTimeStamp and LastCaughtUpTimestamp in ReplicaState (KIP-836).
+  // Version 2 adds ErrorMessage, Nodes, ErrorMessage in ParitionData, ReplicaDirectoryId in ReplicaState (KIP-853).
   "validVersions": "0-2",
   "flexibleVersions": "0+",
   "fields": [
@@ -50,13 +51,13 @@
         "mapKey": true, "entityType": "brokerId", "about": "The ID of the associated node" },
       { "name": "Listeners", "type": "[]Listener",
         "about": "The listeners of this controller", "versions": "0+", "fields": [
-        { "name": "Name", "type": "string", "versions": "0+", "mapKey": true,
+        { "name": "Name", "type": "string", "versions": "2+", "mapKey": true,
           "about": "The name of the endpoint" },
-        { "name": "Host", "type": "string", "versions": "0+",
+        { "name": "Host", "type": "string", "versions": "2+",
           "about": "The hostname" },
-        { "name": "Port", "type": "uint16", "versions": "0+",
+        { "name": "Port", "type": "uint16", "versions": "2+",
           "about": "The port" },
-        { "name": "SecurityProtocol", "type": "int16", "versions": "0+",
+        { "name": "SecurityProtocol", "type": "int16", "versions": "2+",
           "about": "The security protocol" }
       ]}
     ]}

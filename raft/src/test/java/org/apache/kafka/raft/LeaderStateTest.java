@@ -65,7 +65,7 @@ public class LeaderStateTest {
         return new LeaderState<>(
             time,
             localId.getKey(),
-            localId.getValue().voterKey().directoryId().orElse(null),
+            directoryId(localId),
             epoch,
             epochStartOffset,
             voters,
@@ -81,7 +81,7 @@ public class LeaderStateTest {
         assertThrows(NullPointerException.class, () -> new LeaderState<>(
             new MockTime(),
             localId.getKey(),
-            localId.getValue().voterKey().directoryId().orElse(null),
+            directoryId(localId),
             epoch,
             0,
             emptyMap(),
@@ -149,26 +149,26 @@ public class LeaderStateTest {
 
         // Node 1 falls behind
         assertFalse(state.updateLocalState(new LogOffsetMetadata(11L)));
-        assertFalse(state.updateReplicaState(node1.getKey(), node1.getValue().voterKey().directoryId().orElse(null), ++fetchTime, new LogOffsetMetadata(10L)));
+        assertFalse(state.updateReplicaState(node1.getKey(), directoryId(node1), ++fetchTime, new LogOffsetMetadata(10L)));
         assertEquals(currentTime, describeVoterState(state, localId.getKey(), currentTime).lastCaughtUpTimestamp());
         assertEquals(caughtUpTime, describeVoterState(state, node1.getKey(), currentTime).lastCaughtUpTimestamp());
 
         // Node 1 catches up to leader
-        assertTrue(state.updateReplicaState(node1.getKey(), node1.getValue().voterKey().directoryId().orElse(null), ++fetchTime, new LogOffsetMetadata(11L)));
+        assertTrue(state.updateReplicaState(node1.getKey(), directoryId(node1), ++fetchTime, new LogOffsetMetadata(11L)));
         caughtUpTime = fetchTime;
         assertEquals(currentTime, describeVoterState(state, localId.getKey(), currentTime).lastCaughtUpTimestamp());
         assertEquals(caughtUpTime, describeVoterState(state, node1.getKey(), currentTime).lastCaughtUpTimestamp());
 
         // Node 1 falls behind
         assertFalse(state.updateLocalState(new LogOffsetMetadata(100L)));
-        assertTrue(state.updateReplicaState(node1.getKey(), node1.getValue().voterKey().directoryId().orElse(null), ++fetchTime, new LogOffsetMetadata(50L)));
+        assertTrue(state.updateReplicaState(node1.getKey(), directoryId(node1), ++fetchTime, new LogOffsetMetadata(50L)));
         assertEquals(currentTime, describeVoterState(state, localId.getKey(), currentTime).lastCaughtUpTimestamp());
         assertEquals(caughtUpTime, describeVoterState(state, node1.getKey(), currentTime).lastCaughtUpTimestamp());
 
         // Node 1 catches up to the last fetch offset
         int prevFetchTime = fetchTime;
         assertFalse(state.updateLocalState(new LogOffsetMetadata(200L)));
-        assertTrue(state.updateReplicaState(node1.getKey(), node1.getValue().voterKey().directoryId().orElse(null), ++fetchTime, new LogOffsetMetadata(100L)));
+        assertTrue(state.updateReplicaState(node1.getKey(), directoryId(node1), ++fetchTime, new LogOffsetMetadata(100L)));
         caughtUpTime = prevFetchTime;
         assertEquals(currentTime, describeVoterState(state, localId.getKey(), currentTime).lastCaughtUpTimestamp());
         assertEquals(caughtUpTime, describeVoterState(state, node1.getKey(), currentTime).lastCaughtUpTimestamp());
@@ -176,9 +176,9 @@ public class LeaderStateTest {
         // Node2 has never caught up to leader
         assertEquals(-1L, describeVoterState(state, node2.getKey(), currentTime).lastCaughtUpTimestamp());
         assertFalse(state.updateLocalState(new LogOffsetMetadata(300L)));
-        assertTrue(state.updateReplicaState(node2.getKey(), node1.getValue().voterKey().directoryId().orElse(null), ++fetchTime, new LogOffsetMetadata(200L)));
+        assertTrue(state.updateReplicaState(node2.getKey(), directoryId(node1), ++fetchTime, new LogOffsetMetadata(200L)));
         assertEquals(-1L, describeVoterState(state, node2.getKey(), currentTime).lastCaughtUpTimestamp());
-        assertTrue(state.updateReplicaState(node2.getKey(), node1.getValue().voterKey().directoryId().orElse(null), ++fetchTime, new LogOffsetMetadata(250L)));
+        assertTrue(state.updateReplicaState(node2.getKey(), directoryId(node1), ++fetchTime, new LogOffsetMetadata(250L)));
         assertEquals(-1L, describeVoterState(state, node2.getKey(), currentTime).lastCaughtUpTimestamp());
     }
 
@@ -256,12 +256,12 @@ public class LeaderStateTest {
         assertFalse(state.updateLocalState(new LogOffsetMetadata(13L)));
         assertEquals(singleton(otherNodeId.getKey()), state.nonAcknowledgingVoters());
         assertEquals(Optional.empty(), state.highWatermark());
-        assertFalse(state.updateReplicaState(otherNodeId.getKey(), otherNodeId.getValue().voterKey().directoryId().orElse(null), 0, new LogOffsetMetadata(10L)));
+        assertFalse(state.updateReplicaState(otherNodeId.getKey(), directoryId(otherNodeId), 0, new LogOffsetMetadata(10L)));
         assertEquals(emptySet(), state.nonAcknowledgingVoters());
         assertEquals(Optional.empty(), state.highWatermark());
-        assertTrue(state.updateReplicaState(otherNodeId.getKey(), otherNodeId.getValue().voterKey().directoryId().orElse(null), 0, new LogOffsetMetadata(11L)));
+        assertTrue(state.updateReplicaState(otherNodeId.getKey(), directoryId(otherNodeId), 0, new LogOffsetMetadata(11L)));
         assertEquals(Optional.of(new LogOffsetMetadata(11L)), state.highWatermark());
-        assertTrue(state.updateReplicaState(otherNodeId.getKey(), otherNodeId.getValue().voterKey().directoryId().orElse(null), 0, new LogOffsetMetadata(13L)));
+        assertTrue(state.updateReplicaState(otherNodeId.getKey(), directoryId(otherNodeId), 0, new LogOffsetMetadata(13L)));
         assertEquals(Optional.of(new LogOffsetMetadata(13L)), state.highWatermark());
     }
 
@@ -273,19 +273,19 @@ public class LeaderStateTest {
         assertFalse(state.updateLocalState(new LogOffsetMetadata(15L)));
         assertEquals(mkSet(node1.getKey(), node2.getKey()), state.nonAcknowledgingVoters());
         assertEquals(Optional.empty(), state.highWatermark());
-        assertFalse(state.updateReplicaState(node1.getKey(), node1.getValue().voterKey().directoryId().orElse(null), 0, new LogOffsetMetadata(10L)));
+        assertFalse(state.updateReplicaState(node1.getKey(), directoryId(node1), 0, new LogOffsetMetadata(10L)));
         assertEquals(singleton(node2.getKey()), state.nonAcknowledgingVoters());
         assertEquals(Optional.empty(), state.highWatermark());
-        assertFalse(state.updateReplicaState(node2.getKey(), node2.getValue().voterKey().directoryId().orElse(null), 0, new LogOffsetMetadata(10L)));
+        assertFalse(state.updateReplicaState(node2.getKey(), directoryId(node2), 0, new LogOffsetMetadata(10L)));
         assertEquals(emptySet(), state.nonAcknowledgingVoters());
         assertEquals(Optional.empty(), state.highWatermark());
-        assertTrue(state.updateReplicaState(node2.getKey(), node2.getValue().voterKey().directoryId().orElse(null), 0, new LogOffsetMetadata(15L)));
+        assertTrue(state.updateReplicaState(node2.getKey(), directoryId(node2), 0, new LogOffsetMetadata(15L)));
         assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
         assertFalse(state.updateLocalState(new LogOffsetMetadata(20L)));
         assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
-        assertTrue(state.updateReplicaState(node1.getKey(), node1.getValue().voterKey().directoryId().orElse(null), 0, new LogOffsetMetadata(20L)));
+        assertTrue(state.updateReplicaState(node1.getKey(), directoryId(node1), 0, new LogOffsetMetadata(20L)));
         assertEquals(Optional.of(new LogOffsetMetadata(20L)), state.highWatermark());
-        assertFalse(state.updateReplicaState(node2.getKey(), node2.getValue().voterKey().directoryId().orElse(null), 0, new LogOffsetMetadata(20L)));
+        assertFalse(state.updateReplicaState(node2.getKey(), directoryId(node2), 0, new LogOffsetMetadata(20L)));
         assertEquals(Optional.of(new LogOffsetMetadata(20L)), state.highWatermark());
     }
 
@@ -295,12 +295,12 @@ public class LeaderStateTest {
         Entry<Integer, VoterSet.VoterNode> node1 = entry(1);
         LeaderState<?> state = newLeaderState(mkMap(localId, node1), 0L);
         state.updateLocalState(new LogOffsetMetadata(10L));
-        state.updateReplicaState(node1.getKey(), node1.getValue().voterKey().directoryId().orElse(null), time.milliseconds(), new LogOffsetMetadata(10L));
+        state.updateReplicaState(node1.getKey(), directoryId(node1), time.milliseconds(), new LogOffsetMetadata(10L));
         assertEquals(Optional.of(new LogOffsetMetadata(10L)), state.highWatermark());
 
         // Follower crashes and disk is lost. It fetches an earlier offset to rebuild state.
         // The leader will report an error in the logs, but will not let the high watermark rewind
-        assertFalse(state.updateReplicaState(node1.getKey(), node1.getValue().voterKey().directoryId().orElse(null), time.milliseconds(), new LogOffsetMetadata(5L)));
+        assertFalse(state.updateReplicaState(node1.getKey(), directoryId(node1), time.milliseconds(), new LogOffsetMetadata(5L)));
         assertEquals(5L, describeVoterState(state, node1.getKey(), time.milliseconds()).logEndOffset());
         assertEquals(Optional.of(new LogOffsetMetadata(10L)), state.highWatermark());
     }
@@ -336,7 +336,7 @@ public class LeaderStateTest {
         assertEquals(1, partitionData.currentVoters().size());
         assertEquals(new DescribeQuorumResponseData.ReplicaState()
                 .setReplicaId(localId.getKey())
-                .setReplicaDirectoryId(localId.getValue().voterKey().directoryId().orElse(null))
+                .setReplicaDirectoryId(directoryId(localId))
                 .setLogEndOffset(-1)
                 .setLastFetchTimestamp(time.milliseconds())
                 .setLastCaughtUpTimestamp(time.milliseconds()),
@@ -357,7 +357,7 @@ public class LeaderStateTest {
         assertEquals(1, partitionData.currentVoters().size());
         assertEquals(new DescribeQuorumResponseData.ReplicaState()
                 .setReplicaId(localId.getKey())
-                .setReplicaDirectoryId(localId.getValue().voterKey().directoryId().orElse(null))
+                .setReplicaDirectoryId(directoryId(localId))
                 .setLogEndOffset(leaderEndOffset)
                 .setLastFetchTimestamp(time.milliseconds())
                 .setLastCaughtUpTimestamp(time.milliseconds()),
@@ -377,7 +377,7 @@ public class LeaderStateTest {
         assertEquals(Optional.empty(), state.highWatermark());
 
         long activeFollowerFetchTimeMs = time.milliseconds();
-        assertTrue(state.updateReplicaState(activeFollowerId.getKey(), activeFollowerId.getValue().voterKey().directoryId().orElse(null), activeFollowerFetchTimeMs, new LogOffsetMetadata(leaderEndOffset)));
+        assertTrue(state.updateReplicaState(activeFollowerId.getKey(), directoryId(activeFollowerId), activeFollowerFetchTimeMs, new LogOffsetMetadata(leaderEndOffset)));
         assertEquals(Optional.of(new LogOffsetMetadata(leaderEndOffset)), state.highWatermark());
 
         time.sleep(500);
@@ -395,7 +395,7 @@ public class LeaderStateTest {
             findReplicaOrFail(localId.getKey(), partitionData.currentVoters());
         assertEquals(new DescribeQuorumResponseData.ReplicaState()
                 .setReplicaId(localId.getKey())
-                .setReplicaDirectoryId(localId.getValue().voterKey().directoryId().orElse(null))
+                .setReplicaDirectoryId(directoryId(localId))
                 .setLogEndOffset(leaderEndOffset)
                 .setLastFetchTimestamp(time.milliseconds())
                 .setLastCaughtUpTimestamp(time.milliseconds()),
@@ -405,7 +405,7 @@ public class LeaderStateTest {
             findReplicaOrFail(activeFollowerId.getKey(), partitionData.currentVoters());
         assertEquals(new DescribeQuorumResponseData.ReplicaState()
                 .setReplicaId(activeFollowerId.getKey())
-                .setReplicaDirectoryId(activeFollowerId.getValue().voterKey().directoryId().orElse(null))
+                .setReplicaDirectoryId(directoryId(activeFollowerId))
                 .setLogEndOffset(leaderEndOffset)
                 .setLastFetchTimestamp(activeFollowerFetchTimeMs)
                 .setLastCaughtUpTimestamp(activeFollowerFetchTimeMs),
@@ -415,7 +415,7 @@ public class LeaderStateTest {
             findReplicaOrFail(inactiveFollowerId.getKey(), partitionData.currentVoters());
         assertEquals(new DescribeQuorumResponseData.ReplicaState()
                 .setReplicaId(inactiveFollowerId.getKey())
-                .setReplicaDirectoryId(inactiveFollowerId.getValue().voterKey().directoryId().orElse(null))
+                .setReplicaDirectoryId(directoryId(inactiveFollowerId))
                 .setLogEndOffset(-1)
                 .setLastFetchTimestamp(-1)
                 .setLastCaughtUpTimestamp(-1),
@@ -429,8 +429,8 @@ public class LeaderStateTest {
         LeaderState<?> state = newLeaderState(mkMap(localId, follower1, follower2), leaderStartOffset);
         state.updateLocalState(new LogOffsetMetadata(leaderEndOffset));
         assertEquals(Optional.empty(), state.highWatermark());
-        state.updateReplicaState(follower1.getKey(), follower1.getValue().voterKey().directoryId().orElse(null), 0, new LogOffsetMetadata(leaderStartOffset));
-        state.updateReplicaState(follower2.getKey(), follower2.getValue().voterKey().directoryId().orElse(null), 0, new LogOffsetMetadata(leaderEndOffset));
+        state.updateReplicaState(follower1.getKey(), directoryId(follower1), 0, new LogOffsetMetadata(leaderStartOffset));
+        state.updateReplicaState(follower2.getKey(), directoryId(follower2), 0, new LogOffsetMetadata(leaderEndOffset));
         return state;
     }
 
@@ -621,5 +621,9 @@ public class LeaderStateTest {
 
     private static Entry<Integer, VoterSet.VoterNode> entry(int id) {
         return new SimpleImmutableEntry<>(id, new VoterSet.VoterNode(ReplicaKey.of(id, Optional.of(Uuid.randomUuid())), null, null));
+    }
+
+    private static Uuid directoryId(Entry<Integer, VoterSet.VoterNode> node) {
+        return node.getValue().voterKey().directoryId().orElse(Uuid.ZERO_UUID);
     }
 }

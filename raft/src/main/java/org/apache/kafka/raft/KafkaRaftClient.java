@@ -1105,7 +1105,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
             if (validOffsetAndEpoch.kind() == ValidOffsetAndEpoch.Kind.VALID) {
                 LogFetchInfo info = log.read(fetchOffset, Isolation.UNCOMMITTED);
 
-                if (state.updateReplicaState(replicaId, request.replicaDirectoryId(), currentTimeMs, info.startOffsetMetadata)) {
+                if (state.updateReplicaState(replicaId, Uuid.ZERO_UUID, currentTimeMs, info.startOffsetMetadata)) {
                     onUpdateLeaderHighWatermark(state, currentTimeMs);
                 }
 

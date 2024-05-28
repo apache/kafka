@@ -4412,7 +4412,7 @@ public class KafkaAdminClient extends AdminClient {
             private QuorumInfo.ReplicaState translateReplicaState(DescribeQuorumResponseData.ReplicaState replica) {
                 return new QuorumInfo.ReplicaState(
                         replica.replicaId(),
-                        Optional.ofNullable(replica.replicaDirectoryId()),
+                        Optional.of(replica.replicaDirectoryId()),
                         replica.logEndOffset(),
                         replica.lastFetchTimestamp() == -1 ? OptionalLong.empty() : OptionalLong.of(replica.lastFetchTimestamp()),
                         replica.lastCaughtUpTimestamp() == -1 ? OptionalLong.empty() : OptionalLong.of(replica.lastCaughtUpTimestamp()));

@@ -398,7 +398,7 @@ public class LeaderState<T> implements EpochState {
     private ReplicaState getOrCreateReplicaState(int remoteNodeId, Uuid remoteNodeDirectory) {
         ReplicaState state = voterStates.get(remoteNodeId);
         if (state == null) {
-            observerStates.putIfAbsent(remoteNodeId, new ReplicaState(remoteNodeId, Optional.ofNullable(remoteNodeDirectory), false));
+            observerStates.putIfAbsent(remoteNodeId, new ReplicaState(remoteNodeId, Optional.of(remoteNodeDirectory), false));
             return observerStates.get(remoteNodeId);
         }
         return state;
@@ -440,7 +440,7 @@ public class LeaderState<T> implements EpochState {
         }
         return new DescribeQuorumResponseData.ReplicaState()
             .setReplicaId(replicaState.nodeId)
-            .setReplicaDirectoryId(replicaState.nodeDirectory.orElse(null))
+            .setReplicaDirectoryId(replicaState.nodeDirectory.orElse(Uuid.ZERO_UUID))
             .setLogEndOffset(replicaState.endOffset.map(md -> md.offset).orElse(-1L))
             .setLastCaughtUpTimestamp(lastCaughtUpTimestamp)
             .setLastFetchTimestamp(lastFetchTimestamp);

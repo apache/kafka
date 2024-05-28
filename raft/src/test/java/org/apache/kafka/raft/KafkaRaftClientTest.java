@@ -2107,9 +2107,6 @@ public class KafkaRaftClientTest {
         int localId = 0;
         int closeFollower = 2;
         int laggingFollower = 1;
-        Uuid localDirectory = Uuid.randomUuid();
-        Uuid closeFollowerDirectory = Uuid.randomUuid();
-        Uuid laggingFollowerDirectory = Uuid.randomUuid();
         int epoch = 1;
         Set<Integer> voters = Utils.mkSet(localId, closeFollower, laggingFollower);
 
@@ -2131,7 +2128,6 @@ public class KafkaRaftClientTest {
 
         // Create observer
         int observerId = 3;
-        Uuid observerDirectory = Uuid.randomUuid();
         context.time.sleep(100);
         long observerFetchTime = context.time.milliseconds();
         context.deliverRequest(context.fetchRequest(epoch, observerId, 0L, 0, 0));
@@ -2146,7 +2142,7 @@ public class KafkaRaftClientTest {
             Arrays.asList(
                 new ReplicaState()
                     .setReplicaId(localId)
-                    .setReplicaDirectoryId(localDirectory)
+                    .setReplicaDirectoryId(Uuid.ZERO_UUID)
                     // As we are appending the records directly to the log,
                     // the leader end offset hasn't been updated yet.
                     .setLogEndOffset(3L)
@@ -2154,20 +2150,20 @@ public class KafkaRaftClientTest {
                     .setLastCaughtUpTimestamp(context.time.milliseconds()),
                 new ReplicaState()
                     .setReplicaId(laggingFollower)
-                    .setReplicaDirectoryId(laggingFollowerDirectory)
+                    .setReplicaDirectoryId(Uuid.ZERO_UUID)
                     .setLogEndOffset(1L)
                     .setLastFetchTimestamp(laggingFollowerFetchTime)
                     .setLastCaughtUpTimestamp(laggingFollowerFetchTime),
                 new ReplicaState()
                     .setReplicaId(closeFollower)
-                    .setReplicaDirectoryId(closeFollowerDirectory)
+                    .setReplicaDirectoryId(Uuid.ZERO_UUID)
                     .setLogEndOffset(3L)
                     .setLastFetchTimestamp(closeFollowerFetchTime)
                     .setLastCaughtUpTimestamp(closeFollowerFetchTime)),
             singletonList(
                 new ReplicaState()
                     .setReplicaId(observerId)
-                    .setReplicaDirectoryId(observerDirectory)
+                    .setReplicaDirectoryId(Uuid.ZERO_UUID)
                     .setLogEndOffset(0L)
                     .setLastFetchTimestamp(observerFetchTime)
                     .setLastCaughtUpTimestamp(-1L)));

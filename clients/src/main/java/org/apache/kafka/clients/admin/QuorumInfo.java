@@ -110,7 +110,7 @@ public class QuorumInfo {
         private final OptionalLong lastCaughtUpTimestamp;
 
         ReplicaState() {
-            this(0, Optional.empty(), 0, OptionalLong.empty(), OptionalLong.empty());
+            this(0, Optional.of(Uuid.ZERO_UUID), 0, OptionalLong.empty(), OptionalLong.empty());
         }
 
         ReplicaState(
