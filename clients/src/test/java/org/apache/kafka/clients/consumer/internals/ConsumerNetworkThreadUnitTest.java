@@ -148,7 +148,6 @@ public class ConsumerNetworkThreadUnitTest {
                 "The consumer network thread did not stop within " + DEFAULT_MAX_WAIT_MS + " ms");
     }
 
-    // can you rename this test? testEnsureApplicationEventProcessorProcesses....
     @Test
     public void testEnsureApplicationEventProcessorInvokesProcess() {
         //ApplicationEvent e = new PollEvent(100);
@@ -168,7 +167,7 @@ public class ConsumerNetworkThreadUnitTest {
     }
 
     // TODO: Remove test, place elsewhere
-    // This test is testing behavior of the application event processor
+    // This test is testing behavior of the application event processor, redundant
     @Test
     public void testAsyncCommitEvent() {
         ApplicationEvent e = new AsyncCommitEvent(new HashMap<>());
@@ -179,7 +178,7 @@ public class ConsumerNetworkThreadUnitTest {
     }
 
     // TODO: Remove test, place elsewhere
-    // This test is testing behavior of the application event processor
+    // This test is testing behavior of the application event processor, redundant
     @Test
     public void testSyncCommitEvent() {
         Timer timer = time.timer(100);
@@ -191,6 +190,7 @@ public class ConsumerNetworkThreadUnitTest {
     }
 
     // TODO: Remove/move this.
+    // This test is testing behavior of the application event processor, redundant
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testListOffsetsEventIsProcessed(boolean requireTimestamp) {
