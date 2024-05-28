@@ -29,6 +29,7 @@ import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.network.SocketServerConfigs;
+import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ZkConfigs;
 import org.apache.kafka.server.util.MockTime;
 import org.slf4j.Logger;
@@ -92,11 +93,11 @@ public class KafkaEmbedded {
      */
     private Properties effectiveConfigFrom(final Properties initialConfig) {
         final Properties effectiveConfig = new Properties();
-        effectiveConfig.put(KafkaConfig.BrokerIdProp(), 0);
+        effectiveConfig.put(ServerConfigs.BROKER_ID_CONFIG, 0);
         effectiveConfig.put(NUM_PARTITIONS_CONFIG, 1);
         effectiveConfig.put(AUTO_CREATE_TOPICS_ENABLE_CONFIG, true);
-        effectiveConfig.put(KafkaConfig.MessageMaxBytesProp(), 1000000);
-        effectiveConfig.put(KafkaConfig.ControlledShutdownEnableProp(), true);
+        effectiveConfig.put(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG, 1000000);
+        effectiveConfig.put(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, true);
         effectiveConfig.put(ZkConfigs.ZK_SESSION_TIMEOUT_MS_CONFIG, 10000);
 
         effectiveConfig.putAll(initialConfig);
