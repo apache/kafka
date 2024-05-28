@@ -742,8 +742,8 @@ subprojects {
   }
   test.dependsOn('spotbugsMain')
 
-  tasks.withType(com.github.spotbugs.snom.SpotBugsTask) {
-    reports {
+  tasks.withType(com.github.spotbugs.snom.SpotBugsTask).configureEach {
+    reports.configure {
       // Continue supporting `xmlFindBugsReport` for compatibility
       xml.enabled(project.hasProperty('xmlSpotBugsReport') || project.hasProperty('xmlFindBugsReport'))
       html.enabled(!project.hasProperty('xmlSpotBugsReport') && !project.hasProperty('xmlFindBugsReport'))
