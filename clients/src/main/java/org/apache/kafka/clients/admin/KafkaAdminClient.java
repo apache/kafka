@@ -25,6 +25,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.DefaultHostResolver;
 import org.apache.kafka.clients.HostResolver;
 import org.apache.kafka.clients.KafkaClient;
+import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.StaleMetadataException;
 import org.apache.kafka.clients.admin.CreateTopicsResult.TopicMetadataAndConfig;
@@ -394,6 +395,7 @@ public class KafkaAdminClient extends AdminClient {
     private final long retryBackoffMaxMs;
     private final ExponentialBackoff retryBackoff;
     private final boolean clientTelemetryEnabled;
+    private final MetadataRecoveryStrategy metadataRecoveryStrategy;
 
     /**
      * The telemetry requests client instance id.
@@ -607,6 +609,7 @@ public class KafkaAdminClient extends AdminClient {
             retryBackoffMaxMs,
             CommonClientConfigs.RETRY_BACKOFF_JITTER);
         this.clientTelemetryEnabled = config.getBoolean(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG);
+        this.metadataRecoveryStrategy = MetadataRecoveryStrategy.forName(config.getString(AdminClientConfig.METADATA_RECOVERY_STRATEGY_CONFIG));
         config.logUnused();
         AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
         log.debug("Kafka admin client initialized");
@@ -1209,6 +1212,9 @@ public class KafkaAdminClient extends AdminClient {
                     return true;
                 } else {
                     log.trace("Unable to assign {} to a node.", call);
+                    if (metadataRecoveryStrategy == MetadataRecoveryStrategy.REBOOTSTRAP) {
+                        metadataManager.rebootstrap(now);
+                    }
                     return false;
                 }
             } catch (Throwable t) {
@@ -1497,8 +1503,9 @@ public class KafkaAdminClient extends AdminClient {
                     // Create a new metadata fetch call and add it to the end of pendingCalls.
                     // Assign a node for just the new call (we handled the other pending nodes above).
 
-                    if (!maybeDrainPendingCall(metadataCall, now))
+                    if (!maybeDrainPendingCall(metadataCall, now)) {
                         pendingCalls.add(metadataCall);
+                    }
                 }
                 pollTimeout = Math.min(pollTimeout, sendEligibleCalls(now));
 

@@ -140,6 +140,10 @@ public class AdminClientConfig extends AbstractConfig {
     public static final String RETRIES_CONFIG = CommonClientConfigs.RETRIES_CONFIG;
     public static final String DEFAULT_API_TIMEOUT_MS_CONFIG = CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_CONFIG;
 
+    public static final String METADATA_RECOVERY_STRATEGY_CONFIG = CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG;
+    public static final String METADATA_RECOVERY_STRATEGY_DOC = CommonClientConfigs.METADATA_RECOVERY_STRATEGY_DOC;
+    public static final String DEFAULT_METADATA_RECOVERY_STRATEGY = CommonClientConfigs.DEFAULT_METADATA_RECOVERY_STRATEGY;
+
     /**
      * <code>security.providers</code>
      */
@@ -264,13 +268,13 @@ public class AdminClientConfig extends AbstractConfig {
                                         SECURITY_PROTOCOL_DOC)
                                 .withClientSslSupport()
                                 .withClientSaslSupport()
-                                .define(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG,
+                                .define(METADATA_RECOVERY_STRATEGY_CONFIG,
                                         Type.STRING,
-                                        CommonClientConfigs.DEFAULT_METADATA_RECOVERY_STRATEGY,
+                                        DEFAULT_METADATA_RECOVERY_STRATEGY,
                                         ConfigDef.CaseInsensitiveValidString
                                                 .in(Utils.enumOptions(MetadataRecoveryStrategy.class)),
                                         Importance.LOW,
-                                        CommonClientConfigs.METADATA_RECOVERY_STRATEGY_DOC);
+                                        METADATA_RECOVERY_STRATEGY_DOC);
     }
 
     @Override
