@@ -436,7 +436,7 @@ class ControllerServer(
       /**
        * Start the KIP-919 controller registration manager.
        */
-      val controllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes.asScala)
+      val controllerNodeProvider = RaftControllerNodeProvider(raftManager, config)
       registrationChannelManager = new NodeToControllerChannelManagerImpl(
         controllerNodeProvider,
         time,

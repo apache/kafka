@@ -185,6 +185,24 @@ final class KafkaMetadataLogTest {
   }
 
   @Test
+  def testHighWatermarkOffsetMetadata(): Unit = {
+    val numberOfRecords = 10
+    val epoch = 1
+    val log = buildMetadataLog(tempDir, mockTime)
+
+    append(log, numberOfRecords, epoch)
+    log.updateHighWatermark(new LogOffsetMetadata(numberOfRecords))
+
+    val highWatermarkMetadata = log.highWatermark
+    assertEquals(numberOfRecords, highWatermarkMetadata.offset)
+    assertTrue(highWatermarkMetadata.metadata.isPresent)
+
+    val segmentPosition = highWatermarkMetadata.metadata.get().asInstanceOf[SegmentPosition]
+    assertEquals(0, segmentPosition.baseOffset)
+    assertTrue(segmentPosition.relativePosition > 0)
+  }
+
+  @Test
   def testCreateSnapshotBeforeLogStartOffset(): Unit = {
     val numberOfRecords = 10
     val epoch = 1
