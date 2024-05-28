@@ -123,6 +123,7 @@ public class ConsumerNetworkThreadUnitTest {
         when(networkClientDelegate.addAll(pollResult)).thenReturn(pollResult.timeUntilNextPollMs);
         consumerNetworkThread.runOnce();
 
+        // verify networkClientDelegate polls with the correct time
         assertEquals(consumerNetworkThread.maximumTimeToWait(), exampleTime);
     }
 

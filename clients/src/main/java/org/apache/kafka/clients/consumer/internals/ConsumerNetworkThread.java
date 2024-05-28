@@ -75,6 +75,11 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         this.running = true;
     }
 
+    /**
+     * TODO: We should also test close() and cleanup() in two different test cases
+     * However, we can create a separated Jira ticket and PR for the closing tests to ensure full coverage
+     */
+
     @Override
     public void run() {
         try {
@@ -274,6 +279,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         try {
             runAtClose(requestManagers.entries(), networkClientDelegate, timer);
         } catch (Exception e) {
+            // TODO: Makesure exception case is being tested
             log.error("Unexpected error during shutdown.  Proceed with closing.", e);
         } finally {
             sendUnsentRequests(timer);
