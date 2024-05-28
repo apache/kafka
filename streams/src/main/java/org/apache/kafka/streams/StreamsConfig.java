@@ -39,8 +39,8 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndFailExceptionHandler;
+import org.apache.kafka.streams.errors.LogAndFailProcessingExceptionHandler;
 import org.apache.kafka.streams.errors.ProcessingExceptionHandler;
-import org.apache.kafka.streams.errors.ProcessingLogAndFailExceptionHandler;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
@@ -935,7 +935,7 @@ public class StreamsConfig extends AbstractConfig {
                     DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_DOC)
             .define(PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG,
                     Type.CLASS,
-                    ProcessingLogAndFailExceptionHandler.class.getName(),
+                    LogAndFailProcessingExceptionHandler.class.getName(),
                     Importance.MEDIUM,
                     PROCESSING_EXCEPTION_HANDLER_CLASS_DOC)
             .define(DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
