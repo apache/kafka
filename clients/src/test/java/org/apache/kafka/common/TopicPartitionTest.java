@@ -30,9 +30,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * That is, older code won't necessarily be able to deserialize data serialized with newer code.
  */
 public class TopicPartitionTest {
-    private String topicName = "mytopic";
-    private String fileName = "serializedData/topicPartitionSerializedfile";
-    private int partNum = 5;
+    private final String topicName = "mytopic";
+    private final int partNum = 5;
 
     private void checkValues(TopicPartition deSerTP) {
         //assert deserialized values are same as original
@@ -56,7 +55,7 @@ public class TopicPartitionTest {
     public void testTopiPartitionSerializationCompatibility() throws IOException, ClassNotFoundException {
         // assert serialized TopicPartition object in file (serializedData/topicPartitionSerializedfile) is
         // deserializable into TopicPartition and is compatible
-        Object deserializedObject = Serializer.deserialize(fileName);
+        Object deserializedObject = Serializer.deserialize("serializedData/topicPartitionSerializedfile");
         assertInstanceOf(TopicPartition.class, deserializedObject);
         checkValues((TopicPartition) deserializedObject);
     }

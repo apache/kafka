@@ -23,7 +23,10 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -35,7 +38,7 @@ public class KafkaClusterTestKitTest {
     @ParameterizedTest
     @ValueSource(ints = {0, -1})
     public void testCreateClusterWithBadNumDisksThrows(int disks) {
-        RuntimeException e = assertThrowsExactly(RuntimeException.class, () -> new KafkaClusterTestKit.Builder(
+        IllegalArgumentException e = assertThrowsExactly(IllegalArgumentException.class, () -> new KafkaClusterTestKit.Builder(
                 new TestKitNodes.Builder()
                         .setNumBrokerNodes(1)
                         .setNumDisksPerBroker(disks)
@@ -47,7 +50,7 @@ public class KafkaClusterTestKitTest {
 
     @Test
     public void testCreateClusterWithBadNumOfControllers() {
-        RuntimeException e = assertThrowsExactly(RuntimeException.class, () -> new KafkaClusterTestKit.Builder(
+        IllegalArgumentException e = assertThrowsExactly(IllegalArgumentException.class, () -> new KafkaClusterTestKit.Builder(
             new TestKitNodes.Builder()
                 .setNumBrokerNodes(1)
                 .setNumControllerNodes(-1)
@@ -58,13 +61,29 @@ public class KafkaClusterTestKitTest {
 
     @Test
     public void testCreateClusterWithBadNumOfBrokers() {
-        RuntimeException e = assertThrowsExactly(RuntimeException.class, () -> new KafkaClusterTestKit.Builder(
+        IllegalArgumentException e = assertThrowsExactly(IllegalArgumentException.class, () -> new KafkaClusterTestKit.Builder(
             new TestKitNodes.Builder()
                 .setNumBrokerNodes(-1)
                 .setNumControllerNodes(1)
                 .build())
         );
         assertEquals("Invalid negative value for numBrokerNodes", e.getMessage());
+    }
+
+    @Test
+    public void testCreateClusterWithBadPerServerProperties() {
+        Map<Integer, Map<String, String>> perServerProperties = new HashMap<>();
+        perServerProperties.put(100, Collections.singletonMap("foo", "foo1"));
+        perServerProperties.put(200, Collections.singletonMap("bar", "bar1"));
+
+        IllegalArgumentException e = assertThrowsExactly(IllegalArgumentException.class, () -> new KafkaClusterTestKit.Builder(
+                new TestKitNodes.Builder()
+                        .setNumBrokerNodes(1)
+                        .setNumControllerNodes(1)
+                        .setPerServerProperties(perServerProperties)
+                        .build())
+        );
+        assertEquals("Unknown server id 100, 200 in perServerProperties, the existent server ids are 0, 3000", e.getMessage());
     }
 
     @ParameterizedTest

@@ -207,6 +207,23 @@ public class CooperativeStickyAssignorTest extends AbstractStickyAssignorTest {
         assertTrue(isFullyBalanced(assignment));
     }
 
+    @Test
+    public void testUniformSubscriptionTransferOwnershipListIsRight() {
+        this.replicationFactor = 1;
+        this.numBrokerRacks = 2;
+        this.hasConsumerRack = true;
+        Map<String, List<PartitionInfo>> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put(topic1, partitionInfos(topic1, 4));
+
+        subscriptions.put("c0", buildSubscriptionV2Above(topics(topic1), partitions(tp(topic1, 0), tp(topic1, 1)),
+                generationId, 0));
+        subscriptions.put("c1", buildSubscriptionV2Above(topics(topic1), partitions(tp(topic1, 2), tp(topic1, 3)),
+                generationId, 1));
+
+        assignor.assignPartitions(partitionsPerTopic, subscriptions);
+        assertEquals(2, assignor.partitionsTransferringOwnership().size());
+    }
+
     /**
      * The cooperative assignor must do some additional work and verification of some assignments relative to the eager
      * assignor, since it may or may not need to trigger a second follow-up rebalance.

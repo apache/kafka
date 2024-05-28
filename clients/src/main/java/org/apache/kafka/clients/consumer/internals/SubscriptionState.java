@@ -1100,13 +1100,14 @@ public class SubscriptionState {
         }
 
         /**
-         * Only partitions that are {@link FetchStates#INITIALIZING initializing} <em>and not</em>
-         * {@link #pendingOnAssignedCallback pending} the completion of the
-         * {@link ConsumerRebalanceListener#onPartitionsAssigned(Collection) onPartitionsAssigned} callback
-         * should be considered as initialize-able.
+         * True if the partition is in {@link FetchStates#INITIALIZING} state. While in this
+         * state, a position for the partition can be retrieved (based on committed offsets or
+         * partitions offsets).
+         * Note that retrieving a position does not mean that we can start fetching from the
+         * partition (see {@link #isFetchable()})
          */
         private boolean shouldInitialize() {
-            return fetchState.equals(FetchStates.INITIALIZING) && !pendingOnAssignedCallback;
+            return fetchState.equals(FetchStates.INITIALIZING);
         }
 
         private boolean isFetchable() {

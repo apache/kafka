@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.storage.internals.log.LogFileUtils;
 
 import java.io.File;
+import java.io.FilenameFilter;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
@@ -125,7 +126,7 @@ public final class BrokerLocalStorage {
                             "in the log directory is %d which is %s the expected offset %s. The directory of %s is " +
                             "made of the following files: %s", brokerId, topicPartition,
                     offsetHolder.firstLogFileBaseOffset, pos, offset, topicPartition,
-                    Utils.join(offsetHolder.partitionFiles, System.lineSeparator()));
+                    String.join(System.lineSeparator(), offsetHolder.partitionFiles));
             throw new AssertionError(message);
         }
     }
@@ -166,9 +167,9 @@ public final class BrokerLocalStorage {
         return false;
     }
 
-    public void eraseStorage() throws IOException {
+    public void eraseStorage(FilenameFilter filter) throws IOException {
         for (File brokerDir : brokerStorageDirectories) {
-            for (File file : Objects.requireNonNull(brokerDir.listFiles())) {
+            for (File file : Objects.requireNonNull(brokerDir.listFiles(filter))) {
                 Utils.delete(file);
             }
         }

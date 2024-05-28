@@ -27,6 +27,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import java.util.Map;
 import java.util.HashMap;
 import java.nio.ByteBuffer;
+import java.util.Objects;
 
 /** Checkpoint records emitted from MirrorCheckpointConnector. Encodes remote consumer group state. */
 public class Checkpoint {
@@ -179,6 +180,19 @@ public class Checkpoint {
 
     byte[] recordValue() {
         return serializeValue(VERSION).array();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Checkpoint that = (Checkpoint) o;
+        return upstreamOffset == that.upstreamOffset && downstreamOffset == that.downstreamOffset && Objects.equals(consumerGroupId, that.consumerGroupId) && Objects.equals(topicPartition, that.topicPartition) && Objects.equals(metadata, that.metadata);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(consumerGroupId, topicPartition, upstreamOffset, downstreamOffset, metadata);
     }
 }
 

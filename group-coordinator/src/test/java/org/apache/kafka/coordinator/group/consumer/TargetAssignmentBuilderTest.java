@@ -17,28 +17,33 @@
 package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.AssignmentTestUtil;
+import org.apache.kafka.coordinator.group.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
-import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
+import org.apache.kafka.coordinator.group.assignor.GroupSpecImpl;
+import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
+import org.apache.kafka.image.TopicsImage;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.coordinator.group.Assertions.assertUnorderedListEquals;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
-import static org.apache.kafka.coordinator.group.RecordHelpers.newTargetAssignmentEpochRecord;
-import static org.apache.kafka.coordinator.group.RecordHelpers.newTargetAssignmentRecord;
-import static org.apache.kafka.coordinator.group.RecordHelpersTest.mkMapOfPartitionRacks;
+import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTargetAssignmentEpochRecord;
+import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTargetAssignmentRecord;
+import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpersTest.mkMapOfPartitionRacks;
+import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOGENEOUS;
 import static org.apache.kafka.coordinator.group.consumer.TargetAssignmentBuilder.createAssignmentMemberSpec;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
@@ -59,6 +64,7 @@ public class TargetAssignmentBuilderTest {
         private final Map<String, Assignment> targetAssignment = new HashMap<>();
         private final Map<String, MemberAssignment> memberAssignments = new HashMap<>();
         private final Map<String, String> staticMembers = new HashMap<>();
+        private MetadataImageBuilder topicsImageBuilder = new MetadataImageBuilder();
 
         public TargetAssignmentBuilderTestContext(
             String groupId,
@@ -105,6 +111,8 @@ public class TargetAssignmentBuilderTest {
                 numPartitions,
                 partitionRacks
             ));
+            topicsImageBuilder = topicsImageBuilder.addTopic(topicId, topicName, numPartitions);
+
             return topicId;
         }
 
@@ -143,17 +151,7 @@ public class TargetAssignmentBuilderTest {
         public void removeMemberSubscription(
             String memberId
         ) {
-            removeMemberSubscription(memberId, null);
-        }
-
-        public void removeMemberSubscription(
-            String memberId,
-            String instanceId
-        ) {
             this.updatedMembers.put(memberId, null);
-            if (instanceId != null) {
-                this.staticMembers.remove(instanceId);
-            }
         }
 
         public void prepareMemberAssignment(
@@ -164,6 +162,7 @@ public class TargetAssignmentBuilderTest {
         }
 
         public TargetAssignmentBuilder.TargetAssignmentResult build() {
+            TopicsImage topicsImage = topicsImageBuilder.build().topics();
             // Prepare expected member specs.
             Map<String, AssignmentMemberSpec> memberSpecs = new HashMap<>();
 
@@ -172,7 +171,7 @@ public class TargetAssignmentBuilderTest {
                 memberSpecs.put(memberId, createAssignmentMemberSpec(
                     member,
                     targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
-                    subscriptionMetadata
+                    topicsImage
                 )
             ));
 
@@ -182,18 +181,20 @@ public class TargetAssignmentBuilderTest {
                 if (updatedMemberOrNull == null) {
                     memberSpecs.remove(memberId);
                 } else {
-                    ConsumerGroupMember member = members.get(memberId);
-                    Assignment assignment;
+                    Assignment assignment = targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
+
                     // A new static member joins and needs to replace an existing departed one.
-                    if (member == null && staticMembers.containsKey(updatedMemberOrNull.instanceId())) {
-                        assignment = targetAssignment.getOrDefault(staticMembers.get(updatedMemberOrNull.instanceId()), Assignment.EMPTY);
-                    } else {
-                        assignment = targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
+                    if (updatedMemberOrNull.instanceId() != null) {
+                        String previousMemberId = staticMembers.get(updatedMemberOrNull.instanceId());
+                        if (previousMemberId != null && !previousMemberId.equals(memberId)) {
+                            assignment = targetAssignment.getOrDefault(previousMemberId, Assignment.EMPTY);
+                        }
                     }
+
                     memberSpecs.put(memberId, createAssignmentMemberSpec(
                         updatedMemberOrNull,
                         assignment,
-                        subscriptionMetadata
+                        topicsImage
                     ));
                 }
             });
@@ -205,22 +206,28 @@ public class TargetAssignmentBuilderTest {
 
             // Prepare the expected subscription topic metadata.
             SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadataMap);
+            SubscriptionType subscriptionType = HOMOGENEOUS;
+
+            // Prepare the member assignments per topic partition.
+            Map<Uuid, Map<Integer, String>> invertedTargetAssignment = AssignmentTestUtil.invertedTargetAssignment(memberSpecs);
 
             // Prepare the expected assignment spec.
-            AssignmentSpec assignmentSpec = new AssignmentSpec(memberSpecs);
+            GroupSpecImpl groupSpec = new GroupSpecImpl(memberSpecs, subscriptionType, invertedTargetAssignment);
 
             // We use `any` here to always return an assignment but use `verify` later on
             // to ensure that the input was correct.
             when(assignor.assign(any(), any()))
                 .thenReturn(new GroupAssignment(memberAssignments));
 
-
             // Create and populate the assignment builder.
             TargetAssignmentBuilder builder = new TargetAssignmentBuilder(groupId, groupEpoch, assignor)
                 .withMembers(members)
                 .withStaticMembers(staticMembers)
                 .withSubscriptionMetadata(subscriptionMetadata)
-                .withTargetAssignment(targetAssignment);
+                .withSubscriptionType(subscriptionType)
+                .withTargetAssignment(targetAssignment)
+                .withInvertedTargetAssignment(invertedTargetAssignment)
+                .withTopicsImage(topicsImage);
 
             // Add the updated members or delete the deleted members.
             updatedMembers.forEach((memberId, updatedMemberOrNull) -> {
@@ -237,7 +244,7 @@ public class TargetAssignmentBuilderTest {
             // Verify that the assignor was called once with the expected
             // assignment spec.
             verify(assignor, times(1))
-                .assign(assignmentSpec, subscribedTopicMetadata);
+                .assign(groupSpec, subscribedTopicMetadata);
 
             return result;
         }
@@ -247,19 +254,17 @@ public class TargetAssignmentBuilderTest {
     public void testCreateAssignmentMemberSpec() {
         Uuid fooTopicId = Uuid.randomUuid();
         Uuid barTopicId = Uuid.randomUuid();
+        TopicsImage topicsImage = new MetadataImageBuilder()
+            .addTopic(fooTopicId, "foo", 5)
+            .addTopic(barTopicId, "bar", 5)
+            .build()
+            .topics();
 
         ConsumerGroupMember member = new ConsumerGroupMember.Builder("member-id")
             .setSubscribedTopicNames(Arrays.asList("foo", "bar", "zar"))
             .setRackId("rackId")
             .setInstanceId("instanceId")
             .build();
-
-        Map<String, TopicMetadata> subscriptionMetadata = new HashMap<String, TopicMetadata>() {
-            {
-                put("foo", new TopicMetadata(fooTopicId, "foo", 5, Collections.emptyMap()));
-                put("bar", new TopicMetadata(barTopicId, "bar", 5, Collections.emptyMap()));
-            }
-        };
 
         Assignment assignment = new Assignment(mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2, 3),
@@ -269,13 +274,13 @@ public class TargetAssignmentBuilderTest {
         AssignmentMemberSpec assignmentMemberSpec = createAssignmentMemberSpec(
             member,
             assignment,
-            subscriptionMetadata
+            topicsImage
         );
 
         assertEquals(new AssignmentMemberSpec(
             Optional.of("instanceId"),
             Optional.of("rackId"),
-            new HashSet<>(Arrays.asList(fooTopicId, barTopicId)),
+            new TopicIds(mkSet("bar", "foo", "zar"), topicsImage),
             assignment.partitions()
         ), assignmentMemberSpec);
     }
@@ -722,7 +727,7 @@ public class TargetAssignmentBuilderTest {
     }
 
     @Test
-    public void testStaticMemberReplace() {
+    public void testReplaceStaticMember() {
         TargetAssignmentBuilderTestContext context = new TargetAssignmentBuilderTestContext(
             "my-group",
             20
@@ -731,26 +736,26 @@ public class TargetAssignmentBuilderTest {
         Uuid fooTopicId = context.addTopicMetadata("foo", 6, Collections.emptyMap());
         Uuid barTopicId = context.addTopicMetadata("bar", 6, Collections.emptyMap());
 
-        context.addGroupMember("member-1", "member-1", Arrays.asList("foo", "bar", "zar"), mkAssignment(
+        context.addGroupMember("member-1", "instance-member-1", Arrays.asList("foo", "bar", "zar"), mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2),
             mkTopicAssignment(barTopicId, 1, 2)
         ));
 
-        context.addGroupMember("member-2", "member-2", Arrays.asList("foo", "bar", "zar"), mkAssignment(
+        context.addGroupMember("member-2", "instance-member-2", Arrays.asList("foo", "bar", "zar"), mkAssignment(
             mkTopicAssignment(fooTopicId, 3, 4),
             mkTopicAssignment(barTopicId, 3, 4)
         ));
 
-        context.addGroupMember("member-3", "member-3", Arrays.asList("foo", "bar", "zar"), mkAssignment(
+        context.addGroupMember("member-3", "instance-member-3", Arrays.asList("foo", "bar", "zar"), mkAssignment(
             mkTopicAssignment(fooTopicId, 5, 6),
             mkTopicAssignment(barTopicId, 5, 6)
         ));
 
         // Static member 3 leaves
-        context.removeMemberSubscription("member-3", "member-3");
+        context.removeMemberSubscription("member-3");
 
         // Another static member joins with the same instance id as the departed one
-        context.updateMemberSubscription("member-3-a", Arrays.asList("foo", "bar", "zar"), Optional.of("member-3"), Optional.empty());
+        context.updateMemberSubscription("member-3-a", Arrays.asList("foo", "bar", "zar"), Optional.of("instance-member-3"), Optional.empty());
 
         context.prepareMemberAssignment("member-1", mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2),

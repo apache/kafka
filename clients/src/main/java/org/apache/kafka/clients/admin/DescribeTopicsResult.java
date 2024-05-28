@@ -128,6 +128,7 @@ public class DescribeTopicsResult {
      * Return a future which succeeds only if all the topic descriptions succeed.
      */
     private static <T> KafkaFuture<Map<T, TopicDescription>> all(Map<T, KafkaFuture<TopicDescription>> futures) {
+        if (futures == null) return null;
         KafkaFuture<Void> future = KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));
         return future.
             thenApply(v -> {
