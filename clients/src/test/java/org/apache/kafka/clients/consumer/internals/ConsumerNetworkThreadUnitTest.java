@@ -108,9 +108,9 @@ public class ConsumerNetworkThreadUnitTest {
     public void testConsumerNetworkThreadWaitTimeComputations(long exampleTime) {
         List<Optional<? extends RequestManager>> requestManagersList = new ArrayList<>();
         requestManagersList.add(Optional.of(coordinatorRequestManager));
-//        rmsList.add(Optional.of(commitRequestManager));
-//        rmsList.add(Optional.of(heartbeatRequestManager));
-//        rmsList.add(Optional.of(offsetsRequestManager));
+//        requestManagersList.add(Optional.of(commitRequestManager));
+//        requestManagersList.add(Optional.of(heartbeatRequestManager));
+//        requestManagersList.add(Optional.of(offsetsRequestManager));
         when(requestManagers.entries()).thenReturn(requestManagersList);
 
         NetworkClientDelegate.PollResult pollResult = new NetworkClientDelegate.PollResult(exampleTime);
