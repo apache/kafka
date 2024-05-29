@@ -150,7 +150,7 @@ public class ConsumerNetworkThreadUnitTest {
     @Test
     public void testStartupAndTearDown() throws InterruptedException {
         consumerNetworkThread.start();
-        TestCondition isStarted = () -> consumerNetworkThread.isRunning();
+        TestCondition isStarted = consumerNetworkThread::isRunning;
         TestCondition isClosed = () -> !(consumerNetworkThread.isRunning() || consumerNetworkThread.isAlive());
 
         // There's a nonzero amount of time between starting the thread and having it
@@ -230,7 +230,7 @@ public class ConsumerNetworkThreadUnitTest {
 
         ResetPositionsEvent event = new ResetPositionsEvent(calculateDeadlineMs(time, 100));
         applicationEventsQueue.add(event);
-        assertDoesNotThrow(() -> consumerNetworkThread.runOnce());
+        assertDoesNotThrow(consumerNetworkThread::runOnce);
 
         verify(applicationEventProcessor).process(any(ResetPositionsEvent.class));
     }
