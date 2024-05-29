@@ -228,7 +228,7 @@ public class CommonClientConfigs {
             "Metadata recovery is triggered when all last-known brokers appear unavailable simultaneously. " +
             "Brokers appear unavailable when disconnected and no current retry attempt is in-progress. " +
             "Consider increasing <code>reconnect.backoff.ms</code> and <code>reconnect.backoff.max.ms</code> and " +
-            "decreasing <code>socket.connection.setup.timeout.ms</code> and <code>reconnect.backoff.max.ms</code> " +
+            "decreasing <code>socket.connection.setup.timeout.ms</code> and <code>socket.connection.setup.timeout.max.ms</code> " +
             "for the client.";
     public static final String DEFAULT_METADATA_RECOVERY_STRATEGY = MetadataRecoveryStrategy.NONE.name;
 
