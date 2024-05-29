@@ -37,6 +37,7 @@ import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
+import org.bouncycastle.util.io.Streams;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -1577,6 +1578,21 @@ public class StreamsConfigTest {
             streamsConfig.getGlobalConsumerConfigs("clientId")
                 .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
         );
+    }
+
+    @Test
+    public void shouldGetDefaultValueProcessingExceptionHandler() {
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+
+        assertEquals("org.apache.kafka.streams.errors.LogAndFailProcessingExceptionHandler",   streamsConfig.processingExceptionHandler().getClass().getName());
+    }
+
+    @Test
+    public void shouldOverrideDefaultProcessingExceptionHandler() {
+        props.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, "org.apache.kafka.streams.errors.LogAndContinueProcessingExceptionHandler");
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+
+        assertEquals("org.apache.kafka.streams.errors.LogAndContinueProcessingExceptionHandler",   streamsConfig.processingExceptionHandler().getClass().getName());
     }
 
     static class MisconfiguredSerde implements Serde<Object> {
