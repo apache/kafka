@@ -206,12 +206,15 @@ Found problem:
 
   @Test
   def testFormatSucceedsIfAllDirectoriesAreAvailable(): Unit = {
-    val availableDir1 = TestUtils.tempDir()
-    val availableDir2 = TestUtils.tempDir()
+    val availableDirs = Seq(TestUtils.tempDir(), TestUtils.tempDir(), TestUtils.tempDir()).map(dir => dir.toString)
     val stream = new ByteArrayOutputStream()
-    assertEquals(0, runFormatCommand(stream, Seq(availableDir1.toString, availableDir2.toString)))
-    assertTrue(stream.toString().contains("Formatting %s".format(availableDir1)))
-    assertTrue(stream.toString().contains("Formatting %s".format(availableDir2)))
+    assertEquals(0, runFormatCommand(stream, availableDirs))
+    val actual = stream.toString().split("\\r?\\n")
+    val expect = availableDirs.map("Formatting %s".format(_))
+    assertEquals(availableDirs.size, actual.size)
+    expect.foreach(dir => {
+      assertEquals(1, actual.count(_.startsWith(dir)))
+    })
   }
 
   @Test
@@ -489,3 +492,4 @@ Found problem:
     }
   }
 }
+
