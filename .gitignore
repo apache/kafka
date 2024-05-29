@@ -13,7 +13,6 @@ project/boot/
 project/plugins/project/
 patch-process/*
 .idea
-!/.idea/codeStyles
 .svn
 .classpath
 /.metadata
