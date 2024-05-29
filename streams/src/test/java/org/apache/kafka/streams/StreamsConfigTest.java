@@ -37,6 +37,7 @@ import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
+import org.bouncycastle.util.io.Streams;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
