@@ -63,7 +63,6 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.SortedSet;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Logger;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_GROUP_INSTANCE_ID;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_HEARTBEAT_INTERVAL_MS;
