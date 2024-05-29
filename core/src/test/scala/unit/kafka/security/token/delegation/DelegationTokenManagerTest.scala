@@ -27,6 +27,7 @@ import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclOperation}
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType.ALLOW
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.resource.PatternType.LITERAL
 import org.apache.kafka.common.resource.ResourcePattern
@@ -40,7 +41,7 @@ import org.apache.kafka.network.Session
 import org.apache.kafka.security.authorizer.AclEntry.WILDCARD_HOST
 import org.apache.kafka.security.authorizer.AuthorizerUtils
 import org.apache.kafka.server.authorizer._
-import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, KafkaSecurityConfigs}
+import org.apache.kafka.server.config.DelegationTokenManagerConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
@@ -72,7 +73,7 @@ class DelegationTokenManagerTest extends QuorumTestHarness  {
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
     props = TestUtils.createBrokerConfig(0, zkConnect, enableToken = true)
-    props.put(KafkaSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, ScramMechanism.mechanismNames().asScala.mkString(","))
+    props.put(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, ScramMechanism.mechanismNames().asScala.mkString(","))
     props.put(DelegationTokenManagerConfigs.DELEGATION_TOKEN_SECRET_KEY_CONFIG, secretKey)
     tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames())
   }
