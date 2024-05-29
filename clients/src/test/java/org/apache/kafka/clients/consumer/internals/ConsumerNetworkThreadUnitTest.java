@@ -74,10 +74,12 @@ public class ConsumerNetworkThreadUnitTest {
     private final NetworkClientDelegate networkClient;
     private final RequestManagers requestManagers;
     private final CompletableEventReaper applicationEventReaper;
+    private final LogContext logContext;
+    private final ConsumerConfig config;
 
     ConsumerNetworkThreadUnitTest() {
-        LogContext logContext = new LogContext();
-        ConsumerConfig config = mock(ConsumerConfig.class);
+        logContext = new LogContext();
+        config = mock(ConsumerConfig.class);
         this.time = new MockTime();
         this.client = new MockClient(time);
         this.networkClientDelegate = mock(NetworkClientDelegate.class);
@@ -244,7 +246,6 @@ public class ConsumerNetworkThreadUnitTest {
         assertTrue(applicationEventsQueue.isEmpty());
     }
 
-    // Seems to be more like integration testing
     @Test
     public void testAssignmentChangeEvent() {
         HashMap<TopicPartition, OffsetAndMetadata> offset = mockTopicPartitionOffset();
@@ -255,10 +256,7 @@ public class ConsumerNetworkThreadUnitTest {
 
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(AssignmentChangeEvent.class));
-//        verify(networkClientDelegate, times(1)).poll(anyLong(), anyLong());
-//        verify(commitRequestManager, times(1)).updateAutoCommitTimer(currentTimeMs);
-//        // Assignment change should generate an async commit (not retried).
-//        verify(commitRequestManager, times(1)).maybeAutoCommitAsync();
+        verify(networkClientDelegate, times(1)).poll(anyLong(), anyLong());
     }
 
     @Test
