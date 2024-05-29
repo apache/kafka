@@ -17,7 +17,7 @@
 package kafka.server
 
 import kafka.utils.CoreUtils._
-import org.apache.kafka.common.config._
+import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.server.common.AdminOperationException
 import org.apache.kafka.server.config.QuotaConfigs
 import org.junit.jupiter.api.Assertions.assertThrows
