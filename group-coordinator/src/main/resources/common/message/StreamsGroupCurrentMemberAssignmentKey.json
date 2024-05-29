@@ -13,11 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// KIP-848 is in development. This schema is subject to non-backwards-compatible changes.
+// The streams rebalance protocol is in development. This schema is subject to non-backwards-compatible changes.
 {
   "type": "data",
-  "name": "ConsumerGroupCurrentMemberAssignmentKey",
-  "validVersions": "8",
+  "name": "StreamsGroupCurrentMemberAssignmentKey",
+  "validVersions": "14",
   "flexibleVersions": "none",
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "8",
