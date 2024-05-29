@@ -13,16 +13,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// The streams rebalance protocol is in development. This schema is subject to non-backwards-compatible changes.
 {
-  "apiKey": 77,
-  "type": "request",
-  "listeners": ["zkBroker", "broker"],
-  "name": "StreamsInitializeRequest",
+  "type": "data",
+  "name": "StreamsGroupTopologyValue",
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
-    { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
-      "about": "The group identifier." },
+    { "name": "TopologyHash", "type": "bytes", "versions": "0+",
+      "about": "The hash of the topology. " },
     { "name":  "Topology", "type": "[]Subtopology", "versions": "0+",
       "about": "The sub-topologies of the streams application.",
       "fields": [
@@ -33,19 +32,19 @@
         { "name": "SinkTopics", "type": "[]string", "versions": "0+",
           "about": "The topics the topology writes to." },
         { "name": "StateChangelogTopics", "type": "[]TopicInfo", "versions": "0+",
-          "about": "The set of state changelog topics associated with this subtopology. Created automatically." },
+          "about": "The set of state changelog topics associated with this subtopology. " },
         { "name": "RepartitionSourceTopics", "type": "[]TopicInfo", "versions": "0+",
-          "about": "The set of source topics that are internally created repartition topics. Created automatically." }
+          "about": "The set of source topics that are internally created repartition topics. " }
       ]
     }
   ],
   "commonStructs": [
     { "name": "TopicConfig", "versions": "0+", "fields": [
-        { "name": "key", "type": "string", "versions": "0+",
-          "about": "The key of the topic-level configuration." },
-        { "name": "value", "type": "string", "versions": "0+",
-          "about": "The value of the topic-level configuration," }
-      ]
+      { "name": "key", "type": "string", "versions": "0+",
+        "about": "The key of the topic-level configuration." },
+      { "name": "value", "type": "string", "versions": "0+",
+        "about": "The value of the topic-level configuration," }
+    ]
     },
     { "name": "TopicInfo", "versions": "0+", "fields": [
       { "name": "Name", "type": "string", "versions": "0+",
