@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,7 +28,6 @@ import java.util.function.BiConsumer;
 import java.util.function.BiPredicate;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor.CostFunction;
 
 /**
@@ -36,7 +36,7 @@ import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssi
 public interface RackAwareGraphConstructor<T> {
     int SOURCE_ID = -1;
 
-    int getSinkNodeID(final List<TaskId> taskIdList, final List<UUID> clientList, final Map<Subtopology, Set<TaskId>> tasksForTopicGroup);
+    int getSinkNodeID(final List<TaskId> taskIdList, final List<UUID> clientList, final Collection<Set<TaskId>> taskSetsPerTopicGroup);
 
     int getClientNodeId(final int clientIndex, final List<TaskId> taskIdList, final List<UUID> clientList, final int topicGroupIndex);
 

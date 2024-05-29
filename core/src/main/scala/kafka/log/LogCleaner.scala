@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit
 import kafka.common._
 import kafka.log.LogCleaner.{CleanerRecopyPercentMetricName, DeadThreadCountMetricName, MaxBufferUtilizationPercentMetricName, MaxCleanTimeMetricName, MaxCompactionDelayMetricsName}
 import kafka.server.{BrokerReconfigurable, KafkaConfig}
-import kafka.utils._
+import kafka.utils.{Logging, Pool}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.errors.{CorruptRecordException, KafkaStorageException}
@@ -32,9 +32,11 @@ import org.apache.kafka.common.record.MemoryRecords.RecordFilter
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
+import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.ShutdownableThread
 import org.apache.kafka.storage.internals.log.{AbortedTxn, CleanerConfig, LastRecord, LogDirFailureChannel, LogSegment, LogSegmentOffsetOverflowException, OffsetMap, SkimpyOffsetMap, TransactionIndex}
+import org.apache.kafka.storage.internals.utils.Throttler
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
@@ -109,12 +111,7 @@ class LogCleaner(initialConfig: CleanerConfig,
   private[log] val cleanerManager = new LogCleanerManager(logDirs, logs, logDirFailureChannel)
 
   /* a throttle used to limit the I/O of all the cleaner threads to a user-specified maximum rate */
-  private[log] val throttler = new Throttler(desiredRatePerSec = config.maxIoBytesPerSecond,
-                                        checkIntervalMs = 300,
-                                        throttleDown = true,
-                                        "cleaner-io",
-                                        "bytes",
-                                        time = time)
+  private[log] val throttler = new Throttler(config.maxIoBytesPerSecond, 300, "cleaner-io", "bytes", time)
 
   private[log] val cleaners = mutable.ArrayBuffer[CleanerThread]()
 
@@ -503,7 +500,7 @@ object LogCleaner {
     CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP,
     CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_LOAD_FACTOR_PROP,
     CleanerConfig.LOG_CLEANER_IO_BUFFER_SIZE_PROP,
-    KafkaConfig.MessageMaxBytesProp,
+    ServerConfigs.MESSAGE_MAX_BYTES_CONFIG,
     CleanerConfig.LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP,
     CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP
   )

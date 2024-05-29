@@ -66,6 +66,7 @@
                 <subpackage name="storage">
                     <allow pkg="com.yammer.metrics.core" />
                     <allow pkg="org.apache.kafka.server.metrics" />
+                    <allow pkg="kafka.test" />
                 </subpackage>
             </subpackage>
         </subpackage>

@@ -18,12 +18,20 @@ package org.apache.kafka.coordinator.group.runtime;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
+import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.ControlRecordType;
+import org.apache.kafka.common.record.EndTransactionMarker;
+import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.TransactionResult;
+import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -35,10 +43,12 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
+import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.VerificationGuard;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.slf4j.Logger;
 
+import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -55,6 +65,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
+
+import static org.apache.kafka.common.record.Record.EMPTY_HEADERS;
 
 /**
  * The CoordinatorRuntime provides a framework to implement coordinators such as the group coordinator
@@ -93,7 +105,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         private String logPrefix;
         private LogContext logContext;
         private CoordinatorEventProcessor eventProcessor;
-        private PartitionWriter<U> partitionWriter;
+        private PartitionWriter partitionWriter;
         private CoordinatorLoader<U> loader;
         private CoordinatorShardBuilderSupplier<S, U> coordinatorShardBuilderSupplier;
         private Time time = Time.SYSTEM;
@@ -101,6 +113,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         private Duration defaultWriteTimeout;
         private CoordinatorRuntimeMetrics runtimeMetrics;
         private CoordinatorMetrics coordinatorMetrics;
+        private Serializer<U> serializer;
+        private Compression compression;
 
         public Builder<S, U> withLogPrefix(String logPrefix) {
             this.logPrefix = logPrefix;
@@ -117,7 +131,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             return this;
         }
 
-        public Builder<S, U> withPartitionWriter(PartitionWriter<U> partitionWriter) {
+        public Builder<S, U> withPartitionWriter(PartitionWriter partitionWriter) {
             this.partitionWriter = partitionWriter;
             return this;
         }
@@ -157,6 +171,16 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             return this;
         }
 
+        public Builder<S, U> withSerializer(Serializer<U> serializer) {
+            this.serializer = serializer;
+            return this;
+        }
+
+        public Builder<S, U> withCompression(Compression compression) {
+            this.compression = compression;
+            return this;
+        }
+
         public CoordinatorRuntime<S, U> build() {
             if (logPrefix == null)
                 logPrefix = "";
@@ -178,6 +202,10 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 throw new IllegalArgumentException("CoordinatorRuntimeMetrics must be set.");
             if (coordinatorMetrics == null)
                 throw new IllegalArgumentException("CoordinatorMetrics must be set.");
+            if (serializer == null)
+                throw new IllegalArgumentException("Serializer must be set.");
+            if (compression == null)
+                compression = Compression.NONE;
 
             return new CoordinatorRuntime<>(
                 logPrefix,
@@ -190,7 +218,9 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 timer,
                 defaultWriteTimeout,
                 runtimeMetrics,
-                coordinatorMetrics
+                coordinatorMetrics,
+                serializer,
+                compression
             );
         }
     }
@@ -373,6 +403,19 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         }
 
         @Override
+        public void scheduleIfAbsent(
+            String key,
+            long delay,
+            TimeUnit unit,
+            boolean retry,
+            TimeoutOperation<Void, U> operation
+        ) {
+            if (!tasks.containsKey(key)) {
+                schedule(key, delay, unit, retry, 500, operation);
+            }
+        }
+
+        @Override
         public void cancel(String key) {
             TimerTask prevTask = tasks.remove(key);
             if (prevTask != null) prevTask.cancel();
@@ -446,6 +489,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         HighWatermarkListener highWatermarklistener;
 
         /**
+         * The buffer supplier used to write records to the log.
+         */
+        BufferSupplier bufferSupplier;
+
+        /**
          * Constructor.
          *
          * @param tp The topic partition of the coordinator.
@@ -464,6 +512,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             this.epoch = -1;
             this.deferredEventQueue = new DeferredEventQueue(logContext);
             this.timer = new EventBasedCoordinatorTimer(tp, logContext);
+            this.bufferSupplier = new BufferSupplier.GrowableBufferSupplier();
         }
 
         /**
@@ -541,6 +590,28 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         }
     }
 
+    class OperationTimeout extends TimerTask {
+        private final TopicPartition tp;
+        private final DeferredEvent event;
+
+        public OperationTimeout(
+            TopicPartition tp,
+            DeferredEvent event,
+            long delayMs
+        ) {
+            super(delayMs);
+            this.event = event;
+            this.tp = tp;
+        }
+
+        @Override
+        public void run() {
+            String name = event.toString();
+            scheduleInternalOperation("OperationTimeout(name=" + name + ", tp=" + tp + ")", tp,
+                () -> event.complete(new TimeoutException(name + " timed out after " + delayMs + "ms")));
+        }
+    }
+
     /**
      * A coordinator write operation.
      *
@@ -614,7 +685,10 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
          */
         final Duration writeTimeout;
 
-        private TimerTask writeTimeoutTask = null;
+        /**
+         * The operation timeout.
+         */
+        private OperationTimeout operationTimeout = null;
 
         /**
          * The result of the write operation. It could be null
@@ -704,8 +778,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             try {
                 // Get the context of the coordinator or fail if the coordinator is not in active state.
                 withActiveContextOrThrow(tp, context -> {
-                    long prevLastWrittenOffset = context.coordinator.lastWrittenOffset();
-
                     // Execute the operation.
                     result = op.generateRecordsAndResult(context.coordinator.coordinator());
 
@@ -723,19 +795,60 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         // If the records are not empty, first, they are applied to the state machine,
                         // second, then are written to the partition/log, and finally, the response
                         // is put into the deferred event queue.
+                        long prevLastWrittenOffset = context.coordinator.lastWrittenOffset();
+                        LogConfig logConfig = partitionWriter.config(tp);
+                        byte magic = logConfig.recordVersion().value;
+                        int maxBatchSize = logConfig.maxMessageSize();
+                        long currentTimeMs = time.milliseconds();
+                        ByteBuffer buffer = context.bufferSupplier.get(Math.min(MIN_BUFFER_SIZE, maxBatchSize));
+
                         try {
-                            // Apply the records to the state machine.
-                            if (result.replayRecords()) {
-                                // We compute the offset of the record based on the last written offset. The
-                                // coordinator is the single writer to the underlying partition so we can
-                                // deduce it like this.
-                                for (int i = 0; i < result.records().size(); i++) {
+                            MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
+                                buffer,
+                                magic,
+                                compression,
+                                TimestampType.CREATE_TIME,
+                                0L,
+                                currentTimeMs,
+                                producerId,
+                                producerEpoch,
+                                0,
+                                producerId != RecordBatch.NO_PRODUCER_ID,
+                                false,
+                                RecordBatch.NO_PARTITION_LEADER_EPOCH,
+                                maxBatchSize
+                            );
+
+                            // Apply the records to the state machine and add them to the batch.
+                            for (int i = 0; i < result.records().size(); i++) {
+                                U record = result.records().get(i);
+
+                                if (result.replayRecords()) {
+                                    // We compute the offset of the record based on the last written offset. The
+                                    // coordinator is the single writer to the underlying partition so we can
+                                    // deduce it like this.
                                     context.coordinator.replay(
                                         prevLastWrittenOffset + i,
                                         producerId,
                                         producerEpoch,
-                                        result.records().get(i)
+                                        record
                                     );
+                                }
+
+                                byte[] keyBytes = serializer.serializeKey(record);
+                                byte[] valBytes = serializer.serializeValue(record);
+
+                                if (builder.hasRoomFor(currentTimeMs, keyBytes, valBytes, EMPTY_HEADERS)) {
+                                    builder.append(
+                                        currentTimeMs,
+                                        keyBytes,
+                                        valBytes,
+                                        EMPTY_HEADERS
+                                    );
+                                } else {
+                                    throw new RecordTooLargeException("Message batch size is " + builder.estimatedSizeInBytes() +
+                                        " bytes in append to partition " + tp + " which exceeds the maximum " +
+                                        "configured size of " + maxBatchSize + ".");
                                 }
                             }
 
@@ -743,35 +856,24 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                             // offset.
                             long offset = partitionWriter.append(
                                 tp,
-                                producerId,
-                                producerEpoch,
                                 verificationGuard,
-                                result.records()
+                                builder.build()
                             );
                             context.coordinator.updateLastWrittenOffset(offset);
 
                             // Add the response to the deferred queue.
                             if (!future.isDone()) {
                                 context.deferredEventQueue.add(offset, this);
-                                writeTimeoutTask = new TimerTask(writeTimeout.toMillis()) {
-                                    @Override
-                                    public void run() {
-                                        if (!future.isDone()) {
-                                            scheduleInternalOperation(
-                                                "WriteTimeout(name=" + name + ", tp=" + tp + ")",
-                                                tp,
-                                                () -> complete(new TimeoutException("CoordinatorWriteEvent " + name + " timed out after " + writeTimeout.toMillis() + "ms"))
-                                            );
-                                        }
-                                    }
-                                };
-                                timer.add(writeTimeoutTask);
+                                operationTimeout = new OperationTimeout(tp, this, writeTimeout.toMillis());
+                                timer.add(operationTimeout);
                             } else {
                                 complete(null);
                             }
                         } catch (Throwable t) {
                             context.coordinator.revertLastWrittenOffset(prevLastWrittenOffset);
                             complete(t);
+                        } finally {
+                            context.bufferSupplier.release(buffer);
                         }
                     }
                 });
@@ -798,9 +900,9 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 future.completeExceptionally(exception);
             }
 
-            if (writeTimeoutTask != null) {
-                writeTimeoutTask.cancel();
-                writeTimeoutTask = null;
+            if (operationTimeout != null) {
+                operationTimeout.cancel();
+                operationTimeout = null;
             }
         }
 
@@ -988,7 +1090,10 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
          */
         final Duration writeTimeout;
 
-        private TimerTask writeTimeoutTask = null;
+        /**
+         * The operation timeout.
+         */
+        private OperationTimeout operationTimeout = null;
 
         /**
          * The future that will be completed with the response
@@ -1046,31 +1151,25 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                             result
                         );
 
-                        long offset = partitionWriter.appendEndTransactionMarker(
+                        long offset = partitionWriter.append(
                             tp,
-                            producerId,
-                            producerEpoch,
-                            coordinatorEpoch,
-                            result
+                            VerificationGuard.SENTINEL,
+                            MemoryRecords.withEndTransactionMarker(
+                                time.milliseconds(),
+                                producerId,
+                                producerEpoch,
+                                new EndTransactionMarker(
+                                    result == TransactionResult.COMMIT ? ControlRecordType.COMMIT : ControlRecordType.ABORT,
+                                    coordinatorEpoch
+                                )
+                            )
                         );
                         context.coordinator.updateLastWrittenOffset(offset);
 
                         if (!future.isDone()) {
                             context.deferredEventQueue.add(offset, this);
-                            writeTimeoutTask = new TimerTask(writeTimeout.toMillis()) {
-                                @Override
-                                public void run() {
-                                    if (!future.isDone()) {
-                                        scheduleInternalOperation(
-                                            "WriteTimeout(name=" + name + ", tp=" + tp + ")",
-                                            tp,
-                                            () -> complete(new TimeoutException("CoordinatorCompleteTransactionEvent " + name +
-                                                " timed out after " + writeTimeout.toMillis() + "ms"))
-                                        );
-                                    }
-                                }
-                            };
-                            timer.add(writeTimeoutTask);
+                            operationTimeout = new OperationTimeout(tp, this, writeTimeout.toMillis());
+                            timer.add(operationTimeout);
                         } else {
                             complete(null);
                         }
@@ -1098,9 +1197,9 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 future.completeExceptionally(exception);
             }
 
-            if (writeTimeoutTask != null) {
-                writeTimeoutTask.cancel();
-                writeTimeoutTask = null;
+            if (operationTimeout != null) {
+                operationTimeout.cancel();
+                operationTimeout = null;
             }
         }
 
@@ -1270,6 +1369,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     }
 
     /**
+     * 16KB. Used for initial buffer size for write operations.
+     */
+    static final int MIN_BUFFER_SIZE = 16384;
+
+    /**
      * The log prefix.
      */
     private final String logPrefix;
@@ -1312,7 +1416,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     /**
      * The partition writer used by the runtime to persist records.
      */
-    private final PartitionWriter<U> partitionWriter;
+    private final PartitionWriter partitionWriter;
 
     /**
      * The coordinator loaded used by the runtime.
@@ -1336,6 +1440,16 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     private final CoordinatorMetrics coordinatorMetrics;
 
     /**
+     * The serializer used to serialize records.
+     */
+    private final Serializer<U> serializer;
+
+    /**
+     * The compression codec used when writing records.
+     */
+    private final Compression compression;
+
+    /**
      * Atomic boolean indicating whether the runtime is running.
      */
     private final AtomicBoolean isRunning = new AtomicBoolean(true);
@@ -1357,19 +1471,25 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * @param time                              The system time.
      * @param timer                             The system timer.
      * @param defaultWriteTimeout               The write operation timeout.
+     * @param runtimeMetrics                    The runtime metrics.
+     * @param coordinatorMetrics                The coordinator metrics.
+     * @param serializer                        The serializer.
+     * @param compression                       The compression codec.
      */
     private CoordinatorRuntime(
         String logPrefix,
         LogContext logContext,
         CoordinatorEventProcessor processor,
-        PartitionWriter<U> partitionWriter,
+        PartitionWriter partitionWriter,
         CoordinatorLoader<U> loader,
         CoordinatorShardBuilderSupplier<S, U> coordinatorShardBuilderSupplier,
         Time time,
         Timer timer,
         Duration defaultWriteTimeout,
         CoordinatorRuntimeMetrics runtimeMetrics,
-        CoordinatorMetrics coordinatorMetrics
+        CoordinatorMetrics coordinatorMetrics,
+        Serializer<U> serializer,
+        Compression compression
     ) {
         this.logPrefix = logPrefix;
         this.logContext = logContext;
@@ -1384,6 +1504,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         this.coordinatorShardBuilderSupplier = coordinatorShardBuilderSupplier;
         this.runtimeMetrics = runtimeMetrics;
         this.coordinatorMetrics = coordinatorMetrics;
+        this.serializer = serializer;
+        this.compression = compression;
     }
 
     /**
