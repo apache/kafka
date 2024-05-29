@@ -21,7 +21,6 @@ import kafka.cluster.EndPoint;
 import kafka.cluster.Partition;
 import kafka.log.UnifiedLog;
 import kafka.server.BrokerTopicStats;
-import kafka.server.KafkaConfig;
 import kafka.server.StopPartition;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
@@ -44,6 +43,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.OffsetAndEpoch;
+import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.log.remote.metadata.storage.ClassLoaderAwareRemoteLogMetadataManager;
 import org.apache.kafka.server.log.remote.storage.ClassLoaderAwareRemoteStorageManager;
 import org.apache.kafka.server.log.remote.storage.LogSegmentData;
@@ -252,7 +252,7 @@ public class RemoteLogManager implements Closeable {
 
     private void configureRSM() {
         final Map<String, Object> rsmProps = new HashMap<>(rlmConfig.remoteStorageManagerProps());
-        rsmProps.put(KafkaConfig.BrokerIdProp(), brokerId);
+        rsmProps.put(ServerConfigs.BROKER_ID_CONFIG, brokerId);
         remoteLogStorageManager.configure(rsmProps);
     }
 
@@ -286,7 +286,7 @@ public class RemoteLogManager implements Closeable {
         // update the remoteLogMetadataProps here to override endpoint config if any
         rlmmProps.putAll(rlmConfig.remoteLogMetadataManagerProps());
 
-        rlmmProps.put(KafkaConfig.BrokerIdProp(), brokerId);
+        rlmmProps.put(ServerConfigs.BROKER_ID_CONFIG, brokerId);
         rlmmProps.put(LOG_DIR_CONFIG, logDir);
         rlmmProps.put("cluster.id", clusterId);
 
@@ -605,6 +605,7 @@ public class RemoteLogManager implements Closeable {
         // the task's run() method.
         private volatile Optional<OffsetAndEpoch> copiedOffsetOption = Optional.empty();
         private volatile boolean isLogStartOffsetUpdatedOnBecomingLeader = false;
+        private volatile Optional<String> logDirectory = Optional.empty();
 
         public void convertToLeader(int leaderEpochVal) {
             if (leaderEpochVal < 0) {
@@ -815,6 +816,13 @@ public class RemoteLogManager implements Closeable {
                 }
 
                 UnifiedLog log = unifiedLogOptional.get();
+                // In the first run after completing altering logDir within broker, we should make sure the state is reset. (KAFKA-16711)
+                if (!log.parentDir().equals(logDirectory.orElse(null))) {
+                    copiedOffsetOption = Optional.empty();
+                    isLogStartOffsetUpdatedOnBecomingLeader = false;
+                    logDirectory = Optional.of(log.parentDir());
+                }
+
                 if (isLeader()) {
                     // Copy log segments to remote storage
                     copyLogSegmentsToRemote(log);
