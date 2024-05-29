@@ -54,7 +54,7 @@ import org.apache.kafka.image.publisher.ControllerRegistrationsPublisher
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, Features, MetadataVersion, ProducerIdsBlock}
-import org.apache.kafka.server.config.KRaftConfigs
+import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs}
 import org.apache.kafka.server.util.FutureUtils
 import org.apache.kafka.storage.internals.log.CleanerConfig
 import org.junit.jupiter.api.Assertions._
@@ -890,7 +890,7 @@ class ControllerApisTest {
     val controller = new MockController.Builder().
       newInitialTopic("foo", fooId).build()
     val props = new Properties()
-    props.put(KafkaConfig.DeleteTopicEnableProp, "false")
+    props.put(ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, "false")
     controllerApis = createControllerApis(None, controller, props)
     val request = new DeleteTopicsRequestData()
     request.topics().add(new DeleteTopicState().setName("foo").setTopicId(ZERO_UUID))
