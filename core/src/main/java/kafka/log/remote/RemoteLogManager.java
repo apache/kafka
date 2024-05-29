@@ -605,6 +605,7 @@ public class RemoteLogManager implements Closeable {
         // the task's run() method.
         private volatile Optional<OffsetAndEpoch> copiedOffsetOption = Optional.empty();
         private volatile boolean isLogStartOffsetUpdatedOnBecomingLeader = false;
+        private volatile Optional<String> logDirectory = Optional.empty();
 
         public void convertToLeader(int leaderEpochVal) {
             if (leaderEpochVal < 0) {
@@ -815,6 +816,13 @@ public class RemoteLogManager implements Closeable {
                 }
 
                 UnifiedLog log = unifiedLogOptional.get();
+                // In the first run after completing altering logDir within broker, we should make sure the state is reset. (KAFKA-16711)
+                if (!log.parentDir().equals(logDirectory.orElse(null))) {
+                    copiedOffsetOption = Optional.empty();
+                    isLogStartOffsetUpdatedOnBecomingLeader = false;
+                    logDirectory = Optional.of(log.parentDir());
+                }
+
                 if (isLeader()) {
                     // Copy log segments to remote storage
                     copyLogSegmentsToRemote(log);

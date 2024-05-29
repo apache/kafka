@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import java.util.Optional;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol;
 import org.apache.kafka.common.KafkaException;
@@ -248,6 +249,24 @@ public final class AssignorConfiguration {
         } catch (final ClassNotFoundException e) {
             throw new IllegalArgumentException(
                 "Expected an instantiable class name for " + INTERNAL_TASK_ASSIGNOR_CLASS,
+                e
+            );
+        }
+    }
+
+    public Optional<org.apache.kafka.streams.processor.assignment.TaskAssignor> userTaskAssignor() {
+        final String userTaskAssignorClassname = streamsConfig.getString(StreamsConfig.TASK_ASSIGNOR_CLASS_CONFIG);
+        if (userTaskAssignorClassname == null) {
+            return Optional.empty();
+        }
+        try {
+            final org.apache.kafka.streams.processor.assignment.TaskAssignor assignor = Utils.newInstance(userTaskAssignorClassname,
+                org.apache.kafka.streams.processor.assignment.TaskAssignor.class);
+            log.info("Instantiated {} as the task assignor.", userTaskAssignorClassname);
+            return Optional.of(assignor);
+        } catch (final ClassNotFoundException e) {
+            throw new IllegalArgumentException(
+                "Expected an instantiable class name for " + StreamsConfig.TASK_ASSIGNOR_CLASS_CONFIG + " but got " + userTaskAssignorClassname,
                 e
             );
         }
