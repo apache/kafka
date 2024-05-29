@@ -47,8 +47,11 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.StoreQueryUtils.QueryHandler;
 import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
+import java.util.Comparator;
 import java.util.Map;
+import java.util.NavigableSet;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.atomic.LongAdder;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -77,6 +80,7 @@ public class MeteredWindowStore<K, V>
     private TaskId taskId;
 
     private LongAdder numOpenIterators = new LongAdder();
+    private NavigableSet<MeteredIterator> openIterators = new ConcurrentSkipListSet<>(Comparator.comparingLong(MeteredIterator::startTimestamp));
 
     @SuppressWarnings("rawtypes")
     private final Map<Class, QueryHandler> queryHandlers =
@@ -157,6 +161,9 @@ public class MeteredWindowStore<K, V>
         iteratorDurationSensor = StateStoreMetrics.iteratorDurationSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         StateStoreMetrics.addNumOpenIteratorsGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
                 (config, now) -> numOpenIterators.sum());
+        StateStoreMetrics.addOldestOpenIteratorGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
+                (config, now) -> openIterators.isEmpty() ? null : openIterators.first().startTimestamp()
+        );
     }
 
     @Deprecated
@@ -245,7 +252,8 @@ public class MeteredWindowStore<K, V>
             streamsMetrics,
             serdes::valueFrom,
             time,
-            numOpenIterators
+            numOpenIterators,
+            openIterators
         );
     }
 
@@ -261,7 +269,8 @@ public class MeteredWindowStore<K, V>
             streamsMetrics,
             serdes::valueFrom,
             time,
-            numOpenIterators
+            numOpenIterators,
+            openIterators
         );
     }
 
@@ -282,7 +291,8 @@ public class MeteredWindowStore<K, V>
             serdes::keyFrom,
             serdes::valueFrom,
             time,
-            numOpenIterators);
+            numOpenIterators,
+            openIterators);
     }
 
     @Override
@@ -302,7 +312,8 @@ public class MeteredWindowStore<K, V>
             serdes::keyFrom,
             serdes::valueFrom,
             time,
-            numOpenIterators);
+            numOpenIterators,
+            openIterators);
     }
 
     @Override
@@ -316,7 +327,8 @@ public class MeteredWindowStore<K, V>
             serdes::keyFrom,
             serdes::valueFrom,
             time,
-            numOpenIterators);
+            numOpenIterators,
+            openIterators);
     }
 
     @Override
@@ -330,7 +342,8 @@ public class MeteredWindowStore<K, V>
             serdes::keyFrom,
             serdes::valueFrom,
             time,
-            numOpenIterators);
+            numOpenIterators,
+            openIterators);
     }
 
     @Override
@@ -343,7 +356,8 @@ public class MeteredWindowStore<K, V>
             serdes::keyFrom,
             serdes::valueFrom,
             time,
-            numOpenIterators
+            numOpenIterators,
+            openIterators
         );
     }
 
@@ -357,7 +371,8 @@ public class MeteredWindowStore<K, V>
             serdes::keyFrom,
             serdes::valueFrom,
             time,
-            numOpenIterators
+            numOpenIterators,
+            openIterators
         );
     }
 
@@ -435,7 +450,8 @@ public class MeteredWindowStore<K, V>
                         serdes::keyFrom,
                         getDeserializeValue(serdes, wrapped()),
                         time,
-                        numOpenIterators
+                        numOpenIterators,
+                        openIterators
                     );
                 final QueryResult<MeteredWindowedKeyValueIterator<K, V>> typedQueryResult =
                     InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);
@@ -486,7 +502,8 @@ public class MeteredWindowStore<K, V>
                     streamsMetrics,
                     getDeserializeValue(serdes, wrapped()),
                     time,
-                    numOpenIterators
+                    numOpenIterators,
+                    openIterators
                 );
                 final QueryResult<MeteredWindowStoreIterator<V>> typedQueryResult =
                     InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);

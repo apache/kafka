@@ -31,7 +31,6 @@ import kafka.server.ControllerMutationQuotaManager;
 import kafka.server.FetchManager;
 import kafka.server.KafkaApis;
 import kafka.server.KafkaConfig;
-import kafka.server.KafkaConfig$;
 import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
@@ -62,6 +61,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupCoordinator;
 import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ZkConfigs;
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
@@ -178,7 +178,7 @@ public class MetadataRequestBenchmark {
     private KafkaApis createKafkaApis() {
         Properties kafkaProps =  new Properties();
         kafkaProps.put(ZkConfigs.ZK_CONNECT_CONFIG, "zk");
-        kafkaProps.put(KafkaConfig$.MODULE$.BrokerIdProp(), brokerId + "");
+        kafkaProps.put(ServerConfigs.BROKER_ID_CONFIG, brokerId + "");
         KafkaConfig config = new KafkaConfig(kafkaProps);
         return new KafkaApisBuilder().
             setRequestChannel(requestChannel).

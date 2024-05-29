@@ -62,7 +62,7 @@ import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializ
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.security.{PasswordEncoder, PasswordEncoderConfigs}
-import org.apache.kafka.server.config.{ConfigType, KafkaSecurityConfigs, ReplicationConfigs, ServerLogConfigs, ZkConfigs}
+import org.apache.kafka.server.config.{ConfigType, KafkaSecurityConfigs, ServerConfigs, ReplicationConfigs, ServerLogConfigs, ZkConfigs}
 import org.apache.kafka.server.metrics.{KafkaYammerMetrics, MetricConfigs}
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.ShutdownableThread
@@ -542,7 +542,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     props.put(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, "20000000")
     props.put(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_LOAD_FACTOR_PROP, "0.8")
     props.put(CleanerConfig.LOG_CLEANER_IO_BUFFER_SIZE_PROP, "300000")
-    props.put(KafkaConfig.MessageMaxBytesProp, "40000")
+    props.put(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG, "40000")
     props.put(CleanerConfig.LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP, "50000000")
     props.put(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP, "6000")
 
@@ -634,7 +634,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     props.put(ServerLogConfigs.LOG_FLUSH_INTERVAL_MS_CONFIG, "60000")
     props.put(ServerLogConfigs.LOG_RETENTION_BYTES_CONFIG, "10000000")
     props.put(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, TimeUnit.DAYS.toMillis(1).toString)
-    props.put(KafkaConfig.MessageMaxBytesProp, "100000")
+    props.put(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG, "100000")
     props.put(ServerLogConfigs.LOG_INDEX_INTERVAL_BYTES_CONFIG, "10000")
     props.put(CleanerConfig.LOG_CLEANER_DELETE_RETENTION_MS_PROP, TimeUnit.DAYS.toMillis(1).toString)
     props.put(CleanerConfig.LOG_CLEANER_MIN_COMPACTION_LAG_MS_PROP, "60000")
@@ -643,7 +643,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     props.put(ServerLogConfigs.LOG_CLEANUP_POLICY_CONFIG, "delete")
     props.put(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, "false")
     props.put(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
-    props.put(KafkaConfig.CompressionTypeProp, "gzip")
+    props.put(ServerConfigs.COMPRESSION_TYPE_CONFIG, "gzip")
     props.put(ServerLogConfigs.LOG_PRE_ALLOCATE_CONFIG, true.toString)
     props.put(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_TYPE_CONFIG, TimestampType.LOG_APPEND_TIME.toString)
     props.put(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, "1000")
@@ -869,15 +869,15 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     }
 
     val config = servers.head.config
-    verifyThreadPoolResize(KafkaConfig.NumIoThreadsProp, config.numIoThreads,
+    verifyThreadPoolResize(ServerConfigs.NUM_IO_THREADS_CONFIG, config.numIoThreads,
       requestHandlerPrefix, mayReceiveDuplicates = false)
     verifyThreadPoolResize(ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG, config.numReplicaFetchers,
       fetcherThreadPrefix, mayReceiveDuplicates = false)
-    verifyThreadPoolResize(KafkaConfig.BackgroundThreadsProp, config.backgroundThreads,
+    verifyThreadPoolResize(ServerConfigs.BACKGROUND_THREADS_CONFIG, config.backgroundThreads,
       "kafka-scheduler-", mayReceiveDuplicates = false)
     verifyThreadPoolResize(ServerLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG, config.numRecoveryThreadsPerDataDir,
       "", mayReceiveDuplicates = false)
-    verifyThreadPoolResize(KafkaConfig.NumNetworkThreadsProp, config.numNetworkThreads,
+    verifyThreadPoolResize(ServerConfigs.NUM_NETWORK_THREADS_CONFIG, config.numNetworkThreads,
       networkThreadPrefix, mayReceiveDuplicates = true)
     verifyThreads("data-plane-kafka-socket-acceptor-", config.listeners.size)
 
@@ -1965,7 +1965,7 @@ class TestMetricsReporter extends MetricsReporter with Reconfigurable with Close
   }
 
   override def configure(configs: util.Map[String, _]): Unit = {
-    configuredBrokers += configs.get(KafkaConfig.BrokerIdProp).toString.toInt
+    configuredBrokers += configs.get(ServerConfigs.BROKER_ID_CONFIG).toString.toInt
     configureCount += 1
     pollingInterval = configs.get(PollingIntervalProp).toString.toInt
   }
