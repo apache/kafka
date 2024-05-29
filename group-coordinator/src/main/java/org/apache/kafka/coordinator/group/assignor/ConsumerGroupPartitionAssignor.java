@@ -19,27 +19,11 @@ package org.apache.kafka.coordinator.group.assignor;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * Server-side partition assignor used by the GroupCoordinator.
+ * Server-side partition assignor for consumer groups used by the GroupCoordinator.
  *
  * The interface is kept in an internal module until KIP-848 is fully
  * implemented and ready to be released.
  */
 @InterfaceStability.Unstable
-public interface PartitionAssignor {
-    /**
-     * Unique name for this assignor.
-     */
-    String name();
-
-    /**
-     * Assigns partitions to group members based on the given assignment specification and topic metadata.
-     *
-     * @param groupSpec           The assignment spec which includes member metadata.
-     * @param subscribedTopicDescriber The topic and partition metadata describer.
-     * @return The new assignment for the group.
-     */
-    GroupAssignment assign(
-        GroupSpec groupSpec,
-        SubscribedTopicDescriber subscribedTopicDescriber
-    ) throws PartitionAssignorException;
+public interface ConsumerGroupPartitionAssignor extends PartitionAssignor {
 }
