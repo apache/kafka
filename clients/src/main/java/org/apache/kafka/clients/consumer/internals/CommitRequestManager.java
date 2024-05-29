@@ -881,6 +881,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
         abstract void removeRequest();
 
+        // Visible for testing
         protected Optional<Long> expirationTimeMs() {
             return expirationTimeMs;
         }
