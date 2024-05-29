@@ -33,18 +33,8 @@ import java.util.List;
 public class BrokerSecurityConfigs {
 
     public static final String PRINCIPAL_BUILDER_CLASS_CONFIG = "principal.builder.class";
+
     public static final String SSL_PRINCIPAL_MAPPING_RULES_CONFIG = "ssl.principal.mapping.rules";
-
-    public static final String SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_CONFIG = "sasl.kerberos.principal.to.local.rules";
-    public static final List<String> DEFAULT_SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES = Collections.singletonList("DEFAULT");
-    public static final String SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_DOC = "A list of rules for mapping from principal " +
-            "names to short names (typically operating system usernames). The rules are evaluated in order and the " +
-            "first rule that matches a principal name is used to map it to a short name. Any later rules in the list are " +
-            "ignored. By default, principal names of the form <code>{username}/{hostname}@{REALM}</code> are mapped " +
-            "to <code>{username}</code>. For more details on the format please see <a href=\"#security_authz\"> " +
-            "security authorization and acls</a>. Note that this configuration is ignored if an extension of " +
-            "<code>KafkaPrincipalBuilder</code> is provided by the <code>" + PRINCIPAL_BUILDER_CLASS_CONFIG + "</code> configuration.";
-
     public static final String DEFAULT_SSL_PRINCIPAL_MAPPING_RULES = "DEFAULT";
     public static final String SSL_PRINCIPAL_MAPPING_RULES_DOC = "A list of rules for mapping from distinguished name" +
             " from the client certificate to short name. The rules are evaluated in order and the first rule that matches" +
@@ -52,7 +42,17 @@ public class BrokerSecurityConfigs {
             " distinguished name of the X.500 certificate will be the principal. For more details on the format please" +
             " see <a href=\"#security_authz\"> security authorization and acls</a>. Note that this configuration is ignored" +
             " if an extension of KafkaPrincipalBuilder is provided by the <code>" + PRINCIPAL_BUILDER_CLASS_CONFIG + "</code>" +
-           " configuration.";
+            " configuration.";
+
+    public static final String SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_CONFIG = "sasl.kerberos.principal.to.local.rules";
+    public static final List<String> DEFAULT_SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES = Collections.singletonList(DEFAULT_SSL_PRINCIPAL_MAPPING_RULES);
+    public static final String SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_DOC = "A list of rules for mapping from principal " +
+            "names to short names (typically operating system usernames). The rules are evaluated in order and the " +
+            "first rule that matches a principal name is used to map it to a short name. Any later rules in the list are " +
+            "ignored. By default, principal names of the form <code>{username}/{hostname}@{REALM}</code> are mapped " +
+            "to <code>{username}</code>. For more details on the format please see <a href=\"#security_authz\"> " +
+            "security authorization and acls</a>. Note that this configuration is ignored if an extension of " +
+            "<code>KafkaPrincipalBuilder</code> is provided by the <code>" + PRINCIPAL_BUILDER_CLASS_CONFIG + "</code> configuration.";
 
     public static final Class<? extends KafkaPrincipalBuilder> PRINCIPAL_BUILDER_CLASS_DEFAULT = DefaultKafkaPrincipalBuilder.class;
     public static final String PRINCIPAL_BUILDER_CLASS_DOC = "The fully qualified name of a class that implements the " +
