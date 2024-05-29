@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import java.time.Instant;
+import java.util.Optional;
 import java.util.SortedMap;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.TaskId;
@@ -62,6 +64,8 @@ public class ClientState {
     private final ClientStateTask previousStandbyTasks = new ClientStateTask(null, null);
     private final ClientStateTask revokingActiveTasks = new ClientStateTask(null, new TreeMap<>());
     private final UUID processId;
+
+    private Optional<Instant> followupRebalanceDeadline = Optional.empty();
     private int capacity;
 
     public ClientState() {
@@ -141,6 +145,14 @@ public class ClientState {
 
     boolean reachedCapacity() {
         return assignedTaskCount() >= capacity;
+    }
+
+    public Optional<Instant> followupRebalanceDeadline() {
+        return followupRebalanceDeadline;
+    }
+
+    public void setFollowupRebalanceDeadline(final Instant followupRebalanceDeadline) {
+        this.followupRebalanceDeadline = Optional.of(followupRebalanceDeadline);
     }
 
     public Set<TaskId> activeTasks() {
