@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.assignment;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -106,8 +107,7 @@ public final class TaskAssignmentUtils {
             return kafkaStreamsAssignments;
         }
 
-        if (!hasValidRackInformation(applicationState)) {
-            LOG.warn("Cannot optimize active tasks with invalid rack information.");
+        if (!canPerformRackAwareOptimization(applicationState, AssignedTask.Type.ACTIVE)) {
             return kafkaStreamsAssignments;
         }
 
@@ -133,7 +133,7 @@ public final class TaskAssignmentUtils {
             clientRacks.put(uuid, kafkaStreamsStates.get(entry.getKey()).rackId());
         }
 
-        final long initialCost = computeTaskCost(
+        final long initialCost = computeInitialCost(
             topicPartitionsByTaskId,
             taskIds,
             clientIds,
@@ -207,8 +207,7 @@ public final class TaskAssignmentUtils {
      */
     private static Map<ProcessId, KafkaStreamsAssignment> optimizeRackAwareStandbyTasks(final ApplicationState applicationState,
                                                                                        final Map<ProcessId, KafkaStreamsAssignment> kafkaStreamsAssignments) {
-        if (!hasValidRackInformation(applicationState)) {
-            LOG.warn("Cannot optimize standby tasks with invalid rack information.");
+        if (!canPerformRackAwareOptimization(applicationState, AssignedTask.Type.STANDBY)) {
             return kafkaStreamsAssignments;
         }
 
@@ -235,7 +234,7 @@ public final class TaskAssignmentUtils {
             clientRacks.put(uuid, kafkaStreamsStates.get(entry.getKey()).rackId());
         }
 
-        final long currentCost = computeTaskCost(
+        final long initialCost = computeInitialCost(
             topicPartitionsByTaskId,
             taskIds,
             clientIds,
@@ -246,20 +245,20 @@ public final class TaskAssignmentUtils {
             true,
             true
         );
-        LOG.info("Assignment before standby task optimization has cost {}", currentCost);
+        LOG.info("Assignment before standby task optimization has cost {}", initialCost);
 
         throw new UnsupportedOperationException("Not yet Implemented.");
     }
 
-    private static long computeTaskCost(final Map<TaskId, Set<TaskTopicPartition>> topicPartitionsByTaskId,
-                                        final List<TaskId> taskIds,
-                                        final List<UUID> clientIds,
-                                        final Map<UUID, KafkaStreamsAssignment> assignmentsByUuid,
-                                        final Map<UUID, Optional<String>> clientRacks,
-                                        final int crossRackTrafficCost,
-                                        final int nonOverlapCost,
-                                        final boolean hasReplica,
-                                        final boolean isStandby) {
+    private static long computeInitialCost(final Map<TaskId, Set<TaskTopicPartition>> topicPartitionsByTaskId,
+                                           final List<TaskId> taskIds,
+                                           final List<UUID> clientIds,
+                                           final Map<UUID, KafkaStreamsAssignment> assignmentsByUuid,
+                                           final Map<UUID, Optional<String>> clientRacks,
+                                           final int crossRackTrafficCost,
+                                           final int nonOverlapCost,
+                                           final boolean hasReplica,
+                                           final boolean isStandby) {
         if (taskIds.isEmpty()) {
             return 0;
         }
@@ -302,8 +301,8 @@ public final class TaskAssignmentUtils {
             taskCountByClient,
             (assignment, taskId) -> assignment.assignedTaskIds().contains(taskId),
             (taskId, processId, inCurrentAssignment, unused0, unused1, unused2) -> {
+                final String clientRack = clientRacks.get(processId).get();
                 final int assignmentChangeCost = !inCurrentAssignment ? nonOverlapCost : 0;
-                final Optional<String> clientRack = clientRacks.get(processId);
                 return assignmentChangeCost + getCrossRackTrafficCost(topicPartitionsByTaskId.get(taskId), clientRack, crossRackTrafficCost);
             },
             crossRackTrafficCost,
@@ -337,39 +336,43 @@ public final class TaskAssignmentUtils {
      * @return the traffic cost of assigning this {@param task} to the client {@param streamsState}.
      */
     private static int getCrossRackTrafficCost(final Set<TaskTopicPartition> topicPartitions,
-                                               final Optional<String> clientRack,
+                                               final String clientRack,
                                                final int crossRackTrafficCost) {
-        if (!clientRack.isPresent()) {
-            throw new IllegalStateException("Client doesn't have rack configured.");
-        }
-
         int cost = 0;
         for (final TaskTopicPartition topicPartition : topicPartitions) {
             final Optional<Set<String>> topicPartitionRacks = topicPartition.rackIds();
-            if (topicPartitionRacks == null || !topicPartitionRacks.isPresent()) {
-                throw new IllegalStateException("TopicPartition " + topicPartition + " has no rack information.");
+            if (!topicPartitionRacks.get().contains(clientRack)) {
+                cost += crossRackTrafficCost;
             }
-
-            if (topicPartitionRacks.get().contains(clientRack.get())) {
-                continue;
-            }
-
-            cost += crossRackTrafficCost;
         }
         return cost;
     }
 
     /**
+     *
+     * @return whether the rack information is valid, and the {@code StreamsConfig#RACK_AWARE_ASSIGNMENT_STRATEGY_NONE}
+     *         is set.
+     */
+    private static boolean canPerformRackAwareOptimization(final ApplicationState applicationState,
+                                                           final AssignedTask.Type taskType) {
+        final String rackAwareAssignmentStrategy = applicationState.assignmentConfigs().rackAwareAssignmentStrategy();
+        if (StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE.equals(rackAwareAssignmentStrategy)) {
+            LOG.warn("KafkaStreams rack aware task assignment optimization was disabled in the StreamsConfig.");
+            return false;
+        }
+        return hasValidRackInformation(applicationState, taskType);
+    }
+
+    /**
      * This function returns whether the current application state has the required rack information
      * to make assignment decisions with.
-     * This includes ensuring that every client has a known rack id, and that every topic partition for
-     * every logical task that needs to be assigned also has known rack ids.
-     * If a logical task has no source topic partitions, it will return false.
-     * If standby tasks are configured, but a logical task has no changelog topic partitions, it will return false.
+     *
+     * @param taskType the type of task that we are trying to validate rack information for.
      *
      * @return whether rack-aware assignment decisions can be made for this application.
      */
-    private static boolean hasValidRackInformation(final ApplicationState applicationState) {
+    private static boolean hasValidRackInformation(final ApplicationState applicationState,
+                                                   final AssignedTask.Type taskType) {
         for (final KafkaStreamsState state : applicationState.kafkaStreamsStates(false).values()) {
             if (!hasValidRackInformation(state)) {
                 return false;
@@ -377,7 +380,7 @@ public final class TaskAssignmentUtils {
         }
 
         for (final TaskInfo task : applicationState.allTasks()) {
-            if (!hasValidRackInformation(task)) {
+            if (!hasValidRackInformation(task, taskType)) {
                 return false;
             }
         }
@@ -386,14 +389,19 @@ public final class TaskAssignmentUtils {
 
     private static boolean hasValidRackInformation(final KafkaStreamsState state) {
         if (!state.rackId().isPresent()) {
-            LOG.error("Client " + state.processId() + " doesn't have rack configured.");
+            LOG.error("KafkaStreams client {} doesn't have a rack id configured.", state.processId().id());
             return false;
         }
         return true;
     }
 
-    private static boolean hasValidRackInformation(final TaskInfo task) {
-        for (final TaskTopicPartition topicPartition : task.topicPartitions()) {
+    private static boolean hasValidRackInformation(final TaskInfo task,
+                                                   final AssignedTask.Type taskType) {
+        final Collection<TaskTopicPartition> topicPartitions = taskType == AssignedTask.Type.STANDBY
+            ? task.topicPartitions().stream().filter(TaskTopicPartition::isChangelog).collect(Collectors.toSet())
+            : task.topicPartitions();
+
+        for (final TaskTopicPartition topicPartition : topicPartitions) {
             final Optional<Set<String>> racks = topicPartition.rackIds();
             if (!racks.isPresent() || racks.get().isEmpty()) {
                 LOG.error("Topic partition {} for task {} does not have racks configured.", topicPartition, task.id());
