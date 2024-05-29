@@ -615,13 +615,13 @@ public class MeteredSessionStoreTest {
         final KafkaMetric openIteratorsMetric = metric("num-open-iterators");
         assertThat(openIteratorsMetric, not(nullValue()));
 
-        assertThat((Integer) openIteratorsMetric.metricValue(), equalTo(0));
+        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
 
         try (final KeyValueIterator<Windowed<String>, String> iterator = store.backwardFetch(KEY)) {
-            assertThat((Integer) openIteratorsMetric.metricValue(), equalTo(1));
+            assertThat((Long) openIteratorsMetric.metricValue(), equalTo(1L));
         }
 
-        assertThat((Integer) openIteratorsMetric.metricValue(), equalTo(0));
+        assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
     }
 
     @Test
@@ -652,6 +652,42 @@ public class MeteredSessionStoreTest {
 
         assertThat((double) iteratorDurationAvgMetric.metricValue(), equalTo(2.5 * TimeUnit.MILLISECONDS.toNanos(1)));
         assertThat((double) iteratorDurationMaxMetric.metricValue(), equalTo(3.0 * TimeUnit.MILLISECONDS.toNanos(1)));
+    }
+
+    @Test
+    public void shouldTrackOldestOpenIteratorTimestamp() {
+        when(innerStore.backwardFetch(KEY_BYTES)).thenReturn(KeyValueIterators.emptyIterator());
+        init();
+
+        final KafkaMetric oldestIteratorTimestampMetric = metric("oldest-iterator-open-since-ms");
+        assertThat(oldestIteratorTimestampMetric, not(nullValue()));
+
+        assertThat(oldestIteratorTimestampMetric.metricValue(), nullValue());
+
+        KeyValueIterator<Windowed<String>, String> second = null;
+        final long secondTimestamp;
+        try {
+            try (final KeyValueIterator<Windowed<String>, String> first = store.backwardFetch(KEY)) {
+                final long oldestTimestamp = mockTime.milliseconds();
+                assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(oldestTimestamp));
+                mockTime.sleep(100);
+
+                // open a second iterator before closing the first to test that we still produce the first iterator's timestamp
+                second = store.backwardFetch(KEY);
+                secondTimestamp = mockTime.milliseconds();
+                assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(oldestTimestamp));
+                mockTime.sleep(100);
+            }
+
+            // now that the first iterator is closed, check that the timestamp has advanced to the still open second iterator
+            assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(secondTimestamp));
+        } finally {
+            if (second != null) {
+                second.close();
+            }
+        }
+
+        assertThat((Integer) oldestIteratorTimestampMetric.metricValue(), nullValue());
     }
 
     private KafkaMetric metric(final String name) {

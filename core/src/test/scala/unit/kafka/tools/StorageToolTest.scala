@@ -32,7 +32,7 @@ import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.common.metadata.UserScramCredentialRecord
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.apache.kafka.raft.QuorumConfig
-import org.apache.kafka.server.config.{KRaftConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.{Test, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
@@ -206,12 +206,15 @@ Found problem:
 
   @Test
   def testFormatSucceedsIfAllDirectoriesAreAvailable(): Unit = {
-    val availableDir1 = TestUtils.tempDir()
-    val availableDir2 = TestUtils.tempDir()
+    val availableDirs = Seq(TestUtils.tempDir(), TestUtils.tempDir(), TestUtils.tempDir()).map(dir => dir.toString)
     val stream = new ByteArrayOutputStream()
-    assertEquals(0, runFormatCommand(stream, Seq(availableDir1.toString, availableDir2.toString)))
-    assertTrue(stream.toString().contains("Formatting %s".format(availableDir1)))
-    assertTrue(stream.toString().contains("Formatting %s".format(availableDir2)))
+    assertEquals(0, runFormatCommand(stream, availableDirs))
+    val actual = stream.toString().split("\\r?\\n")
+    val expect = availableDirs.map("Formatting %s".format(_))
+    assertEquals(availableDirs.size, actual.size)
+    expect.foreach(dir => {
+      assertEquals(1, actual.count(_.startsWith(dir)))
+    })
   }
 
   @Test
@@ -464,7 +467,7 @@ Found problem:
     val propsStream = Files.newOutputStream(propsFile.toPath)
     try {
       properties.setProperty(ServerLogConfigs.LOG_DIRS_CONFIG, TestUtils.tempDir().toString)
-      properties.setProperty(KafkaConfig.UnstableMetadataVersionsEnableProp, enableUnstable.toString)
+      properties.setProperty(ServerConfigs.UNSTABLE_METADATA_VERSIONS_ENABLE_CONFIG, enableUnstable.toString)
       properties.store(propsStream, "config.props")
     } finally {
       propsStream.close()
@@ -489,3 +492,4 @@ Found problem:
     }
   }
 }
+
