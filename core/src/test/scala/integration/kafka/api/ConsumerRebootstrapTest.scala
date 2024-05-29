@@ -17,11 +17,10 @@
 package kafka.api
 
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.junit.jupiter.api.Test
 
-import java.util.{Collections, Properties}
+import java.util.Collections
 
 class ConsumerRebootstrapTest extends RebootstrapTest {
   @Test
@@ -36,9 +35,7 @@ class ConsumerRebootstrapTest extends RebootstrapTest {
     server1.shutdown()
     server1.awaitShutdown()
 
-    val consumerConfigOverrides = new Properties()
-    consumerConfigOverrides.put(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG, "rebootstrap");
-    val consumer = createConsumer(configOverrides = consumerConfigOverrides)
+    val consumer = createConsumer(configOverrides = clientOverrides)
 
     // Only the server 0 is available for the consumer during the bootstrap.
     consumer.assign(Collections.singleton(tp))

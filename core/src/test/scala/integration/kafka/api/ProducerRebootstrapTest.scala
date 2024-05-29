@@ -16,13 +16,9 @@
  */
 package kafka.api
 
-import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
-
-import java.util.Properties
-import java.util.concurrent.TimeUnit
 
 class ProducerRebootstrapTest extends RebootstrapTest {
   @Test
@@ -30,13 +26,10 @@ class ProducerRebootstrapTest extends RebootstrapTest {
     server1.shutdown()
     server1.awaitShutdown()
 
-    val producerConfigOverrides = new Properties()
-    producerConfigOverrides.put(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG, "rebootstrap");
-    val producer = createProducer(configOverrides = producerConfigOverrides)
+    val producer = createProducer(configOverrides = clientOverrides)
 
     // Only the server 0 is available for the producer during the bootstrap.
-    producer.send(new ProducerRecord(topic, part, "key 0".getBytes, "value 0".getBytes))
-      .get(1, TimeUnit.MINUTES)
+    producer.send(new ProducerRecord(topic, part, "key 0".getBytes, "value 0".getBytes)).get()
 
     server0.shutdown()
     server0.awaitShutdown()
@@ -45,8 +38,7 @@ class ProducerRebootstrapTest extends RebootstrapTest {
     // The server 0, originally cached during the bootstrap, is offline.
     // However, the server 1 from the bootstrap list is online.
     // Should be able to produce records.
-    val recordMetadata1 = producer.send(new ProducerRecord(topic, part, "key 1".getBytes, "value 1".getBytes))
-      .get(1, TimeUnit.MINUTES)
+    val recordMetadata1 = producer.send(new ProducerRecord(topic, part, "key 1".getBytes, "value 1".getBytes)).get()
     assertEquals(0, recordMetadata1.offset())
 
     server1.shutdown()
@@ -54,8 +46,7 @@ class ProducerRebootstrapTest extends RebootstrapTest {
     server0.startup()
 
     // The same situation, but the server 1 has gone and server 0 is back.
-    val recordMetadata2 = producer.send(new ProducerRecord(topic, part, "key 1".getBytes, "value 1".getBytes))
-      .get(1, TimeUnit.MINUTES)
+    val recordMetadata2 = producer.send(new ProducerRecord(topic, part, "key 1".getBytes, "value 1".getBytes)).get()
     assertEquals(1, recordMetadata2.offset())
   }
 }

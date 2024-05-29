@@ -16,11 +16,7 @@
  */
 package kafka.api
 
-import org.apache.kafka.clients.CommonClientConfigs
 import org.junit.jupiter.api.Test
-
-import java.util.Properties
-import java.util.concurrent.TimeUnit
 
 class AdminClientRebootstrapTest extends RebootstrapTest {
   @Test
@@ -28,13 +24,10 @@ class AdminClientRebootstrapTest extends RebootstrapTest {
     server1.shutdown()
     server1.awaitShutdown()
 
-    val adminClientConfigOverrides = new Properties()
-    adminClientConfigOverrides.put(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG, "rebootstrap")
-    val adminClient = createAdminClient(configOverrides = adminClientConfigOverrides)
+    val adminClient = createAdminClient(configOverrides = clientOverrides)
 
     // Only the server 0 is available for the admin client during the bootstrap.
-    adminClient.listTopics().names()
-      .get(1, TimeUnit.MINUTES)
+    adminClient.listTopics().names().get()
 
     server0.shutdown()
     server0.awaitShutdown()
@@ -43,15 +36,13 @@ class AdminClientRebootstrapTest extends RebootstrapTest {
     // The server 0, originally cached during the bootstrap, is offline.
     // However, the server 1 from the bootstrap list is online.
     // Should be able to list topics again.
-    adminClient.listTopics().names()
-      .get(1, TimeUnit.MINUTES)
+    adminClient.listTopics().names().get()
 
     server1.shutdown()
     server1.awaitShutdown()
     server0.startup()
 
     // The same situation, but the server 1 has gone and server 0 is back.
-    adminClient.listTopics().names()
-      .get(1, TimeUnit.MINUTES)
+    adminClient.listTopics().names().get()
   }
 }
