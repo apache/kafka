@@ -338,6 +338,10 @@ public class RemoteLogManager implements Closeable {
                                    Map<String, Uuid> topicIds) {
         LOGGER.debug("Received leadership changes for leaders: {} and followers: {}", partitionsBecomeLeader, partitionsBecomeFollower);
 
+        if (this.rlmConfig.enableRemoteStorageSystem() && !isRemoteLogManagerConfigured()) {
+            throw new KafkaException("RemoteLogManager is not configured when remote storage system is enabled");
+        }
+
         Map<TopicIdPartition, Integer> leaderPartitionsWithLeaderEpoch = filterPartitions(partitionsBecomeLeader)
                 .collect(Collectors.toMap(
                         partition -> new TopicIdPartition(topicIds.get(partition.topic()), partition.topicPartition()),
@@ -346,10 +350,6 @@ public class RemoteLogManager implements Closeable {
 
         Set<TopicIdPartition> followerPartitions = filterPartitions(partitionsBecomeFollower)
                 .map(p -> new TopicIdPartition(topicIds.get(p.topic()), p.topicPartition())).collect(Collectors.toSet());
-
-        if (this.rlmConfig.enableRemoteStorageSystem() && !isRemoteLogManagerConfigured()) {
-            throw new KafkaException("RemoteLogManager is not configured when remote storage system is enabled");
-        }
 
         if (!leaderPartitions.isEmpty() || !followerPartitions.isEmpty()) {
             LOGGER.debug("Effective topic partitions after filtering compact and internal topics, leaders: {} and followers: {}",
