@@ -89,14 +89,14 @@ public class StickyTaskAssignor implements TaskAssignor {
 
         final Map<ProcessId, KafkaStreamsAssignment> currentAssignments = assignmentState.buildKafkaStreamsAssignments();
 
-        final Set<TaskId> statefulTasks = applicationState.allTasks().stream()
+        final Set<TaskId> statefulTasks = applicationState.allTasks().values().stream()
             .filter(TaskInfo::isStateful)
             .map(TaskInfo::id)
             .collect(Collectors.toSet());
         final Map<ProcessId, KafkaStreamsAssignment> optimizedAssignmentsForStatefulTasks = TaskAssignmentUtils.optimizeRackAwareActiveTasks(
             applicationState, currentAssignments, new TreeSet<>(statefulTasks));
 
-        final Set<TaskId> statelessTasks = applicationState.allTasks().stream()
+        final Set<TaskId> statelessTasks = applicationState.allTasks().values().stream()
             .filter(task -> !task.isStateful())
             .map(TaskInfo::id)
             .collect(Collectors.toSet());
@@ -126,8 +126,7 @@ public class StickyTaskAssignor implements TaskAssignor {
                                      final AssignmentState assignmentState,
                                      final boolean mustPreserveActiveTaskAssignment) {
         final int totalCapacity = computeTotalProcessingThreads(clients);
-        final Set<TaskId> allTaskIds = applicationState.allTasks().stream()
-            .map(TaskInfo::id).collect(Collectors.toSet());
+        final Set<TaskId> allTaskIds = applicationState.allTasks().keySet();
         final int taskCount = allTaskIds.size();
         final int activeTasksPerThread = taskCount / totalCapacity;
         final Set<TaskId> unassigned = new HashSet<>(allTaskIds);
@@ -172,7 +171,7 @@ public class StickyTaskAssignor implements TaskAssignor {
 
     private static void assignStandby(final ApplicationState applicationState,
                                       final AssignmentState assignmentState) {
-        final Set<TaskInfo> statefulTasks = applicationState.allTasks().stream()
+        final Set<TaskInfo> statefulTasks = applicationState.allTasks().values().stream()
             .filter(TaskInfo::isStateful)
             .collect(Collectors.toSet());
         final int numStandbyReplicas = applicationState.assignmentConfigs().numStandbyReplicas();
