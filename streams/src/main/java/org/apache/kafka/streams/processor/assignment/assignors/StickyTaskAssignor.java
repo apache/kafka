@@ -78,9 +78,7 @@ public class StickyTaskAssignor implements TaskAssignor {
             finalAssignments.put(clientId, previousAssignment.withFollowupRebalance(Instant.ofEpochMilli(0)));
         }
 
-        final Collection<KafkaStreamsAssignment> taskAssignments = finalAssignments.entrySet().stream()
-            .map(Map.Entry::getValue).collect(Collectors.toList());
-        return new TaskAssignment(taskAssignments);
+        return new TaskAssignment(finalAssignments.values());
     }
 
     private void optimizeActive(final ApplicationState applicationState,
