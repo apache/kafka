@@ -157,16 +157,15 @@ public class ConsumerNetworkThreadUnitTest {
         ApplicationEvent e = new PollEvent(100);
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
-        verify(applicationEventProcessor, times(1)).process(e);
+        verify(applicationEventProcessor).process(e);
     }
 
-    // Probably remove or change
     @Test
     public void testMetadataUpdateEvent() {
         ApplicationEvent e = new NewTopicsMetadataUpdateRequestEvent();
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
-        verify(metadata).requestUpdateForNewTopics();
+        verify(applicationEventProcessor).process(e);
     }
 
     @Test
@@ -225,7 +224,7 @@ public class ConsumerNetworkThreadUnitTest {
         assertTrue(applicationEventsQueue.isEmpty());
     }
 
-    // Maybe remove, try out making commitRequestManager not a mock
+    // Look into this one
     @Test
     public void testAssignmentChangeEvent() {
         HashMap<TopicPartition, OffsetAndMetadata> offset = mockTopicPartitionOffset();

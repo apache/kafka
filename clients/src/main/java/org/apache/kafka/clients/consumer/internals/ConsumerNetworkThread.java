@@ -145,7 +145,6 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
 
         // here we get the system time and pass it to the request manager because we don't want to invoke system time all the time
         final long currentTimeMs = time.milliseconds();
-        // TODO: Make sure pollWaitTimeMs is computed correctly.  Try to examine different scenarios
         final long pollWaitTimeMs = requestManagers.entries().stream()
                 .filter(Optional::isPresent)
                 .map(Optional::get)
@@ -154,7 +153,6 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
                 .reduce(MAX_POLL_TIMEOUT_MS, Math::min);
         networkClientDelegate.poll(pollWaitTimeMs, currentTimeMs);
 
-        // TODO: Check computation of cachedMaximumTimeToWait
         cachedMaximumTimeToWait = requestManagers.entries().stream()
                 .filter(Optional::isPresent)
                 .map(Optional::get)
