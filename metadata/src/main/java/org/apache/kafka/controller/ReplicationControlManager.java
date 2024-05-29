@@ -1478,8 +1478,8 @@ public class ReplicationControlManager {
                 for (int i = 0; i < topic.partitions().size(); i++) {
                     int partitionId = topic.partitions().get(i);
                     int desiredLeader = -1;
-                    if(!topic.desiredLeaders().isEmpty()) {
-                        desiredLeader = topic.desiredLeaders().get(i);
+                    if(!topic.designatedLeaders().isEmpty()) {
+                        desiredLeader = topic.designatedLeaders().get(i);
                     }
                     ApiError error = electLeader(topic.topic(), partitionId, electionType, records, desiredLeader);
                     topicResults.partitionResult().add(new PartitionResult().

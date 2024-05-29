@@ -77,9 +77,9 @@ public class ElectLeadersRequest extends AbstractRequest {
                     }
                     tps.partitions().add(tp.partition());
                     if (version >= 3 && tp instanceof TopicPartitionDesignated) {
-                        tps.desiredLeaders().add(((TopicPartitionDesignated) tp).getDesignatedLeader());
-                        if (tps.desiredLeaders().size() != tps.partitions().size()) {
-                            throw new IllegalStateException("Both desiredLeaders and partitions must be the same size " + tps.desiredLeaders().size() + " " + tps.partitions().size());
+                        tps.designatedLeaders().add(((TopicPartitionDesignated) tp).getDesignatedLeader());
+                        if (tps.designatedLeaders().size() != tps.partitions().size()) {
+                            throw new IllegalStateException("Both desiredLeaders and partitions must be the same size " + tps.designatedLeaders().size() + " " + tps.partitions().size());
                         }
                     }
 

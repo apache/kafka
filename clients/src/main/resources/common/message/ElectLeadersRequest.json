@@ -21,6 +21,8 @@
   // Version 1 implements multiple leader election types, as described by KIP-460.
   //
   // Version 2 is the first flexible version.
+  //
+  // Version 3 implements designatedLeaders, as described by KIP-966
   "validVersions": "0-3",
   "flexibleVersions": "2+",
   "fields": [
@@ -33,7 +35,7 @@
           "about": "The name of a topic." },
         { "name": "Partitions", "type": "[]int32", "versions": "0+",
           "about": "The partitions of this topic whose leader should be elected." },
-        { "name": "DesiredLeaders", "type": "[]int32", "versions": "3+", "nullableVersions": "3+",
+        { "name": "DesignatedLeaders", "type": "[]int32", "versions": "3+", "nullableVersions": "3+",
           "about": "The desired leaders. The entry should match with the entry in Partitions by the index." }
       ]
     },
