@@ -13,7 +13,6 @@
 package kafka.api
 
 import kafka.security.authorizer.AclAuthorizer
-import kafka.server.KafkaConfig
 import kafka.utils.TestUtils._
 import kafka.utils.{JaasTestUtils, TestUtils}
 import org.apache.kafka.clients.admin._
@@ -28,7 +27,7 @@ import org.apache.kafka.common.resource.ResourceType.{GROUP, TOPIC}
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourcePatternFilter, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.security.authorizer.AclEntry.{WILDCARD_HOST, WILDCARD_PRINCIPAL_STRING}
-import org.apache.kafka.server.config.ZkConfigs
+import org.apache.kafka.server.config.{ServerConfigs, ZkConfigs}
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo, Timeout}
@@ -53,7 +52,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
-    this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, aclAuthorizerClassName)
+    this.serverConfig.setProperty(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, aclAuthorizerClassName)
     this.serverConfig.setProperty(ZkConfigs.ZK_ENABLE_SECURE_ACLS_CONFIG, "true")
     this.serverConfig.setProperty(AclAuthorizer.SuperUsersProp, kafkaPrincipal.toString)
 

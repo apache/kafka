@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.time.Instant;
 import java.util.Optional;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
@@ -38,6 +39,9 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.ApplicationState;
+import org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment;
+import org.apache.kafka.streams.processor.assignment.KafkaStreamsState;
+import org.apache.kafka.streams.processor.assignment.TaskAssignor.AssignmentError;
 import org.apache.kafka.streams.processor.assignment.TaskInfo;
 import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment;
@@ -214,6 +218,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private RebalanceProtocol rebalanceProtocol;
     private AssignmentListener assignmentListener;
 
+    private Supplier<Optional<org.apache.kafka.streams.processor.assignment.TaskAssignor>> userTaskAssignorSupplier;
     private Supplier<TaskAssignor> taskAssignorSupplier;
     private byte uniqueField;
     private Map<String, String> clientTags;
@@ -248,6 +253,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         internalTopicManager = assignorConfiguration.internalTopicManager();
         copartitionedTopicsEnforcer = assignorConfiguration.copartitionedTopicsEnforcer();
         rebalanceProtocol = assignorConfiguration.rebalanceProtocol();
+        userTaskAssignorSupplier = assignorConfiguration::userTaskAssignor;
         taskAssignorSupplier = assignorConfiguration::taskAssignor;
         assignmentListener = assignorConfiguration.assignmentListener();
         uniqueField = 0;
@@ -400,9 +406,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         }
 
         try {
-            final boolean versionProbing =
-                checkMetadataVersions(minReceivedMetadataVersion, minSupportedMetadataVersion, futureMetadataVersion);
-
             log.debug("Constructed client metadata {} from the member subscriptions.", clientMetadataMap);
 
             // ---------------- Step One ---------------- //
@@ -440,7 +443,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
             final Set<TaskId> statefulTasks = new HashSet<>();
 
-            final boolean probingRebalanceNeeded = assignTasksToClients(fullMetadata, allSourceTopics, topicGroups,
+            final boolean versionProbing =
+                checkMetadataVersions(minReceivedMetadataVersion, minSupportedMetadataVersion, futureMetadataVersion);
+            assignTasksToClients(fullMetadata, allSourceTopics, topicGroups,
                 clientMetadataMap, partitionsForTask, racksForProcessConsumer, statefulTasks);
 
             // ---------------- Step Three ---------------- //
@@ -465,8 +470,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 allOwnedPartitions,
                 minReceivedMetadataVersion,
                 minSupportedMetadataVersion,
-                versionProbing,
-                probingRebalanceNeeded
+                versionProbing
             );
 
             return new GroupAssignment(assignment);
@@ -570,6 +574,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             final ProcessId processId = kafkaStreamsAssignment.processId();
             final ClientMetadata clientMetadata = clientMetadataMap.get(processId.id());
             clientMetadata.state.setAssignedTasks(kafkaStreamsAssignment);
+            if (kafkaStreamsAssignment.followupRebalanceDeadline().isPresent()) {
+                clientMetadata.state.setFollowupRebalanceDeadline(kafkaStreamsAssignment.followupRebalanceDeadline().get());
+            }
         });
     }
 
@@ -712,15 +719,14 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     /**
      * Assigns a set of tasks to each client (Streams instance) using the configured task assignor, and also
      * populate the stateful tasks that have been assigned to the clients
-     * @return true if a probing rebalance should be triggered
      */
-    private boolean assignTasksToClients(final Cluster fullMetadata,
-                                         final Set<String> allSourceTopics,
-                                         final Map<Subtopology, TopicsInfo> topicGroups,
-                                         final Map<UUID, ClientMetadata> clientMetadataMap,
-                                         final Map<TaskId, Set<TopicPartition>> partitionsForTask,
-                                         final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer,
-                                         final Set<TaskId> statefulTasks) {
+    private void assignTasksToClients(final Cluster fullMetadata,
+                                      final Set<String> allSourceTopics,
+                                      final Map<Subtopology, TopicsInfo> topicGroups,
+                                      final Map<UUID, ClientMetadata> clientMetadataMap,
+                                      final Map<TaskId, Set<TopicPartition>> partitionsForTask,
+                                      final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer,
+                                      final Set<TaskId> statefulTasks) {
         if (!statefulTasks.isEmpty()) {
             throw new TaskAssignmentException("The stateful tasks should not be populated before assigning tasks to clients");
         }
@@ -760,23 +766,45 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         log.debug("Assigning tasks and {} standby replicas to client nodes {}",
                   numStandbyReplicas(), clientStates);
 
-        final TaskAssignor taskAssignor = createTaskAssignor(lagComputationSuccessful);
-
-        final RackAwareTaskAssignor rackAwareTaskAssignor = new RackAwareTaskAssignor(
-            fullMetadata,
-            partitionsForTask,
-            changelogTopics.changelogPartionsForTask(),
-            tasksForTopicGroup,
-            racksForProcessConsumer,
-            internalTopicManager,
-            assignmentConfigs,
-            time
-        );
-        final boolean probingRebalanceNeeded = taskAssignor.assign(clientStates,
-                                                                   allTasks,
-                                                                   statefulTasks,
-                                                                   rackAwareTaskAssignor,
-                                                                   assignmentConfigs);
+        final Optional<org.apache.kafka.streams.processor.assignment.TaskAssignor> userTaskAssignor =
+            userTaskAssignorSupplier.get();
+        if (userTaskAssignor.isPresent()) {
+            final ApplicationState applicationState = buildApplicationState(
+                taskManager.topologyMetadata(),
+                clientMetadataMap,
+                topicGroups,
+                fullMetadata
+            );
+            final TaskAssignment taskAssignment = userTaskAssignor.get().assign(applicationState);
+            processStreamsPartitionAssignment(clientMetadataMap, taskAssignment);
+        } else {
+            final TaskAssignor taskAssignor = createTaskAssignor(lagComputationSuccessful);
+            final RackAwareTaskAssignor rackAwareTaskAssignor = new RackAwareTaskAssignor(
+                fullMetadata,
+                partitionsForTask,
+                changelogTopics.changelogPartionsForTask(),
+                tasksForTopicGroup,
+                racksForProcessConsumer,
+                internalTopicManager,
+                assignmentConfigs,
+                time
+            );
+            final boolean probingRebalanceNeeded = taskAssignor.assign(clientStates,
+                allTasks,
+                statefulTasks,
+                rackAwareTaskAssignor,
+                assignmentConfigs);
+            if (probingRebalanceNeeded) {
+                // Arbitrarily choose the leader's client to be responsible for triggering the probing rebalance,
+                // note once we pick the first consumer within the process to trigger probing rebalance, other consumer
+                // would not set to trigger any more.
+                final ClientMetadata rebalanceClientMetadata = clientMetadataMap.get(taskManager.processId());
+                if (rebalanceClientMetadata != null) {
+                    final Instant rebalanceDeadline = Instant.ofEpochMilli(time.milliseconds() + probingRebalanceIntervalMs());
+                    rebalanceClientMetadata.state.setFollowupRebalanceDeadline(rebalanceDeadline);
+                }
+            }
+        }
 
         // Break this up into multiple logs to make sure the summary info gets through, which helps avoid
         // info loss for example due to long line truncation with large apps
@@ -789,8 +817,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                      .sorted(comparingByKey())
                      .map(entry -> entry.getKey() + "=" + entry.getValue().currentAssignment())
                      .collect(Collectors.joining(Utils.NL)));
-
-        return probingRebalanceNeeded;
     }
 
     private TaskAssignor createTaskAssignor(final boolean lagComputationSuccessful) {
@@ -948,9 +974,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                                          final Set<TopicPartition> allOwnedPartitions,
                                                          final int minUserMetadataVersion,
                                                          final int minSupportedMetadataVersion,
-                                                         final boolean versionProbing,
-                                                         final boolean shouldTriggerProbingRebalance) {
-        boolean rebalanceRequired = shouldTriggerProbingRebalance || versionProbing;
+                                                         final boolean versionProbing) {
+        boolean rebalanceRequired = versionProbing;
         final Map<String, Assignment> assignment = new HashMap<>();
 
         // within the client, distribute tasks to its owned consumers
@@ -992,10 +1017,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 activeTaskAssignment.get(threadEntry.getKey()).addAll(threadEntry.getValue());
             }
 
-            // Arbitrarily choose the leader's client to be responsible for triggering the probing rebalance,
-            // note once we pick the first consumer within the process to trigger probing rebalance, other consumer
-            // would not set to trigger any more.
-            final boolean encodeNextProbingRebalanceTime = shouldTriggerProbingRebalance && clientId.equals(taskManager.processId());
+            final boolean isNextProbingRebalanceEncoded = clientMetadata.state.followupRebalanceDeadline().isPresent();
 
             final boolean tasksRevoked = addClientAssignments(
                 statefulTasks,
@@ -1008,11 +1030,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 activeTaskAssignment,
                 standbyTaskAssignment,
                 minUserMetadataVersion,
-                minSupportedMetadataVersion,
-                encodeNextProbingRebalanceTime
+                minSupportedMetadataVersion
             );
 
-            if (tasksRevoked || encodeNextProbingRebalanceTime) {
+            if (tasksRevoked || isNextProbingRebalanceEncoded) {
                 rebalanceRequired = true;
                 log.debug("Requested client {} to schedule a followup rebalance", clientId);
             }
@@ -1056,12 +1077,12 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                          final Map<String, List<TaskId>> activeTaskAssignments,
                                          final Map<String, List<TaskId>> standbyTaskAssignments,
                                          final int minUserMetadataVersion,
-                                         final int minSupportedMetadataVersion,
-                                         final boolean probingRebalanceNeeded) {
+                                         final int minSupportedMetadataVersion) {
         boolean followupRebalanceRequiredForRevokedTasks = false;
 
         // We only want to encode a scheduled probing rebalance for a single member in this client
-        boolean shouldEncodeProbingRebalance = probingRebalanceNeeded;
+        final Optional<Instant> followupRebalanceDeadline = clientMetadata.state.followupRebalanceDeadline();
+        boolean shouldEncodeProbingRebalance = followupRebalanceDeadline.isPresent();
 
         // Loop through the consumers and build their assignment
         for (final String consumer : clientMetadata.consumers) {
@@ -1108,7 +1129,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 // Don't bother to schedule a probing rebalance if an immediate one is already scheduled
                 shouldEncodeProbingRebalance = false;
             } else if (shouldEncodeProbingRebalance) {
-                final long nextRebalanceTimeMs = time.milliseconds() + probingRebalanceIntervalMs();
+                final long nextRebalanceTimeMs = followupRebalanceDeadline.get().toEpochMilli();
                 log.info("Requesting followup rebalance be scheduled by {} for {} to probe for caught-up replica tasks.",
                         consumer, Utils.toLogDateTimeFormat(nextRebalanceTimeMs));
                 info.setNextRebalanceTime(nextRebalanceTimeMs);
@@ -1520,6 +1541,72 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             log.info("No followup rebalance was requested, resetting the rebalance schedule.");
             nextScheduledRebalanceMs.set(Long.MAX_VALUE);
         }
+    }
+
+    private AssignmentError validateTaskAssignment(final ApplicationState applicationState,
+                                                   final TaskAssignment taskAssignment) {
+        final Collection<KafkaStreamsAssignment> assignments = taskAssignment.assignment();
+        final Set<TaskId> activeTasksInOutput = new HashSet<>();
+        final Set<TaskId> standbyTasksInOutput = new HashSet<>();
+        for (final KafkaStreamsAssignment assignment : assignments) {
+            final Set<TaskId> tasksForAssignment = new HashSet<>();
+            for (final KafkaStreamsAssignment.AssignedTask task : assignment.assignment()) {
+                if (activeTasksInOutput.contains(task.id()) && task.type() == KafkaStreamsAssignment.AssignedTask.Type.ACTIVE) {
+                    log.error("Assignment is invalid: an active task was assigned multiple times: {}", task.id());
+                    return AssignmentError.ACTIVE_TASK_ASSIGNED_MULTIPLE_TIMES;
+                }
+
+                if (tasksForAssignment.contains(task.id())) {
+                    log.error("Assignment is invalid: both an active and standby assignment of a task were assigned to the same client: {}", task.id());
+                    return AssignmentError.ACTIVE_AND_STANDBY_TASK_ASSIGNED_TO_SAME_KAFKASTREAMS;
+                }
+
+                tasksForAssignment.add(task.id());
+                if (task.type() == KafkaStreamsAssignment.AssignedTask.Type.ACTIVE) {
+                    activeTasksInOutput.add(task.id());
+                } else {
+                    standbyTasksInOutput.add(task.id());
+                }
+            }
+        }
+
+        for (final TaskInfo task : applicationState.allTasks()) {
+            if (!task.isStateful() && standbyTasksInOutput.contains(task.id())) {
+                log.error("Assignment is invalid: a standby task was found for a stateless task: {}", task.id());
+                return AssignmentError.INVALID_STANDBY_TASK;
+            }
+        }
+
+        final Map<ProcessId, KafkaStreamsState> clientStates = applicationState.kafkaStreamsStates(false);
+        final Set<ProcessId> clientsInOutput = assignments.stream().map(KafkaStreamsAssignment::processId)
+            .collect(Collectors.toSet());
+        for (final Map.Entry<ProcessId, KafkaStreamsState> entry : clientStates.entrySet()) {
+            final ProcessId processIdInInput = entry.getKey();
+            if (!clientsInOutput.contains(processIdInInput)) {
+                log.error("Assignment is invalid: one of the clients has no assignment: {}", processIdInInput.id());
+                return AssignmentError.MISSING_PROCESS_ID;
+            }
+        }
+
+        for (final ProcessId processIdInOutput : clientsInOutput) {
+            if (!clientStates.containsKey(processIdInOutput)) {
+                log.error("Assignment is invalid: one of the clients in the assignment is unknown: {}", processIdInOutput.id());
+                return AssignmentError.UNKNOWN_PROCESS_ID;
+            }
+        }
+
+        final Set<TaskId> taskIdsInInput = applicationState.allTasks().stream().map(TaskInfo::id)
+            .collect(Collectors.toSet());
+        for (final KafkaStreamsAssignment assignment : assignments) {
+            for (final KafkaStreamsAssignment.AssignedTask task : assignment.assignment()) {
+                if (!taskIdsInInput.contains(task.id())) {
+                    log.error("Assignment is invalid: one of the tasks in the assignment is unknown: {}", task.id());
+                    return AssignmentError.UNKNOWN_TASK_ID;
+                }
+            }
+        }
+
+        return AssignmentError.NONE;
     }
 
     /**
