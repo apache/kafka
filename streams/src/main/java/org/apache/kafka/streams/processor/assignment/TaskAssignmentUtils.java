@@ -205,7 +205,7 @@ public final class TaskAssignmentUtils {
      *
      * @return a map with the KafkaStreamsAssignments updated to minimize cross-rack traffic for standby tasks
      */
-    private static Map<ProcessId, KafkaStreamsAssignment> optimizeRackAwareStandbyTasks(final ApplicationState applicationState,
+    public static Map<ProcessId, KafkaStreamsAssignment> optimizeRackAwareStandbyTasks(final ApplicationState applicationState,
                                                                                        final Map<ProcessId, KafkaStreamsAssignment> kafkaStreamsAssignments) {
         if (!canPerformRackAwareOptimization(applicationState, AssignedTask.Type.STANDBY)) {
             return kafkaStreamsAssignments;
