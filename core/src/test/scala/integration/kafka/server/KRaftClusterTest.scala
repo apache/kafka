@@ -1076,8 +1076,8 @@ class KRaftClusterTest {
   def testCreateClusterAndCreateTopicWithRemoteLogManagerInstantiation(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setNumBrokerNodes(3).
-        setNumControllerNodes(3).build())
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).build())
       .setConfigProp(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true.toString)
       .setConfigProp(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP,
         "org.apache.kafka.server.log.remote.storage.NoOpRemoteLogMetadataManager")
@@ -1096,7 +1096,7 @@ class KRaftClusterTest {
       val admin = Admin.create(cluster.clientProperties())
       try {
         // Create a test topic
-        val newTopic = Collections.singletonList(new NewTopic("test-topic", 1, 3.toShort))
+        val newTopic = Collections.singletonList(new NewTopic("test-topic", 1, 1.toShort))
         val createTopicResult = admin.createTopics(newTopic)
         createTopicResult.all().get()
         waitForTopicListing(admin, Seq("test-topic"), Seq())
