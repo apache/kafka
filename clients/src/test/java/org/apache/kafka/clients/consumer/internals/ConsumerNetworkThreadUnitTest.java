@@ -50,7 +50,13 @@ import static org.apache.kafka.clients.consumer.internals.events.CompletableEven
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 
 public class ConsumerNetworkThreadUnitTest {
@@ -113,6 +119,16 @@ public class ConsumerNetworkThreadUnitTest {
             consumerNetworkThread.close();
     }
 
+    @Test
+    public void testEnsureCloseStopsRunningThread() {
+        // consumerNetworkThread.running is set to true in the constructor
+        assertTrue(consumerNetworkThread.isRunning());
+
+        // close() should make consumerNetworkThread.running false by calling closeInternal(Duration timeout)
+        consumerNetworkThread.close();
+        assertFalse(consumerNetworkThread.isRunning());
+    }
+
     @ParameterizedTest
     @ValueSource(longs = {1, 100, 1000, 4999, 5001})
     public void testConsumerNetworkThreadWaitTimeComputations(long exampleTime) {
@@ -127,7 +143,7 @@ public class ConsumerNetworkThreadUnitTest {
         when(networkClientDelegate.addAll(pollResult)).thenReturn(pollResult.timeUntilNextPollMs);
         consumerNetworkThread.runOnce();
 
-        // verify networkClientDelegate polls with the correct time
+        verify(networkClientDelegate).poll((exampleTime < 5001 ? exampleTime : 5000), time.milliseconds());
         assertEquals(consumerNetworkThread.maximumTimeToWait(), exampleTime);
     }
 
@@ -331,7 +347,7 @@ public class ConsumerNetworkThreadUnitTest {
         coordinatorRequestManager.markCoordinatorUnknown("test", time.milliseconds());
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "group-id", node));
         prepareOffsetCommitRequest(new HashMap<>(), Errors.NONE, false);
-        CompletableApplicationEvent<Void> event1 = spy(new AsyncCommitEvent(Collections.emptyMap()));
+        CompletableApplicationEvent<Void> event1 = mock(AsyncCommitEvent.class);
         ApplicationEvent event2 = new AsyncCommitEvent(Collections.emptyMap());
         CompletableFuture<Void> future = new CompletableFuture<>();
         when(event1.future()).thenReturn(future);
