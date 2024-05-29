@@ -1032,6 +1032,47 @@ public class AsyncKafkaConsumerTest {
         verify(applicationEventHandler).addAndGet(ArgumentMatchers.isA(ListOffsetsEvent.class));
     }
 
+    @Test
+    public void testOffsetsForTimesTimeoutException() {
+        consumer = newConsumer();
+        long timeout = 100;
+        doThrow(new TimeoutException("Event did not complete in time and was expired by the reaper"))
+            .when(applicationEventHandler).addAndGet(any());
+
+        Throwable t = assertThrows(
+            TimeoutException.class,
+            () -> consumer.offsetsForTimes(mockTimestampToSearch(), Duration.ofMillis(timeout)));
+        assertEquals("Failed to get offsets by times in " + timeout + "ms", t.getMessage());
+    }
+
+    @Test
+    public void testBeginningOffsetsTimeoutException() {
+        consumer = newConsumer();
+        long timeout = 100;
+        doThrow(new TimeoutException("Event did not complete in time and was expired by the reaper"))
+            .when(applicationEventHandler).addAndGet(any());
+
+        Throwable t = assertThrows(
+            TimeoutException.class,
+            () -> consumer.beginningOffsets(Collections.singleton(new TopicPartition("topic", 5)),
+                Duration.ofMillis(timeout)));
+        assertEquals("Failed to get offsets by times in " + timeout + "ms", t.getMessage());
+    }
+
+    @Test
+    public void testEndOffsetsTimeoutException() {
+        consumer = newConsumer();
+        long timeout = 100;
+        doThrow(new TimeoutException("Event did not complete in time and was expired by the reaper"))
+            .when(applicationEventHandler).addAndGet(any());
+
+        Throwable t = assertThrows(
+            TimeoutException.class,
+            () -> consumer.endOffsets(Collections.singleton(new TopicPartition("topic", 5)),
+                Duration.ofMillis(timeout)));
+        assertEquals("Failed to get offsets by times in " + timeout + "ms", t.getMessage());
+    }
+
     // This test ensures same behaviour as the current consumer when offsetsForTimes is called
     // with 0 timeout. It should return map with all requested partitions as keys, with null
     // OffsetAndTimestamp as value.
