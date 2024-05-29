@@ -63,6 +63,7 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.SortedSet;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Logger;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_GROUP_INSTANCE_ID;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_HEARTBEAT_INTERVAL_MS;
@@ -152,18 +153,30 @@ public class HeartbeatRequestManagerTest {
 
     @Test
     public void testHeartBeatRequestStateToStringBase() {
+        final long retryBackoffMs = 100;
+        final long retryBackoffMaxMs = 1000;
         LogContext logContext = new LogContext();
+        HeartbeatRequestState heartbeatRequestState1 = new HeartbeatRequestState(
+                logContext,
+                time,
+                10,
+                retryBackoffMs,
+                retryBackoffMaxMs,
+                .2
+        );
+
         RequestState requestState = new RequestState(
                 logContext,
-                "HeartbeatRequestManager",
-                10,
-                100);
+                "org.apache.kafka.clients.consumer.internals.HeartbeatRequestManager$HeartbeatRequestState",
+                retryBackoffMs,
+                retryBackoffMaxMs
+        );
 
         String target = requestState.toStringBase() +
-                ", heartbeatTimer=" + heartbeatRequestState.heartbeatTimer() +
-                ", heartbeatIntervalMs=" + heartbeatRequestState.heartbeatIntervalMs();
+                ", heartbeatTimer=" + heartbeatRequestState1.heartbeatTimer() +
+                ", heartbeatIntervalMs=" + heartbeatRequestState1.heartbeatIntervalMs();
 
-        assertEquals(target, heartbeatRequestState.toStringBase());
+        assertEquals(target, heartbeatRequestState1.toStringBase());
     }
 
     @Test
