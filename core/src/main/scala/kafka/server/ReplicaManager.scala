@@ -703,6 +703,10 @@ class ReplicaManager(val config: KafkaConfig,
     getPartitionOrException(topicPartition).futureLog.isDefined
   }
 
+  def futureLogOrException(topicPartition: TopicPartition): UnifiedLog = {
+    getPartitionOrException(topicPartition).futureLocalLogOrException
+  }
+
   def localLog(topicPartition: TopicPartition): Option[UnifiedLog] = {
     onlinePartition(topicPartition).flatMap(_.log)
   }
@@ -1744,8 +1748,8 @@ class ReplicaManager(val config: KafkaConfig,
       val leaderLogStartOffset = log.logStartOffset
       val leaderLogEndOffset = log.logEndOffset
 
-      if (params.isFromFollower) {
-        // If it is from a follower then send the offset metadata only as the data is already available in remote
+      if (params.isFromFollower || params.isFromFuture) {
+        // If it is from a follower or from a future replica, then send the offset metadata only as the data is already available in remote
         // storage and throw an error saying that this offset is moved to tiered storage.
         createLogReadResult(highWatermark, leaderLogStartOffset, leaderLogEndOffset,
           new OffsetMovedToTieredStorageException("Given offset" + offset + " is moved to tiered storage"))
