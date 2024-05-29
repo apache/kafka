@@ -253,7 +253,7 @@ object StorageTool extends Logging {
            .setServerKey(formatter.serverKey(saltedPassword))
            .setIterations(iterations)
     } catch {
-      case e: Throwable => 
+      case e: Throwable =>
         throw new TerseFailure(s"Error attempting to create UserScramCredentialRecord: ${e.getMessage}")
     }
     myrecord
@@ -464,8 +464,8 @@ object StorageTool extends Logging {
         copier.setWriteErrorHandler((logDir, e) => {
           throw new TerseFailure(s"Error while writing meta.properties file $logDir: ${e.getMessage}")
         })
-        copier.writeLogDirChanges()
       })
+      copier.writeLogDirChanges()
     }
     0
   }
