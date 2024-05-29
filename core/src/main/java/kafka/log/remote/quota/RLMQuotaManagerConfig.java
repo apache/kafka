@@ -23,18 +23,6 @@ public class RLMQuotaManagerConfig {
     private final int numQuotaSamples;
     private final int quotaWindowSizeSeconds;
 
-    public long quotaBytesPerSecond() {
-        return quotaBytesPerSecond;
-    }
-
-    public int numQuotaSamples() {
-        return numQuotaSamples;
-    }
-
-    public int quotaWindowSizeSeconds() {
-        return quotaWindowSizeSeconds;
-    }
-
     /**
      * Configuration settings for quota management
      *
@@ -46,6 +34,18 @@ public class RLMQuotaManagerConfig {
         this.quotaBytesPerSecond = quotaBytesPerSecond;
         this.numQuotaSamples = numQuotaSamples;
         this.quotaWindowSizeSeconds = quotaWindowSizeSeconds;
+    }
+
+    public long quotaBytesPerSecond() {
+        return quotaBytesPerSecond;
+    }
+
+    public int numQuotaSamples() {
+        return numQuotaSamples;
+    }
+
+    public int quotaWindowSizeSeconds() {
+        return quotaWindowSizeSeconds;
     }
 
     @Override
