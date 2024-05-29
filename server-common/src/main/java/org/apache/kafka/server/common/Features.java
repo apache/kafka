@@ -76,6 +76,10 @@ public enum Features {
         return defaultValue(MetadataVersion.LATEST_PRODUCTION);
     }
 
+    public short latestTesting() {
+        return featureVersions[featureVersions.length - 1].featureLevel();
+    }
+
     /**
      * Creates a FeatureVersion from a level.
      *
@@ -83,9 +87,10 @@ public enum Features {
      * @return       the FeatureVersionUtils.FeatureVersion for the feature the enum is based on.
      * @throws        IllegalArgumentException if the feature is not known.
      */
-    public FeatureVersion fromFeatureLevel(short level) {
+    public FeatureVersion fromFeatureLevel(short level,
+                                           boolean allowUnstableFeatureVersions) {
         return Arrays.stream(featureVersions).filter(featureVersion ->
-            featureVersion.featureLevel() == level).findFirst().orElseThrow(
+            featureVersion.featureLevel() == level && (allowUnstableFeatureVersions || level <= latestProduction())).findFirst().orElseThrow(
                 () -> new IllegalArgumentException("No feature:" + featureName() + " with feature level " + level));
     }
 

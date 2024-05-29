@@ -82,6 +82,7 @@ object StorageTool extends Logging {
             metadataVersion,
             featureNamesAndLevelsMap,
             Features.PRODUCTION_FEATURES.asScala.toList,
+            config.get.unstableFeatureVersionsEnabled,
             releaseVersionFlagSpecified
           )
           getUserScramCredentialRecords(namespace).foreach(userScramCredentialRecords => {
@@ -121,7 +122,7 @@ object StorageTool extends Logging {
       throw new TerseFailure(s"Must specify a valid KRaft metadata.version of at least ${MetadataVersion.IBP_3_0_IV0}.")
     }
     if (!metadataVersion.isProduction) {
-      if (config.get.unstableMetadataVersionsEnabled) {
+      if (config.get.unstableFeatureVersionsEnabled) {
         System.out.println(s"WARNING: using pre-production metadata.version $metadataVersion.")
       } else {
         throw new TerseFailure(s"The metadata.version $metadataVersion is not ready for production use yet.")
@@ -133,6 +134,7 @@ object StorageTool extends Logging {
                                             metadataVersion: MetadataVersion,
                                             specifiedFeatures: Map[String, java.lang.Short],
                                             allFeatures: List[Features],
+                                            unstableFeatureVersionsEnabled: Boolean,
                                             releaseVersionSpecified: Boolean): Unit = {
     // If we are using --release-version, the default is based on the metadata version.
     val metadataVersionForDefault = if (releaseVersionSpecified) metadataVersion else MetadataVersion.LATEST_PRODUCTION
@@ -143,7 +145,7 @@ object StorageTool extends Logging {
       val level: java.lang.Short = specifiedFeatures.getOrElse(feature.featureName, feature.defaultValue(metadataVersionForDefault))
       // Only set feature records for levels greater than 0. 0 is assumed if there is no record. Throw an error if level < 0.
       if (level != 0) {
-       allNonZeroFeaturesAndLevels.append(feature.fromFeatureLevel(level))
+       allNonZeroFeaturesAndLevels.append(feature.fromFeatureLevel(level, unstableFeatureVersionsEnabled))
       }
     }
     val featuresMap = Features.featureImplsToMap(allNonZeroFeaturesAndLevels.asJava)

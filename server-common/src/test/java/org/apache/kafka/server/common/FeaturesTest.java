@@ -34,8 +34,16 @@ public class FeaturesTest {
     public void testFromFeatureLevelAllFeatures(Features feature) {
         FeatureVersion[] featureImplementations = feature.featureVersions();
         int numFeatures = featureImplementations.length;
+        short latestProductionLevel = feature.latestProduction();
+
         for (short i = 1; i < numFeatures; i++) {
-            assertEquals(featureImplementations[i - 1], feature.fromFeatureLevel(i));
+            short level = i;
+            if (latestProductionLevel < i) {
+                assertEquals(featureImplementations[i - 1], feature.fromFeatureLevel(level, true));
+                assertThrows(IllegalArgumentException.class, () -> feature.fromFeatureLevel(level, false));
+            } else {
+                assertEquals(featureImplementations[i - 1], feature.fromFeatureLevel(level, false));
+            }
         }
     }
 
@@ -110,5 +118,12 @@ public class FeaturesTest {
             expectedVersion = 0;
         }
         assertEquals(expectedVersion, Features.TEST_VERSION.defaultValue(metadataVersion));
+    }
+
+    @Test
+    public void testUnstableTestVersion() {
+        assertThrows(IllegalArgumentException.class, () ->
+            Features.TEST_VERSION.fromFeatureLevel(Features.TEST_VERSION.latestTesting(), false));
+        Features.TEST_VERSION.fromFeatureLevel(Features.TEST_VERSION.latestTesting(), true);
     }
 }
