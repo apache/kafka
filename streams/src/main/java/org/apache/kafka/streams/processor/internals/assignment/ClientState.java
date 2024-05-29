@@ -489,10 +489,10 @@ public class ClientState {
     }
 
     public void setAssignedTasks(final KafkaStreamsAssignment assignment) {
-        final Set<TaskId> activeTasks = assignment.assignment().stream()
+        final Set<TaskId> activeTasks = assignment.tasks().values().stream()
             .filter(task -> task.type() == ACTIVE).map(KafkaStreamsAssignment.AssignedTask::id)
             .collect(Collectors.toSet());
-        final Set<TaskId> standbyTasks = assignment.assignment().stream()
+        final Set<TaskId> standbyTasks = assignment.tasks().values().stream()
             .filter(task -> task.type() == STANDBY).map(KafkaStreamsAssignment.AssignedTask::id)
             .collect(Collectors.toSet());
         assignedActiveTasks.taskIds(activeTasks);
