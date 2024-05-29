@@ -22,24 +22,17 @@ import java.util.Objects;
 /**
  * A topic name and partition number
  */
-public final class TopicPartition implements Serializable {
+public class TopicPartition implements Serializable {
     private static final long serialVersionUID = -613627415771699627L;
 
     private int hash = 0;
     private final int partition;
     private final String topic;
-    private int designatedLeader = -1;
 
     public TopicPartition(String topic, int partition) {
         this.partition = partition;
         this.topic = topic;
     }
-
-    public void setDesignatedLeader(int designatedLeader) {
-        this.designatedLeader = designatedLeader;
-    }
-
-    public int getDesignatedLeader(){ return designatedLeader; }
 
     public int partition() {
         return partition;

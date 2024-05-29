@@ -25,6 +25,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicPartitionDesignated;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.ElectionNotNeededException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -233,7 +234,7 @@ public class LeaderElectionCommand {
                     designatedLeader = partitionJs.apply("designatedLeader").to(INT);
                 }
             }
-            TopicPartition topicPartition = new TopicPartition(topic, partition);
+            TopicPartitionDesignated topicPartition = new TopicPartitionDesignated(topic, partition);
             topicPartition.setDesignatedLeader(designatedLeader);
             partitions.add(topicPartition);
         }

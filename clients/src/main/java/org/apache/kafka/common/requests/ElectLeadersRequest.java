@@ -20,10 +20,10 @@ package org.apache.kafka.common.requests;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.List;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicPartitionDesignated;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ElectLeadersRequestData.TopicPartitions;
 import org.apache.kafka.common.message.ElectLeadersRequestData;
@@ -76,8 +76,8 @@ public class ElectLeadersRequest extends AbstractRequest {
                         data.topicPartitions().add(tps);
                     }
                     tps.partitions().add(tp.partition());
-                    if (version >= 3) {
-                        tps.desiredLeaders().add(tp.getDesignatedLeader());
+                    if (version >= 3 && tp instanceof TopicPartitionDesignated) {
+                        tps.desiredLeaders().add(((TopicPartitionDesignated) tp).getDesignatedLeader());
                         if (tps.desiredLeaders().size() != tps.partitions().size()) {
                             throw new IllegalStateException("Both desiredLeaders and partitions must be the same size " + tps.desiredLeaders().size() + " " + tps.partitions().size());
                         }

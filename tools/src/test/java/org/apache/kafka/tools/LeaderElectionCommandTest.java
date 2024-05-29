@@ -27,6 +27,7 @@ import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicPartitionDesignated;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.server.common.AdminCommandFailedException;
 import org.junit.jupiter.api.Tag;
@@ -221,7 +222,7 @@ public class LeaderElectionCommandTest {
 
         createTopic(client, topic, partitionAssignment);
 
-        TopicPartition topicPartition = new TopicPartition(topic, partition);
+        TopicPartitionDesignated topicPartition = new TopicPartitionDesignated(topic, partition);
         topicPartition.setDesignatedLeader(1);
         Path topicPartitionPath = tempTopicPartitionFile(Collections.singletonList(topicPartition), true);
 
@@ -358,9 +359,11 @@ public class LeaderElectionCommandTest {
 
         scala.collection.immutable.Set<TopicPartition> topicPartitionSet =
             JavaConverters.asScalaBuffer(partitions).toSet();
+        scala.collection.immutable.Set<TopicPartitionDesignated> topicPartitionDesignatedSet =
+                JavaConverters.asScalaBuffer(partitions).toSet();
         String jsonString;
         if (designated) {
-            jsonString = TestUtils.stringifyTopicPartitionsWithDesignatedLeader(topicPartitionSet);
+            jsonString = TestUtils.stringifyTopicPartitionsWithDesignatedLeader(topicPartitionDesignatedSet);
         } else {
             jsonString = TestUtils.stringifyTopicPartitions(topicPartitionSet);
         }
