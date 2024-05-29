@@ -1503,9 +1503,8 @@ public class KafkaAdminClient extends AdminClient {
                     // Create a new metadata fetch call and add it to the end of pendingCalls.
                     // Assign a node for just the new call (we handled the other pending nodes above).
 
-                    if (!maybeDrainPendingCall(metadataCall, now)) {
+                    if (!maybeDrainPendingCall(metadataCall, now))
                         pendingCalls.add(metadataCall);
-                    }
                 }
                 pollTimeout = Math.min(pollTimeout, sendEligibleCalls(now));
 
