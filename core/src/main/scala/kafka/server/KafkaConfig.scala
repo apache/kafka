@@ -934,8 +934,11 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       throw new ConfigException(s"Disabling the '${GroupType.CLASSIC}' protocol is not supported.")
     }
     if (protocols.contains(GroupType.CONSUMER)) {
+      if (processRoles.isEmpty) {
+        throw new ConfigException(s"The new '${GroupType.CONSUMER}' rebalance protocol is only supported in KRaft cluster.")
+      }
       warn(s"The new '${GroupType.CONSUMER}' rebalance protocol is enabled along with the new group coordinator. " +
-        "This is part of the early access of KIP-848 and MUST NOT be used in production.")
+        "This is part of the preview of KIP-848 and MUST NOT be used in production.")
     }
     protocols
   }
