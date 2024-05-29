@@ -29,9 +29,8 @@ import java.util.Set;
 
 import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ClusterTest {
 
@@ -131,14 +130,14 @@ public class ClusterTest {
         Cluster differentClusterId = new Cluster(clusterId2, Collections.singletonList(node0), partitions1,
             unauthorizedTopics1, invalidTopics1, internalTopics1, controller1, topicIds1);
 
-        assertFalse(cluster1.equals(differentTopicIds));
-        assertFalse(cluster1.equals(differentController));
-        assertFalse(cluster1.equals(differentInternalTopics));
-        assertFalse(cluster1.equals(differentInvalidTopics));
-        assertFalse(cluster1.equals(differentUnauthorizedTopics));
-        assertFalse(cluster1.equals(differentPartitions));
-        assertFalse(cluster1.equals(differentNodes));
-        assertFalse(cluster1.equals(differentClusterId));
+        assertNotEquals(cluster1, differentTopicIds);
+        assertNotEquals(cluster1, differentController);
+        assertNotEquals(cluster1, differentInternalTopics);
+        assertNotEquals(cluster1, differentInvalidTopics);
+        assertNotEquals(cluster1, differentUnauthorizedTopics);
+        assertNotEquals(cluster1, differentPartitions);
+        assertNotEquals(cluster1, differentNodes);
+        assertNotEquals(cluster1, differentClusterId);
     }
 
     @Test
@@ -151,8 +150,8 @@ public class ClusterTest {
         Set<String> unauthorizedTopics1 = Collections.singleton("topic1");
         Set<String> invalidTopics1 = Collections.singleton("topic1");
         Set<String> internalTopics1 = Collections.singleton("topic3");
-        Node controller1 = node1;
-        Node controller1duplicate = node1duplicate;
+        Node controller1 = new Node(2, "host0", 100);
+        Node controller1duplicate = new Node(2, "host0", 100);
         Uuid topicId1 = Uuid.randomUuid();
         Map<String, Uuid> topicIds1 = Collections.singletonMap("topic1", topicId1);
         Map<String, Uuid> topicIds1duplicate = Collections.singletonMap("topic1", topicId1);
@@ -161,6 +160,6 @@ public class ClusterTest {
             invalidTopics1, internalTopics1, controller1, topicIds1);
         Cluster cluster1duplicate = new Cluster(clusterId1, Collections.singletonList(node1duplicate), partitions1duplicate,
             unauthorizedTopics1, invalidTopics1, internalTopics1, controller1duplicate, topicIds1duplicate);
-        assertTrue(cluster1.equals(cluster1duplicate));
+        assertEquals(cluster1, cluster1duplicate);
     }
 }
