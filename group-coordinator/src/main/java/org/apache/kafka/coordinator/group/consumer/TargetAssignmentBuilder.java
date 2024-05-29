@@ -407,7 +407,8 @@ public class TargetAssignmentBuilder {
         }
     }
 
-    public static MemberSubscriptionSpec createMemberSubscriptionSpec(
+    // private for testing
+    static MemberSubscriptionSpec createMemberSubscriptionSpec(
         ConsumerGroupMember member,
         TopicsImage topicsImage
     ) {

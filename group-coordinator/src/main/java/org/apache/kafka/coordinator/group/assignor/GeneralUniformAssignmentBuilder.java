@@ -58,11 +58,6 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
     private final GroupSpec groupSpec;
 
     /**
-     * The members' subscription metadata.
-     */
-    private final Map<String, MemberSubscriptionSpec> memberSubscriptions;
-
-    /**
      * The topic and partition metadata describer.
      */
     private final SubscribedTopicDescriber subscribedTopicDescriber;
@@ -114,13 +109,12 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
 
     public GeneralUniformAssignmentBuilder(GroupSpec groupSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
         this.groupSpec = groupSpec;
-        this.memberSubscriptions = groupSpec.memberSubscriptions();
         this.subscribedTopicDescriber = subscribedTopicDescriber;
         this.subscribedTopicIds = new HashSet<>();
         this.membersPerTopic = new HashMap<>();
         this.targetAssignment = new HashMap<>();
-        memberSubscriptions.forEach((memberId, subscriptionSpec) ->
-            subscriptionSpec.subscribedTopicIds().forEach(topicId -> {
+        groupSpec.memberIds().forEach(memberId ->
+            groupSpec.memberSubscriptionSpec(memberId).subscribedTopicIds().forEach(topicId -> {
                 // Check if the subscribed topic exists.
                 int partitionCount = subscribedTopicDescriber.numPartitions(topicId);
                 if (partitionCount == -1) {
@@ -135,8 +129,8 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
         );
         this.unassignedPartitions = new HashSet<>(topicIdPartitions(subscribedTopicIds, subscribedTopicDescriber));
         this.assignedStickyPartitions = new HashSet<>();
-        this.assignmentManager = new AssignmentManager(this.memberSubscriptions, this.subscribedTopicDescriber);
-        this.sortedMembersByAssignmentSize = assignmentManager.sortMembersByAssignmentSize(memberSubscriptions.keySet());
+        this.assignmentManager = new AssignmentManager(this.subscribedTopicDescriber);
+        this.sortedMembersByAssignmentSize = assignmentManager.sortMembersByAssignmentSize(groupSpec.memberIds());
         this.partitionOwnerInTargetAssignment = new HashMap<>();
         this.partitionMovements = new PartitionMovements();
     }
@@ -196,9 +190,9 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
      * <li> Partitions from topics that are still present in both the new subscriptions and the topic metadata. </li>
      */
     private void assignStickyPartitions() {
-        memberSubscriptions.forEach((memberId, subscriptionSpec) ->
+        groupSpec.memberIds().forEach(memberId ->
             groupSpec.currentMemberAssignment(memberId).forEach((topicId, currentAssignment) -> {
-                if (subscriptionSpec.subscribedTopicIds().contains(topicId)) {
+                if (groupSpec.memberSubscriptionSpec(memberId).subscribedTopicIds().contains(topicId)) {
                     currentAssignment.forEach(partition -> {
                         TopicIdPartition topicIdPartition = new TopicIdPartition(topicId, partition);
                         assignmentManager.addPartitionToTargetAssignment(topicIdPartition, memberId);
@@ -297,7 +291,7 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
                 continue;
 
             // Otherwise make sure it cannot get any more partitions.
-            for (Uuid topicId : memberSubscriptions.get(member).subscribedTopicIds()) {
+            for (Uuid topicId : groupSpec.memberSubscriptionSpec(member).subscribedTopicIds()) {
                 Set<Integer> assignedPartitions = targetAssignment.get(member).targetPartitions().get(topicId);
                 for (int i = 0; i < subscribedTopicDescriber.numPartitions(topicId); i++) {
                     TopicIdPartition topicIdPartition = new TopicIdPartition(topicId, i);
@@ -337,7 +331,7 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
         unassignedPartitions.removeAll(fixedPartitions);
 
         // Narrow down the reassignment scope to only those members that are subject to reassignment.
-        for (String member : memberSubscriptions.keySet()) {
+        for (String member : groupSpec.memberIds()) {
             if (!canMemberParticipateInReassignment(member)) {
                 sortedMembersByAssignmentSize.remove(member);
             }
@@ -416,7 +410,7 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
         // Find the new member with the least assignment size.
         String newOwner = null;
         for (String anotherMember : sortedMembersByAssignmentSize) {
-            if (memberSubscriptions.get(anotherMember).subscribedTopicIds().contains(partition.topicId())) {
+            if (groupSpec.memberSubscriptionSpec(anotherMember).subscribedTopicIds().contains(partition.topicId())) {
                 newOwner = anotherMember;
                 break;
             }
@@ -652,11 +646,10 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
          * Initializes an AssignmentManager, setting up the necessary data structures.
          */
         public AssignmentManager(
-            Map<String, MemberSubscriptionSpec> members,
             SubscribedTopicDescriber subscribedTopicDescriber
         ) {
-            members.forEach((memberId, member) -> {
-                int maxSize = member.subscribedTopicIds().stream()
+            groupSpec.memberIds().forEach(memberId -> {
+                int maxSize = groupSpec.memberSubscriptionSpec(memberId).subscribedTopicIds().stream()
                     .mapToInt(subscribedTopicDescriber::numPartitions)
                     .sum();
 
@@ -742,7 +735,7 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
             String memberId
         ) {
             // If member is not subscribed to the partition's topic, return false without assigning.
-            if (!memberSubscriptions.get(memberId).subscribedTopicIds().contains(topicIdPartition.topicId())) {
+            if (!groupSpec.memberSubscriptionSpec(memberId).subscribedTopicIds().contains(topicIdPartition.topicId())) {
                 return false;
             }
 

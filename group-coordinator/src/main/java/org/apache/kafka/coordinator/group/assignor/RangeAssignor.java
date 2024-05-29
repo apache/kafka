@@ -92,11 +92,11 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
         final SubscribedTopicDescriber subscribedTopicDescriber
     ) {
         Map<Uuid, Collection<String>> membersPerTopic = new HashMap<>();
-        Map<String, MemberSubscriptionSpec> memberSubscriptionSpec = groupSpec.memberSubscriptions();
 
         if (groupSpec.subscriptionType().equals(HOMOGENEOUS)) {
-            Set<String> allMembers = memberSubscriptionSpec.keySet();
-            Collection<Uuid> topics = memberSubscriptionSpec.values().iterator().next().subscribedTopicIds();
+            Collection<String> allMembers = groupSpec.memberIds();
+            Collection<Uuid> topics = groupSpec.memberSubscriptionSpec(groupSpec.memberIds().iterator().next())
+                .subscribedTopicIds();
 
             for (Uuid topicId : topics) {
                 if (subscribedTopicDescriber.numPartitions(topicId) == -1) {
@@ -105,8 +105,8 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
                 membersPerTopic.put(topicId, allMembers);
             }
         } else {
-            memberSubscriptionSpec.forEach((memberId, subscriptionSpec) -> {
-                Collection<Uuid> topics = subscriptionSpec.subscribedTopicIds();
+            groupSpec.memberIds().forEach(memberId -> {
+                Collection<Uuid> topics = groupSpec.memberSubscriptionSpec(memberId).subscribedTopicIds();
                 for (Uuid topicId : topics) {
                     if (subscribedTopicDescriber.numPartitions(topicId) == -1) {
                         throw new PartitionAssignorException("Member is subscribed to a non-existent topic");

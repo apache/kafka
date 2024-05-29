@@ -41,7 +41,7 @@ public class GroupSpecImplTest {
     private Map<Uuid, Map<Integer, String>> invertedTargetAssignment;
     private GroupSpecImpl groupSpec;
     private Uuid topicId;
-    private String testMember;
+    private String testMember = "test-member";
 
     @BeforeEach
     void setUp() {
@@ -65,13 +65,29 @@ public class GroupSpecImplTest {
     }
 
     @Test
-    void testMembers() {
-        assertEquals(members, groupSpec.memberSubscriptions());
+    void testMemberIds() {
+        assertEquals(members.keySet(), groupSpec.memberIds());
     }
 
     @Test
     void testSubscriptionType() {
         assertEquals(subscriptionType, groupSpec.subscriptionType());
+    }
+
+    @Test
+    void testIsPartitionAssigned() {
+        Map<Integer, String> partitionMap = new HashMap<>();
+        partitionMap.put(1, "test-member");
+        invertedTargetAssignment.put(topicId, partitionMap);
+
+        assertTrue(groupSpec.isPartitionAssigned(topicId, 1));
+        assertFalse(groupSpec.isPartitionAssigned(topicId, 2));
+        assertFalse(groupSpec.isPartitionAssigned(Uuid.randomUuid(), 2));
+    }
+
+    @Test
+    void testMemberSubscriptionSpec() {
+        assertEquals(members.get(testMember), groupSpec.memberSubscriptionSpec(testMember));
     }
 
     @Test
@@ -85,16 +101,5 @@ public class GroupSpecImplTest {
 
         assertEquals(topicPartitions, groupSpec.currentMemberAssignment("test-member"));
         assertEquals(Collections.emptyMap(), groupSpec.currentMemberAssignment("unknown-member"));
-    }
-
-    @Test
-    void testIsPartitionAssigned() {
-        Map<Integer, String> partitionMap = new HashMap<>();
-        partitionMap.put(1, "test-member");
-        invertedTargetAssignment.put(topicId, partitionMap);
-
-        assertTrue(groupSpec.isPartitionAssigned(topicId, 1));
-        assertFalse(groupSpec.isPartitionAssigned(topicId, 2));
-        assertFalse(groupSpec.isPartitionAssigned(Uuid.randomUuid(), 2));
     }
 }

@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
 
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
@@ -38,6 +39,8 @@ public class MemberSubscriptionSpecImpl implements MemberSubscriptionSpec {
         Optional<String> rackId,
         Set<Uuid> subscribedTopicIds
     ) {
+        Objects.requireNonNull(rackId);
+        Objects.requireNonNull(subscribedTopicIds);
         this.rackId = rackId;
         this.subscribedTopicIds = subscribedTopicIds;
     }

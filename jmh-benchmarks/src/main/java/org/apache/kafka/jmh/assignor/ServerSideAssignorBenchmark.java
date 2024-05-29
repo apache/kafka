@@ -263,7 +263,7 @@ public class ServerSideAssignorBenchmark {
 
         Map<String, MemberSubscriptionSpec> updatedMemberSpec = new HashMap<>();
 
-        groupSpec.memberSubscriptions().forEach((memberId, assignmentMemberSpec) -> {
+        groupSpec.memberIds().forEach(memberId -> {
             MemberAssignment memberAssignment = members.getOrDefault(
                 memberId,
                 new MemberAssignment(Collections.emptyMap())
@@ -272,8 +272,8 @@ public class ServerSideAssignorBenchmark {
             assignedPartitions.put(memberId, memberAssignment.targetPartitions());
 
             updatedMemberSpec.put(memberId, new MemberSubscriptionSpecImpl(
-                assignmentMemberSpec.rackId(),
-                assignmentMemberSpec.subscribedTopicIds()
+                groupSpec.memberSubscriptionSpec(memberId).rackId(),
+                groupSpec.memberSubscriptionSpec(memberId).subscribedTopicIds()
             ));
         });
 

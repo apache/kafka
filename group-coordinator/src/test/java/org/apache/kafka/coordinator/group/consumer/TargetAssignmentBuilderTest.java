@@ -32,13 +32,11 @@ import org.junit.jupiter.api.Test;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.coordinator.group.Assertions.assertUnorderedListEquals;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
@@ -290,7 +288,7 @@ public class TargetAssignmentBuilderTest {
 
         assertEquals(new MemberSubscriptionSpecImpl(
             Optional.of("rackId"),
-            new HashSet<>(Arrays.asList(fooTopicId, barTopicId))
+            new TopicIds(member.subscribedTopicNames(), topicsImage)
         ), subscriptionSpec);
     }
 
