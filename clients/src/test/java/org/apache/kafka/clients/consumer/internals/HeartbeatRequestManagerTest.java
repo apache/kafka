@@ -752,6 +752,26 @@ public class HeartbeatRequestManagerTest {
         assertEquals(1, result.unsentRequests.size(), "Fenced member should resume heartbeat after transitioning to JOINING");
     }
 
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.CONSUMER_GROUP_HEARTBEAT)
+    public void testSendingLeaveGroupHeartbeatWhenPreviousOneInFlight(final short version) {
+        mockStableMember();
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size());
+        result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(0, result.unsentRequests.size(), "No heartbeat should be sent while a previous one is in-flight");
+
+        membershipManager.leaveGroup();
+        assertTrue(membershipManager.isLeavingGroup());
+
+        ConsumerGroupHeartbeatRequest heartbeatToLeave = getHeartbeatRequest(heartbeatRequestManager, version);
+        assertEquals(ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH, heartbeatToLeave.data().memberEpoch());
+
+        NetworkClientDelegate.PollResult pollAgain = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(0, pollAgain.unsentRequests.size());
+    }
+
     private void assertHeartbeat(HeartbeatRequestManager hrm, int nextPollMs) {
         NetworkClientDelegate.PollResult pollResult = hrm.poll(time.milliseconds());
         assertEquals(1, pollResult.unsentRequests.size());
@@ -879,26 +899,5 @@ public class HeartbeatRequestManagerTest {
                 heartbeatRequestState,
                 backgroundEventHandler,
                 metrics);
-    }
-
-
-    @ParameterizedTest
-    @ApiKeyVersionsSource(apiKey = ApiKeys.CONSUMER_GROUP_HEARTBEAT)
-    public void testSendingLeaveGroupHeartbeatWhenPreviousOneInFlight(final short version) {
-        mockStableMember();
-        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
-        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
-        assertEquals(1, result.unsentRequests.size());
-        result = heartbeatRequestManager.poll(time.milliseconds());
-        assertEquals(0, result.unsentRequests.size(), "No heartbeat should be sent while a previous one is in-flight");
-
-        membershipManager.leaveGroup();
-        assertTrue(membershipManager.isLeavingGroup());
-
-        ConsumerGroupHeartbeatRequest heartbeatToLeave = getHeartbeatRequest(heartbeatRequestManager, version);
-        assertEquals(ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH, heartbeatToLeave.data().memberEpoch());
-
-        NetworkClientDelegate.PollResult pollAgain = heartbeatRequestManager.poll(time.milliseconds());
-        assertEquals(0, pollAgain.unsentRequests.size());
     }
 }
