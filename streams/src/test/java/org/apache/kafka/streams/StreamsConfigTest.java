@@ -1594,6 +1594,12 @@ public class StreamsConfigTest {
         assertEquals("org.apache.kafka.streams.errors.LogAndContinueProcessingExceptionHandler",   streamsConfig.processingExceptionHandler().getClass().getName());
     }
 
+    @Test
+    public void testInvalidProcessingExceptionHandler() {
+        props.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, "org.apache.kafka.streams.errors.InvalidProcessingExceptionHandler");
+        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+    }
+
     static class MisconfiguredSerde implements Serde<Object> {
         @Override
         public void configure(final Map<String, ?>  configs, final boolean isKey) {
