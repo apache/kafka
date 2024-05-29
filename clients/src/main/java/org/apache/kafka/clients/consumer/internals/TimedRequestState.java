@@ -59,11 +59,6 @@ public class TimedRequestState extends RequestState {
         return timer.remainingMs();
     }
 
-    public Timer remainingTimer(final Time time, final int requestTimeoutMs) {
-        long remaining = Math.min(requestTimeoutMs, remainingMs());
-        return time.timer(remaining);
-    }
-
     public static Timer deadlineTimer(final Time time, final long deadlineMs) {
         // Prevent the timer from being negative.
         long diff = Math.max(0, deadlineMs - time.milliseconds());

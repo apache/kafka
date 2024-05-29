@@ -180,7 +180,7 @@ public class TopicMetadataRequestManager implements RequestManager {
             NetworkClientDelegate.UnsentRequest unsent = new NetworkClientDelegate.UnsentRequest(
                 request,
                 Optional.empty(),
-                remainingTimer(time, requestTimeoutMs));
+                time.timer(requestTimeoutMs));
 
             return unsent.whenComplete((response, exception) -> {
                 if (response == null) {
