@@ -67,7 +67,8 @@ object StorageTool extends Logging {
             build()
           val metadataRecords : ArrayBuffer[ApiMessageAndVersion] = ArrayBuffer()
           val specifiedFeatures: util.List[String] = namespace.getList("feature")
-          if (namespace.getString("release_version") != null && specifiedFeatures != null) {
+          val releaseVersionFlagSpecified = namespace.getString("release_version") != null
+          if (releaseVersionFlagSpecified && specifiedFeatures != null) {
             throw new TerseFailure("Both --release-version and --feature were set. Only one of the two flags can be set.")
           }
           val featureNamesAndLevelsMap = featureNamesAndLevels(Option(specifiedFeatures).getOrElse(Collections.emptyList).asScala.toList)
@@ -75,12 +76,13 @@ object StorageTool extends Logging {
             Option(config.get.originals.get(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG)).map(_.toString))
           validateMetadataVersion(metadataVersion, config)
           // Get all other features, validate, and create records for them
+          // Use latest default for features if --release-version is not specified
           generateFeatureRecords(
             metadataRecords,
             metadataVersion,
             featureNamesAndLevelsMap,
             Features.PRODUCTION_FEATURES.asScala.toList,
-            !Option(namespace.getString("release_version")).isEmpty
+            releaseVersionFlagSpecified
           )
           getUserScramCredentialRecords(namespace).foreach(userScramCredentialRecords => {
             if (!metadataVersion.isScramSupported) {
@@ -131,9 +133,9 @@ object StorageTool extends Logging {
                                             metadataVersion: MetadataVersion,
                                             specifiedFeatures: Map[String, java.lang.Short],
                                             allFeatures: List[Features],
-                                            usesVersionDefault: Boolean): Unit = {
+                                            releaseVersionSpecified: Boolean): Unit = {
     // If we are using --release-version, the default is based on the metadata version.
-    val metadataVersionForDefault = if (usesVersionDefault) metadataVersion else MetadataVersion.LATEST_PRODUCTION
+    val metadataVersionForDefault = if (releaseVersionSpecified) metadataVersion else MetadataVersion.LATEST_PRODUCTION
 
     val allNonZeroFeaturesAndLevels: ArrayBuffer[FeatureVersion] = mutable.ArrayBuffer[FeatureVersion]()
 
