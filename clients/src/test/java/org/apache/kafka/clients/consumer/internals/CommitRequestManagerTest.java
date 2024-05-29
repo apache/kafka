@@ -132,9 +132,7 @@ public class CommitRequestManagerTest {
         final long retryBackoffMaxMs = 100;
         final long expirationTimeMs = 1000;
         ConsumerConfig config = mock(ConsumerConfig.class);
-        CommitRequestManager.MemberInfo memberInfo = mock(CommitRequestManager.MemberInfo.class);
-        memberInfo.memberId = Optional.empty();
-        memberInfo.memberEpoch = Optional.empty();
+        CommitRequestManager.MemberInfo memberInfo = new CommitRequestManager.MemberInfo();
 
         this.commitRequestManager = new CommitRequestManager(
                 time,
@@ -160,14 +158,13 @@ public class CommitRequestManagerTest {
                 retryBackoffMaxMs);
 
         String target = requestState.toStringBase() +
-                ", memberInfo=" + memberInfo +
-                ", expirationTimeMs=" + (offsetFetchRequestState.expirationTimeMs().isPresent() ? offsetFetchRequestState.expirationTimeMs() : "undefined") +
+                ", memberInfo={" + offsetFetchRequestState.memberInfo +
+                "}, expirationTimeMs=" + (offsetFetchRequestState.expirationTimeMs().isPresent() ? offsetFetchRequestState.expirationTimeMs() : "undefined") +
                 ", isExpired=" + offsetFetchRequestState.isExpired +
                 ", requestedPartitions=" + offsetFetchRequestState.requestedPartitions +
-                ", future=" + offsetFetchRequestState.future() +
-                ", memberId=" + memberInfo.memberId.orElse("undefined") +
-                ", memberEpoch=" + (memberInfo.memberEpoch.isPresent() ? memberInfo.memberEpoch : "undefined");
+                ", future=" + offsetFetchRequestState.future();
 
+        System.out.println(target);
         assertEquals(target, offsetFetchRequestState.toStringBase());
     }
 
