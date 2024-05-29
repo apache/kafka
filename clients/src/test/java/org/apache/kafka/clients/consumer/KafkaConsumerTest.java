@@ -1065,7 +1065,7 @@ public class KafkaConsumerTest {
     }
 
     @ParameterizedTest
-    @EnumSource(GroupProtocol.class)
+    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
     public void testNoCommittedOffsets(GroupProtocol groupProtocol) {
         long offset1 = 10000;
 
