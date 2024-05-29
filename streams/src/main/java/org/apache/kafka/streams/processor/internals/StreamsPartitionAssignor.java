@@ -1528,46 +1528,30 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private AssignmentError validateTaskAssignment(final ApplicationState applicationState,
                                                    final TaskAssignment taskAssignment) {
         final Collection<KafkaStreamsAssignment> assignments = taskAssignment.assignment();
-
-        final Set<TaskId> activeTasks = new HashSet<>();
-        for (final KafkaStreamsAssignment assignment : assignments) {
-            for (final KafkaStreamsAssignment.AssignedTask task : assignment.assignment()) {
-                if (task.type() == KafkaStreamsAssignment.AssignedTask.Type.ACTIVE) {
-                    if (activeTasks.contains(task.id())) {
-                        log.error("Assignment is invalid: an active task was assigned multiple times: {}", task.id());
-                        return AssignmentError.ACTIVE_TASK_ASSIGNED_MULTIPLE_TIMES;
-                    }
-                    activeTasks.add(task.id());
-                }
-            }
-        }
-
-        for (final KafkaStreamsAssignment assignment : assignments) {
-            final Set<TaskId> activeTasksForAssignment = new HashSet<>();
-            for (final KafkaStreamsAssignment.AssignedTask task : assignment.assignment()) {
-                if (task.type() == KafkaStreamsAssignment.AssignedTask.Type.ACTIVE) {
-                    activeTasksForAssignment.add(task.id());
-                }
-            }
-
-            for (final KafkaStreamsAssignment.AssignedTask task : assignment.assignment()) {
-                if (task.type() == KafkaStreamsAssignment.AssignedTask.Type.STANDBY) {
-                    if (activeTasksForAssignment.contains(task.id())) {
-                        log.error("Assignment is invalid: both an active and standby assignment of a task were assigned to the same client: {}", task.id());
-                        return AssignmentError.ACTIVE_AND_STANDBY_TASK_ASSIGNED_TO_SAME_KAFKASTREAMS;
-                    }
-                }
-            }
-        }
-
+        final Set<TaskId> activeTasksInOutput = new HashSet<>();
         final Set<TaskId> standbyTasksInOutput = new HashSet<>();
         for (final KafkaStreamsAssignment assignment : assignments) {
+            final Set<TaskId> tasksForAssignment = new HashSet<>();
             for (final KafkaStreamsAssignment.AssignedTask task : assignment.assignment()) {
-                if (task.type() == KafkaStreamsAssignment.AssignedTask.Type.STANDBY) {
+                if (activeTasksInOutput.contains(task.id()) && task.type() == KafkaStreamsAssignment.AssignedTask.Type.ACTIVE) {
+                    log.error("Assignment is invalid: an active task was assigned multiple times: {}", task.id());
+                    return AssignmentError.ACTIVE_TASK_ASSIGNED_MULTIPLE_TIMES;
+                }
+
+                if (tasksForAssignment.contains(task.id())) {
+                    log.error("Assignment is invalid: both an active and standby assignment of a task were assigned to the same client: {}", task.id());
+                    return AssignmentError.ACTIVE_AND_STANDBY_TASK_ASSIGNED_TO_SAME_KAFKASTREAMS;
+                }
+
+                tasksForAssignment.add(task.id());
+                if (task.type() == KafkaStreamsAssignment.AssignedTask.Type.ACTIVE) {
+                    activeTasksInOutput.add(task.id());
+                } else {
                     standbyTasksInOutput.add(task.id());
                 }
             }
         }
+
         for (final TaskInfo task : applicationState.allTasks()) {
             if (!task.isStateful() && standbyTasksInOutput.contains(task.id())) {
                 log.error("Assignment is invalid: a standby task was found for a stateless task: {}", task.id());
