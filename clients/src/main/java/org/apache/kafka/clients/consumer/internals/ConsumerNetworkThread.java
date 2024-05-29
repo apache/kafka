@@ -111,7 +111,6 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         }
     }
 
-    // Thunk - lazy sequence () -> 1
     void initializeResources() {
         applicationEventProcessor = applicationEventProcessorSupplier.get();
         networkClientDelegate = networkClientDelegateSupplier.get();
