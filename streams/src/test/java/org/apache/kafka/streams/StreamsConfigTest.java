@@ -1597,7 +1597,13 @@ public class StreamsConfigTest {
     @Test
     public void testInvalidProcessingExceptionHandler() {
         props.put(StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG, "org.apache.kafka.streams.errors.InvalidProcessingExceptionHandler");
-        assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+        final Exception exception = assertThrows(ConfigException.class, () -> new StreamsConfig(props));
+
+        assertThat(
+                exception.getMessage(),
+                containsString("Invalid value org.apache.kafka.streams.errors.InvalidProcessingExceptionHandler " +
+                        "for configuration processing.exception.handler: Class org.apache.kafka.streams.errors.InvalidProcessingExceptionHandler could not be found.")
+        );
     }
 
     static class MisconfiguredSerde implements Serde<Object> {
