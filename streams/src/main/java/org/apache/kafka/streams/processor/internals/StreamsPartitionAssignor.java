@@ -1529,22 +1529,19 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                                    final TaskAssignment taskAssignment) {
         final Collection<KafkaStreamsAssignment> assignments = taskAssignment.assignment();
 
-        // Check for AssignmentError.ACTIVE_TASK_ASSIGNED_MULTIPLE_TIMES
         final Set<TaskId> activeTasks = new HashSet<>();
         for (final KafkaStreamsAssignment assignment : assignments) {
             for (final KafkaStreamsAssignment.AssignedTask task : assignment.assignment()) {
-                if (task.type() != KafkaStreamsAssignment.AssignedTask.Type.ACTIVE) {
-                    continue;
+                if (task.type() == KafkaStreamsAssignment.AssignedTask.Type.ACTIVE) {
+                    if (activeTasks.contains(task.id())) {
+                        log.error("Assignment is invalid: an active task was assigned multiple times: {}", task.id());
+                        return AssignmentError.ACTIVE_TASK_ASSIGNED_MULTIPLE_TIMES;
+                    }
+                    activeTasks.add(task.id());
                 }
-
-                if (activeTasks.contains(task.id())) {
-                    return AssignmentError.ACTIVE_TASK_ASSIGNED_MULTIPLE_TIMES;
-                }
-                activeTasks.add(task.id());
             }
         }
 
-        // Check for ACTIVE_AND_STANDBY_TASK_ASSIGNED_TO_SAME_KAFKASTREAMS
         for (final KafkaStreamsAssignment assignment : assignments) {
             final Set<TaskId> activeTasksForAssignment = new HashSet<>();
             for (final KafkaStreamsAssignment.AssignedTask task : assignment.assignment()) {
@@ -1556,13 +1553,13 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             for (final KafkaStreamsAssignment.AssignedTask task : assignment.assignment()) {
                 if (task.type() == KafkaStreamsAssignment.AssignedTask.Type.STANDBY) {
                     if (activeTasksForAssignment.contains(task.id())) {
+                        log.error("Assignment is invalid: both an active and standby assignment of a task were assigned to the same client: {}", task.id());
                         return AssignmentError.ACTIVE_AND_STANDBY_TASK_ASSIGNED_TO_SAME_KAFKASTREAMS;
                     }
                 }
             }
         }
 
-        // Check for INVALID_STANDBY_TASK
         final Set<TaskId> standbyTasksInOutput = new HashSet<>();
         for (final KafkaStreamsAssignment assignment : assignments) {
             for (final KafkaStreamsAssignment.AssignedTask task : assignment.assignment()) {
@@ -1573,36 +1570,35 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         }
         for (final TaskInfo task : applicationState.allTasks()) {
             if (!task.isStateful() && standbyTasksInOutput.contains(task.id())) {
+                log.error("Assignment is invalid: a standby task was found for a stateless task: {}", task.id());
                 return AssignmentError.INVALID_STANDBY_TASK;
             }
         }
 
-        // Check for MISSING_PROCESS_ID
         final Map<ProcessId, KafkaStreamsState> clientStates = applicationState.kafkaStreamsStates(false);
         final Set<ProcessId> clientsInOutput = assignments.stream().map(KafkaStreamsAssignment::processId)
             .collect(Collectors.toSet());
         for (final Map.Entry<ProcessId, KafkaStreamsState> entry : clientStates.entrySet()) {
             final ProcessId processIdInInput = entry.getKey();
             if (!clientsInOutput.contains(processIdInInput)) {
+                log.error("Assignment is invalid: one of the clients has no assignment: {}", processIdInInput.id());
                 return AssignmentError.MISSING_PROCESS_ID;
             }
         }
 
-        // Check for UNKNOWN_PROCESS_ID
-        final Set<ProcessId> clientsInInput = clientStates.entrySet().stream().map(Map.Entry::getKey)
-            .collect(Collectors.toSet());
         for (final ProcessId processIdInOutput : clientsInOutput) {
-            if (!clientsInInput.contains(processIdInOutput)) {
+            if (!clientStates.containsKey(processIdInOutput)) {
+                log.error("Assignment is invalid: one of the clients in the assignment is unknown: {}", processIdInOutput.id());
                 return AssignmentError.UNKNOWN_PROCESS_ID;
             }
         }
 
-        // Check for UNKNOWN_TASK_ID
         final Set<TaskId> taskIdsInInput = applicationState.allTasks().stream().map(TaskInfo::id)
             .collect(Collectors.toSet());
         for (final KafkaStreamsAssignment assignment : assignments) {
             for (final KafkaStreamsAssignment.AssignedTask task : assignment.assignment()) {
                 if (!taskIdsInInput.contains(task.id())) {
+                    log.error("Assignment is invalid: one of the tasks in the assignment is unknown: {}", task.id());
                     return AssignmentError.UNKNOWN_TASK_ID;
                 }
             }
