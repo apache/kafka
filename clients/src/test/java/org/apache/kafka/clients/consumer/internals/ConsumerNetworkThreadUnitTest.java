@@ -57,13 +57,12 @@ public class ConsumerNetworkThreadUnitTest {
     private final MockClient client;
     private final NetworkClientDelegate networkClientDelegate;
     private final RequestManagers requestManagers;
+    private final CompletableEventReaper applicationEventReaper;
 
     ConsumerNetworkThreadUnitTest() {
         LogContext logContext = new LogContext();
         this.time = new MockTime();
         this.client = new MockClient(time);
-
-        // usually we don't mock 1. time - MockTime 2. logContext and 3. networkClient - MockClient
         this.networkClientDelegate = mock(NetworkClientDelegate.class);
         this.requestManagers = mock(RequestManagers.class);
         this.offsetsRequestManager = mock(OffsetsRequestManager.class);
@@ -75,10 +74,13 @@ public class ConsumerNetworkThreadUnitTest {
         this.subscriptions = mock(SubscriptionState.class);
         this.metadata = mock(ConsumerMetadata.class);
         this.applicationEventProcessor = mock(ApplicationEventProcessor.class);
+        this.applicationEventReaper = mock(CompletableEventReaper.class);
 
         this.consumerNetworkThread = new ConsumerNetworkThread(
                 logContext,
                 time,
+                applicationEventsQueue,
+                applicationEventReaper,
                 () -> applicationEventProcessor,
                 () -> networkClientDelegate,
                 () -> requestManagers
@@ -96,30 +98,17 @@ public class ConsumerNetworkThreadUnitTest {
             consumerNetworkThread.close();
     }
 
-    /**
-     * // Make sure the tests include testing poll with params of (pollWaitTime, currentTimeMs)
-     * 1. Add a test that have RM to return different poll times and ensure pollWaitTimeMs is computed correctly. i.e. takes the min of all
-     * 2. Test maxTimeToWait with different request manager returns
-     * 3. Remove the tests and create a commit for it so that we can look back later.
-     */
-
     @ParameterizedTest
     @ValueSource(longs = {1, 100, 1000, 4999, 5001})
     public void testConsumerNetworkThreadWaitTimeComputations(long exampleTime) {
         List<Optional<? extends RequestManager>> requestManagersList = new ArrayList<>();
         requestManagersList.add(Optional.of(coordinatorRequestManager));
-//        requestManagersList.add(Optional.of(commitRequestManager));
-//        requestManagersList.add(Optional.of(heartbeatRequestManager));
-//        requestManagersList.add(Optional.of(offsetsRequestManager));
         when(requestManagers.entries()).thenReturn(requestManagersList);
 
         NetworkClientDelegate.PollResult pollResult = new NetworkClientDelegate.PollResult(exampleTime);
 
         when(coordinatorRequestManager.poll(anyLong())).thenReturn(pollResult);
         when(coordinatorRequestManager.maximumTimeToWait(anyLong())).thenReturn(exampleTime);
-//        when(commitRequestManager.poll(anyLong())).thenReturn(new NetworkClientDelegate.PollResult(10000L));
-//        when(heartbeatRequestManager.poll(anyLong())).thenReturn(new NetworkClientDelegate.PollResult(10000L));
-//        when(offsetsRequestManager.poll(anyLong())).thenReturn(new NetworkClientDelegate.PollResult(10000L));
         when(networkClientDelegate.addAll(pollResult)).thenReturn(pollResult.timeUntilNextPollMs);
         consumerNetworkThread.runOnce();
 
@@ -146,10 +135,10 @@ public class ConsumerNetworkThreadUnitTest {
 
     @Test
     public void testEnsureApplicationEventProcessorInvokesProcess() {
-        //ApplicationEvent e = new PollEvent(100);
-        //applicationEventsQueue.add(e);
+        ApplicationEvent e = new PollEvent(100);
+        applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
-        verify(applicationEventProcessor, times(1)).process();
+        verify(applicationEventProcessor).process(e);
     }
 
     @Test
@@ -157,7 +146,6 @@ public class ConsumerNetworkThreadUnitTest {
         consumerNetworkThread.runOnce();
         requestManagers.entries().forEach(rmo -> rmo.ifPresent(rm -> verify(rm, times(1)).poll(anyLong())));
         requestManagers.entries().forEach(rmo -> rmo.ifPresent(rm -> verify(rm, times(1)).maximumTimeToWait(anyLong())));
-        // We just need to test networkClientDelegate not networkClient
-        verify(networkClientDelegate, times(1)).poll(anyLong(), anyLong());
+        verify(networkClientDelegate).poll(anyLong(), anyLong());
     }
 }
