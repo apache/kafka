@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -243,7 +244,7 @@ public class LeaderState<T> implements EpochState {
                         );
                         return true;
                     } else if (highWatermarkUpdateOffset < currentHighWatermarkMetadata.offset) {
-                        log.warn("The latest computed high watermark {} is smaller than the current " +
+                        log.info("The latest computed high watermark {} is smaller than the current " +
                                 "value {}, which should only happen when voter set membership changes. If the voter " +
                                 "set has not changed this suggests that one of the voters has lost committed data. " +
                                 "Full voter replication state: {}", highWatermarkUpdateOffset,
@@ -297,10 +298,12 @@ public class LeaderState<T> implements EpochState {
      * Update the local replica state.
      *
      * @param endOffsetMetadata updated log end offset of local replica
+     * @param lastVoterSet the up-to-date voter set
      * @return true if the high watermark is updated as a result of this call
      */
     public boolean updateLocalState(
-        LogOffsetMetadata endOffsetMetadata
+        LogOffsetMetadata endOffsetMetadata,
+        Set<Integer> lastVoterSet
     ) {
         ReplicaState state = getOrCreateReplicaState(localId);
         state.endOffset.ifPresent(currentEndOffset -> {
@@ -309,7 +312,8 @@ public class LeaderState<T> implements EpochState {
                     "end offset: " + currentEndOffset.offset + " -> " + endOffsetMetadata.offset);
             }
         });
-        state.updateLeaderState(endOffsetMetadata);
+        state.updateLeaderEndOffset(endOffsetMetadata);
+        updateVoterSet(lastVoterSet);
         return maybeUpdateHighWatermark();
     }
 
@@ -343,12 +347,14 @@ public class LeaderState<T> implements EpochState {
             }
         });
         Optional<LogOffsetMetadata> leaderEndOffsetOpt;
-        if (voterStates.containsKey(localId)) {
-            leaderEndOffsetOpt = voterStates.get(localId).endOffset;
-        } else if (observerStates.containsKey(localId)) {
+        ReplicaState leaderVoterState = voterStates.get(localId);
+        ReplicaState leaderObserverState = observerStates.get(localId);
+        if (leaderVoterState != null) {
+            leaderEndOffsetOpt = leaderVoterState.endOffset;
+        } else if (leaderObserverState != null) {
             // The leader is not guaranteed to be in the voter set when in the process of being removed from the quorum.
             log.info("Updating end offset for leader {} which is also an observer.", localId);
-            leaderEndOffsetOpt = observerStates.get(localId).endOffset;
+            leaderEndOffsetOpt = leaderObserverState.endOffset;
         } else {
             throw new IllegalStateException("Leader state not found for localId " + localId);
         }
@@ -395,10 +401,14 @@ public class LeaderState<T> implements EpochState {
     private ReplicaState getOrCreateReplicaState(int remoteNodeId) {
         ReplicaState state = voterStates.get(remoteNodeId);
         if (state == null) {
-            observerStates.putIfAbsent(remoteNodeId, new ReplicaState(remoteNodeId, false));
-            return observerStates.get(remoteNodeId);
+            return createObserverState(remoteNodeId);
         }
         return state;
+    }
+
+    private ReplicaState createObserverState(int remoteNodeId) {
+        observerStates.putIfAbsent(remoteNodeId, new ReplicaState(remoteNodeId, false));
+        return observerStates.get(remoteNodeId);
     }
 
     public DescribeQuorumResponseData.PartitionData describeQuorum(long currentTimeMs) {
@@ -453,13 +463,25 @@ public class LeaderState<T> implements EpochState {
         return voterStates.containsKey(remoteNodeId);
     }
 
-    // for testing purposes
-    boolean removeVoter(int nodeId) {
-        if (voterStates.containsKey(nodeId)) {
-            voterStates.remove(nodeId);
-            return true;
+    // with Jose's changes this will probably make more sense as VoterSet
+    private void updateVoterSet(Set<Integer> lastVoterSet) {
+        // Remove any voter state that is not in the last voter set. They become observers.
+        for (Iterator<Map.Entry<Integer, ReplicaState>> iter = voterStates.entrySet().iterator(); iter.hasNext(); ) {
+            Integer nodeId = iter.next().getKey();
+            if (!lastVoterSet.contains(nodeId)) {
+                createObserverState(nodeId);
+                iter.remove();
+            }
         }
-        return false;
+
+        // Add any voter state that is in the last voter set but not in the current voter set. They are removed from
+        // the observerStates if they exist.
+        for (int voterId : lastVoterSet) {
+            if (!voterStates.containsKey(voterId)) {
+                voterStates.put(voterId, new ReplicaState(voterId, false));
+                observerStates.remove(voterId);
+            }
+        }
     }
 
     private static class ReplicaState implements Comparable<ReplicaState> {
@@ -479,7 +501,7 @@ public class LeaderState<T> implements EpochState {
             this.hasAcknowledgedLeader = hasAcknowledgedLeader;
         }
 
-        void updateLeaderState(
+        void updateLeaderEndOffset(
             LogOffsetMetadata endOffsetMetadata
         ) {
             // For the leader, we only update the end offset. The remaining fields
