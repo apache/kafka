@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor.assignment;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -86,6 +85,9 @@ public final class TaskAssignmentUtils {
      * the resulting assignment will have an absolute minimum of cross rack traffic. If we set {@code trafficCost} to 0,
      * and {@code nonOverlapCost} to a positive value, the resulting assignment will be identical to the input assignment.
      * <p>
+     * Note: this method will modify the input {@link KafkaStreamsAssignment} objects and return the same map.
+     * It does not make a copy of the map or the KafkaStreamsAssignment objects.
+     * <p>
      * This method optimizes cross-rack traffic for active tasks only. For standby task optimization,
      * use {@link #optimizeRackAwareStandbyTasks}.
      *
@@ -93,7 +95,7 @@ public final class TaskAssignmentUtils {
      * @param kafkaStreamsAssignments the current assignment of tasks to KafkaStreams clients
      * @param tasks                   the set of tasks to reassign if possible. Must already be assigned to a KafkaStreams client
      *
-     * @return a new map containing the mappings from KafkaStreamsAssignments updated with the default rack-aware assignment for active tasks
+     * @return a map with the KafkaStreamsAssignments updated to minimize cross-rack traffic for active tasks
      */
     public static Map<ProcessId, KafkaStreamsAssignment> optimizeRackAwareActiveTasks(
         final ApplicationState applicationState,
@@ -111,38 +113,48 @@ public final class TaskAssignmentUtils {
 
         final int crossRackTrafficCost = applicationState.assignmentConfigs().rackAwareTrafficCost();
         final int nonOverlapCost = applicationState.assignmentConfigs().rackAwareNonOverlapCost();
-        final long currentCost = computeTaskCost(
-            applicationState.allTasks().stream().filter(taskInfo -> tasks.contains(taskInfo.id())).collect(
-                Collectors.toSet()),
-            applicationState.kafkaStreamsStates(false),
+
+        final Map<ProcessId, KafkaStreamsState> kafkaStreamsStates = applicationState.kafkaStreamsStates(false);
+        final List<TaskId> taskIds = new ArrayList<>(tasks);
+
+        // TODO: can be simplified once we change #allTasks to return a Map<TaskId, TaskInfo>
+        //  then we can change the tasks input parameter to a List and flip the .filter step
+        final Map<TaskId, Set<TaskTopicPartition>> topicPartitionsByTaskId = applicationState.allTasks().stream()
+            .filter(taskInfo -> tasks.contains(taskInfo.id()))
+            .collect(Collectors.toMap(TaskInfo::id, TaskInfo::topicPartitions));
+
+        final Map<UUID, Optional<String>> clientRacks = new HashMap<>();
+        final List<UUID> clientIds = new ArrayList<>();
+        final Map<UUID, KafkaStreamsAssignment> assignmentsByUuid = new HashMap<>();
+
+        for (final Map.Entry<ProcessId, KafkaStreamsAssignment> entry : kafkaStreamsAssignments.entrySet()) {
+            final UUID uuid = entry.getKey().id();
+            clientIds.add(uuid);
+            clientRacks.put(uuid, kafkaStreamsStates.get(entry.getKey()).rackId());
+        }
+
+        final long initialCost = computeTaskCost(
+            topicPartitionsByTaskId,
+            taskIds,
+            clientIds,
+            assignmentsByUuid,
+            clientRacks,
             crossRackTrafficCost,
             nonOverlapCost,
             false,
             false
         );
-        LOG.info("Assignment before active task optimization has cost {}", currentCost);
 
-        final List<UUID> clientIds = kafkaStreamsAssignments.keySet().stream().map(ProcessId::id).collect(
-            Collectors.toList());
-        final Map<ProcessId, KafkaStreamsState> kafkaStreamsStates = applicationState.kafkaStreamsStates(false);
-        final Map<UUID, Optional<String>> clientRacks = kafkaStreamsStates.values().stream().collect(
-                Collectors.toMap(state -> state.processId().id(), KafkaStreamsState::rackId));
-        final Map<UUID, Set<TaskId>> previousTaskIdsByProcess = kafkaStreamsStates.values().stream().collect(Collectors.toMap(
-            state -> state.processId().id(),
-            KafkaStreamsState::previousActiveTasks
-        ));
-        final Map<TaskId, Set<TaskTopicPartition>> topicPartitionsByTaskId = applicationState.allTasks().stream()
-            .filter(taskInfo -> tasks.contains(taskInfo.id()))
-            .collect(Collectors.toMap(TaskInfo::id, TaskInfo::topicPartitions));
+        LOG.info("Assignment before active task optimization has cost {}", initialCost);
 
-        final List<TaskId> taskIds = new ArrayList<>(tasks);
-        final RackAwareGraphConstructor<UUID> graphConstructor = RackAwareGraphConstructorFactory.create(
+        final RackAwareGraphConstructor<KafkaStreamsAssignment> graphConstructor = RackAwareGraphConstructorFactory.create(
             applicationState.assignmentConfigs().rackAwareAssignmentStrategy(), taskIds);
+
         final AssignmentGraph assignmentGraph = buildTaskGraph(
-            clientIds,
+            assignmentsByUuid,
             clientRacks,
             taskIds,
-            previousTaskIdsByProcess,
+            clientIds,
             topicPartitionsByTaskId,
             crossRackTrafficCost,
             nonOverlapCost,
@@ -153,29 +165,19 @@ public final class TaskAssignmentUtils {
 
         assignmentGraph.graph.solveMinCostFlow();
 
-        final Map<UUID, Set<AssignedTask>> reassigned = new HashMap<>();
-        final Map<UUID, Set<TaskId>> unassigned = new HashMap<>();
         graphConstructor.assignTaskFromMinCostFlow(
             assignmentGraph.graph,
             clientIds,
             taskIds,
-            clientIds.stream().collect(Collectors.toMap(id -> id, id -> id)),
+            assignmentsByUuid,
             assignmentGraph.taskCountByClient,
             assignmentGraph.clientByTask,
-            (processId, taskId) -> {
-                reassigned.computeIfAbsent(processId, k -> new HashSet<>());
-                reassigned.get(processId).add(new AssignedTask(taskId, AssignedTask.Type.ACTIVE));
-            },
-            (processId, taskId) -> {
-                unassigned.computeIfAbsent(processId, k -> new HashSet<>());
-                unassigned.get(processId).add(taskId);
-            },
-            (processId, taskId) -> {
-                return previousTaskIdsByProcess.get(processId).contains(taskId);
-            }
+            (assignment, taskId) -> assignment.assignTask(new AssignedTask(taskId, AssignedTask.Type.ACTIVE)),
+            (assignment, taskId) -> assignment.removeTask(new AssignedTask(taskId, AssignedTask.Type.ACTIVE)),
+            (assignment, taskId) -> assignment.assignedTaskIds().contains(taskId)
         );
 
-        return processTaskMoves(kafkaStreamsAssignments.values(), reassigned, unassigned);
+        return kafkaStreamsAssignments;
     }
 
     /**
@@ -192,18 +194,19 @@ public final class TaskAssignmentUtils {
      * the resulting assignment will have an absolute minimum of cross rack traffic. If we set {@code trafficCost} to 0,
      * and {@code nonOverlapCost} to a positive value, the resulting assignment will be identical to the input assignment.
      * <p>
+     * Note: this method will modify the input {@link KafkaStreamsAssignment} objects and return the same map.
+     * It does not make a copy of the map or the KafkaStreamsAssignment objects.
+     * <p>
      * This method optimizes cross-rack traffic for standby tasks only. For active task optimization,
      * use {@link #optimizeRackAwareActiveTasks}.
      *
      * @param kafkaStreamsAssignments the current assignment of tasks to KafkaStreams clients
      * @param applicationState        the metadata and other info describing the current application state
      *
-     * @return a new map containing the mappings from KafkaStreamsAssignments updated with the default rack-aware assignment for standy tasks
+     * @return a map with the KafkaStreamsAssignments updated to minimize cross-rack traffic for standby tasks
      */
-    public static Map<ProcessId, KafkaStreamsAssignment> optimizeRackAwareStandbyTasks(
-        final ApplicationState applicationState,
-        final Map<ProcessId, KafkaStreamsAssignment> kafkaStreamsAssignments
-    ) {
+    private static Map<ProcessId, KafkaStreamsAssignment> optimizeRackAwareStandbyTasks(final ApplicationState applicationState,
+                                                                                       final Map<ProcessId, KafkaStreamsAssignment> kafkaStreamsAssignments) {
         if (!hasValidRackInformation(applicationState)) {
             LOG.warn("Cannot optimize standby tasks with invalid rack information.");
             return kafkaStreamsAssignments;
@@ -211,82 +214,97 @@ public final class TaskAssignmentUtils {
 
         final int crossRackTrafficCost = applicationState.assignmentConfigs().rackAwareTrafficCost();
         final int nonOverlapCost = applicationState.assignmentConfigs().rackAwareNonOverlapCost();
+
+        // TODO: can be simplified once we change #allTasks to return a Map<TaskId, TaskInfo>
+        final Map<TaskId, Set<TaskTopicPartition>> topicPartitionsByTaskId =
+            applicationState.allTasks().stream().collect(Collectors.toMap(
+                TaskInfo::id,
+                t -> t.topicPartitions().stream().filter(TaskTopicPartition::isChangelog).collect(Collectors.toSet()))
+            );
+        final List<TaskId> taskIds = new ArrayList<>(topicPartitionsByTaskId.keySet());
+
+        final Map<ProcessId, KafkaStreamsState> kafkaStreamsStates = applicationState.kafkaStreamsStates(false);
+
+        final Map<UUID, Optional<String>> clientRacks = new HashMap<>();
+        final List<UUID> clientIds = new ArrayList<>();
+        final Map<UUID, KafkaStreamsAssignment> assignmentsByUuid = new HashMap<>();
+
+        for (final Map.Entry<ProcessId, KafkaStreamsAssignment> entry : kafkaStreamsAssignments.entrySet()) {
+            final UUID uuid = entry.getKey().id();
+            clientIds.add(uuid);
+            clientRacks.put(uuid, kafkaStreamsStates.get(entry.getKey()).rackId());
+        }
+
         final long currentCost = computeTaskCost(
-            applicationState.allTasks(),
-            applicationState.kafkaStreamsStates(false),
+            topicPartitionsByTaskId,
+            taskIds,
+            clientIds,
+            assignmentsByUuid,
+            clientRacks,
             crossRackTrafficCost,
             nonOverlapCost,
             true,
             true
         );
         LOG.info("Assignment before standby task optimization has cost {}", currentCost);
-        throw new UnsupportedOperationException("Not Implemented.");
+
+        throw new UnsupportedOperationException("Not yet Implemented.");
     }
 
-    private static long computeTaskCost(final Set<TaskInfo> tasks,
-                                        final Map<ProcessId, KafkaStreamsState> clients,
+    private static long computeTaskCost(final Map<TaskId, Set<TaskTopicPartition>> topicPartitionsByTaskId,
+                                        final List<TaskId> taskIds,
+                                        final List<UUID> clientIds,
+                                        final Map<UUID, KafkaStreamsAssignment> assignmentsByUuid,
+                                        final Map<UUID, Optional<String>> clientRacks,
                                         final int crossRackTrafficCost,
                                         final int nonOverlapCost,
                                         final boolean hasReplica,
                                         final boolean isStandby) {
-        if (tasks.isEmpty()) {
+        if (taskIds.isEmpty()) {
             return 0;
         }
 
-        final List<UUID> clientIds = clients.keySet().stream().map(ProcessId::id).collect(
-            Collectors.toList());
-
-        final List<TaskId> taskIds = tasks.stream().map(TaskInfo::id).collect(Collectors.toList());
-        final Map<TaskId, Set<TaskTopicPartition>> topicPartitionsByTaskId = tasks.stream().collect(
-            Collectors.toMap(TaskInfo::id, TaskInfo::topicPartitions));
-
-        final Map<UUID, Optional<String>> clientRacks = clients.values().stream().collect(
-            Collectors.toMap(state -> state.processId().id(), KafkaStreamsState::rackId));
-
-        final Map<UUID, Set<TaskId>> taskIdsByProcess = clients.values().stream().collect(
-            Collectors.toMap(state -> state.processId().id(), state -> {
-                if (isStandby) {
-                    return state.previousStandbyTasks();
-                }
-                return state.previousActiveTasks();
-            })
+        final RackAwareGraphConstructor<KafkaStreamsAssignment> graphConstructor = new MinTrafficGraphConstructor<>();
+        final AssignmentGraph assignmentGraph = buildTaskGraph(
+            assignmentsByUuid,
+            clientRacks,
+            taskIds,
+            clientIds,
+            topicPartitionsByTaskId,
+            crossRackTrafficCost,
+            nonOverlapCost,
+            hasReplica,
+            isStandby,
+            graphConstructor
         );
-
-        final RackAwareGraphConstructor<UUID> graphConstructor = new MinTrafficGraphConstructor<>();
-        final AssignmentGraph assignmentGraph = buildTaskGraph(clientIds, clientRacks, taskIds, taskIdsByProcess, topicPartitionsByTaskId,
-            crossRackTrafficCost, nonOverlapCost, hasReplica, isStandby, graphConstructor);
         return assignmentGraph.graph.totalCost();
     }
 
-    private static AssignmentGraph buildTaskGraph(final List<UUID> clientIds,
+    private static AssignmentGraph buildTaskGraph(final Map<UUID, KafkaStreamsAssignment> assignmentsByUuid,
                                                   final Map<UUID, Optional<String>> clientRacks,
                                                   final List<TaskId> taskIds,
-                                                  final Map<UUID, Set<TaskId>> previousTaskIdsByProcess,
+                                                  final List<UUID> clientList,
                                                   final Map<TaskId, Set<TaskTopicPartition>> topicPartitionsByTaskId,
                                                   final int crossRackTrafficCost,
                                                   final int nonOverlapCost,
                                                   final boolean hasReplica,
                                                   final boolean isStandby,
-                                                  final RackAwareGraphConstructor<UUID> graphConstructor) {
-        final Map<UUID, UUID> clientsUuidByUuid = clientIds.stream().collect(Collectors.toMap(id -> id, id -> id));
+                                                  final RackAwareGraphConstructor<KafkaStreamsAssignment> graphConstructor) {
+        // Intentionally passed in empty -- these are actually outputs of the graph
         final Map<TaskId, UUID> clientByTask = new HashMap<>();
         final Map<UUID, Integer> taskCountByClient = new HashMap<>();
+
         final Graph<Integer> graph = graphConstructor.constructTaskGraph(
-            clientIds,
+            clientList,
             taskIds,
-            clientsUuidByUuid,
+            assignmentsByUuid,
             clientByTask,
             taskCountByClient,
-            (processId, taskId) -> {
-                return previousTaskIdsByProcess.get(processId).contains(taskId);
-            },
+            (assignment, taskId) -> assignment.assignedTaskIds().contains(taskId),
             (taskId, processId, inCurrentAssignment, unused0, unused1, unused2) -> {
                 final int assignmentChangeCost = !inCurrentAssignment ? nonOverlapCost : 0;
                 final Optional<String> clientRack = clientRacks.get(processId);
-                final Set<TaskTopicPartition> topicPartitions = topicPartitionsByTaskId.get(taskId).stream().filter(tp -> {
-                    return isStandby ? tp.isChangelog() : true;
-                }).collect(Collectors.toSet());
-                return assignmentChangeCost + getCrossRackTrafficCost(topicPartitions, clientRack, crossRackTrafficCost);
+                return assignmentChangeCost + getCrossRackTrafficCost(topicPartitionsByTaskId.get(taskId), clientRack, crossRackTrafficCost);
             },
             crossRackTrafficCost,
             nonOverlapCost,
@@ -383,41 +401,5 @@ public final class TaskAssignmentUtils {
             }
         }
         return true;
-    }
-
-    /**
-     * This function returns a copy of the old collection of {@code KafkaStreamsAssignment} with tasks
-     * moved according to the {@param reassigned} tasks and {@param unassigned} tasks.
-     *
-     * @param kafkaStreamsAssignments the collection to start from when moving tasks from process to process
-     * @param reassigned              the map from process id to tasks that this client has newly been assigned
-     * @param unassigned              the map from process id to tasks that this client has newly been unassigned
-     *
-     * @return the new mapping from processId to {@code KafkaStreamsAssignment}.
-     */
-    private static Map<ProcessId, KafkaStreamsAssignment> processTaskMoves(final Collection<KafkaStreamsAssignment> kafkaStreamsAssignments,
-                                                                           final Map<UUID, Set<AssignedTask>> reassigned,
-                                                                           final Map<UUID, Set<TaskId>> unassigned) {
-        final Map<ProcessId, KafkaStreamsAssignment> optimizedResult = new HashMap<>();
-        for (final KafkaStreamsAssignment oldAssignment : kafkaStreamsAssignments) {
-            final ProcessId processId = oldAssignment.processId();
-            final Set<AssignedTask> newTasks = reassigned.getOrDefault(processId.id(), new HashSet<>());
-            final Set<TaskId> unassignedTasksForProcess = unassigned.getOrDefault(processId.id(), new HashSet<>());
-            for (final AssignedTask previouslyAssignedTask : oldAssignment.assignment()) {
-                if (unassignedTasksForProcess.contains(previouslyAssignedTask.id())) {
-                    continue;
-                }
-                newTasks.add(previouslyAssignedTask);
-            }
-
-            final KafkaStreamsAssignment newAssignment = KafkaStreamsAssignment.of(processId, newTasks);
-            if (oldAssignment.followupRebalanceDeadline().isPresent()) {
-                optimizedResult.put(processId, newAssignment.withFollowupRebalance(
-                    oldAssignment.followupRebalanceDeadline().get()));
-            } else {
-                optimizedResult.put(processId, newAssignment);
-            }
-        }
-        return optimizedResult;
     }
 }
