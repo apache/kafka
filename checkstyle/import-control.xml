@@ -211,6 +211,11 @@
       <allow pkg="org.apache.kafka.common" />
     </subpackage>
 
+    <subpackage name="errors">
+      <allow class="org.apache.kafka.common.header.Headers" />
+      <allow class="org.apache.kafka.common.record.TimestampType" />
+    </subpackage>
+
   </subpackage>
 
   <subpackage name="clients">
