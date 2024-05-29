@@ -52,9 +52,7 @@ public final class TaskAssignmentUtils {
      * @return a new map containing an assignment that replicates exactly the previous assignment reported
      *         in the applicationState
      */
-    public static Map<ProcessId, KafkaStreamsAssignment> identityAssignment(
-        final ApplicationState applicationState
-    ) {
+    public static Map<ProcessId, KafkaStreamsAssignment> identityAssignment(final ApplicationState applicationState) {
         final Map<ProcessId, KafkaStreamsAssignment> assignments = new HashMap<>();
         applicationState.kafkaStreamsStates(false).forEach((processId, state) -> {
             final Set<AssignedTask> tasks = new HashSet<>();
@@ -71,24 +69,6 @@ public final class TaskAssignmentUtils {
             assignments.put(processId, newAssignment);
         });
         return assignments;
-    }
-
-    /**
-     * Assign standby tasks to KafkaStreams clients according to the default logic.
-     * <p>
-     * If rack-aware client tags are configured, the rack-aware standby task assignor will be used
-     *
-     * @param applicationState        the metadata and other info describing the current application state
-     * @param kafkaStreamsAssignments the current assignment of tasks to KafkaStreams clients
-     *
-     * @return a new map containing the mappings from KafkaStreamsAssignments updated with the default
-     *         standby assignment
-     */
-    public static Map<ProcessId, KafkaStreamsAssignment> defaultStandbyTaskAssignment(
-        final ApplicationState applicationState,
-        final Map<ProcessId, KafkaStreamsAssignment> kafkaStreamsAssignments
-    ) {
-        throw new UnsupportedOperationException("Not Implemented.");
     }
 
     /**
@@ -345,7 +325,7 @@ public final class TaskAssignmentUtils {
      *
      * @return whether rack-aware assignment decisions can be made for this application.
      */
-    public static boolean hasValidRackInformation(final ApplicationState applicationState) {
+    private static boolean hasValidRackInformation(final ApplicationState applicationState) {
         for (final KafkaStreamsState state : applicationState.kafkaStreamsStates(false).values()) {
             if (!hasValidRackInformation(state)) {
                 return false;
