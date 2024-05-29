@@ -784,6 +784,7 @@ public class RemoteLogManagerTest {
 
     @Test
     void testRemoteLogTaskUpdateRemoteLogSegmentMetadataAfterLogDirChanged() throws Exception {
+        remoteLogManager.startup();
         long oldSegmentStartOffset = 0L;
         long nextSegmentStartOffset = 150L;
         int segmentCount = 3;
