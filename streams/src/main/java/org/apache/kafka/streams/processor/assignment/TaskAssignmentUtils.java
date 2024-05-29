@@ -650,17 +650,17 @@ public final class TaskAssignmentUtils {
     }
 
     private static void assignStandbyTasksToClientsWithDifferentTags(final int numberOfStandbyClients,
-                                                              final ConstrainedPrioritySet standbyTaskClientsByTaskLoad,
-                                                              final TaskId activeTaskId,
-                                                              final ProcessId activeTaskClient,
-                                                              final Set<String> rackAwareAssignmentTags,
-                                                              final Map<ProcessId, KafkaStreamsState> clientStates,
-                                                              final Map<ProcessId, KafkaStreamsAssignment> kafkaStreamsAssignments,
-                                                              final Map<TaskId, Integer> tasksToRemainingStandbys,
-                                                              final Map<String, Set<String>> tagKeyToValues,
-                                                              final Map<KeyValue<String, String>, Set<ProcessId>> tagEntryToClients,
-                                                              final Map<TaskId, ProcessId> pendingStandbyTasksToClientId,
-                                                              final Function<KafkaStreamsState, Map<String, String>> clientTagGetter) {
+                                                                     final ConstrainedPrioritySet standbyTaskClientsByTaskLoad,
+                                                                     final TaskId activeTaskId,
+                                                                     final ProcessId activeTaskClient,
+                                                                     final Set<String> rackAwareAssignmentTags,
+                                                                     final Map<ProcessId, KafkaStreamsState> clientStates,
+                                                                     final Map<ProcessId, KafkaStreamsAssignment> kafkaStreamsAssignments,
+                                                                     final Map<TaskId, Integer> tasksToRemainingStandbys,
+                                                                     final Map<String, Set<String>> tagKeyToValues,
+                                                                     final Map<KeyValue<String, String>, Set<ProcessId>> tagEntryToClients,
+                                                                     final Map<TaskId, ProcessId> pendingStandbyTasksToClientId,
+                                                                     final Function<KafkaStreamsState, Map<String, String>> clientTagGetter) {
         standbyTaskClientsByTaskLoad.offerAll(clientStates.keySet().stream()
             .map(ProcessId::id).collect(Collectors.toSet()));
 
@@ -730,12 +730,12 @@ public final class TaskAssignmentUtils {
     }
 
     private static void updateClientsOnAlreadyUsedTagEntries(final KafkaStreamsState usedClient,
-                                                      final int countOfUsedClients,
-                                                      final Set<String> rackAwareAssignmentTags,
-                                                      final Map<KeyValue<String, String>, Set<ProcessId>> tagEntryToClients,
-                                                      final Map<String, Set<String>> tagKeyToValues,
-                                                      final Map<KeyValue<String, String>, Set<ProcessId>> tagEntryToUsedClients,
-                                                      final Function<KafkaStreamsState, Map<String, String>> clientTagGetter) {
+                                                             final int countOfUsedClients,
+                                                             final Set<String> rackAwareAssignmentTags,
+                                                             final Map<KeyValue<String, String>, Set<ProcessId>> tagEntryToClients,
+                                                             final Map<String, Set<String>> tagKeyToValues,
+                                                             final Map<KeyValue<String, String>, Set<ProcessId>> tagEntryToUsedClients,
+                                                             final Function<KafkaStreamsState, Map<String, String>> clientTagGetter) {
         final Map<String, String> usedClientTags = clientTagGetter.apply(usedClient);
 
         for (final Map.Entry<String, String> usedClientTagEntry : usedClientTags.entrySet()) {
