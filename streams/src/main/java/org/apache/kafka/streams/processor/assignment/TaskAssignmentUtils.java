@@ -33,6 +33,7 @@ import org.apache.kafka.streams.processor.internals.assignment.Graph;
 import org.apache.kafka.streams.processor.internals.assignment.MinTrafficGraphConstructor;
 import org.apache.kafka.streams.processor.internals.assignment.RackAwareGraphConstructor;
 import org.apache.kafka.streams.processor.internals.assignment.RackAwareGraphConstructorFactory;
+import org.apache.kafka.streams.StreamsConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -72,15 +73,27 @@ public final class TaskAssignmentUtils {
     }
 
     /**
-     * Optimize the active task assignment for rack-awareness
+     * Optimize active task assignment for rack awareness. This optimization is based on the
+     * {@link StreamsConfig#RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG trafficCost}
+     * and {@link StreamsConfig#RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG nonOverlapCost}
+     * configs which balance cross rack traffic minimization and task movement.
+     * Setting {@code trafficCost} to a larger number reduces the overall cross rack traffic of the resulting
+     * assignment, but can increase the number of tasks shuffled around between clients.
+     * Setting {@code nonOverlapCost} to a larger number increases the affinity of tasks to their intended client
+     * and reduces the amount by which the rack-aware optimization can shuffle tasks around, at the cost of higher
+     * cross-rack traffic.
+     * In an extreme case, if we set {@code nonOverlapCost} to 0 and @{code trafficCost} to a positive value,
+     * the resulting assignment will have an absolute minimum of cross rack traffic. If we set {@code trafficCost} to 0,
+     * and {@code nonOverlapCost} to a positive value, the resulting assignment will be identical to the input assignment.
+     * <p>
+     * This method optimizes cross-rack traffic for active tasks only. For standby task optimization,
+     * use {@link #optimizeRackAwareStandbyTasks}.
      *
      * @param applicationState        the metadata and other info describing the current application state
      * @param kafkaStreamsAssignments the current assignment of tasks to KafkaStreams clients
-     * @param tasks                   the set of tasks to reassign if possible. Must already be assigned
-     *                                to a KafkaStreams client
+     * @param tasks                   the set of tasks to reassign if possible. Must already be assigned to a KafkaStreams client
      *
-     * @return a new map containing the mappings from KafkaStreamsAssignments updated with the default
-     *         rack-aware assignment for active tasks
+     * @return a new map containing the mappings from KafkaStreamsAssignments updated with the default rack-aware assignment for active tasks
      */
     public static Map<ProcessId, KafkaStreamsAssignment> optimizeRackAwareActiveTasks(
         final ApplicationState applicationState,
@@ -166,13 +179,26 @@ public final class TaskAssignmentUtils {
     }
 
     /**
-     * Optimize the standby task assignment for rack-awareness
+     * Optimize standby task assignment for rack awareness. This optimization is based on the
+     * {@link StreamsConfig#RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG trafficCost}
+     * and {@link StreamsConfig#RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG nonOverlapCost}
+     * configs which balance cross rack traffic minimization and task movement.
+     * Setting {@code trafficCost} to a larger number reduces the overall cross rack traffic of the resulting
+     * assignment, but can increase the number of tasks shuffled around between clients.
+     * Setting {@code nonOverlapCost} to a larger number increases the affinity of tasks to their intended client
+     * and reduces the amount by which the rack-aware optimization can shuffle tasks around, at the cost of higher
+     * cross-rack traffic.
+     * In an extreme case, if we set {@code nonOverlapCost} to 0 and @{code trafficCost} to a positive value,
+     * the resulting assignment will have an absolute minimum of cross rack traffic. If we set {@code trafficCost} to 0,
+     * and {@code nonOverlapCost} to a positive value, the resulting assignment will be identical to the input assignment.
+     * <p>
+     * This method optimizes cross-rack traffic for standby tasks only. For active task optimization,
+     * use {@link #optimizeRackAwareActiveTasks}.
      *
      * @param kafkaStreamsAssignments the current assignment of tasks to KafkaStreams clients
      * @param applicationState        the metadata and other info describing the current application state
      *
-     * @return a new map containing the mappings from KafkaStreamsAssignments updated with the default
-     *         rack-aware assignment for standby tasks
+     * @return a new map containing the mappings from KafkaStreamsAssignments updated with the default rack-aware assignment for standy tasks
      */
     public static Map<ProcessId, KafkaStreamsAssignment> optimizeRackAwareStandbyTasks(
         final ApplicationState applicationState,
