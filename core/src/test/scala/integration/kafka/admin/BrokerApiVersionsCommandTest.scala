@@ -25,6 +25,7 @@ import org.apache.kafka.common.message.ApiMessageType
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.ApiVersionsResponse
 import org.apache.kafka.network.SocketServerConfigs
+import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertTrue}
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
@@ -43,7 +44,7 @@ class BrokerApiVersionsCommandTest extends KafkaServerTestHarness {
       TestUtils.createBrokerConfigs(1, null).map(props => {
         // Enable unstable api versions to be compatible with the new APIs under development,
         // maybe we can remove this after the new APIs is complete.
-        props.setProperty(KafkaConfig.UnstableApiVersionsEnableProp, "true")
+        props.setProperty(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, "true")
         props
       }).map(KafkaConfig.fromProps)
     } else {
@@ -54,7 +55,7 @@ class BrokerApiVersionsCommandTest extends KafkaServerTestHarness {
         props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT")
         props.setProperty("listeners", "PLAINTEXT://localhost:0,CONTROLLER://localhost:0")
         props.setProperty(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "PLAINTEXT://localhost:0,CONTROLLER://localhost:0")
-        props.setProperty(KafkaConfig.UnstableApiVersionsEnableProp, "true")
+        props.setProperty(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, "true")
         props
       }).map(KafkaConfig.fromProps)
     }
