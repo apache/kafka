@@ -152,15 +152,17 @@ public class HeartbeatRequestManagerTest {
 
     @Test
     public void testHeartBeatRequestStateToStringBase() {
-        LogContext logContext = mock(LogContext.class);
+        LogContext logContext = new LogContext();
         RequestState requestState = new RequestState(
                 logContext,
-                "CommitRequestManager",
+                "HeartbeatRequestManager",
                 10,
                 100);
+
         String target = requestState.toStringBase() +
-                ", heartbeatTimer=" + heartbeatRequestState.heartbeatTimer +
-                ", heartbeatIntervalMs=" + heartbeatRequestState.heartbeatIntervalMs;
+                ", heartbeatTimer=" + heartbeatRequestState.heartbeatTimer() +
+                ", heartbeatIntervalMs=" + heartbeatRequestState.heartbeatIntervalMs();
+
         assertEquals(target, heartbeatRequestState.toStringBase());
     }
 

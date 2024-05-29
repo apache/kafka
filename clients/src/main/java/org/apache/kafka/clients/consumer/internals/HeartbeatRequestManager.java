@@ -477,7 +477,15 @@ public class HeartbeatRequestManager implements RequestManager {
                     ", heartbeatIntervalMs=" + heartbeatIntervalMs;
         }
 
-        //Implement hashCode()
+        // Visible for testing
+        protected Timer heartbeatTimer() {
+            return this.heartbeatTimer;
+        }
+
+        // Visible for testing
+        protected long heartbeatIntervalMs() {
+            return this.heartbeatIntervalMs;
+        }
 
         /**
          * Check if a heartbeat request should be sent on the current time. A heartbeat should be
