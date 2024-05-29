@@ -456,8 +456,7 @@ public class KStreamKStreamJoinTest {
          * This test is testing something internal to [[KStreamKStreamJoin]], so we had to setup low-level api manually.
          */
         final KStreamImplJoin.TimeTrackerSupplier tracker = new KStreamImplJoin.TimeTrackerSupplier();
-        final KStreamKStreamJoin<String, String, String, String> join = new KStreamKStreamJoin<>(
-                false,
+        final KStreamKStreamJoinRightSide<String, String, String, String> join = new KStreamKStreamJoinRightSide<>(
                 "other",
                 new JoinWindowsInternal(JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(1000))),
                 (key, v1, v2) -> v1 + v2,
