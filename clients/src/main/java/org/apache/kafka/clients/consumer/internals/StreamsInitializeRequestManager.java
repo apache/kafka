@@ -122,7 +122,7 @@ public class StreamsInitializeRequestManager implements RequestManager {
             logger.error("Error during Streams initialization: ", exception);
         } else {
             // todo: handle success
-            logger.info("Streams initialization successful", exception);
+            logger.info("Streams initialization successful");
         }
     }
 }
