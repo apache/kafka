@@ -634,7 +634,7 @@ class LogSegmentTest {
   }
 
   @Test
-  def testGetFirstBatchTimestampForSegments(): Unit = {
+  def testGetFirstBatchTimestamp(): Unit = {
     val segment = createSegment(1)
     assertEquals(Long.MaxValue, segment.getFirstBatchTimestamp)
 
