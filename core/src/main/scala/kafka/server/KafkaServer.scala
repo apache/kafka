@@ -44,7 +44,7 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.security.{JaasContext, JaasUtils}
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
-import org.apache.kafka.common.{Endpoint, KafkaException, Node, TopicPartition}
+import org.apache.kafka.common.{Endpoint, Node, TopicPartition}
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.image.loader.metrics.MetadataLoaderMetrics
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag
@@ -165,8 +165,10 @@ class KafkaServer(
 
   var kafkaScheduler: KafkaScheduler = _
 
-  var kraftControllerNodes: Seq[Node] = _
   @volatile var metadataCache: ZkMetadataCache = _
+
+  @volatile var quorumControllerNodeProvider: RaftControllerNodeProvider = _
+
   var quotaManagers: QuotaFactory.QuotaManagers = _
 
   val zkClientConfig: ZKClientConfig = KafkaServer.zkClientConfigFromKafkaConfig(config)
@@ -324,20 +326,13 @@ class KafkaServer(
 
         remoteLogManagerOpt = createRemoteLogManager()
 
-        if (config.migrationEnabled) {
-          kraftControllerNodes = QuorumConfig.voterConnectionsToNodes(
-            QuorumConfig.parseVoterConnections(config.quorumVoters)
-          ).asScala
-        } else {
-          kraftControllerNodes = Seq.empty
-        }
         metadataCache = MetadataCache.zkMetadataCache(
           config.brokerId,
           config.interBrokerProtocolVersion,
           brokerFeatures,
-          kraftControllerNodes,
           config.migrationEnabled)
-        val controllerNodeProvider = new MetadataCacheControllerNodeProvider(metadataCache, config)
+        val controllerNodeProvider = new MetadataCacheControllerNodeProvider(metadataCache, config,
+          () => Option(quorumControllerNodeProvider).map(_.getControllerInfo()))
 
         /* initialize feature change listener */
         _featureChangeListener = new FinalizedFeatureChangeListener(metadataCache, _zkClient)
@@ -446,8 +441,7 @@ class KafkaServer(
             CompletableFuture.completedFuture(quorumVoters),
             fatalFaultHandler = new LoggingFaultHandler("raftManager", () => shutdown())
           )
-          val controllerNodes = QuorumConfig.voterConnectionsToNodes(quorumVoters).asScala
-          val quorumControllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)
+          quorumControllerNodeProvider = RaftControllerNodeProvider(raftManager, config)
           val brokerToQuorumChannelManager = new NodeToControllerChannelManagerImpl(
             controllerNodeProvider = quorumControllerNodeProvider,
             time = time,
@@ -696,10 +690,6 @@ class KafkaServer(
 
   protected def createRemoteLogManager(): Option[RemoteLogManager] = {
     if (config.remoteLogManagerConfig.enableRemoteStorageSystem()) {
-      if (config.logDirs.size > 1) {
-        throw new KafkaException("Tiered storage is not supported with multiple log dirs.")
-      }
-
       Some(new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.head, clusterId, time,
         (tp: TopicPartition) => logManager.getLog(tp).asJava,
         (tp: TopicPartition, remoteLogStartOffset: java.lang.Long) => {
@@ -1075,6 +1065,8 @@ class KafkaServer(
           lifecycleManager.close()
         }
         _brokerState = BrokerState.NOT_RUNNING
+
+        quorumControllerNodeProvider = null
 
         startupComplete.set(false)
         isShuttingDown.set(false)

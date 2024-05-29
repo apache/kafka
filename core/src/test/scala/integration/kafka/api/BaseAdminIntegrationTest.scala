@@ -19,7 +19,6 @@ package kafka.api
 import java.util
 import java.util.Properties
 import java.util.concurrent.ExecutionException
-import kafka.server.KafkaConfig
 import kafka.utils.Logging
 import kafka.utils.TestUtils._
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, CreateTopicsOptions, CreateTopicsResult, DescribeClusterOptions, DescribeTopicsOptions, NewTopic, TopicDescription}
@@ -30,8 +29,7 @@ import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.security.authorizer.AclEntry
-import org.apache.kafka.server.config.KafkaSecurityConfigs
-import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{KafkaSecurityConfigs, ServerConfigs, ReplicationConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo, Timeout}
 
@@ -71,7 +69,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
 
   @Test
   def testCreateDeleteTopics(): Unit = {
-    client = Admin.create(createConfig)
+    client = createAdminClient
     val topics = Seq("mytopic", "mytopic2", "mytopic3")
     val newTopics = Seq(
       new NewTopic("mytopic", Map((0: Integer) -> Seq[Integer](1, 2).asJava, (1: Integer) -> Seq[Integer](2, 0).asJava).asJava),
@@ -163,7 +161,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
 
   @Test
   def testAuthorizedOperations(): Unit = {
-    client = Admin.create(createConfig)
+    client = createAdminClient
 
     // without includeAuthorizedOperations flag
     var result = client.describeCluster
@@ -204,10 +202,10 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
       })
     }
     configs.foreach { config =>
-      config.setProperty(KafkaConfig.DeleteTopicEnableProp, "true")
+      config.setProperty(ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, "true")
       config.setProperty(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "0")
       config.setProperty(ReplicationConfigs.AUTO_LEADER_REBALANCE_ENABLE_CONFIG, "false")
-      config.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false")
+      config.setProperty(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, "false")
       // We set this in order to test that we don't expose sensitive data via describe configs. This will already be
       // set for subclasses with security enabled and we don't want to overwrite it.
       if (!config.containsKey(KafkaSecurityConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG))
@@ -226,10 +224,15 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     val config = new util.HashMap[String, Object]
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "20000")
-    val securityProps: util.Map[Object, Object] =
-      adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
-    securityProps.forEach { (key, value) => config.put(key.asInstanceOf[String], value) }
+    config.put(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, "40000")
     config
+  }
+
+  def createAdminClient: Admin = {
+    val props = new Properties()
+    props.putAll(createConfig)
+    val client = createAdminClient(configOverrides = props)
+    client
   }
 
   def waitForTopics(client: Admin, expectedPresent: Seq[String], expectedMissing: Seq[String]): Unit = {
