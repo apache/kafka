@@ -117,8 +117,6 @@ public final class TaskAssignmentUtils {
         final Map<ProcessId, KafkaStreamsState> kafkaStreamsStates = applicationState.kafkaStreamsStates(false);
         final List<TaskId> taskIds = new ArrayList<>(tasks);
 
-        // TODO: can be simplified once we change #allTasks to return a Map<TaskId, TaskInfo>
-        //  then we can change the tasks input parameter to a List and flip the .filter step
         final Map<TaskId, Set<TaskTopicPartition>> topicPartitionsByTaskId = applicationState.allTasks().values().stream()
             .filter(taskInfo -> tasks.contains(taskInfo.id()))
             .collect(Collectors.toMap(TaskInfo::id, TaskInfo::topicPartitions));
@@ -214,7 +212,6 @@ public final class TaskAssignmentUtils {
         final int crossRackTrafficCost = applicationState.assignmentConfigs().rackAwareTrafficCost();
         final int nonOverlapCost = applicationState.assignmentConfigs().rackAwareNonOverlapCost();
 
-        // TODO: can be simplified once we change #allTasks to return a Map<TaskId, TaskInfo>
         final Map<TaskId, Set<TaskTopicPartition>> topicPartitionsByTaskId =
             applicationState.allTasks().values().stream().collect(Collectors.toMap(
                 TaskInfo::id,
