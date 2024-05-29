@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.assignment;
 
 import java.util.Collection;
+import java.util.Map;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.GroupAssignment;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.GroupSubscription;
 import org.apache.kafka.common.Configurable;
@@ -72,6 +73,9 @@ public interface TaskAssignor extends Configurable {
      *                      or AssignmentError.NONE if the returned assignment was valid
      */
     default void onAssignmentComputed(GroupAssignment assignment, GroupSubscription subscription, AssignmentError error) {}
+
+    @Override
+    default void configure(final Map<String, ?> configs) {}
 
     /**
      * Wrapper class for the final assignment of active and standbys tasks to individual
