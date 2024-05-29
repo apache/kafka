@@ -28,29 +28,41 @@
       "about": "The client id." },
     { "name": "ClientHost", "versions": "0+", "type": "string",
       "about": "The client host." },
-    { "name": "SubscribedTopicNames", "versions": "0+", "type": "[]string",
-      "about": "The list of subscribed topic names." },
-    { "name": "SubscribedTopicRegex", "versions": "0+", "nullableVersions": "0+", "type": "string",
-      "about": "The subscribed topic regular expression." },
     { "name": "RebalanceTimeoutMs", "type": "int32", "versions": "0+", "default": -1,
       "about": "The rebalance timeout" },
-    { "name": "ServerAssignor", "versions": "0+", "nullableVersions": "0+", "type": "string",
-      "about": "The server assignor to use; or null if not used." },
-    { "name": "ClassicMemberMetadata", "versions": "0+", "nullableVersions": "0+", "type": "ClassicMemberMetadata",
-      "default": null, "taggedVersions": "0+", "tag": 0,
-      "about": "The classic member metadata which includes the supported protocols of the consumer if it uses the classic protocol. The metadata is null if the consumer uses the consumer protocol.",
+
+    { "name": "TopologyHash", "type": "bytes", "versions": "0+",
+      "about": "The hash of the topology. " },
+    { "name": "Assignor", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": null,
+      "about": "The desired assignor. " },
+
+    { "name": "ProcessId", "type": "string", "versions": "0+",
+      "about": "Identity of the streams instance that may have multiple consumers. " },
+    { "name": "HostInfo", "type": "HostInfo", "versions": "0+",
+      "about": "Host information for running interactive queries on this instance. ",
       "fields": [
-        { "name": "SessionTimeoutMs", "type": "int32", "versions": "0+",
-          "about": "The session timeout if the consumer uses the classic protocol." },
-        { "name": "SupportedProtocols", "type": "[]ClassicProtocol", "versions": "0+",
-          "about": "The list of protocols that the member supports if the consumer uses the classic protocol.",
-          "fields": [
-            { "name": "Name", "type": "string", "versions": "0+",
-              "about": "The protocol name."},
-            { "name": "Metadata", "type": "bytes", "versions": "0+",
-              "about": "The protocol metadata."}
-          ]
-        }
+        { "name": "Host", "type": "string", "versions": "0+",
+          "about": "Host for running interactive queries on this instance." },
+        { "name": "Port", "type": "int32", "versions": "0+",
+          "about": "Port for running interactive queries on this instance." }
+      ]
+    },
+    // TODO: maybe it would be nice to just stuff this info into "AssignmentConfigs", since it's quite specific
+    { "name": "ClientTags", "type": "[]KeyValue", "versions": "0+",
+      "about": "Used for rack-aware assignment algorithm. Null if unchanged since last heartbeat." },
+
+    { "name": "UserData", "type": "bytes", "versions": "0+", "nullableVersions": "0+", "default": "null",
+      "about": "Opaque user data to be passed to the client-side assignor." },
+    { "name": "AssignmentConfigs", "type": "[]KeyValue", "versions": "0+",
+      "about": "Generic array of assignment configuration strings." }
+  ],
+  "commonStructs": [
+    { "name": "KeyValue", "versions": "0+",
+      "fields": [
+        { "name": "Key", "type": "string", "versions": "0+",
+          "about": "key of the config" },
+        { "name": "Value", "type": "string", "versions": "0+",
+          "about": "value of the config" }
       ]
     }
   ]
