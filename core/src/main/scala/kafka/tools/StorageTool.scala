@@ -150,7 +150,7 @@ object StorageTool extends Logging {
     try {
       for (feature <- allNonZeroFeaturesAndLevels) {
         // In order to validate, we need all feature versions set.
-        Features.validateVersion(feature, metadataVersion, featuresMap)
+        Features.validateVersion(feature, featuresMap)
         metadataRecords.append(new ApiMessageAndVersion(new FeatureLevelRecord().
           setName(feature.featureName).
           setFeatureLevel(feature.featureLevel), 0.toShort))

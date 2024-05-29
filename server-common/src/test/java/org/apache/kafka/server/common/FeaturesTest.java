@@ -21,6 +21,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -41,20 +43,34 @@ public class FeaturesTest {
     @EnumSource(Features.class)
     public void testValidateVersionAllFeatures(Features feature) {
         for (FeatureVersion featureImpl : feature.featureVersions()) {
+            // Ensure the minimum bootstrap metadata version is included if no metadata version dependency.
+            Map<String, Short> deps = new HashMap<>();
+            deps.putAll(featureImpl.dependencies());
+            if (!deps.containsKey(MetadataVersion.FEATURE_NAME)) {
+                deps.put(MetadataVersion.FEATURE_NAME, MetadataVersion.MINIMUM_BOOTSTRAP_VERSION.featureLevel());
+            }
+
             // Ensure that the feature is valid given the typical metadataVersionMapping and the dependencies.
             // Note: Other metadata versions are valid, but this one should always be valid.
-            Features.validateVersion(featureImpl, featureImpl.bootstrapMetadataVersion(), featureImpl.dependencies());
+            Features.validateVersion(featureImpl, deps);
         }
     }
 
     @Test
     public void testInvalidValidateVersion() {
+        // No MetadataVersion is invalid
+        assertThrows(IllegalArgumentException.class,
+            () -> Features.validateVersion(
+                TestFeatureVersion.TEST_1,
+                Collections.emptyMap()
+            )
+        );
+
         // Using too low of a MetadataVersion is invalid
         assertThrows(IllegalArgumentException.class,
             () -> Features.validateVersion(
                 TestFeatureVersion.TEST_1,
-                MetadataVersion.IBP_2_8_IV0,
-                Collections.emptyMap()
+                Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_2_8_IV0.featureLevel())
             )
         );
 
@@ -62,7 +78,6 @@ public class FeaturesTest {
         assertThrows(IllegalArgumentException.class,
              () -> Features.validateVersion(
                  TestFeatureVersion.TEST_2,
-                 MetadataVersion.MINIMUM_BOOTSTRAP_VERSION,
                  Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_7_IV0.featureLevel())
              )
         );

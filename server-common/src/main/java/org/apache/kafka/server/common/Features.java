@@ -99,12 +99,13 @@ public enum Features {
      * All feature levels above 0 require metadata.version=4 (IBP_3_3_IV0) in order to write the feature records to the cluster.
      *
      * @param feature                   the feature we are validating
-     * @param metadataVersion           the metadata version we have (or want to set)
-     * @param features                  the feature versions (besides MetadataVersion) we have (or want to set)
+     * @param features                  the feature versions we have (or want to set)
      * @throws IllegalArgumentException if the feature is not valid
      */
-    public static void validateVersion(FeatureVersion feature, MetadataVersion metadataVersion, Map<String, Short> features) {
-        if (feature.featureLevel() >= 1 && metadataVersion.isLessThan(MetadataVersion.IBP_3_3_IV0))
+    public static void validateVersion(FeatureVersion feature, Map<String, Short> features) {
+        Short metadataVersion = features.get(MetadataVersion.FEATURE_NAME);
+
+        if (feature.featureLevel() >= 1 && (metadataVersion == null || metadataVersion < MetadataVersion.IBP_3_3_IV0.featureLevel()))
             throw new IllegalArgumentException(feature.featureName() + " could not be set to " + feature.featureLevel() +
                     " because it depends on metadata.version=4 (" + MetadataVersion.IBP_3_3_IV0 + ")");
 
@@ -126,7 +127,7 @@ public enum Features {
      * version should be made production ready as well.
      *
      * @param metadataVersion the metadata version we want to use to set the default.
-     * @return the default version level for the feature and potential metadata version
+     * @return the default version level given the feature and provided metadata version
      */
     public short defaultValue(MetadataVersion metadataVersion) {
         short level = 0;

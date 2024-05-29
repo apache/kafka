@@ -311,7 +311,7 @@ Found problem:
     assertEquals(expectedMap2, parseAddFeatures("--feature", testArgument, "--feature", metadataArgument))
   }
 
-  def parseFeatures(namespace: Namespace): Map[String, java.lang.Short] = {
+  private def parseFeatures(namespace: Namespace): Map[String, java.lang.Short] = {
     val specifiedFeatures: util.List[String] = namespace.getList("feature")
     StorageTool.featureNamesAndLevels(Option(specifiedFeatures).getOrElse(Collections.emptyList).asScala.toList)
   }
@@ -334,7 +334,7 @@ Found problem:
     assertThrows(classOf[IllegalArgumentException], () => parseMetadataVersion("--release-version", "0.0"))
   }
 
-  def generateRecord(featureName: String, level: Short): ApiMessageAndVersion = {
+  private def generateRecord(featureName: String, level: Short): ApiMessageAndVersion = {
     new ApiMessageAndVersion(new FeatureLevelRecord().
       setName(featureName).
       setFeatureLevel(level), 0.toShort)

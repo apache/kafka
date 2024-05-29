@@ -461,7 +461,7 @@ public class ClusterControlManager {
         BrokerRegistrationRequestData.Feature feature
     ) {
         int defaultVersion = feature.name().equals(MetadataVersion.FEATURE_NAME) ? 1 : 0; // The default value for MetadataVersion is 1 not 0.
-        short finalized = finalizedFeatures.getOrDefault(feature.name(), (short) defaultVersion);
+        short finalized = finalizedFeatures.versionOrDefault(feature.name(), (short) defaultVersion);
         if (!VersionRange.of(feature.minSupportedVersion(), feature.maxSupportedVersion()).contains(finalized)) {
             throw new UnsupportedVersionException("Unable to register because the broker " +
                 "does not support version " + finalized + " of " + feature.name() +

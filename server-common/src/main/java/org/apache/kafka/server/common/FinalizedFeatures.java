@@ -21,8 +21,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
-import static org.apache.kafka.server.common.MetadataVersion.FEATURE_NAME;
-
 public final class FinalizedFeatures {
     private final MetadataVersion metadataVersion;
     private final Map<String, Short> finalizedFeatures;
@@ -44,9 +42,9 @@ public final class FinalizedFeatures {
         // In KRaft mode, we always include the metadata version in the features map.
         // In ZK mode, we never include it.
         if (kraftMode) {
-            this.finalizedFeatures.put(FEATURE_NAME, metadataVersion.featureLevel());
+            this.finalizedFeatures.put(MetadataVersion.FEATURE_NAME, metadataVersion.featureLevel());
         } else {
-            this.finalizedFeatures.remove(FEATURE_NAME);
+            this.finalizedFeatures.remove(MetadataVersion.FEATURE_NAME);
         }
     }
 
@@ -79,7 +77,7 @@ public final class FinalizedFeatures {
     @Override
     public String toString() {
         return "Features" +
-                "(metadatVersion=" + metadataVersion +
+                "(metadataVersion=" + metadataVersion +
                 ", finalizedFeatures=" + finalizedFeatures +
                 ", finalizedFeaturesEpoch=" + finalizedFeaturesEpoch +
                 ")";
