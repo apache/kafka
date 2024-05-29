@@ -347,7 +347,7 @@
     <suppress checks="ClassDataAbstractionCouplingCheck"
               files="(RecordHelpersTest|GroupMetadataManager|GroupMetadataManagerTest|OffsetMetadataManagerTest|GroupCoordinatorServiceTest|GroupCoordinatorShardTest).java"/>
     <suppress checks="JavaNCSS"
-              files="GroupMetadataManagerTest.java"/>
+              files="(GroupMetadataManager|GroupMetadataManagerTest).java"/>
 
     <!-- storage -->
     <suppress checks="CyclomaticComplexity"
