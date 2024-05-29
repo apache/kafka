@@ -44,22 +44,15 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
 
-import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_HEARTBEAT_INTERVAL_MS;
-import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_REQUEST_TIMEOUT_MS;
 import static org.apache.kafka.clients.consumer.internals.events.CompletableEvent.calculateDeadlineMs;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.eq;
-import static org.mockito.Mockito.any;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.*;
 
 public class ConsumerNetworkThreadUnitTest {
+    static final int DEFAULT_HEARTBEAT_INTERVAL_MS = 1000;
+    static final int DEFAULT_REQUEST_TIMEOUT_MS = 500;
 
     private final Time time;
     private final ConsumerMetadata metadata;
@@ -74,14 +67,11 @@ public class ConsumerNetworkThreadUnitTest {
     private final NetworkClientDelegate networkClient;
     private final RequestManagers requestManagers;
     private final CompletableEventReaper applicationEventReaper;
-    private final LogContext logContext;
-    private final ConsumerConfig config;
 
     ConsumerNetworkThreadUnitTest() {
-        logContext = new LogContext();
-        config = mock(ConsumerConfig.class);
+        LogContext logContext = new LogContext();
+        ConsumerConfig config = mock(ConsumerConfig.class);
         this.time = new MockTime();
-        this.client = new MockClient(time);
         this.networkClientDelegate = mock(NetworkClientDelegate.class);
         this.requestManagers = mock(RequestManagers.class);
         this.offsetsRequestManager = mock(OffsetsRequestManager.class);
@@ -91,6 +81,7 @@ public class ConsumerNetworkThreadUnitTest {
         this.metadata = mock(ConsumerMetadata.class);
         this.applicationEventProcessor = mock(ApplicationEventProcessor.class);
         this.applicationEventReaper = mock(CompletableEventReaper.class);
+        this.client = new MockClient(time, metadata);
 
         this.networkClient = new NetworkClientDelegate(
                 time,
@@ -301,16 +292,6 @@ public class ConsumerNetworkThreadUnitTest {
         consumerNetworkThread.runOnce();
         // After runOnce has been called, it takes the default heartbeat interval from the heartbeat request manager
         assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, consumerNetworkThread.maximumTimeToWait());
-    }
-
-    // Looks like integration testing, I think this should be removed/moved elsewhere
-    @Test
-    void testEnsureMetadataUpdateOnPoll() {
-        MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith(2, Collections.emptyMap());
-        client.prepareMetadataUpdate(metadataResponse);
-        metadata.requestUpdate(false);
-        consumerNetworkThread.runOnce();
-        verify(metadata, times(1)).updateWithCurrentRequestVersion(eq(metadataResponse), eq(false), anyLong());
     }
 
     @Test
