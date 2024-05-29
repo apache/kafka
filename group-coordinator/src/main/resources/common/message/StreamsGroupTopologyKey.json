@@ -16,23 +16,11 @@
 // The streams rebalance protocol is in development. This schema is subject to non-backwards-compatible changes.
 {
   "type": "data",
-  "name": "StreamsGroupTargetAssignmentMemberValue",
-  "validVersions": "0",
-  "flexibleVersions": "0+",
+  "name": "StreamsGroupTopologyKey",
+  "validVersions": "15",
+  "flexibleVersions": "none",
   "fields": [
-    { "name": "ActiveTasks", "versions": "0+", "type": "[]TaskId",
-      "about": "Currently assigned active tasks for this streams client." },
-    { "name": "StandbyTasks", "versions": "0+", "type": "[]TaskId",
-      "about": "Currently assigned standby tasks for this streams client." },
-    { "name": "WarmupTasks", "versions": "0+", "type": "[]TaskId",
-      "about": "Currently assigned warming up tasks for this streams client." }
-  ],
-  "commonStructs": [
-    { "name": "TaskId", "versions": "0+", "fields": [
-      { "name": "Subtopology", "type": "string", "versions": "0+",
-        "about": "The subtopology identifier." },
-      { "name": "Partitions", "type": "[]int32", "versions": "0+",
-        "about": "The partitions of the input topics processed by this member." }
-    ]}
+    { "name": "GroupId", "type": "string", "versions": "3",
+      "about": "The group id." }
   ]
 }
