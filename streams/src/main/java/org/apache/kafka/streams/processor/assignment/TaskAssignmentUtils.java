@@ -119,7 +119,7 @@ public final class TaskAssignmentUtils {
 
         // TODO: can be simplified once we change #allTasks to return a Map<TaskId, TaskInfo>
         //  then we can change the tasks input parameter to a List and flip the .filter step
-        final Map<TaskId, Set<TaskTopicPartition>> topicPartitionsByTaskId = applicationState.allTasks().stream()
+        final Map<TaskId, Set<TaskTopicPartition>> topicPartitionsByTaskId = applicationState.allTasks().values().stream()
             .filter(taskInfo -> tasks.contains(taskInfo.id()))
             .collect(Collectors.toMap(TaskInfo::id, TaskInfo::topicPartitions));
 
@@ -216,7 +216,7 @@ public final class TaskAssignmentUtils {
 
         // TODO: can be simplified once we change #allTasks to return a Map<TaskId, TaskInfo>
         final Map<TaskId, Set<TaskTopicPartition>> topicPartitionsByTaskId =
-            applicationState.allTasks().stream().collect(Collectors.toMap(
+            applicationState.allTasks().values().stream().collect(Collectors.toMap(
                 TaskInfo::id,
                 t -> t.topicPartitions().stream().filter(TaskTopicPartition::isChangelog).collect(Collectors.toSet()))
             );
@@ -379,7 +379,7 @@ public final class TaskAssignmentUtils {
             }
         }
 
-        for (final TaskInfo task : applicationState.allTasks()) {
+        for (final TaskInfo task : applicationState.allTasks().values()) {
             if (!hasValidRackInformation(task, taskType)) {
                 return false;
             }
