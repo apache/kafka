@@ -298,6 +298,7 @@ public class AdminMetadataManager {
      * Rebootstrap metadata with the cluster previously used for bootstrapping.
      */
     public void rebootstrap(long now) {
+        log.info("Rebootstrapping with {}", this.bootstrapCluster);
         update(bootstrapCluster, now);
     }
 }
