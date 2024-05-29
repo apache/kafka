@@ -59,7 +59,7 @@ public enum Features {
         FEATURES = Arrays.copyOf(enumValues, enumValues.length);
 
         PRODUCTION_FEATURES = Arrays.stream(FEATURES).filter(feature ->
-                feature.name != TEST_VERSION.featureName()).collect(Collectors.toList());
+                !feature.name.equals(TEST_VERSION.featureName())).collect(Collectors.toList());
         PRODUCTION_FEATURE_NAMES = PRODUCTION_FEATURES.stream().map(feature ->
                 feature.name).collect(Collectors.toList());
     }
