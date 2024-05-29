@@ -289,7 +289,7 @@ public class ConsumerNetworkThreadUnitTest {
         assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, consumerNetworkThread.maximumTimeToWait());
     }
 
-    // Looks like integration testing, I think this should be removed
+    // Looks like integration testing, I think this should be removed/moved elsewhere
     @Test
     void testEnsureMetadataUpdateOnPoll() {
         MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith(2, Collections.emptyMap());
