@@ -23,7 +23,6 @@ import kafka.test.annotation.ClusterTemplate;
 import kafka.test.junit.ClusterTestExtensions;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -41,6 +40,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
+import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -53,6 +53,7 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -547,29 +548,28 @@ public class ResetConsumerGroupOffsetTest {
             TopicPartition tp1 = new TopicPartition(topic, 1);
             String[] cgcArgs = buildArgsForGroup(cluster, group, "--all-topics", "--to-offset", "2", "--export");
             File file = TestUtils.tempFile("reset", ".csv");
-            String[] cgcArgsExec = buildArgsForGroup(cluster, group, "--all-topics",
-                "--from-file", file.getCanonicalPath(), "--dry-run");
 
             try (Admin admin = cluster.createAdminClient();
-                 ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
-                 BufferedWriter bw = new BufferedWriter(new FileWriter(file));
-                 ConsumerGroupCommand.ConsumerGroupService serviceExec = getConsumerGroupService(cgcArgsExec)) {
+                 ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs)) {
 
                 admin.createTopics(singleton(new NewTopic(topic, 2, (short) 1))).all().get();
                 produceConsumeAndShutdown(cluster, topic, group, 2, groupProtocol);
 
                 Map<String, Map<TopicPartition, OffsetAndMetadata>> exportedOffsets = service.resetOffsets();
 
-                bw.write(service.exportOffsetsToCsv(exportedOffsets));
-                bw.close();
+                writeContentToFile(file, service.exportOffsetsToCsv(exportedOffsets));
 
                 Map<TopicPartition, Long> exp1 = new HashMap<>();
                 exp1.put(tp0, 2L);
                 exp1.put(tp1, 2L);
                 assertEquals(exp1, toOffsetMap(exportedOffsets.get(group)));
 
-                Map<String, Map<TopicPartition, OffsetAndMetadata>> importedOffsets = serviceExec.resetOffsets();
-                assertEquals(exp1, toOffsetMap(importedOffsets.get(group)));
+                String[] cgcArgsExec = buildArgsForGroup(cluster, group, "--all-topics",
+                        "--from-file", file.getCanonicalPath(), "--dry-run");
+                try (ConsumerGroupCommand.ConsumerGroupService serviceExec = getConsumerGroupService(cgcArgsExec)) {
+                    Map<String, Map<TopicPartition, OffsetAndMetadata>> importedOffsets = serviceExec.resetOffsets();
+                    assertEquals(exp1, toOffsetMap(importedOffsets.get(group)));
+                }
 
                 admin.deleteTopics(singleton(topic));
             }
@@ -593,19 +593,9 @@ public class ResetConsumerGroupOffsetTest {
             String[] cgcArgs = buildArgsForGroups(cluster, asList(group1, group2),
                 "--all-topics", "--to-offset", "2", "--export");
             File file = TestUtils.tempFile("reset", ".csv");
-            // Multiple --group's offset import
-            String[] cgcArgsExec = buildArgsForGroups(cluster, asList(group1, group2),
-                "--all-topics",
-                "--from-file", file.getCanonicalPath(), "--dry-run");
-            // Single --group offset import using "group,topic,partition,offset" csv format
-            String[] cgcArgsExec2 = buildArgsForGroup(cluster, group1, "--all-topics",
-                "--from-file", file.getCanonicalPath(), "--dry-run");
 
             try (Admin admin = cluster.createAdminClient();
-                 ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
-                 BufferedWriter bw = new BufferedWriter(new FileWriter(file));
-                 ConsumerGroupCommand.ConsumerGroupService serviceExec = getConsumerGroupService(cgcArgsExec);
-                 ConsumerGroupCommand.ConsumerGroupService serviceExec2 = getConsumerGroupService(cgcArgsExec2)) {
+                 ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs)) {
 
                 admin.createTopics(asList(new NewTopic(topic1, 2, (short) 1),
                         new NewTopic(topic2, 2, (short) 1))).all().get();
@@ -617,8 +607,8 @@ public class ResetConsumerGroupOffsetTest {
                 awaitConsumerGroupInactive(service, group2);
 
                 Map<String, Map<TopicPartition, OffsetAndMetadata>> exportedOffsets = service.resetOffsets();
-                bw.write(service.exportOffsetsToCsv(exportedOffsets));
-                bw.close();
+
+                writeContentToFile(file, service.exportOffsetsToCsv(exportedOffsets));
 
                 Map<TopicPartition, Long> exp1 = new HashMap<>();
                 exp1.put(t1p0, 2L);
@@ -630,12 +620,23 @@ public class ResetConsumerGroupOffsetTest {
                 assertEquals(exp1, toOffsetMap(exportedOffsets.get(group1)));
                 assertEquals(exp2, toOffsetMap(exportedOffsets.get(group2)));
 
-                Map<String, Map<TopicPartition, OffsetAndMetadata>> importedOffsets = serviceExec.resetOffsets();
-                assertEquals(exp1, toOffsetMap(importedOffsets.get(group1)));
-                assertEquals(exp2, toOffsetMap(importedOffsets.get(group2)));
+                // Multiple --group's offset import
+                String[] cgcArgsExec = buildArgsForGroups(cluster, asList(group1, group2),
+                        "--all-topics",
+                        "--from-file", file.getCanonicalPath(), "--dry-run");
+                try (ConsumerGroupCommand.ConsumerGroupService serviceExec = getConsumerGroupService(cgcArgsExec)) {
+                    Map<String, Map<TopicPartition, OffsetAndMetadata>> importedOffsets = serviceExec.resetOffsets();
+                    assertEquals(exp1, toOffsetMap(importedOffsets.get(group1)));
+                    assertEquals(exp2, toOffsetMap(importedOffsets.get(group2)));
+                }
 
-                Map<String, Map<TopicPartition, OffsetAndMetadata>> importedOffsets2 = serviceExec2.resetOffsets();
-                assertEquals(exp1, toOffsetMap(importedOffsets2.get(group1)));
+                // Single --group offset import using "group,topic,partition,offset" csv format
+                String[] cgcArgsExec2 = buildArgsForGroup(cluster, group1, "--all-topics",
+                        "--from-file", file.getCanonicalPath(), "--dry-run");
+                try (ConsumerGroupCommand.ConsumerGroupService serviceExec2 = getConsumerGroupService(cgcArgsExec2)) {
+                    Map<String, Map<TopicPartition, OffsetAndMetadata>> importedOffsets2 = serviceExec2.resetOffsets();
+                    assertEquals(exp1, toOffsetMap(importedOffsets2.get(group1)));
+                }
 
                 admin.deleteTopics(asList(topic1, topic2));
             }
@@ -769,6 +770,12 @@ public class ResetConsumerGroupOffsetTest {
         }
     }
 
+    private void writeContentToFile(File file, String content) throws IOException {
+        try (BufferedWriter bw = new BufferedWriter(new FileWriter(file))) {
+            bw.write(content);
+        }
+    }
+
     private AutoCloseable consumerGroupClosable(ClusterInstance cluster,
                                                 int numConsumers,
                                                 String topic,
@@ -801,14 +808,25 @@ public class ResetConsumerGroupOffsetTest {
                                        String topic,
                                        String group,
                                        long count) throws Exception {
-        TestUtils.waitForCondition(() -> committedOffsets(cluster, topic, group)
-                        .values()
-                        .stream()
-                        .mapToLong(l -> l).sum() == count,
-                "Expected that consumer group has consumed all messages from topic/partition. " +
-                        "Expected offset: " + count +
-                        ". Actual offset: " + committedOffsets(cluster, topic, group).values()
-                        .stream().mapToLong(l -> l).sum());
+        try (Admin admin = Admin.create(singletonMap(BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers()))) {
+            Supplier<Long> offsets = () -> {
+                try {
+                    return admin.listConsumerGroupOffsets(group)
+                            .all().get().get(group)
+                            .entrySet()
+                            .stream()
+                            .filter(e -> e.getKey().topic().equals(topic))
+                            .mapToLong(e -> e.getValue().offset())
+                            .sum();
+                } catch (InterruptedException | ExecutionException e) {
+                    throw new RuntimeException(e);
+                }
+            };
+            TestUtils.waitForCondition(() -> offsets.get() == count,
+                    "Expected that consumer group has consumed all messages from topic/partition. " +
+                            "Expected offset: " + count +
+                            ". Actual offset: " + offsets.get());
+        }
     }
 
     private void awaitConsumerGroupInactive(ConsumerGroupCommand.ConsumerGroupService service,
