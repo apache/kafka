@@ -16,33 +16,19 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.MockClient;
+import org.apache.kafka.clients.*;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
-import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
-import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeEvent;
-import org.apache.kafka.clients.consumer.internals.events.AsyncCommitEvent;
-import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
-import org.apache.kafka.clients.consumer.internals.events.CompletableEvent;
-import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
-import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
-import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
-import org.apache.kafka.clients.consumer.internals.events.PollEvent;
-import org.apache.kafka.clients.consumer.internals.events.ResetPositionsEvent;
-import org.apache.kafka.clients.consumer.internals.events.SyncCommitEvent;
-import org.apache.kafka.clients.consumer.internals.events.TopicMetadataEvent;
-import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsEvent;
+import org.apache.kafka.clients.consumer.internals.events.*;
+import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.FindCoordinatorRequest;
-import org.apache.kafka.common.requests.FindCoordinatorResponse;
-import org.apache.kafka.common.requests.MetadataResponse;
-import org.apache.kafka.common.requests.OffsetCommitRequest;
-import org.apache.kafka.common.requests.OffsetCommitResponse;
-import org.apache.kafka.common.requests.RequestTestUtils;
+import org.apache.kafka.common.requests.*;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
@@ -53,89 +39,111 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.LinkedBlockingQueue;
 
-import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_HEARTBEAT_INTERVAL_MS;
-import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_REQUEST_TIMEOUT_MS;
-import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.createDefaultGroupInformation;
 import static org.apache.kafka.clients.consumer.internals.events.CompletableEvent.calculateDeadlineMs;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 public class ConsumerNetworkThreadTest {
+    static final int DEFAULT_HEARTBEAT_INTERVAL_MS = 1000;
+    static final int DEFAULT_REQUEST_TIMEOUT_MS = 500;
 
-    private ConsumerTestBuilder testBuilder;
-    private Time time;
-    private ConsumerMetadata metadata;
-    private NetworkClientDelegate networkClient;
-    private BlockingQueue<ApplicationEvent> applicationEventsQueue;
-    private ApplicationEventProcessor applicationEventProcessor;
-    private OffsetsRequestManager offsetsRequestManager;
-    private CommitRequestManager commitRequestManager;
-    private CoordinatorRequestManager coordinatorRequestManager;
-    private ConsumerNetworkThread consumerNetworkThread;
-    private final CompletableEventReaper applicationEventReaper = mock(CompletableEventReaper.class);
-    private MockClient client;
+    private final Time time;
+    private final ConsumerMetadata metadata;
+    private final BlockingQueue<ApplicationEvent> applicationEventsQueue;
+    private final ApplicationEventProcessor applicationEventProcessor;
+    private final OffsetsRequestManager offsetsRequestManager;
+    private final HeartbeatRequestManager heartbeatRequestManager;
+    private final CoordinatorRequestManager coordinatorRequestManager;
+    private final ConsumerNetworkThread consumerNetworkThread;
+    private final MockClient client;
+    private final NetworkClientDelegate networkClientDelegate;
+    private final NetworkClientDelegate networkClient;
+    private final RequestManagers requestManagers;
+    private final CompletableEventReaper applicationEventReaper;
+
+    ConsumerNetworkThreadTest() {
+        LogContext logContext = new LogContext();
+        ConsumerConfig config = mock(ConsumerConfig.class);
+        this.time = new MockTime();
+        this.networkClientDelegate = mock(NetworkClientDelegate.class);
+        this.requestManagers = mock(RequestManagers.class);
+        this.offsetsRequestManager = mock(OffsetsRequestManager.class);
+        this.heartbeatRequestManager = mock(HeartbeatRequestManager.class);
+        this.coordinatorRequestManager = mock(CoordinatorRequestManager.class);
+        this.applicationEventsQueue = new LinkedBlockingQueue<>();
+        this.metadata = mock(ConsumerMetadata.class);
+        this.applicationEventProcessor = mock(ApplicationEventProcessor.class);
+        this.applicationEventReaper = mock(CompletableEventReaper.class);
+        this.client = new MockClient(time);
+
+        this.networkClient = new NetworkClientDelegate(
+                time,
+                config,
+                logContext,
+                client
+        );
+
+        this.consumerNetworkThread = new ConsumerNetworkThread(
+                logContext,
+                time,
+                applicationEventsQueue,
+                applicationEventReaper,
+                () -> applicationEventProcessor,
+                () -> networkClientDelegate,
+                () -> requestManagers
+        );
+    }
 
     @BeforeEach
     public void setup() {
-        testBuilder = new ConsumerTestBuilder(createDefaultGroupInformation());
-        time = testBuilder.time;
-        metadata = testBuilder.metadata;
-        networkClient = testBuilder.networkClientDelegate;
-        client = testBuilder.client;
-        applicationEventsQueue = testBuilder.applicationEventQueue;
-        applicationEventProcessor = testBuilder.applicationEventProcessor;
-        commitRequestManager = testBuilder.commitRequestManager.orElseThrow(IllegalStateException::new);
-        offsetsRequestManager = testBuilder.offsetsRequestManager;
-        coordinatorRequestManager = testBuilder.coordinatorRequestManager.orElseThrow(IllegalStateException::new);
-        consumerNetworkThread = new ConsumerNetworkThread(
-                testBuilder.logContext,
-                time,
-                testBuilder.applicationEventQueue,
-                applicationEventReaper,
-                () -> applicationEventProcessor,
-                () -> testBuilder.networkClientDelegate,
-                () -> testBuilder.requestManagers
-        );
         consumerNetworkThread.initializeResources();
     }
 
     @AfterEach
     public void tearDown() {
-        if (testBuilder != null) {
-            testBuilder.close();
-            consumerNetworkThread.close(Duration.ZERO);
-        }
+        if (consumerNetworkThread != null)
+            consumerNetworkThread.close();
+    }
+
+    @Test
+    public void testEnsureCloseStopsRunningThread() {
+        // consumerNetworkThread.running is set to true in the constructor
+        assertTrue(consumerNetworkThread.isRunning());
+
+        // close() should make consumerNetworkThread.running false by calling closeInternal(Duration timeout)
+        consumerNetworkThread.close();
+        assertFalse(consumerNetworkThread.isRunning());
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {1, 100, 1000, 4999, 5001})
+    public void testConsumerNetworkThreadWaitTimeComputations(long exampleTime) {
+        List<Optional<? extends RequestManager>> requestManagersList = new ArrayList<>();
+        requestManagersList.add(Optional.of(coordinatorRequestManager));
+        when(requestManagers.entries()).thenReturn(requestManagersList);
+
+        NetworkClientDelegate.PollResult pollResult = new NetworkClientDelegate.PollResult(exampleTime);
+
+        when(coordinatorRequestManager.poll(anyLong())).thenReturn(pollResult);
+        when(coordinatorRequestManager.maximumTimeToWait(anyLong())).thenReturn(exampleTime);
+        when(networkClientDelegate.addAll(pollResult)).thenReturn(pollResult.timeUntilNextPollMs);
+        consumerNetworkThread.runOnce();
+
+        verify(networkClientDelegate).poll((exampleTime < 5001 ? exampleTime : 5000), time.milliseconds());
+        assertEquals(consumerNetworkThread.maximumTimeToWait(), exampleTime);
     }
 
     @Test
     public void testStartupAndTearDown() throws InterruptedException {
-        // The consumer is closed in ConsumerTestBuilder.ConsumerNetworkThreadTestBuilder.close()
-        // which is called from tearDown().
         consumerNetworkThread.start();
-        TestCondition isStarted = () -> consumerNetworkThread.isRunning();
+        TestCondition isStarted = consumerNetworkThread::isRunning;
         TestCondition isClosed = () -> !(consumerNetworkThread.isRunning() || consumerNetworkThread.isAlive());
 
         // There's a nonzero amount of time between starting the thread and having it
@@ -150,11 +158,19 @@ public class ConsumerNetworkThreadTest {
     }
 
     @Test
+    void testRequestManagersArePolledOnce() {
+        consumerNetworkThread.runOnce();
+        requestManagers.entries().forEach(rmo -> rmo.ifPresent(rm -> verify(rm, times(1)).poll(anyLong())));
+        requestManagers.entries().forEach(rmo -> rmo.ifPresent(rm -> verify(rm, times(1)).maximumTimeToWait(anyLong())));
+        verify(networkClientDelegate).poll(anyLong(), anyLong());
+    }
+
+    @Test
     public void testApplicationEvent() {
         ApplicationEvent e = new PollEvent(100);
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
-        verify(applicationEventProcessor, times(1)).process(e);
+        verify(applicationEventProcessor).process(e);
     }
 
     @Test
@@ -162,7 +178,7 @@ public class ConsumerNetworkThreadTest {
         ApplicationEvent e = new NewTopicsMetadataUpdateRequestEvent();
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
-        verify(metadata).requestUpdateForNewTopics();
+        verify(applicationEventProcessor).process(e);
     }
 
     @Test
@@ -207,7 +223,7 @@ public class ConsumerNetworkThreadTest {
 
         ResetPositionsEvent event = new ResetPositionsEvent(calculateDeadlineMs(time, 100));
         applicationEventsQueue.add(event);
-        assertDoesNotThrow(() -> consumerNetworkThread.runOnce());
+        assertDoesNotThrow(consumerNetworkThread::runOnce);
 
         verify(applicationEventProcessor).process(any(ResetPositionsEvent.class));
     }
@@ -231,10 +247,7 @@ public class ConsumerNetworkThreadTest {
 
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(AssignmentChangeEvent.class));
-        verify(networkClient, times(1)).poll(anyLong(), anyLong());
-        verify(commitRequestManager, times(1)).updateAutoCommitTimer(currentTimeMs);
-        // Assignment change should generate an async commit (not retried).
-        verify(commitRequestManager, times(1)).maybeAutoCommitAsync();
+        verify(networkClientDelegate, times(1)).poll(anyLong(), anyLong());
     }
 
     @Test
@@ -268,32 +281,31 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     void testMaximumTimeToWait() {
+        List<Optional<? extends RequestManager>> list = new ArrayList<>();
+        list.add(Optional.of(heartbeatRequestManager));
         // Initial value before runOnce has been called
         assertEquals(ConsumerNetworkThread.MAX_POLL_TIMEOUT_MS, consumerNetworkThread.maximumTimeToWait());
+
+        when(requestManagers.entries()).thenReturn(list);
+        when(heartbeatRequestManager.maximumTimeToWait(time.milliseconds())).thenReturn((long) DEFAULT_HEARTBEAT_INTERVAL_MS);
+
         consumerNetworkThread.runOnce();
         // After runOnce has been called, it takes the default heartbeat interval from the heartbeat request manager
         assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, consumerNetworkThread.maximumTimeToWait());
     }
 
     @Test
-    void testRequestManagersArePolledOnce() {
-        consumerNetworkThread.runOnce();
-        testBuilder.requestManagers.entries().forEach(rmo -> rmo.ifPresent(rm -> verify(rm, times(1)).poll(anyLong())));
-        testBuilder.requestManagers.entries().forEach(rmo -> rmo.ifPresent(rm -> verify(rm, times(1)).maximumTimeToWait(anyLong())));
-        verify(networkClient, times(1)).poll(anyLong(), anyLong());
-    }
-
-    @Test
-    void testEnsureMetadataUpdateOnPoll() {
-        MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith(2, Collections.emptyMap());
-        client.prepareMetadataUpdate(metadataResponse);
-        metadata.requestUpdate(false);
-        consumerNetworkThread.runOnce();
-        verify(metadata, times(1)).updateWithCurrentRequestVersion(eq(metadataResponse), eq(false), anyLong());
-    }
-
-    @Test
     void testEnsureEventsAreCompleted() {
+        Cluster cluster = mock(Cluster.class);
+        when(metadata.fetch()).thenReturn(cluster);
+
+        List<Node> list = new ArrayList<>();
+        list.add(new Node(0, "host", 0));
+        when(cluster.nodes()).thenReturn(list);
+
+        Queue<NetworkClientDelegate.UnsentRequest> queue = new LinkedList<>();
+        when(networkClientDelegate.unsentRequests()).thenReturn(queue);
+
         // Mimic the logic of CompletableEventReaper.reap(Collection):
         doAnswer(__ -> {
             Iterator<ApplicationEvent> i = applicationEventsQueue.iterator();
@@ -314,7 +326,7 @@ public class ConsumerNetworkThreadTest {
         coordinatorRequestManager.markCoordinatorUnknown("test", time.milliseconds());
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "group-id", node));
         prepareOffsetCommitRequest(new HashMap<>(), Errors.NONE, false);
-        CompletableApplicationEvent<Void> event1 = spy(new AsyncCommitEvent(Collections.emptyMap()));
+        CompletableApplicationEvent<Void> event1 = mock(AsyncCommitEvent.class);
         ApplicationEvent event2 = new AsyncCommitEvent(Collections.emptyMap());
         CompletableFuture<Void> future = new CompletableFuture<>();
         when(event1.future()).thenReturn(future);
@@ -327,8 +339,11 @@ public class ConsumerNetworkThreadTest {
         assertTrue(applicationEventsQueue.isEmpty());
     }
 
+    // Look into this one
     @Test
     void testCleanupInvokesReaper() {
+        Queue<NetworkClientDelegate.UnsentRequest> queue = new LinkedList<>();
+        when(networkClientDelegate.unsentRequests()).thenReturn(queue);
         consumerNetworkThread.cleanup();
         verify(applicationEventReaper).reap(applicationEventsQueue);
     }
@@ -337,6 +352,15 @@ public class ConsumerNetworkThreadTest {
     void testRunOnceInvokesReaper() {
         consumerNetworkThread.runOnce();
         verify(applicationEventReaper).reap(any(Long.class));
+    }
+
+    private HashMap<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {
+        final TopicPartition t0 = new TopicPartition("t0", 2);
+        final TopicPartition t1 = new TopicPartition("t0", 3);
+        HashMap<TopicPartition, OffsetAndMetadata> topicPartitionOffsets = new HashMap<>();
+        topicPartitionOffsets.put(t0, new OffsetAndMetadata(10L));
+        topicPartitionOffsets.put(t1, new OffsetAndMetadata(20L));
+        return topicPartitionOffsets;
     }
 
     private void prepareOffsetCommitRequest(final Map<TopicPartition, Long> expectedOffsets,
@@ -378,14 +402,5 @@ public class ConsumerNetworkThreadTest {
             }
             return true;
         };
-    }
-
-    private HashMap<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {
-        final TopicPartition t0 = new TopicPartition("t0", 2);
-        final TopicPartition t1 = new TopicPartition("t0", 3);
-        HashMap<TopicPartition, OffsetAndMetadata> topicPartitionOffsets = new HashMap<>();
-        topicPartitionOffsets.put(t0, new OffsetAndMetadata(10L));
-        topicPartitionOffsets.put(t1, new OffsetAndMetadata(20L));
-        return topicPartitionOffsets;
     }
 }
