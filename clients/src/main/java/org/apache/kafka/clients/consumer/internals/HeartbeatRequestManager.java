@@ -487,12 +487,12 @@ public class HeartbeatRequestManager implements RequestManager {
 
         // Visible for testing
         protected Timer heartbeatTimer() {
-            return this.heartbeatTimer;
+            return heartbeatTimer;
         }
 
         // Visible for testing
         protected long heartbeatIntervalMs() {
-            return this.heartbeatIntervalMs;
+            return heartbeatIntervalMs;
         }
 
         /**
