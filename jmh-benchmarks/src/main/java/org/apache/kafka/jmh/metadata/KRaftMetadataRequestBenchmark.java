@@ -59,7 +59,7 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.raft.QuorumConfig;
-import org.apache.kafka.server.common.Features;
+import org.apache.kafka.server.common.FinalizedFeatures;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.KRaftConfigs;
 
@@ -204,7 +204,7 @@ public class KRaftMetadataRequestBenchmark {
                         ApiMessageType.ListenerType.BROKER,
                         false,
                         false,
-                        () -> Features.fromKRaftVersion(MetadataVersion.latestTesting()))).
+                        () -> FinalizedFeatures.fromKRaftVersion(MetadataVersion.latestTesting()))).
                 build();
     }
 
