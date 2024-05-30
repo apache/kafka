@@ -40,6 +40,13 @@ public interface MetricsReporter extends Reconfigurable, AutoCloseable {
 
     /**
      * This is called whenever a metric is updated or added
+     * <p>
+     * Note: a metric update refers to a change in the definition of the metric
+     * (e.g. a change in the metric tags), not a change in the metric value.
+     * This method allows a {@link MetricsReporter} implementation to maintain an inventory of all current
+     * metric definitions, but to stay up-to-date about the values the reporter needs
+     * to regularly call {@link KafkaMetric#metricValue()}.
+     * See {@link JmxReporter} for a reference.
      * @param metric
      */
     void metricChange(KafkaMetric metric);
