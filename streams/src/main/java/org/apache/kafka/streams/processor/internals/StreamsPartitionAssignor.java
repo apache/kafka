@@ -791,9 +791,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             final TaskAssignment taskAssignment = assignor.assign(applicationState);
             final AssignmentError assignmentError = validateTaskAssignment(applicationState, taskAssignment);
             processStreamsPartitionAssignment(clientMetadataMap, taskAssignment);
-            userTaskAssignmentListener = (assignment, subscription) -> {
-                assignor.onAssignmentComputed(assignment, subscription, assignmentError);
-            };
+            userTaskAssignmentListener = (assignment, subscription) -> assignor.onAssignmentComputed(assignment, subscription, assignmentError);
         } else {
             userTaskAssignmentListener = (assignment, subscription) -> { };
             final TaskAssignor taskAssignor = createTaskAssignor(lagComputationSuccessful);

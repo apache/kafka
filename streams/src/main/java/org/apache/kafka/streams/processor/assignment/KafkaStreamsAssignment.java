@@ -33,7 +33,7 @@ import org.apache.kafka.streams.processor.TaskId;
 public class KafkaStreamsAssignment {
 
     private final ProcessId processId;
-    private final Map<TaskId, AssignedTask> assignment;
+    private final Map<TaskId, AssignedTask> tasks;
     private final Optional<Instant> followupRebalanceDeadline;
 
     /**
@@ -47,7 +47,8 @@ public class KafkaStreamsAssignment {
      * @return a new KafkaStreamsAssignment object with the given processId and assignment
      */
     public static KafkaStreamsAssignment of(final ProcessId processId, final Set<AssignedTask> assignment) {
-        return new KafkaStreamsAssignment(processId, assignment, Optional.empty());
+        final Map<TaskId, AssignedTask> tasks = assignment.stream().collect(Collectors.toMap(AssignedTask::id, Function.identity()));
+        return new KafkaStreamsAssignment(processId, tasks, Optional.empty());
     }
 
     /**
@@ -68,20 +69,10 @@ public class KafkaStreamsAssignment {
     }
 
     private KafkaStreamsAssignment(final ProcessId processId,
-                                   final Set<AssignedTask> assignment,
-                                   final Optional<Instant> followupRebalanceDeadline) {
-        this(
-            processId,
-            assignment.stream().collect(Collectors.toMap(AssignedTask::id, Function.identity())),
-            followupRebalanceDeadline
-        );
-    }
-
-    private KafkaStreamsAssignment(final ProcessId processId,
-                                   final Map<TaskId, AssignedTask> assignment,
+                                   final Map<TaskId, AssignedTask> tasks,
                                    final Optional<Instant> followupRebalanceDeadline) {
         this.processId = processId;
-        this.assignment = assignment;
+        this.tasks = tasks;
         this.followupRebalanceDeadline = followupRebalanceDeadline;
     }
 
@@ -98,15 +89,15 @@ public class KafkaStreamsAssignment {
      * @return a read-only set of assigned tasks that are part of this {@code KafkaStreamsAssignment}
      */
     public Map<TaskId, AssignedTask> tasks() {
-        return unmodifiableMap(assignment);
+        return unmodifiableMap(tasks);
     }
 
     public void assignTask(final AssignedTask newTask) {
-        assignment.put(newTask.id(), newTask);
+        tasks.put(newTask.id(), newTask);
     }
 
     public void removeTask(final AssignedTask removedTask) {
-        assignment.remove(removedTask.id());
+        tasks.remove(removedTask.id());
     }
 
     /**
