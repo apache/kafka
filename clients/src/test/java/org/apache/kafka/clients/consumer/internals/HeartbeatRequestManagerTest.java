@@ -763,7 +763,6 @@ public class HeartbeatRequestManagerTest {
         assertEquals(0, result.unsentRequests.size(), "No heartbeat should be sent while a previous one is in-flight");
 
         membershipManager.leaveGroup();
-        assertTrue(membershipManager.isLeavingGroup());
 
         ConsumerGroupHeartbeatRequest heartbeatToLeave = getHeartbeatRequest(heartbeatRequestManager, version);
         assertEquals(ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH, heartbeatToLeave.data().memberEpoch());

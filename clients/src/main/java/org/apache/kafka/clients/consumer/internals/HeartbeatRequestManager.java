@@ -211,7 +211,7 @@ public class HeartbeatRequestManager implements RequestManager {
 
         // Case 1: The member is leaving
         boolean heartbeatNow = membershipManager.state() == MemberState.LEAVING ||
-                // Case 2: The member should send a heartbeat now, and there is no heartbeat request currently in flight
+                // Case 2: The member state indicates it should send a heartbeat without waiting for the interval, and there is no heartbeat request currently in-flight
                 (membershipManager.shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight());
 
         if (!heartbeatRequestState.canSendRequest(currentTimeMs) && !heartbeatNow) {
