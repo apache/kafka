@@ -20,6 +20,7 @@ import com.yammer.metrics.core.Gauge;
 import kafka.cluster.EndPoint;
 import kafka.cluster.Partition;
 import kafka.log.UnifiedLog;
+import kafka.log.remote.quota.RLMQuotaManagerConfig;
 import kafka.server.BrokerTopicStats;
 import kafka.server.KafkaConfig;
 import kafka.server.StopPartition;
@@ -30,6 +31,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.errors.ReplicaNotAvailableException;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
@@ -177,6 +179,7 @@ public class RemoteLogManagerTest {
     private RemoteLogManagerConfig remoteLogManagerConfig = null;
 
     private BrokerTopicStats brokerTopicStats = null;
+    private final Metrics metrics = new Metrics(time);
     private RemoteLogManager remoteLogManager = null;
 
     private final TopicIdPartition leaderTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("Leader", 0));
@@ -218,7 +221,7 @@ public class RemoteLogManagerTest {
         remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> currentLogStartOffset.set(offset),
-                brokerTopicStats) {
+                brokerTopicStats, metrics) {
             public RemoteStorageManager createRemoteStorageManager() {
                 return remoteStorageManager;
             }
@@ -373,7 +376,8 @@ public class RemoteLogManagerTest {
                 time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> { },
-                brokerTopicStats) {
+                brokerTopicStats,
+                metrics) {
             public RemoteStorageManager createRemoteStorageManager() {
                 return remoteStorageManager;
             }
@@ -1260,7 +1264,7 @@ public class RemoteLogManagerTest {
             new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, clusterId, time,
                     t -> Optional.empty(),
                     (topicPartition, offset) -> { },
-                    brokerTopicStats) {
+                    brokerTopicStats, metrics) {
                 public RemoteStorageManager createRemoteStorageManager() {
                     return rsmManager;
                 }
@@ -1520,7 +1524,7 @@ public class RemoteLogManagerTest {
         MockedConstruction<KafkaMetricsGroup> mockMetricsGroupCtor = mockConstruction(KafkaMetricsGroup.class);
         try {
             RemoteLogManager remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, clusterId,
-                time, tp -> Optional.of(mockLog), (topicPartition, offset) -> { }, brokerTopicStats) {
+                time, tp -> Optional.of(mockLog), (topicPartition, offset) -> { }, brokerTopicStats, metrics) {
                 public RemoteStorageManager createRemoteStorageManager() {
                     return remoteStorageManager;
                 }
@@ -1914,7 +1918,7 @@ public class RemoteLogManagerTest {
         try (RemoteLogManager remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> { },
-                brokerTopicStats) {
+                brokerTopicStats, metrics) {
             public RemoteLogMetadataManager createRemoteLogMetadataManager() {
                 return remoteLogMetadataManager;
             }
@@ -1939,7 +1943,7 @@ public class RemoteLogManagerTest {
         try (RemoteLogManager remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> { },
-                brokerTopicStats) {
+                brokerTopicStats, metrics) {
             public RemoteLogMetadataManager createRemoteLogMetadataManager() {
                 return remoteLogMetadataManager;
             }
@@ -1973,7 +1977,7 @@ public class RemoteLogManagerTest {
         try (RemoteLogManager remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) ->  logStartOffset.set(offset),
-                brokerTopicStats) {
+                brokerTopicStats, metrics) {
             public RemoteLogMetadataManager createRemoteLogMetadataManager() {
                 return remoteLogMetadataManager;
             }
@@ -2336,7 +2340,7 @@ public class RemoteLogManagerTest {
         try (RemoteLogManager remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> logStartOffset.set(offset),
-                brokerTopicStats) {
+                brokerTopicStats, metrics) {
             public RemoteStorageManager createRemoteStorageManager() {
                 return remoteStorageManager;
             }
@@ -2476,7 +2480,8 @@ public class RemoteLogManagerTest {
                 time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> { },
-                brokerTopicStats) {
+                brokerTopicStats,
+                metrics) {
             public RemoteStorageManager createRemoteStorageManager() {
                 return rsmManager;
             }
@@ -2548,7 +2553,8 @@ public class RemoteLogManagerTest {
                 time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> { },
-                brokerTopicStats) {
+                brokerTopicStats,
+                metrics) {
             public RemoteStorageManager createRemoteStorageManager() {
                 return rsmManager;
             }
@@ -2633,7 +2639,8 @@ public class RemoteLogManagerTest {
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> {
                 },
-                brokerTopicStats) {
+                brokerTopicStats,
+                metrics) {
             public RemoteStorageManager createRemoteStorageManager() {
                 return rsmManager;
             }
@@ -2664,6 +2671,46 @@ public class RemoteLogManagerTest {
             assertEquals(recordBatchSizeInBytes, capture.getValue().capacity());
 
         }
+    }
+    
+    @Test
+    public void testCopyQuotaManagerConfig() {
+        Properties defaultProps = new Properties();
+        RemoteLogManagerConfig defaultRlmConfig = createRLMConfig(defaultProps);
+        RLMQuotaManagerConfig defaultConfig = RemoteLogManager.copyQuotaManagerConfig(defaultRlmConfig);
+        assertEquals(Long.MAX_VALUE, defaultConfig.quotaBytesPerSecond());
+        assertEquals(61, defaultConfig.numQuotaSamples());
+        assertEquals(1, defaultConfig.quotaWindowSizeSeconds());
+
+        Properties customProps = new Properties();
+        customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP, 100);
+        customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_NUM_PROP, 31);
+        customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_SIZE_SECONDS_PROP, 1);
+        RemoteLogManagerConfig rlmConfig = createRLMConfig(customProps);
+        RLMQuotaManagerConfig rlmCopyQuotaManagerConfig = RemoteLogManager.copyQuotaManagerConfig(rlmConfig);
+        assertEquals(100L, rlmCopyQuotaManagerConfig.quotaBytesPerSecond());
+        assertEquals(31, rlmCopyQuotaManagerConfig.numQuotaSamples());
+        assertEquals(1, rlmCopyQuotaManagerConfig.quotaWindowSizeSeconds());
+    }
+    
+    @Test
+    public void testFetchQuotaManagerConfig() {
+        Properties defaultProps = new Properties();
+        RemoteLogManagerConfig defaultRlmConfig = createRLMConfig(defaultProps);
+        RLMQuotaManagerConfig defaultConfig = RemoteLogManager.fetchQuotaManagerConfig(defaultRlmConfig);
+        assertEquals(Long.MAX_VALUE, defaultConfig.quotaBytesPerSecond());
+        assertEquals(11, defaultConfig.numQuotaSamples());
+        assertEquals(1, defaultConfig.quotaWindowSizeSeconds());
+
+        Properties customProps = new Properties();
+        customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP, 100);
+        customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_NUM_PROP, 31);
+        customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_SIZE_SECONDS_PROP, 1);
+        RemoteLogManagerConfig rlmConfig = createRLMConfig(customProps);
+        RLMQuotaManagerConfig rlmFetchQuotaManagerConfig = RemoteLogManager.fetchQuotaManagerConfig(rlmConfig);
+        assertEquals(100L, rlmFetchQuotaManagerConfig.quotaBytesPerSecond());
+        assertEquals(31, rlmFetchQuotaManagerConfig.numQuotaSamples());
+        assertEquals(1, rlmFetchQuotaManagerConfig.quotaWindowSizeSeconds());
     }
 
     private Partition mockPartition(TopicIdPartition topicIdPartition) {
