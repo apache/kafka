@@ -36,7 +36,6 @@ import java.io.{File, RandomAccessFile}
 import java.util
 import java.util.{Optional, OptionalLong}
 import scala.collection._
-import scala.collection.immutable.Seq
 import scala.jdk.CollectionConverters._
 
 class LogSegmentTest {
