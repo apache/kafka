@@ -131,7 +131,7 @@ class AclCommandTest extends QuorumTestHarness with Logging {
 
   override protected def kraftControllerConfigs(): Seq[Properties] = {
     val controllerConfig = new Properties
-    controllerConfig.put(KafkaConfig.AuthorizerClassNameProp, classOf[StandardAuthorizer].getName)
+    controllerConfig.put(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[StandardAuthorizer].getName)
     controllerConfig.put(StandardAuthorizer.SUPER_USERS_CONFIG, "User:ANONYMOUS")
     Seq(controllerConfig)
   }
