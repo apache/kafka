@@ -34,15 +34,15 @@ import org.apache.kafka.common.TopicPartition;
  * administratively adjusted).
  * <p>
  * There are many uses for this functionality. One common use is saving offsets in a custom store. By saving offsets in
- * the {@link #onPartitionsRevoked(Collection)} call we can ensure that any time partition assignment changes
+ * the {@link #onPartitionsRevoked(Collection)} call, we can ensure that any time partition assignment changes
  * the offset gets saved.
  * <p>
  * Another use is flushing out any kind of cache of intermediate results the consumer may be keeping. For example,
- * consider a case where the consumer is subscribing to a topic containing user page views, and the goal is to count the
+ * consider a case where the consumer subscribes to a topic containing user page views, and the goal is to count the
  * number of page views per user for each five-minute window. Let's say the topic is partitioned by the user id so that
  * all events for a particular user go to a single consumer instance. The consumer can keep in memory a running
  * tally of actions per user and only flush these out to a remote data store when its cache gets too big. However, if a
- * partition is reassigned, it may want to automatically trigger a flush of this cache, before the new owner takes over
+ * partition is reassigned, it may want to automatically trigger a flush of this cache before the new owner takes over
  * consumption.
  * <p>
  * This callback will only execute in the user thread as part of the {@link Consumer#poll(java.time.Duration) poll(long)} call
@@ -119,7 +119,7 @@ import org.apache.kafka.common.TopicPartition;
 public interface ConsumerRebalanceListener {
 
     /**
-     * A callback method the user can implement to provide handling of offset commits **sent to** a customized store
+     * A callback method the user can implement to provide handling of offset commits **sent to** a customized store.
      * This method will be called during a rebalance operation when the consumer has to give up some partitions.
      * It can also be called when consumer is being closed ({@link KafkaConsumer#close(Duration)})
      * or is unsubscribing ({@link KafkaConsumer#unsubscribe()}).
