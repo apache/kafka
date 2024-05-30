@@ -25,6 +25,7 @@ import org.slf4j.Logger;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -33,6 +34,11 @@ import java.util.stream.IntStream;
  * which guarantees that events sharing a partition key are not processed concurrently.
  */
 public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
+
+    /**
+     * The poll timeout to wait for an event in EventProcessorThread.
+     */
+    private static long POLL_TIMEOUT = 300;
 
     /**
      * The logger.
@@ -129,7 +135,7 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
                 // time should be discounted by # threads.
 
                 long idleStartTimeMs = time.milliseconds();
-                CoordinatorEvent event = accumulator.take();
+                CoordinatorEvent event = accumulator.poll(POLL_TIMEOUT, TimeUnit.MILLISECONDS);
                 long idleEndTimeMs = time.milliseconds();
                 long idleTimeMs = idleEndTimeMs - idleStartTimeMs;
                 metrics.recordThreadIdleTime(idleTimeMs / threads.size());
@@ -151,8 +157,8 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
         }
 
         private void drainEvents() {
-            CoordinatorEvent event;
-            while ((event = accumulator.poll()) != null) {
+            CoordinatorEvent event = accumulator.poll(0, TimeUnit.MILLISECONDS);
+            while (event != null) {
                 try {
                     log.debug("Draining event: {}.", event);
                     metrics.recordEventQueueTime(time.milliseconds() - event.createdTimeMs());
@@ -162,6 +168,8 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
                 } finally {
                     accumulator.done(event);
                 }
+
+                event = accumulator.poll(0, TimeUnit.MILLISECONDS);
             }
         }
 
