@@ -137,7 +137,6 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     void runOnce() {
         processApplicationEvents();
 
-        // here we get the system time and pass it to the request manager because we don't want to invoke system time all the time
         final long currentTimeMs = time.milliseconds();
         final long pollWaitTimeMs = requestManagers.entries().stream()
                 .filter(Optional::isPresent)
@@ -308,7 +307,6 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         try {
             runAtClose(requestManagers.entries(), networkClientDelegate, timer);
         } catch (Exception e) {
-            // TODO: Makesure exception case is being tested
             log.error("Unexpected error during shutdown.  Proceed with closing.", e);
         } finally {
             sendUnsentRequests(timer);
