@@ -125,9 +125,7 @@ public class ConsumerNetworkThreadTest {
     @ParameterizedTest
     @ValueSource(longs = {1, 100, 1000, 4999, 5001})
     public void testConsumerNetworkThreadWaitTimeComputations(long exampleTime) {
-        List<Optional<? extends RequestManager>> requestManagersList = new ArrayList<>();
-        requestManagersList.add(Optional.of(coordinatorRequestManager));
-        when(requestManagers.entries()).thenReturn(requestManagersList);
+        when(requestManagers.entries()).thenReturn(Collections.singletonList(Optional.of(coordinatorRequestManager)));
 
         NetworkClientDelegate.PollResult pollResult = new NetworkClientDelegate.PollResult(exampleTime);
 
