@@ -162,16 +162,6 @@ public class EventAccumulator<K, T extends EventAccumulator.Event<K>> implements
         }
     }
 
-//    /**
-//     * Returns the next {{@link Event}} available. This method block indefinitely until
-//     * one event is ready or the accumulator is closed.
-//     *
-//     * @return The next event.
-//     */
-//    public T poll() {
-//        return poll(Long.MAX_VALUE, TimeUnit.SECONDS);
-//    }
-
     /**
      * Returns the next {{@link Event}} available. This method blocks for the provided
      * time and returns null of not event is available.
