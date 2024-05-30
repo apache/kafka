@@ -857,6 +857,7 @@ public class ClassicGroup implements Group {
             throw Errors.UNKNOWN_MEMBER_ID.exception();
         }
 
+        // TODO: A temp marker. Will remove it when the pr is open.
         if (!isTransactional && isInState(COMPLETING_REBALANCE)) {
             // We should not receive a commit request if the group has not completed rebalance;
             // but since the consumer's member.id and generation is valid, it means it has received

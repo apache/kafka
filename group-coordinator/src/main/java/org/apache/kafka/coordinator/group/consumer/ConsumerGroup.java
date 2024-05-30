@@ -21,6 +21,9 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.FencedInstanceIdException;
+import org.apache.kafka.common.errors.IllegalGenerationException;
+import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
@@ -806,7 +809,29 @@ public class ConsumerGroup implements Group {
         if (memberEpoch < 0 && members().isEmpty()) return;
 
         final ConsumerGroupMember member = getOrMaybeCreateMember(memberId, false);
-        validateMemberEpoch(memberEpoch, member.memberEpoch());
+        if (member.useClassicProtocol()) {
+            validateMemberInstanceId(member, groupInstanceId);
+
+            try {
+                validateMemberEpoch(memberEpoch, member.memberEpoch());
+            } catch (StaleMemberEpochException ex) {
+                // StaleMemberEpochException is not supported in the classic protocol. We throw
+                // IllegalGenerationException instead for compatibility.
+                throw new IllegalGenerationException(String.format("Invalid offset commit because the "
+                    + "received generation id %d does not match the expected member epoch %d.",
+                    memberEpoch, member.memberEpoch()));
+            }
+
+            if (member.memberEpoch() < groupEpoch() ||
+                member.state() == MemberState.UNREVOKED_PARTITIONS ||
+                (member.state() == MemberState.UNRELEASED_PARTITIONS && !waitingOnUnreleasedPartition(member))) {
+                throw new RebalanceInProgressException(String.format("Invalid offset commit because" +
+                    " a new rebalance has been triggered in group %s and member %s should rejoin to catch up.",
+                    groupId(), member.memberId()));
+            }
+        } else {
+            validateMemberEpoch(memberEpoch, member.memberEpoch());
+        }
     }
 
     /**
@@ -1420,5 +1445,31 @@ public class ConsumerGroup implements Group {
             }
         }
         return false;
+    }
+
+    /**
+     * Validates that the instance id exists and is mapped to the member id
+     * if the group instance id is provided.
+     *
+     * @param member            The ConsumerGroupMember.
+     * @param instanceId        The instance id.
+     */
+    private void validateMemberInstanceId(
+        ConsumerGroupMember member,
+        String instanceId
+    ) throws UnknownMemberIdException, FencedInstanceIdException {
+        if (instanceId != null) {
+            ConsumerGroupMember staticMember = staticMember(instanceId);
+            if (member == null) {
+                throw new UnknownMemberIdException(
+                    String.format("Member with instance id %s is not a member of group %s.", instanceId, groupId())
+                );
+            }
+
+            if (!staticMember.memberId().equals(member.memberId())) {
+                throw Errors.FENCED_INSTANCE_ID.exception("Static member " + member.memberId() + " with instance id "
+                    + instanceId + " was fenced by member " + staticMember.memberId() + ".");
+            }
+        }
     }
 }
