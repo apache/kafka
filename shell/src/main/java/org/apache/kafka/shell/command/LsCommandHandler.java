@@ -297,8 +297,6 @@ public final class LsCommandHandler implements Commands.Handler {
     @Override
     public boolean equals(Object other) {
         if (!(other instanceof LsCommandHandler)) return false;
-        LsCommandHandler o = (LsCommandHandler) other;
-        if (!Objects.equals(o.targets, targets)) return false;
-        return true;
+        return Objects.equals(((LsCommandHandler) other).targets, targets);
     }
 }
