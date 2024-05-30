@@ -144,8 +144,9 @@ public interface ConsumerRebalanceListener {
     void onPartitionsRevoked(Collection<TopicPartition> partitions);
 
     /**
-     * A callback method the user can implement to provide handling of customized offsets on completion of a successful
-     * partition re-assignment. This method will be called after the partition re-assignment completes and before the
+     * A callback method the user is providing handling of cleanup up resource which are being assigned to other customers and
+     * customized offsets on completion of a successful partition re-assignment. For example, the customized store is a possible use.
+     * This method will be called after the partition re-assignment completes and before the
      * consumer starts fetching data, and only as the result of a {@link Consumer#poll(java.time.Duration) poll(long)} call.
      * <p>
      * It is guaranteed that under normal conditions all the processes in a consumer group will execute their
