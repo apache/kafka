@@ -17,6 +17,8 @@
 package org.apache.kafka.connect.mirror.integration;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AlterConfigOp;
+import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
@@ -24,7 +26,7 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
-import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
@@ -58,7 +60,6 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -153,7 +154,7 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
         additionalBackupClusterClientsConfigs.putAll(superUserConfig());
         backupWorkerProps.putAll(superUserConfig());
 
-        HashMap<String, String> additionalConfig = new HashMap<String, String>(superUserConfig()) {{
+        Map<String, String> additionalConfig = new HashMap<String, String>(superUserConfig()) {{
                 put(FORWARDING_ADMIN_CLASS, FakeForwardingAdminWithLocalMetadata.class.getName());
             }};
 
@@ -199,6 +200,9 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
 
     @Test
     public void testReplicationIsCreatingTopicsUsingProvidedForwardingAdmin() throws Exception {
+        // Disable topic refreshing since org.apache.kafka.connect.mirror.MirrorSourceConnector.refreshTopicPartitions can replicate the topics
+        // instead of org.apache.kafka.connect.mirror.MirrorSourceConnector.computeAndCreateTopicPartitions that we are checking in this test
+        mm2Props.put("refresh.topics.enabled", "false");
         produceMessages(primaryProducer, "test-topic-1");
         produceMessages(backupProducer, "test-topic-1");
         String consumerGroupName = "consumer-group-testReplication";
@@ -235,6 +239,7 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
 
     @Test
     public void testCreatePartitionsUseProvidedForwardingAdmin() throws Exception {
+        mm2Props.put("refresh.topics.enabled", "true");
         mm2Config = new MirrorMakerConfig(mm2Props);
         produceMessages(backupProducer, "test-topic-1");
         produceMessages(primaryProducer, "test-topic-1");
@@ -264,7 +269,7 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
         waitForTopicPartitionCreated(backup, "primary.test-topic-1", NUM_PARTITIONS + 1);
 
         // expect to use FakeForwardingAdminWithLocalMetadata to update number of partitions in local store
-        waitForTopicConfigPersistInFakeLocalMetaDataStore("primary.test-topic-1", "partitions", String.valueOf(NUM_PARTITIONS + 1));
+        waitForPartitionsPersistInFakeLocalMetaDataStore("primary.test-topic-1", String.valueOf(NUM_PARTITIONS + 1));
     }
 
     @Test
@@ -285,16 +290,21 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
         waitForTopicCreated(primary, "backup.test-topic-1");
         waitForTopicCreated(backup, "primary.test-topic-1");
 
-        // make sure the topic config is synced into the other cluster
-        assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT, getTopicConfig(backup.kafka(), "primary.test-topic-1", TopicConfig.CLEANUP_POLICY_CONFIG),
-            "topic config was synced");
+        ConfigResource backupConfigResource = new ConfigResource(ConfigResource.Type.TOPIC, "primary.test-topic-1");
+        Collection<AlterConfigOp> backupRetentionBytesOp = Collections.singletonList(new AlterConfigOp(new ConfigEntry("retention.bytes", "2000"),
+                AlterConfigOp.OpType.SET
+        ));
+        Map<ConfigResource, Collection<AlterConfigOp>> backupConfigOps = Collections.singletonMap(backupConfigResource, backupRetentionBytesOp);
+        backup.kafka().incrementalAlterConfigs(backupConfigOps);
 
-        // expect to use FakeForwardingAdminWithLocalMetadata to create remote topics into local store
-        waitForTopicToPersistInFakeLocalMetadataStore("backup.test-topic-1");
-        waitForTopicToPersistInFakeLocalMetadataStore("primary.test-topic-1");
+        ConfigResource primaryConfigResource = new ConfigResource(ConfigResource.Type.TOPIC, "test-topic-1");
+        Collection<AlterConfigOp> primaryRetentionBytesOp = Collections.singletonList(new AlterConfigOp(new ConfigEntry("retention.bytes", "3000"),
+                AlterConfigOp.OpType.SET
+        ));
+        Map<ConfigResource, Collection<AlterConfigOp>> primaryConfigOps = Collections.singletonMap(primaryConfigResource, primaryRetentionBytesOp);
+        primary.kafka().incrementalAlterConfigs(primaryConfigOps);
 
-        // expect to use FakeForwardingAdminWithLocalMetadata to update topic config in local store
-        waitForTopicConfigPersistInFakeLocalMetaDataStore("primary.test-topic-1", TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT);
+        waitForTopicConfigPersistInFakeLocalMetaDataStore("primary.test-topic-1", "retention.bytes", "3000");
     }
 
     @Test
@@ -356,6 +366,12 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
     void waitForTopicConfigPersistInFakeLocalMetaDataStore(String topicName, String configName, String expectedConfigValue) throws InterruptedException {
         waitForCondition(() -> FakeLocalMetadataStore.topicConfig(topicName).getOrDefault(configName, "").equals(expectedConfigValue), FAKE_LOCAL_METADATA_STORE_SYNC_DURATION_MS,
             "Topic: " + topicName + "'s configs don't have " + configName + ":" + expectedConfigValue
+        );
+    }
+
+    void waitForPartitionsPersistInFakeLocalMetaDataStore(String topicName, String expectedConfigValue) throws InterruptedException {
+        waitForCondition(() -> expectedConfigValue.equals(FakeLocalMetadataStore.partitions(topicName)), FAKE_LOCAL_METADATA_STORE_SYNC_DURATION_MS,
+            "Topic: " + topicName + " doesn't have partitions:" + expectedConfigValue
         );
     }
 }
