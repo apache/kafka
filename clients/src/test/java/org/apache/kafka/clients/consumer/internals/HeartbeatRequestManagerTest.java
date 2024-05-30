@@ -168,7 +168,7 @@ public class HeartbeatRequestManagerTest {
 
         RequestState requestState = new RequestState(
                 logContext,
-                "org.apache.kafka.clients.consumer.internals.HeartbeatRequestManager$HeartbeatRequestState",
+                HeartbeatRequestManager.HeartbeatRequestState.class.getName(),
                 retryBackoffMs,
                 retryBackoffMaxMs
         );
