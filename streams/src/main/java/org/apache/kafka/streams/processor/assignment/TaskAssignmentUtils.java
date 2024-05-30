@@ -16,13 +16,10 @@
  */
 package org.apache.kafka.streams.processor.assignment;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor.STANDBY_OPTIMIZER_MAX_ITERATION;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -544,7 +541,7 @@ public final class TaskAssignmentUtils {
         final int numStandbyReplicas = applicationState.assignmentConfigs().numStandbyReplicas();
         final Map<ProcessId, KafkaStreamsState> streamStates = applicationState.kafkaStreamsStates(false);
 
-        final Set<String> rackAwareAssignmentTags = new HashSet<>(getRackAwareAssignmentTags(applicationState));
+        final Set<String> rackAwareAssignmentTags = new HashSet<>(applicationState.assignmentConfigs().rackAwareAssignmentTags());
         final TagStatistics tagStatistics = new TagStatistics(applicationState);
 
         final ConstrainedPrioritySet standbyTaskClientsByTaskLoad = standbyTaskPriorityListByLoad(streamStates, kafkaStreamsAssignments);
@@ -559,7 +556,6 @@ public final class TaskAssignmentUtils {
             entry -> entry.getKey().id(),
             Map.Entry::getValue
         ));
-        final Function<KafkaStreamsState, Map<String, String>> clientTagGetter = createClientTagGetter(applicationState);
 
         final Map<TaskId, ProcessId> pendingStandbyTasksToClientId = new HashMap<>();
         for (final TaskId statefulTaskId : statefulTaskIds) {
@@ -576,8 +572,7 @@ public final class TaskAssignmentUtils {
                         tasksToRemainingStandbys,
                         tagStatistics.tagKeyToValues,
                         tagStatistics.tagEntryToClients,
-                        pendingStandbyTasksToClientId,
-                        clientTagGetter
+                        pendingStandbyTasksToClientId
                     );
                 }
             }
@@ -659,8 +654,7 @@ public final class TaskAssignmentUtils {
                                                                      final Map<TaskId, Integer> tasksToRemainingStandbys,
                                                                      final Map<String, Set<String>> tagKeyToValues,
                                                                      final Map<KeyValue<String, String>, Set<ProcessId>> tagEntryToClients,
-                                                                     final Map<TaskId, ProcessId> pendingStandbyTasksToClientId,
-                                                                     final Function<KafkaStreamsState, Map<String, String>> clientTagGetter) {
+                                                                     final Map<TaskId, ProcessId> pendingStandbyTasksToClientId) {
         standbyTaskClientsByTaskLoad.offerAll(clientStates.keySet().stream()
             .map(ProcessId::id).collect(Collectors.toSet()));
 
@@ -678,8 +672,7 @@ public final class TaskAssignmentUtils {
                 rackAwareAssignmentTags,
                 tagEntryToClients,
                 tagKeyToValues,
-                tagEntryToUsedClients,
-                clientTagGetter
+                tagEntryToUsedClients
             );
 
             final UUID clientOnUnusedTagDimensions = standbyTaskClientsByTaskLoad.poll(
@@ -697,8 +690,8 @@ public final class TaskAssignmentUtils {
             LOG.debug("Assigning {} out of {} standby tasks for an active task [{}] with client tags {}. " +
                       "Standby task client tags are {}.",
                 numberOfStandbyClients - numRemainingStandbys, numberOfStandbyClients, activeTaskId,
-                clientTagGetter.apply(clientStates.get(activeTaskClient)),
-                clientTagGetter.apply(clientStateOnUsedTagDimensions));
+                clientStates.get(activeTaskClient).clientTags(),
+                clientStateOnUsedTagDimensions.clientTags());
 
             kafkaStreamsAssignments.get(clientStateOnUsedTagDimensions.processId()).assignTask(
                 new AssignedTask(activeTaskId, AssignedTask.Type.STANDBY)
@@ -717,7 +710,7 @@ public final class TaskAssignmentUtils {
                      "Standby task assignment will fall back to assigning standby tasks to the least loaded clients.",
                 numRemainingStandbys, numberOfStandbyClients,
                 activeTaskId, rackAwareAssignmentTags,
-                clientTagGetter.apply(clientStates.get(activeTaskClient)));
+                clientStates.get(activeTaskClient).clientTags());
 
         } else {
             tasksToRemainingStandbys.remove(activeTaskId);
@@ -734,9 +727,8 @@ public final class TaskAssignmentUtils {
                                                              final Set<String> rackAwareAssignmentTags,
                                                              final Map<KeyValue<String, String>, Set<ProcessId>> tagEntryToClients,
                                                              final Map<String, Set<String>> tagKeyToValues,
-                                                             final Map<KeyValue<String, String>, Set<ProcessId>> tagEntryToUsedClients,
-                                                             final Function<KafkaStreamsState, Map<String, String>> clientTagGetter) {
-        final Map<String, String> usedClientTags = clientTagGetter.apply(usedClient);
+                                                             final Map<KeyValue<String, String>, Set<ProcessId>> tagEntryToUsedClients) {
+        final Map<String, String> usedClientTags = usedClient.clientTags();
 
         for (final Map.Entry<String, String> usedClientTagEntry : usedClientTags.entrySet()) {
             final String tagKey = usedClientTagEntry.getKey();
@@ -761,35 +753,11 @@ public final class TaskAssignmentUtils {
         }
     }
 
-    private static Function<KafkaStreamsState, Map<String, String>> createClientTagGetter(final ApplicationState applicationState) {
-        final boolean hasRackAwareAssignmentTags = !applicationState.assignmentConfigs().rackAwareAssignmentTags().isEmpty();
-        final boolean canPerformRackAwareOptimization = canPerformRackAwareOptimization(applicationState, AssignedTask.Type.STANDBY);
-
-        if (hasRackAwareAssignmentTags || !canPerformRackAwareOptimization) {
-            return KafkaStreamsState::clientTags;
-        } else {
-            return state -> mkMap(mkEntry("rack", state.rackId().get()));
-        }
-    }
-
-    private static List<String> getRackAwareAssignmentTags(final ApplicationState applicationState) {
-        final boolean hasRackAwareAssignmentTags = !applicationState.assignmentConfigs().rackAwareAssignmentTags().isEmpty();
-
-        if (hasRackAwareAssignmentTags) {
-            return applicationState.assignmentConfigs().rackAwareAssignmentTags();
-        } else if (canPerformRackAwareOptimization(applicationState, AssignedTask.Type.STANDBY)) {
-            return Collections.singletonList("rack");
-        } else {
-            return Collections.emptyList();
-        }
-    }
-
     private static MoveStandbyTaskPredicate getStandbyTaskMovePredicate(final ApplicationState applicationState) {
         final boolean hasRackAwareAssignmentTags = !applicationState.assignmentConfigs().rackAwareAssignmentTags().isEmpty();
         if (hasRackAwareAssignmentTags) {
-            final Function<KafkaStreamsState, Map<String, String>> clientTagGetter = createClientTagGetter(applicationState);
             final BiConsumer<KafkaStreamsState, Set<KeyValue<String, String>>> addTags = (cs, tagSet) -> {
-                final Map<String, String> tags = clientTagGetter.apply(cs);
+                final Map<String, String> tags = cs.clientTags();
                 if (tags != null) {
                     tagSet.addAll(tags.entrySet().stream()
                         .map(entry -> KeyValue.pair(entry.getKey(), entry.getValue()))
@@ -825,9 +793,7 @@ public final class TaskAssignmentUtils {
     private static ConstrainedPrioritySet standbyTaskPriorityListByLoad(final Map<ProcessId, KafkaStreamsState> streamStates,
                                                                         final Map<ProcessId, KafkaStreamsAssignment> kafkaStreamsAssignments) {
         return new ConstrainedPrioritySet(
-            (processId, taskId) -> {
-                return kafkaStreamsAssignments.get(new ProcessId(processId)).tasks().containsKey(taskId);
-            },
+            (processId, taskId) -> kafkaStreamsAssignments.get(new ProcessId(processId)).tasks().containsKey(taskId),
             processId -> {
                 final double capacity = streamStates.get(new ProcessId(processId)).numProcessingThreads();
                 final double numTasks = kafkaStreamsAssignments.get(new ProcessId(processId)).tasks().size();
@@ -867,13 +833,12 @@ public final class TaskAssignmentUtils {
         }
 
         public TagStatistics(final ApplicationState applicationState) {
-            final Function<KafkaStreamsState, Map<String, String>> clientTagGetter = createClientTagGetter(applicationState);
             final Map<ProcessId, KafkaStreamsState> clientStates = applicationState.kafkaStreamsStates(false);
 
             final Map<String, Set<String>> tagKeyToValues = new HashMap<>();
             final Map<KeyValue<String, String>, Set<ProcessId>> tagEntryToClients = new HashMap<>();
             for (final KafkaStreamsState state : clientStates.values()) {
-                clientTagGetter.apply(state).forEach((tagKey, tagValue) -> {
+                state.clientTags().forEach((tagKey, tagValue) -> {
                     tagKeyToValues.computeIfAbsent(tagKey, ignored -> new HashSet<>()).add(tagValue);
                     tagEntryToClients.computeIfAbsent(new KeyValue<>(tagKey, tagValue), ignored -> new HashSet<>()).add(state.processId());
                 });
