@@ -36,9 +36,9 @@ import java.util.stream.IntStream;
 public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
 
     /**
-     * The poll timeout to wait for an event in EventProcessorThread.
+     * The poll timeout to wait for an event by the EventProcessorThread.
      */
-    private static long POLL_TIMEOUT = 300;
+    public static final long POLL_TIMEOUT_MS = 300L;
 
     /**
      * The logger.
@@ -135,7 +135,7 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
                 // time should be discounted by # threads.
 
                 long idleStartTimeMs = time.milliseconds();
-                CoordinatorEvent event = accumulator.poll(POLL_TIMEOUT, TimeUnit.MILLISECONDS);
+                CoordinatorEvent event = accumulator.poll(POLL_TIMEOUT_MS, TimeUnit.MILLISECONDS);
                 long idleEndTimeMs = time.milliseconds();
                 long idleTimeMs = idleEndTimeMs - idleStartTimeMs;
                 metrics.recordThreadIdleTime(idleTimeMs / threads.size());
