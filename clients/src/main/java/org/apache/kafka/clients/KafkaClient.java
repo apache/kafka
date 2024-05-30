@@ -213,4 +213,16 @@ public interface KafkaClient extends Closeable {
      */
     boolean active();
 
+    /**
+     * Register a `DisconnectListener` implementation to be notified on all broker disconnections
+     * @param listener the listener to add to notifications
+     */
+    void registerDisconnectListener(DisconnectListener listener);
+
+    /**
+     * Unregister a `DisconnectListener` implementation so it will no longer be notified of broker disconnections
+     * @param listener the listener to remove from notifications
+     */
+    void unregisterDisconnectListener(DisconnectListener listener);
+
 }

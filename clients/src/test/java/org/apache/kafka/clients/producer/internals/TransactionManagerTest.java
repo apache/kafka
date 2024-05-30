@@ -1039,6 +1039,8 @@ public class TransactionManagerTest {
         prepareInitPidResponse(Errors.NONE, true, producerId, epoch);
         // send pid to coordinator, should get disconnected before receiving the response, and resend the
         // FindCoordinator and InitPid requests.
+        runUntil(() -> !client.hasPendingResponses());
+        client.disconnect(transactionManager.coordinator(CoordinatorType.TRANSACTION).idString());
         runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) == null);
 
         assertNull(transactionManager.coordinator(CoordinatorType.TRANSACTION));
@@ -1057,6 +1059,34 @@ public class TransactionManagerTest {
         assertTrue(transactionManager.hasProducerId());
         assertEquals(producerId, transactionManager.producerIdAndEpoch().producerId);
         assertEquals(epoch, transactionManager.producerIdAndEpoch().epoch);
+    }
+
+    @Test
+    public void testLookupCoordinatorImmediateOnDisconnect() {
+        // This is called from the initTransactions method in the producer as the first order of business.
+        // It finds the coordinator and then gets a PID.
+        TransactionalRequestResult initPidResult = transactionManager.initializeTransactions();
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
+        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+
+        prepareInitPidResponse(Errors.NONE, false, producerId, epoch);
+        runUntil(initPidResult::isCompleted);
+
+        // Ensure we're connected and initialized before disconnecting
+        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+        assertTrue(initPidResult.isCompleted());
+        assertTrue(transactionManager.hasProducerId());
+        client.disconnect(transactionManager.coordinator(CoordinatorType.TRANSACTION).idString());
+
+        // Coordinator should be set to null immediately and rediscovered without any other transactional requests
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) == null);
+
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
+
+        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+        assertTrue(initPidResult.isCompleted());
     }
 
     @Test
@@ -2606,9 +2636,9 @@ public class TransactionManagerTest {
         time.sleep(10000);
         // Disconnect the target node for the pending produce request. This will ensure that sender will try to
         // expire the batch.
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
         Node clusterNode = metadata.fetch().nodes().get(0);
         client.disconnect(clusterNode.idString());
-        client.backoff(clusterNode, 100);
 
         runUntil(responseFuture::isDone);
 
@@ -2653,9 +2683,9 @@ public class TransactionManagerTest {
         time.sleep(10000);
         // Disconnect the target node for the pending produce request. This will ensure that sender will try to
         // expire the batch.
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
         Node clusterNode = metadata.fetch().nodes().get(0);
         client.disconnect(clusterNode.idString());
-        client.backoff(clusterNode, 100);
 
         runUntil(firstBatchResponse::isDone);
         runUntil(secondBatchResponse::isDone);
@@ -2700,6 +2730,7 @@ public class TransactionManagerTest {
         time.sleep(10000);
         // Disconnect the target node for the pending produce request. This will ensure that sender will try to
         // expire the batch.
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
         Node clusterNode = metadata.fetch().nodes().get(0);
         client.disconnect(clusterNode.idString());
 
@@ -2768,9 +2799,9 @@ public class TransactionManagerTest {
         time.sleep(10000);
         // Disconnect the target node for the pending produce request. This will ensure that sender will try to
         // expire the batch.
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
         Node clusterNode = metadata.fetch().nodes().get(0);
         client.disconnect(clusterNode.idString());
-        client.backoff(clusterNode, 100);
 
         runUntil(responseFuture::isDone);  // We should try to flush the produce, but expire it instead without sending anything.
 
@@ -3656,6 +3687,7 @@ public class TransactionManagerTest {
         runUntil(() -> !client.hasPendingResponses());
         assertFalse(result.isCompleted());
         assertThrows(TimeoutException.class, () -> result.await(MAX_BLOCK_TIMEOUT, TimeUnit.MILLISECONDS));
+        client.disconnect(transactionManager.coordinator(CoordinatorType.TRANSACTION).idString());
 
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
         runUntil(() -> !client.hasPendingResponses());
