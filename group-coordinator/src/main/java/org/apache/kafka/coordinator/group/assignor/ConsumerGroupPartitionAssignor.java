@@ -14,26 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.metrics.stats;
+package org.apache.kafka.coordinator.group.assignor;
 
-import org.apache.kafka.common.metrics.MetricConfig;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * A simple rate the rate is incrementally calculated
- * based on the elapsed time between the earliest reading
- * and now.
+ * Server-side partition assignor for consumer groups used by the GroupCoordinator.
  *
- * An exception is made for the first window, which is
- * considered of fixed size. This avoids the issue of
- * an artificially high rate when the gap between readings
- * is close to 0.
+ * The interface is kept in an internal module until KIP-848 is fully
+ * implemented and ready to be released.
  */
-public class SimpleRate extends Rate {
-
-    @Override
-    public long windowSize(MetricConfig config, long now) {
-        stat.purgeObsoleteSamples(config, now);
-        long elapsed = now - stat.oldest(now).startTimeMs;
-        return Math.max(elapsed, config.timeWindowMs());
-    }
+@InterfaceStability.Unstable
+public interface ConsumerGroupPartitionAssignor extends PartitionAssignor {
 }

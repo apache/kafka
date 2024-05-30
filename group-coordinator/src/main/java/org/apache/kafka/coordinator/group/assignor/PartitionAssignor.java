@@ -19,7 +19,7 @@ package org.apache.kafka.coordinator.group.assignor;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * Server side partition assignor used by the GroupCoordinator.
+ * Server-side partition assignor used by the GroupCoordinator.
  *
  * The interface is kept in an internal module until KIP-848 is fully
  * implemented and ready to be released.
