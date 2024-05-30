@@ -92,9 +92,7 @@ public final class TaskAssignmentUtils {
      */
     public static Map<ProcessId, KafkaStreamsAssignment> defaultStandbyTaskAssignment(final ApplicationState applicationState,
                                                                                       final Map<ProcessId, KafkaStreamsAssignment> kafkaStreamsAssignments) {
-        if (!applicationState.assignmentConfigs().rackAwareAssignmentTags().isEmpty()) {
-            return tagBasedStandbyTaskAssignment(applicationState, kafkaStreamsAssignments);
-        } else if (canPerformRackAwareOptimization(applicationState, AssignedTask.Type.STANDBY)) {
+        if (applicationState.assignmentConfigs().rackAwareAssignmentTags().isEmpty()) {
             return tagBasedStandbyTaskAssignment(applicationState, kafkaStreamsAssignments);
         } else {
             return loadBasedStandbyTaskAssignment(applicationState, kafkaStreamsAssignments);
@@ -330,8 +328,8 @@ public final class TaskAssignmentUtils {
                         topicPartitionsByTaskId,
                         crossRackTrafficCost,
                         nonOverlapCost,
-                        false,
-                        false,
+                        true,
+                        true,
                         graphConstructor
                     );
                     assignmentGraph.graph.solveMinCostFlow();
@@ -574,7 +572,7 @@ public final class TaskAssignmentUtils {
         final Map<TaskId, ProcessId> pendingStandbyTasksToClientId = new HashMap<>();
         for (final TaskId statefulTaskId : statefulTaskIds) {
             for (final KafkaStreamsAssignment assignment : clientsByUuid.values()) {
-                if (assignment.tasks().containsKey(statefulTaskId)) {
+                if (assignment.tasks().containsKey(statefulTaskId) && assignment.tasks().get(statefulTaskId).type() == AssignedTask.Type.ACTIVE) {
                     assignStandbyTasksToClientsWithDifferentTags(
                         numStandbyReplicas,
                         standbyTaskClientsByTaskLoad,
