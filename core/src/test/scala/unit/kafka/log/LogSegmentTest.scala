@@ -639,6 +639,8 @@ class LogSegmentTest {
 
     segment.append(1, 1000L, 1, MemoryRecords.withRecords(1, Compression.NONE, new SimpleRecord("one".getBytes)))
     assertEquals(1000L, segment.getFirstBatchTimestamp)
+
+    segment.close()
   }
 
   private def newProducerStateManager(): ProducerStateManager = {

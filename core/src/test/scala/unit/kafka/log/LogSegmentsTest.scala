@@ -106,6 +106,11 @@ class LogSegmentsTest {
     assertFalse(segments.nonEmpty)
     assertEquals(0, segments.numberOfSegments)
     assertFalse(segments.contains(offset1))
+
+    // since we do segments.clear() before, we have to close segments one by one
+    seg1.close()
+    seg2.close()
+    seg3.close()
   }
 
   @Test
@@ -233,6 +238,8 @@ class LogSegmentsTest {
       val iterator = segments.higherSegments(9).iterator
       assertFalse(iterator.hasNext)
     }
+
+    segments.close()
   }
 
   @Test
@@ -249,6 +256,8 @@ class LogSegmentsTest {
     val logSegments: LogSegments = new LogSegments(topicPartition)
     logSegments.add(logSegment)
     assertEquals(Int.MaxValue, logSegments.sizeInBytes())
+
+    logSegment.close()
   }
 
   @Test
@@ -264,6 +273,7 @@ class LogSegmentsTest {
     assertEquals(newDir, seg1.offsetIndexFile().getParentFile)
     assertEquals(newDir, seg1.txnIndex().file().getParentFile)
 
+    seg1.close()
     Utils.delete(newDir)
   }
 }
