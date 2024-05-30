@@ -1407,7 +1407,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         UnalignedRecords records = snapshot.slice(partitionSnapshot.position(), Math.min(data.maxBytes(), maxSnapshotSize));
 
         LeaderState<T> state = quorum.leaderStateOrThrow();
-        state.updateCheckQuorumForFollowingVoter(data.replicaId(), currentTimeMs);
+        state.updateCheckQuorumForFollowingVoter(data.replicaId(), currentTimeMs, -1, partitionSnapshot.position());
 
         return FetchSnapshotResponse.singleton(
             log.topicPartition(),
