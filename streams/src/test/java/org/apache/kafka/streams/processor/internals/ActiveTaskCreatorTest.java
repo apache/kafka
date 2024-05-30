@@ -56,6 +56,8 @@ import static org.hamcrest.Matchers.closeTo;
 import static org.hamcrest.core.IsNot.not;
 import static org.junit.Assert.assertThrows;
 import static java.util.Collections.emptySet;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -472,7 +474,7 @@ public class ActiveTaskCreatorTest {
         final SourceNode sourceNode = mock(SourceNode.class);
 
         when(builder.topologyConfigs()).thenReturn(new TopologyConfig(new StreamsConfig(properties)));
-        when(builder.buildSubtopology(0)).thenReturn(topology);
+        when(builder.buildSubtopology(eq(0), any())).thenReturn(topology);
         when(topology.sinkTopics()).thenReturn(emptySet());
         when(stateDirectory.getOrCreateDirectoryForTask(task00)).thenReturn(mock(File.class));
         when(stateDirectory.checkpointFileFor(task00)).thenReturn(mock(File.class));

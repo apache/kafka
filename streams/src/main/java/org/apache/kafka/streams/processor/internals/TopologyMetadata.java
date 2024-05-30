@@ -503,7 +503,7 @@ public class TopologyMetadata {
      */
     public ProcessorTopology buildSubtopology(final TaskId task) {
         final InternalTopologyBuilder builder = lookupBuilderForTask(task);
-        return builder.buildSubtopology(task.subtopology());
+        return builder.buildSubtopology(task.subtopology(), config.processingExceptionHandler());
     }
 
     public ProcessorTopology globalTaskTopology() {
