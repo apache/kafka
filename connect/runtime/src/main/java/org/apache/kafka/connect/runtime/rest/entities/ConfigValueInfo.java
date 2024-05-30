@@ -87,19 +87,17 @@ public class ConfigValueInfo {
 
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("[")
-            .append(name)
-            .append(",")
-            .append(value)
-            .append(",")
-            .append(recommendedValues)
-            .append(",")
-            .append(errors)
-            .append(",")
-            .append(visible)
-            .append("]");
-        return sb.toString();
+        return "[" +
+                name +
+                "," +
+                value +
+                "," +
+                recommendedValues +
+                "," +
+                errors +
+                "," +
+                visible +
+                "]";
     }
 
 }
