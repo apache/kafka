@@ -499,8 +499,6 @@ public final class QuorumController implements Controller {
         }
     }
 
-    public static final String CONTROLLER_THREAD_SUFFIX = "QuorumControllerEventHandler";
-
     private OptionalInt latestController() {
         return raftClient.leaderAndEpoch().leaderId();
     }

@@ -819,7 +819,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // We will never return a logConfig when the topic is unresolved and the name is null. This is ok since we won't have any records to convert.
       val logConfig = replicaManager.getLogConfig(tp.topicPartition)
 
-      if (logConfig.exists(_.compressionType == BrokerCompressionType.ZSTD.name) && versionId < 10) {
+      if (logConfig.exists(_.compressionType == BrokerCompressionType.ZSTD) && versionId < 10) {
         trace(s"Fetching messages is disabled for ZStandard compressed partition $tp. Sending unsupported version response to $clientId.")
         FetchResponse.partitionResponse(tp, Errors.UNSUPPORTED_COMPRESSION_TYPE)
       } else {
@@ -2364,7 +2364,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     ensureInterBrokerVersion(IBP_0_11_0_IV0)
     // We are checking for AlterCluster permissions first. If it is not present, we are authorizing cluster operation
     // The latter will throw an exception if it is denied.
-    if (!authHelper.authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME)) {
+    if (!authHelper.authorize(request.context, ALTER, CLUSTER, CLUSTER_NAME, logIfDenied = false)) {
       authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
     }
     val writeTxnMarkersRequest = request.body[WriteTxnMarkersRequest]

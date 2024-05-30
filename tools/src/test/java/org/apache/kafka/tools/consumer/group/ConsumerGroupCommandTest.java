@@ -38,7 +38,6 @@ import scala.collection.Seq;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -139,20 +138,12 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
         return service;
     }
 
-    ConsumerGroupExecutor addConsumerGroupExecutor(int numConsumers) {
-        return addConsumerGroupExecutor(numConsumers, TOPIC, GROUP, RangeAssignor.class.getName(), Optional.empty(), Optional.empty(), false, GroupProtocol.CLASSIC.name);
-    }
-
     ConsumerGroupExecutor addConsumerGroupExecutor(int numConsumers, String groupProtocol) {
         return addConsumerGroupExecutor(numConsumers, TOPIC, GROUP, RangeAssignor.class.getName(), Optional.empty(), Optional.empty(), false, groupProtocol);
     }
 
     ConsumerGroupExecutor addConsumerGroupExecutor(int numConsumers, String groupProtocol, Optional<String> remoteAssignor) {
         return addConsumerGroupExecutor(numConsumers, TOPIC, GROUP, RangeAssignor.class.getName(), remoteAssignor, Optional.empty(), false, groupProtocol);
-    }
-
-    ConsumerGroupExecutor addConsumerGroupExecutor(int numConsumers, String group, String groupProtocol) {
-        return addConsumerGroupExecutor(numConsumers, TOPIC, group, RangeAssignor.class.getName(), Optional.empty(), Optional.empty(), false, groupProtocol);
     }
 
     ConsumerGroupExecutor addConsumerGroupExecutor(int numConsumers, String topic, String group, String groupProtocol) {
@@ -165,10 +156,6 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
             topic, strategy, remoteAssignor, customPropsOpt, syncCommit);
         addExecutor(executor);
         return executor;
-    }
-
-    SimpleConsumerGroupExecutor addSimpleGroupExecutor(String group) {
-        return addSimpleGroupExecutor(Arrays.asList(new TopicPartition(TOPIC, 0)), group);
     }
 
     SimpleConsumerGroupExecutor addSimpleGroupExecutor(Collection<TopicPartition> partitions, String group) {
@@ -337,14 +324,6 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
 
     public static Stream<Arguments> getTestQuorumAndGroupProtocolParametersAll() {
         return BaseConsumerTest.getTestQuorumAndGroupProtocolParametersAll();
-    }
-
-    public static Stream<Arguments> getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly() {
-        return BaseConsumerTest.getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly();
-    }
-
-    public static Stream<Arguments> getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly() {
-        return BaseConsumerTest.getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly();
     }
 
     @SuppressWarnings({"deprecation"})

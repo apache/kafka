@@ -17,7 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
+import org.apache.kafka.coordinator.group.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
 
@@ -182,7 +182,7 @@ public class GroupCoordinatorConfig {
     /**
      * The consumer group assignors.
      */
-    public final List<PartitionAssignor> consumerGroupAssignors;
+    public final List<ConsumerGroupPartitionAssignor> consumerGroupAssignors;
 
     /**
      * The offsets topic segment bytes should be kept relatively small to facilitate faster
@@ -252,12 +252,17 @@ public class GroupCoordinatorConfig {
      */
     public final ConsumerGroupMigrationPolicy consumerGroupMigrationPolicy;
 
+    /**
+     * The compression type used to compress records in batches.
+     */
+    public final CompressionType compressionType;
+
     public GroupCoordinatorConfig(
         int numThreads,
         int consumerGroupSessionTimeoutMs,
         int consumerGroupHeartbeatIntervalMs,
         int consumerGroupMaxSize,
-        List<PartitionAssignor> consumerGroupAssignors,
+        List<ConsumerGroupPartitionAssignor> consumerGroupAssignors,
         int offsetsTopicSegmentBytes,
         int offsetMetadataMaxSize,
         int classicGroupMaxSize,
@@ -268,7 +273,8 @@ public class GroupCoordinatorConfig {
         long offsetsRetentionCheckIntervalMs,
         long offsetsRetentionMs,
         int offsetCommitTimeoutMs,
-        ConsumerGroupMigrationPolicy consumerGroupMigrationPolicy
+        ConsumerGroupMigrationPolicy consumerGroupMigrationPolicy,
+        CompressionType compressionType
     ) {
         this.numThreads = numThreads;
         this.consumerGroupSessionTimeoutMs = consumerGroupSessionTimeoutMs;
@@ -286,5 +292,6 @@ public class GroupCoordinatorConfig {
         this.offsetsRetentionMs = offsetsRetentionMs;
         this.offsetCommitTimeoutMs = offsetCommitTimeoutMs;
         this.consumerGroupMigrationPolicy = consumerGroupMigrationPolicy;
+        this.compressionType = compressionType;
     }
 }

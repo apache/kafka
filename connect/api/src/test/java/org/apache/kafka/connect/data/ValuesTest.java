@@ -82,6 +82,20 @@ public class ValuesTest {
     }
 
     @Test
+    public void shouldParseNullString() {
+        SchemaAndValue schemaAndValue = Values.parseString(null);
+        assertNull(schemaAndValue.schema());
+        assertNull(schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldParseEmptyString() {
+        SchemaAndValue schemaAndValue = Values.parseString("");
+        assertEquals(Schema.STRING_SCHEMA, schemaAndValue.schema());
+        assertEquals("", schemaAndValue.value());
+    }
+
+    @Test
     @Timeout(5)
     public void shouldNotEncounterInfiniteLoop() {
         // This byte sequence gets parsed as CharacterIterator.DONE and can cause issues if
@@ -246,6 +260,20 @@ public class ValuesTest {
 
     @Test
     public void shouldConvertNullValue() {
+        assertRoundTrip(Schema.INT8_SCHEMA, Schema.STRING_SCHEMA, null);
+        assertRoundTrip(Schema.OPTIONAL_INT8_SCHEMA, Schema.STRING_SCHEMA, null);
+        assertRoundTrip(Schema.INT16_SCHEMA, Schema.STRING_SCHEMA, null);
+        assertRoundTrip(Schema.OPTIONAL_INT16_SCHEMA, Schema.STRING_SCHEMA, null);
+        assertRoundTrip(Schema.INT32_SCHEMA, Schema.STRING_SCHEMA, null);
+        assertRoundTrip(Schema.OPTIONAL_INT32_SCHEMA, Schema.STRING_SCHEMA, null);
+        assertRoundTrip(Schema.INT64_SCHEMA, Schema.STRING_SCHEMA, null);
+        assertRoundTrip(Schema.OPTIONAL_INT64_SCHEMA, Schema.STRING_SCHEMA, null);
+        assertRoundTrip(Schema.FLOAT32_SCHEMA, Schema.STRING_SCHEMA, null);
+        assertRoundTrip(Schema.OPTIONAL_FLOAT32_SCHEMA, Schema.STRING_SCHEMA, null);
+        assertRoundTrip(Schema.FLOAT64_SCHEMA, Schema.STRING_SCHEMA, null);
+        assertRoundTrip(Schema.OPTIONAL_FLOAT64_SCHEMA, Schema.STRING_SCHEMA, null);
+        assertRoundTrip(Schema.BOOLEAN_SCHEMA, Schema.STRING_SCHEMA, null);
+        assertRoundTrip(Schema.OPTIONAL_BOOLEAN_SCHEMA, Schema.STRING_SCHEMA, null);
         assertRoundTrip(Schema.STRING_SCHEMA, Schema.STRING_SCHEMA, null);
         assertRoundTrip(Schema.OPTIONAL_STRING_SCHEMA, Schema.STRING_SCHEMA, null);
     }
@@ -253,12 +281,20 @@ public class ValuesTest {
     @Test
     public void shouldConvertBooleanValues() {
         assertRoundTrip(Schema.BOOLEAN_SCHEMA, Schema.BOOLEAN_SCHEMA, Boolean.FALSE);
+        assertShortCircuit(Schema.BOOLEAN_SCHEMA, Boolean.FALSE);
         SchemaAndValue resultFalse = roundTrip(Schema.BOOLEAN_SCHEMA, "false");
+        assertEquals(Schema.BOOLEAN_SCHEMA, resultFalse.schema());
+        assertEquals(Boolean.FALSE, resultFalse.value());
+        resultFalse = roundTrip(Schema.BOOLEAN_SCHEMA, "0");
         assertEquals(Schema.BOOLEAN_SCHEMA, resultFalse.schema());
         assertEquals(Boolean.FALSE, resultFalse.value());
 
         assertRoundTrip(Schema.BOOLEAN_SCHEMA, Schema.BOOLEAN_SCHEMA, Boolean.TRUE);
+        assertShortCircuit(Schema.BOOLEAN_SCHEMA, Boolean.TRUE);
         SchemaAndValue resultTrue = roundTrip(Schema.BOOLEAN_SCHEMA, "true");
+        assertEquals(Schema.BOOLEAN_SCHEMA, resultTrue.schema());
+        assertEquals(Boolean.TRUE, resultTrue.value());
+        resultTrue = roundTrip(Schema.BOOLEAN_SCHEMA, "1");
         assertEquals(Schema.BOOLEAN_SCHEMA, resultTrue.schema());
         assertEquals(Boolean.TRUE, resultTrue.value());
     }
@@ -266,6 +302,38 @@ public class ValuesTest {
     @Test
     public void shouldFailToParseInvalidBooleanValueString() {
         assertThrows(DataException.class, () -> Values.convertToBoolean(Schema.STRING_SCHEMA, "\"green\""));
+    }
+
+    @Test
+    public void shouldConvertInt8() {
+        assertRoundTrip(Schema.INT8_SCHEMA, Schema.INT8_SCHEMA, (byte) 0);
+        assertRoundTrip(Schema.INT8_SCHEMA, Schema.INT8_SCHEMA, (byte) 1);
+    }
+
+    @Test
+    public void shouldConvertInt64() {
+        assertRoundTrip(Schema.INT64_SCHEMA, Schema.INT64_SCHEMA, (long) 1);
+        assertShortCircuit(Schema.INT64_SCHEMA, (long) 1);
+    }
+
+    @Test
+    public void shouldConvertFloat32() {
+        assertRoundTrip(Schema.FLOAT32_SCHEMA, Schema.FLOAT32_SCHEMA, (float) 1);
+        assertShortCircuit(Schema.FLOAT32_SCHEMA, (float) 1);
+    }
+
+    @Test
+    public void shouldConvertFloat64() {
+        assertRoundTrip(Schema.FLOAT64_SCHEMA, Schema.FLOAT64_SCHEMA, (double) 1);
+        assertShortCircuit(Schema.FLOAT64_SCHEMA, (double) 1);
+    }
+
+    @Test
+    public void shouldConvertEmptyStruct() {
+        Struct struct = new Struct(SchemaBuilder.struct().build());
+        assertThrows(DataException.class, () -> Values.convertToStruct(struct.schema(), null));
+        assertThrows(DataException.class, () -> Values.convertToStruct(struct.schema(), ""));
+        Values.convertToStruct(struct.schema(), struct);
     }
 
     @Test
@@ -361,7 +429,27 @@ public class ValuesTest {
         assertEquals(3, list.size());
         assertEquals(1, ((Number) list.get(0)).intValue());
         assertEquals(2, ((Number) list.get(1)).intValue());
-        assertEquals(thirdValue, ((Number) list.get(2)).intValue());
+        assertEquals(thirdValue, list.get(2));
+    }
+
+    @Test
+    public void shouldConvertIntegralTypesToFloat() {
+        float thirdValue = Float.MAX_VALUE;
+        List<?> list = Values.convertToList(Schema.STRING_SCHEMA, "[1, 2, " + thirdValue + "]");
+        assertEquals(3, list.size());
+        assertEquals(1, ((Number) list.get(0)).intValue());
+        assertEquals(2, ((Number) list.get(1)).intValue());
+        assertEquals(thirdValue, list.get(2));
+    }
+
+    @Test
+    public void shouldConvertIntegralTypesToDouble() {
+        double thirdValue = Double.MAX_VALUE;
+        List<?> list = Values.convertToList(Schema.STRING_SCHEMA, "[1, 2, " + thirdValue + "]");
+        assertEquals(3, list.size());
+        assertEquals(1, ((Number) list.get(0)).intValue());
+        assertEquals(2, ((Number) list.get(1)).intValue());
+        assertEquals(thirdValue, list.get(2));
     }
 
     /**
@@ -434,12 +522,56 @@ public class ValuesTest {
         assertEquals(expected, list);
     }
 
+    @Test
+    public void shouldParseNestedArray() {
+        SchemaAndValue schemaAndValue = Values.parseString("[[]]");
+        assertEquals(Type.ARRAY, schemaAndValue.schema().type());
+        assertEquals(Type.ARRAY, schemaAndValue.schema().valueSchema().type());
+    }
+
+    @Test
+    public void shouldParseArrayContainingMap() {
+        SchemaAndValue schemaAndValue = Values.parseString("[{}]");
+        assertEquals(Type.ARRAY, schemaAndValue.schema().type());
+        assertEquals(Type.MAP, schemaAndValue.schema().valueSchema().type());
+    }
+
+    @Test
+    public void shouldParseNestedMap() {
+        SchemaAndValue schemaAndValue = Values.parseString("{\"a\":{}}");
+        assertEquals(Type.MAP, schemaAndValue.schema().type());
+        assertEquals(Type.MAP, schemaAndValue.schema().valueSchema().type());
+    }
+
+    @Test
+    public void shouldParseMapContainingArray() {
+        SchemaAndValue schemaAndValue = Values.parseString("{\"a\":[]}");
+        assertEquals(Type.MAP, schemaAndValue.schema().type());
+        assertEquals(Type.ARRAY, schemaAndValue.schema().valueSchema().type());
+    }
+
     /**
      * We can't infer or successfully parse into a different type, so this returns the same string.
      */
     @Test
     public void shouldParseStringListWithExtraDelimitersAndReturnString() {
         String str = "[1, 2, 3,,,]";
+        SchemaAndValue result = Values.parseString(str);
+        assertEquals(Type.STRING, result.schema().type());
+        assertEquals(str, result.value());
+    }
+
+    @Test
+    public void shouldParseStringListWithNullLastAsString() {
+        String str = "[1, null]";
+        SchemaAndValue result = Values.parseString(str);
+        assertEquals(Type.STRING, result.schema().type());
+        assertEquals(str, result.value());
+    }
+
+    @Test
+    public void shouldParseStringListWithNullFirstAsString() {
+        String str = "[null, 1]";
         SchemaAndValue result = Values.parseString(str);
         assertEquals(Type.STRING, result.schema().type());
         assertEquals(str, result.value());
@@ -583,6 +715,13 @@ public class ValuesTest {
         assertEquals(Time.LOGICAL_NAME, valueSchema.name());
         java.util.Date expected = new SimpleDateFormat(Values.ISO_8601_TIME_FORMAT_PATTERN).parse(timeStr);
         assertEquals(Collections.singletonMap(keyStr, expected), result.value());
+    }
+
+    @Test
+    public void shouldFailToConvertNullTime() {
+        assertThrows(DataException.class, () -> Values.convertToTime(null, null));
+        assertThrows(DataException.class, () -> Values.convertToDate(null, null));
+        assertThrows(DataException.class, () -> Values.convertToTimestamp(null, null));
     }
 
     /**
@@ -802,6 +941,51 @@ public class ValuesTest {
         assertEquals(value, Values.convertToDecimal(null, buffer, 1));
     }
 
+    @Test
+    public void shouldFailToConvertNullToDecimal() {
+        assertThrows(DataException.class, () -> Values.convertToDecimal(null, null, 1));
+    }
+
+    @Test
+    public void shouldInferByteSchema() {
+        byte[] bytes = new byte[1];
+        Schema byteSchema = Values.inferSchema(bytes);
+        assertEquals(Schema.BYTES_SCHEMA, byteSchema);
+        Schema byteBufferSchema = Values.inferSchema(ByteBuffer.wrap(bytes));
+        assertEquals(Schema.BYTES_SCHEMA, byteBufferSchema);
+    }
+
+    @Test
+    public void shouldInferStructSchema() {
+        Struct struct = new Struct(SchemaBuilder.struct().build());
+        Schema structSchema = Values.inferSchema(struct);
+        assertEquals(struct.schema(), structSchema);
+    }
+
+    @Test
+    public void shouldInferNoSchemaForEmptyList() {
+        Schema listSchema = Values.inferSchema(Collections.emptyList());
+        assertNull(listSchema);
+    }
+
+    @Test
+    public void shouldInferNoSchemaForListContainingObject() {
+        Schema listSchema = Values.inferSchema(Collections.singletonList(new Object()));
+        assertNull(listSchema);
+    }
+
+    @Test
+    public void shouldInferNoSchemaForEmptyMap() {
+        Schema listSchema = Values.inferSchema(Collections.emptyMap());
+        assertNull(listSchema);
+    }
+
+    @Test
+    public void shouldInferNoSchemaForMapContainingObject() {
+        Schema listSchema = Values.inferSchema(Collections.singletonMap(new Object(), new Object()));
+        assertNull(listSchema);
+    }
+
     /**
      * Test parsing distinct number-like types (strings containing numbers, and logical Decimals) in the same list
      * The parser does not convert Numbers to Decimals, or Strings containing numbers to Numbers automatically.
@@ -817,6 +1001,17 @@ public class ValuesTest {
         assertEquals(Type.ARRAY, schema.type());
         assertNull(schema.valueSchema());
         assertEquals(expected, schemaAndValue.value());
+    }
+
+    @Test
+    public void shouldParseArrayOfOnlyDecimals() {
+        List<Object> decimals = Arrays.asList(BigDecimal.valueOf(Long.MAX_VALUE).add(BigDecimal.ONE),
+                BigDecimal.valueOf(Long.MIN_VALUE).subtract(BigDecimal.ONE));
+        SchemaAndValue schemaAndValue = Values.parseString(decimals.toString());
+        Schema schema = schemaAndValue.schema();
+        assertEquals(Type.ARRAY, schema.type());
+        assertEquals(Decimal.schema(0), schema.valueSchema());
+        assertEquals(decimals, schemaAndValue.value());
     }
 
     @Test
@@ -949,6 +1144,16 @@ public class ValuesTest {
         assertEquals(value, (Double) schemaAndValue.value(), 0);
     }
 
+    @Test
+    public void shouldParseFractionalPartsAsIntegerWhenNoFractionalPart() {
+        assertEquals(new SchemaAndValue(Schema.INT8_SCHEMA, (byte) 1), Values.parseString("1.0"));
+        assertEquals(new SchemaAndValue(Schema.FLOAT32_SCHEMA, 1.1f), Values.parseString("1.1"));
+        assertEquals(new SchemaAndValue(Schema.INT16_SCHEMA, (short) 300), Values.parseString("300.0"));
+        assertEquals(new SchemaAndValue(Schema.FLOAT32_SCHEMA, 300.01f), Values.parseString("300.01"));
+        assertEquals(new SchemaAndValue(Schema.INT32_SCHEMA, 66000), Values.parseString("66000.0"));
+        assertEquals(new SchemaAndValue(Schema.FLOAT32_SCHEMA, 66000.0008f), Values.parseString("66000.0008"));
+    }
+
     protected void assertParsed(String input) {
         assertParsed(input, input);
     }
@@ -1011,47 +1216,48 @@ public class ValuesTest {
             desiredSchema = Values.inferSchema(input);
             assertNotNull(desiredSchema);
         }
+        return convertTo(desiredSchema, serialized);
+    }
+
+    protected SchemaAndValue convertTo(Schema desiredSchema, Object value) {
         Object newValue = null;
-        Schema newSchema = null;
         switch (desiredSchema.type()) {
             case STRING:
-                newValue = Values.convertToString(Schema.STRING_SCHEMA, serialized);
+                newValue = Values.convertToString(Schema.STRING_SCHEMA, value);
                 break;
             case INT8:
-                newValue = Values.convertToByte(Schema.STRING_SCHEMA, serialized);
+                newValue = Values.convertToByte(Schema.STRING_SCHEMA, value);
                 break;
             case INT16:
-                newValue = Values.convertToShort(Schema.STRING_SCHEMA, serialized);
+                newValue = Values.convertToShort(Schema.STRING_SCHEMA, value);
                 break;
             case INT32:
-                newValue = Values.convertToInteger(Schema.STRING_SCHEMA, serialized);
+                newValue = Values.convertToInteger(Schema.STRING_SCHEMA, value);
                 break;
             case INT64:
-                newValue = Values.convertToLong(Schema.STRING_SCHEMA, serialized);
+                newValue = Values.convertToLong(Schema.STRING_SCHEMA, value);
                 break;
             case FLOAT32:
-                newValue = Values.convertToFloat(Schema.STRING_SCHEMA, serialized);
+                newValue = Values.convertToFloat(Schema.STRING_SCHEMA, value);
                 break;
             case FLOAT64:
-                newValue = Values.convertToDouble(Schema.STRING_SCHEMA, serialized);
+                newValue = Values.convertToDouble(Schema.STRING_SCHEMA, value);
                 break;
             case BOOLEAN:
-                newValue = Values.convertToBoolean(Schema.STRING_SCHEMA, serialized);
+                newValue = Values.convertToBoolean(Schema.STRING_SCHEMA, value);
                 break;
             case ARRAY:
-                newValue = Values.convertToList(Schema.STRING_SCHEMA, serialized);
+                newValue = Values.convertToList(Schema.STRING_SCHEMA, value);
                 break;
             case MAP:
-                newValue = Values.convertToMap(Schema.STRING_SCHEMA, serialized);
+                newValue = Values.convertToMap(Schema.STRING_SCHEMA, value);
                 break;
             case STRUCT:
-                newValue = Values.convertToStruct(Schema.STRING_SCHEMA, serialized);
-                break;
             case BYTES:
                 fail("unexpected schema type");
                 break;
         }
-        newSchema = Values.inferSchema(newValue);
+        Schema newSchema = Values.inferSchema(newValue);
         return new SchemaAndValue(newSchema, newValue);
     }
 
@@ -1073,6 +1279,18 @@ public class ValuesTest {
             assertEquals(schema, result2.schema());
             assertEquals(value, result2.value());
             assertEquals(result, result2);
+        }
+    }
+
+    protected void assertShortCircuit(Schema schema, Object value) {
+        SchemaAndValue result = convertTo(schema, value);
+
+        if (value == null) {
+            assertNull(result.schema());
+            assertNull(result.value());
+        } else {
+            assertEquals(value, result.value());
+            assertEquals(schema, result.schema());
         }
     }
 }
