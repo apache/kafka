@@ -351,9 +351,9 @@ public final class TaskAssignmentUtils {
                         assignmentsByUuid,
                         assignmentGraph.taskCountByClient,
                         assignmentGraph.clientByTask,
-                        (assignment, taskId) -> assignment.assignTask(new AssignedTask(taskId, AssignedTask.Type.ACTIVE)),
-                        (assignment, taskId) -> assignment.removeTask(new AssignedTask(taskId, AssignedTask.Type.ACTIVE)),
-                        (assignment, taskId) -> assignment.tasks().containsKey(taskId)
+                        (assignment, taskId) -> assignment.assignTask(new AssignedTask(taskId, AssignedTask.Type.STANDBY)),
+                        (assignment, taskId) -> assignment.removeTask(new AssignedTask(taskId, AssignedTask.Type.STANDBY)),
+                        (assignment, taskId) -> assignment.tasks().containsKey(taskId) && assignment.tasks().get(taskId).type() == AssignedTask.Type.STANDBY
                     );
                 }
             }
