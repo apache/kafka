@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import java.time.Instant;
 import java.util.Optional;
+import java.util.function.Function;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
@@ -555,18 +556,21 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         RackUtils.annotateTopicPartitionsWithRackInfo(cluster, internalTopicManager, allTopicPartitions);
 
-        final Set<TaskInfo> logicalTasks = logicalTaskIds.stream().map(taskId -> {
-            final Set<String> stateStoreNames = topologyMetadata
-                .stateStoreNameToSourceTopicsForTopology(taskId.topologyName())
-                .keySet();
-            final Set<TaskTopicPartition> topicPartitions = topicPartitionsForTask.get(taskId);
-            return new DefaultTaskInfo(
-                taskId,
-                !stateStoreNames.isEmpty(),
-                stateStoreNames,
-                topicPartitions
-            );
-        }).collect(Collectors.toSet());
+        final Map<TaskId, TaskInfo> logicalTasks = logicalTaskIds.stream().collect(Collectors.toMap(
+            Function.identity(),
+            taskId -> {
+                final Set<String> stateStoreNames = topologyMetadata
+                    .stateStoreNameToSourceTopicsForTopology(taskId.topologyName())
+                    .keySet();
+                final Set<TaskTopicPartition> topicPartitions = topicPartitionsForTask.get(taskId);
+                return new DefaultTaskInfo(
+                    taskId,
+                    !stateStoreNames.isEmpty(),
+                    stateStoreNames,
+                    topicPartitions
+                );
+            }
+        ));
 
         return new DefaultApplicationState(
             assignmentConfigs.toPublicAssignmentConfigs(),
@@ -728,12 +732,12 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
      * populate the stateful tasks that have been assigned to the clients
      */
     private UserTaskAssignmentListener assignTasksToClients(final Cluster fullMetadata,
-                                      final Set<String> allSourceTopics,
-                                      final Map<Subtopology, TopicsInfo> topicGroups,
-                                      final Map<UUID, ClientMetadata> clientMetadataMap,
-                                      final Map<TaskId, Set<TopicPartition>> partitionsForTask,
-                                      final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer,
-                                      final Set<TaskId> statefulTasks) {
+                                                            final Set<String> allSourceTopics,
+                                                            final Map<Subtopology, TopicsInfo> topicGroups,
+                                                            final Map<UUID, ClientMetadata> clientMetadataMap,
+                                                            final Map<TaskId, Set<TopicPartition>> partitionsForTask,
+                                                            final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer,
+                                                            final Set<TaskId> statefulTasks) {
         if (!statefulTasks.isEmpty()) {
             throw new TaskAssignmentException("The stateful tasks should not be populated before assigning tasks to clients");
         }
@@ -775,7 +779,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         final Optional<org.apache.kafka.streams.processor.assignment.TaskAssignor> userTaskAssignor =
             userTaskAssignorSupplier.get();
-        UserTaskAssignmentListener userTaskAssignmentListener = (GroupAssignment assignment, GroupSubscription subscription) -> { };
+        final UserTaskAssignmentListener userTaskAssignmentListener;
         if (userTaskAssignor.isPresent()) {
             final ApplicationState applicationState = buildApplicationState(
                 taskManager.topologyMetadata(),
@@ -785,12 +789,11 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             );
             final org.apache.kafka.streams.processor.assignment.TaskAssignor assignor = userTaskAssignor.get();
             final TaskAssignment taskAssignment = assignor.assign(applicationState);
-            processStreamsPartitionAssignment(clientMetadataMap, taskAssignment);
             final AssignmentError assignmentError = validateTaskAssignment(applicationState, taskAssignment);
-            userTaskAssignmentListener = (GroupAssignment assignment, GroupSubscription subscription) -> {
-                assignor.onAssignmentComputed(assignment, subscription, assignmentError);
-            };
+            processStreamsPartitionAssignment(clientMetadataMap, taskAssignment);
+            userTaskAssignmentListener = (assignment, subscription) -> assignor.onAssignmentComputed(assignment, subscription, assignmentError);
         } else {
+            userTaskAssignmentListener = (assignment, subscription) -> { };
             final TaskAssignor taskAssignor = createTaskAssignor(lagComputationSuccessful);
             final RackAwareTaskAssignor rackAwareTaskAssignor = new RackAwareTaskAssignor(
                 fullMetadata,
@@ -1564,7 +1567,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final Map<TaskId, ProcessId> standbyTasksInOutput = new HashMap<>();
         for (final KafkaStreamsAssignment assignment : assignments) {
             final Set<TaskId> tasksForAssignment = new HashSet<>();
-            for (final KafkaStreamsAssignment.AssignedTask task : assignment.assignment()) {
+            for (final KafkaStreamsAssignment.AssignedTask task : assignment.tasks().values()) {
                 if (activeTasksInOutput.containsKey(task.id()) && task.type() == KafkaStreamsAssignment.AssignedTask.Type.ACTIVE) {
                     log.error("Assignment is invalid: active task {} was assigned to multiple KafkaStreams clients: {} and {}",
                         task.id(), assignment.processId().id(), activeTasksInOutput.get(task.id()).id());
@@ -1614,7 +1617,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         final Set<TaskId> taskIdsInInput = applicationState.allTasks().keySet();
         for (final KafkaStreamsAssignment assignment : assignments) {
-            for (final KafkaStreamsAssignment.AssignedTask task : assignment.assignment()) {
+            for (final KafkaStreamsAssignment.AssignedTask task : assignment.tasks().values()) {
                 if (!taskIdsInInput.contains(task.id())) {
                     log.error("Assignment is invalid: task {} assigned to KafkaStreams client {} was unknown",
                         task.id(), assignment.processId().id());
