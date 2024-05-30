@@ -99,15 +99,15 @@ public class KStreamKStreamOuterJoinTest {
 
             inputTopic1.pipeInput(0, "A0", 0L);
             inputTopic1.pipeInput(0, "A0-0", 0L);
-            inputTopic2.pipeInput(0, 0L, 0L);
-            inputTopic2.pipeInput(1, 1L, 0L);
+            inputTopic2.pipeInput(0, 10L, 0L);
+            inputTopic2.pipeInput(1, 21L, 0L);
 
             processor.checkAndClearProcessResult(
                 new KeyValueTimestamp<>(0, "A0+null", 0L),
                 new KeyValueTimestamp<>(0, "A0-0+null", 0L),
-                new KeyValueTimestamp<>(0, "A0+0", 0L),
-                new KeyValueTimestamp<>(0, "A0-0+0", 0L),
-                new KeyValueTimestamp<>(1, "null+1", 0L)
+                new KeyValueTimestamp<>(0, "A0+10", 0L),
+                new KeyValueTimestamp<>(0, "A0-0+10", 0L),
+                new KeyValueTimestamp<>(1, "null+21", 0L)
             );
         }
     }
@@ -141,15 +141,15 @@ public class KStreamKStreamOuterJoinTest {
             // verifies non-joined duplicates are emitted when window has closed
             inputTopic1.pipeInput(0, "A0", 0L);
             inputTopic1.pipeInput(0, "A0-0", 0L);
-            inputTopic2.pipeInput(1, 1L, 0L);
-            inputTopic2.pipeInput(1, 10L, 0L);
-            inputTopic2.pipeInput(1, 0L, 111L);
+            inputTopic2.pipeInput(1, 11L, 0L);
+            inputTopic2.pipeInput(1, 12L, 0L);
+            inputTopic2.pipeInput(1, 10L, 111L);
             // bump stream-time to trigger outer-join results
             inputTopic2.pipeInput(3, 100L, 211);
 
             processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(1, "null+1", 0L),
-                new KeyValueTimestamp<>(1, "null+10", 0L),
+                new KeyValueTimestamp<>(1, "null+11", 0L),
+                new KeyValueTimestamp<>(1, "null+12", 0L),
                 new KeyValueTimestamp<>(0, "A0+null", 0L),
                 new KeyValueTimestamp<>(0, "A0-0+null", 0L)
             );
@@ -157,22 +157,22 @@ public class KStreamKStreamOuterJoinTest {
             // verifies joined duplicates are emitted
             inputTopic1.pipeInput(2, "A2", 200L);
             inputTopic1.pipeInput(2, "A2-0", 200L);
-            inputTopic2.pipeInput(2, 2L, 201L);
-            inputTopic2.pipeInput(2, 20L, 201L);
+            inputTopic2.pipeInput(2, 13L, 201L);
+            inputTopic2.pipeInput(2, 14L, 201L);
 
             processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(2, "A2+2", 201L),
-                new KeyValueTimestamp<>(2, "A2-0+2", 201L),
-                new KeyValueTimestamp<>(2, "A2+20", 201L),
-                new KeyValueTimestamp<>(2, "A2-0+20", 201L)
+                new KeyValueTimestamp<>(2, "A2+13", 201L),
+                new KeyValueTimestamp<>(2, "A2-0+13", 201L),
+                new KeyValueTimestamp<>(2, "A2+14", 201L),
+                new KeyValueTimestamp<>(2, "A2-0+14", 201L)
             );
 
-            // this record should expired non-joined records; only null+0 will be emitted because
+            // this record should expired non-joined records; only null+10 will be emitted because
             // it did not have a join
             inputTopic2.pipeInput(3, 100L, 1500L);
 
             processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(1, "null+0", 111L),
+                new KeyValueTimestamp<>(1, "null+10", 111L),
                 new KeyValueTimestamp<>(3, "null+100", 211)
             );
         }
@@ -213,9 +213,9 @@ public class KStreamKStreamOuterJoinTest {
             processor.checkAndClearProcessResult();
 
             // Join detected; No null-joins emitted
-            inputTopic2.pipeInput(1, 1L, windowStart + 3L);
+            inputTopic2.pipeInput(1, 11L, windowStart + 3L);
             processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(1, "A1+1", windowStart + 3L)
+                new KeyValueTimestamp<>(1, "A1+11", windowStart + 3L)
             );
 
             // Dummy record in left topic will emit expired non-joined records from the left topic
@@ -268,9 +268,9 @@ public class KStreamKStreamOuterJoinTest {
             processor.checkAndClearProcessResult();
 
             // Join detected; No null-joins emitted
-            inputTopic2.pipeInput(1, 1L, windowStart + 3L);
+            inputTopic2.pipeInput(1, 11L, windowStart + 3L);
             processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(1, "A1+1", windowStart + 3L)
+                new KeyValueTimestamp<>(1, "A1+11", windowStart + 3L)
             );
 
             // Dummy record in right topic will emit expired non-joined records from the left topic
@@ -317,22 +317,22 @@ public class KStreamKStreamOuterJoinTest {
             final long windowStart = 0L;
 
             // No joins detected; No null-joins emitted
-            inputTopic2.pipeInput(0, 0L, windowStart + 1L);
-            inputTopic2.pipeInput(1, 1L, windowStart + 2L);
-            inputTopic2.pipeInput(0, 10L, windowStart + 3L);
+            inputTopic2.pipeInput(0, 10L, windowStart + 1L);
+            inputTopic2.pipeInput(1, 11L, windowStart + 2L);
+            inputTopic2.pipeInput(0, 12L, windowStart + 3L);
             processor.checkAndClearProcessResult();
 
             // Join detected; No null-joins emitted
-            inputTopic1.pipeInput(1, "a1", windowStart + 3L);
+            inputTopic1.pipeInput(1, "A1", windowStart + 3L);
             processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(1, "a1+1", windowStart + 3L)
+                new KeyValueTimestamp<>(1, "A1+11", windowStart + 3L)
             );
 
             // Dummy record in left topic will emit expired non-joined records from the right topic
             inputTopic1.pipeInput(2, "dummy", windowStart + 401L);
             processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(0, "null+0", windowStart + 1L),
-                new KeyValueTimestamp<>(0, "null+10", windowStart + 3L)
+                new KeyValueTimestamp<>(0, "null+10", windowStart + 1L),
+                new KeyValueTimestamp<>(0, "null+12", windowStart + 3L)
             );
 
             // Process the dummy joined record
@@ -372,22 +372,22 @@ public class KStreamKStreamOuterJoinTest {
             final long windowStart = 0L;
 
             // No joins detected; No null-joins emitted
-            inputTopic2.pipeInput(0, 0L, windowStart + 1L);
-            inputTopic2.pipeInput(1, 1L, windowStart + 2L);
-            inputTopic2.pipeInput(0, 10L, windowStart + 3L);
+            inputTopic2.pipeInput(0, 10L, windowStart + 1L);
+            inputTopic2.pipeInput(1, 11L, windowStart + 2L);
+            inputTopic2.pipeInput(0, 12L, windowStart + 3L);
             processor.checkAndClearProcessResult();
 
             // Join detected; No null-joins emitted
-            inputTopic1.pipeInput(1, "a1", windowStart + 3L);
+            inputTopic1.pipeInput(1, "A1", windowStart + 3L);
             processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(1, "a1+1", windowStart + 3L)
+                new KeyValueTimestamp<>(1, "A1+11", windowStart + 3L)
             );
 
             // Dummy record in right topic will emit expired non-joined records from the right topic
             inputTopic2.pipeInput(2, 100L, windowStart + 401L);
             processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(0, "null+0", windowStart + 1L),
-                new KeyValueTimestamp<>(0, "null+10", windowStart + 3L)
+                new KeyValueTimestamp<>(0, "null+10", windowStart + 1L),
+                new KeyValueTimestamp<>(0, "null+12", windowStart + 3L)
             );
 
             // Process the dummy joined record
@@ -439,11 +439,11 @@ public class KStreamKStreamOuterJoinTest {
             // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 100) }
             // w2 = { }
             // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 100) }
-            // --> w2 = { 1:a1 (ts: 110) }
-            inputTopic2.pipeInput(1, 1L, 110L);
+            // --> w2 = { 1:11 (ts: 110) }
+            inputTopic2.pipeInput(1, 11L, 110L);
             processor.checkAndClearProcessResult(
                 new KeyValueTimestamp<>(0, "A0+null", 0L),
-                new KeyValueTimestamp<>(1, "A1+1", 110L)
+                new KeyValueTimestamp<>(1, "A1+11", 110L)
             );
         }
     }
@@ -485,30 +485,30 @@ public class KStreamKStreamOuterJoinTest {
             // w1 = {}
             // w2 = {}
             // --> w1 = { 0:A0 (ts: 0) }
-            // --> w2 = { 1:a1 (ts: 0) }
+            // --> w2 = { 1:11 (ts: 0) }
             inputTopic1.pipeInput(0, "A0", 0L);
-            inputTopic2.pipeInput(1, 1L, 0L);
+            inputTopic2.pipeInput(1, 11L, 0L);
             processor.checkAndClearProcessResult();
 
             // push one item on each stream with a window time after the previous window ended (not closed); this should not produce
             // joined records because the window has ended, but will not produce non-joined records because the window has not closed.
             // w1 = { 0:A0 (ts: 0) }
-            // w2 = { 1:a1 (ts: 0) }
+            // w2 = { 1:11 (ts: 0) }
             // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 101) }
-            // --> w2 = { 1:0 (ts: 0), 0:0 (ts: 101) }
+            // --> w2 = { 1:11 (ts: 0), 0:10 (ts: 101) }
             inputTopic1.pipeInput(1, "A1", 101L);
-            inputTopic2.pipeInput(0, 0L, 101L);
+            inputTopic2.pipeInput(0, 10L, 101L);
             processor.checkAndClearProcessResult();
 
-            // push a dummy item to the any stream after the window is closed; this should produced all expired non-joined records because
+            // push a 100 item to the any stream after the window is closed; this should produced all expired non-joined records because
             // the window has closed
             // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0) }
-            // w2 = { 0:a0 (ts: 101), 1:a1 (ts: 101) }
+            // w2 = { 0:10 (ts: 101), 1:11 (ts: 101) }
             // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0) }
-            // --> w2 = { 0:a0 (ts: 101), 1:a1 (ts: 101), 0:dummy (ts: 112) }
+            // --> w2 = { 0:10 (ts: 101), 1:11 (ts: 101), 0:100 (ts: 112) }
             inputTopic2.pipeInput(0, 100L, 112);
             processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(1, "null+1", 0L),
+                new KeyValueTimestamp<>(1, "null+11", 0L),
                 new KeyValueTimestamp<>(0, "A0+null", 0L)
             );
         }
@@ -519,17 +519,17 @@ public class KStreamKStreamOuterJoinTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Integer, String> stream1;
-        final KStream<Integer, String> stream2;
+        final KStream<Integer, Long> stream2;
         final KStream<Integer, String> joined;
         final MockApiProcessorSupplier<Integer, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         stream1 = builder.stream(topic1, consumed);
-        stream2 = builder.stream(topic2, consumed);
+        stream2 = builder.stream(topic2, consumed2);
 
         joined = stream1.outerJoin(
             stream2,
             MockValueJoiner.TOSTRING_JOINER,
             JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(5)).after(ofMillis(20)),
-            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
+            StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.Long())
         );
         joined.process(supplier);
 
@@ -542,8 +542,8 @@ public class KStreamKStreamOuterJoinTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), PROPS)) {
             final TestInputTopic<Integer, String> inputTopic1 =
                 driver.createInputTopic(topic1, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
-            final TestInputTopic<Integer, String> inputTopic2 =
-                driver.createInputTopic(topic2, new IntegerSerializer(), new StringSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
+            final TestInputTopic<Integer, Long> inputTopic2 =
+                driver.createInputTopic(topic2, new IntegerSerializer(), new LongSerializer(), Instant.ofEpochMilli(0L), Duration.ZERO);
             final MockApiProcessor<Integer, String, Void, Void> processor = supplier.theCapturedProcessor();
 
             // push one item to the primary stream; this should not produce any items because there are no matching keys
@@ -569,42 +569,42 @@ public class KStreamKStreamOuterJoinTest {
             // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 30) }
             // w2 = {}
             // --> w1 = { 0:A0 (ts: 29), 1:A1 (ts: 30) }
-            // --> w2 = { 2:a2 (ts: 31) }
-            inputTopic2.pipeInput(2, "a2", 31L);
+            // --> w2 = { 2:12 (ts: 31) }
+            inputTopic2.pipeInput(2, 12L, 31L);
             processor.checkAndClearProcessResult();
 
             // push another item to the other stream; this should produce no inner joined-items because there are no matching keys 
             // and window has not ended
             // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 30) }
-            // w2 = { 2:a2 (ts: 31) }
+            // w2 = { 2:12 (ts: 31) }
             // --> w1 = { 0:A0 (ts: 29), 1:A1 (ts: 30) }
-            // --> w2 = { 2:a2 (ts: 31), 3:a3 (ts: 36) }
-            inputTopic2.pipeInput(3, "a3", 36L);
+            // --> w2 = { 2:12 (ts: 31), 3:13 (ts: 36) }
+            inputTopic2.pipeInput(3, 13L, 36L);
             processor.checkAndClearProcessResult();
 
             // push another item to the other stream; this should produce no inner joined-items because there are no matching keys 
             // and should produce a right-join-item because before window has ended
             // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 30) }
-            // w2 = { 2:a2 (ts: 31), 3:a3 (ts: 36) }
+            // w2 = { 2:12 (ts: 31), 3:13 (ts: 36) }
             // --> w1 = { 0:A0 (ts: 29), 1:A1 (ts: 30) }
-            // --> w2 = { 2:a2 (ts: 31), 3:a3 (ts: 36), 4:a4 (ts: 37) }
-            inputTopic2.pipeInput(4, "a4", 37L);
+            // --> w2 = { 2:12 (ts: 31), 3:13 (ts: 36), 4:14 (ts: 37) }
+            inputTopic2.pipeInput(4, 14L, 37L);
             processor.checkAndClearProcessResult(
-                    new KeyValueTimestamp<>(2, "null+a2", 31L)
+                    new KeyValueTimestamp<>(2, "null+12", 31L)
             );
 
             // push another item to the other stream; this should produce no inner joined-items because there are no matching keys 
             // and should produce a left-join-item because after window has ended
             // and should produce two right-join-items because before window has ended
             // w1 = { 0:A0 (ts: 29), 1:A1 (ts: 30) }
-            // w2 = { 2:a0 (ts: 31), 3:a3 (ts: 36), 4:a4 (ts: 37) }
+            // w2 = { 2:10 (ts: 31), 3:13 (ts: 36), 4:14 (ts: 37) }
             // --> w1 = { 0:A0 (ts: 29), 1:A1 (ts: 30) }
-            // --> w2 = { 2:a2 (ts: 31), 3:a3 (ts: 36), 4:a4 (ts: 37), 5:a5 (ts: 50) }
-            inputTopic2.pipeInput(5, "a5", 50L);
+            // --> w2 = { 2:12 (ts: 31), 3:13 (ts: 36), 4:14 (ts: 37), 5:15 (ts: 50) }
+            inputTopic2.pipeInput(5, 15L, 50L);
             processor.checkAndClearProcessResult(
                 new KeyValueTimestamp<>(0, "A0+null", 29L),
-                new KeyValueTimestamp<>(3, "null+a3", 36L),
-                new KeyValueTimestamp<>(4, "null+a4", 37L)
+                new KeyValueTimestamp<>(3, "null+13", 36L),
+                new KeyValueTimestamp<>(4, "null+14", 37L)
             );
         }
     }
@@ -692,59 +692,59 @@ public class KStreamKStreamOuterJoinTest {
             // w1 = { 0:A0, 1:A1 }
             // w2 {}
             // --> w1 = { 0:A0, 1:A1 }
-            // --> w2 = { 0:a0, 1:a1 }
+            // --> w2 = { 0:10, 1:11 }
             for (int i = 0; i < 2; i++) {
-                inputTopic2.pipeInput(expectedKeys[i], (long) expectedKeys[i]);
+                inputTopic2.pipeInput(expectedKeys[i], (long) expectedKeys[i] + 10);
             }
             processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(0, "A0+0", 0L),
-                new KeyValueTimestamp<>(1, "A1+1", 0L)
+                new KeyValueTimestamp<>(0, "A0+10", 0L),
+                new KeyValueTimestamp<>(1, "A1+11", 0L)
             );
 
             // push three items to the primary stream; this should produce two full-joined items
             // w1 = { 0:A0, 1:A1 }
-            // w2 = { 0:a0, 1:a1 }
+            // w2 = { 0:10, 1:11 }
             // --> w1 = { 0:A0, 1:A1, 0:B0, 1:B1, 2:B2 }
-            // --> w2 = { 0:a0, 1:a1 }
+            // --> w2 = { 0:10, 1:11 }
             for (int i = 0; i < 3; i++) {
                 inputTopic1.pipeInput(expectedKeys[i], "B" + expectedKeys[i]);
             }
             processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(0, "B0+0", 0L),
-                new KeyValueTimestamp<>(1, "B1+1", 0L)
+                new KeyValueTimestamp<>(0, "B0+10", 0L),
+                new KeyValueTimestamp<>(1, "B1+11", 0L)
             );
 
             // push all items to the other stream; this should produce five full-joined items
             // w1 = { 0:A0, 1:A1, 0:B0, 1:B1, 2:B2 }
-            // w2 = { 0:a0, 1:a1 }
+            // w2 = { 0:10, 1:11 }
             // --> w1 = { 0:A0, 1:A1, 0:B0, 1:B1, 2:B2 }
-            // --> w2 = { 0:a0, 1:a1, 0:b0, 1:b1, 2:b2, 3:b3 }
+            // --> w2 = { 0:10, 1:11, 0:20, 1:21, 2:22, 3:23 }
             for (final int expectedKey : expectedKeys) {
-                inputTopic2.pipeInput(expectedKey, (long) expectedKey);
+                inputTopic2.pipeInput(expectedKey, (long) expectedKey + 20);
             }
             processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(0, "A0+0", 0L),
-                new KeyValueTimestamp<>(0, "B0+0", 0L),
-                new KeyValueTimestamp<>(1, "A1+1", 0L),
-                new KeyValueTimestamp<>(1, "B1+1", 0L),
-                new KeyValueTimestamp<>(2, "B2+2", 0L)
+                new KeyValueTimestamp<>(0, "A0+20", 0L),
+                new KeyValueTimestamp<>(0, "B0+20", 0L),
+                new KeyValueTimestamp<>(1, "A1+21", 0L),
+                new KeyValueTimestamp<>(1, "B1+21", 0L),
+                new KeyValueTimestamp<>(2, "B2+22", 0L)
             );
 
             // push all four items to the primary stream; this should produce six full-joined items
             // w1 = { 0:A0, 1:A1, 0:B0, 1:B1, 2:B2 }
-            // w2 = { 0:a0, 1:a1, 0:b0, 1:b1, 2:b2, 3:b3 }
+            // w2 = { 0:10, 1:11, 0:20, 1:21, 2:22, 3:23 }
             // --> w1 = { 0:A0, 1:A1, 0:B0, 1:B1, 2:B2, 0:C0, 1:C1, 2:C2, 3:C3 }
-            // --> w2 = { 0:a0, 1:a1, 0:b0, 1:b1, 2:b2, 3:b3 }
+            // --> w2 = { 0:10, 1:11, 0:20, 1:21, 2:22, 3:23 }
             for (final int expectedKey : expectedKeys) {
                 inputTopic1.pipeInput(expectedKey, "C" + expectedKey);
             }
             processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(0, "C0+0", 0L),
-                new KeyValueTimestamp<>(0, "C0+0", 0L),
-                new KeyValueTimestamp<>(1, "C1+1", 0L),
-                new KeyValueTimestamp<>(1, "C1+1", 0L),
-                new KeyValueTimestamp<>(2, "C2+2", 0L),
-                new KeyValueTimestamp<>(3, "C3+3", 0L)
+                new KeyValueTimestamp<>(0, "C0+10", 0L),
+                new KeyValueTimestamp<>(0, "C0+20", 0L),
+                new KeyValueTimestamp<>(1, "C1+11", 0L),
+                new KeyValueTimestamp<>(1, "C1+21", 0L),
+                new KeyValueTimestamp<>(2, "C2+22", 0L),
+                new KeyValueTimestamp<>(3, "C3+23", 0L)
             );
 
             // push a dummy record that should expire non-joined items; it should not produce any items because
@@ -802,13 +802,13 @@ public class KStreamKStreamOuterJoinTest {
             // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0) }
             // w2 = {}
             // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0) }
-            // --> w2 = { 0:a0 (ts: 0), 1:a1 (ts: 0), 2:a2 (ts: 0), 3:a3 (ts: 0) }
+            // --> w2 = { 0:10 (ts: 0), 1:11 (ts: 0), 2:12 (ts: 0), 3:13 (ts: 0) }
             for (final int expectedKey : expectedKeys) {
-                inputTopic2.pipeInput(expectedKey, (long) expectedKey, time);
+                inputTopic2.pipeInput(expectedKey, (long) expectedKey + 10, time);
             }
             processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(0, "A0+0", 0L),
-                new KeyValueTimestamp<>(1, "A1+1", 0L)
+                new KeyValueTimestamp<>(0, "A0+10", 0L),
+                new KeyValueTimestamp<>(1, "A1+11", 0L)
             );
 
             testUpperWindowBound(expectedKeys, driver, processor);
@@ -858,21 +858,21 @@ public class KStreamKStreamOuterJoinTest {
             // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 1) }
             // w2 = {}
             // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 1) }
-            // --> w2 = { 0:a0 (ts: 100) }
+            // --> w2 = { 0:10 (ts: 100) }
             time += 100L;
-            inputTopic2.pipeInput(expectedKeys[0], (long) expectedKeys[0], time);
+            inputTopic2.pipeInput(expectedKeys[0], (long) expectedKeys[0] + 10, time);
 
             processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(0, "A0+0", 100L)
+                new KeyValueTimestamp<>(0, "A0+10", 100L)
             );
 
             // push one item to the other stream; this should produce one left-join item
             // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 1) }
-            // w2 = { 0:a0 (ts: 100) }
+            // w2 = { 0:10 (ts: 100) }
             // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 1) }
-            // --> w2 = { 0:a0 (ts: 100), 1:a1 (ts: 102) }
+            // --> w2 = { 0:10 (ts: 100), 1:11 (ts: 102) }
             time += 2;
-            inputTopic2.pipeInput(expectedKeys[1], (long) expectedKeys[1], time);
+            inputTopic2.pipeInput(expectedKeys[1], (long) expectedKeys[1] + 10, time);
 
             processor.checkAndClearProcessResult(
                 new KeyValueTimestamp<>(1, "A1+null", 1L)
@@ -880,25 +880,25 @@ public class KStreamKStreamOuterJoinTest {
 
             // push one item to the other stream; this should produce one right-join item
             // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 1) }
-            // w2 = { 0:a0 (ts: 100), 1:a1 (ts: 102) }
+            // w2 = { 0:10 (ts: 100), 1:11 (ts: 102) }
             // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 1) }
-            // --> w2 = { 0:a0 (ts: 100), 1:a1 (ts: 102), 2:a2 (ts: 103) }
+            // --> w2 = { 0:10 (ts: 100), 1:11 (ts: 102), 2:12 (ts: 103) }
             time += 1;
-            inputTopic2.pipeInput(expectedKeys[2], (long) expectedKeys[2], time);
+            inputTopic2.pipeInput(expectedKeys[2], (long) expectedKeys[2] + 10, time);
 
             processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(1, "null+1", 102L)
+                new KeyValueTimestamp<>(1, "null+11", 102L)
             );
 
             // push one item to the first stream; this should not produce one full-join item
             // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 1) }
-            // w2 = { 0:a0 (ts: 100), 1:a1 (ts: 102), 2:a2 (ts: 103) }
+            // w2 = { 0:10 (ts: 100), 1:11 (ts: 102), 2:12 (ts: 103) }
             // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 1), 2:A2 (ts: 103) }
-            // --> w2 = { 0:a0 (ts: 100), 1:a1 (ts: 102), 2:a2 (ts: 103)  }
+            // --> w2 = { 0:10 (ts: 100), 1:11 (ts: 102), 2:12 (ts: 103)  }
             inputTopic1.pipeInput(expectedKeys[2], "A" + expectedKeys[2], time);
 
             processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(2, "A2+2", 103L)
+                new KeyValueTimestamp<>(2, "A2+12", 103L)
             );
         }
     }
@@ -948,45 +948,45 @@ public class KStreamKStreamOuterJoinTest {
             // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 1) }
             // w2 = {}
             // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 1) }
-            // --> w2 = { 1:a1 (ts: 1) }
+            // --> w2 = { 1:11 (ts: 1) }
             time += 1;
-            inputTopic2.pipeInput(expectedKeys[1], (long) expectedKeys[1], time);
+            inputTopic2.pipeInput(expectedKeys[1], (long) expectedKeys[1] + 10, time);
 
             processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(1, "A1+1", 1L)
+                new KeyValueTimestamp<>(1, "A1+11", 1L)
             );
 
             // push one item to the other stream;
             // this should not produce any item
             // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 1) }
-            // w2 = { 1:a1 (ts: 1) }
+            // w2 = { 1:11 (ts: 1) }
             // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 1) }
-            // --> w2 = { 1:a1 (ts: 1), 2:a2 (ts: 101) }
+            // --> w2 = { 1:11 (ts: 1), 2:12 (ts: 101) }
             time += 100;
-            inputTopic2.pipeInput(expectedKeys[2], (long) expectedKeys[2], time);
+            inputTopic2.pipeInput(expectedKeys[2], (long) expectedKeys[2] + 10, time);
 
             processor.checkAndClearProcessResult();
 
             // push one item to the other stream; this should not produce any item
             // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 1) }
-            // w2 = { 1:a1 (ts: 1), 2:a2 (ts: 101) }
+            // w2 = { 1:11 (ts: 1), 2:12 (ts: 101) }
             // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 1) }
-            // --> w2 = { 1:a1 (ts: 1), 2:a2 (ts: 101), 3:a3 (ts: 101) }
-            inputTopic2.pipeInput(expectedKeys[3], (long) expectedKeys[3], time);
+            // --> w2 = { 1:11 (ts: 1), 2:12 (ts: 101), 3:13 (ts: 101) }
+            inputTopic2.pipeInput(expectedKeys[3], (long) expectedKeys[3] + 10, time);
 
             processor.checkAndClearProcessResult();
 
             // push one item to the first stream;
             // this should produce one inner-join item;
             // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 1) }
-            // w2 = { 1:a1 (ts: 1), 2:a2 (ts: 101), 3:a3 (ts: 101) }
+            // w2 = { 1:11 (ts: 1), 2:12 (ts: 101), 3:13 (ts: 101) }
             // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 1), 2:A2 (ts: 201) }
-            // --> w2 = { 1:a1 (ts: 1), 2:a2 (ts: 101), 3:a3 (ts: 101) }
+            // --> w2 = { 1:11 (ts: 1), 2:12 (ts: 101), 3:13 (ts: 101) }
             time += 100;
             inputTopic1.pipeInput(expectedKeys[2], "A" + expectedKeys[2], time);
 
             processor.checkAndClearProcessResult(
-                new KeyValueTimestamp<>(2, "A2+2", 201L)
+                new KeyValueTimestamp<>(2, "A2+12", 201L)
             );
         }
     }
@@ -1029,7 +1029,7 @@ public class KStreamKStreamOuterJoinTest {
             ));
             inputTopic2.pipeInput(new TestRecord<>(
                 1,
-                0L,
+                10L,
                 new RecordHeaders(new Header[]{new RecordHeader("h", new byte[]{0x2})}),
                 0L
             ));
@@ -1046,7 +1046,7 @@ public class KStreamKStreamOuterJoinTest {
             processor.checkAndClearProcessedRecords(
                 new Record<>(
                     1,
-                    "null+0",
+                    "null+10",
                     0L,
                     new RecordHeaders(new Header[]{new RecordHeader("h", new byte[]{0x3})})
                 ),
@@ -1067,7 +1067,7 @@ public class KStreamKStreamOuterJoinTest {
             ));
             inputTopic2.pipeInput(new TestRecord<>(
                 2,
-                2L,
+                12L,
                 new RecordHeaders(new Header[]{new RecordHeader("h", new byte[]{0x5})}),
                 200L
             ));
@@ -1075,7 +1075,7 @@ public class KStreamKStreamOuterJoinTest {
             processor.checkAndClearProcessedRecords(
                 new Record<>(
                     2,
-                    "A2+2",
+                    "A2+12",
                     200L,
                     new RecordHeaders(new Header[]{new RecordHeader("h", new byte[]{0x5})})
                 )
@@ -1095,77 +1095,77 @@ public class KStreamKStreamOuterJoinTest {
 
         // push four items with larger and increasing timestamp (out of window) to the other stream; this should produced 2 expired non-joined records
         // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0) }
-        // w2 = { 0:a0 (ts: 0), 1:a1 (ts: 0), 2:a2 (ts: 0), 3:a3 (ts: 0) }
+        // w2 = { 0:10 (ts: 0), 1:11 (ts: 0), 2:12 (ts: 0), 3:13 (ts: 0) }
         // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0) }
-        // --> w2 = { 0:a0 (ts: 0), 1:a1 (ts: 0), 2:a2 (ts: 0), 3:a3 (ts: 0),
-        //            0:b0 (ts: 1000), 1:b1 (ts: 1001), 2:b2 (ts: 1002), 3:b3 (ts: 1003) }
+        // --> w2 = { 0:10 (ts: 0), 1:11 (ts: 0), 2:12 (ts: 0), 3:13 (ts: 0),
+        //            0:20 (ts: 1000), 1:21 (ts: 1001), 2:22 (ts: 1002), 3:23 (ts: 1003) }
         time = 1000L;
         for (int i = 0; i < expectedKeys.length; i++) {
-            inputTopic2.pipeInput(expectedKeys[i], (long) expectedKeys[i], time + i);
+            inputTopic2.pipeInput(expectedKeys[i], (long) expectedKeys[i] + 20, time + i);
         }
         processor.checkAndClearProcessResult(
-            new KeyValueTimestamp<>(2, "null+2", 0L),
-            new KeyValueTimestamp<>(3, "null+3", 0L)
+            new KeyValueTimestamp<>(2, "null+12", 0L),
+            new KeyValueTimestamp<>(3, "null+13", 0L)
         );
 
         // push four items with larger timestamp to the primary stream; this should produce four full-join items
         // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0) }
-        // w2 = { 0:a0 (ts: 0), 1:a1 (ts: 0), 2:a2 (ts: 0), 3:a3 (ts: 0),
-        //        0:b0 (ts: 1000), 1:b1 (ts: 1001), 2:b2 (ts: 1002), 3:b3 (ts: 1003) }
+        // w2 = { 0:10 (ts: 0), 1:11 (ts: 0), 2:12 (ts: 0), 3:13 (ts: 0),
+        //        0:20 (ts: 1000), 1:21 (ts: 1001), 2:22 (ts: 1002), 3:23 (ts: 1003) }
         // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0),
         //            0:B0 (ts: 1100), 1:B1 (ts: 1100), 2:B2 (ts: 1100), 3:B3 (ts: 1100) }
-        // --> w2 = { 0:a0 (ts: 0), 1:a1 (ts: 0), 2:a2 (ts: 0), 3:a3 (ts: 0),
-        //            0:b0 (ts: 1000), 1:b1 (ts: 1001), 2:b2 (ts: 1002), 3:b3 (ts: 1003) }
+        // --> w2 = { 0:10 (ts: 0), 1:11 (ts: 0), 2:12 (ts: 0), 3:13 (ts: 0),
+        //            0:20 (ts: 1000), 1:21 (ts: 1001), 2:22 (ts: 1002), 3:23 (ts: 1003) }
         time = 1000L + 100L;
         for (final int expectedKey : expectedKeys) {
             inputTopic1.pipeInput(expectedKey, "B" + expectedKey, time);
         }
         processor.checkAndClearProcessResult(
-            new KeyValueTimestamp<>(0, "B0+0", 1100L),
-            new KeyValueTimestamp<>(1, "B1+1", 1100L),
-            new KeyValueTimestamp<>(2, "B2+2", 1100L),
-            new KeyValueTimestamp<>(3, "B3+3", 1100L)
+            new KeyValueTimestamp<>(0, "B0+20", 1100L),
+            new KeyValueTimestamp<>(1, "B1+21", 1100L),
+            new KeyValueTimestamp<>(2, "B2+22", 1100L),
+            new KeyValueTimestamp<>(3, "B3+23", 1100L)
         );
 
         // push four items with increased timestamp to the primary stream; this should produce three full-join items (non-joined item is not produced yet)
         // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0),
         //        0:B0 (ts: 1100), 1:B1 (ts: 1100), 2:B2 (ts: 1100), 3:B3 (ts: 1100) }
-        // w2 = { 0:a0 (ts: 0), 1:a1 (ts: 0), 2:a2 (ts: 0), 3:a3 (ts: 0),
-        //        0:b0 (ts: 1000), 1:b1 (ts: 1001), 2:b2 (ts: 1002), 3:b3 (ts: 1003) }
+        // w2 = { 0:10 (ts: 0), 1:11 (ts: 0), 2:12 (ts: 0), 3:13 (ts: 0),
+        //        0:20 (ts: 1000), 1:21 (ts: 1001), 2:22 (ts: 1002), 3:23 (ts: 1003) }
         // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0),
         //            0:B0 (ts: 1100), 1:B1 (ts: 1100), 2:B2 (ts: 1100), 3:B3 (ts: 1100),
         //            0:C0 (ts: 1101), 1:C1 (ts: 1101), 2:C2 (ts: 1101), 3:C3 (ts: 1101) }
-        // --> w2 = { 0:a0 (ts: 0), 1:a1 (ts: 0), 2:a2 (ts: 0), 3:a3 (ts: 0),
-        //            0:b0 (ts: 1000), 1:b1 (ts: 1001), 2:b2 (ts: 1002), 3:b3 (ts: 1003) }
+        // --> w2 = { 0:10 (ts: 0), 1:11 (ts: 0), 2:12 (ts: 0), 3:13 (ts: 0),
+        //            0:20 (ts: 1000), 1:21 (ts: 1001), 2:22 (ts: 1002), 3:23 (ts: 1003) }
         time += 1L;
         for (final int expectedKey : expectedKeys) {
             inputTopic1.pipeInput(expectedKey, "C" + expectedKey, time);
         }
         processor.checkAndClearProcessResult(
-            new KeyValueTimestamp<>(1, "C1+1", 1101L),
-            new KeyValueTimestamp<>(2, "C2+2", 1101L),
-            new KeyValueTimestamp<>(3, "C3+3", 1101L)
+            new KeyValueTimestamp<>(1, "C1+21", 1101L),
+            new KeyValueTimestamp<>(2, "C2+22", 1101L),
+            new KeyValueTimestamp<>(3, "C3+23", 1101L)
         );
 
         // push four items with increased timestamp to the primary stream; this should produce two full-join items (non-joined items are not produced yet)
         // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0),
         //        0:B0 (ts: 1100), 1:B1 (ts: 1100), 2:B2 (ts: 1100), 3:B3 (ts: 1100),
         //        0:C0 (ts: 1101), 1:C1 (ts: 1101), 2:C2 (ts: 1101), 3:C3 (ts: 1101) }
-        // w2 = { 0:a0 (ts: 0), 1:a1 (ts: 0), 2:a2 (ts: 0), 3:a3 (ts: 0),
-        //        0:b0 (ts: 1000), 1:b1 (ts: 1001), 2:b2 (ts: 1002), 3:b3 (ts: 1003) }
+        // w2 = { 0:10 (ts: 0), 1:11 (ts: 0), 2:12 (ts: 0), 3:13 (ts: 0),
+        //        0:20 (ts: 1000), 1:21 (ts: 1001), 2:22 (ts: 1002), 3:23 (ts: 1003) }
         // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0),
         //            0:B0 (ts: 1100), 1:B1 (ts: 1100), 2:B2 (ts: 1100), 3:B3 (ts: 1100),
         //            0:C0 (ts: 1101), 1:C1 (ts: 1101), 2:C2 (ts: 1101), 3:C3 (ts: 1101),
         //            0:D0 (ts: 1102), 1:D1 (ts: 1102), 2:D2 (ts: 1102), 3:D3 (ts: 1102) }
-        // --> w2 = { 0:a0 (ts: 0), 1:a1 (ts: 0), 2:a2 (ts: 0), 3:a3 (ts: 0),
-        //            0:b0 (ts: 1000), 1:b1 (ts: 1001), 2:b2 (ts: 1002), 3:b3 (ts: 1003) }
+        // --> w2 = { 0:10 (ts: 0), 1:11 (ts: 0), 2:12 (ts: 0), 3:13 (ts: 0),
+        //            0:20 (ts: 1000), 1:21 (ts: 1001), 2:22 (ts: 1002), 3:23 (ts: 1003) }
         time += 1L;
         for (final int expectedKey : expectedKeys) {
             inputTopic1.pipeInput(expectedKey, "D" + expectedKey, time);
         }
         processor.checkAndClearProcessResult(
-            new KeyValueTimestamp<>(2, "D2+2", 1102L),
-            new KeyValueTimestamp<>(3, "D3+3", 1102L)
+            new KeyValueTimestamp<>(2, "D2+22", 1102L),
+            new KeyValueTimestamp<>(3, "D3+23", 1102L)
         );
 
         // push four items with increased timestamp to the primary stream; this should produce one full-join items (three non-joined left-join are not produced yet)
@@ -1173,21 +1173,21 @@ public class KStreamKStreamOuterJoinTest {
         //        0:B0 (ts: 1100), 1:B1 (ts: 1100), 2:B2 (ts: 1100), 3:B3 (ts: 1100),
         //        0:C0 (ts: 1101), 1:C1 (ts: 1101), 2:C2 (ts: 1101), 3:C3 (ts: 1101),
         //        0:D0 (ts: 1102), 1:D1 (ts: 1102), 2:D2 (ts: 1102), 3:D3 (ts: 1102) }
-        // w2 = { 0:a0 (ts: 0), 1:a1 (ts: 0), 2:a2 (ts: 0), 3:a3 (ts: 0),
-        //        0:b0 (ts: 1000), 1:b1 (ts: 1001), 2:b2 (ts: 1002), 3:b3 (ts: 1003) }
+        // w2 = { 0:10 (ts: 0), 1:11 (ts: 0), 2:12 (ts: 0), 3:13 (ts: 0),
+        //        0:20 (ts: 1000), 1:21 (ts: 1001), 2:22 (ts: 1002), 3:23 (ts: 1003) }
         // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0),
         //            0:B0 (ts: 1100), 1:B1 (ts: 1100), 2:B2 (ts: 1100), 3:B3 (ts: 1100),
         //            0:C0 (ts: 1101), 1:C1 (ts: 1101), 2:C2 (ts: 1101), 3:C3 (ts: 1101),
         //            0:D0 (ts: 1102), 1:D1 (ts: 1102), 2:D2 (ts: 1102), 3:D3 (ts: 1102),
         //            0:E0 (ts: 1103), 1:E1 (ts: 1103), 2:E2 (ts: 1103), 3:E3 (ts: 1103) }
-        // --> w2 = { 0:a0 (ts: 0), 1:a1 (ts: 0), 2:a2 (ts: 0), 3:a3 (ts: 0),
-        //            0:b0 (ts: 1000), 1:b1 (ts: 1001), 2:b2 (ts: 1002), 3:b3 (ts: 1003) }
+        // --> w2 = { 0:10 (ts: 0), 1:11 (ts: 0), 2:12 (ts: 0), 3:13 (ts: 0),
+        //            0:20 (ts: 1000), 1:21 (ts: 1001), 2:22 (ts: 1002), 3:23 (ts: 1003) }
         time += 1L;
         for (final int expectedKey : expectedKeys) {
             inputTopic1.pipeInput(expectedKey, "E" + expectedKey, time);
         }
         processor.checkAndClearProcessResult(
-            new KeyValueTimestamp<>(3, "E3+3", 1103L)
+            new KeyValueTimestamp<>(3, "E3+23", 1103L)
         );
 
         // push four items with increased timestamp to the primary stream; this should produce no full-join items (four non-joined left-join are not produced yet)
@@ -1196,16 +1196,16 @@ public class KStreamKStreamOuterJoinTest {
         //        0:C0 (ts: 1101), 1:C1 (ts: 1101), 2:C2 (ts: 1101), 3:C3 (ts: 1101),
         //        0:D0 (ts: 1102), 1:D1 (ts: 1102), 2:D2 (ts: 1102), 3:D3 (ts: 1102),
         //        0:E0 (ts: 1103), 1:E1 (ts: 1103), 2:E2 (ts: 1103), 3:E3 (ts: 1103) }
-        // w2 = { 0:a0 (ts: 0), 1:a1 (ts: 0), 2:a2 (ts: 0), 3:a3 (ts: 0),
-        //        0:b0 (ts: 1000), 1:b1 (ts: 1001), 2:b2 (ts: 1002), 3:b3 (ts: 1003) }
+        // w2 = { 0:10 (ts: 0), 1:11 (ts: 0), 2:12 (ts: 0), 3:13 (ts: 0),
+        //        0:20 (ts: 1000), 1:21 (ts: 1001), 2:22 (ts: 1002), 3:23 (ts: 1003) }
         // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0),
         //            0:B0 (ts: 1100), 1:B1 (ts: 1100), 2:B2 (ts: 1100), 3:B3 (ts: 1100),
         //            0:C0 (ts: 1101), 1:C1 (ts: 1101), 2:C2 (ts: 1101), 3:C3 (ts: 1101),
         //            0:D0 (ts: 1102), 1:D1 (ts: 1102), 2:D2 (ts: 1102), 3:D3 (ts: 1102),
         //            0:E0 (ts: 1103), 1:E1 (ts: 1103), 2:E2 (ts: 1103), 3:E3 (ts: 1103),
         //            0:F0 (ts: 1104), 1:F1 (ts: 1104), 2:F2 (ts: 1104), 3:F3 (ts: 1104) }
-        // --> w2 = { 0:a0 (ts: 0), 1:a1 (ts: 0), 2:a2 (ts: 0), 3:a3 (ts: 0),
-        //            0:b0 (ts: 1000), 1:b1 (ts: 1001), 2:b2 (ts: 1002), 3:b3 (ts: 1003) }
+        // --> w2 = { 0:10 (ts: 0), 1:11 (ts: 0), 2:12 (ts: 0), 3:13 (ts: 0),
+        //            0:20 (ts: 1000), 1:21 (ts: 1001), 2:22 (ts: 1002), 3:23 (ts: 1003) }
         time += 1L;
         for (final int expectedKey : expectedKeys) {
             inputTopic1.pipeInput(expectedKey, "F" + expectedKey, time);
@@ -1242,8 +1242,8 @@ public class KStreamKStreamOuterJoinTest {
         //        0:D0 (ts: 1102), 1:D1 (ts: 1102), 2:D2 (ts: 1102), 3:D3 (ts: 1102),
         //        0:E0 (ts: 1103), 1:E1 (ts: 1103), 2:E2 (ts: 1103), 3:E3 (ts: 1103),
         //        0:F0 (ts: 1104), 1:F1 (ts: 1104), 2:F2 (ts: 1104), 3:F3 (ts: 1104) }
-        // w2 = { 0:a0 (ts: 0), 1:a1 (ts: 0), 2:a2 (ts: 0), 3:a3 (ts: 0),
-        //        0:b0 (ts: 1000), 1:b1 (ts: 1001), 2:b2 (ts: 1002), 3:b3 (ts: 1003) }
+        // w2 = { 0:10 (ts: 0), 1:11 (ts: 0), 2:12 (ts: 0), 3:13 (ts: 0),
+        //        0:20 (ts: 1000), 1:21 (ts: 1001), 2:22 (ts: 1002), 3:23 (ts: 1003) }
         // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0),
         //            0:B0 (ts: 1100), 1:B1 (ts: 1100), 2:B2 (ts: 1100), 3:B3 (ts: 1100),
         //            0:C0 (ts: 1101), 1:C1 (ts: 1101), 2:C2 (ts: 1101), 3:C3 (ts: 1101),
@@ -1251,8 +1251,8 @@ public class KStreamKStreamOuterJoinTest {
         //            0:E0 (ts: 1103), 1:E1 (ts: 1103), 2:E2 (ts: 1103), 3:E3 (ts: 1103),
         //            0:F0 (ts: 1104), 1:F1 (ts: 1104), 2:F2 (ts: 1104), 3:F3 (ts: 1104),
         //            0:G0 (ts: 899), 1:G1 (ts: 899), 2:G2 (ts: 899), 3:G3 (ts: 899) }
-        // --> w2 = { 0:a0 (ts: 0), 1:a1 (ts: 0), 2:a2 (ts: 0), 3:a3 (ts: 0),
-        //            0:b0 (ts: 1000), 1:b1 (ts: 1001), 2:b2 (ts: 1002), 3:b3 (ts: 1003) }
+        // --> w2 = { 0:10 (ts: 0), 1:11 (ts: 0), 2:12 (ts: 0), 3:13 (ts: 0),
+        //            0:20 (ts: 1000), 1:21 (ts: 1001), 2:22 (ts: 1002), 3:23 (ts: 1003) }
         time = 1000L - 100L - 1L;
         for (final int expectedKey : expectedKeys) {
             inputTopic1.pipeInput(expectedKey, "G" + expectedKey, time);
@@ -1272,8 +1272,8 @@ public class KStreamKStreamOuterJoinTest {
         //        0:E0 (ts: 1103), 1:E1 (ts: 1103), 2:E2 (ts: 1103), 3:E3 (ts: 1103),
         //        0:F0 (ts: 1104), 1:F1 (ts: 1104), 2:F2 (ts: 1104), 3:F3 (ts: 1104),
         //        0:G0 (ts: 899), 1:G1 (ts: 899), 2:G2 (ts: 899), 3:G3 (ts: 899) }
-        // w2 = { 0:a0 (ts: 0), 1:a1 (ts: 0), 2:a2 (ts: 0), 3:a3 (ts: 0),
-        //        0:b0 (ts: 1000), 1:b1 (ts: 1001), 2:b2 (ts: 1002), 3:b3 (ts: 1003) }
+        // w2 = { 0:10 (ts: 0), 1:11 (ts: 0), 2:12 (ts: 0), 3:13 (ts: 0),
+        //        0:20 (ts: 1000), 1:21 (ts: 1001), 2:22 (ts: 1002), 3:23 (ts: 1003) }
         // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0),
         //            0:B0 (ts: 1100), 1:B1 (ts: 1100), 2:B2 (ts: 1100), 3:B3 (ts: 1100),
         //            0:C0 (ts: 1101), 1:C1 (ts: 1101), 2:C2 (ts: 1101), 3:C3 (ts: 1101),
@@ -1282,14 +1282,14 @@ public class KStreamKStreamOuterJoinTest {
         //            0:F0 (ts: 1104), 1:F1 (ts: 1104), 2:F2 (ts: 1104), 3:F3 (ts: 1104),
         //            0:G0 (ts: 899), 1:G1 (ts: 899), 2:G2 (ts: 899), 3:G3 (ts: 899),
         //            0:H0 (ts: 900), 1:H1 (ts: 900), 2:H2 (ts: 900), 3:H3 (ts: 900) }
-        // --> w2 = { 0:a0 (ts: 0), 1:a1 (ts: 0), 2:a2 (ts: 0), 3:a3 (ts: 0),
-        //            0:b0 (ts: 1000), 1:b1 (ts: 1001), 2:b2 (ts: 1002), 3:b3 (ts: 1003) }
+        // --> w2 = { 0:10 (ts: 0), 1:11 (ts: 0), 2:12 (ts: 0), 3:13 (ts: 0),
+        //            0:20 (ts: 1000), 1:21 (ts: 1001), 2:22 (ts: 1002), 3:23 (ts: 1003) }
         time += 1L;
         for (final int expectedKey : expectedKeys) {
             inputTopic1.pipeInput(expectedKey, "H" + expectedKey, time);
         }
         processor.checkAndClearProcessResult(
-            new KeyValueTimestamp<>(0, "H0+0", 1000L),
+            new KeyValueTimestamp<>(0, "H0+20", 1000L),
             new KeyValueTimestamp<>(1, "H1+null", 900L),
             new KeyValueTimestamp<>(2, "H2+null", 900L),
             new KeyValueTimestamp<>(3, "H3+null", 900L)
@@ -1304,8 +1304,8 @@ public class KStreamKStreamOuterJoinTest {
         //        0:F0 (ts: 1104), 1:F1 (ts: 1104), 2:F2 (ts: 1104), 3:F3 (ts: 1104),
         //        0:G0 (ts: 899), 1:G1 (ts: 899), 2:G2 (ts: 899), 3:G3 (ts: 899),
         //        0:H0 (ts: 900), 1:H1 (ts: 900), 2:H2 (ts: 900), 3:H3 (ts: 900) }
-        // w2 = { 0:a0 (ts: 0), 1:a1 (ts: 0), 2:a2 (ts: 0), 3:a3 (ts: 0),
-        //        0:b0 (ts: 1000), 1:b1 (ts: 1001), 2:b2 (ts: 1002), 3:b3 (ts: 1003) }
+        // w2 = { 0:10 (ts: 0), 1:11 (ts: 0), 2:12 (ts: 0), 3:13 (ts: 0),
+        //        0:20 (ts: 1000), 1:21 (ts: 1001), 2:22 (ts: 1002), 3:23 (ts: 1003) }
         // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0),
         //            0:B0 (ts: 1100), 1:B1 (ts: 1100), 2:B2 (ts: 1100), 3:B3 (ts: 1100),
         //            0:C0 (ts: 1101), 1:C1 (ts: 1101), 2:C2 (ts: 1101), 3:C3 (ts: 1101),
@@ -1315,15 +1315,15 @@ public class KStreamKStreamOuterJoinTest {
         //            0:G0 (ts: 899), 1:G1 (ts: 899), 2:G2 (ts: 899), 3:G3 (ts: 899),
         //            0:H0 (ts: 900), 1:H1 (ts: 900), 2:H2 (ts: 900), 3:H3 (ts: 900),
         //            0:I0 (ts: 901), 1:I1 (ts: 901), 2:I2 (ts: 901), 3:I3 (ts: 901) }
-        // --> w2 = { 0:a0 (ts: 0), 1:a1 (ts: 0), 2:a2 (ts: 0), 3:a3 (ts: 0),
-        //            0:b0 (ts: 1000), 1:b1 (ts: 1001), 2:b2 (ts: 1002), 3:b3 (ts: 1003) }
+        // --> w2 = { 0:10 (ts: 0), 1:11 (ts: 0), 2:12 (ts: 0), 3:13 (ts: 0),
+        //            0:20 (ts: 1000), 1:21 (ts: 1001), 2:22 (ts: 1002), 3:23 (ts: 1003) }
         time += 1L;
         for (final int expectedKey : expectedKeys) {
             inputTopic1.pipeInput(expectedKey, "I" + expectedKey, time);
         }
         processor.checkAndClearProcessResult(
-            new KeyValueTimestamp<>(0, "I0+0", 1000L),
-            new KeyValueTimestamp<>(1, "I1+1", 1001L),
+            new KeyValueTimestamp<>(0, "I0+20", 1000L),
+            new KeyValueTimestamp<>(1, "I1+21", 1001L),
             new KeyValueTimestamp<>(2, "I2+null", 901L),
             new KeyValueTimestamp<>(3, "I3+null", 901L)
         );
@@ -1338,8 +1338,8 @@ public class KStreamKStreamOuterJoinTest {
         //        0:G0 (ts: 899), 1:G1 (ts: 899), 2:G2 (ts: 899), 3:G3 (ts: 899),
         //        0:H0 (ts: 900), 1:H1 (ts: 900), 2:H2 (ts: 900), 3:H3 (ts: 900),
         //        0:I0 (ts: 901), 1:I1 (ts: 901), 2:I2 (ts: 901), 3:I3 (ts: 901) }
-        // w2 = { 0:a0 (ts: 0), 1:a1 (ts: 0), 2:a2 (ts: 0), 3:a3 (ts: 0),
-        //        0:b0 (ts: 1000), 1:b1 (ts: 1001), 2:b2 (ts: 1002), 3:b3 (ts: 1003) }
+        // w2 = { 0:10 (ts: 0), 1:11 (ts: 0), 2:12 (ts: 0), 3:13 (ts: 0),
+        //        0:20 (ts: 1000), 1:21 (ts: 1001), 2:22 (ts: 1002), 3:23 (ts: 1003) }
         // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0),
         //            0:B0 (ts: 1100), 1:B1 (ts: 1100), 2:B2 (ts: 1100), 3:B3 (ts: 1100),
         //            0:C0 (ts: 1101), 1:C1 (ts: 1101), 2:C2 (ts: 1101), 3:C3 (ts: 1101),
@@ -1350,16 +1350,16 @@ public class KStreamKStreamOuterJoinTest {
         //            0:H0 (ts: 900), 1:H1 (ts: 900), 2:H2 (ts: 900), 3:H3 (ts: 900),
         //            0:I0 (ts: 901), 1:I1 (ts: 901), 2:I2 (ts: 901), 3:I3 (ts: 901),
         //            0:J0 (ts: 902), 1:J1 (ts: 902), 2:J2 (ts: 902), 3:J3 (ts: 902) }
-        // --> w2 = { 0:a0 (ts: 0), 1:a1 (ts: 0), 2:a2 (ts: 0), 3:a3 (ts: 0),
-        //            0:b0 (ts: 1000), 1:b1 (ts: 1001), 2:b2 (ts: 1002), 3:b3 (ts: 1003) }
+        // --> w2 = { 0:10 (ts: 0), 1:11 (ts: 0), 2:12 (ts: 0), 3:13 (ts: 0),
+        //            0:20 (ts: 1000), 1:21 (ts: 1001), 2:22 (ts: 1002), 3:23 (ts: 1003) }
         time += 1L;
         for (final int expectedKey : expectedKeys) {
             inputTopic1.pipeInput(expectedKey, "J" + expectedKey, time);
         }
         processor.checkAndClearProcessResult(
-            new KeyValueTimestamp<>(0, "J0+0", 1000L),
-            new KeyValueTimestamp<>(1, "J1+1", 1001L),
-            new KeyValueTimestamp<>(2, "J2+2", 1002L),
+            new KeyValueTimestamp<>(0, "J0+20", 1000L),
+            new KeyValueTimestamp<>(1, "J1+21", 1001L),
+            new KeyValueTimestamp<>(2, "J2+22", 1002L),
             new KeyValueTimestamp<>(3, "J3+null", 902L)
         );
 
@@ -1374,8 +1374,8 @@ public class KStreamKStreamOuterJoinTest {
         //        0:H0 (ts: 900), 1:H1 (ts: 900), 2:H2 (ts: 900), 3:H3 (ts: 900),
         //        0:I0 (ts: 901), 1:I1 (ts: 901), 2:I2 (ts: 901), 3:I3 (ts: 901),
         //        0:J0 (ts: 902), 1:J1 (ts: 902), 2:J2 (ts: 902), 3:J3 (ts: 902) }
-        // w2 = { 0:a0 (ts: 0), 1:a1 (ts: 0), 2:a2 (ts: 0), 3:a3 (ts: 0),
-        //        0:b0 (ts: 1000), 1:b1 (ts: 1001), 2:b2 (ts: 1002), 3:b3 (ts: 1003) }
+        // w2 = { 0:10 (ts: 0), 1:11 (ts: 0), 2:12 (ts: 0), 3:13 (ts: 0),
+        //        0:20 (ts: 1000), 1:21 (ts: 1001), 2:22 (ts: 1002), 3:23 (ts: 1003) }
         // --> w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0),
         //            0:B0 (ts: 1100), 1:B1 (ts: 1100), 2:B2 (ts: 1100), 3:B3 (ts: 1100),
         //            0:C0 (ts: 1101), 1:C1 (ts: 1101), 2:C2 (ts: 1101), 3:C3 (ts: 1101),
@@ -1387,17 +1387,17 @@ public class KStreamKStreamOuterJoinTest {
         //            0:I0 (ts: 901), 1:I1 (ts: 901), 2:I2 (ts: 901), 3:I3 (ts: 901),
         //            0:J0 (ts: 902), 1:J1 (ts: 902), 2:J2 (ts: 902), 3:J3 (ts: 902),
         //            0:K0 (ts: 903), 1:K1 (ts: 903), 2:K2 (ts: 903), 3:K3 (ts: 903) }
-        // --> w2 = { 0:a0 (ts: 0), 1:a1 (ts: 0), 2:a2 (ts: 0), 3:a3 (ts: 0),
-        //            0:b0 (ts: 1000), 1:b1 (ts: 1001), 2:b2 (ts: 1002), 3:b3 (ts: 1003) }
+        // --> w2 = { 0:10 (ts: 0), 1:11 (ts: 0), 2:12 (ts: 0), 3:13 (ts: 0),
+        //            0:20 (ts: 1000), 1:21 (ts: 1001), 2:22 (ts: 1002), 3:23 (ts: 1003) }
         time += 1L;
         for (final int expectedKey : expectedKeys) {
             inputTopic1.pipeInput(expectedKey, "K" + expectedKey, time);
         }
         processor.checkAndClearProcessResult(
-            new KeyValueTimestamp<>(0, "K0+0", 1000L),
-            new KeyValueTimestamp<>(1, "K1+1", 1001L),
-            new KeyValueTimestamp<>(2, "K2+2", 1002L),
-            new KeyValueTimestamp<>(3, "K3+3", 1003L)
+            new KeyValueTimestamp<>(0, "K0+20", 1000L),
+            new KeyValueTimestamp<>(1, "K1+21", 1001L),
+            new KeyValueTimestamp<>(2, "K2+22", 1002L),
+            new KeyValueTimestamp<>(3, "K3+23", 1003L)
         );
 
         // push a dummy record to verify there are no expired records to produce
@@ -1423,18 +1423,18 @@ public class KStreamKStreamOuterJoinTest {
     @Test
     public void testShouldJoinWithNonTimestampedStore() {
         final CapturingStoreSuppliers suppliers = new CapturingStoreSuppliers();
-        final StreamJoined<Integer, String, Long> streamJoined =
-                StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.Long())
+        final StreamJoined<Integer, String, String> streamJoined =
+                StreamJoined.with(Serdes.Integer(), Serdes.String(), Serdes.String())
                         .withDslStoreSuppliers(suppliers);
 
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Integer, String> stream1;
-        final KStream<Integer, Long> stream2;
+        final KStream<Integer, String> stream2;
         final KStream<Integer, String> joined;
         final MockApiProcessorSupplier<Integer, String, Void, Void> supplier = new MockApiProcessorSupplier<>();
         stream1 = builder.stream(topic1, consumed);
-        stream2 = builder.stream(topic2, consumed2);
+        stream2 = builder.stream(topic2, consumed);
 
         joined = stream1.outerJoin(
                 stream2,
