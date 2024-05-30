@@ -497,7 +497,7 @@ object KafkaConfig {
     if (configType != null) {
       Some(configType)
     } else {
-      val configKey = DynamicConfig.Broker.brokerConfigDef.configKeys().get(exactName)
+      val configKey = DynamicConfig.Broker.configKeys.get(exactName)
       if (configKey != null) {
         Some(configKey.`type`)
       } else {
