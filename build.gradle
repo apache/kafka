@@ -198,6 +198,17 @@ def determineCommitId() {
 
 def spotlessApplyModules = ['']
 
+def configureSpotless = { project ->
+  project.apply plugin: 'com.diffplug.spotless'
+
+  project.spotless {
+    java {
+      importOrder('kafka', 'org.apache.kafka', 'com', 'net', 'org', 'java', 'javax', '', '\\#')
+      removeUnusedImports()
+    }
+  }
+}
+
 apply from: file('wrapper.gradle')
 
 if (repo != null) {
@@ -853,17 +864,6 @@ def connectPkgs = [
     'connect:mirror',
     'connect:mirror-client'
 ]
-
-def configureSpotless = { project ->
-  project.apply plugin: 'com.diffplug.spotless'
-
-  project.spotless {
-    java {
-      importOrder('kafka', 'org.apache.kafka', 'com', 'net', 'org', 'java', 'javax', '', '\\#')
-      removeUnusedImports()
-    }
-  }
-}
 
 tasks.create(name: "jarConnect", dependsOn: connectPkgs.collect { it + ":jar" }) {}
 
