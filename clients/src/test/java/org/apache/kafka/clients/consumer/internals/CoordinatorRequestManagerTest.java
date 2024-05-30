@@ -46,6 +46,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 public class CoordinatorRequestManagerTest {
+    private static final int REQUEST_TIMEOUT_MS = 5000;
     private static final int RETRY_BACKOFF_MS = 500;
     private static final String GROUP_ID = "group-1";
     private MockTime time;
@@ -191,6 +192,7 @@ public class CoordinatorRequestManagerTest {
         return new CoordinatorRequestManager(
             time,
             new LogContext(),
+            REQUEST_TIMEOUT_MS,
             RETRY_BACKOFF_MS,
             RETRY_BACKOFF_MS,
             this.backgroundEventHandler,

@@ -81,7 +81,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
 
     private final Set<ListOffsetsRequestState> requestsToRetry;
     private final List<NetworkClientDelegate.UnsentRequest> requestsToSend;
-    private final long requestTimeoutMs;
+    private final int requestTimeoutMs;
     private final Time time;
     private final ApiVersions apiVersions;
     private final NetworkClientDelegate networkClientDelegate;
@@ -93,7 +93,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
                                  final IsolationLevel isolationLevel,
                                  final Time time,
                                  final long retryBackoffMs,
-                                 final long requestTimeoutMs,
+                                 final int requestTimeoutMs,
                                  final ApiVersions apiVersions,
                                  final NetworkClientDelegate networkClientDelegate,
                                  final BackgroundEventHandler backgroundEventHandler,
@@ -344,7 +344,8 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
 
         NetworkClientDelegate.UnsentRequest unsentRequest = new NetworkClientDelegate.UnsentRequest(
                 builder,
-                Optional.ofNullable(node));
+                Optional.ofNullable(node),
+                time.timer(requestTimeoutMs));
         unsentRequests.add(unsentRequest);
         CompletableFuture<ListOffsetResult> result = new CompletableFuture<>();
         unsentRequest.whenComplete((response, error) -> {
@@ -521,7 +522,8 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
 
         NetworkClientDelegate.UnsentRequest unsentRequest = new NetworkClientDelegate.UnsentRequest(
                 builder,
-                Optional.ofNullable(node));
+                Optional.ofNullable(node),
+                time.timer(requestTimeoutMs));
         unsentRequests.add(unsentRequest);
         CompletableFuture<OffsetsForLeaderEpochUtils.OffsetForEpochResult> result = new CompletableFuture<>();
         unsentRequest.whenComplete((response, error) -> {

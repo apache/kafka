@@ -56,6 +56,7 @@ public class CoordinatorRequestManager implements RequestManager {
     private final BackgroundEventHandler backgroundEventHandler;
     private final String groupId;
 
+    private final int requestTimeoutMs;
     private final RequestState coordinatorRequestState;
     private long timeMarkedUnknownMs = -1L; // starting logging a warning only after unable to connect for a while
     private long totalDisconnectedMin = 0;
@@ -64,6 +65,7 @@ public class CoordinatorRequestManager implements RequestManager {
     public CoordinatorRequestManager(
         final Time time,
         final LogContext logContext,
+        final int requestTimeoutMs,
         final long retryBackoffMs,
         final long retryBackoffMaxMs,
         final BackgroundEventHandler errorHandler,
@@ -74,6 +76,7 @@ public class CoordinatorRequestManager implements RequestManager {
         this.log = logContext.logger(this.getClass());
         this.backgroundEventHandler = errorHandler;
         this.groupId = groupId;
+        this.requestTimeoutMs = requestTimeoutMs;
         this.coordinatorRequestState = new RequestState(
                 logContext,
                 CoordinatorRequestManager.class.getSimpleName(),
@@ -112,7 +115,8 @@ public class CoordinatorRequestManager implements RequestManager {
                 .setKey(this.groupId);
         NetworkClientDelegate.UnsentRequest unsentRequest = new NetworkClientDelegate.UnsentRequest(
             new FindCoordinatorRequest.Builder(data),
-            Optional.empty()
+            Optional.empty(),
+            time.timer(requestTimeoutMs)
         );
 
         return unsentRequest.whenComplete((clientResponse, throwable) -> {
