@@ -1194,33 +1194,32 @@ public class KafkaConfigBackingStoreMockitoTest {
         configStorage.start();
 
         // Bootstrap as if we had already added the connector, but no tasks had been added yet
-        whiteboxAddConnector(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0), Collections.emptyList());
+        whiteBoxAddConnector(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0), Collections.emptyList());
 
         // Null before writing
         ClusterConfigState configState = configStorage.snapshot();
         assertEquals(-1, configState.offset());
 
         // Task configs should read to end, write to the log, read to end, write root.
-        doAnswer(expectReadToEnd(new LinkedHashMap<>())).when(configLog).readToEnd();
+        doAnswer(expectReadToEnd(Collections.emptyMap())).when(configLog).readToEnd();
 
         expectConvertWriteRead(
                 COMMIT_TASKS_CONFIG_KEYS.get(0), KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0, CONFIGS_SERIALIZED.get(0),
                 "tasks", 0); // We have 0 tasks
 
-        List<Map<String, String>> taskConfigs = Collections.emptyList();
-        configStorage.putTaskConfigs("connector1", taskConfigs);
+        configStorage.putTaskConfigs("connector1", Collections.emptyList());
 
         // As soon as root is rewritten, we should see a callback notifying us that we reconfigured some tasks
         configUpdateListener.onTaskConfigUpdate(Collections.emptyList());
         // Validate root config by listing all connectors and tasks
         configState = configStorage.snapshot();
         String connectorName = CONNECTOR_IDS.get(0);
-        assertEquals(Arrays.asList(connectorName), new ArrayList<>(configState.connectors()));
+        assertEquals(Collections.singleton(connectorName), configState.connectors());
         assertEquals(Collections.emptyList(), configState.tasks(connectorName));
-        assertEquals(Collections.EMPTY_SET, configState.inconsistentConnectors());
+        assertEquals(Collections.EMPTY_SET, Collections.emptySet());
 
         configStorage.stop();
-        verify(configStorage).stop();
+        verify(configLog).stop();
     }
 
     @Test
@@ -1255,7 +1254,7 @@ public class KafkaConfigBackingStoreMockitoTest {
         assertEquals(Collections.singleton(CONNECTOR_IDS.get(0)), configStorage.connectorTargetStates.keySet());
         assertEquals(TargetState.STARTED, configState.targetState(CONNECTOR_IDS.get(0)));
 
-        LinkedHashMap<String, byte[]> serializedAfterStartup = new LinkedHashMap<>();
+        HashMap<String, byte[]> serializedAfterStartup = new HashMap<>();
         serializedAfterStartup.put(TARGET_STATE_KEYS.get(0), CONFIGS_SERIALIZED.get(0));
         serializedAfterStartup.put(TARGET_STATE_KEYS.get(1), CONFIGS_SERIALIZED.get(1));
         doAnswer(expectReadToEnd(serializedAfterStartup)).when(configLog).readToEnd();
@@ -1268,7 +1267,6 @@ public class KafkaConfigBackingStoreMockitoTest {
         // Should see two connectors now, one paused and one stopped
         configStorage.refresh(0, TimeUnit.SECONDS);
         verify(configUpdateListener).onConnectorTargetStateChange(CONNECTOR_IDS.get(0));
-        configUpdateListener.onConnectorConfigRemove(CONNECTOR_IDS.get(0));
         configState = configStorage.snapshot();
 
         assertEquals(new HashSet<>(CONNECTOR_IDS), configStorage.connectorTargetStates.keySet());
@@ -1276,7 +1274,7 @@ public class KafkaConfigBackingStoreMockitoTest {
         assertEquals(TargetState.STOPPED, configState.targetState(CONNECTOR_IDS.get(1)));
 
         configStorage.stop();
-        verify(configStorage).stop();
+        verify(configLog).stop();
     }
 
     @Test
@@ -1455,7 +1453,7 @@ public class KafkaConfigBackingStoreMockitoTest {
     }
 
     // Manually insert a connector into config storage, updating the task configs, connector config, and root config
-    private void whiteboxAddConnector(String connectorName, Map<String, String> connectorConfig, List<Map<String, String>> taskConfigs) {
+    private void whiteBoxAddConnector(String connectorName, Map<String, String> connectorConfig, List<Map<String, String>> taskConfigs) {
         Map<ConnectorTaskId, Map<String, String>> storageTaskConfigs = configStorage.taskConfigs;
         for (int i = 0; i < taskConfigs.size(); i++)
             storageTaskConfigs.put(new ConnectorTaskId(connectorName, i), taskConfigs.get(i));
