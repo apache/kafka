@@ -21,7 +21,7 @@ import kafka.server.metadata.ZkMetadataCache
 import kafka.utils.TestUtils
 import kafka.zk.{FeatureZNode, FeatureZNodeStatus, ZkVersion}
 import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
-import org.apache.kafka.server.common.{Features => JFeatures}
+import org.apache.kafka.server.common.{FinalizedFeatures => JFeatures}
 import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_3_2_IV0

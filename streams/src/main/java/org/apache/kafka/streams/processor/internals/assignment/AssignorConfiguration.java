@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import java.util.Optional;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol;
 import org.apache.kafka.common.KafkaException;
@@ -253,6 +254,24 @@ public final class AssignorConfiguration {
         }
     }
 
+    public Optional<org.apache.kafka.streams.processor.assignment.TaskAssignor> userTaskAssignor() {
+        final String userTaskAssignorClassname = streamsConfig.getString(StreamsConfig.TASK_ASSIGNOR_CLASS_CONFIG);
+        if (userTaskAssignorClassname == null) {
+            return Optional.empty();
+        }
+        try {
+            final org.apache.kafka.streams.processor.assignment.TaskAssignor assignor = Utils.newInstance(userTaskAssignorClassname,
+                org.apache.kafka.streams.processor.assignment.TaskAssignor.class);
+            log.info("Instantiated {} as the task assignor.", userTaskAssignorClassname);
+            return Optional.of(assignor);
+        } catch (final ClassNotFoundException e) {
+            throw new IllegalArgumentException(
+                "Expected an instantiable class name for " + StreamsConfig.TASK_ASSIGNOR_CLASS_CONFIG + " but got " + userTaskAssignorClassname,
+                e
+            );
+        }
+    }
+
     public AssignmentListener assignmentListener() {
         final Object o = internalConfigs.get(InternalConfig.ASSIGNMENT_LISTENER);
         if (o == null) {
@@ -339,6 +358,19 @@ public final class AssignorConfiguration {
                 "\n  probingRebalanceIntervalMs=" + probingRebalanceIntervalMs +
                 "\n  rackAwareAssignmentTags=" + rackAwareAssignmentTags +
                 "\n}";
+        }
+
+        public org.apache.kafka.streams.processor.assignment.AssignmentConfigs toPublicAssignmentConfigs() {
+            return new org.apache.kafka.streams.processor.assignment.AssignmentConfigs(
+                acceptableRecoveryLag,
+                maxWarmupReplicas,
+                numStandbyReplicas,
+                probingRebalanceIntervalMs,
+                rackAwareAssignmentTags,
+                rackAwareAssignmentTrafficCost,
+                rackAwareAssignmentNonOverlapCost,
+                rackAwareAssignmentStrategy
+            );
         }
     }
 }

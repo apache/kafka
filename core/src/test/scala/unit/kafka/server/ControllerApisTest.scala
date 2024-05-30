@@ -22,7 +22,6 @@ import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.KRaftMetadataCache
 import kafka.test.MockController
-import kafka.utils.NotNothing
 import org.apache.kafka.clients.admin.AlterConfigOp
 import org.apache.kafka.common.Uuid.ZERO_UUID
 import org.apache.kafka.common.acl.AclOperation
@@ -54,8 +53,8 @@ import org.apache.kafka.controller.{Controller, ControllerRequestContext, Result
 import org.apache.kafka.image.publisher.ControllerRegistrationsPublisher
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult, Authorizer}
-import org.apache.kafka.server.common.{ApiMessageAndVersion, Features, MetadataVersion, ProducerIdsBlock}
-import org.apache.kafka.server.config.KRaftConfigs
+import org.apache.kafka.server.common.{ApiMessageAndVersion, FinalizedFeatures, MetadataVersion, ProducerIdsBlock}
+import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs}
 import org.apache.kafka.server.util.FutureUtils
 import org.apache.kafka.storage.internals.log.CleanerConfig
 import org.junit.jupiter.api.Assertions._
@@ -73,7 +72,6 @@ import java.util.Collections.{singleton, singletonList, singletonMap}
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit}
 import java.util.concurrent.atomic.AtomicReference
 import java.util.{Collections, Properties}
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
 
@@ -171,7 +169,7 @@ class ControllerApisTest {
         ListenerType.CONTROLLER,
         true,
         false,
-        () => Features.fromKRaftVersion(MetadataVersion.latestTesting())),
+        () => FinalizedFeatures.fromKRaftVersion(MetadataVersion.latestTesting())),
       metadataCache
     )
   }
@@ -892,7 +890,7 @@ class ControllerApisTest {
     val controller = new MockController.Builder().
       newInitialTopic("foo", fooId).build()
     val props = new Properties()
-    props.put(KafkaConfig.DeleteTopicEnableProp, "false")
+    props.put(ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, "false")
     controllerApis = createControllerApis(None, controller, props)
     val request = new DeleteTopicsRequestData()
     request.topics().add(new DeleteTopicState().setName("foo").setTopicId(ZERO_UUID))
@@ -1178,8 +1176,7 @@ class ControllerApisTest {
     request: AbstractRequest,
     controllerApis: ControllerApis
   )(
-    implicit classTag: ClassTag[T],
-    @nowarn("cat=unused") nn: NotNothing[T]
+    implicit classTag: ClassTag[T]
   ): T = {
     val req = buildRequest(request)
 

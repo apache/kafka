@@ -16,8 +16,12 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import java.time.Instant;
+import java.util.Optional;
+import java.util.SortedMap;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,6 +44,8 @@ import static java.util.Collections.unmodifiableSet;
 import static java.util.Comparator.comparing;
 import static java.util.Comparator.comparingLong;
 import static org.apache.kafka.common.utils.Utils.union;
+import static org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment.AssignedTask.Type.ACTIVE;
+import static org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment.AssignedTask.Type.STANDBY;
 import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.UNKNOWN_OFFSET_SUM;
 
 public class ClientState {
@@ -58,6 +64,8 @@ public class ClientState {
     private final ClientStateTask previousStandbyTasks = new ClientStateTask(null, null);
     private final ClientStateTask revokingActiveTasks = new ClientStateTask(null, new TreeMap<>());
     private final UUID processId;
+
+    private Optional<Instant> followupRebalanceDeadline = Optional.empty();
     private int capacity;
 
     public ClientState() {
@@ -137,6 +145,14 @@ public class ClientState {
 
     boolean reachedCapacity() {
         return assignedTaskCount() >= capacity;
+    }
+
+    public Optional<Instant> followupRebalanceDeadline() {
+        return followupRebalanceDeadline;
+    }
+
+    public void setFollowupRebalanceDeadline(final Instant followupRebalanceDeadline) {
+        this.followupRebalanceDeadline = Optional.of(followupRebalanceDeadline);
     }
 
     public Set<TaskId> activeTasks() {
@@ -454,6 +470,33 @@ public class ClientState {
 
     public String consumers() {
         return consumerToPreviousStatefulTaskIds.keySet().toString();
+    }
+
+    public Map<TaskId, Long> taskLagTotals() {
+        return taskLagTotals;
+    }
+
+    public SortedSet<TaskId> previousActiveTasks() {
+        return new TreeSet<>(previousActiveTasks.taskIds());
+    }
+
+    public SortedSet<TaskId> previousStandbyTasks() {
+        return new TreeSet<>(previousStandbyTasks.taskIds());
+    }
+
+    public SortedMap<String, Set<TaskId>> taskIdsByPreviousConsumer() {
+        return new TreeMap<>(consumerToPreviousStatefulTaskIds);
+    }
+
+    public void setAssignedTasks(final KafkaStreamsAssignment assignment) {
+        final Set<TaskId> activeTasks = assignment.assignment().stream()
+            .filter(task -> task.type() == ACTIVE).map(KafkaStreamsAssignment.AssignedTask::id)
+            .collect(Collectors.toSet());
+        final Set<TaskId> standbyTasks = assignment.assignment().stream()
+            .filter(task -> task.type() == STANDBY).map(KafkaStreamsAssignment.AssignedTask::id)
+            .collect(Collectors.toSet());
+        assignedActiveTasks.taskIds(activeTasks);
+        assignedStandbyTasks.taskIds(standbyTasks);
     }
 
     public String currentAssignment() {

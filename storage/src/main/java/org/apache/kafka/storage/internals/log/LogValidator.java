@@ -25,6 +25,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.InvalidTimestampException;
 import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
@@ -100,8 +101,8 @@ public class LogValidator {
     private final MemoryRecords records;
     private final TopicPartition topicPartition;
     private final Time time;
-    private final CompressionType sourceCompression;
-    private final CompressionType targetCompression;
+    private final CompressionType sourceCompressionType;
+    private final Compression targetCompression;
     private final boolean compactedTopic;
     private final byte toMagic;
     private final TimestampType timestampType;
@@ -114,8 +115,8 @@ public class LogValidator {
     public LogValidator(MemoryRecords records,
                         TopicPartition topicPartition,
                         Time time,
-                        CompressionType sourceCompression,
-                        CompressionType targetCompression,
+                        CompressionType sourceCompressionType,
+                        Compression targetCompression,
                         boolean compactedTopic,
                         byte toMagic,
                         TimestampType timestampType,
@@ -127,7 +128,7 @@ public class LogValidator {
         this.records = records;
         this.topicPartition = topicPartition;
         this.time = time;
-        this.sourceCompression = sourceCompression;
+        this.sourceCompressionType = sourceCompressionType;
         this.targetCompression = targetCompression;
         this.compactedTopic = compactedTopic;
         this.toMagic = toMagic;
@@ -157,7 +158,7 @@ public class LogValidator {
     public ValidationResult validateMessagesAndAssignOffsets(PrimitiveRef.LongRef offsetCounter,
                                                              MetricsRecorder metricsRecorder,
                                                              BufferSupplier bufferSupplier) {
-        if (sourceCompression == CompressionType.NONE && targetCompression == CompressionType.NONE) {
+        if (sourceCompressionType == CompressionType.NONE && targetCompression.type() == CompressionType.NONE) {
             // check the magic value
             if (!records.hasMatchingMagic(toMagic))
                 return convertAndAssignOffsetsNonCompressed(offsetCounter, metricsRecorder);
@@ -203,7 +204,7 @@ public class LogValidator {
         // The current implementation of BufferSupplier is naive and works best when the buffer size
         // cardinality is low, so don't use it here
         ByteBuffer newBuffer = ByteBuffer.allocate(sizeInBytesAfterConversion);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(newBuffer, toMagic, CompressionType.NONE,
+        MemoryRecordsBuilder builder = MemoryRecords.builder(newBuffer, toMagic, Compression.NONE,
             timestampType, offsetCounter.value, now, producerId, producerEpoch, sequence, isTransactional,
             partitionLeaderEpoch);
 
@@ -331,12 +332,12 @@ public class LogValidator {
     public ValidationResult validateMessagesAndAssignOffsetsCompressed(LongRef offsetCounter,
                                                                        MetricsRecorder metricsRecorder,
                                                                        BufferSupplier bufferSupplier) {
-        if (targetCompression == CompressionType.ZSTD && interBrokerProtocolVersion.isLessThan(IBP_2_1_IV0))
+        if (targetCompression.type() == CompressionType.ZSTD && interBrokerProtocolVersion.isLessThan(IBP_2_1_IV0))
             throw new UnsupportedCompressionTypeException("Produce requests to inter.broker.protocol.version < 2.1 broker " +
                 "are not allowed to use ZStandard compression");
 
         // No in place assignment situation 1
-        boolean inPlaceAssignment = sourceCompression == targetCompression;
+        boolean inPlaceAssignment = sourceCompressionType == targetCompression.type();
         long now = time.milliseconds();
 
         long maxTimestamp = RecordBatch.NO_TIMESTAMP;
@@ -348,7 +349,7 @@ public class LogValidator {
         // Assume there's only one batch with compressed memory records; otherwise, return InvalidRecordException
         // One exception though is that with format smaller than v2, if sourceCompression is noCompression, then each batch is actually
         // a single record so we'd need to special handle it by creating a single wrapper batch that includes all the records
-        MutableRecordBatch firstBatch = getFirstBatchAndMaybeValidateNoMoreBatches(records, sourceCompression);
+        MutableRecordBatch firstBatch = getFirstBatchAndMaybeValidateNoMoreBatches(records, sourceCompressionType);
 
         // No in place assignment situation 2 and 3: we only need to check for the first batch because:
         //  1. For most cases (compressed records, v2, for example), there's only one batch anyways.
@@ -357,7 +358,7 @@ public class LogValidator {
             inPlaceAssignment = false;
 
         // Do not compress control records unless they are written compressed
-        if (sourceCompression == CompressionType.NONE && firstBatch.isControlBatch())
+        if (sourceCompressionType == CompressionType.NONE && firstBatch.isControlBatch())
             inPlaceAssignment = true;
 
         for (MutableRecordBatch batch : records.batches()) {
@@ -380,7 +381,7 @@ public class LogValidator {
                     Record record = recordsIterator.next();
                     long expectedOffset = expectedInnerOffset.value++;
 
-                    Optional<ApiRecordError> recordError = validateRecordCompression(sourceCompression,
+                    Optional<ApiRecordError> recordError = validateRecordCompression(sourceCompressionType,
                         recordIndex, record);
                     if (!recordError.isPresent()) {
                         recordError = validateRecord(batch, topicPartition, record, recordIndex, now,
@@ -456,7 +457,7 @@ public class LogValidator {
                                                           List<Record> validatedRecords,
                                                           int uncompressedSizeInBytes) {
         long startNanos = time.nanoseconds();
-        int estimatedSize = AbstractRecords.estimateSizeInBytes(toMagic, offsetCounter.value, targetCompression,
+        int estimatedSize = AbstractRecords.estimateSizeInBytes(toMagic, offsetCounter.value, targetCompression.type(),
             validatedRecords);
         // The current implementation of BufferSupplier is naive and works best when the buffer size
         // cardinality is low, so don't use it here

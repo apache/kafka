@@ -29,7 +29,6 @@ import org.apache.kafka.clients.consumer.internals.TopicMetadataRequestManager;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Timer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -39,6 +38,7 @@ import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 
+import static org.apache.kafka.clients.consumer.internals.events.CompletableEvent.calculateDeadlineMs;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -47,16 +47,9 @@ import static org.mockito.Mockito.when;
 
 public class ApplicationEventProcessorTest {
     private final Time time = new MockTime(1);
+    private final BlockingQueue applicationEventQueue = mock(BlockingQueue.class);
+    private final ConsumerMetadata metadata = mock(ConsumerMetadata.class);
     private ApplicationEventProcessor processor;
-    private BlockingQueue applicationEventQueue = mock(BlockingQueue.class);
-    private RequestManagers requestManagers;
-    private ConsumerMetadata metadata = mock(ConsumerMetadata.class);
-    private NetworkClientDelegate networkClientDelegate = mock(NetworkClientDelegate.class);
-    private OffsetsRequestManager offsetRequestManager;
-    private OffsetsRequestManager offsetsRequestManager;
-    private TopicMetadataRequestManager topicMetadataRequestManager;
-    private FetchRequestManager fetchRequestManager;
-    private CoordinatorRequestManager coordinatorRequestManager;
     private CommitRequestManager commitRequestManager;
     private HeartbeatRequestManager heartbeatRequestManager;
     private MembershipManager membershipManager;
@@ -65,15 +58,14 @@ public class ApplicationEventProcessorTest {
     @SuppressWarnings("unchecked")
     public void setup() {
         LogContext logContext = new LogContext();
-        offsetRequestManager = mock(OffsetsRequestManager.class);
-        offsetsRequestManager = mock(OffsetsRequestManager.class);
-        topicMetadataRequestManager = mock(TopicMetadataRequestManager.class);
-        fetchRequestManager = mock(FetchRequestManager.class);
-        coordinatorRequestManager = mock(CoordinatorRequestManager.class);
+        OffsetsRequestManager offsetsRequestManager = mock(OffsetsRequestManager.class);
+        TopicMetadataRequestManager topicMetadataRequestManager = mock(TopicMetadataRequestManager.class);
+        FetchRequestManager fetchRequestManager = mock(FetchRequestManager.class);
+        CoordinatorRequestManager coordinatorRequestManager = mock(CoordinatorRequestManager.class);
         commitRequestManager = mock(CommitRequestManager.class);
         heartbeatRequestManager = mock(HeartbeatRequestManager.class);
         membershipManager = mock(MembershipManager.class);
-        requestManagers = new RequestManagers(
+        RequestManagers requestManagers = new RequestManagers(
             logContext,
             offsetsRequestManager,
             topicMetadataRequestManager,
@@ -85,7 +77,6 @@ public class ApplicationEventProcessorTest {
         );
         processor = new ApplicationEventProcessor(
             new LogContext(),
-            applicationEventQueue,
             requestManagers,
             metadata
         );
@@ -101,8 +92,7 @@ public class ApplicationEventProcessorTest {
 
     @Test
     public void testPrepClosingLeaveGroupEvent() {
-        Timer timer = time.timer(100);
-        LeaveOnCloseEvent event = new LeaveOnCloseEvent(timer);
+        LeaveOnCloseEvent event = new LeaveOnCloseEvent(calculateDeadlineMs(time, 100));
         when(heartbeatRequestManager.membershipManager()).thenReturn(membershipManager);
         when(membershipManager.leaveGroup()).thenReturn(CompletableFuture.completedFuture(null));
         processor.process(event);

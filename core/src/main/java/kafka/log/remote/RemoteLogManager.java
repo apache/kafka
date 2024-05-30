@@ -20,8 +20,10 @@ import com.yammer.metrics.core.Gauge;
 import kafka.cluster.EndPoint;
 import kafka.cluster.Partition;
 import kafka.log.UnifiedLog;
+import kafka.log.remote.quota.RLMQuotaManager;
+import kafka.log.remote.quota.RLMQuotaManagerConfig;
 import kafka.server.BrokerTopicStats;
-import kafka.server.KafkaConfig;
+import kafka.server.QuotaType;
 import kafka.server.StopPartition;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
@@ -30,6 +32,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.message.FetchResponseData;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
@@ -44,6 +47,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.OffsetAndEpoch;
+import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.log.remote.metadata.storage.ClassLoaderAwareRemoteLogMetadataManager;
 import org.apache.kafka.server.log.remote.storage.ClassLoaderAwareRemoteStorageManager;
 import org.apache.kafka.server.log.remote.storage.LogSegmentData;
@@ -143,10 +147,14 @@ public class RemoteLogManager implements Closeable {
     private final Function<TopicPartition, Optional<UnifiedLog>> fetchLog;
     private final BiConsumer<TopicPartition, Long> updateRemoteLogStartOffset;
     private final BrokerTopicStats brokerTopicStats;
+    private final Metrics metrics;
 
     private final RemoteStorageManager remoteLogStorageManager;
 
     private final RemoteLogMetadataManager remoteLogMetadataManager;
+
+    private final RLMQuotaManager rlmCopyQuotaManager;
+    private final RLMQuotaManager rlmFetchQuotaManager;
 
     private final RemoteIndexCache indexCache;
     private final RemoteStorageThreadPool remoteStorageReaderThreadPool;
@@ -165,6 +173,8 @@ public class RemoteLogManager implements Closeable {
     private Optional<EndPoint> endpoint = Optional.empty();
     private boolean closed = false;
 
+    private volatile boolean remoteLogManagerConfigured = false;
+
     /**
      * Creates RemoteLogManager instance with the given arguments.
      *
@@ -176,6 +186,7 @@ public class RemoteLogManager implements Closeable {
      * @param fetchLog  function to get UnifiedLog instance for a given topic.
      * @param updateRemoteLogStartOffset function to update the log-start-offset for a given topic partition.
      * @param brokerTopicStats BrokerTopicStats instance to update the respective metrics.
+     * @param metrics  Metrics instance
      */
     public RemoteLogManager(RemoteLogManagerConfig rlmConfig,
                             int brokerId,
@@ -184,7 +195,8 @@ public class RemoteLogManager implements Closeable {
                             Time time,
                             Function<TopicPartition, Optional<UnifiedLog>> fetchLog,
                             BiConsumer<TopicPartition, Long> updateRemoteLogStartOffset,
-                            BrokerTopicStats brokerTopicStats) throws IOException {
+                            BrokerTopicStats brokerTopicStats,
+                            Metrics metrics) throws IOException {
         this.rlmConfig = rlmConfig;
         this.brokerId = brokerId;
         this.logDir = logDir;
@@ -193,9 +205,13 @@ public class RemoteLogManager implements Closeable {
         this.fetchLog = fetchLog;
         this.updateRemoteLogStartOffset = updateRemoteLogStartOffset;
         this.brokerTopicStats = brokerTopicStats;
+        this.metrics = metrics;
 
         remoteLogStorageManager = createRemoteStorageManager();
         remoteLogMetadataManager = createRemoteLogMetadataManager();
+        rlmCopyQuotaManager = createRLMCopyQuotaManager();
+        rlmFetchQuotaManager = createRLMFetchQuotaManager();
+
         indexCache = new RemoteIndexCache(rlmConfig.remoteLogIndexFileCacheTotalSizeBytes(), remoteLogStorageManager, logDir);
         delayInMs = rlmConfig.remoteLogManagerTaskIntervalMs();
         rlmScheduledThreadPool = new RLMScheduledThreadPool(rlmConfig.remoteLogManagerThreadPoolSize());
@@ -221,6 +237,28 @@ public class RemoteLogManager implements Closeable {
     private void removeMetrics() {
         metricsGroup.removeMetric(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC.getName());
         remoteStorageReaderThreadPool.removeMetrics();
+    }
+
+    RLMQuotaManager createRLMCopyQuotaManager() {
+        return new RLMQuotaManager(copyQuotaManagerConfig(rlmConfig), metrics, QuotaType.RLMCopy$.MODULE$,
+          "Tracking copy byte-rate for Remote Log Manager", time);
+    }
+
+    RLMQuotaManager createRLMFetchQuotaManager() {
+        return new RLMQuotaManager(fetchQuotaManagerConfig(rlmConfig), metrics, QuotaType.RLMFetch$.MODULE$,
+          "Tracking fetch byte-rate for Remote Log Manager", time);
+    }
+
+    static RLMQuotaManagerConfig copyQuotaManagerConfig(RemoteLogManagerConfig rlmConfig) {
+        return new RLMQuotaManagerConfig(rlmConfig.remoteLogManagerCopyMaxBytesPerSecond(),
+          rlmConfig.remoteLogManagerCopyNumQuotaSamples(),
+          rlmConfig.remoteLogManagerCopyQuotaWindowSizeSeconds());
+    }
+
+    static RLMQuotaManagerConfig fetchQuotaManagerConfig(RemoteLogManagerConfig rlmConfig) {
+        return new RLMQuotaManagerConfig(rlmConfig.remoteLogManagerFetchMaxBytesPerSecond(),
+          rlmConfig.remoteLogManagerFetchNumQuotaSamples(),
+          rlmConfig.remoteLogManagerFetchQuotaWindowSizeSeconds());
     }
 
     private <T> T createDelegate(ClassLoader classLoader, String className) {
@@ -252,7 +290,7 @@ public class RemoteLogManager implements Closeable {
 
     private void configureRSM() {
         final Map<String, Object> rsmProps = new HashMap<>(rlmConfig.remoteStorageManagerProps());
-        rsmProps.put(KafkaConfig.BrokerIdProp(), brokerId);
+        rsmProps.put(ServerConfigs.BROKER_ID_CONFIG, brokerId);
         remoteLogStorageManager.configure(rsmProps);
     }
 
@@ -286,7 +324,7 @@ public class RemoteLogManager implements Closeable {
         // update the remoteLogMetadataProps here to override endpoint config if any
         rlmmProps.putAll(rlmConfig.remoteLogMetadataManagerProps());
 
-        rlmmProps.put(KafkaConfig.BrokerIdProp(), brokerId);
+        rlmmProps.put(ServerConfigs.BROKER_ID_CONFIG, brokerId);
         rlmmProps.put(LOG_DIR_CONFIG, logDir);
         rlmmProps.put("cluster.id", clusterId);
 
@@ -298,6 +336,11 @@ public class RemoteLogManager implements Closeable {
         // in connecting to the brokers or remote storages.
         configureRSM();
         configureRLMM();
+        remoteLogManagerConfigured = true;
+    }
+
+    private boolean isRemoteLogManagerConfigured() {
+        return this.remoteLogManagerConfigured;
     }
 
     public RemoteStorageManager storageManager() {
@@ -330,6 +373,10 @@ public class RemoteLogManager implements Closeable {
                                    Set<Partition> partitionsBecomeFollower,
                                    Map<String, Uuid> topicIds) {
         LOGGER.debug("Received leadership changes for leaders: {} and followers: {}", partitionsBecomeLeader, partitionsBecomeFollower);
+
+        if (this.rlmConfig.enableRemoteStorageSystem() && !isRemoteLogManagerConfigured()) {
+            throw new KafkaException("RemoteLogManager is not configured when remote storage system is enabled");
+        }
 
         Map<TopicIdPartition, Integer> leaderPartitionsWithLeaderEpoch = filterPartitions(partitionsBecomeLeader)
                 .collect(Collectors.toMap(
@@ -605,6 +652,7 @@ public class RemoteLogManager implements Closeable {
         // the task's run() method.
         private volatile Optional<OffsetAndEpoch> copiedOffsetOption = Optional.empty();
         private volatile boolean isLogStartOffsetUpdatedOnBecomingLeader = false;
+        private volatile Optional<String> logDirectory = Optional.empty();
 
         public void convertToLeader(int leaderEpochVal) {
             if (leaderEpochVal < 0) {
@@ -815,6 +863,13 @@ public class RemoteLogManager implements Closeable {
                 }
 
                 UnifiedLog log = unifiedLogOptional.get();
+                // In the first run after completing altering logDir within broker, we should make sure the state is reset. (KAFKA-16711)
+                if (!log.parentDir().equals(logDirectory.orElse(null))) {
+                    copiedOffsetOption = Optional.empty();
+                    isLogStartOffsetUpdatedOnBecomingLeader = false;
+                    logDirectory = Optional.of(log.parentDir());
+                }
+
                 if (isLeader()) {
                     // Copy log segments to remote storage
                     copyLogSegmentsToRemote(log);
@@ -828,14 +883,13 @@ public class RemoteLogManager implements Closeable {
                 }
             } catch (InterruptedException ex) {
                 if (!isCancelled()) {
-                    logger.warn("Current thread for topic-partition-id {} is interrupted. Reason: {}", topicIdPartition, ex.getMessage());
+                    logger.warn("Current thread for topic-partition-id {} is interrupted", topicIdPartition, ex);
                 }
             } catch (RetriableException ex) {
                 logger.debug("Encountered a retryable error while executing current task for topic-partition {}", topicIdPartition, ex);
             } catch (Exception ex) {
                 if (!isCancelled()) {
-                    logger.warn("Current task for topic-partition {} received error but it will be scheduled. " +
-                            "Reason: {}", topicIdPartition, ex.getMessage());
+                    logger.warn("Current task for topic-partition {} received error but it will be scheduled", topicIdPartition, ex);
                 }
             }
         }
@@ -1217,26 +1271,39 @@ public class RemoteLogManager implements Closeable {
      * @return true if the remote segment's epoch/offsets are within the leader epoch lineage of the partition.
      */
     // Visible for testing
-    public static boolean isRemoteSegmentWithinLeaderEpochs(RemoteLogSegmentMetadata segmentMetadata,
-                                                            long logEndOffset,
-                                                            NavigableMap<Integer, Long> leaderEpochs) {
+    static boolean isRemoteSegmentWithinLeaderEpochs(RemoteLogSegmentMetadata segmentMetadata,
+                                                     long logEndOffset,
+                                                     NavigableMap<Integer, Long> leaderEpochs) {
         long segmentEndOffset = segmentMetadata.endOffset();
         // Filter epochs that does not have any messages/records associated with them.
         NavigableMap<Integer, Long> segmentLeaderEpochs = buildFilteredLeaderEpochMap(segmentMetadata.segmentLeaderEpochs());
         // Check for out of bound epochs between segment epochs and current leader epochs.
-        Integer segmentFirstEpoch = segmentLeaderEpochs.firstKey();
         Integer segmentLastEpoch = segmentLeaderEpochs.lastKey();
-        if (segmentFirstEpoch < leaderEpochs.firstKey() || segmentLastEpoch > leaderEpochs.lastKey()) {
+        if (segmentLastEpoch < leaderEpochs.firstKey() || segmentLastEpoch > leaderEpochs.lastKey()) {
             LOGGER.debug("Segment {} is not within the partition leader epoch lineage. " +
                             "Remote segment epochs: {} and partition leader epochs: {}",
                     segmentMetadata.remoteLogSegmentId(), segmentLeaderEpochs, leaderEpochs);
             return false;
         }
-
+        // There can be overlapping remote log segments in the remote storage. (eg)
+        // leader-epoch-file-cache: {(5, 10), (7, 15), (9, 100)}
+        // segment1: offset-range = 5-50, Broker = 0, epochs = {(5, 10), (7, 15)}
+        // segment2: offset-range = 14-150, Broker = 1, epochs = {(5, 14), (7, 15), (9, 100)}, after leader-election.
+        // When the segment1 gets deleted, then the log-start-offset = 51 and leader-epoch-file-cache gets updated to: {(7, 51), (9, 100)}.
+        // While validating the segment2, we should ensure the overlapping remote log segments case.
+        Integer segmentFirstEpoch = segmentLeaderEpochs.ceilingKey(leaderEpochs.firstKey());
+        if (segmentFirstEpoch == null) {
+            LOGGER.debug("Segment {} is not within the partition leader epoch lineage. " +
+                            "Remote segment epochs: {} and partition leader epochs: {}",
+                    segmentMetadata.remoteLogSegmentId(), segmentLeaderEpochs, leaderEpochs);
+            return false;
+        }
         for (Map.Entry<Integer, Long> entry : segmentLeaderEpochs.entrySet()) {
             int epoch = entry.getKey();
             long offset = entry.getValue();
-
+            if (epoch < segmentFirstEpoch) {
+                continue;
+            }
             // If segment's epoch does not exist in the leader epoch lineage then it is not a valid segment.
             if (!leaderEpochs.containsKey(epoch)) {
                 LOGGER.debug("Segment {} epoch {} is not within the leader epoch lineage. " +
@@ -1244,24 +1311,29 @@ public class RemoteLogManager implements Closeable {
                         segmentMetadata.remoteLogSegmentId(), epoch, segmentLeaderEpochs, leaderEpochs);
                 return false;
             }
-
-            // Segment's first epoch's offset should be more than or equal to the respective leader epoch's offset.
-            if (epoch == segmentFirstEpoch && offset < leaderEpochs.get(epoch)) {
-                LOGGER.debug("Segment {} first epoch {} offset is less than leader epoch offset {}.",
-                        segmentMetadata.remoteLogSegmentId(), epoch, leaderEpochs.get(epoch));
+            // Two cases:
+            // case-1: When the segment-first-epoch equals to the first-epoch in the leader-epoch-lineage, then the
+            // offset value can lie anywhere between 0 to (next-epoch-start-offset - 1) is valid.
+            // case-2: When the segment-first-epoch is not equal to the first-epoch in the leader-epoch-lineage, then
+            // the offset value should be between (current-epoch-start-offset) to (next-epoch-start-offset - 1).
+            if (epoch == segmentFirstEpoch && leaderEpochs.lowerKey(epoch) != null && offset < leaderEpochs.get(epoch)) {
+                LOGGER.debug("Segment {} first-valid epoch {} offset is less than first leader epoch offset {}." +
+                                "Remote segment epochs: {} and partition leader epochs: {}",
+                        segmentMetadata.remoteLogSegmentId(), epoch, leaderEpochs.get(epoch),
+                        segmentLeaderEpochs, leaderEpochs);
                 return false;
             }
-
             // Segment's end offset should be less than or equal to the respective leader epoch's offset.
             if (epoch == segmentLastEpoch) {
                 Map.Entry<Integer, Long> nextEntry = leaderEpochs.higherEntry(epoch);
                 if (nextEntry != null && segmentEndOffset > nextEntry.getValue() - 1) {
-                    LOGGER.debug("Segment {} end offset {} is more than leader epoch offset {}.",
-                            segmentMetadata.remoteLogSegmentId(), segmentEndOffset, nextEntry.getValue() - 1);
+                    LOGGER.debug("Segment {} end offset {} is more than leader epoch offset {}." +
+                                    "Remote segment epochs: {} and partition leader epochs: {}",
+                            segmentMetadata.remoteLogSegmentId(), segmentEndOffset, nextEntry.getValue() - 1,
+                            segmentLeaderEpochs, leaderEpochs);
                     return false;
                 }
             }
-
             // Next segment epoch entry and next leader epoch entry should be same to ensure that the segment's epoch
             // is within the leader epoch lineage.
             if (epoch != segmentLastEpoch && !leaderEpochs.higherEntry(epoch).equals(segmentLeaderEpochs.higherEntry(epoch))) {
@@ -1283,7 +1355,6 @@ public class RemoteLogManager implements Closeable {
     /**
      * Returns a map containing the epoch vs start-offset for the given leader epoch map by filtering the epochs that
      * does not contain any messages/records associated with them.
-     *
      * For ex:
      * <pre>
      * {@code
@@ -1298,8 +1369,7 @@ public class RemoteLogManager implements Closeable {
      *  7 - 70
      * }
      * </pre>
-     *
-     *  When the above leaderEpochMap is passed to this method, it returns the following map:
+     * When the above leaderEpochMap is passed to this method, it returns the following map:
      * <pre>
      * {@code
      *  <epoch - start offset>
@@ -1312,27 +1382,24 @@ public class RemoteLogManager implements Closeable {
      *  7 - 70
      * }
      * </pre>
-     *
      * @param leaderEpochs The leader epoch map to be refined.
      */
     // Visible for testing
-    public static NavigableMap<Integer, Long> buildFilteredLeaderEpochMap(NavigableMap<Integer, Long> leaderEpochs) {
-        List<Integer> duplicatedEpochs = new ArrayList<>();
-        Map.Entry<Integer, Long> previousEntry = null;
-        for (Map.Entry<Integer, Long> entry : leaderEpochs.entrySet()) {
-            if (previousEntry != null && previousEntry.getValue().equals(entry.getValue())) {
-                duplicatedEpochs.add(previousEntry.getKey());
+    static NavigableMap<Integer, Long> buildFilteredLeaderEpochMap(NavigableMap<Integer, Long> leaderEpochs) {
+        List<Integer> epochsWithNoMessages = new ArrayList<>();
+        Map.Entry<Integer, Long> previousEpochAndOffset = null;
+        for (Map.Entry<Integer, Long> currentEpochAndOffset : leaderEpochs.entrySet()) {
+            if (previousEpochAndOffset != null && previousEpochAndOffset.getValue().equals(currentEpochAndOffset.getValue())) {
+                epochsWithNoMessages.add(previousEpochAndOffset.getKey());
             }
-            previousEntry = entry;
+            previousEpochAndOffset = currentEpochAndOffset;
         }
-
-        if (duplicatedEpochs.isEmpty()) {
+        if (epochsWithNoMessages.isEmpty()) {
             return leaderEpochs;
         }
-
         TreeMap<Integer, Long> filteredLeaderEpochs = new TreeMap<>(leaderEpochs);
-        for (Integer duplicatedEpoch : duplicatedEpochs) {
-            filteredLeaderEpochs.remove(duplicatedEpoch);
+        for (Integer epochWithNoMessage : epochsWithNoMessages) {
+            filteredLeaderEpochs.remove(epochWithNoMessage);
         }
         return filteredLeaderEpochs;
     }
