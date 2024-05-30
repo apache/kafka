@@ -157,7 +157,7 @@ public class HeartbeatRequestManagerTest {
         final long retryBackoffMs = 100;
         final long retryBackoffMaxMs = 1000;
         LogContext logContext = new LogContext();
-        HeartbeatRequestState heartbeatRequestState1 = new HeartbeatRequestState(
+        HeartbeatRequestState heartbeatRequestState = new HeartbeatRequestState(
                 logContext,
                 time,
                 10,
@@ -174,10 +174,10 @@ public class HeartbeatRequestManagerTest {
         );
 
         String target = requestState.toStringBase() +
-                ", heartbeatTimer=" + heartbeatRequestState1.heartbeatTimer() +
-                ", heartbeatIntervalMs=" + heartbeatRequestState1.heartbeatIntervalMs();
+                ", heartbeatTimer=" + heartbeatRequestState.heartbeatTimer() +
+                ", heartbeatIntervalMs=" + heartbeatRequestState.heartbeatIntervalMs();
 
-        assertEquals(target, heartbeatRequestState1.toStringBase());
+        assertEquals(target, heartbeatRequestState.toStringBase());
     }
 
     @Test
