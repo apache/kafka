@@ -1367,7 +1367,9 @@ public class KafkaAdminClient extends AdminClient {
                     }
                 } else {
                     try {
-                        call.handleResponse(response.responseBody());
+                        final AbstractResponse responseBody = response.responseBody();
+                        validateResponse(responseBody);
+                        call.handleResponse(responseBody);
                         if (log.isTraceEnabled())
                             log.trace("{} got response {}", call, response.responseBody());
                     } catch (Throwable t) {
@@ -1376,6 +1378,13 @@ public class KafkaAdminClient extends AdminClient {
                         call.fail(now, t);
                     }
                 }
+            }
+        }
+
+        private void validateResponse(final AbstractResponse abstractResponse) {
+            if (abstractResponse instanceof MetadataResponse) {
+                if (((MetadataResponse) abstractResponse).brokers().isEmpty())
+                    throw new StaleMetadataException("Metadata fetch failed due to missing broker list");
             }
         }
 
@@ -3526,8 +3535,6 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse abstractResponse) {
                 MetadataResponse metadataResponse = (MetadataResponse) abstractResponse;
                 Collection<Node> nodes = metadataResponse.brokers();
-                if (nodes.isEmpty())
-                    throw new StaleMetadataException("Metadata fetch failed due to missing broker list");
 
                 HashSet<Node> allNodes = new HashSet<>(nodes);
                 final ListConsumerGroupsResults results = new ListConsumerGroupsResults(allNodes, all);

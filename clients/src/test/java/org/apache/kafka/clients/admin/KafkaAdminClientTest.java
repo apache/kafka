@@ -7298,21 +7298,9 @@ public class KafkaAdminClientTest {
     @Test
     public void testListTransactions() throws Exception {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
-            MetadataResponseData.MetadataResponseBrokerCollection brokers =
-                new MetadataResponseData.MetadataResponseBrokerCollection();
-
-            env.cluster().nodes().forEach(node -> {
-                brokers.add(new MetadataResponseData.MetadataResponseBroker()
-                    .setHost(node.host())
-                    .setNodeId(node.id())
-                    .setPort(node.port())
-                    .setRack(node.rack())
-                );
-            });
-
             env.kafkaClient().prepareResponse(
                 request -> request instanceof MetadataRequest,
-                new MetadataResponse(new MetadataResponseData().setBrokers(brokers),
+                new MetadataResponse(new MetadataResponseData().setBrokers(brokers(env)),
                     MetadataResponseData.HIGHEST_SUPPORTED_VERSION)
             );
 
@@ -7431,7 +7419,8 @@ public class KafkaAdminClientTest {
                 MetadataRequest metadataRequest = (MetadataRequest) request;
                 return metadataRequest.topics().equals(singletonList(topicPartition.topic()));
             },
-            new MetadataResponse(new MetadataResponseData().setTopics(responseTopics),
+            new MetadataResponse(new MetadataResponseData().setTopics(responseTopics)
+                    .setBrokers(brokers(env)),
                 MetadataResponseData.HIGHEST_SUPPORTED_VERSION)
         );
     }
@@ -7677,6 +7666,44 @@ public class KafkaAdminClientTest {
             assertNotNull(result.all());
             TestUtils.assertFutureThrows(result.all(), Errors.UNSUPPORTED_VERSION.exception().getClass());
         }
+    }
+
+    @Test
+    public void describeTopicsWithEmptyMetadataRetries() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            MetadataResponsePartition metadataResponsePartition = new MetadataResponsePartition()
+                    .setPartitionIndex(0);
+            MetadataResponseData.MetadataResponseTopicCollection topics =
+                    new MetadataResponseData.MetadataResponseTopicCollection();
+            topics.add(new MetadataResponseTopic().setName("test-topic").setPartitions(singletonList(metadataResponsePartition)));
+
+            env.kafkaClient().prepareResponse(
+                    request -> request instanceof MetadataRequest,
+                    new MetadataResponse(new MetadataResponseData(), MetadataResponseData.HIGHEST_SUPPORTED_VERSION));
+
+            env.kafkaClient().prepareResponse(
+                    request -> request instanceof MetadataRequest,
+                    new MetadataResponse(new MetadataResponseData().setBrokers(brokers(env))
+                            .setTopics(topics), MetadataResponseData.HIGHEST_SUPPORTED_VERSION));
+
+            DescribeTopicsResult describeTopicsResult = env.adminClient().describeTopics(singleton("test-topic"));
+            assertTrue(describeTopicsResult.allTopicNames().get().containsKey("test-topic"));
+        }
+    }
+
+    private static MetadataResponseData.MetadataResponseBrokerCollection brokers(AdminClientUnitTestEnv env) {
+        MetadataResponseData.MetadataResponseBrokerCollection brokers =
+                new MetadataResponseData.MetadataResponseBrokerCollection();
+
+        env.cluster().nodes().forEach(node ->
+                brokers.add(new MetadataResponseData.MetadataResponseBroker()
+                        .setHost(node.host())
+                        .setNodeId(node.id())
+                        .setPort(node.port())
+                        .setRack(node.rack())
+                ));
+
+        return brokers;
     }
 
     private static ListClientMetricsResourcesResponse prepareListClientMetricsResourcesResponse(Errors error) {
