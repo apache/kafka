@@ -312,6 +312,8 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return AllocateProducerIdsRequest.parse(buffer, apiVersion);
             case CONSUMER_GROUP_HEARTBEAT:
                 return ConsumerGroupHeartbeatRequest.parse(buffer, apiVersion);
+            case CONSUMER_GROUP_INSTALL_ASSIGNMENT:
+                return ConsumerGroupInstallAssignmentRequest.parse(buffer, apiVersion);
             case CONSUMER_GROUP_DESCRIBE:
                 return ConsumerGroupDescribeRequest.parse(buffer, apiVersion);
             case CONTROLLER_REGISTRATION:
