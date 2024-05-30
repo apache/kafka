@@ -187,7 +187,7 @@ public abstract class SaslAuthenticatorFailureDelayTest {
         saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, clientMechanism);
         saslServerConfigs.put(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, serverMechanisms);
         if (serverMechanisms.contains("DIGEST-MD5")) {
-            saslServerConfigs.put("digest-md5." + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS,
+            saslServerConfigs.put("digest-md5." + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG,
                     TestDigestLoginModule.DigestServerCallbackHandler.class.getName());
         }
         return TestJaasConfig.createConfiguration(clientMechanism, serverMechanisms);

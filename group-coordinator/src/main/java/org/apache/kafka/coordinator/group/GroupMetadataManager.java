@@ -58,7 +58,7 @@ import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
+import org.apache.kafka.coordinator.group.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignorException;
 import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.consumer.Assignment;
@@ -158,7 +158,7 @@ public class GroupMetadataManager {
         private SnapshotRegistry snapshotRegistry = null;
         private Time time = null;
         private CoordinatorTimer<Void, CoordinatorRecord> timer = null;
-        private List<PartitionAssignor> consumerGroupAssignors = null;
+        private List<ConsumerGroupPartitionAssignor> consumerGroupAssignors = null;
         private int consumerGroupMaxSize = Integer.MAX_VALUE;
         private int consumerGroupHeartbeatIntervalMs = 5000;
         private int consumerGroupMetadataRefreshIntervalMs = Integer.MAX_VALUE;
@@ -192,7 +192,7 @@ public class GroupMetadataManager {
             return this;
         }
 
-        Builder withConsumerGroupAssignors(List<PartitionAssignor> consumerGroupAssignors) {
+        Builder withConsumerGroupAssignors(List<ConsumerGroupPartitionAssignor> consumerGroupAssignors) {
             this.consumerGroupAssignors = consumerGroupAssignors;
             return this;
         }
@@ -323,14 +323,14 @@ public class GroupMetadataManager {
     private final GroupCoordinatorMetricsShard metrics;
 
     /**
-     * The supported partition assignors keyed by their name.
+     * The supported consumer group partition assignors keyed by their name.
      */
-    private final Map<String, PartitionAssignor> assignors;
+    private final Map<String, ConsumerGroupPartitionAssignor> consumerGroupAssignors;
 
     /**
-     * The default assignor used.
+     * The default consumer group assignor used.
      */
-    private final PartitionAssignor defaultAssignor;
+    private final ConsumerGroupPartitionAssignor defaultConsumerGroupAssignor;
 
     /**
      * The classic and consumer groups keyed by their name.
@@ -412,7 +412,7 @@ public class GroupMetadataManager {
         Time time,
         CoordinatorTimer<Void, CoordinatorRecord> timer,
         GroupCoordinatorMetricsShard metrics,
-        List<PartitionAssignor> assignors,
+        List<ConsumerGroupPartitionAssignor> consumerGroupAssignors,
         MetadataImage metadataImage,
         int consumerGroupMaxSize,
         int consumerGroupSessionTimeoutMs,
@@ -432,8 +432,8 @@ public class GroupMetadataManager {
         this.timer = timer;
         this.metrics = metrics;
         this.metadataImage = metadataImage;
-        this.assignors = assignors.stream().collect(Collectors.toMap(PartitionAssignor::name, Function.identity()));
-        this.defaultAssignor = assignors.get(0);
+        this.consumerGroupAssignors = consumerGroupAssignors.stream().collect(Collectors.toMap(ConsumerGroupPartitionAssignor::name, Function.identity()));
+        this.defaultConsumerGroupAssignor = consumerGroupAssignors.get(0);
         this.groups = new TimelineHashMap<>(snapshotRegistry, 0);
         this.groupsByTopics = new TimelineHashMap<>(snapshotRegistry, 0);
         this.consumerGroupMaxSize = consumerGroupMaxSize;
@@ -539,7 +539,7 @@ public class GroupMetadataManager {
             try {
                 describedGroups.add(consumerGroup(groupId, committedOffset).asDescribedGroup(
                     committedOffset,
-                    defaultAssignor.name(),
+                    defaultConsumerGroupAssignor.name(),
                     metadataImage.topics()
                 ));
             } catch (GroupIdNotFoundException exception) {
@@ -1041,9 +1041,9 @@ public class GroupMetadataManager {
             throw new InvalidRequestException("MemberEpoch is invalid.");
         }
 
-        if (request.serverAssignor() != null && !assignors.containsKey(request.serverAssignor())) {
+        if (request.serverAssignor() != null && !consumerGroupAssignors.containsKey(request.serverAssignor())) {
             throw new UnsupportedAssignorException("ServerAssignor " + request.serverAssignor()
-                + " is not supported. Supported assignors: " + String.join(", ", assignors.keySet())
+                + " is not supported. Supported assignors: " + String.join(", ", consumerGroupAssignors.keySet())
                 + ".");
         }
     }
@@ -1892,10 +1892,10 @@ public class GroupMetadataManager {
         String preferredServerAssignor = group.computePreferredServerAssignor(
             member,
             updatedMember
-        ).orElse(defaultAssignor.name());
+        ).orElse(defaultConsumerGroupAssignor.name());
         try {
             TargetAssignmentBuilder assignmentResultBuilder =
-                new TargetAssignmentBuilder(group.groupId(), groupEpoch, assignors.get(preferredServerAssignor))
+                new TargetAssignmentBuilder(group.groupId(), groupEpoch, consumerGroupAssignors.get(preferredServerAssignor))
                     .withMembers(group.members())
                     .withStaticMembers(group.staticMembers())
                     .withSubscriptionMetadata(subscriptionMetadata)

@@ -29,7 +29,8 @@ import kafka.utils.{CoreUtils, Logging}
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.Reconfigurable
-import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, SslConfigs}
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
+import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, SaslConfigs, SslConfigs}
 import org.apache.kafka.common.metrics.{JmxReporter, Metrics, MetricsReporter}
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
@@ -39,7 +40,7 @@ import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.security.PasswordEncoder
 import org.apache.kafka.server.ProcessRole
-import org.apache.kafka.server.config.{ConfigType, KafkaSecurityConfigs, ServerConfigs, ReplicationConfigs, ServerLogConfigs, ServerTopicConfigSynonyms, ZooKeeperInternals}
+import org.apache.kafka.server.config.{ConfigType, ServerConfigs, ReplicationConfigs, ServerLogConfigs, ServerTopicConfigSynonyms, ZooKeeperInternals}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.{ClientMetricsReceiverPlugin, MetricConfigs}
 import org.apache.kafka.server.telemetry.ClientTelemetry
@@ -101,11 +102,11 @@ object DynamicBrokerConfig {
   private val ClusterLevelListenerConfigs = Set(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG, ServerConfigs.NUM_NETWORK_THREADS_CONFIG)
   private val PerBrokerConfigs = (DynamicSecurityConfigs ++ DynamicListenerConfig.ReconfigurableConfigs).diff(
     ClusterLevelListenerConfigs)
-  private val ListenerMechanismConfigs = Set(KafkaSecurityConfigs.SASL_JAAS_CONFIG,
-    KafkaSecurityConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS_CONFIG,
-    KafkaSecurityConfigs.SASL_LOGIN_CLASS_CONFIG,
-    KafkaSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG,
-    KafkaSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS_CONFIG)
+  private val ListenerMechanismConfigs = Set(SaslConfigs.SASL_JAAS_CONFIG,
+    SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS,
+    SaslConfigs.SASL_LOGIN_CLASS,
+    BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG,
+    BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS_CONFIG)
 
   private val ReloadableFileConfigs = Set(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG)
 
@@ -970,39 +971,39 @@ object DynamicListenerConfig {
     SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG,
 
     // SSL configs
-    KafkaSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG,
-    KafkaSecurityConfigs.SSL_PROTOCOL_CONFIG,
-    KafkaSecurityConfigs.SSL_PROVIDER_CONFIG,
-    KafkaSecurityConfigs.SSL_CIPHER_SUITES_CONFIG,
-    KafkaSecurityConfigs.SSL_ENABLED_PROTOCOLS_CONFIG,
-    KafkaSecurityConfigs.SSL_KEYSTORE_TYPE_CONFIG,
-    KafkaSecurityConfigs.SSL_KEYSTORE_LOCATION_CONFIG,
-    KafkaSecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG,
-    KafkaSecurityConfigs.SSL_KEY_PASSWORD_CONFIG,
-    KafkaSecurityConfigs.SSL_TRUSTSTORE_TYPE_CONFIG,
-    KafkaSecurityConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG,
-    KafkaSecurityConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG,
-    KafkaSecurityConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG,
-    KafkaSecurityConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG,
-    KafkaSecurityConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG,
-    KafkaSecurityConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG,
-    KafkaSecurityConfigs.SSL_CLIENT_AUTH_CONFIG,
-    KafkaSecurityConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG,
+    BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG,
+    SslConfigs.SSL_PROTOCOL_CONFIG,
+    SslConfigs.SSL_PROVIDER_CONFIG,
+    SslConfigs.SSL_CIPHER_SUITES_CONFIG,
+    SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG,
+    SslConfigs.SSL_KEYSTORE_TYPE_CONFIG,
+    SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG,
+    SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG,
+    SslConfigs.SSL_KEY_PASSWORD_CONFIG,
+    SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG,
+    SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG,
+    SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG,
+    SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG,
+    SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG,
+    SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG,
+    SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG,
+    BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG,
+    SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG,
 
     // SASL configs
-    KafkaSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG,
-    KafkaSecurityConfigs.SASL_JAAS_CONFIG,
-    KafkaSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
-    KafkaSecurityConfigs.SASL_KERBEROS_SERVICE_NAME_CONFIG,
-    KafkaSecurityConfigs.SASL_KERBEROS_KINIT_CMD_CONFIG,
-    KafkaSecurityConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR_CONFIG,
-    KafkaSecurityConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER_CONFIG,
-    KafkaSecurityConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN_CONFIG,
-    KafkaSecurityConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_CONFIG,
-    KafkaSecurityConfigs.SASL_LOGIN_REFRESH_WINDOW_FACTOR_CONFIG,
-    KafkaSecurityConfigs.SASL_LOGIN_REFRESH_WINDOW_JITTER_CONFIG,
-    KafkaSecurityConfigs.SASL_LOGIN_REFRESH_MIN_PERIOD_SECONDS_CONFIG,
-    KafkaSecurityConfigs.SASL_LOGIN_REFRESH_BUFFER_SECONDS_CONFIG,
+    BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG,
+    SaslConfigs.SASL_JAAS_CONFIG,
+    BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG,
+    SaslConfigs.SASL_KERBEROS_SERVICE_NAME,
+    SaslConfigs.SASL_KERBEROS_KINIT_CMD,
+    SaslConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR,
+    SaslConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER,
+    SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN,
+    BrokerSecurityConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_CONFIG,
+    SaslConfigs.SASL_LOGIN_REFRESH_WINDOW_FACTOR,
+    SaslConfigs.SASL_LOGIN_REFRESH_WINDOW_JITTER,
+    SaslConfigs.SASL_LOGIN_REFRESH_MIN_PERIOD_SECONDS,
+    SaslConfigs.SASL_LOGIN_REFRESH_BUFFER_SECONDS,
 
     // Connection limit configs
     SocketServerConfigs.MAX_CONNECTIONS_CONFIG,

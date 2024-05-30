@@ -3389,7 +3389,7 @@ class ReplicaManagerTest {
     when(mockLog.remoteLogEnabled()).thenReturn(enableRemoteStorage)
     when(mockLog.remoteStorageSystemEnable).thenReturn(enableRemoteStorage)
     val aliveBrokers = aliveBrokerIds.map(brokerId => new Node(brokerId, s"host$brokerId", brokerId))
-    brokerTopicStats = new BrokerTopicStats(java.util.Optional.of(KafkaConfig.fromProps(props)))
+    brokerTopicStats = new BrokerTopicStats(KafkaConfig.fromProps(props).remoteLogManagerConfig.enableRemoteStorageSystem)
 
     val metadataCache: MetadataCache = mock(classOf[MetadataCache])
     when(metadataCache.topicIdInfo()).thenReturn((topicIds.asJava, topicNames.asJava))
@@ -4095,7 +4095,7 @@ class ReplicaManagerTest {
     val config = new AbstractConfig(RemoteLogManagerConfig.CONFIG_DEF, props)
     val remoteLogManagerConfig = new RemoteLogManagerConfig(config)
     val mockLog = mock(classOf[UnifiedLog])
-    val brokerTopicStats = new BrokerTopicStats(java.util.Optional.of(KafkaConfig.fromProps(props)))
+    val brokerTopicStats = new BrokerTopicStats(KafkaConfig.fromProps(props).isRemoteLogStorageSystemEnabled)
     val remoteLogManager = new RemoteLogManager(
       remoteLogManagerConfig,
       0,
@@ -4105,6 +4105,7 @@ class ReplicaManagerTest {
       _ => Optional.of(mockLog),
       (TopicPartition, Long) => {},
       brokerTopicStats)
+    remoteLogManager.startup()
     val spyRLM = spy(remoteLogManager)
 
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog = true, remoteLogManager = Some(spyRLM))
@@ -4193,7 +4194,7 @@ class ReplicaManagerTest {
     val config = new AbstractConfig(RemoteLogManagerConfig.CONFIG_DEF, props)
     val remoteLogManagerConfig = new RemoteLogManagerConfig(config)
     val dummyLog = mock(classOf[UnifiedLog])
-    val brokerTopicStats = new BrokerTopicStats(java.util.Optional.of(KafkaConfig.fromProps(props)))
+    val brokerTopicStats = new BrokerTopicStats(KafkaConfig.fromProps(props).isRemoteLogStorageSystemEnabled)
     val remoteLogManager = new RemoteLogManager(
       remoteLogManagerConfig,
       0,
@@ -4203,6 +4204,7 @@ class ReplicaManagerTest {
       _ => Optional.of(dummyLog),
       (TopicPartition, Long) => {},
       brokerTopicStats)
+    remoteLogManager.startup()
     val spyRLM = spy(remoteLogManager)
     val timer = new MockTimer(time)
 

@@ -49,7 +49,7 @@ import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOG
  *           movements during reassignment. (Sticky) </li>
  * </ol>
  */
-public class RangeAssignor implements PartitionAssignor {
+public class RangeAssignor implements ConsumerGroupPartitionAssignor {
     public static final String RANGE_ASSIGNOR_NAME = "range";
 
     @Override

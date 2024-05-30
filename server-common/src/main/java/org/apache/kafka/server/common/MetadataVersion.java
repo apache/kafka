@@ -258,6 +258,10 @@ public enum MetadataVersion {
         this.didMetadataChange = didMetadataChange;
     }
 
+    public String featureName() {
+        return FEATURE_NAME;
+    }
+
     public short featureLevel() {
         return featureLevel;
     }
