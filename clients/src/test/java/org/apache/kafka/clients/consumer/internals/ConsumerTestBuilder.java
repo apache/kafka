@@ -259,8 +259,8 @@ public class ConsumerTestBuilder implements Closeable {
                 metricsManager,
                 networkClientDelegate,
                 apiVersions));
-        this.metadataErrorManager = new MetadataErrorManager(metadata,
-                backgroundEventHandler);
+        this.metadataErrorManager = spy(new MetadataErrorManager(metadata,
+                backgroundEventHandler));
         this.requestManagers = new RequestManagers(logContext,
                 offsetsRequestManager,
                 topicMetadataRequestManager,

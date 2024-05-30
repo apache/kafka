@@ -22,9 +22,11 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.AsyncCommitEvent;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
+import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
@@ -34,6 +36,7 @@ import org.apache.kafka.clients.consumer.internals.events.TopicMetadataEvent;
 import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsEvent;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.protocol.Errors;
@@ -71,6 +74,7 @@ import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -90,6 +94,7 @@ public class ConsumerNetworkThreadTest {
     private ConsumerMetadata metadata;
     private NetworkClientDelegate networkClient;
     private BlockingQueue<ApplicationEvent> applicationEventsQueue;
+    private BlockingQueue<BackgroundEvent> backgroundEventsQueue;
     private ApplicationEventProcessor applicationEventProcessor;
     private OffsetsRequestManager offsetsRequestManager;
     private CommitRequestManager commitRequestManager;
@@ -106,6 +111,7 @@ public class ConsumerNetworkThreadTest {
         networkClient = testBuilder.networkClientDelegate;
         client = testBuilder.client;
         applicationEventsQueue = testBuilder.applicationEventQueue;
+        backgroundEventsQueue = testBuilder.backgroundEventQueue;
         applicationEventProcessor = testBuilder.applicationEventProcessor;
         commitRequestManager = testBuilder.commitRequestManager.orElseThrow(IllegalStateException::new);
         offsetsRequestManager = testBuilder.offsetsRequestManager;
@@ -338,6 +344,25 @@ public class ConsumerNetworkThreadTest {
         consumerNetworkThread.runOnce();
         verify(applicationEventReaper).reap(any(Long.class));
     }
+
+    @Test
+    void testMetadataErrorEvent() {
+        metadata.fatalError(new AuthenticationException("Authentication failed"));
+
+        consumerNetworkThread.runOnce();
+        BackgroundEvent event = backgroundEventsQueue.poll();
+        assertNotNull(event);
+        assertEquals(BackgroundEvent.Type.ERROR, event.type());
+        assertEquals(AuthenticationException.class, ((ErrorEvent) event).error().getClass());
+        assertEquals("Authentication failed", ((ErrorEvent) event).error().getMessage());
+    }
+
+    @Test
+    void testNoMetadataErrorEvent() {
+        consumerNetworkThread.runOnce();
+        assertEquals(0, backgroundEventsQueue.size());
+    }
+
 
     private void prepareOffsetCommitRequest(final Map<TopicPartition, Long> expectedOffsets,
                                             final Errors error,
