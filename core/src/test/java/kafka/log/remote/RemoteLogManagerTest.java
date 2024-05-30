@@ -656,7 +656,16 @@ public class RemoteLogManagerTest {
     }
 
     @Test
+    void testLeadershipChangesWithoutRemoteLogManagerConfiguring() {
+        assertThrows(KafkaException.class, () -> {
+            remoteLogManager.onLeadershipChange(
+                Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds);
+        }, "RemoteLogManager is not configured when remote storage system is enabled");
+    }
+
+    @Test
     void testRemoteLogManagerTasksAvgIdlePercentAndMetadataCountMetrics() throws Exception {
+        remoteLogManager.startup();
         long oldSegmentStartOffset = 0L;
         long nextSegmentStartOffset = 150L;
         int segmentCount = 3;
@@ -775,6 +784,7 @@ public class RemoteLogManagerTest {
 
     @Test
     void testRemoteLogTaskUpdateRemoteLogSegmentMetadataAfterLogDirChanged() throws Exception {
+        remoteLogManager.startup();
         long oldSegmentStartOffset = 0L;
         long nextSegmentStartOffset = 150L;
         int segmentCount = 3;
@@ -888,6 +898,7 @@ public class RemoteLogManagerTest {
 
     @Test
     void testRemoteLogManagerRemoteMetrics() throws Exception {
+        remoteLogManager.startup();
         long oldestSegmentStartOffset = 0L;
         long olderSegmentStartOffset = 75L;
         long nextSegmentStartOffset = 150L;
@@ -1274,6 +1285,7 @@ public class RemoteLogManagerTest {
 
     @Test
     void testTopicIdCacheUpdates() throws RemoteStorageException {
+        remoteLogManager.startup();
         Partition mockLeaderPartition = mockPartition(leaderTopicIdPartition);
         Partition mockFollowerPartition = mockPartition(followerTopicIdPartition);
 
@@ -1298,6 +1310,7 @@ public class RemoteLogManagerTest {
 
     @Test
     void testFetchRemoteLogSegmentMetadata() throws RemoteStorageException {
+        remoteLogManager.startup();
         remoteLogManager.onLeadershipChange(
             Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds);
         remoteLogManager.fetchRemoteLogSegmentMetadata(leaderTopicIdPartition.topicPartition(), 10, 100L);
@@ -1311,6 +1324,7 @@ public class RemoteLogManagerTest {
 
     @Test
     void testOnLeadershipChangeWillInvokeHandleLeaderOrFollowerPartitions() {
+        remoteLogManager.startup();
         RemoteLogManager spyRemoteLogManager = spy(remoteLogManager);
         spyRemoteLogManager.onLeadershipChange(
             Collections.emptySet(), Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds);
@@ -1345,6 +1359,7 @@ public class RemoteLogManagerTest {
 
     @Test
     void testFindOffsetByTimestamp() throws IOException, RemoteStorageException {
+        remoteLogManager.startup();
         TopicPartition tp = leaderTopicIdPartition.topicPartition();
 
         long ts = time.milliseconds();
@@ -1378,6 +1393,7 @@ public class RemoteLogManagerTest {
 
     @Test
     void testFindOffsetByTimestampWithInvalidEpochSegments() throws IOException, RemoteStorageException {
+        remoteLogManager.startup();
         TopicPartition tp = leaderTopicIdPartition.topicPartition();
 
         long ts = time.milliseconds();
@@ -1409,6 +1425,7 @@ public class RemoteLogManagerTest {
 
     @Test
     void testFindOffsetByTimestampWithSegmentNotReady() throws IOException, RemoteStorageException {
+        remoteLogManager.startup();
         TopicPartition tp = leaderTopicIdPartition.topicPartition();
 
         long ts = time.milliseconds();
@@ -1814,6 +1831,7 @@ public class RemoteLogManagerTest {
 
     @Test
     public void testStopPartitionsWithoutDeletion() throws RemoteStorageException {
+        remoteLogManager.startup();
         BiConsumer<TopicPartition, Throwable> errorHandler = (topicPartition, throwable) -> fail("shouldn't be called");
         Set<StopPartition> partitions = new HashSet<>();
         partitions.add(new StopPartition(leaderTopicIdPartition.topicPartition(), true, false));
@@ -1833,6 +1851,7 @@ public class RemoteLogManagerTest {
 
     @Test
     public void testStopPartitionsWithDeletion() throws RemoteStorageException {
+        remoteLogManager.startup();
         BiConsumer<TopicPartition, Throwable> errorHandler =
                 (topicPartition, ex) -> fail("shouldn't be called: " + ex);
         Set<StopPartition> partitions = new HashSet<>();
