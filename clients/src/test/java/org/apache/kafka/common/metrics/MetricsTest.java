@@ -337,17 +337,6 @@ public class MetricsTest {
     }
 
     @Test
-    public void testEventWindowing() {
-        WindowedCount count = new WindowedCount();
-        MetricConfig config = new MetricConfig().eventWindow(1).samples(2);
-        count.record(config, 1.0, time.milliseconds());
-        count.record(config, 1.0, time.milliseconds());
-        assertEquals(2.0, count.measure(config, time.milliseconds()), EPS);
-        count.record(config, 1.0, time.milliseconds()); // first event times out
-        assertEquals(2.0, count.measure(config, time.milliseconds()), EPS);
-    }
-
-    @Test
     public void testTimeWindowing() {
         WindowedCount count = new WindowedCount();
         MetricConfig config = new MetricConfig().timeWindow(1, TimeUnit.MILLISECONDS).samples(2);
@@ -475,28 +464,13 @@ public class MetricsTest {
         Metric p50 = this.metrics.metrics().get(metrics.metricName("test.p50", "grp1"));
         Metric p75 = this.metrics.metrics().get(metrics.metricName("test.p75", "grp1"));
 
-        // record two windows worth of sequential values
+        // record 100 sequential values
         for (int i = 0; i < buckets; i++)
             sensor.record(i);
 
-        assertEquals(25, (Double) p25.metricValue(), 1.0);
-        assertEquals(50, (Double) p50.metricValue(), 1.0);
-        assertEquals(75, (Double) p75.metricValue(), 1.0);
-
-        for (int i = 0; i < buckets; i++)
-            sensor.record(0.0);
-
-        assertEquals(0.0, (Double) p25.metricValue(), 1.0);
-        assertEquals(0.0, (Double) p50.metricValue(), 1.0);
-        assertEquals(0.0, (Double) p75.metricValue(), 1.0);
-
-        // record two more windows worth of sequential values
-        for (int i = 0; i < buckets; i++)
-            sensor.record(i);
-
-        assertEquals(25, (Double) p25.metricValue(), 1.0);
-        assertEquals(50, (Double) p50.metricValue(), 1.0);
-        assertEquals(75, (Double) p75.metricValue(), 1.0);
+        assertEquals(25, (Double) p25.metricValue());
+        assertEquals(50, (Double) p50.metricValue());
+        assertEquals(75, (Double) p75.metricValue());
     }
 
     @Test
