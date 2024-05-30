@@ -164,7 +164,6 @@ public class CommitRequestManagerTest {
                 ", requestedPartitions=" + offsetFetchRequestState.requestedPartitions +
                 ", future=" + offsetFetchRequestState.future();
 
-        System.out.println(target);
         assertEquals(target, offsetFetchRequestState.toStringBase());
     }
 
