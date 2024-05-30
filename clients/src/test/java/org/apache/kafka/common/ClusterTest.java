@@ -106,8 +106,8 @@ public class ClusterTest {
         Set<String> invalidTopics2 = Collections.singleton("topic2");
         Set<String> internalTopics1 = Collections.singleton("topic3");
         Set<String> internalTopics2 = Collections.singleton("topic4");
-        Node controller1 = node0;
-        Node controller2 = node1;
+        Node controller1 = new Node(2, "host2", 100);
+        Node controller2 = new Node(3, "host3", 100); 
         Map<String, Uuid> topicIds1 = Collections.singletonMap("topic1", Uuid.randomUuid());
         Map<String, Uuid> topicIds2 = Collections.singletonMap("topic2", Uuid.randomUuid());
 
