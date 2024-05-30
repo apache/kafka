@@ -1854,6 +1854,12 @@ class KafkaConfigTest {
   @Test
   def testGroupCoordinatorRebalanceProtocols(): Unit = {
     val props = new Properties()
+
+    // consumer cannot be enabled in ZK mode.
+    props.put(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer")
+    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
+
+    // Setting KRaft's properties.
     props.putAll(kraftProps())
 
     // Only classic and consumer are supported.

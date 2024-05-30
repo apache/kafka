@@ -118,7 +118,7 @@ public class MetadataRequestBenchmark {
         clientQuotaManager, clientRequestQuotaManager, controllerMutationQuotaManager, replicaQuotaManager,
         replicaQuotaManager, replicaQuotaManager, Option.empty());
     private final FetchManager fetchManager = Mockito.mock(FetchManager.class);
-    private final BrokerTopicStats brokerTopicStats = new BrokerTopicStats(Optional.empty());
+    private final BrokerTopicStats brokerTopicStats = new BrokerTopicStats(false);
     private final KafkaPrincipal principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test-user");
     @Param({"500", "1000", "5000"})
     private int topicCount;
