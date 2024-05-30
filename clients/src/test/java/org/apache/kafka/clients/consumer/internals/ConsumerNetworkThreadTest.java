@@ -279,12 +279,10 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     void testMaximumTimeToWait() {
-        List<Optional<? extends RequestManager>> list = new ArrayList<>();
-        list.add(Optional.of(heartbeatRequestManager));
         // Initial value before runOnce has been called
         assertEquals(ConsumerNetworkThread.MAX_POLL_TIMEOUT_MS, consumerNetworkThread.maximumTimeToWait());
 
-        when(requestManagers.entries()).thenReturn(list);
+        when(requestManagers.entries()).thenReturn(Collections.singletonList(Optional.of(heartbeatRequestManager)));
         when(heartbeatRequestManager.maximumTimeToWait(time.milliseconds())).thenReturn((long) DEFAULT_HEARTBEAT_INTERVAL_MS);
 
         consumerNetworkThread.runOnce();
