@@ -776,7 +776,7 @@ class ControllerChannelManagerTest {
 
   @Test
   def testStopReplicaInterBrokerProtocolVersion(): Unit = {
-    testStopReplicaFollowsInterBrokerProtocolVersion(MetadataVersion.latestTesting, ApiKeys.STOP_REPLICA.latestVersion)
+    testStopReplicaFollowsInterBrokerProtocolVersion(MetadataVersion.latestTesting, ApiKeys.STOP_REPLICA.latestVersion(false))
 
     for (metadataVersion <- MetadataVersion.VERSIONS) {
       if (metadataVersion.isLessThan(IBP_2_2_IV0))

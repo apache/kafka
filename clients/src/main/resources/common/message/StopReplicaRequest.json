@@ -26,8 +26,11 @@
   // Version 3 adds the leader epoch per partition (KIP-570).
   //
   // Version 4 adds KRaft Controller ID field as part of KIP-866
-  "validVersions": "0-4",
+  //
+  // Version 5 adds DisableRemoteOnPartition field as part of KIP-950
+  "validVersions": "0-5",
   "flexibleVersions": "2+",
+  "latestVersionUnstable": "true",
   "fields": [
     { "name": "ControllerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The controller id." },
@@ -64,7 +67,9 @@
         { "name": "LeaderEpoch", "type": "int32", "versions": "3+", "default": "-1",
           "about": "The leader epoch." },
         { "name": "DeletePartition", "type": "bool", "versions": "3+",
-          "about": "Whether this partition should be deleted." }
+          "about": "Whether this partition should be deleted." },
+        { "name": "DisableRemoteOnPartition", "type": "bool", "versions": "5+", "default": "false",
+          "about": "Whether the partition of a remote storage enabled topic can be disabled." }
       ]}
     ]}
   ]

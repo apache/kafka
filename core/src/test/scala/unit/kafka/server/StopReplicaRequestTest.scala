@@ -64,7 +64,7 @@ class StopReplicaRequestTest extends BaseRequestTest {
     ).asJava
 
     for (_ <- 1 to 2) {
-      val request1 = new StopReplicaRequest.Builder(ApiKeys.STOP_REPLICA.latestVersion,
+      val request1 = new StopReplicaRequest.Builder(ApiKeys.STOP_REPLICA.latestVersion(false),
         server.config.brokerId, server.replicaManager.controllerEpoch, server.kafkaController.brokerEpoch,
         false, topicStates).build()
       val response1 = connectAndReceive[StopReplicaResponse](request1, destination = controllerSocketServer)
