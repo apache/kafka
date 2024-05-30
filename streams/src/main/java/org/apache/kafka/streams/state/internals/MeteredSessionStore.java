@@ -45,8 +45,11 @@ import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.internals.StoreQueryUtils.QueryHandler;
 import org.apache.kafka.streams.state.internals.metrics.StateStoreMetrics;
 
+import java.util.Comparator;
 import java.util.Map;
+import java.util.NavigableSet;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.atomic.LongAdder;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -73,6 +76,7 @@ public class MeteredSessionStore<K, V>
     private TaskId taskId;
 
     private LongAdder numOpenIterators = new LongAdder();
+    private final NavigableSet<MeteredIterator> openIterators = new ConcurrentSkipListSet<>(Comparator.comparingLong(MeteredIterator::startTimestamp));
 
     @SuppressWarnings("rawtypes")
     private final Map<Class, QueryHandler> queryHandlers =
@@ -138,6 +142,9 @@ public class MeteredSessionStore<K, V>
         iteratorDurationSensor = StateStoreMetrics.iteratorDurationSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         StateStoreMetrics.addNumOpenIteratorsGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
                 (config, now) -> numOpenIterators.sum());
+        StateStoreMetrics.addOldestOpenIteratorGauge(taskId.toString(), metricsScope, name(), streamsMetrics,
+                (config, now) -> openIterators.isEmpty() ? null : openIterators.first().startTimestamp()
+        );
     }
 
 
@@ -257,7 +264,8 @@ public class MeteredSessionStore<K, V>
             serdes::keyFrom,
             serdes::valueFrom,
             time,
-            numOpenIterators);
+            numOpenIterators,
+            openIterators);
     }
 
     @Override
@@ -271,7 +279,8 @@ public class MeteredSessionStore<K, V>
             serdes::keyFrom,
             serdes::valueFrom,
             time,
-            numOpenIterators
+            numOpenIterators,
+            openIterators
         );
     }
 
@@ -286,7 +295,8 @@ public class MeteredSessionStore<K, V>
             serdes::keyFrom,
             serdes::valueFrom,
             time,
-            numOpenIterators);
+            numOpenIterators,
+            openIterators);
     }
 
     @Override
@@ -300,7 +310,8 @@ public class MeteredSessionStore<K, V>
             serdes::keyFrom,
             serdes::valueFrom,
             time,
-            numOpenIterators
+            numOpenIterators,
+            openIterators
         );
     }
 
@@ -321,7 +332,8 @@ public class MeteredSessionStore<K, V>
             serdes::keyFrom,
             serdes::valueFrom,
             time,
-            numOpenIterators);
+            numOpenIterators,
+            openIterators);
     }
 
     @Override
@@ -342,7 +354,8 @@ public class MeteredSessionStore<K, V>
             serdes::keyFrom,
             serdes::valueFrom,
             time,
-            numOpenIterators
+            numOpenIterators,
+            openIterators
         );
     }
 
@@ -365,7 +378,8 @@ public class MeteredSessionStore<K, V>
             serdes::keyFrom,
             serdes::valueFrom,
             time,
-            numOpenIterators);
+            numOpenIterators,
+            openIterators);
     }
 
     @Override
@@ -379,7 +393,8 @@ public class MeteredSessionStore<K, V>
                 serdes::keyFrom,
                 serdes::valueFrom,
                 time,
-                numOpenIterators);
+                numOpenIterators,
+                openIterators);
     }
 
     @Override
@@ -402,7 +417,8 @@ public class MeteredSessionStore<K, V>
             serdes::keyFrom,
             serdes::valueFrom,
             time,
-            numOpenIterators
+            numOpenIterators,
+            openIterators
         );
     }
 
@@ -474,7 +490,8 @@ public class MeteredSessionStore<K, V>
                         serdes::keyFrom,
                         StoreQueryUtils.getDeserializeValue(serdes, wrapped()),
                         time,
-                        numOpenIterators
+                        numOpenIterators,
+                        openIterators
                     );
                 final QueryResult<MeteredWindowedKeyValueIterator<K, V>> typedQueryResult =
                     InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);

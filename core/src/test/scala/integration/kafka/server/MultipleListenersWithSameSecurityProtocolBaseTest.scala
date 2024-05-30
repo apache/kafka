@@ -26,10 +26,11 @@ import kafka.utils.{JaasTestUtils, TestUtils}
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
-import org.apache.kafka.common.config.SslConfigs
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
+import org.apache.kafka.common.config.{SaslConfigs, SslConfigs}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.{ListenerName, Mode}
-import org.apache.kafka.server.config.{KafkaSecurityConfigs, ReplicationConfigs, ZkConfigs}
+import org.apache.kafka.server.config.{ReplicationConfigs, ZkConfigs}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.network.SocketServerConfigs
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -82,12 +83,12 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
         s"$External:PLAINTEXT, $SecureExternal:SASL_SSL")
       props.put(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG, Internal)
       props.put(ZkConfigs.ZK_ENABLE_SECURE_ACLS_CONFIG, "true")
-      props.put(KafkaSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, kafkaClientSaslMechanism)
-      props.put(s"${new ListenerName(SecureInternal).configPrefix}${KafkaSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG}",
+      props.put(BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, kafkaClientSaslMechanism)
+      props.put(s"${new ListenerName(SecureInternal).configPrefix}${BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG}",
         kafkaServerSaslMechanisms(SecureInternal).mkString(","))
-      props.put(s"${new ListenerName(SecureExternal).configPrefix}${KafkaSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG}",
+      props.put(s"${new ListenerName(SecureExternal).configPrefix}${BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG}",
         kafkaServerSaslMechanisms(SecureExternal).mkString(","))
-      props.put(KafkaSecurityConfigs.SASL_KERBEROS_SERVICE_NAME_CONFIG, "kafka")
+      props.put(SaslConfigs.SASL_KERBEROS_SERVICE_NAME, "kafka")
       props ++= dynamicJaasSections
 
       props ++= TestUtils.sslConfigs(Mode.SERVER, clientCert = false, Some(trustStoreFile), s"server$brokerId")
@@ -176,7 +177,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
     val listenerName = new ListenerName(listener)
     val prefix = listenerName.saslMechanismConfigPrefix(mechanism)
     val jaasConfig = jaasSection.modules.head.toString
-    props.put(s"${prefix}${KafkaSecurityConfigs.SASL_JAAS_CONFIG}", jaasConfig)
+    props.put(s"${prefix}${SaslConfigs.SASL_JAAS_CONFIG}", jaasConfig)
   }
 
   case class ClientMetadata(listenerName: ListenerName, saslMechanism: String, topic: String) {

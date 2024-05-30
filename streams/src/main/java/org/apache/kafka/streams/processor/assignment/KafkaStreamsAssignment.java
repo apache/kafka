@@ -16,11 +16,12 @@
  */
 package org.apache.kafka.streams.processor.assignment;
 
-import static java.util.Collections.unmodifiableSet;
-
 import java.time.Instant;
+import java.util.HashSet;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.apache.kafka.streams.processor.TaskId;
 
 /**
@@ -30,7 +31,7 @@ import org.apache.kafka.streams.processor.TaskId;
 public class KafkaStreamsAssignment {
 
     private final ProcessId processId;
-    private final Set<AssignedTask> assignment;
+    private final Map<TaskId, AssignedTask> assignment;
     private final Optional<Instant> followupRebalanceDeadline;
 
     /**
@@ -68,7 +69,7 @@ public class KafkaStreamsAssignment {
                                    final Set<AssignedTask> assignment,
                                    final Optional<Instant> followupRebalanceDeadline) {
         this.processId = processId;
-        this.assignment = unmodifiableSet(assignment);
+        this.assignment = assignment.stream().collect(Collectors.toMap(AssignedTask::id, t -> t));
         this.followupRebalanceDeadline = followupRebalanceDeadline;
     }
 
@@ -85,7 +86,21 @@ public class KafkaStreamsAssignment {
      * @return a set of assigned tasks that are part of this {@code KafkaStreamsAssignment}
      */
     public Set<AssignedTask> assignment() {
-        return assignment;
+        // TODO change assignment to return a map so we aren't forced to copy this into a Set
+        return new HashSet<>(assignment.values());
+    }
+
+    // TODO: merge this with #assignment by having it return a Map<TaskId, AssignedTask>
+    public Set<TaskId> assignedTaskIds() {
+        return assignment.keySet();
+    }
+
+    public void assignTask(final AssignedTask newTask) {
+        assignment.put(newTask.id(), newTask);
+    }
+
+    public void removeTask(final AssignedTask removedTask) {
+        assignment.remove(removedTask.id());
     }
 
     /**
