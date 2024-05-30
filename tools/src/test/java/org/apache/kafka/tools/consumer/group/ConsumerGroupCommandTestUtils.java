@@ -19,28 +19,28 @@ package org.apache.kafka.tools.consumer.group;
 
 import kafka.test.ClusterConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.Utils;
 
 import java.time.Duration;
-import java.util.Map;
-import java.util.HashMap;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.Collections;
-import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static java.util.Collections.singleton;
 import static kafka.test.annotation.Type.CO_KRAFT;
 import static kafka.test.annotation.Type.KRAFT;
-import static kafka.test.annotation.Type.ZK;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
@@ -51,32 +51,54 @@ class ConsumerGroupCommandTestUtils {
     }
 
     static List<ClusterConfig> generator() {
+        return Stream.concat(forConsumerGroupCoordinator().stream(), forClassicGroupCoordinator().stream())
+                .collect(Collectors.toList());
+    }
+
+    static List<ClusterConfig> forConsumerGroupCoordinator() {
+        Map<String, String> serverProperties = new HashMap<>();
+        serverProperties.put(OFFSETS_TOPIC_PARTITIONS_CONFIG, "1");
+        serverProperties.put(OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
+        serverProperties.put(NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "true");
+
+        return Collections.singletonList(ClusterConfig.defaultBuilder()
+                .setTypes(Stream.of(KRAFT, CO_KRAFT).collect(Collectors.toSet()))
+                .setServerProperties(serverProperties)
+                .setTags(Collections.singletonList("consumerGroupCoordinator"))
+                .build());
+    }
+
+    static List<ClusterConfig> forClassicGroupCoordinator() {
         Map<String, String> serverProperties = new HashMap<>();
         serverProperties.put(OFFSETS_TOPIC_PARTITIONS_CONFIG, "1");
         serverProperties.put(OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1");
         serverProperties.put(NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "false");
 
-        ClusterConfig classicGroupCoordinator = ClusterConfig.defaultBuilder()
-                .setTypes(Stream.of(ZK, KRAFT, CO_KRAFT).collect(Collectors.toSet()))
+        return Collections.singletonList(ClusterConfig.defaultBuilder()
                 .setServerProperties(serverProperties)
                 .setTags(Collections.singletonList("classicGroupCoordinator"))
-                .build();
+                .build());
+    }
 
-        // Following are test case config with new group coordinator
-        serverProperties.put(NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "true");
-
-        ClusterConfig consumerGroupCoordinator = ClusterConfig.defaultBuilder()
-                .setTypes(Stream.of(KRAFT, CO_KRAFT).collect(Collectors.toSet()))
-                .setServerProperties(serverProperties)
-                .setTags(Collections.singletonList("newGroupCoordinator"))
-                .build();
-        return Arrays.asList(classicGroupCoordinator, consumerGroupCoordinator);
+    static <T> AutoCloseable buildConsumers(int numberOfConsumers,
+                                            Set<TopicPartition> partitions,
+                                            Supplier<KafkaConsumer<T, T>> consumerSupplier) {
+        return buildConsumers(numberOfConsumers, false, consumerSupplier,
+                consumer -> consumer.assign(partitions));
     }
 
     static <T> AutoCloseable buildConsumers(int numberOfConsumers,
                                             boolean syncCommit,
                                             String topic,
                                             Supplier<KafkaConsumer<T, T>> consumerSupplier) {
+        return buildConsumers(numberOfConsumers, syncCommit, consumerSupplier,
+                consumer -> consumer.subscribe(Collections.singleton(topic)));
+    }
+
+    private static <T> AutoCloseable buildConsumers(int numberOfConsumers,
+                                                    boolean syncCommit,
+                                                    Supplier<KafkaConsumer<T, T>> consumerSupplier,
+                                                    Consumer<KafkaConsumer<T, T>> setPartitions) {
         List<KafkaConsumer<T, T>> consumers = new ArrayList<>(numberOfConsumers);
         ExecutorService executor = Executors.newFixedThreadPool(numberOfConsumers);
         AtomicBoolean closed = new AtomicBoolean(false);
@@ -85,7 +107,10 @@ class ConsumerGroupCommandTestUtils {
             for (int i = 0; i < numberOfConsumers; i++) {
                 KafkaConsumer<T, T> consumer = consumerSupplier.get();
                 consumers.add(consumer);
-                executor.execute(() -> initConsumer(topic, syncCommit, consumer, closed));
+                executor.execute(() -> initConsumer(syncCommit, () -> {
+                    setPartitions.accept(consumer);
+                    return consumer;
+                }, closed));
             }
             return closeable;
         } catch (Throwable e) {
@@ -101,13 +126,14 @@ class ConsumerGroupCommandTestUtils {
         executor.awaitTermination(1, TimeUnit.MINUTES);
     }
 
-    private static <T> void initConsumer(String topic, boolean syncCommit, KafkaConsumer<T, T> consumer, AtomicBoolean closed) {
-        try (KafkaConsumer<T, T> kafkaConsumer = consumer) {
-            kafkaConsumer.subscribe(singleton(topic));
+    private static <T> void initConsumer(boolean syncCommit,
+                                         Supplier<KafkaConsumer<T, T>> consumerSupplier,
+                                         AtomicBoolean closed) {
+        try (KafkaConsumer<T, T> kafkaConsumer = consumerSupplier.get()) {
             while (!closed.get()) {
-                consumer.poll(Duration.ofMillis(Long.MAX_VALUE));
+                kafkaConsumer.poll(Duration.ofMillis(Long.MAX_VALUE));
                 if (syncCommit)
-                    consumer.commitSync();
+                    kafkaConsumer.commitSync();
             }
         } catch (WakeupException e) {
             // OK

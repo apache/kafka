@@ -44,7 +44,7 @@ import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOG
  * @see OptimizedUniformAssignmentBuilder
  * @see GeneralUniformAssignmentBuilder
  */
-public class UniformAssignor implements PartitionAssignor {
+public class UniformAssignor implements ConsumerGroupPartitionAssignor {
     private static final Logger LOG = LoggerFactory.getLogger(UniformAssignor.class);
     public static final String UNIFORM_ASSIGNOR_NAME = "uniform";
 
