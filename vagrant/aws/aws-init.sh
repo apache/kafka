@@ -43,7 +43,7 @@ fi
 # adds log noise
 
 # Custom vagrant-aws with spot instance support. See https://github.com/mitchellh/vagrant-aws/issues/32
-wget -nv https://s3-us-west-2.amazonaws.com/confluent-packaging-tools/vagrant-aws-0.7.2.spot.gem -P /tmp
+wget -nv https://s3-us-west-2.amazonaws.com/confluent-packaging-tools-891377121322-us-west-2/vagrant-aws-0.7.2.spot.gem -P /tmp
 vagrant_plugins="/tmp/vagrant-aws-0.7.2.spot.gem vagrant-hostmanager"
 existing=`vagrant plugin list`
 for plugin in $vagrant_plugins; do
