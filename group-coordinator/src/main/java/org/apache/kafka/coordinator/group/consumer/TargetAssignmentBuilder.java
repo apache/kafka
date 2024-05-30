@@ -296,7 +296,7 @@ public class TargetAssignmentBuilder {
      */
     public TargetAssignmentResult build() throws PartitionAssignorException {
         Map<String, MemberSubscriptionSpec> memberSpecs = new HashMap<>();
-        Map<String, Map<Uuid, Set<Integer>>> assignedPartitions = new HashMap<>(members.size());
+        Map<String, Map<Uuid, Set<Integer>>> currentTargetAssignment = new HashMap<>(members.size());
 
         // Prepare the member spec for all members.
         members.forEach((memberId, member) -> {
@@ -306,7 +306,7 @@ public class TargetAssignmentBuilder {
                 member,
                 topicsImage
             ));
-            assignedPartitions.put(
+            currentTargetAssignment.put(
                 memberId,
                 assignment.partitions()
             );
@@ -331,7 +331,7 @@ public class TargetAssignmentBuilder {
                     updatedMemberOrNull,
                     topicsImage
                 ));
-                assignedPartitions.put(
+                currentTargetAssignment.put(
                     memberId,
                     assignment.partitions()
                 );
@@ -352,7 +352,7 @@ public class TargetAssignmentBuilder {
             new GroupSpecImpl(
                 Collections.unmodifiableMap(memberSpecs),
                 subscriptionType,
-                assignedPartitions,
+                currentTargetAssignment,
                 invertedTargetAssignment
             ),
             new SubscribedTopicMetadata(topicMetadataMap)
