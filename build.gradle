@@ -47,7 +47,7 @@ plugins {
   // Updating the shadow plugin version to 8.1.1 causes issue with signing and publishing the shadowed
   // artifacts - see https://github.com/johnrengelman/shadow/issues/901
   id 'com.github.johnrengelman.shadow' version '8.1.0' apply false
-  id 'com.diffplug.spotless' version '6.14.0' apply false // 6.14.1 and newer require Java 11 at compile time, so we can't upgrade until AK 4.0
+  id 'com.diffplug.spotless' version "${spotlessVersion}" apply false
 }
 
 ext {
@@ -195,6 +195,8 @@ def determineCommitId() {
     "unknown"
   }
 }
+
+def spotlessApplyModules = ['']
 
 apply from: file('wrapper.gradle')
 
@@ -787,6 +789,12 @@ subprojects {
     skipProjects = [ ":jmh-benchmarks", ":trogdor" ]
     skipConfigurations = [ "zinc" ]
   }
+
+  afterEvaluate {
+    if (project.name in spotlessApplyModules) {
+      configureSpotless(project)
+    }
+  }
 }
 
 gradle.taskGraph.whenReady { taskGraph ->
@@ -845,6 +853,17 @@ def connectPkgs = [
     'connect:mirror',
     'connect:mirror-client'
 ]
+
+def configureSpotless = { project ->
+  project.apply plugin: 'com.diffplug.spotless'
+
+  project.spotless {
+    java {
+      importOrder('kafka', 'org.apache.kafka', 'com', 'net', 'org', 'java', 'javax', '', '\\#')
+      removeUnusedImports()
+    }
+  }
+}
 
 tasks.create(name: "jarConnect", dependsOn: connectPkgs.collect { it + ":jar" }) {}
 
@@ -1007,7 +1026,7 @@ project(':core') {
     testImplementation libs.junitJupiter
     testImplementation libs.slf4jlog4j
     testImplementation libs.caffeine
-    
+
     generator project(':generator')
   }
 
