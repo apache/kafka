@@ -29,6 +29,9 @@ import org.slf4j.LoggerFactory;
  * TopicPartitions type. Since the assignment logic can depend on the type of topic we're
  * looking at, and the rack information of the partition, this container class should have
  * everything necessary to make informed task assignment decisions.
+ * One detail worth noting is the fact that the rack id information can be fetched lazily
+ * when requested, so as to not make RPC calls when the rack information is unnecessary for
+ * the assignor that is currently making decisions.
  */
 public class DefaultTaskTopicPartition implements TaskTopicPartition {
     private static final Logger LOG = LoggerFactory.getLogger(DefaultTaskTopicPartition.class);
@@ -36,18 +39,20 @@ public class DefaultTaskTopicPartition implements TaskTopicPartition {
     private final TopicPartition topicPartition;
     private final boolean isSourceTopic;
     private final boolean isChangelogTopic;
+    private final Runnable rackIdInformationFetcher;
 
     private Optional<Set<String>> rackIds;
-  
+
 
     public DefaultTaskTopicPartition(final TopicPartition topicPartition,
                                      final boolean isSourceTopic,
                                      final boolean isChangelogTopic,
-                                     final Set<String> rackIds) {
+                                     final Runnable rackIdInformationFetcher) {
         this.topicPartition = topicPartition;
         this.isSourceTopic = isSourceTopic;
         this.isChangelogTopic = isChangelogTopic;
-        this.rackIds = Optional.ofNullable(rackIds);
+        this.rackIdInformationFetcher = rackIdInformationFetcher;
+        this.rackIds = Optional.empty();
     }
 
     @Override
@@ -67,6 +72,7 @@ public class DefaultTaskTopicPartition implements TaskTopicPartition {
 
     @Override
     public Optional<Set<String>> rackIds() {
+        this.rackIdInformationFetcher.run();
         return rackIds;
     }
 

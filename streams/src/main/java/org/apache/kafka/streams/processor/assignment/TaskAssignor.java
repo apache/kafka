@@ -68,10 +68,15 @@ public interface TaskAssignor extends Configurable {
      * will be returned and a StreamsException will be thrown after this callback returns. The StreamsException will
      * be thrown up to kill the StreamThread and can be handled as any other uncaught exception would if the application
      * has registered a {@link StreamsUncaughtExceptionHandler}.
+     * <p>
+     * Note: some kinds of errors will make it impossible for the StreamsPartitionAssignor to parse the TaskAssignment
+     * that was returned from the TaskAssignor's {@link #assign}. If this occurs, the {@link GroupAssignment} passed
+     * in to this callback will contain an empty map instead of the consumer assignments.
      *
-     * @param assignment    the final assignment returned to the kafka broker
-     * @param subscription  the original subscription passed into the assignor
-     * @param error         the corresponding error type if one was detected while processing the returned assignment,
+     * @param assignment:   the final consumer assignments returned to the kafka broker, or an empty assignment map if
+     *                      an error prevented the assignor from converting the TaskAssignment into a GroupAssignment
+     * @param subscription: the original consumer subscriptions passed into the assignor
+     * @param error:        the corresponding error type if one was detected while processing the returned assignment,
      *                      or AssignmentError.NONE if the returned assignment was valid
      */
     default void onAssignmentComputed(GroupAssignment assignment, GroupSubscription subscription, AssignmentError error) {}

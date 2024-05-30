@@ -263,6 +263,8 @@ public final class AssignorConfiguration {
             final org.apache.kafka.streams.processor.assignment.TaskAssignor assignor = Utils.newInstance(userTaskAssignorClassname,
                 org.apache.kafka.streams.processor.assignment.TaskAssignor.class);
             log.info("Instantiated {} as the task assignor.", userTaskAssignorClassname);
+            assignor.configure(streamsConfig.originals());
+            log.info("Configured task assignor {} with the StreamsConfig.", userTaskAssignorClassname);
             return Optional.of(assignor);
         } catch (final ClassNotFoundException e) {
             throw new IllegalArgumentException(
@@ -367,8 +369,8 @@ public final class AssignorConfiguration {
                 numStandbyReplicas,
                 probingRebalanceIntervalMs,
                 rackAwareAssignmentTags,
-                rackAwareAssignmentTrafficCost,
-                rackAwareAssignmentNonOverlapCost,
+                Optional.ofNullable(rackAwareAssignmentTrafficCost),
+                Optional.ofNullable(rackAwareAssignmentNonOverlapCost),
                 rackAwareAssignmentStrategy
             );
         }

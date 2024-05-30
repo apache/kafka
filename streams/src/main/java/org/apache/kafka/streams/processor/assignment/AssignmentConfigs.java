@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.assignment;
 
 import java.util.List;
+import java.util.Optional;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.streams.StreamsConfig;
 
@@ -29,8 +30,8 @@ public class AssignmentConfigs {
     private final int numStandbyReplicas;
     private final long probingRebalanceIntervalMs;
     private final List<String> rackAwareAssignmentTags;
-    private final int rackAwareTrafficCost;
-    private final int rackAwareNonOverlapCost;
+    private final Optional<Integer> rackAwareTrafficCost;
+    private final Optional<Integer> rackAwareNonOverlapCost;
     private final String rackAwareAssignmentStrategy;
 
     public AssignmentConfigs(final StreamsConfig configs) {
@@ -40,8 +41,8 @@ public class AssignmentConfigs {
             configs.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG),
             configs.getLong(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG),
             configs.getList(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG),
-            configs.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG),
-            configs.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG),
+            Optional.ofNullable(configs.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG)),
+            Optional.ofNullable(configs.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG)),
             configs.getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG)
         );
     }
@@ -51,10 +52,9 @@ public class AssignmentConfigs {
                              final int numStandbyReplicas,
                              final long probingRebalanceIntervalMs,
                              final List<String> rackAwareAssignmentTags,
-                             final int rackAwareTrafficCost,
-                             final int rackAwareNonOverlapCost,
-                             final String rackAwareAssignmentStrategy
-    ) {
+                             final Optional<Integer> rackAwareTrafficCost,
+                             final Optional<Integer>  rackAwareNonOverlapCost,
+                             final String rackAwareAssignmentStrategy) {
         this.acceptableRecoveryLag = validated(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, acceptableRecoveryLag);
         this.maxWarmupReplicas = validated(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, maxWarmupReplicas);
         this.numStandbyReplicas = validated(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, numStandbyReplicas);
@@ -115,7 +115,7 @@ public class AssignmentConfigs {
      * The rack-aware assignment traffic cost as configured via
      * {@link StreamsConfig#RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG}
      */
-    public int rackAwareTrafficCost() {
+    public Optional<Integer> rackAwareTrafficCost() {
         return rackAwareTrafficCost;
     }
 
@@ -123,7 +123,7 @@ public class AssignmentConfigs {
      * The rack-aware assignment non-overlap cost as configured via
      * {@link StreamsConfig#RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG}
      */
-    public int rackAwareNonOverlapCost() {
+    public Optional<Integer> rackAwareNonOverlapCost() {
         return rackAwareNonOverlapCost;
     }
 
