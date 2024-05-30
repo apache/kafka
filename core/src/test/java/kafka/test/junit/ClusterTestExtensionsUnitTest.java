@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.extension.ExtensionContext;
 
 import java.lang.reflect.Method;
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import static org.mockito.Mockito.mock;
@@ -34,7 +34,7 @@ import static org.mockito.Mockito.when;
 public class ClusterTestExtensionsUnitTest {
 
     static List<ClusterConfig> cfgEmpty() {
-        return new ArrayList<ClusterConfig>();
+        return Collections.emptyList();
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
