@@ -81,7 +81,7 @@ public class ConsumerNetworkThreadUnitTest {
         this.metadata = mock(ConsumerMetadata.class);
         this.applicationEventProcessor = mock(ApplicationEventProcessor.class);
         this.applicationEventReaper = mock(CompletableEventReaper.class);
-        this.client = new MockClient(time, metadata);
+        this.client = new MockClient(time);
 
         this.networkClient = new NetworkClientDelegate(
                 time,
