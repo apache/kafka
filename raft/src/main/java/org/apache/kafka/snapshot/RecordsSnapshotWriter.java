@@ -17,11 +17,11 @@
 
 package org.apache.kafka.snapshot;
 
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.SnapshotFooterRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.ControlRecordUtils;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.RecordBatch;
@@ -47,7 +47,7 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
         int maxBatchSize,
         MemoryPool memoryPool,
         Time time,
-        CompressionType compressionType,
+        Compression compression,
         RecordSerde<T> serde
     ) {
         this.snapshot = snapshot;
@@ -60,7 +60,7 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
             maxBatchSize,
             memoryPool,
             time,
-            compressionType,
+            compression,
             serde
         );
     }
@@ -142,7 +142,7 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
 
     final public static class Builder {
         private long lastContainedLogTimestamp = 0;
-        private CompressionType compressionType = CompressionType.NONE;
+        private Compression compression = Compression.NONE;
         private Time time = Time.SYSTEM;
         private int maxBatchSize = 1024;
         private MemoryPool memoryPool = MemoryPool.NONE;
@@ -155,8 +155,8 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
             return this;
         }
 
-        public Builder setCompressionType(CompressionType compressionType) {
-            this.compressionType = compressionType;
+        public Builder setCompression(Compression compression) {
+            this.compression = compression;
             return this;
         }
 
@@ -208,7 +208,7 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
                 maxBatchSize,
                 memoryPool,
                 time,
-                compressionType,
+                compression,
                 serde
             );
 
@@ -217,7 +217,7 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
                 try (MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
                         buffer,
                         RecordBatch.CURRENT_MAGIC_VALUE,
-                        compressionType,
+                        compression,
                         TimestampType.CREATE_TIME,
                         baseOffset,
                         now,

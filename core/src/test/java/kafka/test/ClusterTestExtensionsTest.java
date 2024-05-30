@@ -35,13 +35,14 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.extension.ExtendWith;
 
-import java.util.Arrays;
-import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
-import java.util.HashSet;
+import java.util.List;
 import java.util.Collections;
 import java.util.concurrent.ExecutionException;
+import java.util.HashMap;
+import java.util.Set;
+import java.util.HashSet;
+import java.util.Arrays;
 
 import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
 import static org.apache.kafka.clients.consumer.GroupProtocol.CONSUMER;
@@ -62,10 +63,10 @@ public class ClusterTestExtensionsTest {
     }
 
     // Static methods can generate cluster configurations
-    static void generate1(ClusterGenerator clusterGenerator) {
+    static List<ClusterConfig> generate1() {
         Map<String, String> serverProperties = new HashMap<>();
         serverProperties.put("foo", "bar");
-        clusterGenerator.accept(ClusterConfig.defaultBuilder()
+        return Collections.singletonList(ClusterConfig.defaultBuilder()
                 .setTypes(Collections.singleton(Type.ZK))
                 .setServerProperties(serverProperties)
                 .setTags(Collections.singletonList("Generated Test"))
@@ -191,10 +192,10 @@ public class ClusterTestExtensionsTest {
         @ClusterTest(types = {Type.ZK, Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
             @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
         }),
-        @ClusterTest(types = {Type.ZK, Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
+        @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
             @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer"),
         }),
-        @ClusterTest(types = {Type.ZK, Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
+        @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
             @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
             @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer"),
         }),
@@ -202,7 +203,7 @@ public class ClusterTestExtensionsTest {
             @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "true"),
             @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic"),
         }),
-        @ClusterTest(types = {Type.ZK, Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
+        @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, serverProperties = {
             @ClusterConfigProperty(key = NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
             @ClusterConfigProperty(key = GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic,consumer"),
         }, tags = {"disable-new-coordinator-and-enable-new-consumer-rebalance-coordinator"}),

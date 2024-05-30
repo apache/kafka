@@ -74,7 +74,7 @@ public class UpdateFollowerFetchStateBenchmark {
     private final Option<Uuid> topicId = OptionConverters.toScala(Optional.of(Uuid.randomUuid()));
     private final File logDir = new File(System.getProperty("java.io.tmpdir"), topicPartition.toString());
     private final KafkaScheduler scheduler = new KafkaScheduler(1, true, "scheduler");
-    private final BrokerTopicStats brokerTopicStats = new BrokerTopicStats(Optional.empty());
+    private final BrokerTopicStats brokerTopicStats = new BrokerTopicStats(false);
     private final LogDirFailureChannel logDirFailureChannel = Mockito.mock(LogDirFailureChannel.class);
     private long nextOffset = 0;
     private LogManager logManager;

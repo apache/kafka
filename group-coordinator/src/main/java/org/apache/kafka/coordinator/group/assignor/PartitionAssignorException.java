@@ -19,7 +19,7 @@ package org.apache.kafka.coordinator.group.assignor;
 import org.apache.kafka.common.errors.ApiException;
 
 /**
- * Exception thrown by {@link PartitionAssignor#assign(AssignmentSpec)}. The exception
+ * Exception thrown by {@link PartitionAssignor#assign(GroupSpec, SubscribedTopicDescriber)}}. The exception
  * is only used internally.
  */
 public class PartitionAssignorException extends ApiException {
