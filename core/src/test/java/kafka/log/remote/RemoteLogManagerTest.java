@@ -2701,9 +2701,9 @@ public class RemoteLogManagerTest {
         Properties defaultProps = new Properties();
         RemoteLogManagerConfig defaultRlmConfig = createRLMConfig(defaultProps);
         RLMQuotaManagerConfig defaultConfig = RemoteLogManager.fetchQuotaManagerConfig(defaultRlmConfig);
-        assertEquals(Long.MAX_VALUE, defaultConfig.quotaBytesPerSecond());
-        assertEquals(11, defaultConfig.numQuotaSamples());
-        assertEquals(1, defaultConfig.quotaWindowSizeSeconds());
+        assertEquals(DEFAULT_REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND, defaultConfig.quotaBytesPerSecond());
+        assertEquals(DEFAULT_REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_NUM, defaultConfig.numQuotaSamples());
+        assertEquals(DEFAULT_REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_SIZE_SECONDS, defaultConfig.quotaWindowSizeSeconds());
 
         Properties customProps = new Properties();
         customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP, 100);
