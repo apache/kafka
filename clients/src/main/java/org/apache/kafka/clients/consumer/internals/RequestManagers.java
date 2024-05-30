@@ -52,6 +52,7 @@ public class RequestManagers implements Closeable {
     public final OffsetsRequestManager offsetsRequestManager;
     public final TopicMetadataRequestManager topicMetadataRequestManager;
     public final FetchRequestManager fetchRequestManager;
+    public final MetadataErrorManager metadataErrorManager;
     private final List<Optional<? extends RequestManager>> entries;
     private final IdempotentCloser closer = new IdempotentCloser();
 
@@ -59,12 +60,14 @@ public class RequestManagers implements Closeable {
                            OffsetsRequestManager offsetsRequestManager,
                            TopicMetadataRequestManager topicMetadataRequestManager,
                            FetchRequestManager fetchRequestManager,
+                           MetadataErrorManager metadataErrorManager,
                            Optional<CoordinatorRequestManager> coordinatorRequestManager,
                            Optional<CommitRequestManager> commitRequestManager,
                            Optional<HeartbeatRequestManager> heartbeatRequestManager,
                            Optional<MembershipManager> membershipManager) {
         this.log = logContext.logger(RequestManagers.class);
         this.offsetsRequestManager = requireNonNull(offsetsRequestManager, "OffsetsRequestManager cannot be null");
+        this.metadataErrorManager = requireNonNull(metadataErrorManager, "MetadataErrorManager cannot be null");
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.commitRequestManager = commitRequestManager;
         this.topicMetadataRequestManager = topicMetadataRequestManager;
@@ -80,6 +83,7 @@ public class RequestManagers implements Closeable {
         list.add(Optional.of(offsetsRequestManager));
         list.add(Optional.of(topicMetadataRequestManager));
         list.add(Optional.of(fetchRequestManager));
+        list.add(Optional.of(metadataErrorManager));
         entries = Collections.unmodifiableList(list);
     }
 
@@ -156,6 +160,10 @@ public class RequestManagers implements Closeable {
                 final TopicMetadataRequestManager topic = new TopicMetadataRequestManager(
                         logContext,
                         config);
+                final MetadataErrorManager metadataError = new MetadataErrorManager(
+                        metadata,
+                        backgroundEventHandler);
+
                 HeartbeatRequestManager heartbeatRequestManager = null;
                 MembershipManager membershipManager = null;
                 CoordinatorRequestManager coordinator = null;
@@ -210,6 +218,7 @@ public class RequestManagers implements Closeable {
                         listOffsets,
                         topic,
                         fetch,
+                        metadataError,
                         Optional.ofNullable(coordinator),
                         Optional.ofNullable(commit),
                         Optional.ofNullable(heartbeatRequestManager),

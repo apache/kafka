@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.internals.CoordinatorRequestManager;
 import org.apache.kafka.clients.consumer.internals.FetchRequestManager;
 import org.apache.kafka.clients.consumer.internals.HeartbeatRequestManager;
 import org.apache.kafka.clients.consumer.internals.MembershipManager;
+import org.apache.kafka.clients.consumer.internals.MetadataErrorManager;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
 import org.apache.kafka.clients.consumer.internals.OffsetsRequestManager;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
@@ -62,6 +63,7 @@ public class ApplicationEventProcessorTest {
         TopicMetadataRequestManager topicMetadataRequestManager = mock(TopicMetadataRequestManager.class);
         FetchRequestManager fetchRequestManager = mock(FetchRequestManager.class);
         CoordinatorRequestManager coordinatorRequestManager = mock(CoordinatorRequestManager.class);
+        MetadataErrorManager metadataErrorManager = mock(MetadataErrorManager.class);
         commitRequestManager = mock(CommitRequestManager.class);
         heartbeatRequestManager = mock(HeartbeatRequestManager.class);
         membershipManager = mock(MembershipManager.class);
@@ -70,6 +72,7 @@ public class ApplicationEventProcessorTest {
             offsetsRequestManager,
             topicMetadataRequestManager,
             fetchRequestManager,
+            metadataErrorManager,
             Optional.of(coordinatorRequestManager),
             Optional.of(commitRequestManager),
             Optional.of(heartbeatRequestManager),

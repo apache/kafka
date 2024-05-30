@@ -91,6 +91,7 @@ public class ConsumerTestBuilder implements Closeable {
     final Optional<HeartbeatRequestManager.HeartbeatRequestState> heartbeatRequestState;
     final TopicMetadataRequestManager topicMetadataRequestManager;
     final FetchRequestManager fetchRequestManager;
+    final MetadataErrorManager metadataErrorManager;
     final RequestManagers requestManagers;
     public final ApplicationEventProcessor applicationEventProcessor;
     public final BackgroundEventHandler backgroundEventHandler;
@@ -258,10 +259,13 @@ public class ConsumerTestBuilder implements Closeable {
                 metricsManager,
                 networkClientDelegate,
                 apiVersions));
+        this.metadataErrorManager = new MetadataErrorManager(metadata,
+                backgroundEventHandler);
         this.requestManagers = new RequestManagers(logContext,
                 offsetsRequestManager,
                 topicMetadataRequestManager,
                 fetchRequestManager,
+                metadataErrorManager,
                 coordinatorRequestManager,
                 commitRequestManager,
                 heartbeatRequestManager,
