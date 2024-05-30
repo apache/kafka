@@ -16,11 +16,7 @@
  */
 package org.apache.kafka.clients;
 
-import java.util.List;
 import java.util.Locale;
-import java.util.NoSuchElementException;
-
-import static java.util.Arrays.asList;
 
 /**
  * Defines the strategies which clients can follow to deal with the situation when none of the known nodes is available.
@@ -35,15 +31,7 @@ public enum MetadataRecoveryStrategy {
         this.name = name;
     }
 
-    private static final List<MetadataRecoveryStrategy> VALUES = asList(values());
-
-    public static MetadataRecoveryStrategy forName(String n) {
-        String name = n.toLowerCase(Locale.ROOT);
-        for (MetadataRecoveryStrategy t : values()) {
-            if (t.name.equals(name)) {
-                return t;
-            }
-        }
-        throw new NoSuchElementException("Invalid metadata recovery strategy " + name);
+    public static MetadataRecoveryStrategy forName(String name) {
+        return MetadataRecoveryStrategy.valueOf(name.toUpperCase(Locale.ROOT));
     }
 }
