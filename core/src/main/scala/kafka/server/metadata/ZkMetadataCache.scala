@@ -40,7 +40,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractControlRequest, ApiVersionsResponse, MetadataResponse, UpdateMetadataRequest}
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.server.common.{Features, MetadataVersion}
+import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
 
 import java.util.concurrent.{ThreadLocalRandom, TimeUnit}
 import scala.concurrent.TimeoutException
@@ -53,7 +53,7 @@ class FeatureCacheUpdateException(message: String) extends RuntimeException(mess
 trait ZkFinalizedFeatureCache {
   def waitUntilFeatureEpochOrThrow(minExpectedEpoch: Long, timeoutMs: Long): Unit
 
-  def getFeatureOption: Option[Features]
+  def getFeatureOption: Option[FinalizedFeatures]
 }
 
 case class MetadataSnapshot(partitionStates: mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataPartitionState]],
@@ -158,7 +158,6 @@ class ZkMetadataCache(
   brokerId: Int,
   metadataVersion: MetadataVersion,
   brokerFeatures: BrokerFeatures,
-  kraftControllerNodes: Seq[Node] = Seq.empty,
   zkMigrationEnabled: Boolean = false)
   extends MetadataCache with ZkFinalizedFeatureCache with Logging {
 
@@ -178,11 +177,9 @@ class ZkMetadataCache(
   private val stateChangeLogger = new StateChangeLogger(brokerId, inControllerContext = false, None)
 
   // Features are updated via ZK notification (see FinalizedFeatureChangeListener)
-  @volatile private var _features: Option[Features] = Option.empty
+  @volatile private var _features: Option[FinalizedFeatures] = Option.empty
   private val featureLock = new ReentrantLock()
   private val featureCond = featureLock.newCondition()
-
-  private val kraftControllerNodeMap = kraftControllerNodes.map(node => node.id() -> node).toMap
 
   // This method is the main hotspot when it comes to the performance of metadata requests,
   // we should be careful about adding additional logic here. Relatedly, `brokers` is
@@ -350,11 +347,7 @@ class ZkMetadataCache(
 
   override def getAliveBrokerNode(brokerId: Int, listenerName: ListenerName): Option[Node] = {
     val snapshot = metadataSnapshot
-    brokerId match {
-      case id if snapshot.controllerId.filter(_.isInstanceOf[KRaftCachedControllerId]).exists(_.id == id) =>
-        kraftControllerNodeMap.get(id)
-      case _ => snapshot.aliveBrokers.get(brokerId).flatMap(_.getNode(listenerName))
-    }
+    snapshot.aliveBrokers.get(brokerId).flatMap(_.getNode(listenerName))
   }
 
   override def getAliveBrokerNodes(listenerName: ListenerName): Iterable[Node] = {
@@ -624,9 +617,9 @@ class ZkMetadataCache(
 
   override def metadataVersion(): MetadataVersion = metadataVersion
 
-  override def features(): Features = _features match {
+  override def features(): FinalizedFeatures = _features match {
     case Some(features) => features
-    case None => new Features(metadataVersion,
+    case None => new FinalizedFeatures(metadataVersion,
       Collections.emptyMap(),
       ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
       false)
@@ -646,7 +639,7 @@ class ZkMetadataCache(
    *                         not modified.
    */
   def updateFeaturesOrThrow(latestFeatures: Map[String, Short], latestEpoch: Long): Unit = {
-    val latest = new Features(metadataVersion,
+    val latest = new FinalizedFeatures(metadataVersion,
       latestFeatures.map(kv => (kv._1, kv._2.asInstanceOf[java.lang.Short])).asJava,
       latestEpoch,
       false)
@@ -718,5 +711,5 @@ class ZkMetadataCache(
     }
   }
 
-  override def getFeatureOption: Option[Features] = _features
+  override def getFeatureOption: Option[FinalizedFeatures] = _features
 }
