@@ -32,6 +32,13 @@ public enum MetadataRecoveryStrategy {
     }
 
     public static MetadataRecoveryStrategy forName(String name) {
-        return MetadataRecoveryStrategy.valueOf(name.toUpperCase(Locale.ROOT));
+        if (name == null) {
+            throw new IllegalArgumentException("Illegal MetadataRecoveryStrategy: null");
+        }
+        try {
+            return MetadataRecoveryStrategy.valueOf(name.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Illegal MetadataRecoveryStrategy: " + name);
+        }
     }
 }
