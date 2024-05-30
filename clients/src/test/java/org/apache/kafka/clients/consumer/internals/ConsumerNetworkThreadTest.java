@@ -46,9 +46,18 @@ import java.util.concurrent.LinkedBlockingQueue;
 
 import static org.apache.kafka.clients.consumer.internals.events.CompletableEvent.calculateDeadlineMs;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class ConsumerNetworkThreadTest {
     static final int DEFAULT_HEARTBEAT_INTERVAL_MS = 1000;
@@ -335,7 +344,6 @@ public class ConsumerNetworkThreadTest {
         assertTrue(applicationEventsQueue.isEmpty());
     }
 
-    // Look into this one
     @Test
     void testCleanupInvokesReaper() {
         Queue<NetworkClientDelegate.UnsentRequest> queue = new LinkedList<>();
