@@ -4104,7 +4104,8 @@ class ReplicaManagerTest {
       time,
       _ => Optional.of(mockLog),
       (TopicPartition, Long) => {},
-      brokerTopicStats)
+      brokerTopicStats,
+      metrics)
     remoteLogManager.startup()
     val spyRLM = spy(remoteLogManager)
 
@@ -4203,7 +4204,8 @@ class ReplicaManagerTest {
       time,
       _ => Optional.of(dummyLog),
       (TopicPartition, Long) => {},
-      brokerTopicStats)
+      brokerTopicStats,
+      metrics)
     remoteLogManager.startup()
     val spyRLM = spy(remoteLogManager)
     val timer = new MockTimer(time)
