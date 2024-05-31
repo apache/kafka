@@ -511,7 +511,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
         // Retry the same fetch request while it fails with RetriableException and the retry timeout hasn't expired.
         currentResult.whenComplete((res, error) -> {
-            pendingRequests.maybeRemoveInflightOffsetFetch(fetchRequest, error);
+            pendingRequests.maybeRemoveInflightOffsetFetch(fetchRequest);
             if (error == null) {
                 result.complete(res);
             } else {
@@ -1093,14 +1093,22 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          * upon completion.
          */
         private CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> addOffsetFetchRequest(final OffsetFetchRequestState request) {
-            Optional<OffsetFetchRequestState> dupe =
+            Optional<OffsetFetchRequestState> unsent =
                     unsentOffsetFetches.stream().filter(r -> r.sameRequest(request)).findAny();
             Optional<OffsetFetchRequestState> inflight =
                     inflightOffsetFetches.stream().filter(r -> r.sameRequest(request)).findAny();
 
-            if (dupe.isPresent() || inflight.isPresent()) {
+            if (unsent.isPresent()) {
                 log.debug("Duplicated unsent offset fetch request found for partitions: {}", request.requestedPartitions);
-                dupe.orElseGet(inflight::get).chainFuture(request.future);
+                OffsetFetchRequestState existing = unsent.get();
+                existing.chainFuture(request.future);
+            } else if (inflight.isPresent()) {
+                log.debug("Duplicated inflight offset fetch request found for partitions: {}", request.requestedPartitions);
+                OffsetFetchRequestState existing = inflight.get();
+                existing.chainFuture(request.future);
+
+                if (existing.future.isDone())
+                    removeInflightOffsetFetch(existing);
             } else {
                 log.debug("Enqueuing offset fetch request for partitions: {}", request.requestedPartitions);
                 this.unsentOffsetFetches.add(request);
@@ -1125,14 +1133,16 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          * of the <em>current</em> attempt will enable the <em>next</em> attempt to use that result and return
          * almost immediately.
          */
-        private void maybeRemoveInflightOffsetFetch(OffsetFetchRequestState fetchRequest, Throwable error) {
-            if (error == null && !fetchRequest.isExpired()) {
-                boolean inflightRemoved = inflightOffsetFetches.remove(fetchRequest);
-                if (!inflightRemoved) {
-                    log.warn("A duplicated, inflight, request was identified, but unable to find it in the " +
-                            "outbound buffer:" + fetchRequest);
-                }
-            }
+        private void maybeRemoveInflightOffsetFetch(OffsetFetchRequestState request) {
+            if (request.isExpired())
+                log.debug("Caching offset fetch result for partitions {} for next attempt", request.requestedPartitions);
+            else
+                removeInflightOffsetFetch(request);
+        }
+
+        private void removeInflightOffsetFetch(OffsetFetchRequestState request) {
+            if (!inflightOffsetFetches.remove(request))
+                log.debug("Offset fetch request for partitions {} was not found in the inflight buffer", request.requestedPartitions);
         }
 
         /**
