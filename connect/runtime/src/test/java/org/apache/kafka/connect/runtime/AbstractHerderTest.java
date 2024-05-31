@@ -1137,8 +1137,9 @@ public class AbstractHerderTest {
         // Last task config is different; should report a change
         assertTrue(AbstractHerder.taskConfigsChanged(snapshot, CONN1, alteredTaskConfigs));
 
-        // Make sure we used exclusively raw task configs and never attempted transformation
-        // See KAFKA-16837
+        // Make sure we used exclusively raw task configs and never attempted transformation,
+        // since otherwise failures in transformation could either cause an infinite loop of task
+        // config generation, or prevent any task configs from being published
         verify(snapshot, never()).taskConfig(any());
     }
 
