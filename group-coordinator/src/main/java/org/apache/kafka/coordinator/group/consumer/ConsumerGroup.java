@@ -795,6 +795,13 @@ public class ConsumerGroup implements Group {
      * @param memberEpoch       The member epoch.
      * @param isTransactional   Whether the offset commit is transactional or not. It has no
      *                          impact when a consumer group is used.
+     * @throws UnknownMemberIdException     If the member is not found.
+     * @throws StaleMemberEpochException    If the member uses the consumer protocol and the provided
+     *                                      member epoch doesn't match the actual member epoch.
+     * @throws FencedInstanceIdException    If the member uses the classic protocol and the provided
+     *                                      instance id is fenced by an existing member.
+     * @throws IllegalGenerationException   If the member uses the classic protocol and the provided
+     *                                      generation id is not equal to the member epoch.
      */
     @Override
     public void validateOffsetCommit(
@@ -802,7 +809,8 @@ public class ConsumerGroup implements Group {
         String groupInstanceId,
         int memberEpoch,
         boolean isTransactional
-    ) throws UnknownMemberIdException, StaleMemberEpochException {
+    ) throws UnknownMemberIdException, StaleMemberEpochException,
+        FencedInstanceIdException, IllegalGenerationException {
         // When the member epoch is -1, the request comes from either the admin client
         // or a consumer which does not use the group management facility. In this case,
         // the request can commit offsets if the group is empty.
@@ -810,8 +818,6 @@ public class ConsumerGroup implements Group {
 
         final ConsumerGroupMember member = getOrMaybeCreateMember(memberId, false);
         if (member.useClassicProtocol()) {
-            validateMemberInstanceId(member, groupInstanceId);
-
             try {
                 validateMemberEpoch(memberEpoch, member.memberEpoch());
             } catch (StaleMemberEpochException ex) {
@@ -820,14 +826,6 @@ public class ConsumerGroup implements Group {
                 throw new IllegalGenerationException(String.format("Invalid offset commit because the "
                     + "received generation id %d does not match the expected member epoch %d.",
                     memberEpoch, member.memberEpoch()));
-            }
-
-            if (member.memberEpoch() < groupEpoch() ||
-                member.state() == MemberState.UNREVOKED_PARTITIONS ||
-                (member.state() == MemberState.UNRELEASED_PARTITIONS && !waitingOnUnreleasedPartition(member))) {
-                throw new RebalanceInProgressException(String.format("Invalid offset commit because" +
-                    " a new rebalance has been triggered in group %s and member %s should rejoin to catch up.",
-                    groupId(), member.memberId()));
             }
         } else {
             validateMemberEpoch(memberEpoch, member.memberEpoch());
@@ -840,13 +838,18 @@ public class ConsumerGroup implements Group {
      * @param memberId              The member id for consumer groups.
      * @param memberEpoch           The member epoch for consumer groups.
      * @param lastCommittedOffset   The last committed offsets in the timeline.
+     * @throws UnknownMemberIdException     If the member is not found.
+     * @throws StaleMemberEpochException    If the member uses the consumer protocol and the provided
+     *                                      member epoch doesn't match the actual member epoch.
+     * @throws IllegalGenerationException   If the member uses the classic protocol and the provided
+     *                                      generation id is not equal to the member epoch.
      */
     @Override
     public void validateOffsetFetch(
         String memberId,
         int memberEpoch,
         long lastCommittedOffset
-    ) throws UnknownMemberIdException, StaleMemberEpochException {
+    ) throws UnknownMemberIdException, StaleMemberEpochException, IllegalGenerationException {
         // When the member id is null and the member epoch is -1, the request either comes
         // from the admin client or from a client which does not provide them. In this case,
         // the fetch request is accepted.
@@ -858,6 +861,8 @@ public class ConsumerGroup implements Group {
                 memberId, groupId));
         }
         validateMemberEpoch(memberEpoch, member.memberEpoch());
+        // If the member uses the old protocol and the member epoch doesn't match, return illegal_generation
+        // same as the
     }
 
     /**
@@ -1445,31 +1450,5 @@ public class ConsumerGroup implements Group {
             }
         }
         return false;
-    }
-
-    /**
-     * Validates that the instance id exists and is mapped to the member id
-     * if the group instance id is provided.
-     *
-     * @param member            The ConsumerGroupMember.
-     * @param instanceId        The instance id.
-     */
-    private void validateMemberInstanceId(
-        ConsumerGroupMember member,
-        String instanceId
-    ) throws UnknownMemberIdException, FencedInstanceIdException {
-        if (instanceId != null) {
-            ConsumerGroupMember staticMember = staticMember(instanceId);
-            if (member == null) {
-                throw new UnknownMemberIdException(
-                    String.format("Member with instance id %s is not a member of group %s.", instanceId, groupId())
-                );
-            }
-
-            if (!staticMember.memberId().equals(member.memberId())) {
-                throw Errors.FENCED_INSTANCE_ID.exception("Static member " + member.memberId() + " with instance id "
-                    + instanceId + " was fenced by member " + staticMember.memberId() + ".");
-            }
-        }
     }
 }
