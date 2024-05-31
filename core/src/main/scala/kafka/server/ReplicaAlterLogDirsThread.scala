@@ -40,7 +40,7 @@ class ReplicaAlterLogDirsThread(name: String,
                                 clientId = name,
                                 leader = leader,
                                 failedPartitions,
-                                fetchTierStateMachine = new ReplicaAlterLogDirsTierStateMachine(),
+                                fetchTierStateMachine = new TierStateMachine(leader, replicaMgr, true),
                                 fetchBackOffMs = fetchBackOffMs,
                                 isInterruptible = false,
                                 brokerTopicStats) {

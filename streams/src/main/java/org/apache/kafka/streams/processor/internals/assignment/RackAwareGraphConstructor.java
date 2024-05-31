@@ -32,6 +32,7 @@ import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssi
 
 /**
  * Construct graph for rack aware task assignor
+ * @param <T> represents a KafkaStreams client and its currently-assigned tasks
  */
 public interface RackAwareGraphConstructor<T> {
     int SOURCE_ID = -1;
