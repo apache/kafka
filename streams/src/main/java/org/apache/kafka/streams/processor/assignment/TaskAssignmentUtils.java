@@ -488,12 +488,12 @@ public final class TaskAssignmentUtils {
         }
 
         if (!assignmentConfigs.rackAwareTrafficCost().isPresent()) {
-            LOG.warn("Rack aware task assignment optimization unavailable: the traffic cost configuration was not set.");
+            LOG.warn("Rack aware task assignment optimization unavailable: must configure {}", StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG);
             return false;
         }
 
         if (!assignmentConfigs.rackAwareNonOverlapCost().isPresent()) {
-            LOG.warn("Rack aware task assignment optimization unavailable: the non-overlap cost configuration was not set.");
+            LOG.warn("Rack aware task assignment optimization unavailable: must configure {}", StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG);
             return false;
         }
 

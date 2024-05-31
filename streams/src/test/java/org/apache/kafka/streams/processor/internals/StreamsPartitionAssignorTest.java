@@ -58,11 +58,19 @@ import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.ApplicationState;
+import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
+import org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
+import org.apache.kafka.streams.processor.assignment.TaskInfo;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
+import org.apache.kafka.streams.processor.internals.assignment.DefaultApplicationState;
+import org.apache.kafka.streams.processor.internals.assignment.DefaultTaskInfo;
+import org.apache.kafka.streams.processor.internals.assignment.DefaultTaskTopicPartition;
 import org.apache.kafka.streams.processor.internals.assignment.FallbackPriorTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
@@ -2551,6 +2559,101 @@ public class StreamsPartitionAssignorTest {
         assertEquals(singletonList("input"), subscription.topics());
         assertEquals(info, SubscriptionInfo.decode(subscription.userData()));
         assertEquals(clientTags, partitionAssignor.clientTags());
+    }
+
+    @Test
+    public void testValidateTaskAssignment() {
+        createDefaultMockTaskManager();
+        configureDefaultPartitionAssignor();
+
+        final StreamsConfig streamsConfig = new StreamsConfig(configProps());
+        final AssignmentConfigs assignmentConfigs = AssignmentConfigs.of(streamsConfig);
+        final Set<TaskInfo> tasks = mkSet(
+            new DefaultTaskInfo(
+                new TaskId(1, 1),
+                false,
+                mkSet(),
+                mkSet(
+                    new DefaultTaskTopicPartition(
+                        new TopicPartition("t1", 1),
+                        true,
+                        false,
+                        () -> { }
+                    )
+                )
+            )
+        );
+
+        final UUID clientUuid1 = UUID.randomUUID();
+        final UUID clientUuid2 = UUID.randomUUID();
+        final Map<UUID, StreamsPartitionAssignor.ClientMetadata> clients = mkMap(
+            mkEntry(clientUuid1, new StreamsPartitionAssignor.ClientMetadata(clientUuid1, "endpoint1:80", mkMap(), Optional.empty())),
+            mkEntry(clientUuid2, new StreamsPartitionAssignor.ClientMetadata(clientUuid1, "endpoint2:80", mkMap(), Optional.empty()))
+        );
+        final ApplicationState applicationState = new DefaultApplicationState(
+            assignmentConfigs,
+            tasks.stream().collect(Collectors.toMap(
+                TaskInfo::id,
+                t -> t
+            )),
+            clients
+        );
+
+        // ****
+        final org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment noError = new org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment(
+            mkSet(
+                KafkaStreamsAssignment.of(new ProcessId(clientUuid1), mkSet(
+                    new KafkaStreamsAssignment.AssignedTask(
+                        new TaskId(1, 1), KafkaStreamsAssignment.AssignedTask.Type.ACTIVE
+                    )
+                )),
+                KafkaStreamsAssignment.of(new ProcessId(clientUuid2), mkSet())
+            )
+        );
+        org.apache.kafka.streams.processor.assignment.TaskAssignor.AssignmentError error = partitionAssignor.validateTaskAssignment(applicationState, noError);
+        assertEquals(org.apache.kafka.streams.processor.assignment.TaskAssignor.AssignmentError.NONE, error);
+
+        // ****
+        final org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment missingProcessId = new org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment(
+            mkSet(
+                KafkaStreamsAssignment.of(new ProcessId(clientUuid1), mkSet(
+                    new KafkaStreamsAssignment.AssignedTask(
+                        new TaskId(1, 1), KafkaStreamsAssignment.AssignedTask.Type.ACTIVE
+                    )
+                ))
+            )
+        );
+        error = partitionAssignor.validateTaskAssignment(applicationState, missingProcessId);
+        assertEquals(org.apache.kafka.streams.processor.assignment.TaskAssignor.AssignmentError.MISSING_PROCESS_ID, error);
+
+        // ****
+        final org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment unknownProcessId = new org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment(
+            mkSet(
+                KafkaStreamsAssignment.of(new ProcessId(clientUuid1), mkSet(
+                    new KafkaStreamsAssignment.AssignedTask(
+                        new TaskId(1, 1), KafkaStreamsAssignment.AssignedTask.Type.ACTIVE
+                    )
+                )),
+                KafkaStreamsAssignment.of(new ProcessId(clientUuid2), mkSet()),
+                KafkaStreamsAssignment.of(new ProcessId(UUID.randomUUID()), mkSet())
+            )
+        );
+        error = partitionAssignor.validateTaskAssignment(applicationState, unknownProcessId);
+        assertEquals(org.apache.kafka.streams.processor.assignment.TaskAssignor.AssignmentError.UNKNOWN_PROCESS_ID, error);
+
+        // ****
+        final org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment unknownTaskId = new org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment(
+            mkSet(
+                KafkaStreamsAssignment.of(new ProcessId(clientUuid1), mkSet(
+                    new KafkaStreamsAssignment.AssignedTask(new TaskId(1, 1), KafkaStreamsAssignment.AssignedTask.Type.ACTIVE)
+                )),
+                KafkaStreamsAssignment.of(new ProcessId(clientUuid2), mkSet(
+                    new KafkaStreamsAssignment.AssignedTask(new TaskId(13, 13), KafkaStreamsAssignment.AssignedTask.Type.ACTIVE)
+                ))
+            )
+        );
+        error = partitionAssignor.validateTaskAssignment(applicationState, unknownTaskId);
+        assertEquals(org.apache.kafka.streams.processor.assignment.TaskAssignor.AssignmentError.UNKNOWN_TASK_ID, error);
     }
 
     private static class CorruptedInternalTopologyBuilder extends InternalTopologyBuilder {

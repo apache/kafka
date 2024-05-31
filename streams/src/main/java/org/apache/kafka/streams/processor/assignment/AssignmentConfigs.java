@@ -20,6 +20,8 @@ import java.util.List;
 import java.util.Optional;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.processor.assignment.assignors.StickyTaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor;
 
 /**
  * Assignment related configs for the Kafka Streams {@link TaskAssignor}.
@@ -34,20 +36,48 @@ public class AssignmentConfigs {
     private final Optional<Integer> rackAwareNonOverlapCost;
     private final String rackAwareAssignmentStrategy;
 
-    public AssignmentConfigs(final StreamsConfig configs) {
-        this(
-            configs.getLong(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG),
-            configs.getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG),
-            configs.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG),
-            configs.getLong(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG),
-            configs.getList(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG),
-            Optional.ofNullable(configs.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG)),
-            Optional.ofNullable(configs.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG)),
-            configs.getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG)
+    public static AssignmentConfigs of(final StreamsConfig configs) {
+        final long acceptableRecoveryLag = configs.getLong(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG);
+        final int maxWarmupReplicas = configs.getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG);
+        final int numStandbyReplicas = configs.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
+        final long probingRebalanceIntervalMs = configs.getLong(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG);
+        final List<String> rackAwareAssignmentTags = configs.getList(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
+        final String rackAwareAssignmentStrategy = configs.getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG);
+        Optional<Integer> rackAwareTrafficCost = Optional.ofNullable(configs.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG));
+        Optional<Integer> rackAwareNonOverlapCost = Optional.ofNullable(configs.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG));
+
+        final String assignorClassName = configs.getString(StreamsConfig.TASK_ASSIGNOR_CLASS_CONFIG);
+        if (StickyTaskAssignor.class.getName().equals(assignorClassName)) {
+            if (!rackAwareTrafficCost.isPresent()) {
+                rackAwareTrafficCost = Optional.of(StickyTaskAssignor.DEFAULT_STATEFUL_TRAFFIC_COST);
+            }
+            if (!rackAwareNonOverlapCost.isPresent()) {
+                rackAwareNonOverlapCost = Optional.of(StickyTaskAssignor.DEFAULT_STATEFUL_NON_OVERLAP_COST);
+            }
+        }
+
+        if (HighAvailabilityTaskAssignor.class.getName().equals(assignorClassName)) {
+            if (!rackAwareTrafficCost.isPresent()) {
+                rackAwareTrafficCost = Optional.of(HighAvailabilityTaskAssignor.DEFAULT_STATEFUL_TRAFFIC_COST);
+            }
+            if (!rackAwareNonOverlapCost.isPresent()) {
+                rackAwareNonOverlapCost = Optional.of(HighAvailabilityTaskAssignor.DEFAULT_STATEFUL_NON_OVERLAP_COST);
+            }
+        }
+
+        return new AssignmentConfigs(
+            acceptableRecoveryLag,
+            maxWarmupReplicas,
+            numStandbyReplicas,
+            probingRebalanceIntervalMs,
+            rackAwareAssignmentTags,
+            rackAwareTrafficCost,
+            rackAwareNonOverlapCost,
+            rackAwareAssignmentStrategy
         );
     }
 
-    public AssignmentConfigs(final long acceptableRecoveryLag,
+    private AssignmentConfigs(final long acceptableRecoveryLag,
                              final int maxWarmupReplicas,
                              final int numStandbyReplicas,
                              final long probingRebalanceIntervalMs,
@@ -70,6 +100,7 @@ public class AssignmentConfigs {
             rackAwareAssignmentStrategy
         );
     }
+
 
     /**
      * The configured acceptable recovery lag according to

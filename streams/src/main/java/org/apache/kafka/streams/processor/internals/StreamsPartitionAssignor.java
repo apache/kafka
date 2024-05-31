@@ -206,6 +206,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     private String userEndPoint;
     private AssignmentConfigs assignmentConfigs;
+    private org.apache.kafka.streams.processor.assignment.AssignmentConfigs publicAssignmentConfigs;
 
     // for the main consumer, we need to use a supplier to break a cyclic setup dependency
     private Supplier<Consumer<byte[], byte[]>> mainConsumerSupplier;
@@ -255,6 +256,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         nonFatalExceptionsToHandle = referenceContainer.nonFatalExceptionsToHandle;
         time = Objects.requireNonNull(referenceContainer.time, "Time was not specified");
         assignmentConfigs = assignorConfiguration.assignmentConfigs();
+        publicAssignmentConfigs = assignorConfiguration.publicAssignmentConfigs();
         partitionGrouper = new PartitionGrouper();
         userEndPoint = assignorConfiguration.userEndPoint();
         internalTopicManager = assignorConfiguration.internalTopicManager();
@@ -582,7 +584,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         ));
 
         return new DefaultApplicationState(
-            assignmentConfigs.toPublicAssignmentConfigs(),
+            publicAssignmentConfigs,
             logicalTasks,
             clientMetadataMap
         );
@@ -1585,6 +1587,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         }
     }
 
+    // Visible for testing only.
     AssignmentError validateTaskAssignment(final ApplicationState applicationState,
                                            final TaskAssignment taskAssignment) {
         final Collection<KafkaStreamsAssignment> assignments = taskAssignment.assignment();

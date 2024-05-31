@@ -27,6 +27,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.internals.UpgradeFromValues;
+import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 import org.apache.kafka.streams.processor.internals.ClientUtils;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.slf4j.Logger;
@@ -243,6 +244,10 @@ public final class AssignorConfiguration {
         return new AssignmentConfigs(streamsConfig);
     }
 
+    public org.apache.kafka.streams.processor.assignment.AssignmentConfigs publicAssignmentConfigs() {
+        return org.apache.kafka.streams.processor.assignment.AssignmentConfigs.of(streamsConfig);
+    }
+
     public TaskAssignor taskAssignor() {
         try {
             return Utils.newInstance(taskAssignorClass, TaskAssignor.class);
@@ -360,19 +365,6 @@ public final class AssignorConfiguration {
                 "\n  probingRebalanceIntervalMs=" + probingRebalanceIntervalMs +
                 "\n  rackAwareAssignmentTags=" + rackAwareAssignmentTags +
                 "\n}";
-        }
-
-        public org.apache.kafka.streams.processor.assignment.AssignmentConfigs toPublicAssignmentConfigs() {
-            return new org.apache.kafka.streams.processor.assignment.AssignmentConfigs(
-                acceptableRecoveryLag,
-                maxWarmupReplicas,
-                numStandbyReplicas,
-                probingRebalanceIntervalMs,
-                rackAwareAssignmentTags,
-                Optional.ofNullable(rackAwareAssignmentTrafficCost),
-                Optional.ofNullable(rackAwareAssignmentNonOverlapCost),
-                rackAwareAssignmentStrategy
-            );
         }
     }
 }
