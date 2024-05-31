@@ -23,7 +23,6 @@ import java.nio.file.Paths
 import java.util.OptionalInt
 import java.util.concurrent.CompletableFuture
 import java.util.{Map => JMap}
-import java.util.{Collection => JCollection}
 import kafka.log.LogManager
 import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig
@@ -148,7 +147,6 @@ class KafkaRaftManager[T](
   metrics: Metrics,
   threadNamePrefixOpt: Option[String],
   val controllerQuorumVotersFuture: CompletableFuture[JMap[Integer, InetSocketAddress]],
-  bootstrapServers: JCollection[InetSocketAddress],
   fatalFaultHandler: FaultHandler
 ) extends RaftManager[T] with Logging {
 
@@ -229,7 +227,6 @@ class KafkaRaftManager[T](
       expirationService,
       logContext,
       clusterId,
-      bootstrapServers,
       raftConfig
     )
     client

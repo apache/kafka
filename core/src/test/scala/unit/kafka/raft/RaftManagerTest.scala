@@ -118,7 +118,6 @@ class RaftManagerTest {
       new Metrics(Time.SYSTEM),
       Option.empty,
       CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumVoters)),
-      QuorumConfig.parseBootstrapServers(config.quorumBootstrapServers),
       mock(classOf[FaultHandler])
     )
   }

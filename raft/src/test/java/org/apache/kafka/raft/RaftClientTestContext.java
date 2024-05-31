@@ -149,7 +149,7 @@ public final class RaftClientTestContext {
         private int electionTimeoutMs = DEFAULT_ELECTION_TIMEOUT_MS;
         private int appendLingerMs = DEFAULT_APPEND_LINGER_MS;
         private MemoryPool memoryPool = MemoryPool.NONE;
-        private List<InetSocketAddress> bootstrapServers = Collections.emptyList();
+        private List<String> bootstrapServers = Collections.emptyList();
 
         public Builder(int localId, Set<Integer> voters) {
             this(OptionalInt.of(localId), voters);
@@ -158,6 +158,7 @@ public final class RaftClientTestContext {
         public Builder(OptionalInt localId, Set<Integer> voters) {
             this.voters = voters;
             this.localId = localId;
+            this.bootstrapServers = voters.stream().map(id -> mockHost() + ":" + mockPort(id)).collect(Collectors.toList());
         }
 
         Builder withElectedLeader(int epoch, int leaderId) {
@@ -244,18 +245,13 @@ public final class RaftClientTestContext {
             return this;
         }
 
-        Builder withBootstrapServers(List<InetSocketAddress> bootstrapServers) {
-            this.bootstrapServers = bootstrapServers;
-            return this;
-        }
-
         public RaftClientTestContext build() throws IOException {
             Metrics metrics = new Metrics(time);
             MockNetworkChannel channel = new MockNetworkChannel();
             MockListener listener = new MockListener(localId);
             Map<Integer, InetSocketAddress> voterAddressMap = voters
                 .stream()
-                .collect(Collectors.toMap(Function.identity(), RaftClientTestContext::mockAddress));
+                .collect(Collectors.toMap(Function.identity(), id -> new InetSocketAddress(mockHost(), mockPort(id))));
 
             QuorumConfig quorumConfig = new QuorumConfig(
                 requestTimeoutMs,
@@ -263,7 +259,8 @@ public final class RaftClientTestContext {
                 electionTimeoutMs,
                 ELECTION_BACKOFF_MAX_MS,
                 FETCH_TIMEOUT_MS,
-                appendLingerMs
+                appendLingerMs,
+                bootstrapServers
             );
 
             KafkaRaftClient<String> client = new KafkaRaftClient<>(
@@ -278,7 +275,6 @@ public final class RaftClientTestContext {
                 new MockExpirationService(time),
                 FETCH_MAX_WAIT_MS,
                 clusterId.toString(),
-                bootstrapServers,
                 logContext,
                 random,
                 quorumConfig
@@ -876,8 +872,12 @@ public final class RaftClientTestContext {
         return requests;
     }
 
-    public static InetSocketAddress mockAddress(int id) {
-        return new InetSocketAddress("localhost", 9990 + id);
+    public static String mockHost() {
+        return "localhost";
+    }
+
+    public static int mockPort(int id) {
+        return 9990 + id;
     }
 
     EndQuorumEpochResponseData endEpochResponse(

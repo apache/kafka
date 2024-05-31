@@ -46,6 +46,7 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeAll, BeforeEach, Tag, TestInfo}
 
 import java.nio.file.{Files, Paths}
+import java.util.stream.Collectors
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Seq, immutable}
@@ -124,13 +125,23 @@ class KRaftQuorumImplementation(
     metaPropertiesEnsemble.verify(Optional.of(clusterId),
       OptionalInt.of(config.nodeId),
       util.EnumSet.of(REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR))
+
+    val bootstrapServers = controllerQuorumVotersFuture.get().values().stream()
+      .map(addr => addr.getHostName + ":" + addr.getPort)
+      .collect(Collectors.joining(","));
+
+    val propsWithControllerQuorumBootstrapServers = new Properties()
+    propsWithControllerQuorumBootstrapServers.putAll(config.originals())
+    propsWithControllerQuorumBootstrapServers.setProperty(QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
+
+    val brokerConfig = new KafkaConfig(propsWithControllerQuorumBootstrapServers)
+
     val sharedServer = new SharedServer(
-      config,
+      brokerConfig,
       metaPropertiesEnsemble,
       time,
       new Metrics(),
       controllerQuorumVotersFuture,
-      controllerQuorumVotersFuture.get().values(),
       faultHandlerFactory
     )
     var broker: BrokerServer = null
@@ -371,7 +382,6 @@ abstract class QuorumTestHarness extends Logging {
       Time.SYSTEM,
       new Metrics(),
       controllerQuorumVotersFuture,
-      Collections.emptyList(),
       faultHandlerFactory
     )
     var controllerServer: ControllerServer = null

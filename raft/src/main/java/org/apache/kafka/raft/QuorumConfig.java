@@ -98,6 +98,7 @@ public class QuorumConfig {
     private final int electionBackoffMaxMs;
     private final int fetchTimeoutMs;
     private final int appendLingerMs;
+    private final List<String> bootstrapServers;
 
     public QuorumConfig(AbstractConfig abstractConfig) {
         this(
@@ -106,7 +107,8 @@ public class QuorumConfig {
             abstractConfig.getInt(QUORUM_ELECTION_TIMEOUT_MS_CONFIG),
             abstractConfig.getInt(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG),
             abstractConfig.getInt(QUORUM_FETCH_TIMEOUT_MS_CONFIG),
-            abstractConfig.getInt(QUORUM_LINGER_MS_CONFIG)
+            abstractConfig.getInt(QUORUM_LINGER_MS_CONFIG),
+            abstractConfig.getList(QUORUM_BOOTSTRAP_SERVERS_CONFIG)
         );
     }
 
@@ -116,7 +118,8 @@ public class QuorumConfig {
         int electionTimeoutMs,
         int electionBackoffMaxMs,
         int fetchTimeoutMs,
-        int appendLingerMs
+        int appendLingerMs,
+        List<String> bootstrapServers
     ) {
         this.requestTimeoutMs = requestTimeoutMs;
         this.retryBackoffMs = retryBackoffMs;
@@ -124,6 +127,7 @@ public class QuorumConfig {
         this.electionBackoffMaxMs = electionBackoffMaxMs;
         this.fetchTimeoutMs = fetchTimeoutMs;
         this.appendLingerMs = appendLingerMs;
+        this.bootstrapServers = bootstrapServers;
     }
 
     public int requestTimeoutMs() {
@@ -148,6 +152,10 @@ public class QuorumConfig {
 
     public int appendLingerMs() {
         return appendLingerMs;
+    }
+
+    public List<String> bootstrapServers() {
+        return bootstrapServers;
     }
 
     private static Integer parseVoterId(String idString) {

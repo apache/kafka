@@ -85,7 +85,6 @@ import org.apache.kafka.snapshot.SnapshotWriter;
 import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
@@ -107,6 +106,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static java.util.concurrent.CompletableFuture.completedFuture;
+import static org.apache.kafka.raft.QuorumConfig.parseBootstrapServers;
 import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
 
 /**
@@ -212,7 +212,6 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         ExpirationService expirationService,
         LogContext logContext,
         String clusterId,
-        Collection<InetSocketAddress> bootstrapServers,
         QuorumConfig quorumConfig
     ) {
         this(
@@ -227,7 +226,6 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
             expirationService,
             MAX_FETCH_WAIT_MS,
             clusterId,
-            bootstrapServers,
             logContext,
             new Random(),
             quorumConfig
@@ -246,7 +244,6 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         ExpirationService expirationService,
         int fetchMaxWaitMs,
         String clusterId,
-        Collection<InetSocketAddress> bootstrapServers,
         LogContext logContext,
         Random random,
         QuorumConfig quorumConfig
@@ -268,6 +265,8 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         this.random = random;
         this.quorumConfig = quorumConfig;
         this.snapshotCleaner = new RaftMetadataLogCleanerManager(logger, time, 60000, log::maybeClean);
+
+        List<InetSocketAddress> bootstrapServers = parseBootstrapServers(quorumConfig.bootstrapServers());
 
         if (!bootstrapServers.isEmpty()) {
             // generate Node objects from network addresses by using decreasing negative ids

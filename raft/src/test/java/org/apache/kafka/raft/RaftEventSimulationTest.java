@@ -106,6 +106,7 @@ public class RaftEventSimulationTest {
     private static final int REQUEST_TIMEOUT_MS = 3000;
     private static final int FETCH_MAX_WAIT_MS = 100;
     private static final int LINGER_MS = 0;
+    private static final List<String> BOOTSTRAP_SERVERS = Collections.emptyList();
 
     @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
     void canElectInitialLeader(
@@ -749,7 +750,8 @@ public class RaftEventSimulationTest {
                 ELECTION_TIMEOUT_MS,
                 ELECTION_JITTER_MS,
                 FETCH_TIMEOUT_MS,
-                LINGER_MS
+                LINGER_MS,
+                BOOTSTRAP_SERVERS
             );
             Metrics metrics = new Metrics(time);
 
@@ -770,7 +772,6 @@ public class RaftEventSimulationTest {
                 new MockExpirationService(time),
                 FETCH_MAX_WAIT_MS,
                 clusterId.toString(),
-                Collections.emptyList(),
                 logContext,
                 random,
                 quorumConfig

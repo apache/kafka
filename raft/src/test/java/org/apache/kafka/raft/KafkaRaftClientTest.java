@@ -51,7 +51,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -63,7 +62,6 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
-import java.util.stream.Collectors;
 
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.raft.RaftClientTestContext.Builder.DEFAULT_ELECTION_TIMEOUT_MS;
@@ -1485,14 +1483,8 @@ public class KafkaRaftClientTest {
         int leaderId = 1;
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(leaderId);
-        List<InetSocketAddress> bootstrapServers = voters
-            .stream()
-            .map(RaftClientTestContext::mockAddress)
-            .collect(Collectors.toList());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withBootstrapServers(bootstrapServers)
-            .build();
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
 
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
@@ -1530,14 +1522,8 @@ public class KafkaRaftClientTest {
         int otherNodeId = 2;
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(leaderId, otherNodeId);
-        List<InetSocketAddress> bootstrapServers = voters
-            .stream()
-            .map(RaftClientTestContext::mockAddress)
-            .collect(Collectors.toList());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withBootstrapServers(bootstrapServers)
-            .build();
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
 
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
@@ -1572,14 +1558,8 @@ public class KafkaRaftClientTest {
         int otherNodeId = 2;
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(leaderId, otherNodeId);
-        List<InetSocketAddress> bootstrapServers = voters
-            .stream()
-            .map(RaftClientTestContext::mockAddress)
-            .collect(Collectors.toList());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withBootstrapServers(bootstrapServers)
-            .build();
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
 
         // Expect a fetch request to one of the bootstrap servers
         context.pollUntilRequest();
@@ -1645,14 +1625,8 @@ public class KafkaRaftClientTest {
         int otherNodeId = 2;
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(leaderId, otherNodeId);
-        List<InetSocketAddress> bootstrapServers = voters
-            .stream()
-            .map(RaftClientTestContext::mockAddress)
-            .collect(Collectors.toList());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withBootstrapServers(bootstrapServers)
-            .build();
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
 
         // Expect a fetch request to one of the bootstrap servers
         context.pollUntilRequest();
@@ -2129,14 +2103,8 @@ public class KafkaRaftClientTest {
         int otherNodeId = 2;
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(leaderId, otherNodeId);
-        List<InetSocketAddress> bootstrapServers = voters
-            .stream()
-            .map(RaftClientTestContext::mockAddress)
-            .collect(Collectors.toList());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withBootstrapServers(bootstrapServers)
-            .build();
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
 
         context.discoverLeaderAsObserver(leaderId, epoch);
 
@@ -2178,14 +2146,8 @@ public class KafkaRaftClientTest {
         int otherNodeId = 2;
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(leaderId, otherNodeId);
-        List<InetSocketAddress> bootstrapServers = voters
-            .stream()
-            .map(RaftClientTestContext::mockAddress)
-            .collect(Collectors.toList());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withBootstrapServers(bootstrapServers)
-            .build();
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
 
         context.discoverLeaderAsObserver(leaderId, epoch);
 
@@ -3272,14 +3234,8 @@ public class KafkaRaftClientTest {
         // This is designed for tooling/debugging use cases.
 
         Set<Integer> voters = Utils.mkSet(1, 2);
-        List<InetSocketAddress> bootstrapServers = voters
-            .stream()
-            .map(RaftClientTestContext::mockAddress)
-            .collect(Collectors.toList());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(OptionalInt.empty(), voters)
-            .withBootstrapServers(bootstrapServers)
-            .build();
+        RaftClientTestContext context = new RaftClientTestContext.Builder(OptionalInt.empty(), voters).build();
 
         // First fetch discovers the current leader and epoch
 

@@ -245,7 +245,6 @@ public class KafkaClusterTestKit implements AutoCloseable {
                         Time.SYSTEM,
                         new Metrics(),
                         connectFutureManager.future,
-                        Collections.emptyList(),
                         faultHandlerFactory
                     );
                     ControllerServer controller = null;
@@ -278,7 +277,6 @@ public class KafkaClusterTestKit implements AutoCloseable {
                             Time.SYSTEM,
                             new Metrics(),
                             connectFutureManager.future,
-                            Collections.emptyList(),
                             faultHandlerFactory
                         )
                     );
