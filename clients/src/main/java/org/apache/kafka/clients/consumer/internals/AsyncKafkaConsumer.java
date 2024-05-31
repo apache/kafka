@@ -1076,12 +1076,16 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 return listOffsetsEvent.emptyResults();
             }
 
-            return applicationEventHandler.addAndGet(listOffsetsEvent)
+            try {
+                return applicationEventHandler.addAndGet(listOffsetsEvent)
                     .entrySet()
                     .stream()
                     .collect(Collectors.toMap(
-                            Map.Entry::getKey,
-                            entry -> entry.getValue().buildOffsetAndTimestamp()));
+                        Map.Entry::getKey,
+                        entry -> entry.getValue().buildOffsetAndTimestamp()));
+            } catch (TimeoutException e) {
+                throw new TimeoutException("Failed to get offsets by times in " + timeout.toMillis() + "ms");
+            }
         } finally {
             release();
         }
@@ -1136,12 +1140,16 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             }
 
             Map<TopicPartition, OffsetAndTimestampInternal> offsetAndTimestampMap;
-            offsetAndTimestampMap = applicationEventHandler.addAndGet(listOffsetsEvent);
-            return offsetAndTimestampMap.entrySet()
+            try {
+                offsetAndTimestampMap = applicationEventHandler.addAndGet(listOffsetsEvent);
+                return offsetAndTimestampMap.entrySet()
                     .stream()
                     .collect(Collectors.toMap(
-                            Map.Entry::getKey,
-                            entry -> entry.getValue().offset()));
+                        Map.Entry::getKey,
+                        entry -> entry.getValue().offset()));
+            } catch (TimeoutException e) {
+                throw new TimeoutException("Failed to get offsets by times in " + timeout.toMillis() + "ms");
+            }
         } finally {
             release();
         }
