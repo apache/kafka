@@ -1099,14 +1099,14 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          * upon completion.
          */
         private CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> addOffsetFetchRequest(final OffsetFetchRequestState request) {
-            Optional<OffsetFetchRequestState> dupe =
+            Optional<OffsetFetchRequestState> unsent =
                     unsentOffsetFetches.stream().filter(r -> r.sameRequest(request)).findAny();
             Optional<OffsetFetchRequestState> inflight =
                     inflightOffsetFetches.stream().filter(r -> r.sameRequest(request)).findAny();
 
-            if (dupe.isPresent()) {
+            if (unsent.isPresent()) {
                 log.debug("Duplicated unsent offset fetch request found for partitions: {}", request.requestedPartitions);
-                OffsetFetchRequestState existing = dupe.get();
+                OffsetFetchRequestState existing = unsent.get();
                 existing.chainFuture(request.future);
             } else if (inflight.isPresent()) {
                 log.debug("Duplicated inflight offset fetch request found for partitions: {}", request.requestedPartitions);
