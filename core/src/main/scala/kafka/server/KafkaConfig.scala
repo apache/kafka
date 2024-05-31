@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import java.{util}
+import java.util
 import java.util.concurrent.TimeUnit
 import java.util.{Collections, Properties}
 import kafka.cluster.EndPoint
