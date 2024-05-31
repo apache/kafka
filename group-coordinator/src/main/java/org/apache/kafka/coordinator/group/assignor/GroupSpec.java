@@ -47,14 +47,16 @@ public interface GroupSpec {
      *
      * @param memberId          The member Id.
      * @return The member's subscription metadata.
+     * @throws IllegalStateException If the member Id is not found.
      */
-    MemberSubscriptionSpec memberSubscriptionSpec(String memberId);
+    MemberSubscriptionSpec memberSubscription(String memberId);
 
     /**
-     * Gets the current assignment for a member.
+     * Gets the current target assignment of a member.
      *
      * @param memberId          The member Id.
      * @return A map of topic Ids to sets of partition numbers.
+     *         An empty map is returned if the member Id isn't found.
      */
-    Map<Uuid, Set<Integer>> currentMemberAssignment(String memberId);
+    Map<Uuid, Set<Integer>> memberAssignment(String memberId);
 }

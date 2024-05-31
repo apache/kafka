@@ -22,7 +22,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -42,28 +41,24 @@ public class GroupSpecImpl implements GroupSpec {
     /**
      * Partitions currently assigned to each member keyed by topicId.
      */
-    private final Map<String, Map<Uuid, Set<Integer>>> currentAssignment;
+    private final Map<String, Map<Uuid, Set<Integer>>> memberAssignment;
 
     /**
      * Reverse lookup map representing topic partitions with
      * their current member assignments.
      */
-    private final Map<Uuid, Map<Integer, String>> invertedCurrentAssignment;
+    private final Map<Uuid, Map<Integer, String>> invertedMemberAssignment;
 
     public GroupSpecImpl(
-        Map<String, MemberSubscriptionSpec> members,
+        Map<String, MemberSubscriptionSpec> memberSubscriptions,
         SubscriptionType subscriptionType,
-        Map<String, Map<Uuid, Set<Integer>>> currentAssignment,
-        Map<Uuid, Map<Integer, String>> invertedCurrentAssignment
+        Map<String, Map<Uuid, Set<Integer>>> memberAssignment,
+        Map<Uuid, Map<Integer, String>> invertedMemberAssignment
     ) {
-        Objects.requireNonNull(members);
-        Objects.requireNonNull(subscriptionType);
-        Objects.requireNonNull(currentAssignment);
-        Objects.requireNonNull(invertedCurrentAssignment);
-        this.memberSubscriptions = members;
-        this.subscriptionType = subscriptionType;
-        this.currentAssignment = currentAssignment;
-        this.invertedCurrentAssignment = invertedCurrentAssignment;
+        this.memberSubscriptions = Objects.requireNonNull(memberSubscriptions);
+        this.subscriptionType = Objects.requireNonNull(subscriptionType);
+        this.memberAssignment = Objects.requireNonNull(memberAssignment);
+        this.invertedMemberAssignment = Objects.requireNonNull(invertedMemberAssignment);
     }
 
     /**
@@ -87,7 +82,7 @@ public class GroupSpecImpl implements GroupSpec {
      */
     @Override
     public boolean isPartitionAssigned(Uuid topicId, int partitionId) {
-        Map<Integer, String> partitionMap = invertedCurrentAssignment.get(topicId);
+        Map<Integer, String> partitionMap = invertedMemberAssignment.get(topicId);
         if (partitionMap == null) {
             return false;
         }
@@ -96,21 +91,23 @@ public class GroupSpecImpl implements GroupSpec {
 
     /**
      * {@inheritDoc}
+     * @throws IllegalStateException If the member Id is not found.
      */
     @Override
-    public MemberSubscriptionSpec memberSubscriptionSpec(String memberId) {
-        return memberSubscriptions.getOrDefault(memberId, new MemberSubscriptionSpecImpl(
-            Optional.empty(),
-            Collections.emptySet()
-        ));
+    public MemberSubscriptionSpec memberSubscription(String memberId) {
+        MemberSubscriptionSpec memberSubscription = memberSubscriptions.get(memberId);
+        if (memberSubscription == null) {
+            throw new IllegalStateException("Member Id " + memberId + " not found.");
+        }
+        return memberSubscription;
     }
 
     /**
      * {@inheritDoc}
      */
     @Override
-    public Map<Uuid, Set<Integer>> currentMemberAssignment(String memberId) {
-        return currentAssignment.getOrDefault(memberId, Collections.emptyMap());
+    public Map<Uuid, Set<Integer>> memberAssignment(String memberId) {
+        return memberAssignment.getOrDefault(memberId, Collections.emptyMap());
     }
 
     @Override
@@ -120,16 +117,16 @@ public class GroupSpecImpl implements GroupSpec {
         GroupSpecImpl that = (GroupSpecImpl) o;
         return subscriptionType == that.subscriptionType &&
             memberSubscriptions.equals(that.memberSubscriptions) &&
-            currentAssignment.equals(that.currentAssignment) &&
-            invertedCurrentAssignment.equals(that.invertedCurrentAssignment);
+            memberAssignment.equals(that.memberAssignment) &&
+            invertedMemberAssignment.equals(that.invertedMemberAssignment);
     }
 
     @Override
     public int hashCode() {
         int result = memberSubscriptions.hashCode();
         result = 31 * result + subscriptionType.hashCode();
-        result = 31 * result + currentAssignment.hashCode();
-        result = 31 * result + invertedCurrentAssignment.hashCode();
+        result = 31 * result + memberAssignment.hashCode();
+        result = 31 * result + invertedMemberAssignment.hashCode();
         return result;
     }
 
@@ -137,8 +134,8 @@ public class GroupSpecImpl implements GroupSpec {
     public String toString() {
         return "GroupSpecImpl(memberSubscriptions=" + memberSubscriptions +
             ", subscriptionType=" + subscriptionType +
-            ", currentAssignment=" + currentAssignment +
-            ", invertedCurrentAssignment=" + invertedCurrentAssignment +
+            ", memberAssignment=" + memberAssignment +
+            ", invertedMemberAssignment=" + invertedMemberAssignment +
             ')';
     }
 }

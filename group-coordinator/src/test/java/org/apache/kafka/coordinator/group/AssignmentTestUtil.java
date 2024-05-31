@@ -18,7 +18,6 @@ package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
-import org.apache.kafka.coordinator.group.assignor.MemberSubscriptionSpec;
 
 import java.util.AbstractMap;
 import java.util.Arrays;
@@ -89,16 +88,13 @@ public class AssignmentTestUtil {
      * Generate a reverse look up map of partition to member target assignments from the given metadata.
      *
      * @param assignedPartitions              Partition assignments per member.
-     * @param memberSubscriptionSpec          A map where the key is the member Id and the value is a
-     *                                        MemberSubscriptionSpec object containing the member's subscription info.
      * @return Map of topic partition to member assignments.
      */
     public static Map<Uuid, Map<Integer, String>> invertedTargetAssignment(
-        Map<String, Map<Uuid, Set<Integer>>> assignedPartitions,
-        Map<String, MemberSubscriptionSpec> memberSubscriptionSpec
+        Map<String, Map<Uuid, Set<Integer>>> assignedPartitions
     ) {
         Map<Uuid, Map<Integer, String>> invertedTargetAssignment = new HashMap<>();
-        for (String memberId : memberSubscriptionSpec.keySet()) {
+        for (String memberId : assignedPartitions.keySet()) {
             Map<Uuid, Set<Integer>> topicsAndPartitions = assignedPartitions.getOrDefault(memberId, Collections.emptyMap());
 
             for (Map.Entry<Uuid, Set<Integer>> topicEntry : topicsAndPartitions.entrySet()) {

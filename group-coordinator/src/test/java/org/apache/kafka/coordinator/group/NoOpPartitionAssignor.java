@@ -38,7 +38,7 @@ public class NoOpPartitionAssignor implements ConsumerGroupPartitionAssignor {
             .stream()
             .collect(Collectors.toMap(
                 memberId -> memberId,
-                memberId -> new MemberAssignment(groupSpec.currentMemberAssignment(memberId))
+                memberId -> new MemberAssignment(groupSpec.memberAssignment(memberId))
             )));
     }
 }

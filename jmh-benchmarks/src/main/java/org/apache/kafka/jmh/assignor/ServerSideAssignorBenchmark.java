@@ -272,8 +272,8 @@ public class ServerSideAssignorBenchmark {
             assignedPartitions.put(memberId, memberAssignment.targetPartitions());
 
             updatedMemberSpec.put(memberId, new MemberSubscriptionSpecImpl(
-                groupSpec.memberSubscriptionSpec(memberId).rackId(),
-                groupSpec.memberSubscriptionSpec(memberId).subscribedTopicIds()
+                groupSpec.memberSubscription(memberId).rackId(),
+                groupSpec.memberSubscription(memberId).subscribedTopicIds()
             ));
         });
 

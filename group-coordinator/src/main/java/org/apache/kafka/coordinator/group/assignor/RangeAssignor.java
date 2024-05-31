@@ -95,7 +95,7 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
 
         if (groupSpec.subscriptionType().equals(HOMOGENEOUS)) {
             Collection<String> allMembers = groupSpec.memberIds();
-            Collection<Uuid> topics = groupSpec.memberSubscriptionSpec(groupSpec.memberIds().iterator().next())
+            Collection<Uuid> topics = groupSpec.memberSubscription(groupSpec.memberIds().iterator().next())
                 .subscribedTopicIds();
 
             for (Uuid topicId : topics) {
@@ -106,7 +106,7 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
             }
         } else {
             groupSpec.memberIds().forEach(memberId -> {
-                Collection<Uuid> topics = groupSpec.memberSubscriptionSpec(memberId).subscribedTopicIds();
+                Collection<Uuid> topics = groupSpec.memberSubscription(memberId).subscribedTopicIds();
                 for (Uuid topicId : topics) {
                     if (subscribedTopicDescriber.numPartitions(topicId) == -1) {
                         throw new PartitionAssignorException("Member is subscribed to a non-existent topic");
@@ -162,7 +162,7 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
             List<MemberWithRemainingAssignments> potentiallyUnfilledMembers = new ArrayList<>();
 
             for (String memberId : membersForTopic) {
-                Set<Integer> assignedPartitionsForTopic = groupSpec.currentMemberAssignment(memberId)
+                Set<Integer> assignedPartitionsForTopic = groupSpec.memberAssignment(memberId)
                     .getOrDefault(topicId, Collections.emptySet());
 
                 int currentAssignmentSize = assignedPartitionsForTopic.size();

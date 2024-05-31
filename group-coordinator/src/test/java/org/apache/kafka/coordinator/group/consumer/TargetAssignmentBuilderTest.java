@@ -165,17 +165,17 @@ public class TargetAssignmentBuilderTest {
             TopicsImage topicsImage = topicsImageBuilder.build().topics();
             // Prepare expected member specs.
             Map<String, MemberSubscriptionSpec> memberSubscriptions = new HashMap<>();
-            Map<String, Map<Uuid, Set<Integer>>> assignedPartitions = new HashMap<>(members.size());
+            Map<String, Map<Uuid, Set<Integer>>> targetAssignment = new HashMap<>(members.size());
 
             // All the existing members are prepared.
             members.forEach((memberId, member) -> {
-                Assignment assignment = targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
+                Assignment assignment = this.targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
 
                 memberSubscriptions.put(memberId, createMemberSubscriptionSpec(
                     member,
                     topicsImage
                 ));
-                assignedPartitions.put(
+                targetAssignment.put(
                     memberId,
                     assignment.partitions()
                 );
@@ -187,13 +187,13 @@ public class TargetAssignmentBuilderTest {
                 if (updatedMemberOrNull == null) {
                     memberSubscriptions.remove(memberId);
                 } else {
-                    Assignment assignment = targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
+                    Assignment assignment = this.targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
 
                     // A new static member joins and needs to replace an existing departed one.
                     if (updatedMemberOrNull.instanceId() != null) {
                         String previousMemberId = staticMembers.get(updatedMemberOrNull.instanceId());
                         if (previousMemberId != null && !previousMemberId.equals(memberId)) {
-                            assignment = targetAssignment.getOrDefault(previousMemberId, Assignment.EMPTY);
+                            assignment = this.targetAssignment.getOrDefault(previousMemberId, Assignment.EMPTY);
                         }
                     }
 
@@ -201,7 +201,7 @@ public class TargetAssignmentBuilderTest {
                         updatedMemberOrNull,
                         topicsImage
                     ));
-                    assignedPartitions.put(
+                    targetAssignment.put(
                         memberId,
                         assignment.partitions()
                     );
@@ -219,13 +219,13 @@ public class TargetAssignmentBuilderTest {
 
             // Prepare the member assignments per topic partition.
             Map<Uuid, Map<Integer, String>> invertedTargetAssignment = AssignmentTestUtil
-                .invertedTargetAssignment(assignedPartitions, memberSubscriptions);
+                .invertedTargetAssignment(targetAssignment);
 
             // Prepare the expected assignment spec.
             GroupSpecImpl groupSpec = new GroupSpecImpl(
                 memberSubscriptions,
                 subscriptionType,
-                assignedPartitions,
+                targetAssignment,
                 invertedTargetAssignment
             );
 
@@ -240,7 +240,7 @@ public class TargetAssignmentBuilderTest {
                 .withStaticMembers(staticMembers)
                 .withSubscriptionMetadata(subscriptionMetadata)
                 .withSubscriptionType(subscriptionType)
-                .withTargetAssignment(targetAssignment)
+                .withTargetAssignment(this.targetAssignment)
                 .withInvertedTargetAssignment(invertedTargetAssignment)
                 .withTopicsImage(topicsImage);
 

@@ -39,10 +39,8 @@ public class MemberSubscriptionSpecImpl implements MemberSubscriptionSpec {
         Optional<String> rackId,
         Set<Uuid> subscribedTopicIds
     ) {
-        Objects.requireNonNull(rackId);
-        Objects.requireNonNull(subscribedTopicIds);
-        this.rackId = rackId;
-        this.subscribedTopicIds = subscribedTopicIds;
+        this.rackId = Objects.requireNonNull(rackId);
+        this.subscribedTopicIds = Objects.requireNonNull(subscribedTopicIds);
     }
 
     @Override

@@ -99,7 +99,7 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
     OptimizedUniformAssignmentBuilder(GroupSpec groupSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
         this.groupSpec = groupSpec;
         this.subscribedTopicDescriber = subscribedTopicDescriber;
-        this.subscribedTopicIds = new HashSet<>(groupSpec.memberSubscriptionSpec(groupSpec.memberIds().iterator().next())
+        this.subscribedTopicIds = new HashSet<>(groupSpec.memberSubscription(groupSpec.memberIds().iterator().next())
             .subscribedTopicIds());
         this.potentiallyUnfilledMembers = new HashMap<>();
         this.unassignedPartitions = new HashSet<>();
@@ -190,7 +190,7 @@ public class OptimizedUniformAssignmentBuilder extends AbstractUniformAssignment
 
         groupSpec.memberIds().forEach(memberId -> {
             List<TopicIdPartition> validCurrentMemberAssignment = validCurrentMemberAssignment(
-                groupSpec.currentMemberAssignment(memberId)
+                groupSpec.memberAssignment(memberId)
             );
 
             int currentAssignmentSize = validCurrentMemberAssignment.size();

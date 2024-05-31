@@ -21,11 +21,14 @@ import org.apache.kafka.common.Uuid;
 import java.util.Optional;
 import java.util.Set;
 
+/**
+ * Interface representing the subscription metadata for a group member.
+ */
 public interface MemberSubscriptionSpec {
     /**
      * Gets the rack Id if present.
      *
-     * @return An Optional containing the rack ID, or an empty Optional if not present.
+     * @return An Optional containing the rack Id, or an empty Optional if not present.
      */
     Optional<String> rackId();
 
