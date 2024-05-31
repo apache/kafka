@@ -20,7 +20,10 @@ import com.yammer.metrics.core.Gauge;
 import kafka.cluster.EndPoint;
 import kafka.cluster.Partition;
 import kafka.log.UnifiedLog;
+import kafka.log.remote.quota.RLMQuotaManager;
+import kafka.log.remote.quota.RLMQuotaManagerConfig;
 import kafka.server.BrokerTopicStats;
+import kafka.server.QuotaType;
 import kafka.server.StopPartition;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
@@ -29,6 +32,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.message.FetchResponseData;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
@@ -143,10 +147,14 @@ public class RemoteLogManager implements Closeable {
     private final Function<TopicPartition, Optional<UnifiedLog>> fetchLog;
     private final BiConsumer<TopicPartition, Long> updateRemoteLogStartOffset;
     private final BrokerTopicStats brokerTopicStats;
+    private final Metrics metrics;
 
     private final RemoteStorageManager remoteLogStorageManager;
 
     private final RemoteLogMetadataManager remoteLogMetadataManager;
+
+    private final RLMQuotaManager rlmCopyQuotaManager;
+    private final RLMQuotaManager rlmFetchQuotaManager;
 
     private final RemoteIndexCache indexCache;
     private final RemoteStorageThreadPool remoteStorageReaderThreadPool;
@@ -178,6 +186,7 @@ public class RemoteLogManager implements Closeable {
      * @param fetchLog  function to get UnifiedLog instance for a given topic.
      * @param updateRemoteLogStartOffset function to update the log-start-offset for a given topic partition.
      * @param brokerTopicStats BrokerTopicStats instance to update the respective metrics.
+     * @param metrics  Metrics instance
      */
     public RemoteLogManager(RemoteLogManagerConfig rlmConfig,
                             int brokerId,
@@ -186,7 +195,8 @@ public class RemoteLogManager implements Closeable {
                             Time time,
                             Function<TopicPartition, Optional<UnifiedLog>> fetchLog,
                             BiConsumer<TopicPartition, Long> updateRemoteLogStartOffset,
-                            BrokerTopicStats brokerTopicStats) throws IOException {
+                            BrokerTopicStats brokerTopicStats,
+                            Metrics metrics) throws IOException {
         this.rlmConfig = rlmConfig;
         this.brokerId = brokerId;
         this.logDir = logDir;
@@ -195,9 +205,13 @@ public class RemoteLogManager implements Closeable {
         this.fetchLog = fetchLog;
         this.updateRemoteLogStartOffset = updateRemoteLogStartOffset;
         this.brokerTopicStats = brokerTopicStats;
+        this.metrics = metrics;
 
         remoteLogStorageManager = createRemoteStorageManager();
         remoteLogMetadataManager = createRemoteLogMetadataManager();
+        rlmCopyQuotaManager = createRLMCopyQuotaManager();
+        rlmFetchQuotaManager = createRLMFetchQuotaManager();
+
         indexCache = new RemoteIndexCache(rlmConfig.remoteLogIndexFileCacheTotalSizeBytes(), remoteLogStorageManager, logDir);
         delayInMs = rlmConfig.remoteLogManagerTaskIntervalMs();
         rlmScheduledThreadPool = new RLMScheduledThreadPool(rlmConfig.remoteLogManagerThreadPoolSize());
@@ -223,6 +237,28 @@ public class RemoteLogManager implements Closeable {
     private void removeMetrics() {
         metricsGroup.removeMetric(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC.getName());
         remoteStorageReaderThreadPool.removeMetrics();
+    }
+
+    RLMQuotaManager createRLMCopyQuotaManager() {
+        return new RLMQuotaManager(copyQuotaManagerConfig(rlmConfig), metrics, QuotaType.RLMCopy$.MODULE$,
+          "Tracking copy byte-rate for Remote Log Manager", time);
+    }
+
+    RLMQuotaManager createRLMFetchQuotaManager() {
+        return new RLMQuotaManager(fetchQuotaManagerConfig(rlmConfig), metrics, QuotaType.RLMFetch$.MODULE$,
+          "Tracking fetch byte-rate for Remote Log Manager", time);
+    }
+
+    static RLMQuotaManagerConfig copyQuotaManagerConfig(RemoteLogManagerConfig rlmConfig) {
+        return new RLMQuotaManagerConfig(rlmConfig.remoteLogManagerCopyMaxBytesPerSecond(),
+          rlmConfig.remoteLogManagerCopyNumQuotaSamples(),
+          rlmConfig.remoteLogManagerCopyQuotaWindowSizeSeconds());
+    }
+
+    static RLMQuotaManagerConfig fetchQuotaManagerConfig(RemoteLogManagerConfig rlmConfig) {
+        return new RLMQuotaManagerConfig(rlmConfig.remoteLogManagerFetchMaxBytesPerSecond(),
+          rlmConfig.remoteLogManagerFetchNumQuotaSamples(),
+          rlmConfig.remoteLogManagerFetchQuotaWindowSizeSeconds());
     }
 
     private <T> T createDelegate(ClassLoader classLoader, String className) {

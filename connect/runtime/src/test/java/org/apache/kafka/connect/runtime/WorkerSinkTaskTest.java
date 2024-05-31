@@ -141,14 +141,14 @@ public class WorkerSinkTaskTest {
 
     private static final TaskConfig TASK_CONFIG = new TaskConfig(TASK_PROPS);
 
-    private ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
-    private ConnectorTaskId taskId1 = new ConnectorTaskId("job", 1);
-    private TargetState initialState = TargetState.STARTED;
+    private final ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
+    private final ConnectorTaskId taskId1 = new ConnectorTaskId("job", 1);
+    private final TargetState initialState = TargetState.STARTED;
     private MockTime time;
     private WorkerSinkTask workerTask;
     @Mock
     private SinkTask sinkTask;
-    private ArgumentCaptor<WorkerSinkTaskContext> sinkTaskContext = ArgumentCaptor.forClass(WorkerSinkTaskContext.class);
+    private final ArgumentCaptor<WorkerSinkTaskContext> sinkTaskContext = ArgumentCaptor.forClass(WorkerSinkTaskContext.class);
     private WorkerConfig workerConfig;
     private MockConnectMetrics metrics;
     @Mock
@@ -169,7 +169,7 @@ public class WorkerSinkTaskTest {
     private KafkaConsumer<byte[], byte[]> consumer;
     @Mock
     private ErrorHandlingMetrics errorHandlingMetrics;
-    private ArgumentCaptor<ConsumerRebalanceListener> rebalanceListener = ArgumentCaptor.forClass(ConsumerRebalanceListener.class);
+    private final ArgumentCaptor<ConsumerRebalanceListener> rebalanceListener = ArgumentCaptor.forClass(ConsumerRebalanceListener.class);
     @Rule
     public final MockitoRule rule = MockitoJUnit.rule().strictness(Strictness.STRICT_STUBS);
 
@@ -684,9 +684,9 @@ public class WorkerSinkTaskTest {
 
         when(consumer.assignment())
                 .thenReturn(INITIAL_ASSIGNMENT, INITIAL_ASSIGNMENT)
-                .thenReturn(new HashSet<>(Arrays.asList(TOPIC_PARTITION2)))
-                .thenReturn(new HashSet<>(Arrays.asList(TOPIC_PARTITION2)))
-                .thenReturn(new HashSet<>(Arrays.asList(TOPIC_PARTITION2)))
+                .thenReturn(new HashSet<>(Collections.singletonList(TOPIC_PARTITION2)))
+                .thenReturn(new HashSet<>(Collections.singletonList(TOPIC_PARTITION2)))
+                .thenReturn(new HashSet<>(Collections.singletonList(TOPIC_PARTITION2)))
                 .thenReturn(new HashSet<>(Arrays.asList(TOPIC_PARTITION2, TOPIC_PARTITION3)))
                 .thenReturn(new HashSet<>(Arrays.asList(TOPIC_PARTITION2, TOPIC_PARTITION3)))
                 .thenReturn(new HashSet<>(Arrays.asList(TOPIC_PARTITION2, TOPIC_PARTITION3)));
@@ -1788,7 +1788,7 @@ public class WorkerSinkTaskTest {
     }
 
     private void verifyInitializeTask() {
-        verify(consumer).subscribe(eq(asList(TOPIC)), rebalanceListener.capture());
+        verify(consumer).subscribe(eq(Collections.singletonList(TOPIC)), rebalanceListener.capture());
         verify(sinkTask).initialize(sinkTaskContext.capture());
         verify(sinkTask).start(TASK_PROPS);
     }

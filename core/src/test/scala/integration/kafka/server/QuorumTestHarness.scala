@@ -324,7 +324,7 @@ abstract class QuorumTestHarness extends Logging {
     props.putAll(overridingProps)
     props.setProperty(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG, TimeUnit.MINUTES.toMillis(10).toString)
     props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
-    props.setProperty(ServerConfigs.UNSTABLE_METADATA_VERSIONS_ENABLE_CONFIG, "true")
+    props.setProperty(ServerConfigs.UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG, "true")
     if (props.getProperty(KRaftConfigs.NODE_ID_CONFIG) == null) {
       props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1000")
     }
