@@ -92,9 +92,9 @@ public final class Utils {
 
     private Utils() {}
 
-    // This matches URIs of formats: host:port and protocol:\\host:port
+    // This matches URIs of formats: host:port and protocol://host:port
     // IPv6 is supported with [ip] pattern
-    private static final Pattern HOST_PORT_PATTERN = Pattern.compile(".*?\\[?([0-9a-zA-Z\\-%._:]*)\\]?:([0-9]+)");
+    private static final Pattern HOST_PORT_PATTERN = Pattern.compile("^(?:[a-zA-Z][a-zA-Z\\d+-.]*://)?\\[?([0-9a-zA-Z\\-._%:]+)\\]?:([0-9]+)$");
 
     private static final Pattern VALID_HOST_CHARACTERS = Pattern.compile("([0-9a-zA-Z\\-%._:]*)");
 
