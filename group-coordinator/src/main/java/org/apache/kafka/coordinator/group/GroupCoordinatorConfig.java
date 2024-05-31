@@ -17,7 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
+import org.apache.kafka.coordinator.group.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
 
@@ -182,7 +182,7 @@ public class GroupCoordinatorConfig {
     /**
      * The consumer group assignors.
      */
-    public final List<PartitionAssignor> consumerGroupAssignors;
+    public final List<ConsumerGroupPartitionAssignor> consumerGroupAssignors;
 
     /**
      * The offsets topic segment bytes should be kept relatively small to facilitate faster
@@ -262,7 +262,7 @@ public class GroupCoordinatorConfig {
         int consumerGroupSessionTimeoutMs,
         int consumerGroupHeartbeatIntervalMs,
         int consumerGroupMaxSize,
-        List<PartitionAssignor> consumerGroupAssignors,
+        List<ConsumerGroupPartitionAssignor> consumerGroupAssignors,
         int offsetsTopicSegmentBytes,
         int offsetMetadataMaxSize,
         int classicGroupMaxSize,

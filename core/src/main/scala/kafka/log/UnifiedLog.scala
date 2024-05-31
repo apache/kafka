@@ -1918,7 +1918,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * to ensure no other logcleaner threads and retention thread can work on the same segment.
    */
   private[log] def getFirstBatchTimestampForSegments(segments: util.Collection[LogSegment]): util.Collection[java.lang.Long] = {
-    LogSegments.getFirstBatchTimestampForSegments(segments)
+    segments.stream().map[java.lang.Long](s => s.getFirstBatchTimestamp).collect(Collectors.toList())
   }
 
   /**
