@@ -43,7 +43,7 @@ import java.util.Set;
  *      Balance > Stickiness.
  */
 public class OptimizedUniformAssignmentBuilder {
-    private static final Class<?> UNMODIFIALBE_MAP_CLASS = Collections.unmodifiableMap(new HashMap<>()).getClass();
+    private static final Class<?> UNMODIFIABLE_MAP_CLASS = Collections.unmodifiableMap(new HashMap<>()).getClass();
     private static final Class<?> EMPTY_MAP_CLASS = Collections.emptyMap().getClass();
 
     /**
@@ -51,7 +51,7 @@ public class OptimizedUniformAssignmentBuilder {
      * public hence we cannot use the `instanceof` operator.
      */
     private static boolean isImmutableMap(Map<?, ?> map) {
-        return UNMODIFIALBE_MAP_CLASS.isInstance(map) || EMPTY_MAP_CLASS.isInstance(map);
+        return UNMODIFIABLE_MAP_CLASS.isInstance(map) || EMPTY_MAP_CLASS.isInstance(map);
     }
 
     /**
@@ -70,9 +70,9 @@ public class OptimizedUniformAssignmentBuilder {
     private final Set<Uuid> subscribedTopicIds;
 
     /**
-     * Members mapped to the remaining number of partitions needed to meet the minimum quota.
+     * The members that are below their quota.
      */
-    private final List<MemberWithRemainingQuota> potentiallyUnfilledMembers;
+    private final List<MemberWithRemainingQuota> unfilledMembers;
 
     /**
      * The partitions that still need to be assigned.
@@ -102,7 +102,7 @@ public class OptimizedUniformAssignmentBuilder {
         this.groupSpec = groupSpec;
         this.subscribedTopicDescriber = subscribedTopicDescriber;
         this.subscribedTopicIds = new HashSet<>(groupSpec.members().values().iterator().next().subscribedTopicIds());
-        this.potentiallyUnfilledMembers = new ArrayList<>();
+        this.unfilledMembers = new ArrayList<>();
         this.unassignedPartitions = new ArrayList<>();
         this.targetAssignment = new HashMap<>();
     }
@@ -134,13 +134,13 @@ public class OptimizedUniformAssignmentBuilder {
         }
 
         // Compute the minimum required quota per member and the number of members
-        // who should receive an extra partition.
+        // that should receive an extra partition.
         int numberOfMembers = groupSpec.members().size();
         minimumMemberQuota = totalPartitionsCount / numberOfMembers;
         remainingMembersToGetAnExtraPartition = totalPartitionsCount % numberOfMembers;
 
-        // Revoke the partitions which are either not part of the subscriptions or above
-        // the maximum quota.
+        // Revoke the partitions that either are not part of the member's subscriptions or
+        // exceed the maximum quota assigned to each member.
         maybeRevokePartitions();
 
         // Assign the unassigned partitions to the members with space.
@@ -149,6 +149,13 @@ public class OptimizedUniformAssignmentBuilder {
         return new GroupAssignment(targetAssignment);
     }
 
+    /**
+     * Revoke the partitions that either are not part of the member's subscriptions or
+     * exceed the maximum quota assigned to each member.
+     *
+     * This method ensures that the original assignment is not copied if it is not
+     * altered.
+     */
     private void maybeRevokePartitions() {
         for (Map.Entry<String, AssignmentMemberSpec> entry : groupSpec.members().entrySet()) {
             String memberId = entry.getKey();
@@ -208,7 +215,7 @@ public class OptimizedUniformAssignmentBuilder {
             }
 
             if (quota > 0) {
-                potentiallyUnfilledMembers.add(new MemberWithRemainingQuota(memberId, quota));
+                unfilledMembers.add(new MemberWithRemainingQuota(memberId, quota));
             }
 
             if (newAssignment == null) {
@@ -219,15 +226,20 @@ public class OptimizedUniformAssignmentBuilder {
         }
     }
 
+    /**
+     * Assign the unassigned partitions to the unfilled members.
+     */
     private void assignRemainingPartitions() {
         int unassignedPartitionIndex = 0;
 
-        for (MemberWithRemainingQuota unfilledMember : potentiallyUnfilledMembers) {
+        for (MemberWithRemainingQuota unfilledMember : unfilledMembers) {
             String memberId = unfilledMember.memberId;
             int remainingQuota = unfilledMember.remainingQuota;
 
             Map<Uuid, Set<Integer>> newAssignment = targetAssignment.get(memberId).targetPartitions();
             if (isImmutableMap(newAssignment)) {
+                // If the new assignment is immutable, we must create a deep copy of it
+                // before altering it.
                 newAssignment = deepCopy(newAssignment);
                 targetAssignment.put(memberId, new MemberAssignment(newAssignment));
             }
