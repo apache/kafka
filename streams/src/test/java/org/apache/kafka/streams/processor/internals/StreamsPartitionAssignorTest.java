@@ -2645,15 +2645,37 @@ public class StreamsPartitionAssignorTest {
         final org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment unknownTaskId = new org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment(
             mkSet(
                 KafkaStreamsAssignment.of(new ProcessId(clientUuid1), mkSet(
-                    new KafkaStreamsAssignment.AssignedTask(new TaskId(1, 1), KafkaStreamsAssignment.AssignedTask.Type.ACTIVE)
+                    new KafkaStreamsAssignment.AssignedTask(
+                        new TaskId(1, 1), KafkaStreamsAssignment.AssignedTask.Type.ACTIVE
+                    )
                 )),
                 KafkaStreamsAssignment.of(new ProcessId(clientUuid2), mkSet(
-                    new KafkaStreamsAssignment.AssignedTask(new TaskId(13, 13), KafkaStreamsAssignment.AssignedTask.Type.ACTIVE)
+                    new KafkaStreamsAssignment.AssignedTask(
+                        new TaskId(13, 13), KafkaStreamsAssignment.AssignedTask.Type.ACTIVE
+                    )
                 ))
             )
         );
         error = partitionAssignor.validateTaskAssignment(applicationState, unknownTaskId);
         assertEquals(org.apache.kafka.streams.processor.assignment.TaskAssignor.AssignmentError.UNKNOWN_TASK_ID, error);
+
+        // ****
+        final org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment activeTaskDuplicated = new org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment(
+            mkSet(
+                KafkaStreamsAssignment.of(new ProcessId(clientUuid1), mkSet(
+                    new KafkaStreamsAssignment.AssignedTask(
+                        new TaskId(1, 1), KafkaStreamsAssignment.AssignedTask.Type.ACTIVE
+                    )
+                )),
+                KafkaStreamsAssignment.of(new ProcessId(clientUuid2), mkSet(
+                    new KafkaStreamsAssignment.AssignedTask(
+                        new TaskId(1, 1), KafkaStreamsAssignment.AssignedTask.Type.ACTIVE
+                    )
+                ))
+            )
+        );
+        error = partitionAssignor.validateTaskAssignment(applicationState, activeTaskDuplicated);
+        assertEquals(org.apache.kafka.streams.processor.assignment.TaskAssignor.AssignmentError.ACTIVE_TASK_ASSIGNED_MULTIPLE_TIMES, error);
     }
 
     private static class CorruptedInternalTopologyBuilder extends InternalTopologyBuilder {
