@@ -376,10 +376,18 @@ Found problem:
       true
     )
 
-    val featureLevel = Features.TEST_VERSION.defaultValue(metadataVersion)
-    if (featureLevel > 0) {
-      assertEquals(List(generateRecord(TestFeatureVersion.FEATURE_NAME, featureLevel)), records)
+    val expectedRecords = new ArrayBuffer[ApiMessageAndVersion]()
+
+    def maybeAddRecordFor(features: Features): Unit = {
+      val featureLevel = features.defaultValue(metadataVersion)
+      if (featureLevel > 0) {
+        expectedRecords += generateRecord(features.featureName, featureLevel)
+      }
     }
+
+    Features.FEATURES.foreach(maybeAddRecordFor)
+
+    assertEquals(expectedRecords, records)
   }
   @Test
   def testVersionDefaultNoArgs(): Unit = {
