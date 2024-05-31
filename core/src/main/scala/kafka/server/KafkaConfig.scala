@@ -1205,8 +1205,6 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   def usesTopicId: Boolean =
     usesSelfManagedQuorum || interBrokerProtocolVersion.isTopicIdsSupported
 
-
-  val isRemoteLogStorageSystemEnabled: lang.Boolean = getBoolean(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP)
   def logLocalRetentionBytes: java.lang.Long = getLong(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP)
 
   def logLocalRetentionMs: java.lang.Long = getLong(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP)
