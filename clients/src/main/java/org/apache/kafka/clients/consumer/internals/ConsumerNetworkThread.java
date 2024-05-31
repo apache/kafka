@@ -298,7 +298,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         do {
             networkClientDelegate.poll(timer.remainingMs(), timer.currentTimeMs());
             timer.update();
-        } while (timer.notExpired() && !networkClientDelegate.unsentRequests().isEmpty());
+        } while (timer.notExpired() && networkClientDelegate.hasAnyPendingRequests());
     }
 
     void cleanup() {
