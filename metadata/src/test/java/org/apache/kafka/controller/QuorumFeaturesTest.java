@@ -22,6 +22,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.metadata.ControllerRegistration;
 import org.apache.kafka.metadata.VersionRange;
+import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 
@@ -55,6 +56,12 @@ public class QuorumFeaturesTest {
         expectedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
             MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
             MetadataVersion.LATEST_PRODUCTION.featureLevel()));
+        for (Features feature : Features.PRODUCTION_FEATURES) {
+            expectedFeatures.put(feature.featureName(), VersionRange.of(
+                0,
+                feature.defaultValue(MetadataVersion.LATEST_PRODUCTION)
+            ));
+        }
         assertEquals(expectedFeatures, QuorumFeatures.defaultFeatureMap(false));
     }
 
@@ -64,6 +71,12 @@ public class QuorumFeaturesTest {
         expectedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
             MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
             MetadataVersion.latestTesting().featureLevel()));
+        for (Features feature : Features.PRODUCTION_FEATURES) {
+            expectedFeatures.put(feature.featureName(), VersionRange.of(
+                0,
+                feature.defaultValue(MetadataVersion.latestTesting())
+            ));
+        }
         assertEquals(expectedFeatures, QuorumFeatures.defaultFeatureMap(true));
     }
 

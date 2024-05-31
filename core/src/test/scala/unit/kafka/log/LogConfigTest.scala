@@ -21,13 +21,13 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM
 import org.apache.kafka.common.config.ConfigDef.Type.INT
-import org.apache.kafka.common.config.{ConfigException, TopicConfig}
+import org.apache.kafka.common.config.{ConfigException, SslConfigs, TopicConfig}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
 import java.util.{Collections, Properties}
 import org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV1
-import org.apache.kafka.server.config.{KafkaSecurityConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.storage.internals.log.{LogConfig, ThrottledReplicaListValidator}
 import org.junit.jupiter.params.ParameterizedTest
@@ -188,7 +188,7 @@ class LogConfigTest {
     val kafkaProps = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
     kafkaProps.put("unknown.broker.password.config", "aaaaa")
     kafkaProps.put(ServerLogConfigs.LOG_RETENTION_BYTES_CONFIG, "50")
-    kafkaProps.put(KafkaSecurityConfigs.SSL_KEY_PASSWORD_CONFIG, "somekeypassword")
+    kafkaProps.put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, "somekeypassword")
     val kafkaConfig = KafkaConfig.fromProps(kafkaProps)
     val topicOverrides = new Properties
     // Only set as a topic config
@@ -196,7 +196,7 @@ class LogConfigTest {
     // Overrides value from broker config
     topicOverrides.setProperty(TopicConfig.RETENTION_BYTES_CONFIG, "100")
     // Unknown topic config, but known broker config
-    topicOverrides.setProperty(KafkaSecurityConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, "sometrustpasswrd")
+    topicOverrides.setProperty(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, "sometrustpasswrd")
     // Unknown config
     topicOverrides.setProperty("unknown.topic.password.config", "bbbb")
     // We don't currently have any sensitive topic configs, if we add them, we should set one here

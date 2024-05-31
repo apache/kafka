@@ -110,7 +110,7 @@ public class KafkaOffsetBackingStoreTest {
     private static final ByteBuffer TP0_VALUE_NEW = buffer("VAL0_NEW");
     private static final ByteBuffer TP1_VALUE_NEW = buffer("VAL1_NEW");
 
-    private Map<String, String> props = new HashMap<>(DEFAULT_PROPS);
+    private final Map<String, String> props = new HashMap<>(DEFAULT_PROPS);
     @Mock
     KafkaBasedLog<byte[], byte[]> storeLog;
     @Mock

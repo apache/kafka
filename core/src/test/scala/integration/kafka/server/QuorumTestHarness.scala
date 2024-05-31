@@ -37,7 +37,7 @@ import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationF
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
-import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, Features, MetadataVersion}
 import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs}
 import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
 import org.apache.zookeeper.client.ZKClientConfig
@@ -324,7 +324,7 @@ abstract class QuorumTestHarness extends Logging {
     props.putAll(overridingProps)
     props.setProperty(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG, TimeUnit.MINUTES.toMillis(10).toString)
     props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
-    props.setProperty(ServerConfigs.UNSTABLE_METADATA_VERSIONS_ENABLE_CONFIG, "true")
+    props.setProperty(ServerConfigs.UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG, "true")
     if (props.getProperty(KRaftConfigs.NODE_ID_CONFIG) == null) {
       props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1000")
     }
@@ -341,6 +341,15 @@ abstract class QuorumTestHarness extends Logging {
     metadataRecords.add(new ApiMessageAndVersion(new FeatureLevelRecord().
                         setName(MetadataVersion.FEATURE_NAME).
                         setFeatureLevel(metadataVersion.featureLevel()), 0.toShort))
+
+    if (isNewGroupCoordinatorEnabled()) {
+      metadataRecords.add(new ApiMessageAndVersion(
+        new FeatureLevelRecord()
+          .setName(Features.GROUP_VERSION.featureName)
+          .setFeatureLevel(Features.GROUP_VERSION.latestTesting),
+        0.toShort
+      ))
+    }
 
     optionalMetadataRecords.foreach { metadataArguments =>
       for (record <- metadataArguments) metadataRecords.add(record)
