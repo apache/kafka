@@ -279,6 +279,10 @@ public class NetworkClientDelegate implements AutoCloseable {
             this.timer = timer;
         }
 
+        Timer timer() {
+            return timer;
+        }
+
         CompletableFuture<ClientResponse> future() {
             return handler.future;
         }

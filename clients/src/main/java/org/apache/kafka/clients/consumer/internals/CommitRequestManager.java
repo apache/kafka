@@ -511,11 +511,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
         // Retry the same fetch request while it fails with RetriableException and the retry timeout hasn't expired.
         currentResult.whenComplete((res, error) -> {
-            boolean inflightRemoved = pendingRequests.inflightOffsetFetches.remove(fetchRequest);
-            if (!inflightRemoved) {
-                log.warn("A duplicated, inflight, request was identified, but unable to find it in the " +
-                    "outbound buffer:" + fetchRequest);
-            }
+            pendingRequests.maybeRemoveInflightOffsetFetch(fetchRequest);
+
             if (error == null) {
                 result.complete(res);
             } else {
@@ -1097,19 +1094,56 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          * upon completion.
          */
         private CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> addOffsetFetchRequest(final OffsetFetchRequestState request) {
-            Optional<OffsetFetchRequestState> dupe =
+            Optional<OffsetFetchRequestState> unsent =
                     unsentOffsetFetches.stream().filter(r -> r.sameRequest(request)).findAny();
             Optional<OffsetFetchRequestState> inflight =
                     inflightOffsetFetches.stream().filter(r -> r.sameRequest(request)).findAny();
 
-            if (dupe.isPresent() || inflight.isPresent()) {
+            if (unsent.isPresent()) {
                 log.debug("Duplicated unsent offset fetch request found for partitions: {}", request.requestedPartitions);
-                dupe.orElseGet(inflight::get).chainFuture(request.future);
+                OffsetFetchRequestState existing = unsent.get();
+                existing.chainFuture(request.future);
+            } else if (inflight.isPresent()) {
+                log.debug("Duplicated inflight offset fetch request found for partitions: {}", request.requestedPartitions);
+                OffsetFetchRequestState existing = inflight.get();
+                existing.chainFuture(request.future);
+
+                if (existing.future.isDone())
+                    removeInflightOffsetFetch(existing);
             } else {
                 log.debug("Enqueuing offset fetch request for partitions: {}", request.requestedPartitions);
                 this.unsentOffsetFetches.add(request);
             }
             return request.future;
+        }
+
+        /**
+         * Remove the {@link OffsetFetchRequestState request} from the inflight requests queue <em>iff</em>
+         * both of the following are true:
+         *
+         * <ul>
+         *     <li>The request completed without an error</li>
+         *     <li>The request is not {@link OffsetFetchRequestState#isExpired expired}</li>
+         * </ul>
+         *
+         * <p/>
+         *
+         * In some cases, even though an offset fetch request may complete without an error, <em>technically</em>
+         * the request took longer than the user's provided timeout. In that case, the application thread will
+         * still receive a timeout error, and will shortly try to fetch these offsets again. Keeping the result
+         * of the <em>current</em> attempt will enable the <em>next</em> attempt to use that result and return
+         * almost immediately.
+         */
+        private void maybeRemoveInflightOffsetFetch(OffsetFetchRequestState request) {
+            if (request.isExpired())
+                log.debug("Caching offset fetch result for partitions {} for next attempt", request.requestedPartitions);
+            else
+                removeInflightOffsetFetch(request);
+        }
+
+        private void removeInflightOffsetFetch(OffsetFetchRequestState request) {
+            if (!inflightOffsetFetches.remove(request))
+                log.debug("Offset fetch request for partitions {} was not found in the inflight buffer", request.requestedPartitions);
         }
 
         /**

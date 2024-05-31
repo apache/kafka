@@ -1179,6 +1179,85 @@ public class CommitRequestManagerTest {
     }
 
     @Test
+    public void testOffsetFetchTimeoutStoresResult() {
+        CommitRequestManager commitRequestManager = create(true, 100);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+        TopicPartition tp = new TopicPartition("test-topic", 0);
+        Set<TopicPartition> partitions = Collections.singleton(tp);
+
+        // Mimic when a user passes 0 to the Consumer.poll() method.
+        long timeoutMs = 0;
+        long expirationTimeMs = time.milliseconds() + timeoutMs;
+
+        {
+            CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = commitRequestManager.fetchOffsets(
+                partitions,
+                expirationTimeMs
+            );
+
+            // Poll for the next set of outgoing network requests
+            NetworkClientDelegate.PollResult res = commitRequestManager.poll(time.milliseconds());
+            assertEquals(1, res.unsentRequests.size());
+            NetworkClientDelegate.UnsentRequest unsentRequest = res.unsentRequests.get(0);
+
+            // Mimic the request taking 10 ms, which would be past our timeout of 0. But it does come back within
+            // the network request's timeout, so we should
+            time.sleep(10);
+            unsentRequest.timer().update(time.milliseconds());
+            Map<TopicPartition, OffsetFetchResponse.PartitionData> topicPartitionData = Collections.singletonMap(
+                tp,
+                new OffsetFetchResponse.PartitionData(
+                    123L,
+                    Optional.of(1),
+                    "metadata",
+                    Errors.NONE
+                )
+            );
+            unsentRequest.handler().onComplete(
+                buildOffsetFetchClientResponse(
+                    unsentRequest,
+                    topicPartitionData,
+                    Errors.NONE,
+                    false
+                )
+            );
+
+            // Because the request state is expired, we know the result wasn't propagated up to the user, so we
+            // need to keep it around for the next request.
+            assertEquals(
+                1,
+                commitRequestManager.pendingRequests.inflightOffsetFetches.size(),
+                "The inflight offset fetch response should be cached for the next request since this request expired"
+            );
+
+            assertTrue(future.isDone());
+            assertFalse(future.isCompletedExceptionally());
+            assertTrue(commitRequestManager.pendingRequests.inflightOffsetFetches.get(0).isExpired());
+        }
+
+        {
+            CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = commitRequestManager.fetchOffsets(
+                partitions,
+                expirationTimeMs
+            );
+
+            // Poll for the next set of outgoing network requests
+            NetworkClientDelegate.PollResult res = commitRequestManager.poll(time.milliseconds());
+            assertEquals(0, res.unsentRequests.size());
+
+            // In this case, we should be able to return the results from the first request that were cached.
+            assertEquals(
+                0,
+                commitRequestManager.pendingRequests.inflightOffsetFetches.size(),
+                "The inflight offset fetch response should have been removed from the cache"
+            );
+
+            assertTrue(future.isDone());
+            assertFalse(future.isCompletedExceptionally());
+        }
+    }
+
+    @Test
     public void testSignalClose() {
         CommitRequestManager commitRequestManager = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
