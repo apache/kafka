@@ -95,6 +95,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.controller.errors.ControllerExceptions;
 import org.apache.kafka.controller.errors.EventHandlerExceptionInfo;
 import org.apache.kafka.controller.metrics.QuorumControllerMetrics;
+import org.apache.kafka.controller.metrics.SlowEventsLogger;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
@@ -152,6 +153,7 @@ import java.util.function.Supplier;
 
 import static java.util.concurrent.TimeUnit.MICROSECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.apache.kafka.controller.QuorumController.ControllerOperationFlag.DOES_NOT_UPDATE_QUEUE_TIME;
 import static org.apache.kafka.controller.QuorumController.ControllerOperationFlag.RUNS_IN_PREMIGRATION;
 
@@ -508,6 +510,7 @@ public final class QuorumController implements Controller {
         long deltaNs = endProcessingTime - startProcessingTimeNs;
         log.debug("Processed {} in {} us", name,
             MICROSECONDS.convert(deltaNs, NANOSECONDS));
+        slowEventsLogger.maybeLog(name, deltaNs);
         controllerMetrics.updateEventQueueProcessingTime(NANOSECONDS.toMillis(deltaNs));
     }
 
@@ -1403,6 +1406,7 @@ public final class QuorumController implements Controller {
                 () -> {
                     noOpRecordScheduled = false;
                     maybeScheduleNextWriteNoOpRecord();
+                    slowEventsLogger.maybeRefreshPercentile();
 
                     return ControllerResult.of(
                         Arrays.asList(new ApiMessageAndVersion(new NoOpRecord(), (short) 0)),
@@ -1769,6 +1773,8 @@ public final class QuorumController implements Controller {
      */
     private final RecordRedactor recordRedactor;
 
+    private final SlowEventsLogger slowEventsLogger;
+
     private QuorumController(
         FaultHandler nonFatalFaultHandler,
         FaultHandler fatalFaultHandler,
@@ -1912,6 +1918,7 @@ public final class QuorumController implements Controller {
             eligibleLeaderReplicasEnabled ? " Eligible leader replicas enabled." : "");
 
         this.raftClient.register(metaLogListener);
+        this.slowEventsLogger = new SlowEventsLogger(controllerMetrics::getEventQueueProcessingTimeP99, log, time);
     }
 
     @Override

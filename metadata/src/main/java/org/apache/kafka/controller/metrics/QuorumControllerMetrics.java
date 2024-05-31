@@ -28,6 +28,8 @@ import java.util.Arrays;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * These are the metrics which are managed by the QuorumController class. They generally pertain to
@@ -188,6 +190,16 @@ public class QuorumControllerMetrics implements AutoCloseable {
 
     public void updateEventQueueProcessingTime(long durationMs) {
         eventQueueProcessingTimeUpdater.accept(durationMs);
+    }
+
+    public double getEventQueueProcessingTimeP99() {
+        if (registry.isPresent()) {
+            Histogram histogram = registry.get().newHistogram(EVENT_QUEUE_PROCESSING_TIME_MS, false);
+            return histogram.getSnapshot().get99thPercentile();
+        } else {
+            // Only returned in unit tests when a metrics registry is not set.
+            return 0.0;
+        }
     }
 
     public void updateZkWriteSnapshotTimeMs(long durationMs) {
