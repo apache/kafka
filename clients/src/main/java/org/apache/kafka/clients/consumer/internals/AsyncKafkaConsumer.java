@@ -1471,12 +1471,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     /**
-     * TODO: remove this when we implement the KIP-848 protocol.
-     *
      * <p>
-     * The contents of this method are shamelessly stolen from
-     * {@link ConsumerCoordinator#updatePatternSubscription(Cluster)} and are used here because we won't have access
-     * to a {@link ConsumerCoordinator} in this code. Perhaps it could be moved to a ConsumerUtils class?
+     *
+     * This function evaluate the regex that the consumer subscribed to
+     * against the list of topic names from metadata and update
+     * the list of topics in subscription state accordingly
      *
      * @param cluster Cluster from which we get the topics
      */

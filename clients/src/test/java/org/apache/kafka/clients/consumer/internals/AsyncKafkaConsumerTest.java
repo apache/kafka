@@ -104,7 +104,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
-import java.util.HashSet;
 import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
@@ -485,26 +484,25 @@ public class AsyncKafkaConsumerTest {
         final int partition = 3;
         final TopicPartition tp = new TopicPartition(topicName, partition);
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
-        Map<TopicPartition, OffsetAndMetadata> offsets = mkMap(mkEntry(tp, new OffsetAndMetadata(1)));
+        Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(tp, new OffsetAndMetadata(1));
         completeFetchedCommittedOffsetApplicationEventSuccessfully(offsets);
         doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
         doReturn(cluster).when(metadata).fetch();
-
-        HashSet<String> topics = new HashSet<>();
-        topics.add(topicName);
-        doReturn(topics).when(cluster).topics();
+        doReturn(Collections.singleton(topicName)).when(cluster).topics();
 
         consumer.subscribe(Pattern.compile("f*"));
         verify(metadata).requestUpdateForNewTopics();
         verify(subscriptions).matchesSubscribedPattern(topicName);
+        clearInvocations(subscriptions);
 
         consumer.poll(Duration.ZERO);
-        clearInvocations(subscriptions);
         verify(subscriptions, never()).matchesSubscribedPattern(topicName);
+
         when(metadata.updateVersion()).thenReturn(2);
         when(subscriptions.hasPatternSubscription()).thenReturn(true);
         consumer.poll(Duration.ZERO);
         verify(subscriptions).matchesSubscribedPattern(topicName);
+    }
 
     @Test
     public void testClearWakeupTriggerAfterPoll() {
