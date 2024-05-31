@@ -20,7 +20,6 @@
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
-    // TODO: Do we need to update this???
     { "name": "Topics", "versions": "0+", "type": "[]TopicMetadata",
       "about": "The list of topic metadata.", "fields": [
       { "name": "TopicId", "versions": "0+", "type": "uuid",
