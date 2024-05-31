@@ -1644,12 +1644,9 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         int epoch,
         long currentTimeMs
     ) {
-        Optional<Node> leader = Optional.empty();
-        if (leaderId.isPresent()) {
-            leader = partitionState
-                .lastVoterSet()
-                .voterNode(leaderId.getAsInt(), channel.listenerName());
-        }
+        Optional<Node> leader = leaderId.isPresent() ?
+            partitionState.lastVoterSet().voterNode(leaderId.getAsInt(), channel.listenerName()) :
+            Optional.empty();
 
         if (epoch < quorum.epoch() || error == Errors.UNKNOWN_LEADER_EPOCH) {
             // We have a larger epoch, so the response is no longer relevant
@@ -1697,10 +1694,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         int epoch,
         long currentTimeMs
     ) {
-        OptionalInt leaderId = OptionalInt.empty();
-        if (leader.isPresent()) {
-            leaderId = OptionalInt.of(leader.get().id());
-        }
+        OptionalInt leaderId = leader.isPresent() ? OptionalInt.of(leader.get().id()) : OptionalInt.empty();
 
         if (!hasConsistentLeader(epoch, leaderId)) {
             throw new IllegalStateException("Received request or response with leader " + leader +
