@@ -251,17 +251,28 @@ public class ConnectSchema implements Schema {
                 break;
             case ARRAY:
                 List<?> array = (List<?>) value;
-                for (Object entry : array)
-                    validateValue(schema.valueSchema(), entry);
+                Schema arrayValueSchema = assertSchemaNotNull(name, "elements", schema.valueSchema());
+                for (Object entry : array) {
+                    validateValue("entry", arrayValueSchema, entry);
+                }
                 break;
             case MAP:
                 Map<?, ?> map = (Map<?, ?>) value;
+                Schema mapKeySchema = assertSchemaNotNull(name, "keys", schema.keySchema());
+                Schema mapValueSchema = assertSchemaNotNull(name, "values", schema.valueSchema());
                 for (Map.Entry<?, ?> entry : map.entrySet()) {
-                    validateValue(schema.keySchema(), entry.getKey());
-                    validateValue(schema.valueSchema(), entry.getValue());
+                    validateValue("key", mapKeySchema, entry.getKey());
+                    validateValue("value", mapValueSchema, entry.getValue());
                 }
                 break;
         }
+    }
+
+    private static Schema assertSchemaNotNull(String fieldName, String innerName, Schema schema) {
+        if (schema == null) {
+            throw new DataException("No schema defined for " + innerName + " of field: \"" + fieldName + "\"");
+        }
+        return schema;
     }
 
     private static List<Class<?>> expectedClassesFor(Schema schema) {
