@@ -6450,6 +6450,8 @@ class ReplicaManagerTest {
         assertEquals(Errors.NONE.code, response.errorCode)
         assertTrue(response.totalBytes > 0)
         assertTrue(response.usableBytes >= 0)
+        assertFalse(response.topics().isEmpty)
+        response.topics().forEach(t => assertFalse(t.partitions().isEmpty))
       }
     } finally {
       replicaManager.shutdown(checkpointHW = false)
@@ -6478,6 +6480,8 @@ class ReplicaManagerTest {
       assertEquals(mockLogMgr.liveLogDirs.size, responses.size)
       responses.foreach { response =>
         assertEquals(Errors.NONE.code, response.errorCode)
+        assertTrue(response.totalBytes > 0)
+        assertTrue(response.usableBytes >= 0)
         assertTrue(response.topics().isEmpty)
       }
     } finally {
