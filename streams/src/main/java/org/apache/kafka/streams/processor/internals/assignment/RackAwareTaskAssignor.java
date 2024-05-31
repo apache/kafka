@@ -77,7 +77,7 @@ public class RackAwareTaskAssignor {
 
     // This is number is picked based on testing. Usually the optimization for standby assignment
     // stops after 3 rounds
-    private static final int STANDBY_OPTIMIZER_MAX_ITERATION = 4;
+    public static final int STANDBY_OPTIMIZER_MAX_ITERATION = 4;
 
     private final Cluster fullMetadata;
     private final Map<TaskId, Set<TopicPartition>> partitionsForTask;

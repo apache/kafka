@@ -213,7 +213,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             if (controllerNode != null) {
                 props.putAll(controllerNode.propertyOverrides());
             }
-            props.putIfAbsent(ServerConfigs.UNSTABLE_METADATA_VERSIONS_ENABLE_CONFIG, "true");
+            props.putIfAbsent(ServerConfigs.UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG, "true");
             props.putIfAbsent(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, "true");
             return new KafkaConfig(props, false, Option.empty());
         }

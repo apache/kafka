@@ -278,7 +278,7 @@ public class StickyTaskAssignor implements TaskAssignor {
 
             for (final Map.Entry<ProcessId, KafkaStreamsAssignment> entry : optimizedAssignments.entrySet()) {
                 final ProcessId processId = entry.getKey();
-                final Set<AssignedTask> assignedTasks = optimizedAssignments.get(processId).assignment();
+                final Set<AssignedTask> assignedTasks = new HashSet<>(optimizedAssignments.get(processId).tasks().values());
                 newAssignments.put(processId, assignedTasks);
 
                 for (final AssignedTask task : assignedTasks) {

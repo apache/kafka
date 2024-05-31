@@ -21,9 +21,7 @@ import static java.util.Collections.unmodifiableMap;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import org.apache.kafka.streams.processor.assignment.TaskInfo;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor.ClientMetadata;
 import org.apache.kafka.streams.processor.TaskId;
@@ -42,10 +40,10 @@ public class DefaultApplicationState implements ApplicationState {
     private final Map<Boolean, Map<ProcessId, KafkaStreamsState>> cachedKafkaStreamStates;
 
     public DefaultApplicationState(final AssignmentConfigs assignmentConfigs,
-                                   final Set<TaskInfo> tasks,
+                                   final Map<TaskId, TaskInfo> tasks,
                                    final Map<UUID, ClientMetadata> clientStates) {
         this.assignmentConfigs = assignmentConfigs;
-        this.tasks = unmodifiableMap(tasks.stream().collect(Collectors.toMap(TaskInfo::id, task -> task)));
+        this.tasks = unmodifiableMap(tasks);
         this.clientStates = clientStates;
         this.cachedKafkaStreamStates = new HashMap<>();
     }

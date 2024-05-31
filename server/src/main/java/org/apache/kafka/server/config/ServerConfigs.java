@@ -124,7 +124,7 @@ public class ServerConfigs {
 
     /** Internal Configurations **/
     public static final String UNSTABLE_API_VERSIONS_ENABLE_CONFIG = "unstable.api.versions.enable";
-    public static final String UNSTABLE_METADATA_VERSIONS_ENABLE_CONFIG = "unstable.metadata.versions.enable";
+    public static final String UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG = "unstable.feature.versions.enable";
 
     /************* Authorizer Configuration ***********/
     public static final String AUTHORIZER_CLASS_NAME_CONFIG = "authorizer.class.name";

@@ -151,7 +151,7 @@ public class KafkaConfigBackingStoreTest {
     private Converter converter;
     @Mock
     private ConfigBackingStore.UpdateListener configUpdateListener;
-    private Map<String, String> props = new HashMap<>(DEFAULT_CONFIG_STORAGE_PROPS);
+    private final Map<String, String> props = new HashMap<>(DEFAULT_CONFIG_STORAGE_PROPS);
     private DistributedConfig config;
     @Mock
     KafkaBasedLog<String, byte[]> storeLog;
@@ -328,7 +328,7 @@ public class KafkaConfigBackingStoreTest {
         configState = configStorage.snapshot();
         assertEquals(3, configState.offset());
         String connectorName = CONNECTOR_IDS.get(0);
-        assertEquals(Arrays.asList(connectorName), new ArrayList<>(configState.connectors()));
+        assertEquals(Collections.singletonList(connectorName), new ArrayList<>(configState.connectors()));
         assertEquals(Arrays.asList(TASK_IDS.get(0), TASK_IDS.get(1)), configState.tasks(connectorName));
         assertEquals(SAMPLE_CONFIGS.get(0), configState.taskConfig(TASK_IDS.get(0)));
         assertEquals(SAMPLE_CONFIGS.get(1), configState.taskConfig(TASK_IDS.get(1)));
@@ -378,7 +378,7 @@ public class KafkaConfigBackingStoreTest {
                 "tasks", 1); // Starts with 2 tasks, after update has 3
 
         // As soon as root is rewritten, we should see a callback notifying us that we reconfigured some tasks
-        configUpdateListener.onTaskConfigUpdate(Arrays.asList(TASK_IDS.get(2)));
+        configUpdateListener.onTaskConfigUpdate(Collections.singletonList(TASK_IDS.get(2)));
         EasyMock.expectLastCall();
 
         // Records to be read by consumer as it reads to the end of the log
@@ -473,7 +473,7 @@ public class KafkaConfigBackingStoreTest {
         configState = configStorage.snapshot();
         assertEquals(1, configState.offset());
         String connectorName = CONNECTOR_IDS.get(0);
-        assertEquals(Arrays.asList(connectorName), new ArrayList<>(configState.connectors()));
+        assertEquals(Collections.singletonList(connectorName), new ArrayList<>(configState.connectors()));
         assertEquals(Collections.emptyList(), configState.tasks(connectorName));
         assertEquals(Collections.EMPTY_SET, configState.inconsistentConnectors());
 

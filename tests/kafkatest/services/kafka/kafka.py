@@ -806,7 +806,13 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         return s
 
     def start_cmd(self, node):
-        cmd = "export JMX_PORT=%d; " % self.jmx_port
+        """
+        To bring up kafka using native image, pass following in ducktape options
+        --globals '{"kafka_mode": "native"}'
+        """
+        kafka_mode = self.context.globals.get("kafka_mode", "")
+        cmd = f"export KAFKA_MODE={kafka_mode}; "
+        cmd += "export JMX_PORT=%d; " % self.jmx_port
         cmd += "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG
         heap_kafka_opts = "-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=%s" % \
                           self.logs["kafka_heap_dump_file"]["path"]
