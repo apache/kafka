@@ -812,19 +812,7 @@ public class ConsumerGroup implements Group {
         if (memberEpoch < 0 && members().isEmpty()) return;
 
         final ConsumerGroupMember member = getOrMaybeCreateMember(memberId, false);
-        if (member.useClassicProtocol()) {
-            try {
-                validateMemberEpoch(memberEpoch, member.memberEpoch());
-            } catch (StaleMemberEpochException ex) {
-                // StaleMemberEpochException is not supported in the classic protocol. We throw
-                // IllegalGenerationException instead for compatibility.
-                throw new IllegalGenerationException(String.format("Invalid offset commit because the "
-                    + "received generation id %d does not match the expected member epoch %d.",
-                    memberEpoch, member.memberEpoch()));
-            }
-        } else {
-            validateMemberEpoch(memberEpoch, member.memberEpoch());
-        }
+        validateMemberEpoch(memberEpoch, member.memberEpoch(), member.useClassicProtocol());
     }
 
     /**
@@ -855,20 +843,7 @@ public class ConsumerGroup implements Group {
             throw new UnknownMemberIdException(String.format("Member %s is not a member of group %s.",
                 memberId, groupId));
         }
-
-        if (member.useClassicProtocol()) {
-            try {
-                validateMemberEpoch(memberEpoch, member.memberEpoch());
-            } catch (StaleMemberEpochException ex) {
-                // StaleMemberEpochException is not supported in the classic protocol. We throw
-                // IllegalGenerationException instead for compatibility.
-                throw new IllegalGenerationException(String.format("Invalid offset commit because the "
-                        + "received generation id %d does not match the expected member epoch %d.",
-                    memberEpoch, member.memberEpoch()));
-            }
-        } else {
-            validateMemberEpoch(memberEpoch, member.memberEpoch());
-        }
+        validateMemberEpoch(memberEpoch, member.memberEpoch(), member.useClassicProtocol());
     }
 
     /**
@@ -932,16 +907,27 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * Throws a StaleMemberEpochException if the received member epoch does not match
-     * the expected member epoch.
+     * Throws an exception if the received member epoch does not match the expected member epoch.
+     *
+     * @param receivedMemberEpoch   The received member epoch or generation id.
+     * @param expectedMemberEpoch   The expected member epoch.
+     * @param useClassicProtocol    The boolean indicating whether the checked member uses the classic protocol.
+     * @throws StaleMemberEpochException    if the member with unmatched member epoch uses the consumer protocol.
+     * @throws IllegalGenerationException   if the member with unmatched generation id uses the classic protocol.
      */
     private void validateMemberEpoch(
         int receivedMemberEpoch,
-        int expectedMemberEpoch
-    ) throws StaleMemberEpochException {
+        int expectedMemberEpoch,
+        boolean useClassicProtocol
+    ) throws StaleMemberEpochException, IllegalGenerationException {
         if (receivedMemberEpoch != expectedMemberEpoch) {
-            throw new StaleMemberEpochException(String.format("The received member epoch %d does not match "
-                + "the expected member epoch %d.", receivedMemberEpoch, expectedMemberEpoch));
+            if (useClassicProtocol) {
+                throw new IllegalGenerationException(String.format("The received generation id %d does not match " +
+                    "the expected member epoch %d.", receivedMemberEpoch, expectedMemberEpoch));
+            } else {
+                throw new StaleMemberEpochException(String.format("The received member epoch %d does not match "
+                    + "the expected member epoch %d.", receivedMemberEpoch, expectedMemberEpoch));
+            }
         }
     }
 
