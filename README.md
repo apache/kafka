@@ -232,6 +232,12 @@ You can run checkstyle using:
 The checkstyle warnings will be found in `reports/checkstyle/reports/main.html` and `reports/checkstyle/reports/test.html` files in the
 subproject build directories. They are also printed to the console. The build will fail if Checkstyle fails.
 
+#### Spotless ####
+This plugin can review code by rules,it is disabled by default. You can enable it by setting `build.gradle` add a module name into the `spotlessApplyModules` variable like 
+`def spotlessApplyModules = ['core']`,then you can run spotless using:
+
+    ./gradlew spotlessApply`
+
 #### Spotbugs ####
 Spotbugs uses static analysis to look for bugs in the code.
 You can run spotbugs using:
