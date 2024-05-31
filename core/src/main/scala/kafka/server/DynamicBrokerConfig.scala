@@ -321,7 +321,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   }
 
   private def verifyReconfigurableConfigs(configNames: Set[String]): Unit = CoreUtils.inWriteLock(lock) {
-    val nonDynamic = configNames.filter(nonDynamicProps.contains)
+    val nonDynamic = configNames.intersect(nonDynamicProps)
     require(nonDynamic.isEmpty, s"Reconfigurable contains non-dynamic configs $nonDynamic")
   }
 
@@ -676,11 +676,10 @@ trait BrokerReconfigurable {
 object DynamicLogConfig {
   // Exclude message.format.version for now since we need to check that the version
   // is supported on all brokers in the cluster.
-  @nowarn("cat=deprecation")
-  private val ExcludedConfigs = Set(ServerLogConfigs.LOG_MESSAGE_FORMAT_VERSION_CONFIG)
-
-  val ReconfigurableConfigs = ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.values.asScala.toSet -- ExcludedConfigs
-  val KafkaConfigToLogConfigName = ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.asScala.map { case (k, v) => (v, k) }
+  val ReconfigurableConfigs: Set[String] =
+    ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.values.asScala.toSet -- Set(ServerLogConfigs.LOG_MESSAGE_FORMAT_VERSION_CONFIG)
+  val KafkaConfigToLogConfigName: Map[String, String] =
+    ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.asScala.map { case (k, v) => (v, k) }
 }
 
 class DynamicLogConfig(logManager: LogManager, server: KafkaBroker) extends BrokerReconfigurable with Logging {
