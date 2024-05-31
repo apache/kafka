@@ -16,12 +16,11 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import static java.util.Collections.unmodifiableSet;
+import static java.util.Collections.unmodifiableMap;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import org.apache.kafka.streams.processor.assignment.TaskInfo;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor.ClientMetadata;
@@ -32,22 +31,29 @@ import org.apache.kafka.streams.processor.assignment.KafkaStreamsState;
 import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 
-public class ApplicationStateImpl implements ApplicationState {
+public class DefaultApplicationState implements ApplicationState {
 
     private final AssignmentConfigs assignmentConfigs;
-    private final Set<TaskInfo> tasks;
+    private final Map<TaskId, TaskInfo> tasks;
     private final Map<UUID, ClientMetadata> clientStates;
 
-    public ApplicationStateImpl(final AssignmentConfigs assignmentConfigs,
-                                final Set<TaskInfo> tasks,
-                                final Map<UUID, ClientMetadata> clientStates) {
+    private final Map<Boolean, Map<ProcessId, KafkaStreamsState>> cachedKafkaStreamStates;
+
+    public DefaultApplicationState(final AssignmentConfigs assignmentConfigs,
+                                   final Map<TaskId, TaskInfo> tasks,
+                                   final Map<UUID, ClientMetadata> clientStates) {
         this.assignmentConfigs = assignmentConfigs;
-        this.tasks = unmodifiableSet(tasks);
+        this.tasks = unmodifiableMap(tasks);
         this.clientStates = clientStates;
+        this.cachedKafkaStreamStates = new HashMap<>();
     }
 
     @Override
     public Map<ProcessId, KafkaStreamsState> kafkaStreamsStates(final boolean computeTaskLags) {
+        if (cachedKafkaStreamStates.containsKey(computeTaskLags)) {
+            return cachedKafkaStreamStates.get(computeTaskLags);
+        }
+
         final Map<ProcessId, KafkaStreamsState> kafkaStreamsStates = new HashMap<>();
         for (final Map.Entry<UUID, StreamsPartitionAssignor.ClientMetadata> clientEntry : clientStates.entrySet()) {
             final ClientMetadata metadata = clientEntry.getValue();
@@ -68,6 +74,7 @@ public class ApplicationStateImpl implements ApplicationState {
             kafkaStreamsStates.put(processId, kafkaStreamsState);
         }
 
+        cachedKafkaStreamStates.put(computeTaskLags, kafkaStreamsStates);
         return kafkaStreamsStates;
     }
 
@@ -77,7 +84,7 @@ public class ApplicationStateImpl implements ApplicationState {
     }
 
     @Override
-    public Set<TaskInfo> allTasks() {
+    public Map<TaskId, TaskInfo> allTasks() {
         return tasks;
     }
 }
