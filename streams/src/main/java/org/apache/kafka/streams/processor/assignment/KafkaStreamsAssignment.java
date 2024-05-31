@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.streams.processor.assignment;
 
+import static java.util.Collections.unmodifiableMap;
+
 import java.time.Instant;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.apache.kafka.streams.processor.TaskId;
 
@@ -31,7 +33,7 @@ import org.apache.kafka.streams.processor.TaskId;
 public class KafkaStreamsAssignment {
 
     private final ProcessId processId;
-    private final Map<TaskId, AssignedTask> assignment;
+    private final Map<TaskId, AssignedTask> tasks;
     private final Optional<Instant> followupRebalanceDeadline;
 
     /**
@@ -45,7 +47,8 @@ public class KafkaStreamsAssignment {
      * @return a new KafkaStreamsAssignment object with the given processId and assignment
      */
     public static KafkaStreamsAssignment of(final ProcessId processId, final Set<AssignedTask> assignment) {
-        return new KafkaStreamsAssignment(processId, assignment, Optional.empty());
+        final Map<TaskId, AssignedTask> tasks = assignment.stream().collect(Collectors.toMap(AssignedTask::id, Function.identity()));
+        return new KafkaStreamsAssignment(processId, tasks, Optional.empty());
     }
 
     /**
@@ -62,14 +65,14 @@ public class KafkaStreamsAssignment {
      * @return a new KafkaStreamsAssignment object with the same processId and assignment but with the given rebalanceDeadline
      */
     public KafkaStreamsAssignment withFollowupRebalance(final Instant rebalanceDeadline) {
-        return new KafkaStreamsAssignment(this.processId(), this.assignment(), Optional.of(rebalanceDeadline));
+        return new KafkaStreamsAssignment(this.processId(), this.tasks(), Optional.of(rebalanceDeadline));
     }
 
     private KafkaStreamsAssignment(final ProcessId processId,
-                                   final Set<AssignedTask> assignment,
+                                   final Map<TaskId, AssignedTask> tasks,
                                    final Optional<Instant> followupRebalanceDeadline) {
         this.processId = processId;
-        this.assignment = assignment.stream().collect(Collectors.toMap(AssignedTask::id, t -> t));
+        this.tasks = tasks;
         this.followupRebalanceDeadline = followupRebalanceDeadline;
     }
 
@@ -83,24 +86,18 @@ public class KafkaStreamsAssignment {
 
     /**
      *
-     * @return a set of assigned tasks that are part of this {@code KafkaStreamsAssignment}
+     * @return a read-only set of assigned tasks that are part of this {@code KafkaStreamsAssignment}
      */
-    public Set<AssignedTask> assignment() {
-        // TODO change assignment to return a map so we aren't forced to copy this into a Set
-        return new HashSet<>(assignment.values());
-    }
-
-    // TODO: merge this with #assignment by having it return a Map<TaskId, AssignedTask>
-    public Set<TaskId> assignedTaskIds() {
-        return assignment.keySet();
+    public Map<TaskId, AssignedTask> tasks() {
+        return unmodifiableMap(tasks);
     }
 
     public void assignTask(final AssignedTask newTask) {
-        assignment.put(newTask.id(), newTask);
+        tasks.put(newTask.id(), newTask);
     }
 
     public void removeTask(final AssignedTask removedTask) {
-        assignment.remove(removedTask.id());
+        tasks.remove(removedTask.id());
     }
 
     /**
@@ -139,6 +136,26 @@ public class KafkaStreamsAssignment {
          */
         public Type type() {
             return taskType;
+        }
+
+        @Override
+        public int hashCode() {
+            final int prime = 31;
+            int result = prime + this.id.hashCode();
+            result = prime * result + this.type().hashCode();
+            return result;
+        }
+
+        @Override
+        public boolean equals(final Object obj) {
+            if (this == obj)
+                return true;
+            if (obj == null)
+                return false;
+            if (getClass() != obj.getClass())
+                return false;
+            final AssignedTask other = (AssignedTask) obj;
+            return this.id.equals(other.id()) && this.taskType == other.taskType;
         }
     }
 }
