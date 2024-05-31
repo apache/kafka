@@ -198,16 +198,6 @@ def determineCommitId() {
 
 def spotlessApplyModules = ['']
 
-def configureSpotless = { project ->
-  project.apply plugin: 'com.diffplug.spotless'
-
-  project.spotless {
-    java {
-      importOrder('kafka', 'org.apache.kafka', 'com', 'net', 'org', 'java', 'javax', '', '\\#')
-      removeUnusedImports()
-    }
-  }
-}
 
 apply from: file('wrapper.gradle')
 
@@ -801,9 +791,13 @@ subprojects {
     skipConfigurations = [ "zinc" ]
   }
 
-  afterEvaluate {
-    if (project.name in spotlessApplyModules) {
-      configureSpotless(project)
+  if (project.name in spotlessApplyModules) {
+    apply plugin: 'com.diffplug.spotless'
+    spotless {
+      java {
+        importOrder('kafka', 'org.apache.kafka', 'com', 'net', 'org', 'java', 'javax', '', '\\#')
+        removeUnusedImports()
+      }
     }
   }
 }
@@ -1026,7 +1020,7 @@ project(':core') {
     testImplementation libs.junitJupiter
     testImplementation libs.slf4jlog4j
     testImplementation libs.caffeine
-
+    
     generator project(':generator')
   }
 
