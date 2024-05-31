@@ -1134,8 +1134,17 @@ public class ConnectWorkerIntegrationTest {
         );
     }
 
+    /**
+     * Task configs are not removed from the config topic after a connector is deleted.
+     * When topic compaction takes place, this can cause the tombstone message for the
+     * connector config to be deleted, leaving the task configs in the config topic with no
+     * explicit record of the connector's deletion.
+     * <p>
+     * This test guarantees that those older task configs are never used, even when the
+     * connector is recreated later.
+     */
     @Test
-    public void testKafka16838() throws Exception {
+    public void testCompactedDeletedOlderConnectorConfig() throws Exception {
         brokerProps.put("log.cleaner.backoff.ms", "100");
         brokerProps.put("log.cleaner.delete.retention.ms", "1");
         brokerProps.put("log.cleaner.max.compaction.lag.ms", "1");
@@ -1148,8 +1157,6 @@ public class ConnectWorkerIntegrationTest {
         workerProps.put(CONFIG_TOPIC_CONFIG, configTopic);
         workerProps.put(CONFIG_STORAGE_PREFIX + SEGMENT_MS_CONFIG, "100");
         workerProps.put(CONFIG_STORAGE_PREFIX + DELETE_RETENTION_MS_CONFIG, "1");
-        workerProps.put(CONFIG_PROVIDERS_CONFIG, "file");
-        workerProps.put(CONFIG_PROVIDERS_CONFIG + ".file.class", FileConfigProvider.class.getName());
         workerProps.put(OFFSET_COMMIT_INTERVAL_MS_CONFIG, Integer.toString(offsetCommitIntervalMs));
 
         final int numWorkers = 1;
@@ -1167,22 +1174,10 @@ public class ConnectWorkerIntegrationTest {
         final String connectorTopic = "connector-topic";
         connect.kafka().createTopic(connectorTopic, 1);
 
-        final File secretsFile = tmp.newFile("test-secrets");
-        final Properties secrets = new Properties();
-        final String throughputSecretKey = "secret-throughput";
-        secrets.put(throughputSecretKey, "10");
-        try (FileOutputStream secretsOutputStream = new FileOutputStream(secretsFile)) {
-            secrets.store(secretsOutputStream, null);
-        }
-
         ConnectorHandle connectorHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME);
         connectorHandle.expectedCommits(NUM_TASKS * 2);
 
         Map<String, String> connectorConfig = defaultSourceConnectorProps(connectorTopic);
-        connectorConfig.put(
-                "throughput",
-                "${file:" + secretsFile.getAbsolutePath() + ":" + throughputSecretKey + "}"
-        );
         connect.configureConnector(CONNECTOR_NAME, connectorConfig);
         connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
                 CONNECTOR_NAME,
@@ -1196,12 +1191,12 @@ public class ConnectWorkerIntegrationTest {
         // Roll the entire cluster
         connect.activeWorkers().forEach(connect::removeWorker);
 
-        // Miserable hack: produce directly to the config topic in order to trigger segment rollover
-        // and allow compaction to take place
-        for (int i = 0; i < 5; i++) {
-            connect.kafka().produce(configTopic, "garbage-key-" + i, null);
-            Thread.sleep(1_000);
-        }
+        // Miserable hack: produce directly to the config topic and then wait a little bit
+        // in order to trigger segment rollover and allow compaction to take place
+        connect.kafka().produce(configTopic, "garbage-key-1", null);
+        Thread.sleep(1_000);
+        connect.kafka().produce(configTopic, "garbage-key-2", null);
+        Thread.sleep(1_000);
 
         for (int i = 0; i < numWorkers; i++)
             connect.addWorker();
@@ -1239,7 +1234,64 @@ public class ConnectWorkerIntegrationTest {
                 initialEndOffset,
                 nextEndOffset
         );
+    }
 
+    /**
+     * If a connector has existing tasks, and then generates new task configs, workers compare the
+     * new and existing configs before publishing them to the config topic. If there is no difference,
+     * workers do not publish task configs (this is a workaround to prevent infinite loops with eager
+     * rebalancing).
+     * <p>
+     * This test tries to guarantee that, if the old task configs become invalid because of
+     * an invalid config provider reference, it will still be possible to reconfigure the connector.
+     */
+    @Test
+    public void testReconfigureConnectorWithFailingTaskConfigs() throws Exception {
+        final int offsetCommitIntervalMs = 100;
+        workerProps.put(CONFIG_PROVIDERS_CONFIG, "file");
+        workerProps.put(CONFIG_PROVIDERS_CONFIG + ".file.class", FileConfigProvider.class.getName());
+        workerProps.put(OFFSET_COMMIT_INTERVAL_MS_CONFIG, Integer.toString(offsetCommitIntervalMs));
+
+        final int numWorkers = 1;
+        connect = connectBuilder
+                .numWorkers(numWorkers)
+                .build();
+        // start the clusters
+        connect.start();
+
+        connect.assertions().assertAtLeastNumWorkersAreUp(
+                numWorkers,
+                "Initial group of workers did not start in time."
+        );
+
+        final String firstConnectorTopic = "connector-topic-1";
+        connect.kafka().createTopic(firstConnectorTopic);
+
+        final File secretsFile = tmp.newFile("test-secrets");
+        final Properties secrets = new Properties();
+        final String throughputSecretKey = "secret-throughput";
+        secrets.put(throughputSecretKey, "10");
+        try (FileOutputStream secretsOutputStream = new FileOutputStream(secretsFile)) {
+            secrets.store(secretsOutputStream, null);
+        }
+
+        ConnectorHandle connectorHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME);
+        connectorHandle.expectedCommits(NUM_TASKS * 2);
+
+        Map<String, String> connectorConfig = defaultSourceConnectorProps(firstConnectorTopic);
+        connectorConfig.put(
+                "throughput",
+                "${file:" + secretsFile.getAbsolutePath() + ":" + throughputSecretKey + "}"
+        );
+        connect.configureConnector(CONNECTOR_NAME, connectorConfig);
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+                CONNECTOR_NAME,
+                NUM_TASKS,
+                "Connector or its tasks did not start in time"
+        );
+        connectorHandle.awaitCommits(offsetCommitIntervalMs * 3);
+
+        // Delete the secrets file, which should render the old task configs invalid
         assertTrue("Failed to delete secrets file", secretsFile.delete());
 
         // Use a start latch here instead of assertConnectorAndExactlyNumTasksAreRunning
@@ -1248,20 +1300,25 @@ public class ConnectWorkerIntegrationTest {
         StartAndStopLatch restarts = connectorHandle.expectedStarts(NUM_TASKS + 1);
         connectorHandle.expectedCommits(NUM_TASKS * 2);
 
+        final String secondConnectorTopic = "connector-topic-2";
+        connect.kafka().createTopic(secondConnectorTopic, 1);
+
         // Stop using the config provider for this connector, and instruct it to start writing to the
         // old topic again
         connectorConfig.put("throughput", "10");
-        connectorConfig.put(TOPIC_CONFIG, connectorTopic);
+        connectorConfig.put(TOPIC_CONFIG, secondConnectorTopic);
         connect.configureConnector(CONNECTOR_NAME, connectorConfig);
-        restarts.await(10, TimeUnit.SECONDS);
+        assertTrue(
+                "Connector tasks were not restarted in time",
+                restarts.await(10, TimeUnit.SECONDS)
+        );
         connectorHandle.awaitCommits(offsetCommitIntervalMs * 3);
 
-        final long finalEndOffset = connect.kafka().endOffset(connectorTopicPartition);
+        final long endOffset = connect.kafka().endOffset(new TopicPartition(secondConnectorTopic, 0));
         assertTrue(
-                "Source connector should have published new records to Kafka, "
-                        + "but the end offset of the topic (" + finalEndOffset + ") "
-                        + "is not greater than the previous end offset before reconfiguration (" + initialEndOffset + ")",
-                finalEndOffset > initialEndOffset
+                "Source connector should have published at least one record to new Kafka topic "
+                    + "after being reconfigured",
+                endOffset > 0
         );
     }
 
