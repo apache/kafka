@@ -411,9 +411,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         # When the new group coordinator is enabled, the new consumer rebalance
         # protocol is enabled too.
-        rebalance_protocols = ["classic"]
+        rebalance_protocols = "classic"
         if self.use_new_coordinator:
-            rebalance_protocols.append("consumer")
+            rebalance_protocols = "classic,consumer"
 
         for node in self.nodes:
             node_quorum_info = quorum.NodeQuorumInfo(self.quorum_info, node)
@@ -430,7 +430,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 config_property.NODE_ID: self.idx(node),
                 config_property.UNSTABLE_FEATURE_VERSIONS_ENABLE: use_new_coordinator,
                 config_property.NEW_GROUP_COORDINATOR_ENABLE: use_new_coordinator,
-                config_property.GROUP_COORDINATOR_REBALANCE_PROTOCOLS: ",".join(rebalance_protocols)
+                config_property.GROUP_COORDINATOR_REBALANCE_PROTOCOLS: rebalance_protocols
             }
             kraft_broker_plus_zk_configs = kraft_broker_configs.copy()
             kraft_broker_plus_zk_configs.update(zk_broker_configs)
@@ -789,7 +789,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 override_configs[config_property.ZOOKEEPER_SSL_CLIENT_ENABLE] = 'false'
 
         if self.use_new_coordinator:
+            override_configs[config_property.UNSTABLE_FEATURE_VERSIONS_ENABLE] = 'true'
             override_configs[config_property.NEW_GROUP_COORDINATOR_ENABLE] = 'true'
+            override_configs[config_property.GROUP_COORDINATOR_REBALANCE_PROTOCOLS] = 'classic,consumer'
     
         for prop in self.server_prop_overrides:
             override_configs[prop[0]] = prop[1]
