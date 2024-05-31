@@ -30,14 +30,14 @@ import java.util.function.Function;
 /**
  * Wraps a priority queue of clients and returns the next valid candidate(s) based on the current task assignment
  */
-class ConstrainedPrioritySet {
+public class ConstrainedPrioritySet {
 
     private final PriorityQueue<UUID> clientsByTaskLoad;
     private final BiFunction<UUID, TaskId, Boolean> constraint;
     private final Set<UUID> uniqueClients = new HashSet<>();
 
-    ConstrainedPrioritySet(final BiFunction<UUID, TaskId, Boolean> constraint,
-                           final Function<UUID, Double> weight) {
+    public ConstrainedPrioritySet(final BiFunction<UUID, TaskId, Boolean> constraint,
+                                  final Function<UUID, Double> weight) {
         this.constraint = constraint;
         clientsByTaskLoad = new PriorityQueue<>(Comparator.comparing(weight).thenComparing(clientId -> clientId));
     }
@@ -45,7 +45,7 @@ class ConstrainedPrioritySet {
     /**
      * @return the next least loaded client that satisfies the given criteria, or null if none do
      */
-    UUID poll(final TaskId task, final Function<UUID, Boolean> extraConstraint) {
+    public UUID poll(final TaskId task, final Function<UUID, Boolean> extraConstraint) {
         final Set<UUID> invalidPolledClients = new HashSet<>();
         while (!clientsByTaskLoad.isEmpty()) {
             final UUID candidateClient = pollNextClient();
@@ -66,17 +66,17 @@ class ConstrainedPrioritySet {
     /**
      * @return the next least loaded client that satisfies the given criteria, or null if none do
      */
-    UUID poll(final TaskId task) {
+    public UUID poll(final TaskId task) {
         return poll(task, client -> true);
     }
 
-    void offerAll(final Collection<UUID> clients) {
+    public void offerAll(final Collection<UUID> clients) {
         for (final UUID client : clients) {
             offer(client);
         }
     }
 
-    void offer(final UUID client) {
+    public void offer(final UUID client) {
         if (uniqueClients.contains(client)) {
             clientsByTaskLoad.remove(client);
         } else {

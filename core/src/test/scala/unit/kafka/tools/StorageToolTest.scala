@@ -354,6 +354,7 @@ Found problem:
         MetadataVersion.LATEST_PRODUCTION,
         Map(TestFeatureVersion.FEATURE_NAME -> featureLevel),
         allFeatures,
+        false,
         false
       )
       if (featureLevel > 0) {
@@ -371,6 +372,7 @@ Found problem:
       metadataVersion,
       Map.empty,
       allFeatures,
+      true,
       true
     )
 
@@ -387,6 +389,7 @@ Found problem:
       MetadataVersion.LATEST_PRODUCTION,
       Map.empty,
       allFeatures,
+      false,
       false
     )
 
@@ -402,6 +405,7 @@ Found problem:
       MetadataVersion.IBP_2_8_IV1,
       Map(TestFeatureVersion.FEATURE_NAME -> featureLevel),
       allFeatures,
+      false,
       false
     ))
   }
@@ -414,6 +418,7 @@ Found problem:
       MetadataVersion.IBP_3_3_IV0,
       Map.empty,
       allFeatures,
+      false,
       false
     )
 
@@ -428,6 +433,19 @@ Found problem:
       MetadataVersion.LATEST_PRODUCTION,
       Map(TestFeatureVersion.FEATURE_NAME -> featureLevel),
       allFeatures,
+      false,
+      false
+    ))
+  }
+
+  @Test
+  def testUnstableFeatureThrowsError(): Unit = {
+    assertThrows(classOf[IllegalArgumentException], () => StorageTool.generateFeatureRecords(
+      new ArrayBuffer[ApiMessageAndVersion](),
+      MetadataVersion.LATEST_PRODUCTION,
+      Map(TestFeatureVersion.FEATURE_NAME -> Features.TEST_VERSION.latestTesting),
+      allFeatures,
+      false,
       false
     ))
   }
@@ -606,7 +624,7 @@ Found problem:
     val propsStream = Files.newOutputStream(propsFile.toPath)
     try {
       properties.setProperty(ServerLogConfigs.LOG_DIRS_CONFIG, TestUtils.tempDir().toString)
-      properties.setProperty(ServerConfigs.UNSTABLE_METADATA_VERSIONS_ENABLE_CONFIG, enableUnstable.toString)
+      properties.setProperty(ServerConfigs.UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG, enableUnstable.toString)
       properties.store(propsStream, "config.props")
     } finally {
       propsStream.close()

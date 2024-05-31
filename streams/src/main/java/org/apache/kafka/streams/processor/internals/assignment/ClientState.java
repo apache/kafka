@@ -85,8 +85,8 @@ public class ClientState {
     }
 
     ClientState(final UUID processId, final int capacity, final Map<String, String> clientTags) {
-        previousStandbyTasks.taskIds(new TreeSet<>());
-        previousActiveTasks.taskIds(new TreeSet<>());
+        previousStandbyTasks.setTaskIds(new TreeSet<>());
+        previousActiveTasks.setTaskIds(new TreeSet<>());
         taskOffsetSums = new TreeMap<>();
         taskLagTotals = new TreeMap<>();
         this.capacity = capacity;
@@ -110,8 +110,8 @@ public class ClientState {
                        final Map<String, String> clientTags,
                        final int capacity,
                        final UUID processId) {
-        this.previousStandbyTasks.taskIds(unmodifiableSet(new TreeSet<>(previousStandbyTasks)));
-        this.previousActiveTasks.taskIds(unmodifiableSet(new TreeSet<>(previousActiveTasks)));
+        this.previousStandbyTasks.setTaskIds(unmodifiableSet(new TreeSet<>(previousStandbyTasks)));
+        this.previousActiveTasks.setTaskIds(unmodifiableSet(new TreeSet<>(previousActiveTasks)));
         taskOffsetSums = emptyMap();
         this.taskLagTotals = unmodifiableMap(taskLagTotals);
         this.capacity = capacity;
@@ -489,14 +489,14 @@ public class ClientState {
     }
 
     public void setAssignedTasks(final KafkaStreamsAssignment assignment) {
-        final Set<TaskId> activeTasks = assignment.assignment().stream()
+        final Set<TaskId> activeTasks = assignment.tasks().values().stream()
             .filter(task -> task.type() == ACTIVE).map(KafkaStreamsAssignment.AssignedTask::id)
             .collect(Collectors.toSet());
-        final Set<TaskId> standbyTasks = assignment.assignment().stream()
+        final Set<TaskId> standbyTasks = assignment.tasks().values().stream()
             .filter(task -> task.type() == STANDBY).map(KafkaStreamsAssignment.AssignedTask::id)
             .collect(Collectors.toSet());
-        assignedActiveTasks.taskIds(activeTasks);
-        assignedStandbyTasks.taskIds(standbyTasks);
+        assignedActiveTasks.setTaskIds(activeTasks);
+        assignedStandbyTasks.setTaskIds(standbyTasks);
     }
 
     public String currentAssignment() {
