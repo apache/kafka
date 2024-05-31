@@ -26,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 final public class VoterSetHistoryTest {
     @Test
-    void testStaicVoterSet() {
+    void testStaticVoterSet() {
         VoterSet staticVoterSet = new VoterSet(VoterSetTest.voterMap(Arrays.asList(1, 2, 3), true));
         VoterSetHistory votersHistory = new VoterSetHistory(Optional.of(staticVoterSet));
 
@@ -76,6 +76,7 @@ final public class VoterSetHistoryTest {
         assertEquals(Optional.empty(), votersHistory.valueAtOrBefore(99));
         assertEquals(Optional.of(addedVoterSet), votersHistory.valueAtOrBefore(100));
 
+        voterMap.remove(4);
         VoterSet removedVoterSet = new VoterSet(new HashMap<>(voterMap));
         votersHistory.addAt(200, removedVoterSet);
 

@@ -719,9 +719,9 @@ public class LogSegment implements Closeable {
     }
 
     /**
-     * @return the first batch timestamp if the timestamp is available. Otherwise return Long.MaxValue
+     * @return the first batch timestamp if the timestamp is available. Otherwise, return Long.MaxValue
      */
-    long getFirstBatchTimestamp() {
+    public long getFirstBatchTimestamp() {
         loadFirstBatchTimestamp();
         OptionalLong timestamp = rollingBasedTimestamp;
         if (timestamp.isPresent() && timestamp.getAsLong() >= 0)
