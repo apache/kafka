@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.assignment;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalInt;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.assignment.assignors.StickyTaskAssignor;
@@ -32,8 +33,8 @@ public class AssignmentConfigs {
     private final int numStandbyReplicas;
     private final long probingRebalanceIntervalMs;
     private final List<String> rackAwareAssignmentTags;
-    private final Optional<Integer> rackAwareTrafficCost;
-    private final Optional<Integer> rackAwareNonOverlapCost;
+    private final OptionalInt rackAwareTrafficCost;
+    private final OptionalInt rackAwareNonOverlapCost;
     private final String rackAwareAssignmentStrategy;
 
     public static AssignmentConfigs of(final StreamsConfig configs) {
@@ -71,8 +72,8 @@ public class AssignmentConfigs {
             numStandbyReplicas,
             probingRebalanceIntervalMs,
             rackAwareAssignmentTags,
-            rackAwareTrafficCost,
-            rackAwareNonOverlapCost,
+            rackAwareTrafficCost.map(OptionalInt::of).orElseGet(OptionalInt::empty),
+            rackAwareNonOverlapCost.map(OptionalInt::of).orElseGet(OptionalInt::empty),
             rackAwareAssignmentStrategy
         );
     }
@@ -82,8 +83,8 @@ public class AssignmentConfigs {
                              final int numStandbyReplicas,
                              final long probingRebalanceIntervalMs,
                              final List<String> rackAwareAssignmentTags,
-                             final Optional<Integer> rackAwareTrafficCost,
-                             final Optional<Integer>  rackAwareNonOverlapCost,
+                             final OptionalInt rackAwareTrafficCost,
+                             final OptionalInt  rackAwareNonOverlapCost,
                              final String rackAwareAssignmentStrategy) {
         this.acceptableRecoveryLag = validated(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, acceptableRecoveryLag);
         this.maxWarmupReplicas = validated(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, maxWarmupReplicas);
@@ -146,7 +147,7 @@ public class AssignmentConfigs {
      * The rack-aware assignment traffic cost as configured via
      * {@link StreamsConfig#RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG}
      */
-    public Optional<Integer> rackAwareTrafficCost() {
+    public OptionalInt rackAwareTrafficCost() {
         return rackAwareTrafficCost;
     }
 
@@ -154,7 +155,7 @@ public class AssignmentConfigs {
      * The rack-aware assignment non-overlap cost as configured via
      * {@link StreamsConfig#RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG}
      */
-    public Optional<Integer> rackAwareNonOverlapCost() {
+    public OptionalInt rackAwareNonOverlapCost() {
         return rackAwareNonOverlapCost;
     }
 

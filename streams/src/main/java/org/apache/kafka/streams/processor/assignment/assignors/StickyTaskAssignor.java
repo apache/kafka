@@ -262,7 +262,7 @@ public class StickyTaskAssignor implements TaskAssignor {
             taskPairs.addPairs(taskId, newAssignmentsForClient);
 
             newAssignments.get(client).assignTask(new AssignedTask(taskId, type));
-            newTaskLocations.get(taskId).add(client);
+            newTaskLocations.computeIfAbsent(taskId, k -> new HashSet<>()).add(client);
         }
 
         public Map<ProcessId, KafkaStreamsAssignment> newAssignments() {

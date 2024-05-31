@@ -136,8 +136,8 @@ public final class TaskAssignmentUtils {
             return kafkaStreamsAssignments;
         }
 
-        final int crossRackTrafficCost = applicationState.assignmentConfigs().rackAwareTrafficCost().get();
-        final int nonOverlapCost = applicationState.assignmentConfigs().rackAwareNonOverlapCost().get();
+        final int crossRackTrafficCost = applicationState.assignmentConfigs().rackAwareTrafficCost().getAsInt();
+        final int nonOverlapCost = applicationState.assignmentConfigs().rackAwareNonOverlapCost().getAsInt();
 
         final Map<ProcessId, KafkaStreamsState> kafkaStreamsStates = applicationState.kafkaStreamsStates(false);
         final List<TaskId> taskIds = new ArrayList<>(tasks);
@@ -234,8 +234,8 @@ public final class TaskAssignmentUtils {
             return kafkaStreamsAssignments;
         }
 
-        final int crossRackTrafficCost = applicationState.assignmentConfigs().rackAwareTrafficCost().get();
-        final int nonOverlapCost = applicationState.assignmentConfigs().rackAwareNonOverlapCost().get();
+        final int crossRackTrafficCost = applicationState.assignmentConfigs().rackAwareTrafficCost().getAsInt();
+        final int nonOverlapCost = applicationState.assignmentConfigs().rackAwareNonOverlapCost().getAsInt();
 
         final Map<TaskId, Set<TaskTopicPartition>> topicPartitionsByTaskId =
             applicationState.allTasks().values().stream().collect(Collectors.toMap(
