@@ -22,6 +22,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.state.StateSerdes;
 
@@ -35,8 +36,8 @@ public class StoreSerdeInitializer {
                                                       final PrepareFunc<V> prepareValueSerdeFunc) {
         return new StateSerdes<>(
             changelogTopic,
-            prepareSerde(WrappingNullableUtils::prepareKeySerde, storeName, keySerde, new SerdeGetter(context), true),
-            prepareSerde(prepareValueSerdeFunc, storeName, valueSerde, new SerdeGetter(context), false)
+            prepareSerde(WrappingNullableUtils::prepareKeySerde, storeName, keySerde, new SerdeGetter(context), true, context.taskId()),
+            prepareSerde(prepareValueSerdeFunc, storeName, valueSerde, new SerdeGetter(context), false, context.taskId())
         );
     }
 
@@ -48,8 +49,8 @@ public class StoreSerdeInitializer {
                                                       final PrepareFunc<V> prepareValueSerdeFunc) {
         return new StateSerdes<>(
             changelogTopic,
-            prepareSerde(WrappingNullableUtils::prepareKeySerde, storeName, keySerde, new SerdeGetter(context), true),
-            prepareSerde(prepareValueSerdeFunc, storeName, valueSerde, new SerdeGetter(context), false)
+            prepareSerde(WrappingNullableUtils::prepareKeySerde, storeName, keySerde, new SerdeGetter(context), true, context.taskId()),
+            prepareSerde(prepareValueSerdeFunc, storeName, valueSerde, new SerdeGetter(context), false, context.taskId())
         );
     }
 
@@ -57,15 +58,14 @@ public class StoreSerdeInitializer {
                                              final String storeName,
                                              final Serde<T> serde,
                                              final SerdeGetter getter,
-                                             final Boolean isKey) {
+                                             final Boolean isKey,
+                                             final TaskId taskId) {
 
         final String serdeType = isKey ? "key" : "value";
         try {
             return prepare.prepareSerde(serde, getter);
-        } catch (final ConfigException e) {
-            throw new ConfigException(String.format("Failed to initialize %s serdes for store %s", serdeType, storeName));
-        } catch (final StreamsException e) {
-            throw new StreamsException(String.format("Failed to initialize %s serdes for store %s", serdeType, storeName), e);
+        } catch (final ConfigException | StreamsException e) {
+            throw new StreamsException(String.format("Failed to initialize %s serdes for store %s", serdeType, storeName), e, taskId);
         }
     }
 }

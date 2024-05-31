@@ -70,60 +70,67 @@ public class StoreSerdeInitializerTest {
     }
 
     @Test
-    public void shouldThrowConfigExceptionOnUndefinedKeySerdeForProcessorContext() {
+    public void shouldThrowStreamsExceptionOnUndefinedKeySerdeForProcessorContext() {
         final MockInternalNewProcessorContext<String, String> context = new MockInternalNewProcessorContext<>();
 
-        utilsMock.when(() -> WrappingNullableUtils.prepareKeySerde(any(), any())).thenThrow(new ConfigException(""));
+        utilsMock.when(() -> WrappingNullableUtils.prepareKeySerde(any(), any()))
+            .thenThrow(new ConfigException("Please set StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG"));
 
-        final Throwable exception = assertThrows(ConfigException.class,
+        final Throwable exception = assertThrows(StreamsException.class,
             () -> StoreSerdeInitializer.prepareStoreSerde((ProcessorContext) context, "myStore", "topic",
                 new Serdes.StringSerde(), new Serdes.StringSerde(), WrappingNullableUtils::prepareValueSerde));
 
         assertThat(exception.getMessage(), equalTo("Failed to initialize key serdes for store myStore"));
+        assertThat(exception.getCause().getMessage(), equalTo("Please set StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG"));
     }
 
     @Test
-    public void shouldThrowConfigExceptionOnUndefinedValueSerdeForProcessorContext() {
+    public void shouldThrowStreamsExceptionOnUndefinedValueSerdeForProcessorContext() {
         final MockInternalNewProcessorContext<String, String> context = new MockInternalNewProcessorContext<>();
 
         utilsMock.when(() -> WrappingNullableUtils.prepareValueSerde(any(), any()))
-            .thenThrow(new ConfigException(""));
+            .thenThrow(new ConfigException("Please set StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG"));
 
-        final Throwable exception = assertThrows(ConfigException.class,
+        final Throwable exception = assertThrows(StreamsException.class,
             () -> StoreSerdeInitializer.prepareStoreSerde((ProcessorContext) context, "myStore", "topic",
                 new Serdes.StringSerde(), new Serdes.StringSerde(), WrappingNullableUtils::prepareValueSerde));
 
         assertThat(exception.getMessage(), equalTo("Failed to initialize value serdes for store myStore"));
+        assertThat(exception.getCause().getMessage(), equalTo("Please set StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG"));
     }
 
     @Test
-    public void shouldThrowConfigExceptionOnUndefinedKeySerdeForStateStoreContext() {
+    public void shouldThrowStreamsExceptionOnUndefinedKeySerdeForStateStoreContext() {
         final MockInternalNewProcessorContext<String, String> context = new MockInternalNewProcessorContext<>();
 
-        utilsMock.when(() -> WrappingNullableUtils.prepareKeySerde(any(), any())).thenThrow(new ConfigException(""));
+        utilsMock.when(() -> WrappingNullableUtils.prepareKeySerde(any(), any()))
+            .thenThrow(new ConfigException("Please set StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG"));
 
-        final Throwable exception = assertThrows(ConfigException.class,
+        final Throwable exception = assertThrows(StreamsException.class,
             () -> StoreSerdeInitializer.prepareStoreSerde((StateStoreContext) context, "myStore", "topic",
                 new Serdes.StringSerde(), new Serdes.StringSerde(), WrappingNullableUtils::prepareValueSerde));
 
         assertThat(exception.getMessage(), equalTo("Failed to initialize key serdes for store myStore"));
+        assertThat(exception.getCause().getMessage(), equalTo("Please set StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG"));
     }
 
     @Test
-    public void shouldThrowConfigExceptionOnUndefinedValueSerdeForStateStoreContext() {
+    public void shouldThrowStreamsExceptionOnUndefinedValueSerdeForStateStoreContext() {
         final MockInternalNewProcessorContext<String, String> context = new MockInternalNewProcessorContext<>();
 
-        utilsMock.when(() -> WrappingNullableUtils.prepareValueSerde(any(), any())).thenThrow(new ConfigException(""));
+        utilsMock.when(() -> WrappingNullableUtils.prepareValueSerde(any(), any()))
+            .thenThrow(new ConfigException("Please set StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG"));
 
-        final Throwable exception = assertThrows(ConfigException.class,
+        final Throwable exception = assertThrows(StreamsException.class,
             () -> StoreSerdeInitializer.prepareStoreSerde((StateStoreContext) context, "myStore", "topic",
                 new Serdes.StringSerde(), new Serdes.StringSerde(), WrappingNullableUtils::prepareValueSerde));
 
         assertThat(exception.getMessage(), equalTo("Failed to initialize value serdes for store myStore"));
+        assertThat(exception.getCause().getMessage(), equalTo("Please set StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG"));
     }
 
     @Test
-    public void shouldThrowStreamsExceptionOnUndefinedKeySerdeForProcessorContext() {
+    public void shouldThrowStreamsExceptionWithExplicitErrorMessageForProcessorContext() {
         final MockInternalNewProcessorContext<String, String> context = new MockInternalNewProcessorContext<>();
 
         utilsMock.when(() -> WrappingNullableUtils.prepareKeySerde(any(), any())).thenThrow(new StreamsException(""));
@@ -136,7 +143,7 @@ public class StoreSerdeInitializerTest {
     }
 
     @Test
-    public void shouldThrowStreamsExceptionOnUndefinedValueSerdeForStateStoreContext() {
+    public void shouldThrowStreamsExceptionWithExplicitErrorMessageForStateStoreContext() {
         final MockInternalNewProcessorContext<String, String> context = new MockInternalNewProcessorContext<>();
 
         utilsMock.when(() -> WrappingNullableUtils.prepareValueSerde(any(), any())).thenThrow(new StreamsException(""));

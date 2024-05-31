@@ -131,7 +131,7 @@ public class SourceNodeTest {
     }
 
     @Test
-    public void shouldThrowConfigExceptionOnUndefinedKeySerde() {
+    public void shouldThrowStreamsExceptionOnUndefinedKeySerde() {
         final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>();
 
         final SourceNode<String, String> node =
@@ -140,16 +140,20 @@ public class SourceNodeTest {
         utilsMock.when(() -> WrappingNullableUtils.prepareKeyDeserializer(any(), any(), any()))
             .thenThrow(new ConfigException("Please set StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG"));
 
-        final Throwable exception = assertThrows(ConfigException.class, () -> node.init(context));
+        final Throwable exception = assertThrows(StreamsException.class, () -> node.init(context));
 
         assertThat(
             exception.getMessage(),
-            equalTo("Failed to initialize key serdes for source node TESTING_NODE. Please set StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG")
+            equalTo("Failed to initialize key serdes for source node TESTING_NODE")
+        );
+        assertThat(
+            exception.getCause().getMessage(),
+            equalTo("Please set StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG")
         );
     }
 
     @Test
-    public void shouldThrowConfigExceptionOnUndefinedValueSerde() {
+    public void shouldThrowStreamsExceptionOnUndefinedValueSerde() {
         final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>();
 
         final SourceNode<String, String> node =
@@ -158,16 +162,20 @@ public class SourceNodeTest {
         utilsMock.when(() -> WrappingNullableUtils.prepareValueDeserializer(any(), any(), any()))
             .thenThrow(new ConfigException("Please set StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG"));
 
-        final Throwable exception = assertThrows(ConfigException.class, () -> node.init(context));
+        final Throwable exception = assertThrows(StreamsException.class, () -> node.init(context));
 
         assertThat(
             exception.getMessage(),
-            equalTo("Failed to initialize value serdes for source node TESTING_NODE. Please set StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG")
+            equalTo("Failed to initialize value serdes for source node TESTING_NODE")
+        );
+        assertThat(
+            exception.getCause().getMessage(),
+            equalTo("Please set StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG")
         );
     }
 
     @Test
-    public void shouldThrowStreamsExceptionOnUndefinedSerde() {
+    public void shouldThrowStreamsExceptionWithExplicitErrorMessage() {
         final InternalMockProcessorContext<String, String> context = new InternalMockProcessorContext<>();
 
         final SourceNode<String, String> node =

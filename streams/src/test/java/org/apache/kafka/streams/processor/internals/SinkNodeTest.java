@@ -75,33 +75,41 @@ public class SinkNodeTest {
     }
 
     @Test
-    public void shouldThrowConfigExceptionOnUndefinedKeySerde() {
+    public void shouldThrowStreamsExceptionOnUndefinedKeySerde() {
         utilsMock.when(() -> WrappingNullableUtils.prepareKeySerializer(any(), any(), any()))
             .thenThrow(new ConfigException("Please set StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG"));
 
-        final Throwable exception = assertThrows(ConfigException.class, () -> sink.init(context));
+        final Throwable exception = assertThrows(StreamsException.class, () -> sink.init(context));
 
         assertThat(
             exception.getMessage(),
-            equalTo("Failed to initialize key serdes for sink node anyNodeName. Please set StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG")
+            equalTo("Failed to initialize key serdes for sink node anyNodeName")
+        );
+        assertThat(
+            exception.getCause().getMessage(),
+            equalTo("Please set StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG")
         );
     }
 
     @Test
-    public void shouldThrowConfigExceptionOnUndefinedValueSerde() {
+    public void shouldThrowStreamsExceptionOnUndefinedValueSerde() {
         utilsMock.when(() -> WrappingNullableUtils.prepareValueSerializer(any(), any(), any()))
             .thenThrow(new ConfigException("Please set StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG"));
 
-        final Throwable exception = assertThrows(ConfigException.class, () -> sink.init(context));
+        final Throwable exception = assertThrows(StreamsException.class, () -> sink.init(context));
 
         assertThat(
             exception.getMessage(),
-            equalTo("Failed to initialize value serdes for sink node anyNodeName. Please set StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG")
+            equalTo("Failed to initialize value serdes for sink node anyNodeName")
+        );
+        assertThat(
+            exception.getCause().getMessage(),
+            equalTo("Please set StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG")
         );
     }
 
     @Test
-    public void shouldThrowStreamsExceptionOnUndefinedSerde() {
+    public void shouldThrowStreamsExceptionWithExplicitErrorMessage() {
         utilsMock.when(() -> WrappingNullableUtils.prepareKeySerializer(any(), any(), any())).thenThrow(new StreamsException(""));
 
         final Throwable exception = assertThrows(StreamsException.class, () -> sink.init(context));
