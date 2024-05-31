@@ -39,10 +39,11 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 public class FenceProducersHandlerTest {
     private final LogContext logContext = new LogContext();
     private final Node node = new Node(1, "host", 1234);
+    private final int timeoutMs = 30000;
 
     @Test
     public void testBuildRequest() {
-        FenceProducersHandler handler = new FenceProducersHandler(logContext);
+        FenceProducersHandler handler = new FenceProducersHandler(logContext, timeoutMs);
         mkSet("foo", "bar", "baz").forEach(transactionalId -> assertLookup(handler, transactionalId));
     }
 
@@ -51,7 +52,7 @@ public class FenceProducersHandlerTest {
         String transactionalId = "foo";
         CoordinatorKey key = CoordinatorKey.byTransactionalId(transactionalId);
 
-        FenceProducersHandler handler = new FenceProducersHandler(logContext);
+        FenceProducersHandler handler = new FenceProducersHandler(logContext, timeoutMs);
 
         short epoch = 57;
         long producerId = 7;
@@ -73,7 +74,7 @@ public class FenceProducersHandlerTest {
     @Test
     public void testHandleErrorResponse() {
         String transactionalId = "foo";
-        FenceProducersHandler handler = new FenceProducersHandler(logContext);
+        FenceProducersHandler handler = new FenceProducersHandler(logContext, timeoutMs);
         assertFatalError(handler, transactionalId, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED);
         assertFatalError(handler, transactionalId, Errors.CLUSTER_AUTHORIZATION_FAILED);
         assertFatalError(handler, transactionalId, Errors.UNKNOWN_SERVER_ERROR);
@@ -140,6 +141,6 @@ public class FenceProducersHandlerTest {
         CoordinatorKey key = CoordinatorKey.byTransactionalId(transactionalId);
         InitProducerIdRequest.Builder request = handler.buildSingleRequest(1, key);
         assertEquals(transactionalId, request.data.transactionalId());
-        assertEquals(1, request.data.transactionTimeoutMs());
+        assertEquals(timeoutMs, request.data.transactionTimeoutMs());
     }
 }

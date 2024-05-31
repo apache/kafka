@@ -38,12 +38,15 @@ import java.util.stream.Collectors;
 public class FenceProducersHandler extends AdminApiHandler.Unbatched<CoordinatorKey, ProducerIdAndEpoch> {
     private final Logger log;
     private final AdminApiLookupStrategy<CoordinatorKey> lookupStrategy;
+    private final int requestTimeoutMs;
 
     public FenceProducersHandler(
-        LogContext logContext
+        LogContext logContext,
+        int requestTimeoutMs
     ) {
         this.log = logContext.logger(FenceProducersHandler.class);
         this.lookupStrategy = new CoordinatorStrategy(FindCoordinatorRequest.CoordinatorType.TRANSACTION, logContext);
+        this.requestTimeoutMs = requestTimeoutMs;
     }
 
     public static AdminApiFuture.SimpleAdminApiFuture<CoordinatorKey, ProducerIdAndEpoch> newFuture(
@@ -82,9 +85,9 @@ public class FenceProducersHandler extends AdminApiHandler.Unbatched<Coordinator
             .setProducerEpoch(ProducerIdAndEpoch.NONE.epoch)
             .setProducerId(ProducerIdAndEpoch.NONE.producerId)
             .setTransactionalId(key.idValue)
-            // Set transaction timeout to 1 since it's only being initialized to fence out older producers with the same transactional ID,
-            // and shouldn't be used for any actual record writes
-            .setTransactionTimeoutMs(1);
+            // Set transaction timeout to requestTimeoutMs since it's only being initialized to fence out older producers with the same transactional ID.
+            // This timeout is used to append the record with the new producer epoch to the transaction log.
+            .setTransactionTimeoutMs(requestTimeoutMs);
         return new InitProducerIdRequest.Builder(data);
     }
 
