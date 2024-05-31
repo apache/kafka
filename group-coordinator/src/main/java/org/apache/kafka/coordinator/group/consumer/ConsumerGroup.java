@@ -798,8 +798,6 @@ public class ConsumerGroup implements Group {
      * @throws UnknownMemberIdException     If the member is not found.
      * @throws StaleMemberEpochException    If the member uses the consumer protocol and the provided
      *                                      member epoch doesn't match the actual member epoch.
-     * @throws FencedInstanceIdException    If the member uses the classic protocol and the provided
-     *                                      instance id is fenced by an existing member.
      * @throws IllegalGenerationException   If the member uses the classic protocol and the provided
      *                                      generation id is not equal to the member epoch.
      */
@@ -809,8 +807,7 @@ public class ConsumerGroup implements Group {
         String groupInstanceId,
         int memberEpoch,
         boolean isTransactional
-    ) throws UnknownMemberIdException, StaleMemberEpochException,
-        FencedInstanceIdException, IllegalGenerationException {
+    ) throws UnknownMemberIdException, StaleMemberEpochException, IllegalGenerationException {
         // When the member epoch is -1, the request comes from either the admin client
         // or a consumer which does not use the group management facility. In this case,
         // the request can commit offsets if the group is empty.
@@ -860,9 +857,20 @@ public class ConsumerGroup implements Group {
             throw new UnknownMemberIdException(String.format("Member %s is not a member of group %s.",
                 memberId, groupId));
         }
-        validateMemberEpoch(memberEpoch, member.memberEpoch());
-        // If the member uses the old protocol and the member epoch doesn't match, return illegal_generation
-        // same as the
+
+        if (member.useClassicProtocol()) {
+            try {
+                validateMemberEpoch(memberEpoch, member.memberEpoch());
+            } catch (StaleMemberEpochException ex) {
+                // StaleMemberEpochException is not supported in the classic protocol. We throw
+                // IllegalGenerationException instead for compatibility.
+                throw new IllegalGenerationException(String.format("Invalid offset commit because the "
+                        + "received generation id %d does not match the expected member epoch %d.",
+                    memberEpoch, member.memberEpoch()));
+            }
+        } else {
+            validateMemberEpoch(memberEpoch, member.memberEpoch());
+        }
     }
 
     /**
