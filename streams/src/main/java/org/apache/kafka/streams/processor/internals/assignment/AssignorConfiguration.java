@@ -27,7 +27,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.internals.UpgradeFromValues;
-import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 import org.apache.kafka.streams.processor.internals.ClientUtils;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.slf4j.Logger;
@@ -41,7 +40,7 @@ import static org.apache.kafka.streams.StreamsConfig.InternalConfig.INTERNAL_TAS
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 
 public final class AssignorConfiguration {
-    private final String taskAssignorClass;
+    private final String internalTaskAssignorClass;
 
     private final String logPrefix;
     private final Logger log;
@@ -84,9 +83,9 @@ public final class AssignorConfiguration {
         {
             final String o = (String) configs.get(INTERNAL_TASK_ASSIGNOR_CLASS);
             if (o == null) {
-                taskAssignorClass = HighAvailabilityTaskAssignor.class.getName();
+                internalTaskAssignorClass = HighAvailabilityTaskAssignor.class.getName();
             } else {
-                taskAssignorClass = o;
+                internalTaskAssignorClass = o;
             }
         }
     }
@@ -250,7 +249,7 @@ public final class AssignorConfiguration {
 
     public TaskAssignor taskAssignor() {
         try {
-            return Utils.newInstance(taskAssignorClass, TaskAssignor.class);
+            return Utils.newInstance(internalTaskAssignorClass, TaskAssignor.class);
         } catch (final ClassNotFoundException e) {
             throw new IllegalArgumentException(
                 "Expected an instantiable class name for " + INTERNAL_TASK_ASSIGNOR_CLASS,
@@ -259,7 +258,7 @@ public final class AssignorConfiguration {
         }
     }
 
-    public Optional<org.apache.kafka.streams.processor.assignment.TaskAssignor> userTaskAssignor() {
+    public Optional<org.apache.kafka.streams.processor.assignment.TaskAssignor> customTaskAssignor() {
         final String userTaskAssignorClassname = streamsConfig.getString(StreamsConfig.TASK_ASSIGNOR_CLASS_CONFIG);
         if (userTaskAssignorClassname == null) {
             return Optional.empty();

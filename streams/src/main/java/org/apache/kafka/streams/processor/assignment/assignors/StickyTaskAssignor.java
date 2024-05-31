@@ -277,7 +277,7 @@ public class StickyTaskAssignor implements TaskAssignor {
                 final Set<AssignedTask> assignedTasks = new HashSet<>(optimizedAssignments.get(processId).tasks().values());
 
                 for (final AssignedTask task : assignedTasks) {
-                    newTaskLocations.get(task.id()).add(processId);
+                    newTaskLocations.computeIfAbsent(task.id(), k -> new HashSet<>()).add(processId);
                 }
             }
 

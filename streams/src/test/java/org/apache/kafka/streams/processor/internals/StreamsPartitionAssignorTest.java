@@ -241,7 +241,8 @@ public class StreamsPartitionAssignorTest {
     @Captor
     private ArgumentCaptor<Map<TopicPartition, PartitionInfo>> topicPartitionInfoCaptor;
     private final Map<String, Subscription> subscriptions = new HashMap<>();
-    private final Class<? extends TaskAssignor> taskAssignor;
+    private final Class<? extends TaskAssignor> internalTaskAssignor;
+    private final Class<? extends org.apache.kafka.streams.processor.assignment.TaskAssignor> customTaskAssignor;
     private final String rackAwareAssignorStrategy;
     private Map<String, String> clientTags;
 
@@ -261,8 +262,13 @@ public class StreamsPartitionAssignorTest {
         referenceContainer.time = time;
         referenceContainer.clientTags = clientTags != null ? clientTags : EMPTY_CLIENT_TAGS;
         configurationMap.put(InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
-        configurationMap.put(InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, taskAssignor.getName());
         configurationMap.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG, rackAwareAssignorStrategy);
+        if (internalTaskAssignor != null) {
+            configurationMap.put(InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, internalTaskAssignor.getName());
+        }
+        if (customTaskAssignor != null) {
+            configurationMap.put(StreamsConfig.TASK_ASSIGNOR_CLASS_CONFIG, customTaskAssignor.getName());
+        }
         return configurationMap;
     }
 
@@ -337,20 +343,25 @@ public class StreamsPartitionAssignorTest {
         return mockInternalTopicManager;
     }
 
-    @Parameterized.Parameters(name = "task assignor = {0}, rack aware assignor = {1}")
+    @Parameterized.Parameters(name = "internal task assignor = {0}, rack aware assignor = {1}, custom task assignor = {2}")
     public static Collection<Object[]> parameters() {
         return asList(
-            new Object[]{HighAvailabilityTaskAssignor.class, true},
-            new Object[]{HighAvailabilityTaskAssignor.class, false},
-            new Object[]{StickyTaskAssignor.class, true},
-            new Object[]{StickyTaskAssignor.class, false},
-            new Object[]{FallbackPriorTaskAssignor.class, true},
-            new Object[]{FallbackPriorTaskAssignor.class, false}
+            new Object[]{HighAvailabilityTaskAssignor.class, true, null},
+            new Object[]{HighAvailabilityTaskAssignor.class, false, null},
+            new Object[]{StickyTaskAssignor.class, true, null},
+            new Object[]{StickyTaskAssignor.class, false, null},
+            new Object[]{FallbackPriorTaskAssignor.class, true, null},
+            new Object[]{FallbackPriorTaskAssignor.class, false, null},
+            new Object[]{HighAvailabilityTaskAssignor.class, false, org.apache.kafka.streams.processor.assignment.assignors.StickyTaskAssignor.class},
+            new Object[]{null, false, org.apache.kafka.streams.processor.assignment.assignors.StickyTaskAssignor.class}
         );
     }
 
-    public StreamsPartitionAssignorTest(final Class<? extends TaskAssignor> taskAssignor, final boolean enableRackAwareAssignor) {
-        this.taskAssignor = taskAssignor;
+    public StreamsPartitionAssignorTest(final Class<? extends TaskAssignor> internalTaskAssignor,
+                                        final boolean enableRackAwareAssignor,
+                                        final Class<? extends org.apache.kafka.streams.processor.assignment.TaskAssignor> customTaskAssignor) {
+        this.internalTaskAssignor = internalTaskAssignor;
+        this.customTaskAssignor = customTaskAssignor;
         rackAwareAssignorStrategy = enableRackAwareAssignor ? StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC : StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE;
         adminClient = createMockAdminClientForAssignor(EMPTY_CHANGELOG_END_OFFSETS);
         topologyMetadata = new TopologyMetadata(builder, new StreamsConfig(configProps()));

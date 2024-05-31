@@ -226,8 +226,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private RebalanceProtocol rebalanceProtocol;
     private AssignmentListener assignmentListener;
 
-    private Supplier<Optional<org.apache.kafka.streams.processor.assignment.TaskAssignor>> userTaskAssignorSupplier;
-    private Supplier<TaskAssignor> taskAssignorSupplier;
+    private Supplier<Optional<org.apache.kafka.streams.processor.assignment.TaskAssignor>>
+        customTaskAssignorSupplier;
+    private Supplier<TaskAssignor> internalTaskAssignorSupplier;
     private byte uniqueField;
     private Map<String, String> clientTags;
 
@@ -262,8 +263,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         internalTopicManager = assignorConfiguration.internalTopicManager();
         copartitionedTopicsEnforcer = assignorConfiguration.copartitionedTopicsEnforcer();
         rebalanceProtocol = assignorConfiguration.rebalanceProtocol();
-        userTaskAssignorSupplier = assignorConfiguration::userTaskAssignor;
-        taskAssignorSupplier = assignorConfiguration::taskAssignor;
+        customTaskAssignorSupplier = assignorConfiguration::customTaskAssignor;
+        internalTaskAssignorSupplier = assignorConfiguration::taskAssignor;
         assignmentListener = assignorConfiguration.assignmentListener();
         uniqueField = 0;
         clientTags = referenceContainer.clientTags;
@@ -518,10 +519,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             changelogTopicsByGroup.put(entry.getKey(), changelogTopics);
         }
 
+        final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask = new HashMap<>();
         final Map<TaskId, Set<TopicPartition>> sourcePartitionsForTask =
-            partitionGrouper.partitionGroups(sourceTopicsByGroup, cluster);
-        final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask =
-            partitionGrouper.partitionGroups(changelogTopicsByGroup, cluster);
+            partitionGrouper.partitionGroups(sourceTopicsByGroup, changelogTopicsByGroup,
+                changelogPartitionsForTask, cluster);
 
         if (!sourcePartitionsForTask.keySet().equals(changelogPartitionsForTask.keySet())) {
             log.error("Partition grouper returned {} tasks for source topics but {} tasks for changelog topics",
@@ -799,7 +800,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                   numStandbyReplicas(), clientStates);
 
         final Optional<org.apache.kafka.streams.processor.assignment.TaskAssignor> userTaskAssignor =
-            userTaskAssignorSupplier.get();
+            customTaskAssignorSupplier.get();
         final UserTaskAssignmentListener userTaskAssignmentListener;
         if (userTaskAssignor.isPresent()) {
             final ApplicationState applicationState = buildApplicationState(
@@ -864,7 +865,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     }
 
     private TaskAssignor createTaskAssignor(final boolean lagComputationSuccessful) {
-        final TaskAssignor taskAssignor = taskAssignorSupplier.get();
+        final TaskAssignor taskAssignor = internalTaskAssignorSupplier.get();
         if (taskAssignor instanceof StickyTaskAssignor) {
             // special case: to preserve pre-existing behavior, we invoke the StickyTaskAssignor
             // whether or not lag computation failed.
@@ -1519,8 +1520,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 topicToPartitionInfo = getTopicPartitionInfo(partitionsByHost);
                 encodedNextScheduledRebalanceMs = Long.MAX_VALUE;
                 break;
-            case 6:
-                validateActiveTaskEncoding(partitions, info, logPrefix);
+            case 6: validateActiveTaskEncoding(partitions, info, logPrefix);
 
                 activeTasks = getActiveTasks(partitions, info);
                 partitionsByHost = info.partitionsByHost();
@@ -1594,7 +1594,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final Map<TaskId, ProcessId> activeTasksInOutput = new HashMap<>();
         final Map<TaskId, ProcessId> standbyTasksInOutput = new HashMap<>();
         for (final KafkaStreamsAssignment assignment : assignments) {
-            final Set<TaskId> tasksForAssignment = new HashSet<>();
             for (final KafkaStreamsAssignment.AssignedTask task : assignment.tasks().values()) {
                 if (activeTasksInOutput.containsKey(task.id()) && task.type() == KafkaStreamsAssignment.AssignedTask.Type.ACTIVE) {
                     log.error("Assignment is invalid: active task {} was assigned to multiple KafkaStreams clients: {} and {}",
@@ -1602,13 +1601,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                     return AssignmentError.ACTIVE_TASK_ASSIGNED_MULTIPLE_TIMES;
                 }
 
-                if (tasksForAssignment.contains(task.id())) {
-                    log.error("Assignment is invalid: both an active and standby copy of task {} were assigned to KafkaStreams client {}",
-                        task.id(), assignment.processId().id());
-                    return AssignmentError.ACTIVE_AND_STANDBY_TASK_ASSIGNED_TO_SAME_KAFKASTREAMS;
-                }
-
-                tasksForAssignment.add(task.id());
                 if (task.type() == KafkaStreamsAssignment.AssignedTask.Type.ACTIVE) {
                     activeTasksInOutput.put(task.id(), assignment.processId());
                 } else {
