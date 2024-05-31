@@ -41,6 +41,7 @@ import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.assignment.TaskAssignmentUtils;
 import org.apache.kafka.streams.processor.assignment.TaskAssignor;
 import org.apache.kafka.streams.processor.assignment.TaskInfo;
+import org.apache.kafka.streams.processor.assignment.TaskTopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -177,6 +178,7 @@ public class StickyTaskAssignor implements TaskAssignor {
                                       final AssignmentState assignmentState) {
         final Set<TaskInfo> statefulTasks = applicationState.allTasks().values().stream()
             .filter(TaskInfo::isStateful)
+            .filter(taskInfo -> taskInfo.topicPartitions().stream().anyMatch(TaskTopicPartition::isChangelog))
             .collect(Collectors.toSet());
         final int numStandbyReplicas = applicationState.assignmentConfigs().numStandbyReplicas();
         for (final TaskInfo task : statefulTasks) {

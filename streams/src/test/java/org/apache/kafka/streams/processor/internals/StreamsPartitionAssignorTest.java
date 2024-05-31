@@ -351,9 +351,9 @@ public class StreamsPartitionAssignorTest {
             new Object[]{StickyTaskAssignor.class, true, null},
             new Object[]{StickyTaskAssignor.class, false, null},
             new Object[]{FallbackPriorTaskAssignor.class, true, null},
-            new Object[]{FallbackPriorTaskAssignor.class, false, null}
-            // new Object[]{HighAvailabilityTaskAssignor.class, false, org.apache.kafka.streams.processor.assignment.assignors.StickyTaskAssignor.class},
-            // new Object[]{null, false, org.apache.kafka.streams.processor.assignment.assignors.StickyTaskAssignor.class}
+            new Object[]{FallbackPriorTaskAssignor.class, false, null},
+            new Object[]{null, false, org.apache.kafka.streams.processor.assignment.assignors.StickyTaskAssignor.class},
+            new Object[]{HighAvailabilityTaskAssignor.class, false, org.apache.kafka.streams.processor.assignment.assignors.StickyTaskAssignor.class}
         );
     }
 

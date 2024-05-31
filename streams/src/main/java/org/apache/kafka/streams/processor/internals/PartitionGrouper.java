@@ -90,10 +90,7 @@ public class PartitionGrouper {
                 }
 
                 for (final String topic : changelogTopicGroup) {
-                    final List<PartitionInfo> partitions = metadata.partitionsForTopic(topic);
-                    if (partitionId < partitions.size()) {
-                        changelogPartitionGroup.add(new TopicPartition(topic, partitionId));
-                    }
+                    changelogPartitionGroup.add(new TopicPartition(topic, partitionId));
                 }
 
                 final TaskId taskId = new TaskId(subtopology.nodeGroupId, partitionId, subtopology.namedTopology);
