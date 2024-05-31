@@ -635,6 +635,29 @@ public abstract class AbstractModernGroup<T extends ModernGroupMember> implement
     }
 
     /**
+     * Updates the subscription count with a set of members removed.
+     *
+     * @param removedMembers        The set of removed members.
+     *
+     * @return Copy of the map of topics to the count of number of subscribers.
+     */
+    public Map<String, Integer> computeSubscribedTopicNames(
+        Set<? extends ModernGroupMember> removedMembers
+    ) {
+        Map<String, Integer> subscribedTopicNames = new HashMap<>(this.subscribedTopicNames);
+        if (removedMembers != null) {
+            removedMembers.forEach(removedMember ->
+                maybeUpdateSubscribedTopicNames(
+                    subscribedTopicNames,
+                    removedMember,
+                    null
+                )
+            );
+        }
+        return subscribedTopicNames;
+    }
+
+    /**
      * Compute the subscription type of the consumer group.
      *
      * @param subscribedTopicNames      A map of topic names to the count of members subscribed to each topic.

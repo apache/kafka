@@ -32,6 +32,7 @@ import org.apache.kafka.common.record.MemoryRecords.RecordFilter
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
+import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.ShutdownableThread
 import org.apache.kafka.storage.internals.log.{AbortedTxn, CleanerConfig, LastRecord, LogDirFailureChannel, LogSegment, LogSegmentOffsetOverflowException, OffsetMap, SkimpyOffsetMap, TransactionIndex}
@@ -499,7 +500,7 @@ object LogCleaner {
     CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP,
     CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_LOAD_FACTOR_PROP,
     CleanerConfig.LOG_CLEANER_IO_BUFFER_SIZE_PROP,
-    KafkaConfig.MessageMaxBytesProp,
+    ServerConfigs.MESSAGE_MAX_BYTES_CONFIG,
     CleanerConfig.LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP,
     CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP
   )

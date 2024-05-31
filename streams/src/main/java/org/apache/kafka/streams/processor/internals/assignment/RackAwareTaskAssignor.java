@@ -77,7 +77,7 @@ public class RackAwareTaskAssignor {
 
     // This is number is picked based on testing. Usually the optimization for standby assignment
     // stops after 3 rounds
-    private static final int STANDBY_OPTIMIZER_MAX_ITERATION = 4;
+    public static final int STANDBY_OPTIMIZER_MAX_ITERATION = 4;
 
     private final Cluster fullMetadata;
     private final Map<TaskId, Set<TopicPartition>> partitionsForTask;
@@ -467,12 +467,12 @@ public class RackAwareTaskAssignor {
                         .sorted()
                         .collect(Collectors.toList());
 
-                    final Map<TaskId, UUID> taskClientMap = new HashMap<>();
                     final List<UUID> clients = Stream.of(clientList.get(i), clientList.get(j))
                         .sorted().collect(
                             Collectors.toList());
-                    final Map<UUID, Integer> originalAssignedTaskNumber = new HashMap<>();
 
+                    final Map<TaskId, UUID> taskClientMap = new HashMap<>();
+                    final Map<UUID, Integer> originalAssignedTaskNumber = new HashMap<>();
                     final Graph<Integer> graph = graphConstructor.constructTaskGraph(
                         clients,
                         taskIdList,

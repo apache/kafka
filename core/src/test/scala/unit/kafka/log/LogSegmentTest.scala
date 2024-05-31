@@ -632,6 +632,17 @@ class LogSegmentTest {
     Utils.delete(tempDir)
   }
 
+  @Test
+  def testGetFirstBatchTimestamp(): Unit = {
+    val segment = createSegment(1)
+    assertEquals(Long.MaxValue, segment.getFirstBatchTimestamp)
+
+    segment.append(1, 1000L, 1, MemoryRecords.withRecords(1, Compression.NONE, new SimpleRecord("one".getBytes)))
+    assertEquals(1000L, segment.getFirstBatchTimestamp)
+
+    segment.close()
+  }
+
   private def newProducerStateManager(): ProducerStateManager = {
     new ProducerStateManager(
       topicPartition,
