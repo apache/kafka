@@ -501,7 +501,10 @@ public class AsyncKafkaConsumerTest {
         consumer.poll(Duration.ZERO);
         clearInvocations(subscriptions);
         verify(subscriptions, never()).matchesSubscribedPattern(topicName);
-    }
+        when(metadata.updateVersion()).thenReturn(2);
+        when(subscriptions.hasPatternSubscription()).thenReturn(true);
+        consumer.poll(Duration.ZERO);
+        verify(subscriptions).matchesSubscribedPattern(topicName);
 
     @Test
     public void testClearWakeupTriggerAfterPoll() {
