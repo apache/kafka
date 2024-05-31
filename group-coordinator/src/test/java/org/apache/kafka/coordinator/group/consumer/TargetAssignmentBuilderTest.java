@@ -44,7 +44,7 @@ import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTar
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTargetAssignmentRecord;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpersTest.mkMapOfPartitionRacks;
 import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOGENEOUS;
-import static org.apache.kafka.coordinator.group.consumer.TargetAssignmentBuilder.createMemberSubscriptionSpec;
+import static org.apache.kafka.coordinator.group.consumer.TargetAssignmentBuilder.createMemberSubscriptionSpecImpl;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -164,21 +164,18 @@ public class TargetAssignmentBuilderTest {
         public TargetAssignmentBuilder.TargetAssignmentResult build() {
             TopicsImage topicsImage = topicsImageBuilder.build().topics();
             // Prepare expected member specs.
-            Map<String, MemberSubscriptionSpec> memberSubscriptions = new HashMap<>();
+            Map<String, MemberSubscriptionSpecImpl> memberSubscriptions = new HashMap<>();
             Map<String, Map<Uuid, Set<Integer>>> targetAssignment = new HashMap<>(members.size());
 
             // All the existing members are prepared.
             members.forEach((memberId, member) -> {
                 Assignment assignment = this.targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
 
-                memberSubscriptions.put(memberId, createMemberSubscriptionSpec(
+                memberSubscriptions.put(memberId, createMemberSubscriptionSpecImpl(
                     member,
-                    topicsImage
+                    topicsImage,
+                    assignment
                 ));
-                targetAssignment.put(
-                    memberId,
-                    assignment.partitions()
-                );
             });
 
             // All the updated are added and all the deleted
@@ -197,14 +194,11 @@ public class TargetAssignmentBuilderTest {
                         }
                     }
 
-                    memberSubscriptions.put(memberId, createMemberSubscriptionSpec(
+                    memberSubscriptions.put(memberId, createMemberSubscriptionSpecImpl(
                         updatedMemberOrNull,
-                        topicsImage
+                        topicsImage,
+                        assignment
                     ));
-                    targetAssignment.put(
-                        memberId,
-                        assignment.partitions()
-                    );
                 }
             });
 
@@ -219,13 +213,12 @@ public class TargetAssignmentBuilderTest {
 
             // Prepare the member assignments per topic partition.
             Map<Uuid, Map<Integer, String>> invertedTargetAssignment = AssignmentTestUtil
-                .invertedTargetAssignment(targetAssignment);
+                .invertedTargetAssignment(memberSubscriptions);
 
             // Prepare the expected assignment spec.
             GroupSpecImpl groupSpec = new GroupSpecImpl(
                 memberSubscriptions,
                 subscriptionType,
-                targetAssignment,
                 invertedTargetAssignment
             );
 
@@ -266,7 +259,7 @@ public class TargetAssignmentBuilderTest {
     }
 
     @Test
-    public void testCreateMemberSubscriptionSpec() {
+    public void testCreateMemberSubscriptionSpecImpl() {
         Uuid fooTopicId = Uuid.randomUuid();
         Uuid barTopicId = Uuid.randomUuid();
         TopicsImage topicsImage = new MetadataImageBuilder()
@@ -281,14 +274,16 @@ public class TargetAssignmentBuilderTest {
             .setInstanceId("instanceId")
             .build();
 
-        MemberSubscriptionSpec subscriptionSpec = createMemberSubscriptionSpec(
+        MemberSubscriptionSpec subscriptionSpec = createMemberSubscriptionSpecImpl(
             member,
-            topicsImage
+            topicsImage,
+            new Assignment(Collections.emptyMap())
         );
 
         assertEquals(new MemberSubscriptionSpecImpl(
             Optional.of("rackId"),
-            new TopicIds(member.subscribedTopicNames(), topicsImage)
+            new TopicIds(member.subscribedTopicNames(), topicsImage),
+            new Assignment(Collections.emptyMap())
         ), subscriptionSpec);
     }
 

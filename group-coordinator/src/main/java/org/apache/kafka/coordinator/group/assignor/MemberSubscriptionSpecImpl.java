@@ -17,7 +17,9 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.consumer.Assignment;
 
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -28,6 +30,7 @@ import java.util.Set;
 public class MemberSubscriptionSpecImpl implements MemberSubscriptionSpec {
     private final Optional<String> rackId;
     private final Set<Uuid> subscribedTopicIds;
+    private final Assignment memberAssignment;
 
     /**
      * Constructs a new {@code MemberSubscriptionSpecImpl}.
@@ -37,10 +40,12 @@ public class MemberSubscriptionSpecImpl implements MemberSubscriptionSpec {
      */
     public MemberSubscriptionSpecImpl(
         Optional<String> rackId,
-        Set<Uuid> subscribedTopicIds
+        Set<Uuid> subscribedTopicIds,
+        Assignment memberAssignment
     ) {
         this.rackId = Objects.requireNonNull(rackId);
         this.subscribedTopicIds = Objects.requireNonNull(subscribedTopicIds);
+        this.memberAssignment = Objects.requireNonNull(memberAssignment);
     }
 
     @Override
@@ -51,6 +56,10 @@ public class MemberSubscriptionSpecImpl implements MemberSubscriptionSpec {
     @Override
     public Set<Uuid> subscribedTopicIds() {
         return subscribedTopicIds;
+    }
+
+    public Map<Uuid, Set<Integer>> memberAssignment() {
+        return memberAssignment.partitions();
     }
 
     @Override

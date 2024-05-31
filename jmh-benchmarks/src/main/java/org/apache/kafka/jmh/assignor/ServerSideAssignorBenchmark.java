@@ -20,12 +20,12 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
-import org.apache.kafka.coordinator.group.assignor.MemberSubscriptionSpec;
 import org.apache.kafka.coordinator.group.assignor.MemberSubscriptionSpecImpl;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
+import org.apache.kafka.coordinator.group.consumer.Assignment;
 import org.apache.kafka.coordinator.group.consumer.TopicIds;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
 import org.apache.kafka.coordinator.group.consumer.SubscribedTopicMetadata;
@@ -177,7 +177,7 @@ public class ServerSideAssignorBenchmark {
     }
 
     private void createGroupSpec() {
-        Map<String, MemberSubscriptionSpec> members = new HashMap<>();
+        Map<String, MemberSubscriptionSpecImpl> members = new HashMap<>();
 
         // In the rebalance case, we will add the last member as a trigger.
         // This is done to keep the total members count consistent with the input.
@@ -219,7 +219,6 @@ public class ServerSideAssignorBenchmark {
         this.groupSpec = new GroupSpecImpl(
             members,
             subscriptionType,
-            Collections.emptyMap(),
             Collections.emptyMap()
         );
     }
@@ -229,7 +228,7 @@ public class ServerSideAssignorBenchmark {
     }
 
     private void addMemberSpec(
-        Map<String, MemberSubscriptionSpec> members,
+        Map<String, MemberSubscriptionSpecImpl> members,
         int memberIndex,
         Set<Uuid> subscribedTopicIds
     ) {
@@ -238,7 +237,8 @@ public class ServerSideAssignorBenchmark {
 
         members.put(memberId, new MemberSubscriptionSpecImpl(
             rackId,
-            subscribedTopicIds
+            subscribedTopicIds,
+            Assignment.EMPTY
         ));
     }
 
@@ -259,23 +259,24 @@ public class ServerSideAssignorBenchmark {
         Map<String, MemberAssignment> members = initialAssignment.members();
 
         Map<Uuid, Map<Integer, String>> invertedTargetAssignment = AssignorBenchmarkUtils.computeInvertedTargetAssignment(initialAssignment);
-        Map<String, Map<Uuid, Set<Integer>>> assignedPartitions = new HashMap<>();
+        Map<Uuid, Set<Integer>> targetAssignment;
 
-        Map<String, MemberSubscriptionSpec> updatedMemberSpec = new HashMap<>();
+        Map<String, MemberSubscriptionSpecImpl> updatedMemberSpec = new HashMap<>();
 
-        groupSpec.memberIds().forEach(memberId -> {
+        for (String memberId : groupSpec.memberIds()) {
             MemberAssignment memberAssignment = members.getOrDefault(
                 memberId,
                 new MemberAssignment(Collections.emptyMap())
             );
 
-            assignedPartitions.put(memberId, memberAssignment.targetPartitions());
+            targetAssignment = memberAssignment.targetPartitions();
 
             updatedMemberSpec.put(memberId, new MemberSubscriptionSpecImpl(
                 groupSpec.memberSubscription(memberId).rackId(),
-                groupSpec.memberSubscription(memberId).subscribedTopicIds()
+                groupSpec.memberSubscription(memberId).subscribedTopicIds(),
+                new Assignment(targetAssignment)
             ));
-        });
+        }
 
         Set<Uuid> subscribedTopicIdsForNewMember;
         if (subscriptionType == HETEROGENEOUS) {
@@ -287,13 +288,13 @@ public class ServerSideAssignorBenchmark {
         Optional<String> rackId = rackId(memberCount - 1);
         updatedMemberSpec.put("newMember", new MemberSubscriptionSpecImpl(
             rackId,
-            subscribedTopicIdsForNewMember
+            subscribedTopicIdsForNewMember,
+            Assignment.EMPTY
         ));
 
         groupSpec = new GroupSpecImpl(
             updatedMemberSpec,
             subscriptionType,
-            assignedPartitions,
             invertedTargetAssignment);
     }
 

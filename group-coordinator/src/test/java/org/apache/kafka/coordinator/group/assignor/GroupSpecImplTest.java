@@ -17,17 +17,17 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.consumer.Assignment;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -35,31 +35,29 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 public class GroupSpecImplTest {
-    private Map<String, MemberSubscriptionSpec> members;
+    private Map<String, MemberSubscriptionSpecImpl> members;
     private SubscriptionType subscriptionType;
-    private Map<String, Map<Uuid, Set<Integer>>> targetAssignment;
     private Map<Uuid, Map<Integer, String>> invertedTargetAssignment;
     private GroupSpecImpl groupSpec;
     private Uuid topicId;
-    private String testMember = "test-member";
+    private final String testMember = "test-member";
 
     @BeforeEach
     void setUp() {
         members = new HashMap<>();
         subscriptionType = SubscriptionType.HOMOGENEOUS;
-        targetAssignment = new HashMap<>();
         invertedTargetAssignment = new HashMap<>();
         topicId = Uuid.randomUuid();
 
         members.put(testMember,  new MemberSubscriptionSpecImpl(
             Optional.empty(),
-            new HashSet<>(Collections.singletonList(topicId))
+            mkSet(topicId),
+            Assignment.EMPTY
         ));
 
         groupSpec = new GroupSpecImpl(
             members,
             subscriptionType,
-            targetAssignment,
             invertedTargetAssignment
         );
     }
@@ -96,9 +94,13 @@ public class GroupSpecImplTest {
         Map<Uuid, Set<Integer>> topicPartitions = new HashMap<>();
         topicPartitions.put(
             topicId,
-            new HashSet<>(Arrays.asList(0, 1))
+            mkSet(0, 1)
         );
-        targetAssignment.put("test-member", topicPartitions);
+        members.put(testMember, new MemberSubscriptionSpecImpl(
+            Optional.empty(),
+            mkSet(topicId),
+            new Assignment(topicPartitions)
+        ));
 
         assertEquals(topicPartitions, groupSpec.memberAssignment(testMember));
         assertEquals(Collections.emptyMap(), groupSpec.memberAssignment("unknown-member"));

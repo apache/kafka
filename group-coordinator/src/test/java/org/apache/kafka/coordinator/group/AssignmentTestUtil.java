@@ -18,10 +18,10 @@ package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.assignor.MemberSubscriptionSpecImpl;
 
 import java.util.AbstractMap;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -87,17 +87,17 @@ public class AssignmentTestUtil {
     /**
      * Generate a reverse look up map of partition to member target assignments from the given metadata.
      *
-     * @param assignedPartitions              Partition assignments per member.
+     * @param members       The member subscription specs.
      * @return Map of topic partition to member assignments.
      */
     public static Map<Uuid, Map<Integer, String>> invertedTargetAssignment(
-        Map<String, Map<Uuid, Set<Integer>>> assignedPartitions
+        Map<String, MemberSubscriptionSpecImpl> members
     ) {
         Map<Uuid, Map<Integer, String>> invertedTargetAssignment = new HashMap<>();
-        for (String memberId : assignedPartitions.keySet()) {
-            Map<Uuid, Set<Integer>> topicsAndPartitions = assignedPartitions.getOrDefault(memberId, Collections.emptyMap());
+        for (String memberId : members.keySet()) {
+            Map<Uuid, Set<Integer>> memberAssignment = members.get(memberId).memberAssignment();
 
-            for (Map.Entry<Uuid, Set<Integer>> topicEntry : topicsAndPartitions.entrySet()) {
+            for (Map.Entry<Uuid, Set<Integer>> topicEntry : memberAssignment.entrySet()) {
                 Uuid topicId = topicEntry.getKey();
                 Set<Integer> partitions = topicEntry.getValue();
 

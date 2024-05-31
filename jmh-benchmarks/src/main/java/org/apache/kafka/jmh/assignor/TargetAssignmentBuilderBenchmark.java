@@ -20,7 +20,6 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
-import org.apache.kafka.coordinator.group.assignor.MemberSubscriptionSpec;
 import org.apache.kafka.coordinator.group.assignor.MemberSubscriptionSpecImpl;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.consumer.TopicIds;
@@ -195,20 +194,20 @@ public class TargetAssignmentBuilderBenchmark {
     }
 
     private void createAssignmentSpec() {
-        Map<String, MemberSubscriptionSpec> members = new HashMap<>();
+        Map<String, MemberSubscriptionSpecImpl> members = new HashMap<>();
 
         for (int i = 0; i < memberCount - 1; i++) {
             String memberId = "member" + i;
 
             members.put(memberId, new MemberSubscriptionSpecImpl(
                 Optional.empty(),
-                new TopicIds(new HashSet<>(allTopicNames), topicsImage)
+                new TopicIds(new HashSet<>(allTopicNames), topicsImage),
+                Assignment.EMPTY
             ));
         }
         groupSpec = new GroupSpecImpl(
             members,
             HOMOGENEOUS,
-            Collections.emptyMap(),
             Collections.emptyMap()
         );
     }

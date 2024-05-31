@@ -19,7 +19,6 @@ package org.apache.kafka.coordinator.group.consumer;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.assignor.GroupSpecImpl;
-import org.apache.kafka.coordinator.group.assignor.MemberSubscriptionSpec;
 import org.apache.kafka.coordinator.group.assignor.MemberSubscriptionSpecImpl;
 import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
@@ -35,7 +34,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTargetAssignmentEpochRecord;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTargetAssignmentRecord;
@@ -295,21 +293,17 @@ public class TargetAssignmentBuilder {
      * @throws PartitionAssignorException if the target assignment cannot be computed.
      */
     public TargetAssignmentResult build() throws PartitionAssignorException {
-        Map<String, MemberSubscriptionSpec> memberSpecs = new HashMap<>(members.size());
-        Map<String, Map<Uuid, Set<Integer>>> targetAssignment = new HashMap<>(members.size());
+        Map<String, MemberSubscriptionSpecImpl> memberSpecs = new HashMap<>(members.size());
 
         // Prepare the member spec for all members.
         members.forEach((memberId, member) -> {
-            Assignment assignment = this.targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
+            Assignment assignment = targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
 
-            memberSpecs.put(memberId, createMemberSubscriptionSpec(
+            memberSpecs.put(memberId, createMemberSubscriptionSpecImpl(
                 member,
-                topicsImage
+                topicsImage,
+                assignment
             ));
-            targetAssignment.put(
-                memberId,
-                assignment.partitions()
-            );
         });
 
         // Update the member spec if updated or deleted members.
@@ -317,24 +311,21 @@ public class TargetAssignmentBuilder {
             if (updatedMemberOrNull == null) {
                 memberSpecs.remove(memberId);
             } else {
-                Assignment assignment = this.targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
+                Assignment assignment = targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
 
                 // A new static member joins and needs to replace an existing departed one.
                 if (updatedMemberOrNull.instanceId() != null) {
                     String previousMemberId = staticMembers.get(updatedMemberOrNull.instanceId());
                     if (previousMemberId != null && !previousMemberId.equals(memberId)) {
-                        assignment = this.targetAssignment.getOrDefault(previousMemberId, Assignment.EMPTY);
+                        assignment = targetAssignment.getOrDefault(previousMemberId, Assignment.EMPTY);
                     }
                 }
 
-                memberSpecs.put(memberId, createMemberSubscriptionSpec(
+                memberSpecs.put(memberId, createMemberSubscriptionSpecImpl(
                     updatedMemberOrNull,
-                    topicsImage
+                    topicsImage,
+                    assignment
                 ));
-                targetAssignment.put(
-                    memberId,
-                    assignment.partitions()
-                );
             }
         });
 
@@ -352,7 +343,6 @@ public class TargetAssignmentBuilder {
             new GroupSpecImpl(
                 Collections.unmodifiableMap(memberSpecs),
                 subscriptionType,
-                targetAssignment,
                 invertedTargetAssignment
             ),
             new SubscribedTopicMetadata(topicMetadataMap)
@@ -408,13 +398,15 @@ public class TargetAssignmentBuilder {
     }
 
     // private for testing
-    static MemberSubscriptionSpec createMemberSubscriptionSpec(
+    static MemberSubscriptionSpecImpl createMemberSubscriptionSpecImpl(
         ConsumerGroupMember member,
-        TopicsImage topicsImage
+        TopicsImage topicsImage,
+        Assignment memberAssignment
     ) {
         return new MemberSubscriptionSpecImpl(
             Optional.ofNullable(member.rackId()),
-            new TopicIds(member.subscribedTopicNames(), topicsImage)
+            new TopicIds(member.subscribedTopicNames(), topicsImage),
+            memberAssignment
         );
     }
 }

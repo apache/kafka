@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.consumer.Assignment;
 import org.apache.kafka.coordinator.group.consumer.SubscribedTopicMetadata;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
 import org.junit.jupiter.api.Test;
@@ -66,20 +67,21 @@ public class GeneralUniformAssignmentBuilderTest {
             )
         );
 
-        Map<String, MemberSubscriptionSpec> members = new TreeMap<>();
+        Map<String, MemberSubscriptionSpecImpl> members = new TreeMap<>();
         members.put(memberA, new MemberSubscriptionSpecImpl(
             Optional.empty(),
-            Collections.emptySet()
+            Collections.emptySet(),
+            Assignment.EMPTY
         ));
         members.put(memberB, new MemberSubscriptionSpecImpl(
             Optional.empty(),
-            Collections.emptySet()
+            Collections.emptySet(),
+            Assignment.EMPTY
         ));
 
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
-            Collections.emptyMap(),
             Collections.emptyMap()
         );
 
@@ -105,20 +107,21 @@ public class GeneralUniformAssignmentBuilderTest {
             )
         );
 
-        Map<String, MemberSubscriptionSpec> members = new TreeMap<>();
+        Map<String, MemberSubscriptionSpecImpl> members = new TreeMap<>();
         members.put(memberA, new MemberSubscriptionSpecImpl(
             Optional.empty(),
-            Collections.singleton(topic3Uuid)
+            Collections.singleton(topic3Uuid),
+            Assignment.EMPTY
         ));
         members.put(memberB, new MemberSubscriptionSpecImpl(
             Optional.empty(),
-            Collections.singleton(topic2Uuid)
+            Collections.singleton(topic2Uuid),
+            Assignment.EMPTY
         ));
 
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
-            Collections.emptyMap(),
             Collections.emptyMap()
         );
 
@@ -142,25 +145,23 @@ public class GeneralUniformAssignmentBuilderTest {
             mkMapOfPartitionRacks(6)
         ));
 
-        Map<String, MemberSubscriptionSpec> members = new TreeMap<>();
-        Map<String, Map<Uuid, Set<Integer>>> targetAssignment = new HashMap<>();
+        Map<String, MemberSubscriptionSpecImpl> members = new TreeMap<>();
 
-        targetAssignment.put(memberA, Collections.emptyMap());
         members.put(memberA, new MemberSubscriptionSpecImpl(
             Optional.empty(),
-            mkSet(topic1Uuid, topic3Uuid)
+            mkSet(topic1Uuid, topic3Uuid),
+            Assignment.EMPTY
         ));
 
-        targetAssignment.put(memberB, Collections.emptyMap());
         members.put(memberB, new MemberSubscriptionSpecImpl(
             Optional.empty(),
-            Collections.singleton(topic3Uuid)
+            Collections.singleton(topic3Uuid),
+            Assignment.EMPTY
         ));
 
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
-            targetAssignment,
             Collections.emptyMap()
         );
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
@@ -198,31 +199,29 @@ public class GeneralUniformAssignmentBuilderTest {
             mkMapOfPartitionRacks(2)
         ));
 
-        Map<String, MemberSubscriptionSpec> members = new TreeMap<>();
-        Map<String, Map<Uuid, Set<Integer>>> targetAssignment = new HashMap<>();
+        Map<String, MemberSubscriptionSpecImpl> members = new TreeMap<>();
 
-        targetAssignment.put(memberA, Collections.emptyMap());
         members.put(memberA, new MemberSubscriptionSpecImpl(
             Optional.empty(),
-            Collections.singleton(topic3Uuid)
+            Collections.singleton(topic3Uuid),
+            Assignment.EMPTY
         ));
 
-        targetAssignment.put(memberB, Collections.emptyMap());
         members.put(memberB, new MemberSubscriptionSpecImpl(
             Optional.empty(),
-            Collections.singleton(topic3Uuid)
+            Collections.singleton(topic3Uuid),
+            Assignment.EMPTY
         ));
 
-        targetAssignment.put(memberC, Collections.emptyMap());
         members.put(memberC, new MemberSubscriptionSpecImpl(
             Optional.empty(),
-            Collections.singleton(topic1Uuid)
+            Collections.singleton(topic1Uuid),
+            Assignment.EMPTY
         ));
 
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
-            targetAssignment,
             Collections.emptyMap()
         );
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
@@ -269,41 +268,43 @@ public class GeneralUniformAssignmentBuilderTest {
             mkMapOfPartitionRacks(4)
         ));
 
-        Map<String, MemberSubscriptionSpec> members = new TreeMap<>();
-        Map<String, Map<Uuid, Set<Integer>>> targetAssignment = new HashMap<>();
+        Map<String, MemberSubscriptionSpecImpl> members = new TreeMap<>();
+        Map<Uuid, Set<Integer>> targetAssignment;
 
-        targetAssignment.put(memberA, mkAssignment(
+        targetAssignment = mkAssignment(
             mkTopicAssignment(topic1Uuid, 0, 1, 2)
-        ));
+        );
         members.put(memberA, new MemberSubscriptionSpecImpl(
             Optional.empty(),
-            Collections.singleton(topic1Uuid)
+            Collections.singleton(topic1Uuid),
+            new Assignment(targetAssignment)
         ));
 
-        targetAssignment.put(memberB, mkAssignment(
+        targetAssignment = mkAssignment(
             mkTopicAssignment(topic1Uuid, 3),
             mkTopicAssignment(topic2Uuid, 0)
-        ));
+        );
         members.put(memberB, new MemberSubscriptionSpecImpl(
             Optional.empty(),
-            mkSet(topic1Uuid, topic2Uuid)
+            mkSet(topic1Uuid, topic2Uuid),
+            new Assignment(targetAssignment)
         ));
 
-        targetAssignment.put(memberC, mkAssignment(
+        targetAssignment = mkAssignment(
             mkTopicAssignment(topic1Uuid, 4, 5),
             mkTopicAssignment(topic2Uuid, 1, 2, 3),
             mkTopicAssignment(topic3Uuid, 0, 1, 2, 3)
-        ));
+        );
         members.put(memberC, new MemberSubscriptionSpecImpl(
             Optional.empty(),
-            mkSet(topic1Uuid, topic2Uuid, topic3Uuid)
+            mkSet(topic1Uuid, topic2Uuid, topic3Uuid),
+            new Assignment(targetAssignment)
         ));
 
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
-            targetAssignment,
-            invertedTargetAssignment(targetAssignment)
+            invertedTargetAssignment(members)
         );
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
@@ -356,32 +357,33 @@ public class GeneralUniformAssignmentBuilderTest {
             mkMapOfPartitionRacks(3)
         ));
 
-        Map<String, MemberSubscriptionSpec> members = new TreeMap<>();
-        Map<String, Map<Uuid, Set<Integer>>> targetAssignment = new HashMap<>();
+        Map<String, MemberSubscriptionSpecImpl> members = new TreeMap<>();
+        Map<Uuid, Set<Integer>> targetAssignment;
 
-        targetAssignment.put(memberA, mkAssignment(
+        targetAssignment = mkAssignment(
             mkTopicAssignment(topic1Uuid, 0, 1, 2, 3),
             mkTopicAssignment(topic3Uuid, 0, 1)
-        ));
+        );
         members.put(memberA, new MemberSubscriptionSpecImpl(
             Optional.empty(),
-            mkSet(topic1Uuid, topic3Uuid)
+            mkSet(topic1Uuid, topic3Uuid),
+            new Assignment(targetAssignment)
         ));
 
-        targetAssignment.put(memberB, mkAssignment(
+        targetAssignment = mkAssignment(
             mkTopicAssignment(topic2Uuid, 0, 1, 2),
             mkTopicAssignment(topic4Uuid, 0, 1, 2)
-        ));
+        );
         members.put(memberB, new MemberSubscriptionSpecImpl(
             Optional.empty(),
-            mkSet(topic1Uuid, topic2Uuid, topic3Uuid, topic4Uuid)
+            mkSet(topic1Uuid, topic2Uuid, topic3Uuid, topic4Uuid),
+            new Assignment(targetAssignment)
         ));
 
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
-            targetAssignment,
-            invertedTargetAssignment(targetAssignment)
+            invertedTargetAssignment(members)
         );
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
@@ -420,38 +422,40 @@ public class GeneralUniformAssignmentBuilderTest {
             mkMapOfPartitionRacks(7)
         ));
 
-        Map<String, MemberSubscriptionSpec> members = new TreeMap<>();
-        Map<String, Map<Uuid, Set<Integer>>> targetAssignment = new HashMap<>();
+        Map<String, MemberSubscriptionSpecImpl> members = new TreeMap<>();
+        Map<Uuid, Set<Integer>> targetAssignment;
 
-        targetAssignment.put(memberA, mkAssignment(
+        targetAssignment = mkAssignment(
             mkTopicAssignment(topic1Uuid, 0, 2),
             mkTopicAssignment(topic2Uuid, 0)
-        ));
+        );
         members.put(memberA, new MemberSubscriptionSpecImpl(
             Optional.empty(),
-            Collections.singleton(topic1Uuid)
+            Collections.singleton(topic1Uuid),
+            new Assignment(targetAssignment)
         ));
 
-        targetAssignment.put(memberB, mkAssignment(
+        targetAssignment = mkAssignment(
             mkTopicAssignment(topic1Uuid, 1),
             mkTopicAssignment(topic2Uuid, 1, 2)
-        ));
+        );
         members.put(memberB, new MemberSubscriptionSpecImpl(
             Optional.empty(),
-            mkSet(topic1Uuid, topic2Uuid)
+            mkSet(topic1Uuid, topic2Uuid),
+            new Assignment(targetAssignment)
         ));
 
         // Add a new member to trigger a re-assignment.
         members.put(memberC, new MemberSubscriptionSpecImpl(
             Optional.empty(),
-            mkSet(topic1Uuid, topic2Uuid)
+            mkSet(topic1Uuid, topic2Uuid),
+            Assignment.EMPTY
         ));
 
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
-            targetAssignment,
-            invertedTargetAssignment(targetAssignment)
+            invertedTargetAssignment(members)
         );
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
@@ -497,24 +501,26 @@ public class GeneralUniformAssignmentBuilderTest {
             mkMapOfPartitionRacks(3)
         ));
 
-        Map<String, MemberSubscriptionSpec> members = new TreeMap<>();
-        Map<String, Map<Uuid, Set<Integer>>> targetAssignment = new HashMap<>();
+        Map<String, MemberSubscriptionSpecImpl> members = new TreeMap<>();
+        Map<Uuid, Set<Integer>> targetAssignment;
 
-        targetAssignment.put(memberA, mkAssignment(
+        targetAssignment = mkAssignment(
             mkTopicAssignment(topic1Uuid, 0, 1, 2),
             mkTopicAssignment(topic3Uuid, 0, 1)
-        ));
+        );
         members.put(memberA, new MemberSubscriptionSpecImpl(
             Optional.empty(),
-            mkSet(topic1Uuid, topic3Uuid)
+            mkSet(topic1Uuid, topic3Uuid),
+            new Assignment(targetAssignment)
         ));
 
-        targetAssignment.put(memberB, mkAssignment(
+        targetAssignment = mkAssignment(
             mkTopicAssignment(topic2Uuid, 3, 4, 5, 6)
-        ));
+        );
         members.put(memberB, new MemberSubscriptionSpecImpl(
             Optional.empty(),
-            Collections.singleton(topic2Uuid)
+            Collections.singleton(topic2Uuid),
+            new Assignment(targetAssignment)
         ));
 
         // Member C was removed
@@ -522,8 +528,7 @@ public class GeneralUniformAssignmentBuilderTest {
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
-            targetAssignment,
-            invertedTargetAssignment(targetAssignment)
+            invertedTargetAssignment(members)
         );
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 
@@ -561,32 +566,33 @@ public class GeneralUniformAssignmentBuilderTest {
         ));
 
         // Initial subscriptions were [T1, T2]
-        Map<String, MemberSubscriptionSpec> members = new TreeMap<>();
-        Map<String, Map<Uuid, Set<Integer>>> targetAssignment = new HashMap<>();
+        Map<String, MemberSubscriptionSpecImpl> members = new TreeMap<>();
+        Map<Uuid, Set<Integer>> targetAssignment;
 
-        targetAssignment.put(memberA, mkAssignment(
+        targetAssignment = mkAssignment(
             mkTopicAssignment(topic1Uuid, 0, 2),
             mkTopicAssignment(topic2Uuid, 1, 3)
-        ));
+        );
         members.put(memberA, new MemberSubscriptionSpecImpl(
             Optional.empty(),
-            Collections.singleton(topic1Uuid)
+            Collections.singleton(topic1Uuid),
+            new Assignment(targetAssignment)
         ));
 
-        targetAssignment.put(memberB, mkAssignment(
+        targetAssignment = mkAssignment(
             mkTopicAssignment(topic1Uuid, 1),
             mkTopicAssignment(topic2Uuid, 0, 2, 4)
-        ));
+        );
         members.put(memberB, new MemberSubscriptionSpecImpl(
             Optional.empty(),
-            mkSet(topic1Uuid, topic2Uuid)
+            mkSet(topic1Uuid, topic2Uuid),
+            new Assignment(targetAssignment)
         ));
 
         GroupSpec groupSpec = new GroupSpecImpl(
             members,
             HETEROGENEOUS,
-            targetAssignment,
-            invertedTargetAssignment(targetAssignment)
+            invertedTargetAssignment(members)
         );
         SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
 

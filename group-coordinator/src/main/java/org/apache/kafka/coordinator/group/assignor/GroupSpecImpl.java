@@ -31,17 +31,12 @@ public class GroupSpecImpl implements GroupSpec {
     /**
      * Member subscription metadata keyed by member Id.
      */
-    private final Map<String, MemberSubscriptionSpec> memberSubscriptions;
+    private final Map<String, MemberSubscriptionSpecImpl> memberSubscriptions;
 
     /**
      * The subscription type of the group.
      */
     private final SubscriptionType subscriptionType;
-
-    /**
-     * Partitions currently assigned to each member keyed by topicId.
-     */
-    private final Map<String, Map<Uuid, Set<Integer>>> memberAssignment;
 
     /**
      * Reverse lookup map representing topic partitions with
@@ -50,14 +45,12 @@ public class GroupSpecImpl implements GroupSpec {
     private final Map<Uuid, Map<Integer, String>> invertedMemberAssignment;
 
     public GroupSpecImpl(
-        Map<String, MemberSubscriptionSpec> memberSubscriptions,
+        Map<String, MemberSubscriptionSpecImpl> memberSubscriptions,
         SubscriptionType subscriptionType,
-        Map<String, Map<Uuid, Set<Integer>>> memberAssignment,
         Map<Uuid, Map<Integer, String>> invertedMemberAssignment
     ) {
         this.memberSubscriptions = Objects.requireNonNull(memberSubscriptions);
         this.subscriptionType = Objects.requireNonNull(subscriptionType);
-        this.memberAssignment = Objects.requireNonNull(memberAssignment);
         this.invertedMemberAssignment = Objects.requireNonNull(invertedMemberAssignment);
     }
 
@@ -107,7 +100,11 @@ public class GroupSpecImpl implements GroupSpec {
      */
     @Override
     public Map<Uuid, Set<Integer>> memberAssignment(String memberId) {
-        return memberAssignment.getOrDefault(memberId, Collections.emptyMap());
+        MemberSubscriptionSpecImpl memberSubscription = memberSubscriptions.get(memberId);
+        if (memberSubscription == null) {
+            return Collections.emptyMap();
+        }
+        return memberSubscription.memberAssignment();
     }
 
     @Override
@@ -117,7 +114,6 @@ public class GroupSpecImpl implements GroupSpec {
         GroupSpecImpl that = (GroupSpecImpl) o;
         return subscriptionType == that.subscriptionType &&
             memberSubscriptions.equals(that.memberSubscriptions) &&
-            memberAssignment.equals(that.memberAssignment) &&
             invertedMemberAssignment.equals(that.invertedMemberAssignment);
     }
 
@@ -125,7 +121,6 @@ public class GroupSpecImpl implements GroupSpec {
     public int hashCode() {
         int result = memberSubscriptions.hashCode();
         result = 31 * result + subscriptionType.hashCode();
-        result = 31 * result + memberAssignment.hashCode();
         result = 31 * result + invertedMemberAssignment.hashCode();
         return result;
     }
@@ -134,7 +129,6 @@ public class GroupSpecImpl implements GroupSpec {
     public String toString() {
         return "GroupSpecImpl(memberSubscriptions=" + memberSubscriptions +
             ", subscriptionType=" + subscriptionType +
-            ", memberAssignment=" + memberAssignment +
             ", invertedMemberAssignment=" + invertedMemberAssignment +
             ')';
     }
