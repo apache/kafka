@@ -59,16 +59,4 @@ public enum GroupVersion implements FeatureVersion {
     public Map<String, Short> dependencies() {
         return dependencies;
     }
-
-    public boolean isConsumerGroupProtocolEnabled() {
-        return isAtLeast(GV_1);
-    }
-
-    public boolean isAtLeast(GroupVersion otherVersion) {
-        return this.compareTo(otherVersion) >= 0;
-    }
-
-    public boolean isLessThan(GroupVersion otherVersion) {
-        return this.compareTo(otherVersion) < 0;
-    }
 }

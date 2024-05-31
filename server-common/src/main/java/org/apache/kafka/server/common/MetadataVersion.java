@@ -204,7 +204,7 @@ public enum MetadataVersion {
     // Add ELR related supports (KIP-966).
     IBP_3_8_IV0(20, "3.8", "IV0", true),
 
-    // Introduce version 2 of the GroupVersion feature (KIP-848).
+    // Introduce version 1 of the GroupVersion feature (KIP-848).
     IBP_4_0_IVO(21, "4.0", "IV0", false);
 
     // NOTES when adding a new version:
