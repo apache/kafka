@@ -17,7 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
+import org.apache.kafka.coordinator.group.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.junit.jupiter.api.Test;
 
@@ -28,7 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class GroupCoordinatorConfigTest {
     @Test
     public void testConfigs() {
-        PartitionAssignor assignor = new RangeAssignor();
+        ConsumerGroupPartitionAssignor assignor = new RangeAssignor();
         GroupCoordinatorConfig config = new GroupCoordinatorConfig(
             10,
             30,

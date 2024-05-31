@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.assignment;
 
 import java.util.Collection;
+import java.util.Map;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.GroupAssignment;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.GroupSubscription;
 import org.apache.kafka.common.Configurable;
@@ -36,6 +37,7 @@ public interface TaskAssignor extends Configurable {
      * ACTIVE_TASK_ASSIGNED_MULTIPLE_TIMES: multiple KafkaStreams clients assigned with the same active task
      * ACTIVE_AND_STANDBY_TASK_ASSIGNED_TO_SAME_KAFKASTREAMS: active task and standby task assigned to the same KafkaStreams client
      * INVALID_STANDBY_TASK: stateless task assigned as a standby task
+     * MISSING_PROCESS_ID: ProcessId present in the input ApplicationState was not present in the output TaskAssignment
      * UNKNOWN_PROCESS_ID: unrecognized ProcessId not matching any of the participating consumers
      * UNKNOWN_TASK_ID: unrecognized TaskId not matching any of the tasks to be assigned
      */
@@ -44,6 +46,7 @@ public interface TaskAssignor extends Configurable {
         ACTIVE_TASK_ASSIGNED_MULTIPLE_TIMES,
         ACTIVE_AND_STANDBY_TASK_ASSIGNED_TO_SAME_KAFKASTREAMS,
         INVALID_STANDBY_TASK,
+        MISSING_PROCESS_ID,
         UNKNOWN_PROCESS_ID,
         UNKNOWN_TASK_ID
     }
@@ -72,6 +75,9 @@ public interface TaskAssignor extends Configurable {
      *                      or AssignmentError.NONE if the returned assignment was valid
      */
     default void onAssignmentComputed(GroupAssignment assignment, GroupSubscription subscription, AssignmentError error) {}
+
+    @Override
+    default void configure(final Map<String, ?> configs) {}
 
     /**
      * Wrapper class for the final assignment of active and standbys tasks to individual

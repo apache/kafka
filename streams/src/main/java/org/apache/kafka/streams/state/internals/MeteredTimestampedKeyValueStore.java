@@ -307,11 +307,12 @@ public class MeteredTimestampedKeyValueStore<K, V>
     }
 
     @SuppressWarnings("unchecked")
-    private class MeteredTimestampedKeyValueStoreIterator implements KeyValueIterator<K, V> {
+    private class MeteredTimestampedKeyValueStoreIterator implements KeyValueIterator<K, V>, MeteredIterator {
 
         private final KeyValueIterator<Bytes, byte[]> iter;
         private final Sensor sensor;
         private final long startNs;
+        private final long startTimestampMs;
         private final Function<byte[], ValueAndTimestamp<V>> valueAndTimestampDeserializer;
 
         private final boolean returnPlainValue;
@@ -324,8 +325,15 @@ public class MeteredTimestampedKeyValueStore<K, V>
             this.sensor = sensor;
             this.valueAndTimestampDeserializer = valueAndTimestampDeserializer;
             this.startNs = time.nanoseconds();
+            this.startTimestampMs = time.milliseconds();
             this.returnPlainValue = returnPlainValue;
-            numOpenIterators.incrementAndGet();
+            numOpenIterators.increment();
+            openIterators.add(this);
+        }
+
+        @Override
+        public long startTimestamp() {
+            return startTimestampMs;
         }
 
         @Override
@@ -353,7 +361,8 @@ public class MeteredTimestampedKeyValueStore<K, V>
                 final long duration = time.nanoseconds() - startNs;
                 sensor.record(duration);
                 iteratorDurationSensor.record(duration);
-                numOpenIterators.decrementAndGet();
+                numOpenIterators.decrement();
+                openIterators.remove(this);
             }
         }
 

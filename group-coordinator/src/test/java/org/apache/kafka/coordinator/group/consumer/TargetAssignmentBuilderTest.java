@@ -17,9 +17,10 @@
 package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.AssignmentTestUtil;
 import org.apache.kafka.coordinator.group.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
-import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
+import org.apache.kafka.coordinator.group.assignor.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
@@ -207,8 +208,11 @@ public class TargetAssignmentBuilderTest {
             SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadataMap);
             SubscriptionType subscriptionType = HOMOGENEOUS;
 
+            // Prepare the member assignments per topic partition.
+            Map<Uuid, Map<Integer, String>> invertedTargetAssignment = AssignmentTestUtil.invertedTargetAssignment(memberSpecs);
+
             // Prepare the expected assignment spec.
-            AssignmentSpec assignmentSpec = new AssignmentSpec(memberSpecs, subscriptionType);
+            GroupSpecImpl groupSpec = new GroupSpecImpl(memberSpecs, subscriptionType, invertedTargetAssignment);
 
             // We use `any` here to always return an assignment but use `verify` later on
             // to ensure that the input was correct.
@@ -222,6 +226,7 @@ public class TargetAssignmentBuilderTest {
                 .withSubscriptionMetadata(subscriptionMetadata)
                 .withSubscriptionType(subscriptionType)
                 .withTargetAssignment(targetAssignment)
+                .withInvertedTargetAssignment(invertedTargetAssignment)
                 .withTopicsImage(topicsImage);
 
             // Add the updated members or delete the deleted members.
@@ -239,7 +244,7 @@ public class TargetAssignmentBuilderTest {
             // Verify that the assignor was called once with the expected
             // assignment spec.
             verify(assignor, times(1))
-                .assign(assignmentSpec, subscribedTopicMetadata);
+                .assign(groupSpec, subscribedTopicMetadata);
 
             return result;
         }
