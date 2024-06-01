@@ -1464,14 +1464,14 @@ public class KafkaConfigBackingStoreMockitoTest {
                 COMMIT_TASKS_CONFIG_KEYS.get(0), KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0, CONFIGS_SERIALIZED.get(2),
                 "tasks", 2); // Starts with 0 tasks, after update has 2
 
-        // Task count records are read back after writing as well
-        expectConvertWriteRead(
-                CONNECTOR_TASK_COUNT_RECORD_KEYS.get(0), KafkaConfigBackingStore.TASK_COUNT_RECORD_V0, CONFIGS_SERIALIZED.get(3),
-                "task-count", 4);
         doAnswer(expectReadToEnd(new LinkedHashMap<String, byte[]>() {{
             put(CONNECTOR_TASK_COUNT_RECORD_KEYS.get(0), CONFIGS_SERIALIZED.get(3));
                 }})
         ).when(configLog).readToEnd();
+        // Task count records are read back after writing as well
+        expectConvertWriteRead(
+                CONNECTOR_TASK_COUNT_RECORD_KEYS.get(0), KafkaConfigBackingStore.TASK_COUNT_RECORD_V0, CONFIGS_SERIALIZED.get(3),
+                "task-count", 4);
 
         when(configLog.partitionCount()).thenReturn(1);
 
