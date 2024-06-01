@@ -1367,8 +1367,8 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       && originals.containsKey(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG)
       && logDirs.size > 1) {
         require(interBrokerProtocolVersion.isDirectoryAssignmentSupported,
-          s"Multiple log directories (aka JBOD) are not supported in the configured " +
-            s"${ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG} ${interBrokerProtocolVersion}. " +
+          s"Multiple log directories (aka JBOD) are not supported with the configured " +
+            s"${interBrokerProtocolVersion} ${ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG}. " +
             s"Need ${MetadataVersion.IBP_3_7_IV2} or higher")
     }
 
