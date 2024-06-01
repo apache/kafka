@@ -1440,9 +1440,6 @@ public class KafkaConfigBackingStoreMockitoTest {
 
     @Test
     public void testTaskCountRecordsAndGenerations() throws Exception {
-        verifyConfigure();
-        expectStart(Collections.emptyList(), Collections.emptyMap());
-
         // Task configs should read to end, write to the log, read to end, write root, then read to end again
         expectConvertWriteRead(TASK_CONFIG_KEYS.get(0), KafkaConfigBackingStore.TASK_CONFIGURATION_V0, CONFIGS_SERIALIZED.get(0),
                 "properties", SAMPLE_CONFIGS.get(0));
@@ -1473,8 +1470,44 @@ public class KafkaConfigBackingStoreMockitoTest {
                 }})
         ).when(configLog).readToEnd();
 
+        when(configLog.partitionCount()).thenReturn(1);
+
         configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
+        verifyConfigure();
+
         configStorage.start();
+        verify(configLog).start();
+
+        addConnector(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0), Collections.emptyList());
+
+        // Before anything is written
+        String connectorName = CONNECTOR_IDS.get(0);
+        ClusterConfigState configState = configStorage.snapshot();
+        assertFalse(configState.pendingFencing(connectorName));
+        assertNull(configState.taskCountRecord(connectorName));
+        assertNull(configState.taskConfigGeneration(connectorName));
+
+        // Writing task configs should block until all the writes have been performed and the root record update
+        // has completed
+        List<Map<String, String>> taskConfigs = Arrays.asList(SAMPLE_CONFIGS.get(0), SAMPLE_CONFIGS.get(1));
+        configStorage.putTaskConfigs("connector1", taskConfigs);
+
+        configState = configStorage.snapshot();
+        assertEquals(3, configState.offset());
+        assertTrue(configState.pendingFencing(connectorName));
+        assertNull(configState.taskCountRecord(connectorName));
+        assertEquals(0, (long) configState.taskConfigGeneration(connectorName));
+
+        configStorage.putTaskCountRecord(connectorName, 4);
+
+        configState = configStorage.snapshot();
+        assertEquals(4, configState.offset());
+        assertFalse(configState.pendingFencing(connectorName));
+        assertEquals(4, (long) configState.taskCountRecord(connectorName));
+        assertEquals(0, (long) configState.taskConfigGeneration(connectorName));
+
+        configStorage.stop();
+        verify(configLog).stop();
     }
 
     private void verifyConfigure() {
