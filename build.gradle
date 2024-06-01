@@ -1027,7 +1027,7 @@ project(':core') {
     testImplementation libs.junitJupiter
     testImplementation libs.slf4jlog4j
     testImplementation libs.caffeine
-
+    
     generator project(':generator')
   }
 
