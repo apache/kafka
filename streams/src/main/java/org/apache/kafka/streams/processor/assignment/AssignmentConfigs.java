@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor.assignment;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.OptionalInt;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.streams.StreamsConfig;
@@ -44,23 +43,23 @@ public class AssignmentConfigs {
         final long probingRebalanceIntervalMs = configs.getLong(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG);
         final List<String> rackAwareAssignmentTags = configs.getList(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
         final String rackAwareAssignmentStrategy = configs.getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG);
-        Optional<Integer> rackAwareTrafficCost = Optional.ofNullable(configs.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG));
-        Optional<Integer> rackAwareNonOverlapCost = Optional.ofNullable(configs.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG));
+        Integer rackAwareTrafficCost = configs.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG);
+        Integer rackAwareNonOverlapCost = configs.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG);
 
         final String assignorClassName = configs.getString(StreamsConfig.TASK_ASSIGNOR_CLASS_CONFIG);
         if (StickyTaskAssignor.class.getName().equals(assignorClassName)) {
-            if (!rackAwareTrafficCost.isPresent()) {
-                rackAwareTrafficCost = Optional.of(StickyTaskAssignor.DEFAULT_STICKY_TRAFFIC_COST);
+            if (rackAwareTrafficCost == null) {
+                rackAwareTrafficCost = StickyTaskAssignor.DEFAULT_STICKY_TRAFFIC_COST;
             }
-            if (!rackAwareNonOverlapCost.isPresent()) {
-                rackAwareNonOverlapCost = Optional.of(StickyTaskAssignor.DEFAULT_STICKY_NON_OVERLAP_COST);
+            if (rackAwareNonOverlapCost == null) {
+                rackAwareNonOverlapCost = StickyTaskAssignor.DEFAULT_STICKY_NON_OVERLAP_COST;
             }
         } else if (HighAvailabilityTaskAssignor.class.getName().equals(assignorClassName)) {
-            if (!rackAwareTrafficCost.isPresent()) {
-                rackAwareTrafficCost = Optional.of(HighAvailabilityTaskAssignor.DEFAULT_STATEFUL_TRAFFIC_COST);
+            if (rackAwareTrafficCost == null) {
+                rackAwareTrafficCost = HighAvailabilityTaskAssignor.DEFAULT_STATEFUL_TRAFFIC_COST;
             }
-            if (!rackAwareNonOverlapCost.isPresent()) {
-                rackAwareNonOverlapCost = Optional.of(HighAvailabilityTaskAssignor.DEFAULT_STATEFUL_NON_OVERLAP_COST);
+            if (rackAwareNonOverlapCost == null) {
+                rackAwareNonOverlapCost = HighAvailabilityTaskAssignor.DEFAULT_STATEFUL_NON_OVERLAP_COST;
             }
         }
 
@@ -70,8 +69,8 @@ public class AssignmentConfigs {
             numStandbyReplicas,
             probingRebalanceIntervalMs,
             rackAwareAssignmentTags,
-            rackAwareTrafficCost.map(OptionalInt::of).orElseGet(OptionalInt::empty),
-            rackAwareNonOverlapCost.map(OptionalInt::of).orElseGet(OptionalInt::empty),
+            OptionalInt.of(rackAwareTrafficCost),
+            OptionalInt.of(rackAwareNonOverlapCost),
             rackAwareAssignmentStrategy
         );
     }
