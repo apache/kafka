@@ -1442,6 +1442,18 @@ public class KafkaConfigBackingStoreMockitoTest {
 
     @Test
     public void testTaskCountRecordsAndGenerations() throws Exception {
+        configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
+        verifyConfigure();
+        configStorage.start();
+        verify(configLog).start();
+
+        // Records to be read by consumer as it reads to the end of the log
+        doAnswer(expectReadToEnd(new LinkedHashMap<String, byte[]>() {{
+                    put(TASK_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(0));
+                    put(TASK_CONFIG_KEYS.get(1), CONFIGS_SERIALIZED.get(1));
+                    put(COMMIT_TASKS_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(2));
+                }})
+        ).when(configLog).readToEnd();
         // Task configs should read to end, write to the log, read to end, write root, then read to end again
         expectConvertWriteRead(TASK_CONFIG_KEYS.get(0), KafkaConfigBackingStore.TASK_CONFIGURATION_V0, CONFIGS_SERIALIZED.get(0),
                 "properties", SAMPLE_CONFIGS.get(0));
@@ -1451,17 +1463,6 @@ public class KafkaConfigBackingStoreMockitoTest {
         expectConvertWriteRead(
                 COMMIT_TASKS_CONFIG_KEYS.get(0), KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0, CONFIGS_SERIALIZED.get(2),
                 "tasks", 2); // Starts with 0 tasks, after update has 2
-
-        // As soon as root is rewritten, we should see a callback notifying us that we reconfigured some tasks
-        configUpdateListener.onTaskConfigUpdate(Arrays.asList(TASK_IDS.get(0), TASK_IDS.get(1)));
-
-        // Records to be read by consumer as it reads to the end of the log
-        doAnswer(expectReadToEnd(new LinkedHashMap<String, byte[]>() {{
-                    put(TASK_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(0));
-                    put(TASK_CONFIG_KEYS.get(1), CONFIGS_SERIALIZED.get(1));
-                    put(COMMIT_TASKS_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(2));
-                }})
-        ).when(configLog).readToEnd();
 
         // Task count records are read back after writing as well
         expectConvertWriteRead(
@@ -1473,9 +1474,6 @@ public class KafkaConfigBackingStoreMockitoTest {
         ).when(configLog).readToEnd();
 
         when(configLog.partitionCount()).thenReturn(1);
-
-        configStorage.setupAndCreateKafkaBasedLog(TOPIC, config);
-        verifyConfigure();
 
         configStorage.start();
         verify(configLog).start();
@@ -1507,6 +1505,9 @@ public class KafkaConfigBackingStoreMockitoTest {
         assertFalse(configState.pendingFencing(connectorName));
         assertEquals(4, (long) configState.taskCountRecord(connectorName));
         assertEquals(0, (long) configState.taskConfigGeneration(connectorName));
+
+        // As soon as root is rewritten, we should see a callback notifying us that we reconfigured some tasks
+        verify(configUpdateListener).onTaskConfigUpdate(Arrays.asList(TASK_IDS.get(0), TASK_IDS.get(1)));
 
         configStorage.stop();
         verify(configLog).stop();
