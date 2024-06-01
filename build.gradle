@@ -176,6 +176,8 @@ allprojects {
     options.memberLevel = JavadocMemberLevel.PUBLIC  // Document only public members/API
     // Turn off doclint for now, see https://blog.joda.org/2014/02/turning-off-doclint-in-jdk-8-javadoc.html for rationale
     options.addStringOption('Xdoclint:none', '-quiet')
+    // Javadoc warnings should fail the build in JDK 15+ https://bugs.openjdk.org/browse/JDK-8200363
+    options.addBooleanOption('Werror', JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_15))
 
     // The URL structure was changed to include the locale after Java 8
     if (JavaVersion.current().isJava11Compatible())
@@ -305,10 +307,12 @@ subprojects {
     addParametersForTests(name, options)
   }
 
-  // We should only set this if Java version is < 9 (--release is recommended for >= 9), but the Scala plugin for IntelliJ sets
-  // `-target` incorrectly if this is unset
-  sourceCompatibility = minJavaVersion
-  targetCompatibility = minJavaVersion
+  java {
+    // We should only set this if Java version is < 9 (--release is recommended for >= 9), but the Scala plugin for IntelliJ sets
+    // `-target` incorrectly if this is unset
+    sourceCompatibility = minJavaVersion
+    targetCompatibility = minJavaVersion
+  }
 
   if (shouldPublish) {
 
@@ -610,6 +614,8 @@ subprojects {
 
   task docsJar(dependsOn: javadocJar)
 
+  test.dependsOn('javadoc')
+
   task systemTestLibs(dependsOn: jar)
 
   if (!sourceSets.test.allSource.isEmpty()) {
@@ -742,8 +748,8 @@ subprojects {
   }
   test.dependsOn('spotbugsMain')
 
-  tasks.withType(com.github.spotbugs.snom.SpotBugsTask) {
-    reports {
+  tasks.withType(com.github.spotbugs.snom.SpotBugsTask).configureEach {
+    reports.configure {
       // Continue supporting `xmlFindBugsReport` for compatibility
       xml.enabled(project.hasProperty('xmlSpotBugsReport') || project.hasProperty('xmlFindBugsReport'))
       html.enabled(!project.hasProperty('xmlSpotBugsReport') && !project.hasProperty('xmlFindBugsReport'))

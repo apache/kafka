@@ -130,5 +130,6 @@
     <allow pkg="kafka.test"/>
     <allow pkg="kafka.test.annotation"/>
     <allow pkg="kafka.test.junit"/>
+    <allow pkg="org.apache.kafka.clients.admin" />
   </subpackage>
 </import-control>
