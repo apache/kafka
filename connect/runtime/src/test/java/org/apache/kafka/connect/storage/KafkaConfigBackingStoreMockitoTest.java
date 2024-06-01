@@ -1320,7 +1320,7 @@ public class KafkaConfigBackingStoreMockitoTest {
 
         expectRead(TARGET_STATE_KEYS.get(0), CONFIGS_SERIALIZED.get(0), TARGET_STATE_STARTED);
         // on resume update listener shouldn't be called
-        verify(configUpdateListener, never()).onConnectorConfigUpdate(anyString());
+        verify(configUpdateListener, never()).onConnectorTargetStateChange(anyString());
 
         configStorage.stop();
         verify(configStorage).stop();
