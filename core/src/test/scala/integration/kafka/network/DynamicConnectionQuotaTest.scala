@@ -32,6 +32,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.{KafkaException, requests}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.config.QuotaConfigs
+import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -275,7 +276,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     val initialConnectionCount = connectionCount
     val entity = new ClientQuotaEntity(Map(ClientQuotaEntity.IP -> ip.orNull).asJava)
     val request = Map(entity -> Map(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG -> Some(updatedRate.toDouble)))
-    alterClientQuotas(admin, request).all.get()
+    alterClientQuotas(admin, request).all.get(JTestUtils.DEFAULT_MAX_WAIT_MS, TimeUnit.MILLISECONDS)
     // use a random throwaway address if ip isn't specified to get the default value
     TestUtils.waitUntilTrue(() => brokers.head.socketServer.connectionQuotas.
       connectionRateForIp(InetAddress.getByName(ip.getOrElse(unknownHost))) == updatedRate,
