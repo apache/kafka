@@ -363,7 +363,4 @@
     <suppress checks="(ClassDataAbstractionCoupling|ClassFanOutComplexity)"
               files="(ReplicaFetcherThreadBenchmark).java"/>
 
-    <!--import order -->
-    <suppress checks="ImportOrder" files="^*$"/>
-
 </suppressions>

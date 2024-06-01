@@ -82,13 +82,9 @@
       <property name="file" value="${config_loc}/${importControlFile}"/>
     </module>
 
-    <module name="ImportOrder">
-      <property name="groups" value="kafka,org.apache.kafka,com,net,org,java,javax"/>
-      <property name="ordered" value="true"/>
-      <property name="separated" value="true"/>
-      <property name="option" value="bottom"/>
-      <property name="sortStaticImportsAlphabetically" value="true"/>
-    </module>
+    <!--   import order rule not config in the checkstyle.xml.
+        import order check by is checked by the spotless plugin.
+        More checks may be handed over to the spotless plugin in the future-->
 
     <!-- whitespace -->
     <module name="GenericWhitespace"/>
