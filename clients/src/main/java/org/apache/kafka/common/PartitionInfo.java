@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common;
 
+import java.util.Arrays;
+import java.util.Objects;
+
 /**
  * This is used to describe per-partition state in the MetadataResponse.
  */
@@ -86,6 +89,29 @@ public class PartitionInfo {
      */
     public Node[] offlineReplicas() {
         return offlineReplicas;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(topic, partition, leader, Arrays.hashCode(replicas),
+            Arrays.hashCode(inSyncReplicas), Arrays.hashCode(offlineReplicas));
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj)
+            return true;
+        if (obj == null)
+            return false;
+        if (getClass() != obj.getClass())
+            return false;
+        PartitionInfo other = (PartitionInfo) obj;
+        return Objects.equals(topic, other.topic) &&
+            partition == other.partition &&
+            Objects.equals(leader, other.leader) &&
+            Objects.deepEquals(replicas, other.replicas) &&
+            Objects.deepEquals(inSyncReplicas, other.inSyncReplicas) &&
+            Objects.deepEquals(offlineReplicas, other.offlineReplicas);
     }
 
     @Override

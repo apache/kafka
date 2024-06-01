@@ -274,7 +274,7 @@ public class ServerSideAssignorBenchmark {
             updatedMemberSpec.put(memberId, new MemberSubscriptionSpecImpl(
                 groupSpec.memberSubscription(memberId).rackId(),
                 groupSpec.memberSubscription(memberId).subscribedTopicIds(),
-                new Assignment(targetAssignment)
+                new Assignment(Collections.unmodifiableMap(targetAssignment))
             ));
         }
 

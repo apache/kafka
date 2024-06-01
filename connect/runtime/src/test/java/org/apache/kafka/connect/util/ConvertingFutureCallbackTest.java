@@ -192,9 +192,9 @@ public class ConvertingFutureCallbackTest {
     }
   
     protected static class TestConvertingFutureCallback extends ConvertingFutureCallback<Object, Object> {
-        private AtomicInteger numberOfConversions = new AtomicInteger();
-        private CountDownLatch getInvoked = new CountDownLatch(1);
-        private CountDownLatch cancelInvoked = new CountDownLatch(1);
+        private final AtomicInteger numberOfConversions = new AtomicInteger();
+        private final CountDownLatch getInvoked = new CountDownLatch(1);
+        private final CountDownLatch cancelInvoked = new CountDownLatch(1);
     
         public int numberOfConversions() {
             return numberOfConversions.get();
