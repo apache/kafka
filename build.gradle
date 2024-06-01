@@ -46,8 +46,8 @@ plugins {
   id 'org.scoverage' version '8.0.3' apply false
   // Updating the shadow plugin version to 8.1.1 causes issue with signing and publishing the shadowed
   // artifacts - see https://github.com/johnrengelman/shadow/issues/901
-  //  6.14.0 and newer are need for java 11
   id 'com.github.johnrengelman.shadow' version '8.1.0' apply false
+  //  6.14.0 and newer are need for java 11
   id 'com.diffplug.spotless' version "6.13.0" apply false
 }
 
