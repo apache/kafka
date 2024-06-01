@@ -26,18 +26,25 @@ public class MetadataErrorManager implements RequestManager {
     private final BackgroundEventHandler backgroundEventHandler;
 
     public MetadataErrorManager(Metadata metadata, BackgroundEventHandler backgroundEventHandler) {
+        assert metadata != null;
+        assert backgroundEventHandler != null;
+
         this.metadata = metadata;
         this.backgroundEventHandler = backgroundEventHandler;
     }
 
     @Override
     public PollResult poll(long currentTimeMs) {
-        try {
-            metadata.maybeThrowAnyException();
-        } catch (Exception ex) {
-            backgroundEventHandler.add(new ErrorEvent(ex));
-        }
+        maybePropagateMetadataError();
 
         return PollResult.EMPTY;
+    }
+
+    private void maybePropagateMetadataError() {
+        try {
+            metadata.maybeThrowAnyException();
+        } catch (Exception e) {
+            backgroundEventHandler.add(new ErrorEvent(e));
+        }
     }
 }
