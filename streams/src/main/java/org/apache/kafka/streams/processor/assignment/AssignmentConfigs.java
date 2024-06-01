@@ -55,6 +55,7 @@ public class AssignmentConfigs {
                 rackAwareNonOverlapCost = StickyTaskAssignor.DEFAULT_STICKY_NON_OVERLAP_COST;
             }
         } else if (HighAvailabilityTaskAssignor.class.getName().equals(assignorClassName)) {
+            // TODO KAFKA-16869: replace with the HighAvailabilityTaskAssignor class once it implements the new TaskAssignor interface
             if (rackAwareTrafficCost == null) {
                 rackAwareTrafficCost = HighAvailabilityTaskAssignor.DEFAULT_STATEFUL_TRAFFIC_COST;
             }
