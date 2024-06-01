@@ -154,6 +154,7 @@ public final class TaskAssignmentUtils {
             final UUID uuid = entry.getKey().id();
             clientIds.add(uuid);
             clientRacks.put(uuid, kafkaStreamsStates.get(entry.getKey()).rackId());
+            assignmentsByUuid.put(uuid, entry.getValue());
         }
 
         final long initialCost = computeTotalAssignmentCost(
@@ -254,6 +255,7 @@ public final class TaskAssignmentUtils {
             final UUID uuid = entry.getKey().id();
             clientIds.add(uuid);
             clientRacks.put(uuid, kafkaStreamsStates.get(entry.getKey()).rackId());
+            assignmentsByUuid.put(uuid, entry.getValue());
         }
 
         final long initialCost = computeTotalAssignmentCost(

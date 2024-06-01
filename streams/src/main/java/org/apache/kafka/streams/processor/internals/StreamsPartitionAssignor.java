@@ -531,13 +531,12 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                               + "tasks for source topics vs changelog topics.");
         }
 
-
-        final Set<DefaultTaskTopicPartition> allTopicPartitions = new HashSet<>();
+        final Set<DefaultTaskTopicPartition> topicsRequiringRackInfo = new HashSet<>();
         final AtomicBoolean rackInformationFetched = new AtomicBoolean(false);
         final Runnable fetchRackInformation = () -> {
             if (!rackInformationFetched.get()) {
                 RackUtils.annotateTopicPartitionsWithRackInfo(cluster,
-                    internalTopicManager, allTopicPartitions);
+                    internalTopicManager, topicsRequiringRackInfo);
                 rackInformationFetched.set(true);
             }
         };
@@ -552,7 +551,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 final boolean isChangelog = changelogPartitionsForTask.get(taskId).contains(topicPartition);
                 final DefaultTaskTopicPartition racklessTopicPartition = new DefaultTaskTopicPartition(
                     topicPartition, isSource, isChangelog, fetchRackInformation);
-                allTopicPartitions.add(racklessTopicPartition);
+                topicsRequiringRackInfo.add(racklessTopicPartition);
                 topicPartitions.add(racklessTopicPartition);
             }
 
@@ -561,7 +560,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 final boolean isChangelog = true;
                 final DefaultTaskTopicPartition racklessTopicPartition = new DefaultTaskTopicPartition(
                     topicPartition, isSource, isChangelog, fetchRackInformation);
-                allTopicPartitions.add(racklessTopicPartition);
+                if (publicAssignmentConfigs.numStandbyReplicas() > 0) {
+                    topicsRequiringRackInfo.add(racklessTopicPartition);
+                }
                 topicPartitions.add(racklessTopicPartition);
             }
 

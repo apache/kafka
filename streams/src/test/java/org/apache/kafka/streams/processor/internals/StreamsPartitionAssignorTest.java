@@ -84,6 +84,7 @@ import org.apache.kafka.test.MockInternalTopicManager;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.mockito.ArgumentCaptor;
@@ -182,6 +183,8 @@ public class StreamsPartitionAssignorTest {
     // We need this rule because we would like to combine Parameterised tests with strict Mockito stubs.
     @Rule
     public MockitoRule rule = MockitoJUnit.rule().strictness(Strictness.STRICT_STUBS);
+    @Rule
+    public Timeout timeout = new Timeout(10_000);
 
     private static final String CONSUMER_1 = "consumer1";
     private static final String CONSUMER_2 = "consumer2";
@@ -353,6 +356,7 @@ public class StreamsPartitionAssignorTest {
             new Object[]{FallbackPriorTaskAssignor.class, true, null},
             new Object[]{FallbackPriorTaskAssignor.class, false, null},
             new Object[]{null, false, org.apache.kafka.streams.processor.assignment.assignors.StickyTaskAssignor.class},
+            new Object[]{null, true, org.apache.kafka.streams.processor.assignment.assignors.StickyTaskAssignor.class},
             new Object[]{HighAvailabilityTaskAssignor.class, false, org.apache.kafka.streams.processor.assignment.assignors.StickyTaskAssignor.class}
         );
     }
