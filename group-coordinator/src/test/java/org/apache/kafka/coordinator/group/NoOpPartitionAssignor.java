@@ -16,16 +16,16 @@
  */
 package org.apache.kafka.coordinator.group;
 
-import org.apache.kafka.coordinator.group.assignor.GroupSpec;
+import org.apache.kafka.coordinator.group.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
-import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.SubscribedTopicDescriber;
 
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class NoOpPartitionAssignor implements PartitionAssignor {
+public class NoOpPartitionAssignor implements ConsumerGroupPartitionAssignor {
     static final String NAME = "no-op";
 
     @Override

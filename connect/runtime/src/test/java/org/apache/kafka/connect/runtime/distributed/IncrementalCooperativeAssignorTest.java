@@ -659,7 +659,7 @@ public class IncrementalCooperativeAssignorTest {
                 .collect(Collectors.toList());
         expectedAssignment.get(0).connectors().addAll(Arrays.asList("connector6", "connector9"));
         expectedAssignment.get(1).connectors().addAll(Arrays.asList("connector7", "connector10"));
-        expectedAssignment.get(2).connectors().addAll(Arrays.asList("connector8"));
+        expectedAssignment.get(2).connectors().add("connector8");
 
         List<String> newConnectors = newConnectors(6, 11);
         assignor.assignConnectors(existingAssignment, newConnectors);
@@ -679,11 +679,11 @@ public class IncrementalCooperativeAssignorTest {
 
         expectedAssignment.get(0).connectors().addAll(Arrays.asList("connector6", "connector9"));
         expectedAssignment.get(1).connectors().addAll(Arrays.asList("connector7", "connector10"));
-        expectedAssignment.get(2).connectors().addAll(Arrays.asList("connector8"));
+        expectedAssignment.get(2).connectors().add("connector8");
 
         expectedAssignment.get(0).tasks().addAll(Arrays.asList(new ConnectorTaskId("task", 6), new ConnectorTaskId("task", 9)));
         expectedAssignment.get(1).tasks().addAll(Arrays.asList(new ConnectorTaskId("task", 7), new ConnectorTaskId("task", 10)));
-        expectedAssignment.get(2).tasks().addAll(Arrays.asList(new ConnectorTaskId("task", 8)));
+        expectedAssignment.get(2).tasks().add(new ConnectorTaskId("task", 8));
 
         List<String> newConnectors = newConnectors(6, 11);
         assignor.assignConnectors(existingAssignment, newConnectors);

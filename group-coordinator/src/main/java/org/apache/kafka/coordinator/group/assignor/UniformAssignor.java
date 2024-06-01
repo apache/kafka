@@ -44,7 +44,7 @@ import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOG
  * @see OptimizedUniformAssignmentBuilder
  * @see GeneralUniformAssignmentBuilder
  */
-public class UniformAssignor implements PartitionAssignor {
+public class UniformAssignor implements ConsumerGroupPartitionAssignor {
     private static final Logger LOG = LoggerFactory.getLogger(UniformAssignor.class);
     public static final String UNIFORM_ASSIGNOR_NAME = "uniform";
 
@@ -66,21 +66,19 @@ public class UniformAssignor implements PartitionAssignor {
         GroupSpec groupSpec,
         SubscribedTopicDescriber subscribedTopicDescriber
     ) throws PartitionAssignorException {
-        AbstractUniformAssignmentBuilder assignmentBuilder;
-
         if (groupSpec.members().isEmpty())
             return new GroupAssignment(Collections.emptyMap());
 
         if (groupSpec.subscriptionType().equals(HOMOGENEOUS)) {
             LOG.debug("Detected that all members are subscribed to the same set of topics, invoking the "
                 + "optimized assignment algorithm");
-            assignmentBuilder = new OptimizedUniformAssignmentBuilder(groupSpec, subscribedTopicDescriber);
+            return new OptimizedUniformAssignmentBuilder(groupSpec, subscribedTopicDescriber)
+                .build();
         } else {
             LOG.debug("Detected that the members are subscribed to different sets of topics, invoking the "
                 + "general assignment algorithm");
-            assignmentBuilder = new GeneralUniformAssignmentBuilder(groupSpec, subscribedTopicDescriber);
+            return new GeneralUniformAssignmentBuilder(groupSpec, subscribedTopicDescriber)
+                .buildAssignment();
         }
-
-        return assignmentBuilder.buildAssignment();
     }
 }
