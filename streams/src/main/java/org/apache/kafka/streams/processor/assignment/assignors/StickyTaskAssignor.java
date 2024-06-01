@@ -49,8 +49,8 @@ import org.slf4j.LoggerFactory;
 public class StickyTaskAssignor implements TaskAssignor {
     private static final Logger LOG = LoggerFactory.getLogger(StickyTaskAssignor.class);
 
-    public static final int DEFAULT_STATEFUL_TRAFFIC_COST = 1;
-    public static final int DEFAULT_STATEFUL_NON_OVERLAP_COST = 10;
+    public static final int DEFAULT_STICKY_TRAFFIC_COST = 1;
+    public static final int DEFAULT_STICKY_NON_OVERLAP_COST = 10;
 
     private final boolean mustPreserveActiveTaskAssignment;
 

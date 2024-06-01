@@ -50,14 +50,12 @@ public class AssignmentConfigs {
         final String assignorClassName = configs.getString(StreamsConfig.TASK_ASSIGNOR_CLASS_CONFIG);
         if (StickyTaskAssignor.class.getName().equals(assignorClassName)) {
             if (!rackAwareTrafficCost.isPresent()) {
-                rackAwareTrafficCost = Optional.of(StickyTaskAssignor.DEFAULT_STATEFUL_TRAFFIC_COST);
+                rackAwareTrafficCost = Optional.of(StickyTaskAssignor.DEFAULT_STICKY_TRAFFIC_COST);
             }
             if (!rackAwareNonOverlapCost.isPresent()) {
-                rackAwareNonOverlapCost = Optional.of(StickyTaskAssignor.DEFAULT_STATEFUL_NON_OVERLAP_COST);
+                rackAwareNonOverlapCost = Optional.of(StickyTaskAssignor.DEFAULT_STICKY_NON_OVERLAP_COST);
             }
-        }
-
-        if (HighAvailabilityTaskAssignor.class.getName().equals(assignorClassName)) {
+        } else if (HighAvailabilityTaskAssignor.class.getName().equals(assignorClassName)) {
             if (!rackAwareTrafficCost.isPresent()) {
                 rackAwareTrafficCost = Optional.of(HighAvailabilityTaskAssignor.DEFAULT_STATEFUL_TRAFFIC_COST);
             }
@@ -78,7 +76,7 @@ public class AssignmentConfigs {
         );
     }
 
-    private AssignmentConfigs(final long acceptableRecoveryLag,
+    public AssignmentConfigs(final long acceptableRecoveryLag,
                              final int maxWarmupReplicas,
                              final int numStandbyReplicas,
                              final long probingRebalanceIntervalMs,
