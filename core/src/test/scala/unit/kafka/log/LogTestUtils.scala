@@ -56,19 +56,19 @@ object LogTestUtils {
     new LogSegment(ms, idx, timeIdx, txnIndex, offset, indexIntervalBytes, 0, time)
   }
 
-  def createLogConfig(segmentMs: Long = LogConfig.DEFAULT_SEGMENT_MS,
-                      segmentBytes: Int = LogConfig.DEFAULT_SEGMENT_BYTES,
-                      retentionMs: Long = LogConfig.DEFAULT_RETENTION_MS,
-                      localRetentionMs: Long = LogConfig.DEFAULT_LOCAL_RETENTION_MS,
+  def createLogConfig(segmentMs: Long = LogConfig.SEGMENT_MS_DEFAULT,
+                      segmentBytes: Int = LogConfig.SEGMENT_BYTES_DEFAULT,
+                      retentionMs: Long = LogConfig.RETENTION_MS_DEFAULT,
+                      localRetentionMs: Long = LogConfig.LOCAL_RETENTION_MS_DEFAULT,
                       retentionBytes: Long = ServerLogConfigs.LOG_RETENTION_BYTES_DEFAULT,
-                      localRetentionBytes: Long = LogConfig.DEFAULT_LOCAL_RETENTION_BYTES,
-                      segmentJitterMs: Long = LogConfig.DEFAULT_SEGMENT_JITTER_MS,
+                      localRetentionBytes: Long = LogConfig.LOCAL_RETENTION_BYTES_DEFAULT,
+                      segmentJitterMs: Long = LogConfig.SEGMENT_JITTER_MS_DEFAULT,
                       cleanupPolicy: String = ServerLogConfigs.LOG_CLEANUP_POLICY_DEFAULT,
-                      maxMessageBytes: Int = LogConfig.DEFAULT_MAX_MESSAGE_BYTES,
+                      maxMessageBytes: Int = LogConfig.MAX_MESSAGE_BYTES_DEFAULT,
                       indexIntervalBytes: Int = ServerLogConfigs.LOG_INDEX_INTERVAL_BYTES_DEFAULT,
                       segmentIndexBytes: Int = ServerLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_DEFAULT,
                       fileDeleteDelayMs: Long = ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
-                      remoteLogStorageEnable: Boolean = LogConfig.DEFAULT_REMOTE_STORAGE_ENABLE): LogConfig = {
+                      remoteLogStorageEnable: Boolean = LogConfig.REMOTE_STORAGE_ENABLE_DEFAULT): LogConfig = {
     val logProps = new Properties()
     logProps.put(TopicConfig.SEGMENT_MS_CONFIG, segmentMs: java.lang.Long)
     logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, segmentBytes: Integer)

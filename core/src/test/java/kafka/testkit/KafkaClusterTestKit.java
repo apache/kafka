@@ -203,7 +203,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             props.put(QuorumConfig.QUORUM_VOTERS_CONFIG, uninitializedQuorumVotersString);
 
             // reduce log cleaner offset map memory usage
-            props.put(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, "2097152");
+            props.put(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_CONFIG, "2097152");
 
             // Add associated broker node property overrides
             if (brokerNode != null) {

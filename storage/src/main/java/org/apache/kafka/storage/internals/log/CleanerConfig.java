@@ -32,24 +32,24 @@ public class CleanerConfig {
     public static final int LOG_CLEANER_BACKOFF_MS = 15 * 1000;
     public static final boolean LOG_CLEANER_ENABLE = true;
 
-    public static final String LOG_CLEANER_THREADS_PROP = ServerTopicConfigSynonyms.LOG_CLEANER_PREFIX + "threads";
-    public static final String LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP = ServerTopicConfigSynonyms.LOG_CLEANER_PREFIX + "io.max.bytes.per.second";
-    public static final String LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP = ServerTopicConfigSynonyms.LOG_CLEANER_PREFIX + "dedupe.buffer.size";
-    public static final String LOG_CLEANER_IO_BUFFER_SIZE_PROP = ServerTopicConfigSynonyms.LOG_CLEANER_PREFIX + "io.buffer.size";
-    public static final String LOG_CLEANER_DEDUPE_BUFFER_LOAD_FACTOR_PROP = ServerTopicConfigSynonyms.LOG_CLEANER_PREFIX + "io.buffer.load.factor";
-    public static final String LOG_CLEANER_BACKOFF_MS_PROP = ServerTopicConfigSynonyms.LOG_CLEANER_PREFIX + "backoff.ms";
-    public static final String LOG_CLEANER_MIN_CLEAN_RATIO_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG);
-    public static final String LOG_CLEANER_ENABLE_PROP = ServerTopicConfigSynonyms.LOG_CLEANER_PREFIX + "enable";
-    public static final String LOG_CLEANER_DELETE_RETENTION_MS_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.DELETE_RETENTION_MS_CONFIG);
-    public static final String LOG_CLEANER_MIN_COMPACTION_LAG_MS_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG);
-    public static final String LOG_CLEANER_MAX_COMPACTION_LAG_MS_PROP = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MAX_COMPACTION_LAG_MS_CONFIG);
+    public static final String LOG_CLEANER_THREADS_CONFIG = ServerTopicConfigSynonyms.LOG_CLEANER_PREFIX + "threads";
+    public static final String LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_CONFIG = ServerTopicConfigSynonyms.LOG_CLEANER_PREFIX + "io.max.bytes.per.second";
+    public static final String LOG_CLEANER_DEDUPE_BUFFER_SIZE_CONFIG = ServerTopicConfigSynonyms.LOG_CLEANER_PREFIX + "dedupe.buffer.size";
+    public static final String LOG_CLEANER_IO_BUFFER_SIZE_CONFIG = ServerTopicConfigSynonyms.LOG_CLEANER_PREFIX + "io.buffer.size";
+    public static final String LOG_CLEANER_DEDUPE_BUFFER_LOAD_FACTOR_CONFIG = ServerTopicConfigSynonyms.LOG_CLEANER_PREFIX + "io.buffer.load.factor";
+    public static final String LOG_CLEANER_BACKOFF_MS_CONFIG = ServerTopicConfigSynonyms.LOG_CLEANER_PREFIX + "backoff.ms";
+    public static final String LOG_CLEANER_MIN_CLEAN_RATIO_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG);
+    public static final String LOG_CLEANER_ENABLE_CONFIG = ServerTopicConfigSynonyms.LOG_CLEANER_PREFIX + "enable";
+    public static final String LOG_CLEANER_DELETE_RETENTION_MS_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.DELETE_RETENTION_MS_CONFIG);
+    public static final String LOG_CLEANER_MIN_COMPACTION_LAG_MS_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG);
+    public static final String LOG_CLEANER_MAX_COMPACTION_LAG_MS_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.MAX_COMPACTION_LAG_MS_CONFIG);
 
     public static final String LOG_CLEANER_MIN_CLEAN_RATIO_DOC = "The minimum ratio of dirty log to total log for a log to eligible for cleaning. " +
-            "If the " + LOG_CLEANER_MAX_COMPACTION_LAG_MS_PROP + " or the " + LOG_CLEANER_MIN_COMPACTION_LAG_MS_PROP +
+            "If the " + LOG_CLEANER_MAX_COMPACTION_LAG_MS_CONFIG + " or the " + LOG_CLEANER_MIN_COMPACTION_LAG_MS_CONFIG +
             " configurations are also specified, then the log compactor considers the log eligible for compaction " +
             "as soon as either: (i) the dirty ratio threshold has been met and the log has had dirty (uncompacted) " +
-            "records for at least the " + LOG_CLEANER_MIN_COMPACTION_LAG_MS_PROP + " duration, or (ii) if the log has had " +
-            "dirty (uncompacted) records for at most the " + LOG_CLEANER_MAX_COMPACTION_LAG_MS_PROP + " period.";
+            "records for at least the " + LOG_CLEANER_MIN_COMPACTION_LAG_MS_CONFIG + " duration, or (ii) if the log has had " +
+            "dirty (uncompacted) records for at most the " + LOG_CLEANER_MAX_COMPACTION_LAG_MS_CONFIG + " period.";
     public static final String LOG_CLEANER_THREADS_DOC = "The number of background threads to use for log cleaning";
     public static final String LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_DOC = "The log cleaner will be throttled so that the sum of its read and write i/o will be less than this value on average";
     public static final String LOG_CLEANER_DEDUPE_BUFFER_SIZE_DOC = "The total memory used for log deduplication across all cleaner threads";

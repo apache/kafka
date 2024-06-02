@@ -169,7 +169,7 @@ public class EmbeddedKafkaCluster {
         putIfAbsent(brokerConfig, GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, (short) brokers.length);
         putIfAbsent(brokerConfig, AUTO_CREATE_TOPICS_ENABLE_CONFIG, false);
         // reduce the size of the log cleaner map to reduce test memory usage
-        putIfAbsent(brokerConfig, CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, 2 * 1024 * 1024L);
+        putIfAbsent(brokerConfig, CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_CONFIG, 2 * 1024 * 1024L);
 
         Object listenerConfig = brokerConfig.get(INTER_BROKER_LISTENER_NAME_CONFIG);
         if (listenerConfig == null)
