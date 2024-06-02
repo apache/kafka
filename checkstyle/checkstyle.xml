@@ -82,9 +82,7 @@
       <property name="file" value="${config_loc}/${importControlFile}"/>
     </module>
 
-    <!--   import order rule not config in the checkstyle.xml.
-        import order check by is checked by the spotless plugin.
-        More checks may be handed over to the spotless plugin in the future-->
+    <!--   DON'T define any import order here! Import order check/format is addressed by spotless.-->
 
     <!-- whitespace -->
     <module name="GenericWhitespace"/>
