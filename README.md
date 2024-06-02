@@ -233,7 +233,7 @@ The checkstyle warnings will be found in `reports/checkstyle/reports/main.html` 
 subproject build directories. They are also printed to the console. The build will fail if Checkstyle fails.
 
 #### Spotless ####
-This plugin can review code by rules and can also help you check the code , it is disabled by default. Some of our code reviews use `spotless` instead of `checkstyle`:
+The import order is a part of static check. please call `spotlessApply` to optimize the imports of Java codes before filing pull request :
 
     ./gradlew spotlessApply
 
