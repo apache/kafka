@@ -1274,7 +1274,6 @@ public class KafkaConfigBackingStoreMockitoTest {
         // Should see two connectors now, one paused and one stopped
         configStorage.refresh(0, TimeUnit.SECONDS);
         verify(configUpdateListener).onConnectorTargetStateChange(CONNECTOR_IDS.get(0));
-        configUpdateListener.onConnectorConfigRemove(CONNECTOR_IDS.get(0));
         configState = configStorage.snapshot();
 
         assertEquals(new HashSet<>(CONNECTOR_IDS), configStorage.connectorTargetStates.keySet());
