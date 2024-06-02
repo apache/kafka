@@ -158,12 +158,11 @@ public class NetworkClientDelegateTest {
             assertTrue(networkClientDelegate.hasAnyPendingRequests());
             assertTrue(networkClientDelegate.unsentRequests().isEmpty());
             assertTrue(client.hasInFlightRequests());
-            time.sleep(REQUEST_TIMEOUT_MS);
 
-            // get response normally
-            networkClientDelegate.add(unsentRequest);
-            prepareFindCoordinatorResponse(Errors.NONE);
+            client.respond(FindCoordinatorResponse.prepareResponse(Errors.NONE, GROUP_ID, mockNode()));
             networkClientDelegate.poll(0, time.milliseconds());
+
+            // get response
             assertFalse(networkClientDelegate.hasAnyPendingRequests());
             assertTrue(networkClientDelegate.unsentRequests().isEmpty());
             assertFalse(client.hasInFlightRequests());
