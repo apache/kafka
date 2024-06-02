@@ -39,4 +39,21 @@ public class ProcessId {
     public String toString() {
         return "ProcessId{id=" + id + "}";
     }
+
+    @Override
+    public int hashCode() {
+        return id.hashCode();
+    }
+
+    @Override
+    public boolean equals(final Object obj) {
+        if (this == obj)
+            return true;
+        if (obj == null)
+            return false;
+        if (getClass() != obj.getClass())
+            return false;
+        final ProcessId other = (ProcessId) obj;
+        return this.id.equals(other.id());
+    }
 }

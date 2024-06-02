@@ -50,6 +50,7 @@ import org.apache.kafka.metadata.placement.ReplicaPlacer;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer;
 import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
@@ -407,6 +408,13 @@ public class ClusterControlManager {
             setBrokerEpoch(brokerEpoch).
             setRack(request.rack()).
             setEndPoints(listenerInfo.toBrokerRegistrationRecord());
+
+        if (existing != null && request.incarnationId().equals(existing.incarnationId())) {
+            log.info("Amending registration of broker {}", request.brokerId());
+            record.setFenced(existing.fenced());
+            record.setInControlledShutdown(existing.inControlledShutdown());
+        }
+
         for (BrokerRegistrationRequestData.Feature feature : request.features()) {
             record.features().add(processRegistrationFeature(brokerId, finalizedFeatures, feature));
         }
@@ -459,18 +467,19 @@ public class ClusterControlManager {
         FinalizedControllerFeatures finalizedFeatures,
         BrokerRegistrationRequestData.Feature feature
     ) {
-        Optional<Short> finalized = finalizedFeatures.get(feature.name());
-        if (finalized.isPresent()) {
-            if (!VersionRange.of(feature.minSupportedVersion(), feature.maxSupportedVersion()).contains(finalized.get())) {
-                throw new UnsupportedVersionException("Unable to register because the broker " +
-                    "does not support version " + finalized.get() + " of " + feature.name() +
-                        ". It wants a version between " + feature.minSupportedVersion() + " and " +
-                        feature.maxSupportedVersion() + ", inclusive.");
-            }
-        } else {
+        int defaultVersion = feature.name().equals(MetadataVersion.FEATURE_NAME) ? 1 : 0; // The default value for MetadataVersion is 1 not 0.
+        short finalized = finalizedFeatures.versionOrDefault(feature.name(), (short) defaultVersion);
+        if (!VersionRange.of(feature.minSupportedVersion(), feature.maxSupportedVersion()).contains(finalized)) {
+            throw new UnsupportedVersionException("Unable to register because the broker " +
+                "does not support version " + finalized + " of " + feature.name() +
+                    ". It wants a version between " + feature.minSupportedVersion() + " and " +
+                    feature.maxSupportedVersion() + ", inclusive.");
+        }
+        // A feature is not found in the finalizedFeature map if it is unknown to the controller or set to 0 (feature not enabled).
+        // Only log if the feature name is not known by the controller.
+        if (!Features.PRODUCTION_FEATURE_NAMES.contains(feature.name()))
             log.warn("Broker {} registered with feature {} that is unknown to the controller",
                     brokerId, feature.name());
-        }
         return new BrokerFeature().
                 setName(feature.name()).
                 setMinSupportedVersion(feature.minSupportedVersion()).

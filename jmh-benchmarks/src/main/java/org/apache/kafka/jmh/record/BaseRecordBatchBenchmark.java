@@ -36,7 +36,6 @@ import org.openjdk.jmh.annotations.TearDown;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
-import java.util.Optional;
 import java.util.Random;
 import java.util.stream.IntStream;
 
@@ -80,7 +79,7 @@ public abstract class BaseRecordBatchBenchmark {
     ByteBuffer[] batchBuffers;
     RequestLocal requestLocal;
     LogValidator.MetricsRecorder validatorMetricsRecorder = UnifiedLog.newValidatorMetricsRecorder(
-        new BrokerTopicStats(Optional.empty()).allTopicsStats());
+        new BrokerTopicStats(false).allTopicsStats());
 
     @Setup
     public void init() {

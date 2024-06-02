@@ -17,29 +17,64 @@
 
 package kafka.test.junit;
 
+import kafka.test.ClusterConfig;
 import kafka.test.annotation.ClusterTemplate;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.extension.ExtensionContext;
+
+import java.lang.reflect.Method;
+import java.util.Collections;
+import java.util.List;
+
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class ClusterTestExtensionsUnitTest {
+
+    static List<ClusterConfig> cfgEmpty() {
+        return Collections.emptyList();
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private ExtensionContext buildExtensionContext(String methodName) throws Exception {
+        ExtensionContext extensionContext = mock(ExtensionContext.class);
+        Class clazz = ClusterTestExtensionsUnitTest.class;
+        Method method = clazz.getDeclaredMethod(methodName);
+        when(extensionContext.getRequiredTestClass()).thenReturn(clazz);
+        when(extensionContext.getRequiredTestMethod()).thenReturn(method);
+        return extensionContext;
+    }
+
     @Test
-    void testProcessClusterTemplate() {
+    void testProcessClusterTemplate() throws Exception {
         ClusterTestExtensions ext = new ClusterTestExtensions();
-        ExtensionContext context = mock(ExtensionContext.class);
+        ExtensionContext context = buildExtensionContext("cfgEmpty");
 
         ClusterTemplate annot = mock(ClusterTemplate.class);
-        when(annot.value()).thenReturn("").thenReturn(" ");
+        when(annot.value()).thenReturn("").thenReturn(" ").thenReturn("cfgEmpty");
 
-        Assertions.assertThrows(IllegalStateException.class, () ->
-                ext.processClusterTemplate(context, annot)
+        Assertions.assertEquals(
+                "ClusterTemplate value can't be empty string.",
+                Assertions.assertThrows(IllegalStateException.class, () ->
+                        ext.processClusterTemplate(context, annot)
+                ).getMessage()
         );
 
-        Assertions.assertThrows(IllegalStateException.class, () ->
-                ext.processClusterTemplate(context, annot)
+
+        Assertions.assertEquals(
+                "ClusterTemplate value can't be empty string.",
+                Assertions.assertThrows(IllegalStateException.class, () ->
+                        ext.processClusterTemplate(context, annot)
+                ).getMessage()
+        );
+
+        Assertions.assertEquals(
+                "ClusterConfig generator method should provide at least one config",
+                Assertions.assertThrows(IllegalStateException.class, () ->
+                        ext.processClusterTemplate(context, annot)
+                ).getMessage()
         );
     }
 }

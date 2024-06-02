@@ -28,7 +28,7 @@ import kafka.log.{LogTestUtils, UnifiedLog}
 import kafka.raft.{KafkaMetadataLog, MetadataLogConfig}
 import kafka.server.{BrokerTopicStats, KafkaRaftServer}
 import kafka.tools.DumpLogSegments.{OffsetsMessageParser, TimeIndexDumpErrors}
-import kafka.utils.TestUtils
+import kafka.utils.{TestUtils, VerifiableProperties}
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.{Assignment, Subscription}
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.{TopicPartition, Uuid}
@@ -598,6 +598,26 @@ class DumpLogSegmentsTest {
     )
   }
 
+  @Test
+  def testNewDecoder(): Unit = {
+    // Decoder translate should pass without exception
+    DumpLogSegments.newDecoder(classOf[DumpLogSegmentsTest.TestDecoder].getName)
+    DumpLogSegments.newDecoder(classOf[kafka.serializer.DefaultDecoder].getName)
+    assertThrows(classOf[Exception], () => DumpLogSegments.newDecoder(classOf[DumpLogSegmentsTest.TestDecoderWithoutVerifiableProperties].getName))
+  }
+
+  @Test
+  def testConvertDeprecatedDecoderClass(): Unit = {
+    assertEquals(classOf[org.apache.kafka.tools.api.DefaultDecoder].getName, DumpLogSegments.convertDeprecatedDecoderClass(
+      classOf[kafka.serializer.DefaultDecoder].getName))
+    assertEquals(classOf[org.apache.kafka.tools.api.IntegerDecoder].getName, DumpLogSegments.convertDeprecatedDecoderClass(
+      classOf[kafka.serializer.IntegerDecoder].getName))
+    assertEquals(classOf[org.apache.kafka.tools.api.LongDecoder].getName, DumpLogSegments.convertDeprecatedDecoderClass(
+      classOf[kafka.serializer.LongDecoder].getName))
+    assertEquals(classOf[org.apache.kafka.tools.api.StringDecoder].getName, DumpLogSegments.convertDeprecatedDecoderClass(
+      classOf[kafka.serializer.StringDecoder].getName))
+  }
+
   private def readBatchMetadata(lines: util.ListIterator[String]): Option[String] = {
     while (lines.hasNext) {
       val line = lines.next()
@@ -730,5 +750,15 @@ class DumpLogSegmentsTest {
         assertEquals(None, parsedRecord.get("compresscodec"))
       }
     }
+  }
+}
+
+object DumpLogSegmentsTest {
+  class TestDecoder(props: VerifiableProperties) extends kafka.serializer.Decoder[Array[Byte]] {
+    override def fromBytes(bytes: Array[Byte]): Array[Byte] = bytes
+  }
+
+  class TestDecoderWithoutVerifiableProperties() extends kafka.serializer.Decoder[Array[Byte]] {
+    override def fromBytes(bytes: Array[Byte]): Array[Byte] = bytes
   }
 }

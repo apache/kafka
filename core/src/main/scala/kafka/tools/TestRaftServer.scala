@@ -37,7 +37,7 @@ import org.apache.kafka.common.{TopicPartition, Uuid, protocol}
 import org.apache.kafka.raft.errors.NotLeaderException
 import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient, QuorumConfig}
 import org.apache.kafka.security.CredentialProvider
-import org.apache.kafka.server.common.{Features, MetadataVersion}
+import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
 import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.server.config.KRaftConfigs
 import org.apache.kafka.server.fault.ProcessTerminatingFaultHandler
@@ -81,7 +81,7 @@ class TestRaftServer(
       ListenerType.CONTROLLER,
       true,
       false,
-      () => Features.fromKRaftVersion(MetadataVersion.MINIMUM_KRAFT_VERSION))
+      () => FinalizedFeatures.fromKRaftVersion(MetadataVersion.MINIMUM_KRAFT_VERSION))
     socketServer = new SocketServer(config, metrics, time, credentialProvider, apiVersionManager)
 
     raftManager = new KafkaRaftManager[Array[Byte]](
