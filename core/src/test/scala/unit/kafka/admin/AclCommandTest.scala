@@ -228,7 +228,6 @@ class AclCommandTest extends QuorumTestHarness with Logging {
       e.getThrowableInformation != null &&
       e.getThrowableInformation.getThrowable.getClass.getName == classOf[InstanceAlreadyExistsException].getName)
     assertFalse(warning.isDefined, "There should be no warnings about multiple registration of mbeans")
-
   }
 
   private def testProducerConsumerCli(cmdArgs: Array[String]): Unit = {
