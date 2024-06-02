@@ -3853,7 +3853,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, consumerGroupDescribeRequest.getErrorResponse(exception))
         } else {
-          if (request.header.apiVersion >= 3 && includeAuthorizedOperations) {
+          if (includeAuthorizedOperations) {
             results.forEach { groupResult =>
               if (groupResult.errorCode == Errors.NONE.code) {
                 groupResult.setAuthorizedOperations(authHelper.authorizedOperations(
