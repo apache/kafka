@@ -20,9 +20,6 @@ package kafka.server
 import java.net.{InetAddress, UnknownHostException}
 import java.util.Properties
 import org.apache.kafka.common.config.ConfigDef
-import org.apache.kafka.common.config.ConfigDef.Importance._
-import org.apache.kafka.common.config.ConfigDef.Range._
-import org.apache.kafka.common.config.ConfigDef.Type._
 import org.apache.kafka.server.config.{QuotaConfigs, ZooKeeperInternals}
 
 import java.util
@@ -35,48 +32,44 @@ import scala.jdk.CollectionConverters._
 object DynamicConfig {
 
   object Broker {
-    // Definitions
-    val brokerConfigDef = new ConfigDef()
-      // Round minimum value down, to make it easier for users.
-      .define(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, LONG, QuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT, atLeast(0), MEDIUM, QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_DOC)
-      .define(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, LONG, QuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT, atLeast(0), MEDIUM, QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_DOC)
-      .define(QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, LONG, QuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT, atLeast(0), MEDIUM, QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_DOC)
-    DynamicBrokerConfig.addDynamicConfigs(brokerConfigDef)
-    val nonDynamicProps = KafkaConfig.configNames.toSet -- brokerConfigDef.names.asScala
+    private val brokerConfigs = QuotaConfigs.brokerQuotaConfigs()
+    DynamicBrokerConfig.addDynamicConfigs(brokerConfigs)
 
-    def names = brokerConfigDef.names
+    def configKeys: util.Map[String, ConfigDef.ConfigKey] = brokerConfigs.configKeys
 
-    def validate(props: Properties) = DynamicConfig.validate(brokerConfigDef, props, customPropsAllowed = true)
+    def names: util.Set[String] = brokerConfigs.names
+
+    def validate(props: Properties): util.Map[String, AnyRef] = DynamicConfig.validate(brokerConfigs, props, customPropsAllowed = true)
   }
 
   object Client {
     private val clientConfigs = QuotaConfigs.userAndClientQuotaConfigs()
 
-    def configKeys = clientConfigs.configKeys
+    def configKeys: util.Map[String, ConfigDef.ConfigKey] = clientConfigs.configKeys
 
-    def names = clientConfigs.names
+    def names: util.Set[String] = clientConfigs.names
 
-    def validate(props: Properties) = DynamicConfig.validate(clientConfigs, props, customPropsAllowed = false)
+    def validate(props: Properties): util.Map[String, AnyRef] = DynamicConfig.validate(clientConfigs, props, customPropsAllowed = false)
   }
 
   object User {
     private val userConfigs = QuotaConfigs.scramMechanismsPlusUserAndClientQuotaConfigs()
 
-    def configKeys = userConfigs.configKeys
+    def configKeys: util.Map[String, ConfigDef.ConfigKey] = userConfigs.configKeys
 
-    def names = userConfigs.names
+    def names: util.Set[String] = userConfigs.names
 
-    def validate(props: Properties) = DynamicConfig.validate(userConfigs, props, customPropsAllowed = false)
+    def validate(props: Properties): util.Map[String, AnyRef] = DynamicConfig.validate(userConfigs, props, customPropsAllowed = false)
   }
 
   object Ip {
     private val ipConfigs = QuotaConfigs.ipConfigs()
 
-    def configKeys = ipConfigs.configKeys
+    def configKeys: util.Map[String, ConfigDef.ConfigKey] = ipConfigs.configKeys
 
-    def names = ipConfigs.names
+    def names: util.Set[String] = ipConfigs.names
 
-    def validate(props: Properties) = DynamicConfig.validate(ipConfigs, props, customPropsAllowed = false)
+    def validate(props: Properties): util.Map[String, AnyRef] = DynamicConfig.validate(ipConfigs, props, customPropsAllowed = false)
 
     def isValidIpEntity(ip: String): Boolean = {
       if (ip != ZooKeeperInternals.DEFAULT_STRING) {

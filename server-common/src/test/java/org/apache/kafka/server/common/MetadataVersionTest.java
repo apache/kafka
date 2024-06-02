@@ -47,6 +47,7 @@ class MetadataVersionTest {
     }
 
     @Test
+    @SuppressWarnings("checkstyle:JavaNCSS")
     public void testFromVersionString() {
         assertEquals(IBP_0_8_0, MetadataVersion.fromVersionString("0.8.0"));
         assertEquals(IBP_0_8_0, MetadataVersion.fromVersionString("0.8.0.0"));
@@ -184,6 +185,8 @@ class MetadataVersionTest {
         assertEquals(IBP_3_7_IV4, MetadataVersion.fromVersionString("3.7-IV4"));
 
         assertEquals(IBP_3_8_IV0, MetadataVersion.fromVersionString("3.8-IV0"));
+
+        assertEquals(IBP_4_0_IVO, MetadataVersion.fromVersionString("4.0-IV0"));
     }
 
     @Test
@@ -243,6 +246,8 @@ class MetadataVersionTest {
         assertEquals("3.7", IBP_3_7_IV2.shortVersion());
         assertEquals("3.7", IBP_3_7_IV3.shortVersion());
         assertEquals("3.7", IBP_3_7_IV4.shortVersion());
+        assertEquals("3.8", IBP_3_8_IV0.shortVersion());
+        assertEquals("4.0", IBP_4_0_IVO.shortVersion());
     }
 
     @Test
@@ -292,6 +297,7 @@ class MetadataVersionTest {
         assertEquals("3.7-IV3", IBP_3_7_IV3.version());
         assertEquals("3.7-IV4", IBP_3_7_IV4.version());
         assertEquals("3.8-IV0", IBP_3_8_IV0.version());
+        assertEquals("4.0-IV0", IBP_4_0_IVO.version());
     }
 
     @Test
