@@ -22,9 +22,6 @@ public class DefaultChannelMetadataRegistry implements ChannelMetadataRegistry {
 
     @Override
     public void registerCipherInformation(final CipherInformation cipherInformation) {
-        if (cipherInformation == null) {
-            throw new IllegalArgumentException("cipherInformation cannot be null");
-        }
         this.cipherInformation = cipherInformation;
     }
 
