@@ -146,6 +146,7 @@ public class NetworkClientDelegateTest {
         try (NetworkClientDelegate networkClientDelegate = newNetworkClientDelegate()) {
             NetworkClientDelegate.UnsentRequest unsentRequest = newUnsentFindCoordinatorRequest();
             networkClientDelegate.add(unsentRequest);
+
             // unsent
             assertTrue(networkClientDelegate.hasAnyPendingRequests());
             assertFalse(networkClientDelegate.unsentRequests().isEmpty());
@@ -157,6 +158,15 @@ public class NetworkClientDelegateTest {
             assertTrue(networkClientDelegate.hasAnyPendingRequests());
             assertTrue(networkClientDelegate.unsentRequests().isEmpty());
             assertTrue(client.hasInFlightRequests());
+            time.sleep(REQUEST_TIMEOUT_MS);
+
+            // get response normally
+            networkClientDelegate.add(unsentRequest);
+            prepareFindCoordinatorResponse(Errors.NONE);
+            networkClientDelegate.poll(0, time.milliseconds());
+            assertFalse(networkClientDelegate.hasAnyPendingRequests());
+            assertTrue(networkClientDelegate.unsentRequests().isEmpty());
+            assertFalse(client.hasInFlightRequests());
         }
     }
 
