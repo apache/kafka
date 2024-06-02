@@ -49,6 +49,7 @@ import org.apache.kafka.server.log.remote.storage.LocalTieredStorageSnapshot;
 import scala.Function0;
 import scala.Function1;
 
+import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.util.ArrayList;
@@ -259,8 +260,20 @@ public final class TieredStorageTestContext implements AutoCloseable {
         initContext();
     }
 
-    public void eraseBrokerStorage(int brokerId) throws IOException {
-        localStorages.get(brokerId).eraseStorage();
+    public void eraseBrokerStorage(int brokerId,
+                                   FilenameFilter filter,
+                                   boolean isStopped) throws IOException {
+        BrokerLocalStorage brokerLocalStorage;
+        if (isStopped) {
+            brokerLocalStorage = TieredStorageTestHarness.localStorages(harness.brokers())
+                    .stream()
+                    .filter(bls -> bls.getBrokerId() == brokerId)
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalArgumentException("No local storage found for broker " + brokerId));
+        } else {
+            brokerLocalStorage = localStorages.get(brokerId);
+        }
+        brokerLocalStorage.eraseStorage(filter);
     }
 
     public TopicSpec topicSpec(String topicName) {

@@ -190,15 +190,15 @@ public class RestClient {
                         "Unexpected status code when handling forwarded request: " + responseCode);
             }
         } catch (IOException | InterruptedException | TimeoutException | ExecutionException e) {
-            log.error("IO error forwarding REST request: ", e);
+            log.error("IO error forwarding REST request to {} :", url, e);
             throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR, "IO Error trying to forward REST request: " + e.getMessage(), e);
         } catch (ConnectRestException e) {
             // catching any explicitly thrown ConnectRestException-s to preserve its status code
             // and to avoid getting it overridden by the more generic catch (Throwable) clause down below
-            log.error("Error forwarding REST request", e);
+            log.error("Error forwarding REST request to {} :", url, e);
             throw e;
         } catch (Throwable t) {
-            log.error("Error forwarding REST request", t);
+            log.error("Error forwarding REST request to {} :", url, t);
             throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR, "Error trying to forward REST request: " + t.getMessage(), t);
         }
     }

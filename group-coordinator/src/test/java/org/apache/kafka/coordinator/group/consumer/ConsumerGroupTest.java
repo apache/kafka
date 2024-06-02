@@ -765,6 +765,55 @@ public class ConsumerGroupTest {
                 image.cluster()
             )
         );
+
+        // Compute while taking into account removal of member 1, member 2 and member 3
+        assertEquals(
+            Collections.emptyMap(),
+            consumerGroup.computeSubscriptionMetadata(
+                consumerGroup.computeSubscribedTopicNames(new HashSet<>(Arrays.asList(member1, member2, member3))),
+                image.topics(),
+                image.cluster()
+            )
+        );
+
+        // Compute while taking into account removal of member 2 and member 3.
+        assertEquals(
+            mkMap(
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, mkMapOfPartitionRacks(1)))
+            ),
+            consumerGroup.computeSubscriptionMetadata(
+                consumerGroup.computeSubscribedTopicNames(new HashSet<>(Arrays.asList(member2, member3))),
+                image.topics(),
+                image.cluster()
+            )
+        );
+
+        // Compute while taking into account removal of member 1.
+        assertEquals(
+            mkMap(
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, mkMapOfPartitionRacks(2))),
+                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3, mkMapOfPartitionRacks(3)))
+            ),
+            consumerGroup.computeSubscriptionMetadata(
+                consumerGroup.computeSubscribedTopicNames(Collections.singleton(member1)),
+                image.topics(),
+                image.cluster()
+            )
+        );
+
+        // It should return foo, bar and zar.
+        assertEquals(
+            mkMap(
+                mkEntry("foo", new TopicMetadata(fooTopicId, "foo", 1, mkMapOfPartitionRacks(1))),
+                mkEntry("bar", new TopicMetadata(barTopicId, "bar", 2, mkMapOfPartitionRacks(2))),
+                mkEntry("zar", new TopicMetadata(zarTopicId, "zar", 3, mkMapOfPartitionRacks(3)))
+            ),
+            consumerGroup.computeSubscriptionMetadata(
+                consumerGroup.computeSubscribedTopicNames(Collections.emptySet()),
+                image.topics(),
+                image.cluster()
+            )
+        );
     }
 
     @Test

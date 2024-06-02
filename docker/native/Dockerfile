@@ -20,40 +20,26 @@ ARG kafka_url
 WORKDIR /app
 
 ENV KAFKA_URL=$kafka_url
-COPY native-image-configs native-image-configs
+ENV NATIVE_IMAGE_PATH="native-image"
+ENV KAFKA_DIR="/app/kafka"
+ENV NATIVE_CONFIGS_DIR="/app/native-image-configs"
+ENV KAFKA_LIBS_DIR="$KAFKA_DIR/libs"
+ENV TARGET_PATH="$KAFKA_DIR/kafka.Kafka"
 
-RUN mkdir kafka; \
+COPY native-image-configs $NATIVE_CONFIGS_DIR
+COPY native_command.sh native_command.sh
+
+RUN mkdir $KAFKA_DIR; \
     microdnf install wget; \
     wget -nv -O kafka.tgz "$KAFKA_URL"; \
-    wget -nv -O kafka.tgz.asc "$kafka_url.asc"; \
-    tar xfz kafka.tgz -C kafka --strip-components 1; \
+    wget -nv -O kafka.tgz.asc "$KAFKA_URL.asc"; \
+    tar xfz kafka.tgz -C $KAFKA_DIR --strip-components 1; \
     wget -nv -O KEYS https://downloads.apache.org/kafka/KEYS; \
     gpg --import KEYS; \
     gpg --batch --verify kafka.tgz.asc kafka.tgz; \
     rm kafka.tgz ; \
-    cd kafka ;  \
 # Build the native-binary of the apache kafka using graalVM native-image.
-    native-image --no-fallback \
-        --enable-http \
-        --enable-https \
-        --allow-incomplete-classpath \
-        --report-unsupported-elements-at-runtime \
-        --install-exit-handlers \
-        --enable-monitoring=jmxserver,jmxclient,heapdump,jvmstat \
-        -H:+ReportExceptionStackTraces \
-        -H:+EnableAllSecurityServices \
-        -H:EnableURLProtocols=http,https \
-        -H:AdditionalSecurityProviders=sun.security.jgss.SunProvider \
-        -H:ReflectionConfigurationFiles=/app/native-image-configs/reflect-config.json \
-        -H:JNIConfigurationFiles=/app/native-image-configs/jni-config.json \
-        -H:ResourceConfigurationFiles=/app/native-image-configs/resource-config.json \
-        -H:SerializationConfigurationFiles=/app/native-image-configs/serialization-config.json \
-        -H:PredefinedClassesConfigurationFiles=/app/native-image-configs/predefined-classes-config.json \
-        -H:DynamicProxyConfigurationFiles=/app/native-image-configs/proxy-config.json \
-        --verbose \
-        -march=compatibility \
-        -cp "libs/*" kafka.docker.KafkaDockerWrapper \
-        -o kafka.Kafka
+    /app/native_command.sh $NATIVE_IMAGE_PATH $NATIVE_CONFIGS_DIR $KAFKA_LIBS_DIR $TARGET_PATH
 
 
 FROM alpine:latest
