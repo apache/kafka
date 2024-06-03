@@ -19,6 +19,7 @@ package org.apache.kafka.clients.producer.internals;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.LeastLoadedNode;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.MetadataSnapshot;
@@ -3799,10 +3800,10 @@ public class SenderTest {
         client = new MockClient(time, metadata) {
             volatile boolean canSendMore = true;
             @Override
-            public Node leastLoadedNode(long now) {
+            public LeastLoadedNode leastLoadedNode(long now) {
                 for (Node node : metadata.fetch().nodes()) {
                     if (isReady(node, now) && canSendMore)
-                        return node;
+                        return new LeastLoadedNode(node, true);
                 }
                 return null;
             }

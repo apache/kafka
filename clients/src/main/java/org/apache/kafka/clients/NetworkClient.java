@@ -705,7 +705,7 @@ public class NetworkClient implements KafkaClient {
      * @return The node with the fewest in-flight requests.
      */
     @Override
-    public Node leastLoadedNode(long now) {
+    public LeastLoadedNode leastLoadedNode(long now) {
         List<Node> nodes = this.metadataUpdater.fetchNodes();
         if (nodes.isEmpty())
             throw new IllegalStateException("There are no nodes in the Kafka cluster");
@@ -715,16 +715,25 @@ public class NetworkClient implements KafkaClient {
         Node foundCanConnect = null;
         Node foundReady = null;
 
+        boolean atLeastOneNodeConnected = false;
+
         int offset = this.randOffset.nextInt(nodes.size());
         for (int i = 0; i < nodes.size(); i++) {
             int idx = (offset + i) % nodes.size();
             Node node = nodes.get(idx);
+
+            if (!atLeastOneNodeConnected
+                    && connectionStates.isReady(node.idString(), now)
+                    && selector.isChannelReady(node.idString())) {
+                atLeastOneNodeConnected = true;
+            }
+
             if (canSendRequest(node.idString(), now)) {
                 int currInflight = this.inFlightRequests.count(node.idString());
                 if (currInflight == 0) {
                     // if we find an established connection with no in-flight requests we can stop right away
                     log.trace("Found least loaded node {} connected with no in-flight requests", node);
-                    return node;
+                    return new LeastLoadedNode(node, true);
                 } else if (currInflight < inflight) {
                     // otherwise if this is the best we have found so far, record that
                     inflight = currInflight;
@@ -748,16 +757,16 @@ public class NetworkClient implements KafkaClient {
         // which are being established before connecting to new nodes.
         if (foundReady != null) {
             log.trace("Found least loaded node {} with {} inflight requests", foundReady, inflight);
-            return foundReady;
+            return new LeastLoadedNode(foundReady, atLeastOneNodeConnected);
         } else if (foundConnecting != null) {
             log.trace("Found least loaded connecting node {}", foundConnecting);
-            return foundConnecting;
+            return new LeastLoadedNode(foundConnecting, atLeastOneNodeConnected);
         } else if (foundCanConnect != null) {
             log.trace("Found least loaded node {} with no active connection", foundCanConnect);
-            return foundCanConnect;
+            return new LeastLoadedNode(foundCanConnect, atLeastOneNodeConnected);
         } else {
             log.trace("Least loaded node selection failed to find an available node");
-            return null;
+            return new LeastLoadedNode(null, atLeastOneNodeConnected);
         }
     }
 
@@ -1132,24 +1141,26 @@ public class NetworkClient implements KafkaClient {
 
             // Beware that the behavior of this method and the computation of timeouts for poll() are
             // highly dependent on the behavior of leastLoadedNode.
-            Node node = leastLoadedNode(now);
+            LeastLoadedNode leastLoadedNode = leastLoadedNode(now);
 
             // Rebootstrap if needed and configured.
-            if (node == null && metadataRecoveryStrategy == MetadataRecoveryStrategy.REBOOTSTRAP) {
+            if (leastLoadedNode.node() == null
+                    && !leastLoadedNode.isAtLeastOneConnected()
+                    && metadataRecoveryStrategy == MetadataRecoveryStrategy.REBOOTSTRAP) {
                 for (final Node oldNode : metadata.fetch().nodes()) {
                     NetworkClient.this.close(oldNode.idString());
                 }
                 metadata.rebootstrap();
 
-                node = leastLoadedNode(now);
+                leastLoadedNode = leastLoadedNode(now);
             }
 
-            if (node == null) {
+            if (leastLoadedNode.node() == null) {
                 log.debug("Give up sending metadata request since no node is available");
                 return reconnectBackoffMs;
             }
 
-            return maybeUpdate(now, node);
+            return maybeUpdate(now, leastLoadedNode.node());
         }
 
         @Override
@@ -1287,7 +1298,7 @@ public class NetworkClient implements KafkaClient {
 
             // Per KIP-714, let's continue to re-use the same broker for as long as possible.
             if (stickyNode == null) {
-                stickyNode = leastLoadedNode(now);
+                stickyNode = leastLoadedNode(now).node();
                 if (stickyNode == null) {
                     log.debug("Give up sending telemetry request since no node is available");
                     return reconnectBackoffMs;

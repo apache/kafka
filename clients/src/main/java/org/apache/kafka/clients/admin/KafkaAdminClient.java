@@ -25,6 +25,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.DefaultHostResolver;
 import org.apache.kafka.clients.HostResolver;
 import org.apache.kafka.clients.KafkaClient;
+import org.apache.kafka.clients.LeastLoadedNode;
 import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.StaleMetadataException;
@@ -696,7 +697,14 @@ public class KafkaAdminClient extends AdminClient {
     private class MetadataUpdateNodeIdProvider implements NodeProvider {
         @Override
         public Node provide() {
-            return client.leastLoadedNode(time.milliseconds());
+            LeastLoadedNode leastLoadedNode = client.leastLoadedNode(time.milliseconds());
+            if (leastLoadedNode.node() == null
+                    && !leastLoadedNode.isAtLeastOneConnected()
+                    && metadataRecoveryStrategy == MetadataRecoveryStrategy.REBOOTSTRAP) {
+                metadataManager.rebootstrap(time.milliseconds());
+            }
+
+            return leastLoadedNode.node();
         }
 
         @Override
@@ -778,7 +786,7 @@ public class KafkaAdminClient extends AdminClient {
             if (metadataManager.isReady()) {
                 // This may return null if all nodes are busy.
                 // In that case, we will postpone node assignment.
-                return client.leastLoadedNode(time.milliseconds());
+                return client.leastLoadedNode(time.milliseconds()).node();
             }
             metadataManager.requestUpdate();
             return null;
@@ -833,7 +841,7 @@ public class KafkaAdminClient extends AdminClient {
                 } else {
                     // This may return null if all nodes are busy.
                     // In that case, we will postpone node assignment.
-                    return client.leastLoadedNode(time.milliseconds());
+                    return client.leastLoadedNode(time.milliseconds()).node();
                 }
             }
             metadataManager.requestUpdate();
@@ -1212,9 +1220,6 @@ public class KafkaAdminClient extends AdminClient {
                     return true;
                 } else {
                     log.trace("Unable to assign {} to a node.", call);
-                    if (metadataRecoveryStrategy == MetadataRecoveryStrategy.REBOOTSTRAP) {
-                        metadataManager.rebootstrap(now);
-                    }
                     return false;
                 }
             } catch (Throwable t) {

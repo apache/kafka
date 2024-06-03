@@ -588,11 +588,11 @@ public class MockClient implements KafkaClient {
     }
 
     @Override
-    public Node leastLoadedNode(long now) {
+    public LeastLoadedNode leastLoadedNode(long now) {
         // Consistent with NetworkClient, we do not return nodes awaiting reconnect backoff
         for (Node node : metadataUpdater.fetchNodes()) {
             if (!connectionState(node.idString()).isBackingOff(now))
-                return node;
+                return new LeastLoadedNode(node, true);
         }
         return null;
     }

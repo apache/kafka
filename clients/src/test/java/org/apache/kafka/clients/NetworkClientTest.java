@@ -710,7 +710,7 @@ public class NetworkClientTest {
         assertTrue(client.isReady(node, time.milliseconds()), "The client should be ready");
 
         // leastloadednode should be our single node
-        Node leastNode = client.leastLoadedNode(time.milliseconds());
+        Node leastNode = client.leastLoadedNode(time.milliseconds()).node();
         assertEquals(leastNode.id(), node.id(), "There should be one leastloadednode");
 
         // sleep for longer than reconnect backoff
@@ -721,7 +721,7 @@ public class NetworkClientTest {
 
         client.poll(1, time.milliseconds());
         assertFalse(client.ready(node, time.milliseconds()), "After we forced the disconnection the client is no longer ready.");
-        leastNode = client.leastLoadedNode(time.milliseconds());
+        leastNode = client.leastLoadedNode(time.milliseconds()).node();
         assertNull(leastNode, "There should be NO leastloadednode");
     }
 
@@ -732,7 +732,7 @@ public class NetworkClientTest {
 
         Set<Node> providedNodeIds = new HashSet<>();
         for (int i = 0; i < nodeNumber * 10; i++) {
-            Node node = client.leastLoadedNode(time.milliseconds());
+            Node node = client.leastLoadedNode(time.milliseconds()).node();
             assertNotNull(node, "Should provide a node");
             providedNodeIds.add(node);
             client.ready(node, time.milliseconds());
