@@ -190,8 +190,7 @@ public class RemoteLogManagerConfigTest {
                 Long.MAX_VALUE,
                 11,
                 1);
-
-
+        
         assertNotEquals(config1.hashCode(), config3.hashCode());
         assertNotEquals(config1, config3);
     }
