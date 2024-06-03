@@ -51,6 +51,7 @@ public class MirrorConnectorConfigTest {
         MirrorConnectorConfig config = new TestMirrorConnectorConfig(connectorProps);
         Map<String, Object> connectorConsumerProps = config.sourceConsumerConfig("test");
         Map<String, Object> expectedConsumerProps = new HashMap<>();
+        expectedConsumerProps.put("allow.auto.create.topics", "false");
         expectedConsumerProps.put("enable.auto.commit", "false");
         expectedConsumerProps.put("auto.offset.reset", "earliest");
         expectedConsumerProps.put("max.poll.interval.ms", "120000");
@@ -81,6 +82,7 @@ public class MirrorConnectorConfigTest {
         MirrorConnectorConfig config = new TestMirrorConnectorConfig(connectorProps);
         Map<String, Object> connectorConsumerProps = config.sourceConsumerConfig("test");
         Map<String, Object> expectedConsumerProps = new HashMap<>();
+        expectedConsumerProps.put("allow.auto.create.topics", "false");
         expectedConsumerProps.put("enable.auto.commit", "false");
         expectedConsumerProps.put("auto.offset.reset", "latest");
         expectedConsumerProps.put("max.poll.interval.ms", "100");
