@@ -796,7 +796,7 @@ public class RemoteLogManagerTest {
 
         // leader epoch preparation
         checkpoint.write(totalEpochEntries);
-        LeaderEpochFileCache cache = new LeaderEpochFileCache(leaderTopicIdPartition.topicPartition(), checkpoint);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(leaderTopicIdPartition.topicPartition(), checkpoint, scheduler);
         when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
         when(remoteLogMetadataManager.highestOffsetForEpoch(any(TopicIdPartition.class), anyInt()))
                 .thenReturn(Optional.of(0L))
@@ -2675,7 +2675,7 @@ public class RemoteLogManagerTest {
 
         }
     }
-    
+
     @Test
     public void testCopyQuotaManagerConfig() {
         Properties defaultProps = new Properties();
@@ -2695,7 +2695,7 @@ public class RemoteLogManagerTest {
         assertEquals(31, rlmCopyQuotaManagerConfig.numQuotaSamples());
         assertEquals(1, rlmCopyQuotaManagerConfig.quotaWindowSizeSeconds());
     }
-    
+
     @Test
     public void testFetchQuotaManagerConfig() {
         Properties defaultProps = new Properties();
