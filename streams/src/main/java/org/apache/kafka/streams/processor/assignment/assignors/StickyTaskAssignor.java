@@ -212,7 +212,7 @@ public class StickyTaskAssignor implements TaskAssignor {
     private static Map<TaskId, Set<ProcessId>> mapPreviousStandbyTasks(final Map<ProcessId, KafkaStreamsState> clients) {
         final Map<TaskId, Set<ProcessId>> previousStandbyTasks = new HashMap<>();
         for (final KafkaStreamsState client : clients.values()) {
-            for (final TaskId taskId : client.previousActiveTasks()) {
+            for (final TaskId taskId : client.previousStandbyTasks()) {
                 previousStandbyTasks.computeIfAbsent(taskId, k -> new HashSet<>());
                 previousStandbyTasks.get(taskId).add(client.processId());
             }

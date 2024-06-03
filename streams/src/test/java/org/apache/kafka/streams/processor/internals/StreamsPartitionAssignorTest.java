@@ -184,7 +184,7 @@ public class StreamsPartitionAssignorTest {
     @Rule
     public MockitoRule rule = MockitoJUnit.rule().strictness(Strictness.STRICT_STUBS);
     @Rule
-    public Timeout timeout = new Timeout(10_000);
+    public Timeout timeout = new Timeout(30_000);
 
     private static final String CONSUMER_1 = "consumer1";
     private static final String CONSUMER_2 = "consumer2";

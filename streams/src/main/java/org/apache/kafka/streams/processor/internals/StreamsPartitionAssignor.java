@@ -535,8 +535,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         final AtomicBoolean rackInformationFetched = new AtomicBoolean(false);
         final Runnable fetchRackInformation = () -> {
             if (!rackInformationFetched.get()) {
-                RackUtils.annotateTopicPartitionsWithRackInfo(cluster,
-                    internalTopicManager, topicsRequiringRackInfo);
+                RackUtils.annotateTopicPartitionsWithRackInfo(cluster, internalTopicManager, topicsRequiringRackInfo);
                 rackInformationFetched.set(true);
             }
         };
@@ -599,7 +598,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                                    final GroupSubscription groupSubscription) {
         if (assignmentError == AssignmentError.UNKNOWN_PROCESS_ID || assignmentError == AssignmentError.UNKNOWN_TASK_ID) {
             assignor.onAssignmentComputed(new GroupAssignment(Collections.emptyMap()), groupSubscription, assignmentError);
-            log.error("Task assignment returning empty GroupAssignment and failing due to error {}", assignmentError);
+            log.error("Rebalance failed due to task assignor returning assignment with error {}, " +
+                      "assignor callback will receive empty GroupAssignment due to this error", assignmentError);
             throw new StreamsException("Task assignment with " + assignor.getClass().getName() +
                                        " returned a fatal error: " + assignmentError);
         }
@@ -818,7 +818,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             customTaskAssignmentListener = (assignment, subscription) -> {
                 assignor.onAssignmentComputed(assignment, subscription, assignmentError);
                 if (assignmentError != AssignmentError.NONE) {
-                    log.error("Task assignment returning empty GroupAssignment and failing due to error {}", assignmentError);
+                    log.error("Rebalance failed due to task assignor returning assignment with error {}", assignmentError);
                     throw new StreamsException("Task assignment with " + assignor.getClass().getName() +
                                                " returned an error: " + assignmentError);
                 }
