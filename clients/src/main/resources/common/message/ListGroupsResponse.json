@@ -27,7 +27,9 @@
   // Version 4 adds the GroupState field (KIP-518).
   //
   // Version 5 adds the GroupType field (KIP-848).
-  "validVersions": "0-5",
+  //
+  // Version 6 adds support for share groups (KIP-932).
+  "validVersions": "0-6",
   "flexibleVersions": "3+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,
