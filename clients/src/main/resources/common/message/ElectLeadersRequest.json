@@ -36,7 +36,7 @@
         { "name": "Partitions", "type": "[]int32", "versions": "0+",
           "about": "The partitions of this topic whose leader should be elected." },
         { "name": "DesignatedLeaders", "type": "[]int32", "versions": "3+", "nullableVersions": "3+",
-          "about": "The desired leaders. The entry should match with the entry in Partitions by the index." }
+          "about": "The designated leaders only meant for designated elections. The entry should match with the entry in Partitions by the index." }
       ]
     },
     { "name": "TimeoutMs", "type": "int32", "versions": "0+", "default": "60000",

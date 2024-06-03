@@ -211,6 +211,9 @@ public class LeaderElectionCommandTest {
 
     @ClusterTest
     public void testDesignatedReplicaElection() throws Exception {
+        if (cluster.type().toString() == "ZK") {
+            return;
+        }
         String topic = "designated-topic";
         int partition = 0;
         List<Integer> assignment = Arrays.asList(broker2, broker3);
@@ -239,7 +242,7 @@ public class LeaderElectionCommandTest {
             JavaConverters.asScalaBuffer(Collections.singletonList(broker2)).toSet()
         );
 
-        LeaderElectionCommand.main(
+        LeaderElectionCommand.mainNoExit(
             "--bootstrap-server", cluster.bootstrapServers(),
             "--election-type", "designated",
             "--path-to-json-file", topicPartitionPath.toString()

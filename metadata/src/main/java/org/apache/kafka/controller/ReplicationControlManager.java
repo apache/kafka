@@ -25,6 +25,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidPartitionsException;
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException;
 import org.apache.kafka.common.errors.InvalidReplicationFactorException;
@@ -1477,9 +1478,16 @@ public class ReplicationControlManager {
                 response.replicaElectionResults().add(topicResults);
                 for (int i = 0; i < topic.partitions().size(); i++) {
                     int partitionId = topic.partitions().get(i);
-                    int desiredLeader = -1;
+                    int desiredLeader;
                     if(!topic.designatedLeaders().isEmpty()) {
                         desiredLeader = topic.designatedLeaders().get(i);
+                        if (desiredLeader < 0) {
+                            throw new UnknownServerException("Cannot pass negative number for Designated Leader");
+                        }
+                    } else if (electionType == ElectionType.DESIGNATED) {
+                        throw new InvalidConfigurationException("Designated leader input required for designated election");
+                    } else {
+                        desiredLeader = -1;
                     }
                     ApiError error = electLeader(topic.topic(), partitionId, electionType, records, desiredLeader);
                     topicResults.partitionResult().add(new PartitionResult().
@@ -1523,12 +1531,17 @@ public class ReplicationControlManager {
             return new ApiError(Errors.ELECTION_NOT_NEEDED);
         }
 
-        PartitionChangeBuilder.Election election = PartitionChangeBuilder.Election.PREFERRED;
-        if (electionType == ElectionType.UNCLEAN) {
-            election = PartitionChangeBuilder.Election.UNCLEAN;
-        }
-        if (electionType == ElectionType.DESIGNATED) {
-            election = PartitionChangeBuilder.Election.DESIGNTATED;
+        PartitionChangeBuilder.Election election;
+        switch(electionType) {
+            case UNCLEAN:
+                election = PartitionChangeBuilder.Election.UNCLEAN;
+                break;
+            case DESIGNATED:
+                election = PartitionChangeBuilder.Election.DESIGNATED;
+                break;
+            default:
+                election = PartitionChangeBuilder.Election.PREFERRED;
+                break;
         }
         Optional<ApiMessageAndVersion> record = new PartitionChangeBuilder(
             partition,

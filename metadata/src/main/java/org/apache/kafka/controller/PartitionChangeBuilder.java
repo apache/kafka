@@ -30,6 +30,7 @@ import java.util.stream.Collectors;
 
 import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.metadata.LeaderRecoveryState;
@@ -81,7 +82,7 @@ public class PartitionChangeBuilder {
         /**
          * Perform leader election for designated leader
          */
-        DESIGNTATED
+        DESIGNATED
     }
 
     private final PartitionRegistration partition;
@@ -235,26 +236,33 @@ public class PartitionChangeBuilder {
      * See documentation for the Election type to see more details on the election types supported.
      */
     ElectionResult electLeader() {
-        if (election == Election.PREFERRED || election == Election.DESIGNTATED) {
-            return electPreferredOrDesignatedLeader();
+        if (election == Election.PREFERRED) {
+            return electPreferredLeader();
+        } else if (election == Election.DESIGNATED) {
+            return electDesignatedLeader();
         }
 
         return electAnyLeader();
     }
 
     /**
+     * Assumes that the election type is Election.DESIGNATED
+     */
+    private ElectionResult electDesignatedLeader() {
+        if (isValidNewLeader(desiredLeader)) {
+            return new ElectionResult(desiredLeader, false);
+        }
+
+        throw new UnknownServerException("Invalid desired leader");
+    }
+
+    /**
      * Assumes that the election type is Election.PREFERRED
      */
-    private ElectionResult electPreferredOrDesignatedLeader() {
-        if (election == Election.PREFERRED) {
-            int preferredReplica = targetReplicas.get(0);
-            if (isValidNewLeader(preferredReplica)) {
-                return new ElectionResult(preferredReplica, false);
-            }
-        } else if (election == Election.DESIGNTATED) {
-            if (isValidNewLeader(desiredLeader)) {
-                return new ElectionResult(desiredLeader, false);
-            }
+    private ElectionResult electPreferredLeader() {
+        int preferredReplica = targetReplicas.get(0);
+        if (isValidNewLeader(preferredReplica)) {
+            return new ElectionResult(preferredReplica, false);
         }
 
         if (isValidNewLeader(partition.leader)) {
