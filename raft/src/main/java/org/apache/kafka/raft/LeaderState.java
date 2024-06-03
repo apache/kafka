@@ -313,7 +313,7 @@ public class LeaderState<T> implements EpochState {
             }
         });
         state.updateLeaderEndOffset(endOffsetMetadata);
-        updateVoterSet(lastVoterSet);
+        updateVoterAndObserverStates(lastVoterSet);
         return maybeUpdateHighWatermark();
     }
 
@@ -346,18 +346,7 @@ public class LeaderState<T> implements EpochState {
                     state.nodeId, currentEndOffset.offset, fetchOffsetMetadata.offset);
             }
         });
-        Optional<LogOffsetMetadata> leaderEndOffsetOpt;
-        ReplicaState leaderVoterState = voterStates.get(localId);
-        ReplicaState leaderObserverState = observerStates.get(localId);
-        if (leaderVoterState != null) {
-            leaderEndOffsetOpt = leaderVoterState.endOffset;
-        } else if (leaderObserverState != null) {
-            // The leader is not guaranteed to be in the voter set when in the process of being removed from the quorum.
-            log.info("Updating end offset for leader {} which is also an observer.", localId);
-            leaderEndOffsetOpt = leaderObserverState.endOffset;
-        } else {
-            throw new IllegalStateException("Leader state not found for localId " + localId);
-        }
+        Optional<LogOffsetMetadata> leaderEndOffsetOpt = getOrCreateReplicaState(localId).endOffset;
 
         state.updateFollowerState(
             currentTimeMs,
@@ -401,14 +390,10 @@ public class LeaderState<T> implements EpochState {
     private ReplicaState getOrCreateReplicaState(int remoteNodeId) {
         ReplicaState state = voterStates.get(remoteNodeId);
         if (state == null) {
-            return createObserverState(remoteNodeId);
+            observerStates.putIfAbsent(remoteNodeId, new ReplicaState(remoteNodeId, false));
+            return observerStates.get(remoteNodeId);
         }
         return state;
-    }
-
-    private ReplicaState createObserverState(int remoteNodeId) {
-        observerStates.putIfAbsent(remoteNodeId, new ReplicaState(remoteNodeId, false));
-        return observerStates.get(remoteNodeId);
     }
 
     public DescribeQuorumResponseData.PartitionData describeQuorum(long currentTimeMs) {
@@ -453,9 +438,13 @@ public class LeaderState<T> implements EpochState {
 
     }
 
+    /**
+     * Clear observer states that have not been active for a while and are not the leader.
+     */
     private void clearInactiveObservers(final long currentTimeMs) {
         observerStates.entrySet().removeIf(integerReplicaStateEntry ->
-            currentTimeMs - integerReplicaStateEntry.getValue().lastFetchTimestamp >= OBSERVER_SESSION_TIMEOUT_MS
+            currentTimeMs - integerReplicaStateEntry.getValue().lastFetchTimestamp >= OBSERVER_SESSION_TIMEOUT_MS &&
+                integerReplicaStateEntry.getKey() != localId
         );
     }
 
@@ -463,23 +452,22 @@ public class LeaderState<T> implements EpochState {
         return voterStates.containsKey(remoteNodeId);
     }
 
-    // with Jose's changes this will probably make more sense as VoterSet
-    private void updateVoterSet(Set<Integer> lastVoterSet) {
-        // Remove any voter state that is not in the last voter set. They become observers.
+    private void updateVoterAndObserverStates(Set<Integer> lastVoterSet) {
+        // Move any replica that is not in the last voter set from voterStates to observerStates
         for (Iterator<Map.Entry<Integer, ReplicaState>> iter = voterStates.entrySet().iterator(); iter.hasNext(); ) {
-            Integer nodeId = iter.next().getKey();
-            if (!lastVoterSet.contains(nodeId)) {
-                createObserverState(nodeId);
+            Map.Entry<Integer, ReplicaState> replica = iter.next();
+            if (!lastVoterSet.contains(replica.getKey())) {
+                observerStates.put(replica.getKey(), replica.getValue());
                 iter.remove();
             }
         }
 
-        // Add any voter state that is in the last voter set but not in the current voter set. They are removed from
-        // the observerStates if they exist.
+        // Add replicas that are in the last voter set and not in voterStates to voterStates (from observerStates
+        // if they exist)
         for (int voterId : lastVoterSet) {
             if (!voterStates.containsKey(voterId)) {
-                voterStates.put(voterId, new ReplicaState(voterId, false));
-                observerStates.remove(voterId);
+                Optional<ReplicaState> existingObserverState = Optional.ofNullable(observerStates.remove(voterId));
+                voterStates.put(voterId, existingObserverState.orElse(new ReplicaState(voterId, false)));
             }
         }
     }
