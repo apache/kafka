@@ -178,7 +178,6 @@ public class HeartbeatRequestManagerTest {
                 ", heartbeatTimer=" + heartbeatRequestState.heartbeatTimer() +
                 ", heartbeatIntervalMs=" + DEFAULT_HEARTBEAT_INTERVAL_MS;
 
-        System.out.println(target);
         assertDoesNotThrow(heartbeatRequestState::toString);
         assertEquals(target, heartbeatRequestState.toStringBase());
     }
