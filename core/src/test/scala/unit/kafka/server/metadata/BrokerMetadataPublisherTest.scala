@@ -219,5 +219,4 @@ class BrokerMetadataPublisherTest {
 
     verify(groupCoordinator).onNewMetadataImage(image, delta)
   }
-
 }

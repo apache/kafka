@@ -202,7 +202,8 @@ public enum MetadataVersion {
     // Add new fetch request version for KIP-951
     IBP_3_7_IV4(19, "3.7", "IV4", false),
 
-    // Add ELR related supports (KIP-966).
+    // Similar to IBP_3_7_IV3, IBP_3_8_IV0 was reserved for ELR support (KIP-966) but has
+    // been moved forward to a later release requiring a new MetadataVersion.
     IBP_3_8_IV0(20, "3.8", "IV0", true),
 
     // Add ListOffsets V9 (KIP-1005)
@@ -334,7 +335,7 @@ public enum MetadataVersion {
     }
 
     public boolean isElrSupported() {
-        return this.isAtLeast(IBP_3_8_IV0);
+        return this.isAtLeast(IBP_4_0_IVO);
     }
 
     public boolean isKRaftSupported() {
