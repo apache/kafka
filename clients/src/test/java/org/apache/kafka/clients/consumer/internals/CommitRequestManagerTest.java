@@ -76,6 +76,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZE
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_GROUP_ID;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_GROUP_INSTANCE_ID;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -139,6 +140,7 @@ public class CommitRequestManagerTest {
                 Optional.of("groupInstanceId"),
                 metrics);
 
+        // Add some topic partitions to the hashset and test for it in the target
         CommitRequestManager.OffsetFetchRequestState offsetFetchRequestState = commitRequestManager.new OffsetFetchRequestState(
                 new HashSet<>(),
                 retryBackoffMs,
@@ -153,13 +155,16 @@ public class CommitRequestManagerTest {
                 retryBackoffMs,
                 retryBackoffMaxMs);
 
+        // Make parameterized test for expirationTimeMs
         String target = requestState.toStringBase() +
-                ", memberInfo=" + offsetFetchRequestState.memberInfo +
+                ", memberInfo=" + memberInfo +
                 ", expirationTimeMs=" + (offsetFetchRequestState.expirationTimeMs().isPresent() ? offsetFetchRequestState.expirationTimeMs() : "undefined") +
                 ", isExpired=" + offsetFetchRequestState.isExpired +
                 ", requestedPartitions=" + offsetFetchRequestState.requestedPartitions +
                 ", future=" + offsetFetchRequestState.future();
 
+        System.out.println(target);
+        assertDoesNotThrow(requestState::toString);
         assertEquals(target, offsetFetchRequestState.toStringBase());
     }
 
