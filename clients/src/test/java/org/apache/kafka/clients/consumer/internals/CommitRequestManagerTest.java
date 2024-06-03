@@ -194,7 +194,7 @@ public class CommitRequestManagerTest {
         offsets2.put(new TopicPartition("test", 4), new OffsetAndMetadata(20L));
 
         // Add the requests to the CommitRequestManager and store their futures
-        long deadlineMs  = time.milliseconds() + defaultApiTimeoutMs;
+        long deadlineMs = time.milliseconds() + defaultApiTimeoutMs;
         commitManager.commitSync(offsets1, deadlineMs);
         commitManager.fetchOffsets(Collections.singleton(new TopicPartition("test", 0)), deadlineMs);
         commitManager.commitSync(offsets2, deadlineMs);
@@ -748,11 +748,12 @@ public class CommitRequestManagerTest {
             new TopicPartition("topic", 1),
             new OffsetAndMetadata(0));
 
-        // Send sync offset commit request.
+        // Send sync offset commit request that fails with retriable error.
         long deadlineMs = time.milliseconds() + retryBackoffMs * 2;
         CompletableFuture<Void> commitResult = commitRequestManager.commitSync(offsets, deadlineMs);
+        completeOffsetCommitRequestWithError(commitRequestManager, Errors.REQUEST_TIMED_OUT);
 
-        // Make the first request fail with a retriable error. Should not complete yet
+        // Request retried after backoff, and fails with retriable again. Should not complete yet
         // given that the request timeout hasn't expired.
         time.sleep(retryBackoffMs);
         completeOffsetCommitRequestWithError(commitRequestManager, Errors.REQUEST_TIMED_OUT);
@@ -760,7 +761,8 @@ public class CommitRequestManagerTest {
 
         // Sleep to expire the request timeout. Request should fail on the next poll.
         time.sleep(retryBackoffMs);
-        completeOffsetCommitRequestWithError(commitRequestManager, Errors.REQUEST_TIMED_OUT);
+        NetworkClientDelegate.PollResult res = commitRequestManager.poll(time.milliseconds());
+        assertEquals(0, res.unsentRequests.size());
         assertTrue(commitResult.isDone());
         assertTrue(commitResult.isCompletedExceptionally());
     }
@@ -778,17 +780,16 @@ public class CommitRequestManagerTest {
             new TopicPartition("topic", 1),
             new OffsetAndMetadata(0));
 
-        // Send offset commit request.
+        // Send offset commit request that fails with retriable error.
         long deadlineMs = time.milliseconds() + retryBackoffMs * 2;
         CompletableFuture<Void> commitResult = commitRequestManager.commitSync(offsets, deadlineMs);
-
-        // Make the first request fail due to a missing coordinator.
         completeOffsetCommitRequestWithError(commitRequestManager, Errors.COORDINATOR_NOT_AVAILABLE);
 
         // Sleep to expire the request timeout. Request should fail on the next poll with a
         // TimeoutException.
         time.sleep(deadlineMs);
-        completeOffsetCommitRequestWithError(commitRequestManager, Errors.REQUEST_TIMED_OUT);
+        NetworkClientDelegate.PollResult res = commitRequestManager.poll(time.milliseconds());
+        assertEquals(0, res.unsentRequests.size());
         assertTrue(commitResult.isDone());
         assertFutureThrows(commitResult, TimeoutException.class);
     }

@@ -37,7 +37,6 @@ public class TimedRequestState extends RequestState {
         this.timer = timer;
     }
 
-    // Visible for testing
     TimedRequestState(final LogContext logContext,
                       final String owner,
                       final long retryBackoffMs,

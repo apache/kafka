@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -46,7 +47,9 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.CompletableFuture;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
@@ -129,6 +132,43 @@ public class TopicMetadataRequestManagerTest {
         } else {
             assertEquals(0, inflights.size());
         }
+    }
+
+    @Test
+    public void testExpiringRequest() {
+        String topic = "hello";
+
+        // Request topic metadata with 1000ms expiration
+        long now = this.time.milliseconds();
+        CompletableFuture<Map<String, List<PartitionInfo>>> future =
+            this.topicMetadataRequestManager.requestTopicMetadata(topic, now + 1000L);
+        assertEquals(1, this.topicMetadataRequestManager.inflightRequests().size());
+
+        // Poll the request manager to get the list of requests to send
+        // - fail the request with a RetriableException
+        NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
+        res.unsentRequests.get(0).future().complete(buildTopicMetadataClientResponse(
+            res.unsentRequests.get(0),
+            topic,
+            Errors.REQUEST_TIMED_OUT));
+
+        // Sleep for long enough to exceed the backoff delay but still within the expiration
+        // - fail the request again with a RetriableException
+        this.time.sleep(500);
+        res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
+        res.unsentRequests.get(0).future().complete(buildTopicMetadataClientResponse(
+            res.unsentRequests.get(0),
+            topic,
+            Errors.REQUEST_TIMED_OUT));
+
+        // Sleep for long enough to expire the request which should fail
+        this.time.sleep(1000);
+        res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
+        assertEquals(0, res.unsentRequests.size());
+        assertEquals(0, this.topicMetadataRequestManager.inflightRequests().size());
+        assertTrue(future.isCompletedExceptionally());
     }
 
     @ParameterizedTest

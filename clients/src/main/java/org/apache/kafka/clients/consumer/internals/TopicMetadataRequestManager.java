@@ -84,6 +84,12 @@ public class TopicMetadataRequestManager implements RequestManager {
 
     @Override
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
+        // Prune any requests which have timed out
+        List<TopicMetadataRequestState> expiredRequests = inflightRequests.stream()
+                .filter(TimedRequestState::isExpired)
+                .collect(Collectors.toList());
+        expiredRequests.forEach(TopicMetadataRequestState::expire);
+
         List<NetworkClientDelegate.UnsentRequest> requests = inflightRequests.stream()
             .map(req -> req.send(currentTimeMs))
             .filter(Optional::isPresent)
@@ -175,6 +181,11 @@ public class TopicMetadataRequestManager implements RequestManager {
             return Optional.of(createUnsentRequest(request));
         }
 
+        private void expire() {
+            completeFutureAndRemoveRequest(
+                    new TimeoutException("Timeout expired while fetching topic metadata"));
+        }
+
         private NetworkClientDelegate.UnsentRequest createUnsentRequest(
                 final MetadataRequest.Builder request) {
             NetworkClientDelegate.UnsentRequest unsent = new NetworkClientDelegate.UnsentRequest(
@@ -193,33 +204,22 @@ public class TopicMetadataRequestManager implements RequestManager {
 
         private void handleError(final Throwable exception,
                                  final long completionTimeMs) {
-            if (exception instanceof RetriableException) {
-                if (isExpired()) {
-                    completeFutureAndRemoveRequest(
-                        new TimeoutException("Timeout expired while fetching topic metadata"));
-                } else {
-                    onFailedAttempt(completionTimeMs);
-                }
+            if (isExpired()) {
+                completeFutureAndRemoveRequest(new TimeoutException("Timeout expired while fetching topic metadata"));
+            } else if (exception instanceof RetriableException) {
+                onFailedAttempt(completionTimeMs);
             } else {
                 completeFutureAndRemoveRequest(exception);
             }
         }
 
         private void handleResponse(final ClientResponse response) {
-            long responseTimeMs = response.receivedTimeMs();
             try {
                 Map<String, List<PartitionInfo>> res = handleTopicMetadataResponse((MetadataResponse) response.responseBody());
                 future.complete(res);
                 inflightRequests.remove(this);
-            } catch (RetriableException e) {
-                if (isExpired()) {
-                    completeFutureAndRemoveRequest(
-                        new TimeoutException("Timeout expired while fetching topic metadata"));
-                } else {
-                    onFailedAttempt(responseTimeMs);
-                }
-            } catch (Exception t) {
-                completeFutureAndRemoveRequest(t);
+            } catch (Exception e) {
+                handleError(e, response.receivedTimeMs());
             }
         }
 
