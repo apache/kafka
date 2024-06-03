@@ -351,6 +351,13 @@ abstract class QuorumTestHarness extends Logging {
       ))
     }
 
+    metadataRecords.add(new ApiMessageAndVersion(
+      new FeatureLevelRecord()
+        .setName(Features.TRANSACTION_VERSION.featureName)
+        .setFeatureLevel(Features.TRANSACTION_VERSION.latestTesting),
+      0.toShort
+    ))
+
     optionalMetadataRecords.foreach { metadataArguments =>
       for (record <- metadataArguments) metadataRecords.add(record)
     }

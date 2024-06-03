@@ -205,7 +205,10 @@ public enum MetadataVersion {
     IBP_3_8_IV0(20, "3.8", "IV0", true),
 
     // Introduce version 1 of the GroupVersion feature (KIP-848).
-    IBP_4_0_IVO(21, "4.0", "IV0", false);
+    IBP_4_0_IVO(21, "4.0", "IV0", false),
+
+    // Introduce version 1 of the TransactionVersion feature (KIP-890).
+    IBP_4_0_IV1(22, "4.0", "IV1", false);
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version
