@@ -84,6 +84,12 @@ public class TopicMetadataRequestManager implements RequestManager {
 
     @Override
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
+        // Prune any requests which have timed out
+        List<TopicMetadataRequestState> expiredRequests = inflightRequests.stream()
+                .filter(TimedRequestState::isExpired)
+                .collect(Collectors.toList());
+        expiredRequests.forEach(TopicMetadataRequestState::expire);
+
         List<NetworkClientDelegate.UnsentRequest> requests = inflightRequests.stream()
             .map(req -> req.send(currentTimeMs))
             .filter(Optional::isPresent)
@@ -173,6 +179,11 @@ public class TopicMetadataRequestManager implements RequestManager {
                 : new MetadataRequest.Builder(Collections.singletonList(topic), allowAutoTopicCreation);
 
             return Optional.of(createUnsentRequest(request));
+        }
+
+        private void expire() {
+            completeFutureAndRemoveRequest(
+                    new TimeoutException("Timeout expired while fetching topic metadata"));
         }
 
         private NetworkClientDelegate.UnsentRequest createUnsentRequest(
