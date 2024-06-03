@@ -43,18 +43,18 @@ object ApiVersionsRequestTest {
   def testApiVersionsRequestTemplate(): java.util.List[ClusterConfig] = {
     val serverProperties: java.util.HashMap[String, String] = controlPlaneListenerProperties()
     serverProperties.put("unstable.api.versions.enable", "false")
-    serverProperties.put("unstable.metadata.versions.enable", "true")
+    serverProperties.put("unstable.feature.versions.enable", "true")
     List(ClusterConfig.defaultBuilder()
       .setTypes(java.util.Collections.singleton(Type.ZK))
       .setServerProperties(serverProperties)
-      .setMetadataVersion(MetadataVersion.IBP_3_8_IV0)
+      .setMetadataVersion(MetadataVersion.IBP_4_0_IVO)
       .build()).asJava
   }
 
   def testApiVersionsRequestIncludesUnreleasedApisTemplate(): java.util.List[ClusterConfig] = {
     val serverProperties: java.util.HashMap[String, String] = controlPlaneListenerProperties()
     serverProperties.put("unstable.api.versions.enable", "true")
-    serverProperties.put("unstable.metadata.versions.enable", "true")
+    serverProperties.put("unstable.feature.versions.enable", "true")
     List(ClusterConfig.defaultBuilder()
       .setTypes(java.util.Collections.singleton(Type.ZK))
       .setServerProperties(serverProperties)
@@ -64,7 +64,7 @@ object ApiVersionsRequestTest {
   def testApiVersionsRequestValidationV0Template(): java.util.List[ClusterConfig] = {
     val serverProperties: java.util.HashMap[String, String] = controlPlaneListenerProperties()
     serverProperties.put("unstable.api.versions.enable", "false")
-    serverProperties.put("unstable.metadata.versions.enable", "false")
+    serverProperties.put("unstable.feature.versions.enable", "false")
     List(ClusterConfig.defaultBuilder()
       .setTypes(java.util.Collections.singleton(Type.ZK))
       .setMetadataVersion(MetadataVersion.IBP_3_7_IV4)
@@ -83,9 +83,9 @@ object ApiVersionsRequestTest {
 class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersionsRequestTest(cluster) {
 
   @ClusterTemplate("testApiVersionsRequestTemplate")
-  @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT), metadataVersion = MetadataVersion.IBP_3_8_IV0, serverProperties = Array(
+  @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT), metadataVersion = MetadataVersion.IBP_4_0_IVO, serverProperties = Array(
     new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "false"),
-    new ClusterConfigProperty(key = "unstable.metadata.versions.enable", value = "true")
+    new ClusterConfigProperty(key = "unstable.feature.versions.enable", value = "true")
   ))
   def testApiVersionsRequest(): Unit = {
     val request = new ApiVersionsRequest.Builder().build()
@@ -95,8 +95,8 @@ class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersio
 
   @ClusterTemplate("testApiVersionsRequestIncludesUnreleasedApisTemplate")
   @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT), serverProperties = Array(
-    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "false"),
-    new ClusterConfigProperty(key = "unstable.metadata.versions.enable", value = "true"),
+    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true"),
+    new ClusterConfigProperty(key = "unstable.feature.versions.enable", value = "true"),
   ))
   def testApiVersionsRequestIncludesUnreleasedApis(): Unit = {
     val request = new ApiVersionsRequest.Builder().build()
@@ -134,7 +134,7 @@ class ApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersio
   @ClusterTemplate("testApiVersionsRequestValidationV0Template")
   @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT), metadataVersion = MetadataVersion.IBP_3_7_IV4, serverProperties = Array(
       new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "false"),
-      new ClusterConfigProperty(key = "unstable.metadata.versions.enable", value = "false"),
+      new ClusterConfigProperty(key = "unstable.feature.versions.enable", value = "false"),
   ))
   def testApiVersionsRequestValidationV0(): Unit = {
     val apiVersionsRequest = new ApiVersionsRequest.Builder().build(0.asInstanceOf[Short])
