@@ -585,6 +585,8 @@ public final class RemoteLogManagerConfig {
         return enableRemoteStorageSystem == that.enableRemoteStorageSystem
                 && remoteLogIndexFileCacheTotalSizeBytes == that.remoteLogIndexFileCacheTotalSizeBytes
                 && remoteLogManagerThreadPoolSize == that.remoteLogManagerThreadPoolSize
+                && remoteLogManagerCopierThreadPoolSize == that.remoteLogManagerCopierThreadPoolSize
+                && remoteLogManagerExpirationThreadPoolSize == that.remoteLogManagerExpirationThreadPoolSize
                 && remoteLogManagerTaskIntervalMs == that.remoteLogManagerTaskIntervalMs
                 && remoteLogManagerTaskRetryBackoffMs == that.remoteLogManagerTaskRetryBackoffMs
                 && remoteLogManagerTaskRetryBackoffMaxMs == that.remoteLogManagerTaskRetryBackoffMaxMs
@@ -613,7 +615,8 @@ public final class RemoteLogManagerConfig {
     public int hashCode() {
         return Objects.hash(enableRemoteStorageSystem, remoteStorageManagerClassName, remoteStorageManagerClassPath,
                             remoteLogMetadataManagerClassName, remoteLogMetadataManagerClassPath, remoteLogMetadataManagerListenerName,
-                            remoteLogMetadataCustomMetadataMaxBytes, remoteLogIndexFileCacheTotalSizeBytes, remoteLogManagerThreadPoolSize, remoteLogManagerTaskIntervalMs,
+                            remoteLogMetadataCustomMetadataMaxBytes, remoteLogIndexFileCacheTotalSizeBytes, remoteLogManagerThreadPoolSize,
+                            remoteLogManagerCopierThreadPoolSize, remoteLogManagerExpirationThreadPoolSize, remoteLogManagerTaskIntervalMs,
                             remoteLogManagerTaskRetryBackoffMs, remoteLogManagerTaskRetryBackoffMaxMs, remoteLogManagerTaskRetryJitter,
                             remoteLogReaderThreads, remoteLogReaderMaxPendingTasks, remoteStorageManagerProps, remoteLogMetadataManagerProps,
                             remoteStorageManagerPrefix, remoteLogMetadataManagerPrefix, remoteLogManagerCopyMaxBytesPerSecond,
