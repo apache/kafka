@@ -930,10 +930,8 @@ public class KafkaConsumerTest {
         assertThrows(NoOffsetForPartitionException.class, () -> consumer.poll(Duration.ZERO));
     }
 
-    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
-    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    @EnumSource(value = GroupProtocol.class)
     public void testResetToCommittedOffset(GroupProtocol groupProtocol) {
         SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
         ConsumerMetadata metadata = createMetadata(subscription);
@@ -955,10 +953,8 @@ public class KafkaConsumerTest {
         assertEquals(539L, consumer.position(tp0));
     }
 
-    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
-    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    @EnumSource(value = GroupProtocol.class)
     public void testResetUsingAutoResetPolicy(GroupProtocol groupProtocol) {
         SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.LATEST);
         ConsumerMetadata metadata = createMetadata(subscription);
@@ -1038,10 +1034,8 @@ public class KafkaConsumerTest {
         assertEquals(offset2, consumer.committed(Collections.singleton(tp1)).get(tp1).offset());
     }
 
-    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
-    //       The bug will be investigated and fixed so this test can use both group protocols.
     @ParameterizedTest
-    @EnumSource(value = GroupProtocol.class, names = "CLASSIC")
+    @EnumSource(value = GroupProtocol.class)
     public void testFetchStableOffsetThrowInCommitted(GroupProtocol groupProtocol) {
         assertThrows(UnsupportedVersionException.class, () -> setupThrowableConsumer(groupProtocol).committed(Collections.singleton(tp0)));
     }
