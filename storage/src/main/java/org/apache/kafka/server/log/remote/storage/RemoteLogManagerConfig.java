@@ -100,6 +100,16 @@ public final class RemoteLogManagerConfig {
             "segments, fetch remote log indexes and clean up remote log segments.";
     public static final int DEFAULT_REMOTE_LOG_MANAGER_THREAD_POOL_SIZE = 10;
 
+    public static final String REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP = "remote.log.manager.copier.thread.pool.size";
+    public static final String REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_DOC = "Size of the thread pool used in " +
+            "scheduling tasks to copy segments.";
+    public static final int DEFAULT_REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE = 10;
+
+    public static final String REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP = "remote.log.manager.expiration.thread.pool.size";
+    public static final String REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_DOC = "Size of the thread pool used in" +
+            " scheduling tasks to clean up remote log segments.";
+    public static final int DEFAULT_REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE = 10;
+
     public static final String REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP = "remote.log.manager.task.interval.ms";
     public static final String REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_DOC = "Interval at which remote log manager runs the scheduled tasks like copy " +
             "segments, and clean up remote log segments.";
@@ -142,6 +152,38 @@ public final class RemoteLogManagerConfig {
             "Default value is -2, it represents `log.retention.bytes` value to be used. The effective value should always be " +
             "less than or equal to `log.retention.bytes` value.";
     public static final Long DEFAULT_LOG_LOCAL_RETENTION_BYTES = -2L;
+
+    public static final String REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP = "remote.log.manager.copy.max.bytes.per.second";
+    public static final String REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_DOC = "The maximum number of bytes that can be copied from local storage to remote storage per second. " +
+            "This is a global limit for all the partitions that are being copied from local storage to remote storage. " +
+            "The default value is Long.MAX_VALUE, which means there is no limit on the number of bytes that can be copied per second.";
+    public static final Long DEFAULT_REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND = Long.MAX_VALUE;
+
+    public static final String REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_NUM_PROP = "remote.log.manager.copy.quota.window.num";
+    public static final String REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_NUM_DOC = "The number of samples to retain in memory for remote copy quota management. " +
+            "The default value is 11, which means there are 10 whole windows + 1 current window.";
+    public static final int DEFAULT_REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_NUM = 11;
+
+    public static final String REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_SIZE_SECONDS_PROP = "remote.log.manager.copy.quota.window.size.seconds";
+    public static final String REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_SIZE_SECONDS_DOC = "The time span of each sample for remote copy quota management. " +
+            "The default value is 1 second.";
+    public static final int DEFAULT_REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_SIZE_SECONDS = 1;
+
+    public static final String REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP = "remote.log.manager.fetch.max.bytes.per.second";
+    public static final String REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_DOC = "The maximum number of bytes that can be fetched from remote storage to local storage per second. " +
+            "This is a global limit for all the partitions that are being fetched from remote storage to local storage. " +
+            "The default value is Long.MAX_VALUE, which means there is no limit on the number of bytes that can be fetched per second.";
+    public static final Long DEFAULT_REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND = Long.MAX_VALUE;
+
+    public static final String REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_NUM_PROP = "remote.log.manager.fetch.quota.window.num";
+    public static final String REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_NUM_DOC = "The number of samples to retain in memory for remote fetch quota management. " +
+            "The default value is 11, which means there are 10 whole windows + 1 current window.";
+    public static final int DEFAULT_REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_NUM = 11;
+
+    public static final String REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_SIZE_SECONDS_PROP = "remote.log.manager.fetch.quota.window.size.seconds";
+    public static final String REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_SIZE_SECONDS_DOC = "The time span of each sample for remote fetch quota management. " +
+            "The default value is 1 second.";
+    public static final int DEFAULT_REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_SIZE_SECONDS = 1;
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef();
 
@@ -209,6 +251,18 @@ public final class RemoteLogManagerConfig {
                                   atLeast(1),
                                   MEDIUM,
                                   REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_DOC)
+                  .defineInternal(REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP,
+                        INT,
+                        DEFAULT_REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE,
+                        atLeast(1),
+                        MEDIUM,
+                        REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_DOC)
+                  .defineInternal(REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP,
+                        INT,
+                        DEFAULT_REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE,
+                        atLeast(1),
+                        MEDIUM,
+                        REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_DOC)
                   .define(REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP,
                                   LONG,
                                   DEFAULT_REMOTE_LOG_MANAGER_TASK_INTERVAL_MS,
@@ -255,7 +309,43 @@ public final class RemoteLogManagerConfig {
                                   DEFAULT_LOG_LOCAL_RETENTION_BYTES,
                                   atLeast(DEFAULT_LOG_LOCAL_RETENTION_BYTES),
                                   MEDIUM,
-                                  LOG_LOCAL_RETENTION_BYTES_DOC);
+                                  LOG_LOCAL_RETENTION_BYTES_DOC)
+                  .define(REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP,
+                                  LONG,
+                                  DEFAULT_REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND,
+                                  atLeast(1),
+                                  MEDIUM,
+                                  REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_DOC)
+                  .define(REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_NUM_PROP,
+                                  INT,
+                                  DEFAULT_REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_NUM,
+                                  atLeast(1),
+                                  MEDIUM,
+                                  REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_NUM_DOC)
+                  .define(REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_SIZE_SECONDS_PROP,
+                                 INT,
+                                 DEFAULT_REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_SIZE_SECONDS,
+                                 atLeast(1),
+                                 MEDIUM,
+                                 REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_SIZE_SECONDS_DOC)
+                  .define(REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP,
+                                 LONG,
+                                 DEFAULT_REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND,
+                                 atLeast(1),
+                                 MEDIUM,
+                                 REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_DOC)
+                  .define(REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_NUM_PROP,
+                                 INT,
+                                 DEFAULT_REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_NUM,
+                                 atLeast(1),
+                                 MEDIUM,
+                                 REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_NUM_DOC)
+                  .define(REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_SIZE_SECONDS_PROP,
+                                 INT,
+                                 DEFAULT_REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_SIZE_SECONDS,
+                                 atLeast(1),
+                                 MEDIUM,
+                                 REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_SIZE_SECONDS_DOC);
     }
 
     private final boolean enableRemoteStorageSystem;
@@ -265,6 +355,8 @@ public final class RemoteLogManagerConfig {
     private final String remoteLogMetadataManagerClassPath;
     private final long remoteLogIndexFileCacheTotalSizeBytes;
     private final int remoteLogManagerThreadPoolSize;
+    private final int remoteLogManagerCopierThreadPoolSize;
+    private final int remoteLogManagerExpirationThreadPoolSize;
     private final long remoteLogManagerTaskIntervalMs;
     private final long remoteLogManagerTaskRetryBackoffMs;
     private final long remoteLogManagerTaskRetryBackoffMaxMs;
@@ -277,6 +369,12 @@ public final class RemoteLogManagerConfig {
     private final HashMap<String, Object> remoteLogMetadataManagerProps;
     private final String remoteLogMetadataManagerListenerName;
     private final int remoteLogMetadataCustomMetadataMaxBytes;
+    private final long remoteLogManagerCopyMaxBytesPerSecond;
+    private final int remoteLogManagerCopyNumQuotaSamples;
+    private final int remoteLogManagerCopyQuotaWindowSizeSeconds;
+    private final long remoteLogManagerFetchMaxBytesPerSecond;
+    private final int remoteLogManagerFetchNumQuotaSamples;
+    private final int remoteLogManagerFetchQuotaWindowSizeSeconds;
 
     public RemoteLogManagerConfig(AbstractConfig config) {
         this(config.getBoolean(REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP),
@@ -287,6 +385,8 @@ public final class RemoteLogManagerConfig {
              config.getString(REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP),
              config.getLong(REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP),
              config.getInt(REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_PROP),
+             config.getInt(REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP),
+             config.getInt(REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP),
              config.getLong(REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP),
              config.getLong(REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MS_PROP),
              config.getLong(REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MAX_MS_PROP),
@@ -301,7 +401,13 @@ public final class RemoteLogManagerConfig {
              config.getString(REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP),
              config.getString(REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP) != null
                  ? config.originalsWithPrefix(config.getString(REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP))
-                 : Collections.emptyMap());
+                 : Collections.emptyMap(),
+            config.getLong(REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP),
+            config.getInt(REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_NUM_PROP),
+            config.getInt(REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_SIZE_SECONDS_PROP),
+            config.getLong(REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP),
+            config.getInt(REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_NUM_PROP),
+            config.getInt(REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_SIZE_SECONDS_PROP));
     }
 
     // Visible for testing
@@ -313,6 +419,8 @@ public final class RemoteLogManagerConfig {
                                   String remoteLogMetadataManagerListenerName,
                                   long remoteLogIndexFileCacheTotalSizeBytes,
                                   int remoteLogManagerThreadPoolSize,
+                                  int remoteLogManagerCopierThreadPoolSize,
+                                  int remoteLogManagerExpirationThreadPoolSize,
                                   long remoteLogManagerTaskIntervalMs,
                                   long remoteLogManagerTaskRetryBackoffMs,
                                   long remoteLogManagerTaskRetryBackoffMaxMs,
@@ -323,7 +431,13 @@ public final class RemoteLogManagerConfig {
                                   String remoteStorageManagerPrefix,
                                   Map<String, Object> remoteStorageManagerProps, /* properties having keys stripped out with remoteStorageManagerPrefix */
                                   String remoteLogMetadataManagerPrefix,
-                                  Map<String, Object> remoteLogMetadataManagerProps /* properties having keys stripped out with remoteLogMetadataManagerPrefix */
+                                  Map<String, Object> remoteLogMetadataManagerProps, /* properties having keys stripped out with remoteLogMetadataManagerPrefix */
+                                  long remoteLogManagerCopyMaxBytesPerSecond,
+                                  int remoteLogManagerCopyNumQuotaSamples,
+                                  int remoteLogManagerCopyQuotaWindowSizeSeconds,
+                                  long remoteLogManagerFetchMaxBytesPerSecond,
+                                  int remoteLogManagerFetchNumQuotaSamples,
+                                  int remoteLogManagerFetchQuotaWindowSizeSeconds
     ) {
         this.enableRemoteStorageSystem = enableRemoteStorageSystem;
         this.remoteStorageManagerClassName = remoteStorageManagerClassName;
@@ -332,6 +446,8 @@ public final class RemoteLogManagerConfig {
         this.remoteLogMetadataManagerClassPath = remoteLogMetadataManagerClassPath;
         this.remoteLogIndexFileCacheTotalSizeBytes = remoteLogIndexFileCacheTotalSizeBytes;
         this.remoteLogManagerThreadPoolSize = remoteLogManagerThreadPoolSize;
+        this.remoteLogManagerCopierThreadPoolSize = remoteLogManagerCopierThreadPoolSize;
+        this.remoteLogManagerExpirationThreadPoolSize = remoteLogManagerExpirationThreadPoolSize;
         this.remoteLogManagerTaskIntervalMs = remoteLogManagerTaskIntervalMs;
         this.remoteLogManagerTaskRetryBackoffMs = remoteLogManagerTaskRetryBackoffMs;
         this.remoteLogManagerTaskRetryBackoffMaxMs = remoteLogManagerTaskRetryBackoffMaxMs;
@@ -344,6 +460,12 @@ public final class RemoteLogManagerConfig {
         this.remoteLogMetadataManagerProps = new HashMap<>(remoteLogMetadataManagerProps);
         this.remoteLogMetadataManagerListenerName = remoteLogMetadataManagerListenerName;
         this.remoteLogMetadataCustomMetadataMaxBytes = remoteLogMetadataCustomMetadataMaxBytes;
+        this.remoteLogManagerCopyMaxBytesPerSecond = remoteLogManagerCopyMaxBytesPerSecond;
+        this.remoteLogManagerCopyNumQuotaSamples = remoteLogManagerCopyNumQuotaSamples;
+        this.remoteLogManagerCopyQuotaWindowSizeSeconds = remoteLogManagerCopyQuotaWindowSizeSeconds;
+        this.remoteLogManagerFetchMaxBytesPerSecond = remoteLogManagerFetchMaxBytesPerSecond;
+        this.remoteLogManagerFetchNumQuotaSamples = remoteLogManagerFetchNumQuotaSamples;
+        this.remoteLogManagerFetchQuotaWindowSizeSeconds = remoteLogManagerFetchQuotaWindowSizeSeconds;
     }
 
     public boolean enableRemoteStorageSystem() {
@@ -372,6 +494,14 @@ public final class RemoteLogManagerConfig {
 
     public int remoteLogManagerThreadPoolSize() {
         return remoteLogManagerThreadPoolSize;
+    }
+
+    public int remoteLogManagerCopierThreadPoolSize() {
+        return remoteLogManagerCopierThreadPoolSize;
+    }
+
+    public int remoteLogManagerExpirationThreadPoolSize() {
+        return remoteLogManagerExpirationThreadPoolSize;
     }
 
     public long remoteLogManagerTaskIntervalMs() {
@@ -422,6 +552,31 @@ public final class RemoteLogManagerConfig {
         return Collections.unmodifiableMap(remoteLogMetadataManagerProps);
     }
 
+    public long remoteLogManagerCopyMaxBytesPerSecond() {
+        return remoteLogManagerCopyMaxBytesPerSecond;
+    }
+
+    public int remoteLogManagerCopyNumQuotaSamples() {
+        return remoteLogManagerCopyNumQuotaSamples;
+    }
+
+    public int remoteLogManagerCopyQuotaWindowSizeSeconds() {
+        return remoteLogManagerCopyQuotaWindowSizeSeconds;
+    }
+
+    public long remoteLogManagerFetchMaxBytesPerSecond() {
+        return remoteLogManagerFetchMaxBytesPerSecond;
+    }
+
+    public int remoteLogManagerFetchNumQuotaSamples() {
+        return remoteLogManagerFetchNumQuotaSamples;
+    }
+
+    public int remoteLogManagerFetchQuotaWindowSizeSeconds() {
+        return remoteLogManagerFetchQuotaWindowSizeSeconds;
+    }
+
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -445,7 +600,13 @@ public final class RemoteLogManagerConfig {
                 && Objects.equals(remoteStorageManagerProps, that.remoteStorageManagerProps)
                 && Objects.equals(remoteLogMetadataManagerProps, that.remoteLogMetadataManagerProps)
                 && Objects.equals(remoteStorageManagerPrefix, that.remoteStorageManagerPrefix)
-                && Objects.equals(remoteLogMetadataManagerPrefix, that.remoteLogMetadataManagerPrefix);
+                && Objects.equals(remoteLogMetadataManagerPrefix, that.remoteLogMetadataManagerPrefix)
+                && remoteLogManagerCopyMaxBytesPerSecond == that.remoteLogManagerCopyMaxBytesPerSecond
+                && remoteLogManagerCopyNumQuotaSamples == that.remoteLogManagerCopyNumQuotaSamples
+                && remoteLogManagerCopyQuotaWindowSizeSeconds == that.remoteLogManagerCopyQuotaWindowSizeSeconds
+                && remoteLogManagerFetchMaxBytesPerSecond == that.remoteLogManagerFetchMaxBytesPerSecond
+                && remoteLogManagerFetchNumQuotaSamples == that.remoteLogManagerFetchNumQuotaSamples
+                && remoteLogManagerFetchQuotaWindowSizeSeconds == that.remoteLogManagerFetchQuotaWindowSizeSeconds;
     }
 
     @Override
@@ -455,7 +616,9 @@ public final class RemoteLogManagerConfig {
                             remoteLogMetadataCustomMetadataMaxBytes, remoteLogIndexFileCacheTotalSizeBytes, remoteLogManagerThreadPoolSize, remoteLogManagerTaskIntervalMs,
                             remoteLogManagerTaskRetryBackoffMs, remoteLogManagerTaskRetryBackoffMaxMs, remoteLogManagerTaskRetryJitter,
                             remoteLogReaderThreads, remoteLogReaderMaxPendingTasks, remoteStorageManagerProps, remoteLogMetadataManagerProps,
-                            remoteStorageManagerPrefix, remoteLogMetadataManagerPrefix);
+                            remoteStorageManagerPrefix, remoteLogMetadataManagerPrefix, remoteLogManagerCopyMaxBytesPerSecond,
+                            remoteLogManagerCopyNumQuotaSamples, remoteLogManagerCopyQuotaWindowSizeSeconds, remoteLogManagerFetchMaxBytesPerSecond,
+                            remoteLogManagerFetchNumQuotaSamples, remoteLogManagerFetchQuotaWindowSizeSeconds);
     }
 
     public static void main(String[] args) {

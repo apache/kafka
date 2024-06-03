@@ -40,8 +40,9 @@ public @interface ClusterTest {
     AutoStart autoStart() default AutoStart.DEFAULT;
     SecurityProtocol securityProtocol() default SecurityProtocol.PLAINTEXT;
     String listener() default "";
-    MetadataVersion metadataVersion() default MetadataVersion.IBP_3_8_IV0;
+    MetadataVersion metadataVersion() default MetadataVersion.IBP_4_0_IVO;
     ClusterConfigProperty[] serverProperties() default {};
     // users can add tags that they want to display in test
     String[] tags() default {};
+    ClusterFeature[] features() default {};
 }
