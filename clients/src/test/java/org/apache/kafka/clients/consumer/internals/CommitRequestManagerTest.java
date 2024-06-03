@@ -146,8 +146,7 @@ public class CommitRequestManagerTest {
                 retryBackoffMs,
                 retryBackoffMaxMs,
                 1000,
-                memberInfo
-        );
+                memberInfo);
 
         RequestState requestState = new RequestState(
                 logContext,
