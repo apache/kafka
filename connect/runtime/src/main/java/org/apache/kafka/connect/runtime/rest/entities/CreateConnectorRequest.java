@@ -47,7 +47,7 @@ public class CreateConnectorRequest {
         return config;
     }
 
-    @JsonProperty("initial_state")
+    @JsonProperty
     public InitialState initialState() {
         return initialState;
     }

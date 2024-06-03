@@ -161,18 +161,11 @@ class LogCleaner(initialConfig: CleanerConfig,
   /**
    * Stop the background cleaner threads
    */
-  private[this] def shutdownCleaners(): Unit = {
-    info("Shutting down the log cleaner.")
-    cleaners.foreach(_.shutdown())
-    cleaners.clear()
-  }
-
-  /**
-   * Stop the background cleaner threads
-   */
   def shutdown(): Unit = {
+    info("Shutting down the log cleaner.")
     try {
-      shutdownCleaners()
+      cleaners.foreach(_.shutdown())
+      cleaners.clear()
     } finally {
       removeMetrics()
     }
@@ -227,8 +220,8 @@ class LogCleaner(initialConfig: CleanerConfig,
       info(s"Updating logCleanerIoMaxBytesPerSecond: $maxIoBytesPerSecond")
       throttler.updateDesiredRatePerSec(maxIoBytesPerSecond)
     }
-    // call shutdownCleaners() instead of shutdown to avoid unnecessary deletion of metrics
-    shutdownCleaners()
+
+    shutdown()
     startup()
   }
 
