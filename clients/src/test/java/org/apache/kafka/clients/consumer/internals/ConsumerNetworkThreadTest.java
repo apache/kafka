@@ -45,6 +45,7 @@ import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
@@ -63,6 +64,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.List;
 import java.util.LinkedList;
+import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -75,6 +77,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -151,6 +154,16 @@ public class ConsumerNetworkThreadTest {
         // close() should make consumerNetworkThread.running false by calling closeInternal(Duration timeout)
         consumerNetworkThread.close();
         assertFalse(consumerNetworkThread.isRunning());
+    }
+
+    @Test
+    public void testEnsureSendUnsentRequestPollWIthZeroRunsOnce() {
+        Timer timer = time.timer(0);
+        Queue<NetworkClientDelegate.UnsentRequest> queue = new LinkedList<>();
+        queue.add(mock(NetworkClientDelegate.UnsentRequest.class));
+        when(networkClientDelegate.unsentRequests()).thenReturn(queue);
+        consumerNetworkThread.sendUnsentRequests(timer);
+        verify(networkClientDelegate).poll(eq(0L), anyLong());
     }
 
     @ParameterizedTest
