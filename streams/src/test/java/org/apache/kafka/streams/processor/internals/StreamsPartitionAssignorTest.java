@@ -646,7 +646,20 @@ public class StreamsPartitionAssignorTest {
             singletonList(APPLICATION_ID + "-store-changelog"),
             singletonList(3))
         );
-        configureDefaultPartitionAssignor();
+
+        List<Map<String, List<TopicPartitionInfo>>> partitionInfo = singletonList(mkMap(mkEntry(
+                "stream-partition-assignor-test-store-changelog",
+                singletonList(
+                    new TopicPartitionInfo(
+                        0,
+                        new Node(1, "h1", 80),
+                        singletonList(new Node(1, "h1", 80)),
+                        emptyList()
+                    )
+                )
+            )
+        ));
+        configurePartitionAssignorWith(emptyMap(), partitionInfo);
 
         subscriptions.put("consumer10",
                           new Subscription(
@@ -2380,7 +2393,19 @@ public class StreamsPartitionAssignorTest {
                           ));
 
         configureDefault();
-        overwriteInternalTopicManagerWithMock(true);
+        List<Map<String, List<TopicPartitionInfo>>> partitionInfo = singletonList(mkMap(mkEntry(
+                "stream-partition-assignor-test-store-changelog",
+                singletonList(
+                    new TopicPartitionInfo(
+                        0,
+                        new Node(1, "h1", 80),
+                        singletonList(new Node(1, "h1", 80)),
+                        emptyList()
+                    )
+                )
+            )
+        ));
+        overwriteInternalTopicManagerWithMock(true, partitionInfo);
 
         partitionAssignor.assign(metadata, new GroupSubscription(subscriptions));
     }
@@ -2421,7 +2446,19 @@ public class StreamsPartitionAssignorTest {
             ));
 
         configureDefault();
-        overwriteInternalTopicManagerWithMock(false);
+        List<Map<String, List<TopicPartitionInfo>>> partitionInfo = singletonList(mkMap(mkEntry(
+                "stream-partition-assignor-test-store-changelog",
+                singletonList(
+                    new TopicPartitionInfo(
+                        0,
+                        new Node(1, "h1", 80),
+                        singletonList(new Node(1, "h1", 80)),
+                        emptyList()
+                    )
+                )
+            )
+        ));
+        overwriteInternalTopicManagerWithMock(false, partitionInfo);
 
         partitionAssignor.assign(metadata, new GroupSubscription(subscriptions));
 

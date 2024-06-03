@@ -559,9 +559,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 final boolean isChangelog = true;
                 final DefaultTaskTopicPartition racklessTopicPartition = new DefaultTaskTopicPartition(
                     topicPartition, isSource, isChangelog, fetchRackInformation);
-                if (publicAssignmentConfigs.numStandbyReplicas() > 0) {
-                    topicsRequiringRackInfo.add(racklessTopicPartition);
-                }
+                topicsRequiringRackInfo.add(racklessTopicPartition);
                 topicPartitions.add(racklessTopicPartition);
             }
 
