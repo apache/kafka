@@ -1634,14 +1634,14 @@ public class KafkaConfigBackingStoreTest {
     private void expectConvertWriteRead(final String configKey, final Schema valueSchema, final byte[] serialized,
                                         final String dataFieldName, final Object dataFieldValue) throws Exception {
         final ArgumentCaptor<Struct> capturedRecord = ArgumentCaptor.forClass(Struct.class);
-        when(converter.fromConnectData(eq(TOPIC), eq(valueSchema), capturedRecord.capture())).thenReturn(serialized);
-        when(configLog.sendWithReceipt(configKey, serialized)).thenReturn(producerFuture);
-        when(producerFuture.get(anyLong(), any(TimeUnit.class))).thenReturn(null);
-        when(converter.toConnectData(TOPIC, serialized)).thenAnswer(invocation -> {
+        doReturn(serialized).when(converter).fromConnectData(eq(TOPIC), eq(valueSchema), capturedRecord.capture());
+        doReturn(producerFuture).when(configLog).sendWithReceipt(configKey, serialized);
+        doReturn(null).when(producerFuture).get(anyLong(), any(TimeUnit.class));
+        doAnswer(invocation -> {
             assertEquals(dataFieldValue, capturedRecord.getValue().get(dataFieldName));
             // Note null schema because default settings for internal serialization are schema-less
             return new SchemaAndValue(null, structToMap(capturedRecord.getValue()));
-        });
+        }).when(converter).toConnectData(TOPIC, serialized);
     }
 
     private void expectRead(LinkedHashMap<String, byte[]> serializedValues,
