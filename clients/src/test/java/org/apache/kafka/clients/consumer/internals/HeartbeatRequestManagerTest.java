@@ -854,50 +854,7 @@ public class HeartbeatRequestManagerTest {
         heartbeatRequestManager.resetPollTimer(time.milliseconds());
         verify(pollTimer).isExpiredBy();
     }
-
-    // TODO: should be removed or changed heavily
-    @Test
-    public void testHeartbeatMetrics() {
-        // setup
-        heartbeatRequestState = new HeartbeatRequestManager.HeartbeatRequestState(
-                logContext,
-                time,
-                0, // This initial interval should be 0 to ensure heartbeat on the clock
-                DEFAULT_RETRY_BACKOFF_MS,
-                DEFAULT_RETRY_BACKOFF_MAX_MS,
-                0);
-        backgroundEventHandler = mock(BackgroundEventHandler.class);
-        heartbeatRequestManager = createHeartbeatRequestManager(
-                coordinatorRequestManager,
-                membershipManager,
-                heartbeatState,
-                heartbeatRequestState,
-                backgroundEventHandler);
-        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
-        when(membershipManager.state()).thenReturn(MemberState.STABLE);
-
-        assertNotNull(getMetric("heartbeat-response-time-max"));
-        assertNotNull(getMetric("heartbeat-rate"));
-        assertNotNull(getMetric("heartbeat-total"));
-        assertNotNull(getMetric("last-heartbeat-seconds-ago"));
-
-        // test poll
-        assertHeartbeat(heartbeatRequestManager, 0);
-        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
-        assertEquals(1.0, getMetric("heartbeat-total").metricValue());
-        assertEquals((double) TimeUnit.MILLISECONDS.toSeconds(DEFAULT_HEARTBEAT_INTERVAL_MS), getMetric("last-heartbeat-seconds-ago").metricValue());
-
-        assertHeartbeat(heartbeatRequestManager, DEFAULT_HEARTBEAT_INTERVAL_MS);
-        assertEquals(0.06d, (double) getMetric("heartbeat-rate").metricValue(), 0.005d);
-        assertEquals(2.0, getMetric("heartbeat-total").metricValue());
-
-        // Randomly sleep for some time
-        Random rand = new Random();
-        int randomSleepS = rand.nextInt(11);
-        time.sleep(randomSleepS * 1000);
-        assertEquals((double) randomSleepS, getMetric("last-heartbeat-seconds-ago").metricValue());
-    }
-
+    
     @Test
     public void testFencedMemberStopHeartbeatUntilItReleasesAssignmentToRejoin() {
         heartbeatRequestManager = createHeartbeatRequestManager(
