@@ -140,7 +140,7 @@ public class CommitRequestManagerTest {
                 metrics);
 
         CommitRequestManager.OffsetFetchRequestState offsetFetchRequestState = commitRequestManager.new OffsetFetchRequestState(
-                mock(Set.class),
+                new HashSet<>(),
                 retryBackoffMs,
                 retryBackoffMaxMs,
                 1000,
