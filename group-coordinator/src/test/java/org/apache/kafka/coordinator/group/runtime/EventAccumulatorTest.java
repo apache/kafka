@@ -80,7 +80,7 @@ public class EventAccumulatorTest {
         EventAccumulator<Integer, MockEvent> accumulator = new EventAccumulator<>();
 
         assertEquals(0, accumulator.size());
-        assertNull(accumulator.poll(0, TimeUnit.MILLISECONDS));
+        assertNull(accumulator.poll());
 
         List<MockEvent> events = Arrays.asList(
             new MockEvent(1, 0),
@@ -99,14 +99,14 @@ public class EventAccumulatorTest {
 
         Set<MockEvent> polledEvents = new HashSet<>();
         for (int i = 0; i < events.size(); i++) {
-            MockEvent event = accumulator.poll(0, TimeUnit.MILLISECONDS);
+            MockEvent event = accumulator.poll();
             assertNotNull(event);
             polledEvents.add(event);
             assertEquals(events.size() - 1 - i, accumulator.size());
             accumulator.done(event);
         }
 
-        assertNull(accumulator.poll(0, TimeUnit.MILLISECONDS));
+        assertNull(accumulator.poll());
         assertEquals(new HashSet<>(events), polledEvents);
         assertEquals(0, accumulator.size());
 
@@ -128,7 +128,7 @@ public class EventAccumulatorTest {
 
         List<MockEvent> polledEvents = new ArrayList<>(3);
         for (int i = 0; i < events.size(); i++) {
-            MockEvent event = accumulator.poll(0, TimeUnit.MILLISECONDS);
+            MockEvent event = accumulator.poll();
             assertNotNull(event);
             polledEvents.add(event);
             assertEquals(events.size() - 1 - i, accumulator.size());
@@ -156,27 +156,27 @@ public class EventAccumulatorTest {
         MockEvent event = null;
 
         // Poll event0.
-        event = accumulator.poll(0, TimeUnit.MILLISECONDS);
+        event = accumulator.poll();
         assertEquals(event0, event);
 
         // Poll returns null because key is inflight.
-        assertNull(accumulator.poll(0, TimeUnit.MILLISECONDS));
+        assertNull(accumulator.poll());
         accumulator.done(event);
 
         // Poll event1.
-        event = accumulator.poll(0, TimeUnit.MILLISECONDS);
+        event = accumulator.poll();
         assertEquals(event1, event);
 
         // Poll returns null because key is inflight.
-        assertNull(accumulator.poll(0, TimeUnit.MILLISECONDS));
+        assertNull(accumulator.poll());
         accumulator.done(event);
 
         // Poll event2.
-        event = accumulator.poll(0, TimeUnit.MILLISECONDS);
+        event = accumulator.poll();
         assertEquals(event2, event);
 
         // Poll returns null because key is inflight.
-        assertNull(accumulator.poll(0, TimeUnit.MILLISECONDS));
+        assertNull(accumulator.poll());
         accumulator.done(event);
 
         accumulator.close();

@@ -163,8 +163,18 @@ public class EventAccumulator<K, T extends EventAccumulator.Event<K>> implements
     }
 
     /**
+     * Immediately returns the next {{@link Event}} available or null
+     * if the accumulator is empty.
+     *
+     * @return The next event available or null.
+     */
+    public T poll() {
+        return poll(0, TimeUnit.MILLISECONDS);
+    }
+
+    /**
      * Returns the next {{@link Event}} available. This method blocks for the provided
-     * time and returns null of not event is available.
+     * time and returns null of no event is available.
      *
      * @param timeout   The timeout.
      * @param unit      The timeout unit.

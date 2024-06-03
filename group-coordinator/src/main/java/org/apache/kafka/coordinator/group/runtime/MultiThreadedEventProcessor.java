@@ -38,7 +38,7 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
     /**
      * The poll timeout to wait for an event by the EventProcessorThread.
      */
-    public static final long POLL_TIMEOUT_MS = 300L;
+    private static final long POLL_TIMEOUT_MS = 300L;
 
     /**
      * The logger.
@@ -157,8 +157,8 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
         }
 
         private void drainEvents() {
-            CoordinatorEvent event = accumulator.poll(0, TimeUnit.MILLISECONDS);
-            while (event != null) {
+            CoordinatorEvent event;
+            while ((event = accumulator.poll()) != null) {
                 try {
                     log.debug("Draining event: {}.", event);
                     metrics.recordEventQueueTime(time.milliseconds() - event.createdTimeMs());
@@ -168,8 +168,6 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
                 } finally {
                     accumulator.done(event);
                 }
-
-                event = accumulator.poll(0, TimeUnit.MILLISECONDS);
             }
         }
 
