@@ -154,8 +154,8 @@ public class HeartbeatRequestManagerTest {
 
     @Test
     public void testHeartBeatRequestStateToStringBase() {
-        final long retryBackoffMs = 100;
-        final long retryBackoffMaxMs = 1000;
+        long retryBackoffMs = 100;
+        long retryBackoffMaxMs = 1000;
         LogContext logContext = new LogContext();
         HeartbeatRequestState heartbeatRequestState = new HeartbeatRequestState(
                 logContext,

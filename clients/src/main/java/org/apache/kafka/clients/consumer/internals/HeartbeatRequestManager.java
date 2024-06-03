@@ -452,6 +452,7 @@ public class HeartbeatRequestManager implements RequestManager {
      * object extends {@link RequestState} to enable exponential backoff and duplicated request handling. The two fields
      * that it holds are:
      */
+    // Visible for testing
     protected static class HeartbeatRequestState extends RequestState {
         /**
          *  heartbeatTimer tracks the time since the last heartbeat was sent
