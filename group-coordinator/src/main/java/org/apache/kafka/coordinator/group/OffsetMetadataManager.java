@@ -325,12 +325,22 @@ public class OffsetMetadataManager {
             }
         }
 
-        group.validateOffsetCommit(
-            request.memberId(),
-            request.groupInstanceId(),
-            request.generationIdOrMemberEpoch(),
-            false
-        );
+        try {
+            group.validateOffsetCommit(
+                request.memberId(),
+                request.groupInstanceId(),
+                request.generationIdOrMemberEpoch(),
+                false
+            );
+        } catch (StaleMemberEpochException ex) {
+            // The STALE_MEMBER_EPOCH error is only returned for new consumer group (KIP-848). When
+            // it is, the member should be using the OffsetCommit API version >= 9.
+            if (context.header.apiVersion() >= 9) {
+                throw ex;
+            } else {
+                throw Errors.UNSUPPORTED_VERSION.exception();
+            }
+        }
 
         return group;
     }
