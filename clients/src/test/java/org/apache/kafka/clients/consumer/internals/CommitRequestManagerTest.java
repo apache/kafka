@@ -106,9 +106,6 @@ public class CommitRequestManagerTest {
     private OffsetCommitCallbackInvoker offsetCommitCallbackInvoker;
     private final Metrics metrics = new Metrics();
     private Properties props;
-    private CommitRequestManager.OffsetFetchRequestState offsetFetchRequestState;
-    private RequestState requestState;
-    private CommitRequestManager commitRequestManager;
 
     private final int defaultApiTimeoutMs = 60000;
 
@@ -128,13 +125,10 @@ public class CommitRequestManagerTest {
 
     @Test
     public void testOffsetFetchRequestStateToStringBase() {
-        final long retryBackoffMs = 10;
-        final long retryBackoffMaxMs = 100;
-        final long expirationTimeMs = 1000;
         ConsumerConfig config = mock(ConsumerConfig.class);
         CommitRequestManager.MemberInfo memberInfo = new CommitRequestManager.MemberInfo();
 
-        this.commitRequestManager = new CommitRequestManager(
+        CommitRequestManager commitRequestManager = new CommitRequestManager(
                 time,
                 logContext,
                 subscriptionState,
@@ -145,21 +139,23 @@ public class CommitRequestManagerTest {
                 Optional.of("groupInstanceId"),
                 metrics);
 
-        this.offsetFetchRequestState = commitRequestManager.new OffsetFetchRequestState(
+        CommitRequestManager.OffsetFetchRequestState offsetFetchRequestState = commitRequestManager.new OffsetFetchRequestState(
                 mock(Set.class),
-                retryBackoffMs, retryBackoffMaxMs, expirationTimeMs,
+                retryBackoffMs,
+                retryBackoffMaxMs,
+                1000,
                 memberInfo
         );
 
-        this.requestState = new RequestState(
+        RequestState requestState = new RequestState(
                 logContext,
                 "CommitRequestManager",
                 retryBackoffMs,
                 retryBackoffMaxMs);
 
         String target = requestState.toStringBase() +
-                ", memberInfo={" + offsetFetchRequestState.memberInfo +
-                "}, expirationTimeMs=" + (offsetFetchRequestState.expirationTimeMs().isPresent() ? offsetFetchRequestState.expirationTimeMs() : "undefined") +
+                ", memberInfo=" + offsetFetchRequestState.memberInfo +
+                ", expirationTimeMs=" + (offsetFetchRequestState.expirationTimeMs().isPresent() ? offsetFetchRequestState.expirationTimeMs() : "undefined") +
                 ", isExpired=" + offsetFetchRequestState.isExpired +
                 ", requestedPartitions=" + offsetFetchRequestState.requestedPartitions +
                 ", future=" + offsetFetchRequestState.future();

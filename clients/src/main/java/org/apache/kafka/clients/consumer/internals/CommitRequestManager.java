@@ -1097,8 +1097,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         @Override
         public String toStringBase() {
             return super.toStringBase() +
-                    ", memberInfo={" + memberInfo +
-                    "}, expirationTimeMs=" + (expirationTimeMs().isPresent() ? expirationTimeMs() : "undefined") +
+                    ", memberInfo=" + memberInfo +
+                    ", expirationTimeMs=" + (expirationTimeMs().isPresent() ? expirationTimeMs() : "undefined") +
                     ", isExpired=" + isExpired +
                     ", requestedPartitions=" + requestedPartitions +
                     ", future=" + future;
@@ -1296,8 +1296,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
         @Override
         public String toString() {
-            return "memberId=" + memberId.orElse("undefined") +
-                    ", memberEpoch=" + (memberEpoch.isPresent() ? memberEpoch : "undefined");
+            return "MemberInfo{" + "memberId=" + memberId.orElse("undefined") +
+                    ", memberEpoch=" + (memberEpoch.isPresent() ? memberEpoch : "undefined") + "}";
         }
     }
 }
