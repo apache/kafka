@@ -64,11 +64,11 @@ public class TargetAssignmentBuilder {
         /**
          * The new target assignment for the group.
          */
-        private final Map<String, Assignment> targetAssignment;
+        private final Map<String, MemberAssignment> targetAssignment;
 
         TargetAssignmentResult(
             List<CoordinatorRecord> records,
-            Map<String, Assignment> targetAssignment
+            Map<String, MemberAssignment> targetAssignment
         ) {
             Objects.requireNonNull(records);
             Objects.requireNonNull(targetAssignment);
@@ -86,7 +86,7 @@ public class TargetAssignmentBuilder {
         /**
          * @return The target assignment.
          */
-        public Map<String, Assignment> targetAssignment() {
+        public Map<String, MemberAssignment> targetAssignment() {
             return targetAssignment;
         }
     }
@@ -347,38 +347,26 @@ public class TargetAssignmentBuilder {
         // Compute delta from previous to new target assignment and create the
         // relevant records.
         List<CoordinatorRecord> records = new ArrayList<>();
-        Map<String, Assignment> newTargetAssignment = new HashMap<>();
 
-        memberSpecs.keySet().forEach(memberId -> {
+        for (String memberId : memberSpecs.keySet()) {
             Assignment oldMemberAssignment = targetAssignment.get(memberId);
             Assignment newMemberAssignment = newMemberAssignment(newGroupAssignment, memberId);
 
-            newTargetAssignment.put(memberId, newMemberAssignment);
-
-            if (oldMemberAssignment == null) {
-                // If the member had no assignment, we always create a record for it.
+            if (!newMemberAssignment.equals(oldMemberAssignment)) {
+                // If the member had no assignment or had a different assignment, we
+                // create a record for the new assignment.
                 records.add(newTargetAssignmentRecord(
                     groupId,
                     memberId,
                     newMemberAssignment.partitions()
                 ));
-            } else {
-                // If the member had an assignment, we only create a record if the
-                // new assignment is different.
-                if (!newMemberAssignment.equals(oldMemberAssignment)) {
-                    records.add(newTargetAssignmentRecord(
-                        groupId,
-                        memberId,
-                        newMemberAssignment.partitions()
-                    ));
-                }
             }
-        });
+        }
 
         // Bump the target assignment epoch.
         records.add(newTargetAssignmentEpochRecord(groupId, groupEpoch));
 
-        return new TargetAssignmentResult(records, newTargetAssignment);
+        return new TargetAssignmentResult(records, newGroupAssignment.members());
     }
 
     private Assignment newMemberAssignment(

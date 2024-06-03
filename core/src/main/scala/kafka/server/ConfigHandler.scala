@@ -70,7 +70,7 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
     val logs = logManager.logsByTopic(topic)
     val wasRemoteLogEnabledBeforeUpdate = logs.exists(_.remoteLogEnabled())
 
-    logManager.updateTopicConfig(topic, props, kafkaConfig.isRemoteLogStorageSystemEnabled)
+    logManager.updateTopicConfig(topic, props, kafkaConfig.remoteLogManagerConfig.enableRemoteStorageSystem())
     maybeBootstrapRemoteLogComponents(topic, logs, wasRemoteLogEnabledBeforeUpdate)
   }
 
