@@ -25,9 +25,7 @@
   // Version 4 adds the StatesFilter field (KIP-518).
   //
   // Version 5 adds the TypesFilter field (KIP-848).
-  //
-  // Version 6 adds support for share groups (KIP-932).
-  "validVersions": "0-6",
+  "validVersions": "0-5",
   "flexibleVersions": "3+",
   "fields": [
     { "name": "StatesFilter", "type": "[]string", "versions": "4+",
