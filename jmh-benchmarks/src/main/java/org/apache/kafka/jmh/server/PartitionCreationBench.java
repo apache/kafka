@@ -27,7 +27,6 @@ import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
 import kafka.server.builders.LogManagerBuilder;
 import kafka.server.builders.ReplicaManagerBuilder;
-import kafka.server.checkpoints.OffsetCheckpoints;
 import kafka.server.metadata.ConfigRepository;
 import kafka.server.metadata.MockConfigRepository;
 import kafka.utils.TestUtils;
@@ -42,6 +41,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.util.KafkaScheduler;
 import org.apache.kafka.server.util.Scheduler;
+import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
@@ -65,6 +65,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -203,7 +204,7 @@ public class PartitionCreationBench {
         replicas.add(1);
         replicas.add(2);
 
-        OffsetCheckpoints checkpoints = (logDir, topicPartition) -> Option.apply(0L);
+        OffsetCheckpoints checkpoints = (logDir, topicPartition) -> Optional.of(0L);
         for (TopicPartition topicPartition : topicPartitions) {
             final Partition partition = this.replicaManager.createPartition(topicPartition);
             List<Integer> inSync = new ArrayList<>();
