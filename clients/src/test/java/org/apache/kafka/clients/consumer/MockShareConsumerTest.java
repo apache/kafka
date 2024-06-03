@@ -25,7 +25,8 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 public class MockShareConsumerTest {
     private final MockShareConsumer<String, String> consumer = new MockShareConsumer<>();
