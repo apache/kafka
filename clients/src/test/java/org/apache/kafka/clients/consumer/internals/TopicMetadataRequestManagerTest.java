@@ -141,7 +141,7 @@ public class TopicMetadataRequestManagerTest {
         // Request topic metadata with 1000ms expiration
         long now = this.time.milliseconds();
         CompletableFuture<Map<String, List<PartitionInfo>>> future =
-                this.topicMetadataRequestManager.requestTopicMetadata(topic, now + 1000L);
+            this.topicMetadataRequestManager.requestTopicMetadata(topic, now + 1000L);
         assertEquals(1, this.topicMetadataRequestManager.inflightRequests().size());
 
         // Poll the request manager to get the list of requests to send
@@ -149,9 +149,9 @@ public class TopicMetadataRequestManagerTest {
         NetworkClientDelegate.PollResult res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
         res.unsentRequests.get(0).future().complete(buildTopicMetadataClientResponse(
-                res.unsentRequests.get(0),
-                topic,
-                Errors.REQUEST_TIMED_OUT));
+            res.unsentRequests.get(0),
+            topic,
+            Errors.REQUEST_TIMED_OUT));
 
         // Sleep for long enough to exceed the backoff delay but still within the expiration
         // - fail the request again with a RetriableException
@@ -159,9 +159,9 @@ public class TopicMetadataRequestManagerTest {
         res = this.topicMetadataRequestManager.poll(this.time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
         res.unsentRequests.get(0).future().complete(buildTopicMetadataClientResponse(
-                res.unsentRequests.get(0),
-                topic,
-                Errors.REQUEST_TIMED_OUT));
+            res.unsentRequests.get(0),
+            topic,
+            Errors.REQUEST_TIMED_OUT));
 
         // Sleep for long enough to expire the request which should fail
         this.time.sleep(1000);
