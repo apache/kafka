@@ -154,9 +154,24 @@ public class StreamsConfig extends AbstractConfig {
     private static final ConfigDef CONFIG;
 
     private final boolean eosEnabled;
+    /**
+     * @deprecated Use {@link #COMMIT_INTERVAL_MS_DEFAULT} instead.
+     */
+    @Deprecated
     private static final long DEFAULT_COMMIT_INTERVAL_MS = 30000L;
+    private static final long COMMIT_INTERVAL_MS_DEFAULT = 30000L;
+    /**
+     * @deprecated Use {@link #COMMIT_INTERVAL_MS_DEFAULT} instead.
+     */
+    @Deprecated
     private static final long EOS_DEFAULT_COMMIT_INTERVAL_MS = 100L;
+    private static final long EOS_COMMIT_INTERVAL_MS_DEFAULT = 100L;
+    /**
+     * @deprecated Use {@link #COMMIT_INTERVAL_MS_DEFAULT} instead.
+     */
+    @Deprecated
     private static final int DEFAULT_TRANSACTION_TIMEOUT = 10000;
+    private static final int TRANSACTION_TIMEOUT_DEFAULT = 10000;
 
     @SuppressWarnings("unused")
     public static final int DUMMY_THREAD_INDEX = 1;
@@ -530,8 +545,8 @@ public class StreamsConfig extends AbstractConfig {
     private static final String COMMIT_INTERVAL_MS_DOC = "The frequency in milliseconds with which to commit processing progress." +
         " For at-least-once processing, committing means to save the position (ie, offsets) of the processor." +
         " For exactly-once processing, it means to commit the transaction which includes to save the position and to make the committed data in the output topic visible to consumers with isolation level read_committed." +
-        " (Note, if <code>processing.guarantee</code> is set to <code>" + EXACTLY_ONCE_V2 + "</code>, <code>" + EXACTLY_ONCE + "</code>,the default value is <code>" + EOS_DEFAULT_COMMIT_INTERVAL_MS + "</code>," +
-        " otherwise the default value is <code>" + DEFAULT_COMMIT_INTERVAL_MS + "</code>.";
+        " (Note, if <code>processing.guarantee</code> is set to <code>" + EXACTLY_ONCE_V2 + "</code>, <code>" + EXACTLY_ONCE + "</code>,the default value is <code>" + EOS_COMMIT_INTERVAL_MS_DEFAULT + "</code>," +
+        " otherwise the default value is <code>" + COMMIT_INTERVAL_MS_DEFAULT + "</code>.";
 
     /** {@code repartition.purge.interval.ms} */
     @SuppressWarnings("WeakerAccess")
@@ -546,13 +561,33 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code default.deserialization.exception.handler} */
     @SuppressWarnings("WeakerAccess")
+    /**
+     * @deprecated Use {@link #COMMIT_INTERVAL_MS_DEFAULT} instead.
+     */
+    @Deprecated
     public static final String DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG = "default.deserialization.exception.handler";
+    public static final String DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG_DEFAULT = "default.deserialization.exception.handler";
+    /**
+     * @deprecated Use {@link #COMMIT_INTERVAL_MS_DEFAULT} instead.
+     */
+    @Deprecated
     public static final String DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.DeserializationExceptionHandler</code> interface.";
+    public static final String DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DEFAULT_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.DeserializationExceptionHandler</code> interface.";
 
     /** {@code default.production.exception.handler} */
     @SuppressWarnings("WeakerAccess")
+    /**
+     * @deprecated Use {@link #COMMIT_INTERVAL_MS_DEFAULT} instead.
+     */
+    @Deprecated
     public static final String DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG = "default.production.exception.handler";
+    public static final String PRODUCTION_EXCEPTION_HANDLER_CLASS_DEFAULT_CONFIG = "default.production.exception.handler";
+    /**
+     * @deprecated Use {@link #COMMIT_INTERVAL_MS_DEFAULT} instead.
+     */
+    @Deprecated
     private static final String DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.ProductionExceptionHandler</code> interface.";
+    private static final String PRODUCTION_EXCEPTION_HANDLER_CLASS_DEFAULT_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.ProductionExceptionHandler</code> interface.";
 
     /** {@code default.dsl.store} */
     @Deprecated
@@ -578,16 +613,28 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     @Deprecated
     public static final String DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS = "default.windowed.key.serde.inner";
+    /**
+     * @deprecated Use {@link #COMMIT_INTERVAL_MS_DEFAULT} instead.
+     */
+    @Deprecated
     private static final String DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS_DOC = "Default serializer / deserializer for the inner class of a windowed key. Must implement the " +
         "<code>org.apache.kafka.common.serialization.Serde</code> interface.";
+    private static final String WINDOWED_KEY_SERDE_INNER_CLASS_DEFAULT_DOC = "Default serializer / deserializer for the inner class of a windowed key. Must implement the " +
+            "<code>org.apache.kafka.common.serialization.Serde</code> interface.";
 
     /** {@code default.windowed.value.serde.inner}
      * @deprecated since 3.0.0  Use {@link #WINDOWED_INNER_CLASS_SERDE "windowed.inner.class.serde"} instead. */
     @SuppressWarnings("WeakerAccess")
     @Deprecated
     public static final String DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS = "default.windowed.value.serde.inner";
+    /**
+     * @deprecated Use {@link #COMMIT_INTERVAL_MS_DEFAULT} instead.
+     */
+    @Deprecated
     private static final String DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS_DOC = "Default serializer / deserializer for the inner class of a windowed value. Must implement the " +
         "<code>org.apache.kafka.common.serialization.Serde</code> interface.";
+    private static final String WINDOWED_VALUE_SERDE_INNER_CLASS_DEFAULT_DOC = "Default serializer / deserializer for the inner class of a windowed value. Must implement the " +
+            "<code>org.apache.kafka.common.serialization.Serde</code> interface.";
 
     public static final String WINDOWED_INNER_CLASS_SERDE = "windowed.inner.class.serde";
     private static final String WINDOWED_INNER_CLASS_SERDE_DOC = " Default serializer / deserializer for the inner class of a windowed record. Must implement the " +
@@ -596,22 +643,56 @@ public class StreamsConfig extends AbstractConfig {
         
     /** {@code default key.serde} */
     @SuppressWarnings("WeakerAccess")
+    /**
+     * @deprecated Use {@link #COMMIT_INTERVAL_MS_DEFAULT} instead.
+     */
+    @Deprecated
     public static final String DEFAULT_KEY_SERDE_CLASS_CONFIG = "default.key.serde";
+    public static final String KEY_SERDE_CLASS_DEFAULT_CONFIG = "default.key.serde";
+    /**
+     * @deprecated Use {@link #COMMIT_INTERVAL_MS_DEFAULT} instead.
+     */
+    @Deprecated
     private static final String DEFAULT_KEY_SERDE_CLASS_DOC = "Default serializer / deserializer class for key that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface. "
+            + "Note when windowed serde class is used, one needs to set the inner serde class that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface via '"
+            + DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS + "' or '" + DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS + "' as well";
+    private static final String KEY_SERDE_CLASS_DEFAULT_DOC = "Default serializer / deserializer class for key that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface. "
             + "Note when windowed serde class is used, one needs to set the inner serde class that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface via '"
             + DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS + "' or '" + DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS + "' as well";
 
     /** {@code default value.serde} */
     @SuppressWarnings("WeakerAccess")
+    /**
+     * @deprecated Use {@link #COMMIT_INTERVAL_MS_DEFAULT} instead.
+     */
+    @Deprecated
     public static final String DEFAULT_VALUE_SERDE_CLASS_CONFIG = "default.value.serde";
+    public static final String VALUE_SERDE_CLASS_DEFAULT_CONFIG = "default.value.serde";
+    /**
+     * @deprecated Use {@link #COMMIT_INTERVAL_MS_DEFAULT} instead.
+     */
+    @Deprecated
     private static final String DEFAULT_VALUE_SERDE_CLASS_DOC = "Default serializer / deserializer class for value that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface. "
+            + "Note when windowed serde class is used, one needs to set the inner serde class that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface via '"
+            + DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS + "' or '" + DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS + "' as well";
+    private static final String VALUE_SERDE_CLASS_DEFAULT_DOC = "Default serializer / deserializer class for value that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface. "
             + "Note when windowed serde class is used, one needs to set the inner serde class that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface via '"
             + DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS + "' or '" + DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS + "' as well";
 
     /** {@code default.timestamp.extractor} */
     @SuppressWarnings("WeakerAccess")
+    /**
+     * @deprecated Use {@link #COMMIT_INTERVAL_MS_DEFAULT} instead.
+     */
+    @Deprecated
     public static final String DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG = "default.timestamp.extractor";
+    public static final String TIMESTAMP_EXTRACTOR_CLASS_DEFAULT_CONFIG = "default.timestamp.extractor";
+    /**
+     * @deprecated Use {@link #COMMIT_INTERVAL_MS_DEFAULT} instead.
+     */
+    @Deprecated
     public static final String DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC = "Default timestamp extractor class that implements the <code>org.apache.kafka.streams.processor.TimestampExtractor</code> interface.";
+    public static final String TIMESTAMP_EXTRACTOR_CLASS_DEFAULT_DOC = "Default timestamp extractor class that implements the <code>org.apache.kafka.streams.processor.TimestampExtractor</code> interface.";
 
     /** {@code max.task.idle.ms} */
     public static final String MAX_TASK_IDLE_MS_CONFIG = "max.task.idle.ms";
@@ -795,7 +876,16 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code default.client.supplier} */
     @SuppressWarnings("WeakerAccess")
+    /**
+     * @deprecated Use {@link #COMMIT_INTERVAL_MS_DEFAULT} instead.
+     */
+    @Deprecated
     public static final String DEFAULT_CLIENT_SUPPLIER_CONFIG = "default.client.supplier";
+    public static final String CLIENT_SUPPLIER_DEFAULT_CONFIG = "default.client.supplier";
+    /**
+     * @deprecated Use {@link #COMMIT_INTERVAL_MS_DEFAULT} instead.
+     */
+    @Deprecated
     public static final String DEFAULT_CLIENT_SUPPLIER_DOC = "Client supplier class that implements the <code>org.apache.kafka.streams.KafkaClientSupplier</code> interface.";
 
     public static final String RACK_AWARE_ASSIGNMENT_STRATEGY_NONE = "none";
@@ -896,16 +986,16 @@ public class StreamsConfig extends AbstractConfig {
                     Importance.MEDIUM,
                     CLIENT_ID_DOC,
                     "<code>&lt;application.id&gt-&lt;random-UUID&gt</code>")
-            .define(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
+            .define(DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG_DEFAULT,
                     Type.CLASS,
                     LogAndFailExceptionHandler.class.getName(),
                     Importance.MEDIUM,
-                    DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC)
-            .define(DEFAULT_KEY_SERDE_CLASS_CONFIG,
+                    DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DEFAULT_DOC)
+            .define(KEY_SERDE_CLASS_DEFAULT_CONFIG,
                     Type.CLASS,
                     null,
                     Importance.MEDIUM,
-                    DEFAULT_KEY_SERDE_CLASS_DOC)
+                    KEY_SERDE_CLASS_DEFAULT_DOC)
             .define(CommonClientConfigs.LIST_KEY_SERDE_INNER_CLASS_DEFAULT,
                     Type.CLASS,
                     null,
@@ -926,21 +1016,21 @@ public class StreamsConfig extends AbstractConfig {
                     null,
                     Importance.MEDIUM,
                     CommonClientConfigs.LIST_VALUE_SERDE_TYPE_CLASS_DEFAULT_DOC)
-            .define(DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG,
+            .define(PRODUCTION_EXCEPTION_HANDLER_CLASS_DEFAULT_CONFIG,
                     Type.CLASS,
                     DefaultProductionExceptionHandler.class.getName(),
                     Importance.MEDIUM,
-                    DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_DOC)
-            .define(DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
+                    PRODUCTION_EXCEPTION_HANDLER_CLASS_DEFAULT_DOC)
+            .define(TIMESTAMP_EXTRACTOR_CLASS_DEFAULT_CONFIG,
                     Type.CLASS,
                     FailOnInvalidTimestamp.class.getName(),
                     Importance.MEDIUM,
-                    DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC)
-            .define(DEFAULT_VALUE_SERDE_CLASS_CONFIG,
+                    TIMESTAMP_EXTRACTOR_CLASS_DEFAULT_DOC)
+            .define(VALUE_SERDE_CLASS_DEFAULT_CONFIG,
                     Type.CLASS,
                     null,
                     Importance.MEDIUM,
-                    DEFAULT_VALUE_SERDE_CLASS_DOC)
+                    VALUE_SERDE_CLASS_DEFAULT_DOC)
             .define(MAX_TASK_IDLE_MS_CONFIG,
                     Type.LONG,
                     0L,
@@ -1036,7 +1126,7 @@ public class StreamsConfig extends AbstractConfig {
                     BUILT_IN_METRICS_VERSION_DOC)
             .define(COMMIT_INTERVAL_MS_CONFIG,
                     Type.LONG,
-                    DEFAULT_COMMIT_INTERVAL_MS,
+                    COMMIT_INTERVAL_MS_DEFAULT,
                     atLeast(0),
                     Importance.LOW,
                     COMMIT_INTERVAL_MS_DOC)
@@ -1047,7 +1137,7 @@ public class StreamsConfig extends AbstractConfig {
                     ENABLE_METRICS_PUSH_DOC)
             .define(REPARTITION_PURGE_INTERVAL_MS_CONFIG,
                     Type.LONG,
-                    DEFAULT_COMMIT_INTERVAL_MS,
+                    COMMIT_INTERVAL_MS_DEFAULT,
                     atLeast(0),
                     Importance.LOW,
                     REPARTITION_PURGE_INTERVAL_MS_DOC)
@@ -1067,7 +1157,7 @@ public class StreamsConfig extends AbstractConfig {
                     DSL_STORE_SUPPLIERS_CLASS_DEFAULT,
                     Importance.LOW,
                     DSL_STORE_SUPPLIERS_CLASS_DOC)
-            .define(DEFAULT_CLIENT_SUPPLIER_CONFIG,
+            .define(CLIENT_SUPPLIER_DEFAULT_CONFIG,
                     Type.CLASS,
                     DefaultKafkaClientSupplier.class.getName(),
                     Importance.LOW,
@@ -1211,7 +1301,7 @@ public class StreamsConfig extends AbstractConfig {
         tempProducerDefaultOverrides.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE);
         tempProducerDefaultOverrides.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
         // Reduce the transaction timeout for quicker pending offset expiration on broker side.
-        tempProducerDefaultOverrides.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, DEFAULT_TRANSACTION_TIMEOUT);
+        tempProducerDefaultOverrides.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, TRANSACTION_TIMEOUT_DEFAULT);
 
         PRODUCER_EOS_OVERRIDES = Collections.unmodifiableMap(tempProducerDefaultOverrides);
     }
@@ -1454,7 +1544,7 @@ public class StreamsConfig extends AbstractConfig {
                     (int) Objects.requireNonNull(
                         parseType(transactionTimeoutConfigKey, originals().get(transactionTimeoutConfigKey), Type.INT),
                         "Could not parse config `" + COMMIT_INTERVAL_MS_CONFIG + "` because it's set to `null`") :
-                    DEFAULT_TRANSACTION_TIMEOUT;
+                        TRANSACTION_TIMEOUT_DEFAULT;
 
         if (transactionTimeout < commitInterval) {
             throw new IllegalArgumentException(String.format("Transaction timeout %d was set lower than " +
@@ -1473,8 +1563,8 @@ public class StreamsConfig extends AbstractConfig {
 
         if (StreamsConfigUtils.eosEnabled(this) && !originals().containsKey(COMMIT_INTERVAL_MS_CONFIG)) {
             log.debug("Using {} default value of {} as exactly once is enabled.",
-                    COMMIT_INTERVAL_MS_CONFIG, EOS_DEFAULT_COMMIT_INTERVAL_MS);
-            configUpdates.put(COMMIT_INTERVAL_MS_CONFIG, EOS_DEFAULT_COMMIT_INTERVAL_MS);
+                    COMMIT_INTERVAL_MS_CONFIG, EOS_COMMIT_INTERVAL_MS_DEFAULT);
+            configUpdates.put(COMMIT_INTERVAL_MS_CONFIG, EOS_COMMIT_INTERVAL_MS_DEFAULT);
         }
 
         validateRackAwarenessConfiguration();
@@ -1862,24 +1952,24 @@ public class StreamsConfig extends AbstractConfig {
      * @return Configured KafkaClientSupplier
      */
     public KafkaClientSupplier getKafkaClientSupplier() {
-        return getConfiguredInstance(StreamsConfig.DEFAULT_CLIENT_SUPPLIER_CONFIG,
+        return getConfiguredInstance(StreamsConfig.CLIENT_SUPPLIER_DEFAULT_CONFIG,
             KafkaClientSupplier.class);
     }
 
     /**
-     * Return an {@link Serde#configure(Map, boolean) configured} instance of {@link #DEFAULT_KEY_SERDE_CLASS_CONFIG key Serde
+     * Return an {@link Serde#configure(Map, boolean) configured} instance of {@link #KEY_SERDE_CLASS_DEFAULT_CONFIG key Serde
      * class}.
      *
      * @return a configured instance of key Serde class
      */
     @SuppressWarnings("WeakerAccess")
     public Serde<?> defaultKeySerde() {
-        final Object keySerdeConfigSetting = get(DEFAULT_KEY_SERDE_CLASS_CONFIG);
+        final Object keySerdeConfigSetting = get(KEY_SERDE_CLASS_DEFAULT_CONFIG);
         if (keySerdeConfigSetting ==  null) {
             throw new ConfigException("Please specify a key serde or set one through StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG");
         }
         try {
-            final Serde<?> serde = getConfiguredInstance(DEFAULT_KEY_SERDE_CLASS_CONFIG, Serde.class);
+            final Serde<?> serde = getConfiguredInstance(KEY_SERDE_CLASS_DEFAULT_CONFIG, Serde.class);
             serde.configure(originals(), true);
             return serde;
         } catch (final Exception e) {
@@ -1889,19 +1979,19 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     /**
-     * Return an {@link Serde#configure(Map, boolean) configured} instance of {@link #DEFAULT_VALUE_SERDE_CLASS_CONFIG value
+     * Return an {@link Serde#configure(Map, boolean) configured} instance of {@link #VALUE_SERDE_CLASS_DEFAULT_CONFIG value
      * Serde class}.
      *
      * @return an configured instance of value Serde class
      */
     @SuppressWarnings("WeakerAccess")
     public Serde<?> defaultValueSerde() {
-        final Object valueSerdeConfigSetting = get(DEFAULT_VALUE_SERDE_CLASS_CONFIG);
+        final Object valueSerdeConfigSetting = get(VALUE_SERDE_CLASS_DEFAULT_CONFIG);
         if (valueSerdeConfigSetting == null) {
             throw new ConfigException("Please specify a value serde or set one through StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG");
         }
         try {
-            final Serde<?> serde = getConfiguredInstance(DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serde.class);
+            final Serde<?> serde = getConfiguredInstance(VALUE_SERDE_CLASS_DEFAULT_CONFIG, Serde.class);
             serde.configure(originals(), false);
             return serde;
         } catch (final Exception e) {
@@ -1912,17 +2002,17 @@ public class StreamsConfig extends AbstractConfig {
 
     @SuppressWarnings("WeakerAccess")
     public TimestampExtractor defaultTimestampExtractor() {
-        return getConfiguredInstance(DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
+        return getConfiguredInstance(TIMESTAMP_EXTRACTOR_CLASS_DEFAULT_CONFIG, TimestampExtractor.class);
     }
 
     @SuppressWarnings("WeakerAccess")
     public DeserializationExceptionHandler defaultDeserializationExceptionHandler() {
-        return getConfiguredInstance(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG, DeserializationExceptionHandler.class);
+        return getConfiguredInstance(DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG_DEFAULT, DeserializationExceptionHandler.class);
     }
 
     @SuppressWarnings("WeakerAccess")
     public ProductionExceptionHandler defaultProductionExceptionHandler() {
-        return getConfiguredInstance(DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG, ProductionExceptionHandler.class);
+        return getConfiguredInstance(PRODUCTION_EXCEPTION_HANDLER_CLASS_DEFAULT_CONFIG, ProductionExceptionHandler.class);
     }
 
     /**

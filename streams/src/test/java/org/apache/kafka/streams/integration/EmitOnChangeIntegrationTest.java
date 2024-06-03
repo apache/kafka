@@ -91,8 +91,8 @@ public class EmitOnChangeIntegrationTest {
                 mkEntry(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1),
                 mkEntry(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0),
                 mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 300000L),
-                mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class),
-                mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),
+                mkEntry(StreamsConfig.KEY_SERDE_CLASS_DEFAULT_CONFIG, Serdes.IntegerSerde.class),
+                mkEntry(StreamsConfig.VALUE_SERDE_CLASS_DEFAULT_CONFIG, Serdes.StringSerde.class),
                 mkEntry(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000)
             )
         );

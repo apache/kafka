@@ -27,7 +27,7 @@ import org.slf4j.Logger;
 
 import java.util.Optional;
 
-import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG_DEFAULT;
 
 public class RecordDeserializer {
     private final Logger log;
@@ -96,7 +96,7 @@ public class RecordDeserializer {
             throw new StreamsException("Deserialization exception handler is set to fail upon" +
                 " a deserialization error. If you would rather have the streaming pipeline" +
                 " continue after a deserialization error, please set the " +
-                DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.",
+                    DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG_DEFAULT + " appropriately.",
                 deserializationException);
         } else {
             log.warn(

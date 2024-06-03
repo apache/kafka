@@ -133,8 +133,8 @@ public class PauseResumeIntegrationTest {
         properties.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         properties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath());
-        properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
+        properties.put(StreamsConfig.KEY_SERDE_CLASS_DEFAULT_CONFIG, Serdes.String().getClass());
+        properties.put(StreamsConfig.VALUE_SERDE_CLASS_DEFAULT_CONFIG, Serdes.Long().getClass());
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
         properties.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         properties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");

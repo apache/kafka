@@ -124,7 +124,7 @@ public class ResetPartitionTimeIntegrationTest {
             .to(outputRaw);
 
         final Properties streamsConfig = new Properties();
-        streamsConfig.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MaxTimestampExtractor.class);
+        streamsConfig.put(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_DEFAULT_CONFIG, MaxTimestampExtractor.class);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         streamsConfig.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfig.put(StreamsConfig.POLL_MS_CONFIG, Integer.toString(DEFAULT_TIMEOUT));
