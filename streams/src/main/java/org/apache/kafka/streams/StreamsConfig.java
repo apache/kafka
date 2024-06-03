@@ -44,6 +44,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
+import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
@@ -1575,16 +1576,24 @@ public class StreamsConfig extends AbstractConfig {
         if (eosEnabled) {
             // Iterate over KS_CONTROLLED_CONSUMER_CONFIGS_EOS_ENABLED and override values if set
             for (final Map.Entry<String, Object> entry : KS_CONTROLLED_PRODUCER_CONFIGS_EOS_ENABLED.entrySet()) {
-                overwritePropertyMap(props, entry.getKey(), entry.getValue(), "consumer");
+                overwritePropertyMap(props, entry.getKey(), entry.getValue(), "producer");
             }
             verifyMaxInFlightRequestPerConnection(props.get(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION));
 
         } else {
             // Iterate over KS_CONTROLLED_CONSUMER_CONFIGS and override values if set
             for (final Map.Entry<String, Object> entry : KS_CONTROLLED_PRODUCER_CONFIGS.entrySet()) {
-                overwritePropertyMap(props, entry.getKey(), entry.getValue(), "consumer");
+                overwritePropertyMap(props, entry.getKey(), entry.getValue(), "producer");
             }
-        }   
+        }
+
+        if (props.containsKey(ProducerConfig.PARTITIONER_CLASS_CONFIG)) {
+            final Class<?> c = getClass(ProducerConfig.PARTITIONER_CLASS_CONFIG);
+            if (!StreamPartitioner.class.isAssignableFrom(c)) {
+                props.remove(ProducerConfig.PARTITIONER_CLASS_CONFIG);
+                log.warn(String.format("Unexpected producer config: partitioner.class found. User setting (%s) will be ignored", c.getName()));
+            }
+        }
     }
 
     private void verifyMaxInFlightRequestPerConnection(final Object maxInFlightRequests) {
