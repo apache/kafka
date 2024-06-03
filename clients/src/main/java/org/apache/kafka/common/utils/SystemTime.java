@@ -26,6 +26,18 @@ import java.util.function.Supplier;
  */
 public class SystemTime implements Time {
 
+    /**
+     * use the static inner class to implement the singleton pattern
+     * to avoid the overhead of synchronization
+     */
+    private static class SingletonInstance {
+        private static final SystemTime instance = new SystemTime();
+    }
+
+    public static SystemTime getInstance() {
+        return SingletonInstance.instance;
+    }
+
     @Override
     public long milliseconds() {
         return System.currentTimeMillis();
@@ -57,4 +69,6 @@ public class SystemTime implements Time {
         }
     }
 
+    private SystemTime() {
+    }
 }

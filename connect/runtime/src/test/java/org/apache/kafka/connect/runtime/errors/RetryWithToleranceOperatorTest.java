@@ -83,6 +83,8 @@ import static org.mockito.Mockito.when;
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class RetryWithToleranceOperatorTest {
 
+    private static final SystemTime SYSTEM_TIME = SystemTime.getInstance();
+
     private static final Map<String, String> PROPERTIES = new HashMap<String, String>() {{
             put(CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG, Objects.toString(2));
             put(CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG, Objects.toString(3000));
@@ -97,14 +99,14 @@ public class RetryWithToleranceOperatorTest {
         return genericOperator(ERRORS_RETRY_TIMEOUT_DEFAULT, NONE, new ErrorHandlingMetrics(
                 new ConnectorTaskId("noop-connector", -1),
                 new ConnectMetrics("noop-worker", new TestableWorkerConfig(PROPERTIES),
-                        new SystemTime(), "test-cluster")));
+                        SYSTEM_TIME, "test-cluster")));
     }
 
     public static <T> RetryWithToleranceOperator<T> allOperator() {
         return genericOperator(ERRORS_RETRY_TIMEOUT_DEFAULT, ALL, new ErrorHandlingMetrics(
                 new ConnectorTaskId("errors-all-tolerate-connector", -1),
                 new ConnectMetrics("errors-all-tolerate-worker", new TestableWorkerConfig(PROPERTIES),
-                        new SystemTime(), "test-cluster")));
+                        SYSTEM_TIME, "test-cluster")));
     }
 
     private static <T> RetryWithToleranceOperator<T> genericOperator(int retryTimeout, ToleranceType toleranceType, ErrorHandlingMetrics metrics) {

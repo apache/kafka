@@ -46,7 +46,7 @@ class MockBlockingSender(offsets: java.util.Map[TopicPartition, EpochEndOffset],
                          time: Time)
   extends BlockingSend {
 
-  private val client = new MockClient(new SystemTime)
+  private val client = new MockClient(SystemTime.getInstance())
   var fetchCount = 0
   var epochFetchCount = 0
   var listOffsetsCount = 0

@@ -801,7 +801,7 @@ public abstract class AbstractSessionBytesStoreTest {
             new StreamsConfig(streamsConfig),
             recordCollector
         );
-        final Time time = new SystemTime();
+        final Time time = SystemTime.getInstance();
         context.setTime(1L);
         context.setSystemTimeMs(time.milliseconds());
         sessionStore.init((StateStoreContext) context, sessionStore);

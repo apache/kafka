@@ -148,7 +148,7 @@ public class KTableSuppressProcessorMetricsTest {
         streamsConfig.setProperty(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG, StreamsConfig.METRICS_LATEST);
         final MockInternalNewProcessorContext<String, Change<Long>> context =
             new MockInternalNewProcessorContext<>(streamsConfig, TASK_ID, TestUtils.tempDirectory());
-        final Time time = new SystemTime();
+        final Time time = SystemTime.getInstance();
         context.setCurrentNode(new ProcessorNode("testNode"));
         context.setSystemTimeMs(time.milliseconds());
 

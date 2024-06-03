@@ -60,7 +60,7 @@ import java.util.stream.Collectors;
 
 public class SustainedConnectionWorker implements TaskWorker {
     private static final Logger log = LoggerFactory.getLogger(SustainedConnectionWorker.class);
-    private static final SystemTime SYSTEM_TIME = new SystemTime();
+    private static final SystemTime SYSTEM_TIME = SystemTime.getInstance();
 
     // This is the metadata for the test itself.
     private final String id;

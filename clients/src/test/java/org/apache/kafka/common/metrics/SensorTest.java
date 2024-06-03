@@ -53,6 +53,7 @@ public class SensorTest {
     private static final MetricConfig INFO_CONFIG = new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO);
     private static final MetricConfig DEBUG_CONFIG = new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG);
     private static final MetricConfig TRACE_CONFIG = new MetricConfig().recordLevel(Sensor.RecordingLevel.TRACE);
+    private static final SystemTime SYSTEM_TIME = SystemTime.getInstance();
 
     @Test
     public void testRecordLevelEnum() {
@@ -81,45 +82,45 @@ public class SensorTest {
 
     @Test
     public void testShouldRecordForInfoLevelSensor() {
-        Sensor infoSensor = new Sensor(null, "infoSensor", null, INFO_CONFIG, new SystemTime(),
+        Sensor infoSensor = new Sensor(null, "infoSensor", null, INFO_CONFIG, SYSTEM_TIME,
             0, Sensor.RecordingLevel.INFO);
         assertTrue(infoSensor.shouldRecord());
 
-        infoSensor = new Sensor(null, "infoSensor", null, DEBUG_CONFIG, new SystemTime(),
+        infoSensor = new Sensor(null, "infoSensor", null, DEBUG_CONFIG, SYSTEM_TIME,
             0, Sensor.RecordingLevel.INFO);
         assertTrue(infoSensor.shouldRecord());
 
-        infoSensor = new Sensor(null, "infoSensor", null, TRACE_CONFIG, new SystemTime(),
+        infoSensor = new Sensor(null, "infoSensor", null, TRACE_CONFIG, SYSTEM_TIME,
             0, Sensor.RecordingLevel.INFO);
         assertTrue(infoSensor.shouldRecord());
     }
 
     @Test
     public void testShouldRecordForDebugLevelSensor() {
-        Sensor debugSensor = new Sensor(null, "debugSensor", null, INFO_CONFIG, new SystemTime(),
+        Sensor debugSensor = new Sensor(null, "debugSensor", null, INFO_CONFIG, SYSTEM_TIME,
             0, Sensor.RecordingLevel.DEBUG);
         assertFalse(debugSensor.shouldRecord());
 
-        debugSensor = new Sensor(null, "debugSensor", null, DEBUG_CONFIG, new SystemTime(),
+        debugSensor = new Sensor(null, "debugSensor", null, DEBUG_CONFIG, SYSTEM_TIME,
              0, Sensor.RecordingLevel.DEBUG);
         assertTrue(debugSensor.shouldRecord());
 
-        debugSensor = new Sensor(null, "debugSensor", null, TRACE_CONFIG, new SystemTime(),
+        debugSensor = new Sensor(null, "debugSensor", null, TRACE_CONFIG, SYSTEM_TIME,
              0, Sensor.RecordingLevel.DEBUG);
         assertTrue(debugSensor.shouldRecord());
     }
 
     @Test
     public void testShouldRecordForTraceLevelSensor() {
-        Sensor traceSensor = new Sensor(null, "traceSensor", null, INFO_CONFIG, new SystemTime(),
+        Sensor traceSensor = new Sensor(null, "traceSensor", null, INFO_CONFIG, SYSTEM_TIME,
              0, Sensor.RecordingLevel.TRACE);
         assertFalse(traceSensor.shouldRecord());
 
-        traceSensor = new Sensor(null, "traceSensor", null, DEBUG_CONFIG, new SystemTime(),
+        traceSensor = new Sensor(null, "traceSensor", null, DEBUG_CONFIG, SYSTEM_TIME,
              0, Sensor.RecordingLevel.TRACE);
         assertFalse(traceSensor.shouldRecord());
 
-        traceSensor = new Sensor(null, "traceSensor", null, TRACE_CONFIG, new SystemTime(),
+        traceSensor = new Sensor(null, "traceSensor", null, TRACE_CONFIG, SYSTEM_TIME,
              0, Sensor.RecordingLevel.TRACE);
         assertTrue(traceSensor.shouldRecord());
     }

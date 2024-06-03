@@ -1584,7 +1584,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest<S extends
             TestUtils.tempDirectory(),
             new StreamsConfig(streamsConfig)
         );
-        final Time time = new SystemTime();
+        final Time time = SystemTime.getInstance();
         context.setSystemTimeMs(time.milliseconds());
         bytesStore.init((StateStoreContext) context, bytesStore);
 

@@ -993,7 +993,7 @@ public abstract class AbstractWindowBytesStoreTest {
             new StreamsConfig(streamsConfig),
             recordCollector
         );
-        final Time time = new SystemTime();
+        final Time time = SystemTime.getInstance();
         context.setSystemTimeMs(time.milliseconds());
         context.setTime(1L);
         windowStore.init((StateStoreContext) context, windowStore);

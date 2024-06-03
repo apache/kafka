@@ -135,6 +135,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public abstract class ConsumerCoordinatorTest {
+    private static final SystemTime REAL_TIME = SystemTime.getInstance();
     private final String topic1 = "test1";
     private final String topic2 = "test2";
     private final TopicPartition t1p = new TopicPartition(topic1, 0);
@@ -3588,7 +3589,6 @@ public abstract class ConsumerCoordinatorTest {
     public void shouldLoseAllOwnedPartitionsBeforeRejoiningAfterDroppingOutOfTheGroup() {
         final List<TopicPartition> partitions = singletonList(t1p);
         try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, false, Optional.of("group-id"), true)) {
-            final SystemTime realTime = new SystemTime();
             coordinator.ensureActiveGroup();
 
             prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.REBALANCE_IN_PROGRESS);
@@ -3603,13 +3603,13 @@ public abstract class ConsumerCoordinatorTest {
             client.prepareResponse(joinGroupFollowerResponse(generationId, memberId, "leader", Errors.NONE));
             client.prepareResponse(syncGroupResponse(Collections.emptyList(), Errors.UNKNOWN_MEMBER_ID));
 
-            boolean res = coordinator.joinGroupIfNeeded(realTime.timer(1000));
+            boolean res = coordinator.joinGroupIfNeeded(REAL_TIME.timer(1000));
 
             assertFalse(res);
             assertEquals(AbstractCoordinator.Generation.NO_GENERATION, coordinator.generation());
             assertEquals("", coordinator.generation().memberId);
 
-            res = coordinator.joinGroupIfNeeded(realTime.timer(1000));
+            res = coordinator.joinGroupIfNeeded(REAL_TIME.timer(1000));
             assertFalse(res);
         }
         Collection<TopicPartition> lost = getLost(partitions);
@@ -3621,7 +3621,6 @@ public abstract class ConsumerCoordinatorTest {
     public void shouldLoseAllOwnedPartitionsBeforeRejoiningAfterResettingGenerationId() {
         final List<TopicPartition> partitions = singletonList(t1p);
         try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, false, Optional.of("group-id"), true)) {
-            final SystemTime realTime = new SystemTime();
             coordinator.ensureActiveGroup();
 
             prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.REBALANCE_IN_PROGRESS);
@@ -3636,7 +3635,7 @@ public abstract class ConsumerCoordinatorTest {
             client.prepareResponse(joinGroupFollowerResponse(generationId, memberId, "leader", Errors.NONE));
             client.prepareResponse(syncGroupResponse(Collections.emptyList(), Errors.ILLEGAL_GENERATION));
 
-            boolean res = coordinator.joinGroupIfNeeded(realTime.timer(1000));
+            boolean res = coordinator.joinGroupIfNeeded(REAL_TIME.timer(1000));
 
             assertFalse(res);
             assertEquals(AbstractCoordinator.Generation.NO_GENERATION.generationId, coordinator.generation().generationId);
@@ -3644,7 +3643,7 @@ public abstract class ConsumerCoordinatorTest {
             // member ID should not be reset
             assertEquals(memberId, coordinator.generation().memberId);
 
-            res = coordinator.joinGroupIfNeeded(realTime.timer(1000));
+            res = coordinator.joinGroupIfNeeded(REAL_TIME.timer(1000));
             assertFalse(res);
         }
         Collection<TopicPartition> lost = getLost(partitions);
