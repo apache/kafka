@@ -125,7 +125,7 @@ public class HeartbeatRequestManagerTest {
 
     private void setUp(Optional<GroupInformation> groupInfo) {
         this.time = new MockTime();
-        this.metrics = new Metrics(time);
+        this.metrics = new Metrics();
         this.logContext = new LogContext();
         this.groupInfo = groupInfo;
         this.pollTimer = mock(Timer.class);
@@ -208,14 +208,24 @@ public class HeartbeatRequestManagerTest {
         assertEquals(0, result2.unsentRequests.size());
     }
 
-    // TODO
     @Test
     public void testSuccessfulHeartbeatTiming() {
+        heartbeatRequestManager = createHeartbeatRequestManager(
+                coordinatorRequestManager,
+                membershipManager,
+                heartbeatState,
+                heartbeatRequestState,
+                backgroundEventHandler
+        );
+
         when(membershipManager.state()).thenReturn(MemberState.STABLE);
         mockStableMember(membershipManager);
 
+        long t = time.milliseconds();
         when(membershipManager.isLeavingGroup()).thenReturn(true);
-        when(heartbeatRequestState.canSendRequest(time.milliseconds())).thenReturn(false);
+        when(heartbeatRequestState.canSendRequest(t)).thenReturn(false);
+        when(heartbeatRequestState.canSendRequest(t + 1000)).thenReturn(true);
+        when(heartbeatRequestState.timeToNextHeartbeatMs(anyLong())).thenReturn(1000L);
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(0, result.unsentRequests.size(),
                 "No heartbeat should be sent while interval has not expired");
@@ -230,6 +240,7 @@ public class HeartbeatRequestManagerTest {
                 "Heartbeat timer was not reset to the interval when the heartbeat request was sent.");
 
         long partOfInterval = DEFAULT_HEARTBEAT_INTERVAL_MS / 3;
+        when(heartbeatRequestState.timeToNextHeartbeatMs(anyLong())).thenReturn(DEFAULT_HEARTBEAT_INTERVAL_MS - partOfInterval);
         time.sleep(partOfInterval);
         result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(0, result.unsentRequests.size(),
@@ -238,6 +249,10 @@ public class HeartbeatRequestManagerTest {
                 heartbeatRequestState.timeToNextHeartbeatMs(time.milliseconds()),
                 "Time to next interval was not properly updated.");
 
+        t = time.milliseconds();
+        when(heartbeatRequestState.canSendRequest(t)).thenReturn(false);
+        t = t + DEFAULT_HEARTBEAT_INTERVAL_MS - partOfInterval;
+        when(heartbeatRequestState.canSendRequest(t)).thenReturn(true);
         inflightReq.handler().onComplete(createHeartbeatResponse(inflightReq, Errors.NONE));
         assertNextHeartbeatTiming(DEFAULT_HEARTBEAT_INTERVAL_MS - partOfInterval);
     }
@@ -301,8 +316,6 @@ public class HeartbeatRequestManagerTest {
 
     @Test
     public void testTimerNotDue() {
-
-
         Optional<ClientTelemetryReporter> clientTelemetryReporter = Optional.of(mock(ClientTelemetryReporter.class));
         Optional<String> optionalString1 = Optional.of(DEFAULT_GROUP_INSTANCE_ID);
         Optional<String> optionalString2 = Optional.of(DEFAULT_REMOTE_ASSIGNOR);
@@ -842,7 +855,7 @@ public class HeartbeatRequestManagerTest {
         verify(pollTimer).isExpiredBy();
     }
 
-    // TODO
+    // TODO: should be removed or changed heavily
     @Test
     public void testHeartbeatMetrics() {
         // setup
@@ -885,9 +898,17 @@ public class HeartbeatRequestManagerTest {
         assertEquals((double) randomSleepS, getMetric("last-heartbeat-seconds-ago").metricValue());
     }
 
-    // TODO
     @Test
     public void testFencedMemberStopHeartbeatUntilItReleasesAssignmentToRejoin() {
+        heartbeatRequestManager = createHeartbeatRequestManager(
+                coordinatorRequestManager,
+                membershipManager,
+                heartbeatState,
+                heartbeatRequestState,
+                backgroundEventHandler
+        );
+
+        when(heartbeatRequestState.canSendRequest(anyLong())).thenReturn(true);
         when(membershipManager.state()).thenReturn(MemberState.STABLE);
         mockStableMember(membershipManager);
 
@@ -906,10 +927,12 @@ public class HeartbeatRequestManagerTest {
         verify(heartbeatRequestState).onFailedAttempt(anyLong());
         verify(heartbeatRequestState).reset();
 
+        when(heartbeatRequestState.canSendRequest(anyLong())).thenReturn(false);
         when(membershipManager.state()).thenReturn(MemberState.FENCED);
         result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(0, result.unsentRequests.size(), "Member should not send heartbeats while FENCED");
 
+        when(heartbeatRequestState.canSendRequest(anyLong())).thenReturn(true);
         when(membershipManager.state()).thenReturn(MemberState.JOINING);
         result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, result.unsentRequests.size(), "Fenced member should resume heartbeat after transitioning to JOINING");
