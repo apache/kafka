@@ -47,7 +47,9 @@ plugins {
   // Updating the shadow plugin version to 8.1.1 causes issue with signing and publishing the shadowed
   // artifacts - see https://github.com/johnrengelman/shadow/issues/901
   id 'com.github.johnrengelman.shadow' version '8.1.0' apply false
-  id 'com.diffplug.spotless' version '6.14.0' apply false // 6.14.1 and newer require Java 11 at compile time, so we can't upgrade until AK 4.0
+  //  the minimum required JRE of 6.14.0+ is 11
+  //  refer:https://github.com/diffplug/spotless/tree/main/plugin-gradle#requirements
+  id 'com.diffplug.spotless' version "6.13.0" apply false
 }
 
 ext {
@@ -197,6 +199,9 @@ def determineCommitId() {
     "unknown"
   }
 }
+
+def spotlessApplyModules = ['']
+
 
 apply from: file('wrapper.gradle')
 
@@ -792,6 +797,16 @@ subprojects {
     suppressionFile = "$rootDir/gradle/resources/dependencycheck-suppressions.xml"
     skipProjects = [ ":jmh-benchmarks", ":trogdor" ]
     skipConfigurations = [ "zinc" ]
+  }
+
+  if (project.name in spotlessApplyModules) {
+    apply plugin: 'com.diffplug.spotless'
+    spotless {
+      java {
+        importOrder('kafka', 'org.apache.kafka', 'com', 'net', 'org', 'java', 'javax', '', '\\#')
+        removeUnusedImports()
+      }
+    }
   }
 }
 
