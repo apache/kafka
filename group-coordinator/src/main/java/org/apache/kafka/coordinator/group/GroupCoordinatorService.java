@@ -44,6 +44,8 @@ import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData.DescribedGroup;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsInitializeRequestData;
+import org.apache.kafka.common.message.StreamsInitializeResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
@@ -339,6 +341,35 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 .setErrorCode(error.code())
                 .setErrorMessage(message),
             log
+        ));
+    }
+
+    /**
+     * See {@link GroupCoordinator#streamsInitialize(RequestContext, StreamsInitializeRequestData)}.
+     */
+    @Override
+    public CompletableFuture<StreamsInitializeResponseData> streamsInitialize(
+        RequestContext context,
+        StreamsInitializeRequestData request
+    ) {
+        if (!isActive.get()) {
+            return CompletableFuture.completedFuture(new StreamsInitializeResponseData()
+                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+            );
+        }
+
+        return runtime.scheduleWriteOperation(
+            "streams-group-initialize",
+            topicPartitionFor(request.groupId()),
+            Duration.ofMillis(config.offsetCommitTimeoutMs),
+            coordinator -> coordinator.streamsInitialize(context, request)
+        ).exceptionally(exception -> handleOperationException(
+            "streams-group-initialize",
+            request,
+            exception,
+            (error, message) -> new StreamsInitializeResponseData()
+                .setErrorCode(error.code())
+                .setErrorMessage(message)
         ));
     }
 

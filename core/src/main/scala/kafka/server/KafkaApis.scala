@@ -275,6 +275,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.WRITE_SHARE_GROUP_STATE => handleWriteShareGroupStateRequest(request)
         case ApiKeys.DELETE_SHARE_GROUP_STATE => handleDeleteShareGroupStateRequest(request)
         case ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY => handleReadShareGroupStateSummaryRequest(request)
+        case ApiKeys.STREAMS_INITIALIZE => handleStreamsInitialize(request).exceptionally(handleError)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {
@@ -3870,6 +3871,33 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
+  }
+
+  def handleStreamsInitialize(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    val streamsInitializeRequest = request.body[StreamsInitializeRequest]
+
+    // TODO: Check ACLs on CREATE TOPIC & DESCRIBE_CONFIGS
+
+    if (!config.isNewGroupCoordinatorEnabled) {
+      // The API is not supported by the "old" group coordinator (the default). If the
+      // new one is not enabled, we fail directly here.
+      requestHelper.sendMaybeThrottle(request, streamsInitializeRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      CompletableFuture.completedFuture[Unit](())
+    } else if (!authHelper.authorize(request.context, READ, GROUP, streamsInitializeRequest.data.groupId)) {
+      requestHelper.sendMaybeThrottle(request, streamsInitializeRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
+      CompletableFuture.completedFuture[Unit](())
+    } else {
+      groupCoordinator.streamsInitialize(
+        request.context,
+        streamsInitializeRequest.data,
+      ).handle[Unit] { (response, exception) =>
+        if (exception != null) {
+          requestHelper.sendMaybeThrottle(request, streamsInitializeRequest.getErrorResponse(exception))
+        } else {
+          requestHelper.sendMaybeThrottle(request, new StreamsInitializeResponse(response))
+        }
+      }
+    }
   }
 
   def handleGetTelemetrySubscriptionsRequest(request: RequestChannel.Request): Unit = {

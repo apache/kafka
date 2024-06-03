@@ -30,6 +30,7 @@ import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
+import org.apache.kafka.common.errors.StreamsInvalidTopologyException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.internals.Topic;
@@ -53,6 +54,8 @@ import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsInitializeRequestData;
+import org.apache.kafka.common.message.StreamsInitializeResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
@@ -254,6 +257,118 @@ public class GroupCoordinatorServiceTest {
 
         assertEquals(
             new ConsumerGroupHeartbeatResponseData()
+                .setErrorCode(expectedErrorCode)
+                .setErrorMessage(expectedErrorMessage),
+            future.get(5, TimeUnit.SECONDS)
+        );
+    }
+
+    @Test
+    public void testStreamsInitializeWhenNotStarted() throws ExecutionException, InterruptedException {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime,
+            new GroupCoordinatorMetrics()
+        );
+
+        StreamsInitializeRequestData request = new StreamsInitializeRequestData()
+            .setGroupId("foo");
+
+        CompletableFuture<StreamsInitializeResponseData> future = service.streamsInitialize(
+            requestContext(ApiKeys.STREAMS_INITIALIZE),
+            request
+        );
+
+        assertEquals(
+            new StreamsInitializeResponseData()
+                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code()),
+            future.get()
+        );
+    }
+
+    @Test
+    public void testStreamsInitialize() throws ExecutionException, InterruptedException, TimeoutException {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime,
+            new GroupCoordinatorMetrics()
+        );
+
+        StreamsInitializeRequestData request = new StreamsInitializeRequestData()
+            .setGroupId("foo");
+
+        service.startup(() -> 1);
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("streams-group-initialize"),
+            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(
+            new StreamsInitializeResponseData()
+        ));
+
+        CompletableFuture<StreamsInitializeResponseData> future = service.streamsInitialize(
+            requestContext(ApiKeys.STREAMS_INITIALIZE),
+            request
+        );
+
+        assertEquals(new StreamsInitializeResponseData(), future.get(5, TimeUnit.SECONDS));
+    }
+
+    private static Stream<Arguments> testStreamsInitializeWithExceptionSource() {
+        return Stream.of(
+            Arguments.arguments(new UnknownTopicOrPartitionException(), Errors.COORDINATOR_NOT_AVAILABLE.code(), null),
+            Arguments.arguments(new NotEnoughReplicasException(), Errors.COORDINATOR_NOT_AVAILABLE.code(), null),
+            Arguments.arguments(new org.apache.kafka.common.errors.TimeoutException(), Errors.COORDINATOR_NOT_AVAILABLE.code(), null),
+            Arguments.arguments(new NotLeaderOrFollowerException(), Errors.NOT_COORDINATOR.code(), null),
+            Arguments.arguments(new KafkaStorageException(), Errors.NOT_COORDINATOR.code(), null),
+            Arguments.arguments(new RecordTooLargeException(), Errors.UNKNOWN_SERVER_ERROR.code(), null),
+            Arguments.arguments(new RecordBatchTooLargeException(), Errors.UNKNOWN_SERVER_ERROR.code(), null),
+            Arguments.arguments(new InvalidFetchSizeException(""), Errors.UNKNOWN_SERVER_ERROR.code(), null),
+            Arguments.arguments(new InvalidRequestException("Invalid"), Errors.INVALID_REQUEST.code(), "Invalid"),
+            Arguments.arguments(new StreamsInvalidTopologyException("Invalid"), Errors.STREAMS_INVALID_TOPOLOGY.code(), "Invalid")
+        );
+    }
+
+    @ParameterizedTest
+    @MethodSource("testStreamsInitializeWithExceptionSource")
+    public void testStreamsInitializeWithException(
+        Throwable exception,
+        short expectedErrorCode,
+        String expectedErrorMessage
+    ) throws ExecutionException, InterruptedException, TimeoutException {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime,
+            new GroupCoordinatorMetrics()
+        );
+
+        StreamsInitializeRequestData request = new StreamsInitializeRequestData()
+            .setGroupId("foo");
+
+        service.startup(() -> 1);
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("streams-group-initialize"),
+            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+        )).thenReturn(FutureUtils.failedFuture(exception));
+
+        CompletableFuture<StreamsInitializeResponseData> future = service.streamsInitialize(
+            requestContext(ApiKeys.STREAMS_INITIALIZE),
+            request
+        );
+
+        assertEquals(
+            new StreamsInitializeResponseData()
                 .setErrorCode(expectedErrorCode)
                 .setErrorMessage(expectedErrorMessage),
             future.get(5, TimeUnit.SECONDS)
