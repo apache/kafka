@@ -38,7 +38,6 @@ import org.apache.kafka.connect.util.TopicAdmin;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.junit.Before;
-import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.easymock.PowerMock;
 import org.powermock.api.easymock.annotation.Mock;
@@ -47,7 +46,6 @@ import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 import org.powermock.reflect.Whitebox;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -62,9 +60,6 @@ import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.INCLUDE_T
 import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.ONLY_FAILED_FIELD_NAME;
 import static org.apache.kafka.connect.storage.KafkaConfigBackingStore.RESTART_KEY;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 
 @RunWith(PowerMockRunner.class)
 @PrepareForTest({KafkaConfigBackingStore.class, WorkerConfig.class})

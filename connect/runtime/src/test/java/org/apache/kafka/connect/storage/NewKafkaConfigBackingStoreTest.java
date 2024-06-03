@@ -46,7 +46,6 @@ import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.KafkaBasedLog;
 import org.apache.kafka.connect.util.TopicAdmin;
-import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -56,7 +55,6 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.mockito.stubbing.Answer;
-import org.powermock.api.easymock.PowerMock;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -106,7 +104,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
-public class KafkaConfigBackingStoreMockitoTest {
+public class NewKafkaConfigBackingStoreTest {
     private static final String CLIENT_ID_BASE = "test-client-id-";
     private static final String TOPIC = "connect-configs";
     private static final short TOPIC_REPLICATION_FACTOR = 5;
@@ -1465,7 +1463,7 @@ public class KafkaConfigBackingStoreMockitoTest {
                 "tasks", 2); // Starts with 0 tasks, after update has 2
 
         doAnswer(expectReadToEnd(new LinkedHashMap<String, byte[]>() {{
-            put(CONNECTOR_TASK_COUNT_RECORD_KEYS.get(0), CONFIGS_SERIALIZED.get(3));
+                    put(CONNECTOR_TASK_COUNT_RECORD_KEYS.get(0), CONFIGS_SERIALIZED.get(3));
                 }})
         ).when(configLog).readToEnd();
         // Task count records are read back after writing as well
