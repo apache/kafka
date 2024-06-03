@@ -820,10 +820,10 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          * reached, based on the provided current time.
          */
         void maybeExpire() {
-            if (isExpired()) {
+            if (retryTimeoutExpired()) {
                 removeRequest();
                 future().completeExceptionally(new TimeoutException(requestDescription() +
-                        " could not complete before timeout expired."));
+                    " could not complete before timeout expired."));
             }
         }
 
@@ -863,6 +863,14 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         abstract void onResponse(final ClientResponse response);
+
+        /**
+         * If at least one attempt has been sent, and the user-provided timeout has elapsed, consider the
+         * request as expired.
+         */
+        boolean retryTimeoutExpired() {
+            return numAttempts > 0 && isExpired();
+        }
 
         abstract void removeRequest();
     }
