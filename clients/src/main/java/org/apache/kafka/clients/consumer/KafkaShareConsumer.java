@@ -541,7 +541,8 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
      *
      * <p>
      * This is a synchronous commit and will block until either the commit succeeds, an unrecoverable error is
-     * encountered (in which case it is thrown to the caller), or the timeout expires.
+     * encountered (in which case it is thrown to the caller), or the timeout specified by {@code default.api.timeout.ms}
+     * expires.
      *
      * @return A map of the results for each topic-partition for which delivery was acknowledged.
      *         If the acknowledgement failed for a topic-partition, an exception is present.
@@ -560,6 +561,7 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
      * the acknowledgements to commit have been indicated using {@link #acknowledge(ConsumerRecord)} or
      * {@link #acknowledge(ConsumerRecord, AcknowledgeType)}. If the consumer is using implicit acknowledgement,
      * all the records returned by the latest call to {@link #poll(Duration)} are acknowledged.
+
      * <p>
      * This is a synchronous commit and will block until either the commit succeeds, an unrecoverable error is
      * encountered (in which case it is thrown to the caller), or the timeout expires.
