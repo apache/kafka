@@ -371,7 +371,6 @@ public final class Utils {
             int j = i < second.length ? i : 0;
             if (first[i] != second[j]) {
                 matches = false;
-                break;
             }
         }
         return matches;

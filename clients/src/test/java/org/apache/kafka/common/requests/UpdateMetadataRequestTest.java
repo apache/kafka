@@ -144,11 +144,11 @@ public class UpdateMetadataRequestTest {
                 new UpdateMetadataBroker()
                     .setId(1)
                     .setEndpoints(Collections.singletonList(
-                            new UpdateMetadataEndpoint()
-                                    .setHost("host1")
-                                    .setPort(9090)
-                                    .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
-                                    .setListener("PLAINTEXT")
+                        new UpdateMetadataEndpoint()
+                            .setHost("host1")
+                            .setPort(9090)
+                            .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+                            .setListener("PLAINTEXT")
                     ))
             );
 
