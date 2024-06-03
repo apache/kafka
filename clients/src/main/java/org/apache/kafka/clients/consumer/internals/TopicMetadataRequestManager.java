@@ -204,13 +204,10 @@ public class TopicMetadataRequestManager implements RequestManager {
 
         private void handleError(final Throwable exception,
                                  final long completionTimeMs) {
-            if (exception instanceof RetriableException) {
-                if (isExpired()) {
-                    completeFutureAndRemoveRequest(
-                        new TimeoutException("Timeout expired while fetching topic metadata"));
-                } else {
-                    onFailedAttempt(completionTimeMs);
-                }
+            if (isExpired()) {
+                completeFutureAndRemoveRequest(new TimeoutException("Timeout expired while fetching topic metadata"));
+            } else if (exception instanceof RetriableException) {
+                onFailedAttempt(completionTimeMs);
             } else {
                 completeFutureAndRemoveRequest(exception);
             }

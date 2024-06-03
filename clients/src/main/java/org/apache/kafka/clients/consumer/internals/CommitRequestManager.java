@@ -211,6 +211,13 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             .orElse(Long.MAX_VALUE);
     }
 
+    private KafkaException maybeWrapAsTimeoutException(Throwable t) {
+        if (t instanceof TimeoutException)
+            return (TimeoutException) t;
+        else
+            return new TimeoutException(t);
+    }
+
     /**
      * Generate a request to commit consumed offsets. Add the request to the queue of pending
      * requests to be sent out on the next call to {@link #poll(long)}. If there are empty
@@ -319,11 +326,11 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             if (error == null) {
                 result.complete(null);
             } else {
-                if (error instanceof RetriableException || isStaleEpochErrorAndValidEpochAvailable(error)) {
-                    if (error instanceof TimeoutException && requestAttempt.isExpired()) {
-                        log.debug("Auto-commit sync before revocation timed out and won't be retried anymore");
-                        result.completeExceptionally(error);
-                    } else if (error instanceof UnknownTopicOrPartitionException) {
+                if (requestAttempt.isExpired()) {
+                    log.debug("Auto-commit sync before revocation timed out and won't be retried anymore");
+                    result.completeExceptionally(maybeWrapAsTimeoutException(error));
+                } else if (error instanceof RetriableException || isStaleEpochErrorAndValidEpochAvailable(error)) {
+                    if (error instanceof UnknownTopicOrPartitionException) {
                         log.debug("Auto-commit sync before revocation failed because topic or partition were deleted");
                         result.completeExceptionally(error);
                     } else {
@@ -435,14 +442,12 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             if (error == null) {
                 result.complete(null);
             } else {
-                if (error instanceof RetriableException) {
-                    if (error instanceof TimeoutException && requestAttempt.isExpired()) {
-                        log.info("OffsetCommit timeout expired so it won't be retried anymore");
-                        result.completeExceptionally(error);
-                    } else {
-                        requestAttempt.resetFuture();
-                        commitSyncWithRetries(requestAttempt, result);
-                    }
+                if (requestAttempt.isExpired()) {
+                    log.info("OffsetCommit timeout expired so it won't be retried anymore");
+                    result.completeExceptionally(maybeWrapAsTimeoutException(error));
+                } else if (error instanceof RetriableException) {
+                    requestAttempt.resetFuture();
+                    commitSyncWithRetries(requestAttempt, result);
                 } else {
                     result.completeExceptionally(commitSyncExceptionForError(error));
                 }
@@ -519,13 +524,12 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             if (error == null) {
                 result.complete(res);
             } else {
-                if (error instanceof RetriableException || isStaleEpochErrorAndValidEpochAvailable(error)) {
-                    if (error instanceof TimeoutException && fetchRequest.isExpired()) {
-                        result.completeExceptionally(error);
-                    } else {
-                        fetchRequest.resetFuture();
-                        fetchOffsetsWithRetries(fetchRequest, result);
-                    }
+                if (fetchRequest.isExpired()) {
+                    log.debug("Fetch request for {} timed out and won't be retried anymore", fetchRequest.requestedPartitions);
+                    result.completeExceptionally(maybeWrapAsTimeoutException(error));
+                } else if (error instanceof RetriableException || isStaleEpochErrorAndValidEpochAvailable(error)) {
+                    fetchRequest.resetFuture();
+                    fetchOffsetsWithRetries(fetchRequest, result);
                 } else
                     result.completeExceptionally(error);
             }
