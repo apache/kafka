@@ -2244,7 +2244,7 @@ class KafkaController(val config: KafkaConfig,
               val currentLeader = controllerContext.partitionLeadershipInfo(partition).get.leaderAndIsr.leader
               currentLeader == LeaderAndIsr.NoLeader || !controllerContext.liveBrokerIds.contains(currentLeader)
 
-            case ElectionType.DESIGNATED => throw new RuntimeException("Designated election not supported by KafkaController")
+            case ElectionType.DESIGNATED => throw new UnsupportedClassVersionError("Designated election not supported by KafkaController in ZK mode")
           }
         }
 
