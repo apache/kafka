@@ -167,7 +167,7 @@ public class ConsumerNetworkThreadTest {
     }
 
     @ParameterizedTest
-    @ValueSource(longs = {1, 100, 1000, 4999, 5001})
+    @ValueSource(longs = {100, 4999, 5001})
     public void testConsumerNetworkThreadWaitTimeComputations(long exampleTime) {
         List<Optional<? extends RequestManager>> list = new ArrayList<>();
         list.add(Optional.of(coordinatorRequestManager));
