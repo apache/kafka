@@ -206,20 +206,12 @@ public class TopicMetadataRequestManager implements RequestManager {
         }
 
         private void handleResponse(final ClientResponse response) {
-            long responseTimeMs = response.receivedTimeMs();
             try {
                 Map<String, List<PartitionInfo>> res = handleTopicMetadataResponse((MetadataResponse) response.responseBody());
                 future.complete(res);
                 inflightRequests.remove(this);
-            } catch (RetriableException e) {
-                if (isExpired()) {
-                    completeFutureAndRemoveRequest(
-                        new TimeoutException("Timeout expired while fetching topic metadata"));
-                } else {
-                    onFailedAttempt(responseTimeMs);
-                }
-            } catch (Exception t) {
-                completeFutureAndRemoveRequest(t);
+            } catch (Exception e) {
+                handleError(e, response.receivedTimeMs());
             }
         }
 
