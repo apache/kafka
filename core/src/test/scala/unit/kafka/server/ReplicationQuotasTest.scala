@@ -299,7 +299,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
     features.add(new BrokerRegistrationRequestData.Feature()
       .setName(MetadataVersion.FEATURE_NAME)
       .setMinSupportedVersion(MetadataVersion.IBP_3_0_IV1.featureLevel())
-      .setMaxSupportedVersion(MetadataVersion.IBP_4_0_IVO.featureLevel()))
+      .setMaxSupportedVersion(MetadataVersion.IBP_4_0_IV0.featureLevel()))
     controllerServer.controller.registerBroker(
       ControllerRequestContextUtil.ANONYMOUS_CONTEXT,
       new BrokerRegistrationRequestData()
