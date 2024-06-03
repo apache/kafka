@@ -57,7 +57,6 @@ import org.openjdk.jmh.annotations.Warmup;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -112,7 +111,7 @@ public class CheckpointBench {
                 new LogConfig(new Properties()), new MockConfigRepository(), new CleanerConfig(1, 4 * 1024 * 1024L, 0.9d,
                         1024 * 1024, 32 * 1024 * 1024, Double.MAX_VALUE, 15 * 1000, true), time, MetadataVersion.latestTesting(), 4, false, Option.empty(), false, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT);
         scheduler.startup();
-        final BrokerTopicStats brokerTopicStats = new BrokerTopicStats(Optional.empty());
+        final BrokerTopicStats brokerTopicStats = new BrokerTopicStats(false);
         final MetadataCache metadataCache =
                 MetadataCache.zkMetadataCache(this.brokerProperties.brokerId(),
                     this.brokerProperties.interBrokerProtocolVersion(),

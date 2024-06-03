@@ -95,7 +95,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -112,7 +111,7 @@ import scala.collection.Map;
 public class ReplicaFetcherThreadBenchmark {
     private final File logDir = new File(System.getProperty("java.io.tmpdir"), UUID.randomUUID().toString());
     private final KafkaScheduler scheduler = new KafkaScheduler(1, true, "scheduler");
-    private final Pool<TopicPartition, Partition> pool = new Pool<TopicPartition, Partition>(Option.empty());
+    private final Pool<TopicPartition, Partition> pool = new Pool<>(Option.empty());
     private final Metrics metrics = new Metrics();
     private final Option<Uuid> topicId = Option.apply(Uuid.randomUuid());
     @Param({"100", "500", "1000", "5000"})
@@ -133,7 +132,7 @@ public class ReplicaFetcherThreadBenchmark {
         KafkaConfig config = new KafkaConfig(props);
         LogConfig logConfig = createLogConfig();
 
-        BrokerTopicStats brokerTopicStats = new BrokerTopicStats(Optional.empty());
+        BrokerTopicStats brokerTopicStats = new BrokerTopicStats(false);
         LogDirFailureChannel logDirFailureChannel = Mockito.mock(LogDirFailureChannel.class);
         List<File> logDirs = Collections.singletonList(logDir);
         logManager = new LogManagerBuilder().

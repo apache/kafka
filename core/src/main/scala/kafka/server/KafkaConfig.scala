@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import java.{lang, util}
+import java.util
 import java.util.concurrent.TimeUnit
 import java.util.Properties
 import kafka.cluster.EndPoint
@@ -136,7 +136,7 @@ object KafkaConfig {
     if (configType != null) {
       Some(configType)
     } else {
-      val configKey = DynamicConfig.Broker.brokerConfigDef.configKeys().get(exactName)
+      val configKey = DynamicConfig.Broker.configKeys.get(exactName)
       if (configKey != null) {
         Some(configKey.`type`)
       } else {
@@ -573,8 +573,11 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       throw new ConfigException(s"Disabling the '${GroupType.CLASSIC}' protocol is not supported.")
     }
     if (protocols.contains(GroupType.CONSUMER)) {
+      if (processRoles.isEmpty) {
+        throw new ConfigException(s"The new '${GroupType.CONSUMER}' rebalance protocol is only supported in KRaft cluster.")
+      }
       warn(s"The new '${GroupType.CONSUMER}' rebalance protocol is enabled along with the new group coordinator. " +
-        "This is part of the early access of KIP-848 and MUST NOT be used in production.")
+        "This is part of the preview of KIP-848 and MUST NOT be used in production.")
     }
     protocols
   }
@@ -700,7 +703,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
 
   /** Internal Configurations **/
   val unstableApiVersionsEnabled = getBoolean(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG)
-  val unstableMetadataVersionsEnabled = getBoolean(ServerConfigs.UNSTABLE_METADATA_VERSIONS_ENABLE_CONFIG)
+  val unstableFeatureVersionsEnabled = getBoolean(ServerConfigs.UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG)
 
   def addReconfigurable(reconfigurable: Reconfigurable): Unit = {
     dynamicConfig.addReconfigurable(reconfigurable)
@@ -841,8 +844,6 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   def usesTopicId: Boolean =
     usesSelfManagedQuorum || interBrokerProtocolVersion.isTopicIdsSupported
 
-
-  val isRemoteLogStorageSystemEnabled: lang.Boolean = getBoolean(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP)
   def logLocalRetentionBytes: java.lang.Long = getLong(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP)
 
   def logLocalRetentionMs: java.lang.Long = getLong(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP)

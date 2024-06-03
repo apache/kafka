@@ -385,12 +385,13 @@ public final class Cluster {
                 Objects.equals(internalTopics, cluster.internalTopics) &&
                 Objects.equals(controller, cluster.controller) &&
                 Objects.equals(partitionsByTopicPartition, cluster.partitionsByTopicPartition) &&
-                Objects.equals(clusterResource, cluster.clusterResource);
+                Objects.equals(clusterResource, cluster.clusterResource) &&
+                Objects.equals(topicIds, cluster.topicIds);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(isBootstrapConfigured, nodes, unauthorizedTopics, invalidTopics, internalTopics, controller,
-                partitionsByTopicPartition, clusterResource);
+                partitionsByTopicPartition, clusterResource, topicIds);
     }
 }

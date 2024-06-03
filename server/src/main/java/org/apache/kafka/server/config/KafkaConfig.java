@@ -414,6 +414,6 @@ public class KafkaConfig {
         // This indicates whether unreleased APIs should be advertised by this node.
         .defineInternal(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, BOOLEAN, false, HIGH)
         // This indicates whether unreleased MetadataVersions should be enabled on this node.
-        .defineInternal(ServerConfigs.UNSTABLE_METADATA_VERSIONS_ENABLE_CONFIG, BOOLEAN, false, HIGH);
+        .defineInternal(ServerConfigs.UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG, BOOLEAN, false, HIGH);
 
 }

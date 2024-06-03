@@ -47,7 +47,9 @@ plugins {
   // Updating the shadow plugin version to 8.1.1 causes issue with signing and publishing the shadowed
   // artifacts - see https://github.com/johnrengelman/shadow/issues/901
   id 'com.github.johnrengelman.shadow' version '8.1.0' apply false
-  id 'com.diffplug.spotless' version '6.14.0' apply false // 6.14.1 and newer require Java 11 at compile time, so we can't upgrade until AK 4.0
+  //  the minimum required JRE of 6.14.0+ is 11
+  //  refer:https://github.com/diffplug/spotless/tree/main/plugin-gradle#requirements
+  id 'com.diffplug.spotless' version "6.13.0" apply false
 }
 
 ext {
@@ -176,6 +178,8 @@ allprojects {
     options.memberLevel = JavadocMemberLevel.PUBLIC  // Document only public members/API
     // Turn off doclint for now, see https://blog.joda.org/2014/02/turning-off-doclint-in-jdk-8-javadoc.html for rationale
     options.addStringOption('Xdoclint:none', '-quiet')
+    // Javadoc warnings should fail the build in JDK 15+ https://bugs.openjdk.org/browse/JDK-8200363
+    options.addBooleanOption('Werror', JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_15))
 
     // The URL structure was changed to include the locale after Java 8
     if (JavaVersion.current().isJava11Compatible())
@@ -195,6 +199,9 @@ def determineCommitId() {
     "unknown"
   }
 }
+
+def spotlessApplyModules = ['']
+
 
 apply from: file('wrapper.gradle')
 
@@ -305,10 +312,12 @@ subprojects {
     addParametersForTests(name, options)
   }
 
-  // We should only set this if Java version is < 9 (--release is recommended for >= 9), but the Scala plugin for IntelliJ sets
-  // `-target` incorrectly if this is unset
-  sourceCompatibility = minJavaVersion
-  targetCompatibility = minJavaVersion
+  java {
+    // We should only set this if Java version is < 9 (--release is recommended for >= 9), but the Scala plugin for IntelliJ sets
+    // `-target` incorrectly if this is unset
+    sourceCompatibility = minJavaVersion
+    targetCompatibility = minJavaVersion
+  }
 
   if (shouldPublish) {
 
@@ -610,6 +619,8 @@ subprojects {
 
   task docsJar(dependsOn: javadocJar)
 
+  test.dependsOn('javadoc')
+
   task systemTestLibs(dependsOn: jar)
 
   if (!sourceSets.test.allSource.isEmpty()) {
@@ -786,6 +797,16 @@ subprojects {
     suppressionFile = "$rootDir/gradle/resources/dependencycheck-suppressions.xml"
     skipProjects = [ ":jmh-benchmarks", ":trogdor" ]
     skipConfigurations = [ "zinc" ]
+  }
+
+  if (project.name in spotlessApplyModules) {
+    apply plugin: 'com.diffplug.spotless'
+    spotless {
+      java {
+        importOrder('kafka', 'org.apache.kafka', 'com', 'net', 'org', 'java', 'javax', '', '\\#')
+        removeUnusedImports()
+      }
+    }
   }
 }
 
