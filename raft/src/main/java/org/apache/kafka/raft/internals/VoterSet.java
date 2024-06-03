@@ -28,11 +28,13 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.message.VotersRecord;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.Utils;
 
 /**
@@ -55,15 +57,41 @@ final public class VoterSet {
     }
 
     /**
-     * Returns the socket address for a given voter at a given listener.
+     * Returns the node information for all the given voter ids and listener.
      *
-     * @param voter the id of the voter
-     * @param listener the name of the listener
-     * @return the socket address if it exists, otherwise {@code Optional.empty()}
+     * @param voterIds the ids of the voters
+     * @param listenerName the name of the listener
+     * @return the node information for all of the voter ids
+     * @throws IllegalArgumentException if there are missing endpoints
      */
-    public Optional<InetSocketAddress> voterAddress(int voter, String listener) {
-        return Optional.ofNullable(voters.get(voter))
-            .flatMap(voterNode -> voterNode.address(listener));
+    public Set<Node> voterNodes(Stream<Integer> voterIds, ListenerName listenerName) {
+        return voterIds
+            .map(voterId ->
+                voterNode(voterId, listenerName).orElseThrow(() ->
+                    new IllegalArgumentException(
+                        String.format(
+                            "Unable to find endpoint for voter %d and listener %s in %s",
+                            voterId,
+                            listenerName,
+                            voters
+                        )
+                    )
+                )
+            )
+            .collect(Collectors.toSet());
+    }
+
+    /**
+     * Returns the node information for a given voter id and listener.
+     *
+     * @param voterId the id of the voter
+     * @param listenerName the name of the listener
+     * @return the node information if it exists, otherwise {@code Optional.empty()}
+     */
+    public Optional<Node> voterNode(int voterId, ListenerName listenerName) {
+        return Optional.ofNullable(voters.get(voterId))
+            .flatMap(voterNode -> voterNode.address(listenerName))
+            .map(address -> new Node(voterId, address.getHostString(), address.getPort()));
     }
 
     /**
@@ -166,7 +194,7 @@ final public class VoterSet {
                 .stream()
                 .map(entry ->
                     new VotersRecord.Endpoint()
-                        .setName(entry.getKey())
+                        .setName(entry.getKey().value())
                         .setHost(entry.getValue().getHostString())
                         .setPort(entry.getValue().getPort())
                 )
@@ -247,12 +275,12 @@ final public class VoterSet {
 
     public final static class VoterNode {
         private final ReplicaKey voterKey;
-        private final Map<String, InetSocketAddress> listeners;
+        private final Map<ListenerName, InetSocketAddress> listeners;
         private final SupportedVersionRange supportedKRaftVersion;
 
         VoterNode(
             ReplicaKey voterKey,
-            Map<String, InetSocketAddress> listeners,
+            Map<ListenerName, InetSocketAddress> listeners,
             SupportedVersionRange supportedKRaftVersion
         ) {
             this.voterKey = voterKey;
@@ -264,7 +292,7 @@ final public class VoterSet {
             return voterKey;
         }
 
-        Map<String, InetSocketAddress> listeners() {
+        Map<ListenerName, InetSocketAddress> listeners() {
             return listeners;
         }
 
@@ -273,7 +301,7 @@ final public class VoterSet {
         }
 
 
-        Optional<InetSocketAddress> address(String listener) {
+        Optional<InetSocketAddress> address(ListenerName listener) {
             return Optional.ofNullable(listeners.get(listener));
         }
 
@@ -323,9 +351,12 @@ final public class VoterSet {
                 directoryId = Optional.empty();
             }
 
-            Map<String, InetSocketAddress> listeners = new HashMap<>(voter.endpoints().size());
+            Map<ListenerName, InetSocketAddress> listeners = new HashMap<>(voter.endpoints().size());
             for (VotersRecord.Endpoint endpoint : voter.endpoints()) {
-                listeners.put(endpoint.name(), InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port()));
+                listeners.put(
+                    ListenerName.normalised(endpoint.name()),
+                    InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port())
+                );
             }
 
             voterNodes.put(
@@ -351,7 +382,7 @@ final public class VoterSet {
      * @param voters the socket addresses by voter id
      * @return the voter set
      */
-    public static VoterSet fromInetSocketAddresses(String listener, Map<Integer, InetSocketAddress> voters) {
+    public static VoterSet fromInetSocketAddresses(ListenerName listener, Map<Integer, InetSocketAddress> voters) {
         Map<Integer, VoterNode> voterNodes = voters
             .entrySet()
             .stream()
@@ -367,17 +398,5 @@ final public class VoterSet {
             );
 
         return new VoterSet(voterNodes);
-    }
-
-    public Optional<Node> voterNode(int id, String listener) {
-        VoterNode voterNode = voters.get(id);
-        if (voterNode == null) {
-            return Optional.empty();
-        }
-        InetSocketAddress address = voterNode.listeners.get(listener);
-        if (address == null) {
-            return Optional.empty();
-        }
-        return Optional.of(new Node(id, address.getHostString(), address.getPort()));
     }
 }
