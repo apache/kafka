@@ -19,15 +19,17 @@ package org.apache.kafka.storage.internals.epoch;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.server.util.Scheduler;
+import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile;
 import org.apache.kafka.storage.internals.log.EpochEntry;
-import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpoint;
 import org.slf4j.Logger;
 
 import java.util.AbstractMap;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -44,13 +46,13 @@ import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UND
  * Leader Epoch = epoch assigned to each leader by the controller.
  * Offset = offset of the first message in each epoch.
  * <p>
- * Note that {@link #truncateFromStart},{@link #truncateFromEnd} may flush the epoch-entry changes to checkpoint asynchronously.
+ * Note that {@link #truncateFromStart},{@link #truncateFromEnd} flush the epoch-entry changes to checkpoint asynchronously.
  * Hence, it is instantiater's responsibility to ensure restoring the cache to the correct state after instantiating
  * this class from checkpoint (which might contain stale epoch entries right after instantiation).
  */
 public class LeaderEpochFileCache {
     private final TopicPartition topicPartition;
-    private final LeaderEpochCheckpoint checkpoint;
+    private final LeaderEpochCheckpointFile checkpoint;
     private final Scheduler scheduler;
     private final Logger log;
 
@@ -64,7 +66,7 @@ public class LeaderEpochFileCache {
      * @param scheduler      the scheduler to use for async I/O operations
      */
     @SuppressWarnings("this-escape")
-    public LeaderEpochFileCache(TopicPartition topicPartition, LeaderEpochCheckpoint checkpoint, Scheduler scheduler) {
+    public LeaderEpochFileCache(TopicPartition topicPartition, LeaderEpochCheckpointFile checkpoint, Scheduler scheduler) {
         this.checkpoint = checkpoint;
         this.topicPartition = topicPartition;
         this.scheduler = scheduler;
@@ -83,7 +85,7 @@ public class LeaderEpochFileCache {
      */
     private LeaderEpochFileCache(List<EpochEntry> epochEntries,
                                  TopicPartition topicPartition,
-                                 LeaderEpochCheckpoint checkpoint,
+                                 LeaderEpochCheckpointFile checkpoint,
                                  Scheduler scheduler) {
         this.checkpoint = checkpoint;
         this.topicPartition = topicPartition;
@@ -147,7 +149,9 @@ public class LeaderEpochFileCache {
      * Remove any entries which violate monotonicity prior to appending a new entry
      */
     private void maybeTruncateNonMonotonicEntries(EpochEntry newEntry) {
-        List<EpochEntry> removedEpochs = removeFromEnd(entry -> entry.epoch >= newEntry.epoch || entry.startOffset >= newEntry.startOffset);
+        List<EpochEntry> removedEpochs = removeFromEnd(
+                epochs,
+                entry -> entry.epoch >= newEntry.epoch || entry.startOffset >= newEntry.startOffset);
 
         if (removedEpochs.size() > 1 || (!removedEpochs.isEmpty() && removedEpochs.get(0).startOffset != newEntry.startOffset)) {
 
@@ -158,15 +162,17 @@ public class LeaderEpochFileCache {
         }
     }
 
-    private List<EpochEntry> removeFromEnd(Predicate<EpochEntry> predicate) {
+    private static List<EpochEntry> removeFromEnd(
+            TreeMap<Integer, EpochEntry> epochs, Predicate<EpochEntry> predicate) {
         return removeWhileMatching(epochs.descendingMap().entrySet().iterator(), predicate);
     }
 
-    private List<EpochEntry> removeFromStart(Predicate<EpochEntry> predicate) {
+    private static List<EpochEntry> removeFromStart(
+            TreeMap<Integer, EpochEntry> epochs, Predicate<EpochEntry> predicate) {
         return removeWhileMatching(epochs.entrySet().iterator(), predicate);
     }
 
-    private List<EpochEntry> removeWhileMatching(Iterator<Map.Entry<Integer, EpochEntry>> iterator, Predicate<EpochEntry> predicate) {
+    private static List<EpochEntry> removeWhileMatching(Iterator<Map.Entry<Integer, EpochEntry>> iterator, Predicate<EpochEntry> predicate) {
         ArrayList<EpochEntry> removedEpochs = new ArrayList<>();
 
         while (iterator.hasNext()) {
@@ -335,22 +341,23 @@ public class LeaderEpochFileCache {
 
     /**
      * Removes all epoch entries from the store with start offsets greater than or equal to the passed offset.
-     *
-     * @param endOffset  the offset to clear up to
-     * @param flushSync  if true, the method will block until the changes are flushed to file
+     * <p>
+     * Checkpoint-flushing is done asynchronously.
      */
-    public void truncateFromEnd(long endOffset, boolean flushSync) {
+    public void truncateFromEnd(long endOffset) {
         lock.writeLock().lock();
         try {
-            Optional<EpochEntry> epochEntry = latestEntry();
-            if (endOffset >= 0 && epochEntry.isPresent() && epochEntry.get().startOffset >= endOffset) {
-                List<EpochEntry> removedEntries = removeFromEnd(x -> x.startOffset >= endOffset);
-
-                if (flushSync) {
-                    writeToFileForTruncation();
-                } else {
-                    scheduler.scheduleOnce("leader-epoch-cache-flush-" + topicPartition, this::writeToFileForTruncation);
-                }
+            List<EpochEntry> removedEntries = truncateFromEnd(epochs, endOffset);
+            if (!removedEntries.isEmpty()) {
+                // We flush the change to the device in the background because:
+                // - To avoid fsync latency
+                //   * fsync latency could be huge on a disk glitch, which is not rare in spinning drives
+                //   * This method is called by ReplicaFetcher threads, which could block replica fetching
+                //     then causing ISR shrink or high produce response time degradation in remote scope on high fsync latency.
+                // - We still flush the change in #assign synchronously, meaning that it's guaranteed that the checkpoint file always has no missing entries.
+                //   * Even when stale epochs are restored from the checkpoint file after the unclean shutdown, it will be handled by
+                //     another truncateFromEnd call on log loading procedure, so it won't be a problem
+                scheduler.scheduleOnce("leader-epoch-cache-flush-" + topicPartition, this::writeToFileForTruncation);
 
                 log.debug("Cleared entries {} from epoch cache after truncating to end offset {}, leaving {} entries in the cache.", removedEntries, endOffset, epochs.size());
             }
@@ -364,31 +371,52 @@ public class LeaderEpochFileCache {
      * be offset, then clears any previous epoch entries.
      * <p>
      * This method is exclusive: so truncateFromStart(6) will retain an entry at offset 6.
+     * <p>
+     * Checkpoint-flushing is done asynchronously.
      *
      * @param startOffset the offset to clear up to
-     * @param flushSync   if true, the method will block until the changes are flushed to file
      */
-    public void truncateFromStart(long startOffset, boolean flushSync) {
+    public void truncateFromStart(long startOffset) {
         lock.writeLock().lock();
         try {
-            List<EpochEntry> removedEntries = removeFromStart(entry -> entry.startOffset <= startOffset);
-
+            List<EpochEntry> removedEntries = truncateFromStart(epochs, startOffset);
             if (!removedEntries.isEmpty()) {
-                EpochEntry firstBeforeStartOffset = removedEntries.get(removedEntries.size() - 1);
-                EpochEntry updatedFirstEntry = new EpochEntry(firstBeforeStartOffset.epoch, startOffset);
-                epochs.put(updatedFirstEntry.epoch, updatedFirstEntry);
+                // We flush the change to the device in the background because:
+                // - To avoid fsync latency
+                //   * fsync latency could be huge on a disk glitch, which is not rare in spinning drives
+                //   * This method is called as part of deleteRecords with holding UnifiedLog#lock.
+                //      - Meanwhile all produces against the partition will be blocked, which causes req-handlers to exhaust
+                // - We still flush the change in #assign synchronously, meaning that it's guaranteed that the checkpoint file always has no missing entries.
+                //   * Even when stale epochs are restored from the checkpoint file after the unclean shutdown, it will be handled by
+                //     another truncateFromStart call on log loading procedure, so it won't be a problem
+                scheduler.scheduleOnce("leader-epoch-cache-flush-" + topicPartition, this::writeToFileForTruncation);
 
-                if (flushSync) {
-                    writeToFileForTruncation();
-                } else {
-                    scheduler.scheduleOnce("leader-epoch-cache-flush-" + topicPartition, this::writeToFileForTruncation);
-                }
-
+                EpochEntry updatedFirstEntry = removedEntries.get(removedEntries.size() - 1);
                 log.debug("Cleared entries {} and rewrote first entry {} after truncating to start offset {}, leaving {} in the cache.", removedEntries, updatedFirstEntry, startOffset, epochs.size());
             }
         } finally {
             lock.writeLock().unlock();
         }
+    }
+
+    private static List<EpochEntry> truncateFromStart(TreeMap<Integer, EpochEntry> epochs, long startOffset) {
+        List<EpochEntry> removedEntries = removeFromStart(epochs, entry -> entry.startOffset <= startOffset);
+
+        if (!removedEntries.isEmpty()) {
+            EpochEntry firstBeforeStartOffset = removedEntries.get(removedEntries.size() - 1);
+            EpochEntry updatedFirstEntry = new EpochEntry(firstBeforeStartOffset.epoch, startOffset);
+            epochs.put(updatedFirstEntry.epoch, updatedFirstEntry);
+        }
+
+        return removedEntries;
+    }
+
+    private static List<EpochEntry> truncateFromEnd(TreeMap<Integer, EpochEntry> epochs, long endOffset) {
+        Optional<EpochEntry> epochEntry = Optional.ofNullable(epochs.lastEntry()).map(Entry::getValue);
+        if (endOffset >= 0 && epochEntry.isPresent() && epochEntry.get().startOffset >= endOffset) {
+            return removeFromEnd(epochs, x -> x.startOffset >= endOffset);
+        }
+        return Collections.emptyList();
     }
 
     public OptionalInt epochForOffset(long offset) {
@@ -414,31 +442,39 @@ public class LeaderEpochFileCache {
         }
     }
 
-    public LeaderEpochFileCache writeTo(LeaderEpochCheckpoint leaderEpochCheckpoint) {
-        lock.readLock().lock();
-        try {
-            leaderEpochCheckpoint.write(epochEntries());
-            // We instantiate LeaderEpochFileCache after writing leaderEpochCheckpoint,
-            // hence it is guaranteed that the new cache is consistent with the latest epoch entries.
-            return new LeaderEpochFileCache(topicPartition, leaderEpochCheckpoint, scheduler);
-        } finally {
-            lock.readLock().unlock();
-        }
-    }
-
     /**
      * Returns a new LeaderEpochFileCache which contains same
      * epoch entries with replacing backing checkpoint file.
      * @param leaderEpochCheckpoint the new checkpoint file
      * @return a new LeaderEpochFileCache instance
      */
-    public LeaderEpochFileCache withCheckpoint(LeaderEpochCheckpoint leaderEpochCheckpoint) {
+    public LeaderEpochFileCache withCheckpoint(LeaderEpochCheckpointFile leaderEpochCheckpoint) {
         lock.readLock().lock();
         try {
             return new LeaderEpochFileCache(epochEntries(),
                                             topicPartition,
                                             leaderEpochCheckpoint,
                                             scheduler);
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    /**
+     * Returns the leader epoch entries within the range of the given start[exclusive] and end[inclusive] offset
+     * @param startOffset The start offset of the epoch entries (exclusive).
+     * @param endOffset   The end offset of the epoch entries (inclusive)
+     * @return the leader epoch entries
+     */
+    public List<EpochEntry> epochEntriesInRange(long startOffset, long endOffset) {
+        lock.readLock().lock();
+        try {
+            TreeMap<Integer, EpochEntry> epochsCopy = new TreeMap<>(this.epochs);
+            if (startOffset >= 0) {
+                truncateFromStart(epochsCopy, startOffset);
+            }
+            truncateFromEnd(epochsCopy, endOffset);
+            return new ArrayList<>(epochsCopy.values());
         } finally {
             lock.readLock().unlock();
         }

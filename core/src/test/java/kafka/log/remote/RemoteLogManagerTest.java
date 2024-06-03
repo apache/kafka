@@ -58,14 +58,14 @@ import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.server.util.MockScheduler;
-import org.apache.kafka.storage.internals.checkpoint.InMemoryLeaderEpochCheckpoint;
-import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpoint;
+import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
 import org.apache.kafka.storage.internals.log.EpochEntry;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.FetchIsolation;
 import org.apache.kafka.storage.internals.log.LazyIndex;
 import org.apache.kafka.storage.internals.log.LogConfig;
+import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
 import org.apache.kafka.storage.internals.log.LogFileUtils;
 import org.apache.kafka.storage.internals.log.LogSegment;
 import org.apache.kafka.storage.internals.log.OffsetIndex;
@@ -87,16 +87,19 @@ import org.mockito.Mockito;
 import scala.Option;
 import scala.collection.JavaConverters;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.InputStream;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -188,19 +191,7 @@ public class RemoteLogManagerTest {
     private final EpochEntry epochEntry1 = new EpochEntry(1, 100);
     private final EpochEntry epochEntry2 = new EpochEntry(2, 200);
     private final List<EpochEntry> totalEpochEntries = Arrays.asList(epochEntry0, epochEntry1, epochEntry2);
-    private final LeaderEpochCheckpoint checkpoint = new LeaderEpochCheckpoint() {
-        List<EpochEntry> epochs = Collections.emptyList();
-
-        @Override
-        public void write(Collection<EpochEntry> epochs) {
-            this.epochs = new ArrayList<>(epochs);
-        }
-
-        @Override
-        public List<EpochEntry> read() {
-            return epochs;
-        }
-    };
+    private LeaderEpochCheckpointFile checkpoint;
     private final AtomicLong currentLogStartOffset = new AtomicLong(0L);
 
     private final UnifiedLog mockLog = mock(UnifiedLog.class);
@@ -209,6 +200,7 @@ public class RemoteLogManagerTest {
 
     @BeforeEach
     void setUp() throws Exception {
+        checkpoint = new LeaderEpochCheckpointFile(TestUtils.tempFile(), new LogDirFailureChannel(1));
         topicIds.put(leaderTopicIdPartition.topicPartition().topic(), leaderTopicIdPartition.topicId());
         topicIds.put(followerTopicIdPartition.topicPartition().topic(), followerTopicIdPartition.topicId());
         Properties props = kafka.utils.TestUtils.createDummyBrokerConfig();
@@ -248,11 +240,9 @@ public class RemoteLogManagerTest {
         checkpoint.write(totalEpochEntries);
         LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint, scheduler);
         when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
-        InMemoryLeaderEpochCheckpoint inMemoryCheckpoint = remoteLogManager.getLeaderEpochCheckpoint(mockLog, 0, 300);
-        assertEquals(totalEpochEntries, inMemoryCheckpoint.read());
+        assertEquals(totalEpochEntries, remoteLogManager.getLeaderEpochEntries(mockLog, 0, 300));
 
-        InMemoryLeaderEpochCheckpoint inMemoryCheckpoint2 = remoteLogManager.getLeaderEpochCheckpoint(mockLog, 100, 200);
-        List<EpochEntry> epochEntries = inMemoryCheckpoint2.read();
+        List<EpochEntry> epochEntries = remoteLogManager.getLeaderEpochEntries(mockLog, 100, 200);
         assertEquals(1, epochEntries.size());
         assertEquals(epochEntry1, epochEntries.get(0));
     }
@@ -1124,9 +1114,7 @@ public class RemoteLogManagerTest {
         assertEquals(tempFile.getAbsolutePath(), logSegmentData.logSegment().toAbsolutePath().toString());
         assertEquals(mockProducerSnapshotIndex.getAbsolutePath(), logSegmentData.producerSnapshotIndex().toAbsolutePath().toString());
 
-        InMemoryLeaderEpochCheckpoint inMemoryLeaderEpochCheckpoint = new InMemoryLeaderEpochCheckpoint();
-        inMemoryLeaderEpochCheckpoint.write(expectedLeaderEpoch);
-        assertEquals(inMemoryLeaderEpochCheckpoint.readAsByteBuffer(), logSegmentData.leaderEpochIndex());
+        assertEquals(RemoteLogManager.epochEntriesAsByteBuffer(expectedLeaderEpoch), logSegmentData.leaderEpochIndex());
     }
 
     @Test
@@ -2305,11 +2293,17 @@ public class RemoteLogManagerTest {
     private Map<Integer, Long> truncateAndGetLeaderEpochs(List<EpochEntry> entries,
                                                           Long startOffset,
                                                           Long endOffset) {
-        InMemoryLeaderEpochCheckpoint myCheckpoint = new InMemoryLeaderEpochCheckpoint();
+        LeaderEpochCheckpointFile myCheckpoint;
+        try {
+            myCheckpoint = new LeaderEpochCheckpointFile(
+                    TestUtils.tempFile(), new LogDirFailureChannel(1));
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
         myCheckpoint.write(entries);
         LeaderEpochFileCache cache = new LeaderEpochFileCache(null, myCheckpoint, scheduler);
-        cache.truncateFromStart(startOffset, true);
-        cache.truncateFromEnd(endOffset, true);
+        cache.truncateFromStart(startOffset);
+        cache.truncateFromEnd(endOffset);
         return myCheckpoint.read().stream().collect(Collectors.toMap(e -> e.epoch, e -> e.startOffset));
     }
 
@@ -2533,6 +2527,21 @@ public class RemoteLogManagerTest {
 
         }
     }
+
+    @Test
+    public void testEpochEntriesAsByteBuffer() throws Exception {
+        int expectedEpoch = 0;
+        long expectedStartOffset = 1L;
+        int expectedVersion = 0;
+        List<EpochEntry> epochs = Arrays.asList(new EpochEntry(expectedEpoch, expectedStartOffset));
+        ByteBuffer buffer = RemoteLogManager.epochEntriesAsByteBuffer(epochs);
+        BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(new ByteArrayInputStream(buffer.array()), StandardCharsets.UTF_8));
+
+        assertEquals(String.valueOf(expectedVersion), bufferedReader.readLine());
+        assertEquals(String.valueOf(epochs.size()), bufferedReader.readLine());
+        assertEquals(expectedEpoch + " " + expectedStartOffset, bufferedReader.readLine());
+    }
+
 
     private Partition mockPartition(TopicIdPartition topicIdPartition) {
         TopicPartition tp = topicIdPartition.topicPartition();

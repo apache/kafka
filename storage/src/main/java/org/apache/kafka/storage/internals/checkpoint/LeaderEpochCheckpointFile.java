@@ -38,7 +38,7 @@ import java.util.regex.Pattern;
  * 1  2
  * -----checkpoint file end----------
  */
-public class LeaderEpochCheckpointFile implements LeaderEpochCheckpoint {
+public class LeaderEpochCheckpointFile {
 
     public static final Formatter FORMATTER = new Formatter();
 
@@ -52,12 +52,10 @@ public class LeaderEpochCheckpointFile implements LeaderEpochCheckpoint {
         checkpoint = new CheckpointFileWithFailureHandler<>(file, CURRENT_VERSION, FORMATTER, logDirFailureChannel, file.getParentFile().getParent());
     }
 
-    @Override
     public void write(Collection<EpochEntry> epochs) {
         checkpoint.write(epochs);
     }
 
-    @Override
     public void writeForTruncation(Collection<EpochEntry> epochs) {
         // Writing epoch entries after truncation is done asynchronously for performance reasons.
         // This could cause NoSuchFileException when the directory is renamed concurrently for topic deletion,
@@ -65,7 +63,6 @@ public class LeaderEpochCheckpointFile implements LeaderEpochCheckpoint {
         checkpoint.writeIfDirExists(epochs);
     }
 
-    @Override
     public List<EpochEntry> read() {
         return checkpoint.read();
     }
