@@ -100,6 +100,16 @@ public final class RemoteLogManagerConfig {
             "segments, fetch remote log indexes and clean up remote log segments.";
     public static final int DEFAULT_REMOTE_LOG_MANAGER_THREAD_POOL_SIZE = 10;
 
+    public static final String REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP = "remote.log.manager.copier.thread.pool.size";
+    public static final String REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_DOC = "Size of the thread pool used in " +
+            "scheduling tasks to copy segments.";
+    public static final int DEFAULT_REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE = 10;
+
+    public static final String REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP = "remote.log.manager.expiration.thread.pool.size";
+    public static final String REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_DOC = "Size of the thread pool used in" +
+            " scheduling tasks to clean up remote log segments.";
+    public static final int DEFAULT_REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE = 10;
+
     public static final String REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP = "remote.log.manager.task.interval.ms";
     public static final String REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_DOC = "Interval at which remote log manager runs the scheduled tasks like copy " +
             "segments, and clean up remote log segments.";
@@ -241,6 +251,18 @@ public final class RemoteLogManagerConfig {
                                   atLeast(1),
                                   MEDIUM,
                                   REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_DOC)
+                  .defineInternal(REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP,
+                        INT,
+                        DEFAULT_REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE,
+                        atLeast(1),
+                        MEDIUM,
+                        REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_DOC)
+                  .defineInternal(REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP,
+                        INT,
+                        DEFAULT_REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE,
+                        atLeast(1),
+                        MEDIUM,
+                        REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_DOC)
                   .define(REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP,
                                   LONG,
                                   DEFAULT_REMOTE_LOG_MANAGER_TASK_INTERVAL_MS,
@@ -333,6 +355,8 @@ public final class RemoteLogManagerConfig {
     private final String remoteLogMetadataManagerClassPath;
     private final long remoteLogIndexFileCacheTotalSizeBytes;
     private final int remoteLogManagerThreadPoolSize;
+    private final int remoteLogManagerCopierThreadPoolSize;
+    private final int remoteLogManagerExpirationThreadPoolSize;
     private final long remoteLogManagerTaskIntervalMs;
     private final long remoteLogManagerTaskRetryBackoffMs;
     private final long remoteLogManagerTaskRetryBackoffMaxMs;
@@ -361,6 +385,8 @@ public final class RemoteLogManagerConfig {
              config.getString(REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP),
              config.getLong(REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP),
              config.getInt(REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_PROP),
+             config.getInt(REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP),
+             config.getInt(REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP),
              config.getLong(REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP),
              config.getLong(REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MS_PROP),
              config.getLong(REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MAX_MS_PROP),
@@ -393,6 +419,8 @@ public final class RemoteLogManagerConfig {
                                   String remoteLogMetadataManagerListenerName,
                                   long remoteLogIndexFileCacheTotalSizeBytes,
                                   int remoteLogManagerThreadPoolSize,
+                                  int remoteLogManagerCopierThreadPoolSize,
+                                  int remoteLogManagerExpirationThreadPoolSize,
                                   long remoteLogManagerTaskIntervalMs,
                                   long remoteLogManagerTaskRetryBackoffMs,
                                   long remoteLogManagerTaskRetryBackoffMaxMs,
@@ -418,6 +446,8 @@ public final class RemoteLogManagerConfig {
         this.remoteLogMetadataManagerClassPath = remoteLogMetadataManagerClassPath;
         this.remoteLogIndexFileCacheTotalSizeBytes = remoteLogIndexFileCacheTotalSizeBytes;
         this.remoteLogManagerThreadPoolSize = remoteLogManagerThreadPoolSize;
+        this.remoteLogManagerCopierThreadPoolSize = remoteLogManagerCopierThreadPoolSize;
+        this.remoteLogManagerExpirationThreadPoolSize = remoteLogManagerExpirationThreadPoolSize;
         this.remoteLogManagerTaskIntervalMs = remoteLogManagerTaskIntervalMs;
         this.remoteLogManagerTaskRetryBackoffMs = remoteLogManagerTaskRetryBackoffMs;
         this.remoteLogManagerTaskRetryBackoffMaxMs = remoteLogManagerTaskRetryBackoffMaxMs;
@@ -464,6 +494,14 @@ public final class RemoteLogManagerConfig {
 
     public int remoteLogManagerThreadPoolSize() {
         return remoteLogManagerThreadPoolSize;
+    }
+
+    public int remoteLogManagerCopierThreadPoolSize() {
+        return remoteLogManagerCopierThreadPoolSize;
+    }
+
+    public int remoteLogManagerExpirationThreadPoolSize() {
+        return remoteLogManagerExpirationThreadPoolSize;
     }
 
     public long remoteLogManagerTaskIntervalMs() {
