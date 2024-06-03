@@ -116,6 +116,7 @@ public class HeartbeatRequestManagerTest {
     private LogContext logContext;
     private ConsumerConfig config;
     private OffsetCommitCallbackInvoker offsetCommitCallbackInvoker;
+    private CommitRequestManager commitRequestManager;
 
     @BeforeEach
     public void setUp() {
@@ -156,6 +157,11 @@ public class HeartbeatRequestManagerTest {
                 Optional.empty(), Optional.empty(),
                 Optional.of(heartbeatRequestManager),
                 Optional.empty());
+
+        this.commitRequestManager = new CommitRequestManager(
+                time, logContext, subscriptions, config, coordinatorRequestManager,
+                offsetCommitCallbackInvoker, DEFAULT_GROUP_ID, Optional.of(DEFAULT_GROUP_INSTANCE_ID),
+                new Metrics());
 
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
         Map<Uuid, SortedSet<Integer>> map = new HashMap<>();
@@ -293,13 +299,9 @@ public class HeartbeatRequestManagerTest {
         }
     }
 
-    // Probably integration testing
     @Test
     public void testTimerNotDue() {
-        CommitRequestManager commitRequestManager = new CommitRequestManager(
-                time, logContext, subscriptions, config, coordinatorRequestManager,
-                offsetCommitCallbackInvoker, DEFAULT_GROUP_ID, Optional.of(DEFAULT_GROUP_INSTANCE_ID),
-                new Metrics());
+
 
         Optional<ClientTelemetryReporter> clientTelemetryReporter = Optional.of(mock(ClientTelemetryReporter.class));
         Optional<String> optionalString1 = Optional.of(DEFAULT_GROUP_INSTANCE_ID);
@@ -645,14 +647,8 @@ public class HeartbeatRequestManagerTest {
         assertTrue(heartbeatRequestState.canSendRequest(time.milliseconds()));
     }
 
-    // TODO: cleanup
     @Test
     public void testHeartbeatState() {
-        CommitRequestManager commitRequestManager = new CommitRequestManager(
-                time, logContext, subscriptions, config, coordinatorRequestManager,
-                offsetCommitCallbackInvoker, DEFAULT_GROUP_ID, Optional.of(DEFAULT_GROUP_INSTANCE_ID),
-                new Metrics());
-
         Optional<ClientTelemetryReporter> clientTelemetryReporter = Optional.of(mock(ClientTelemetryReporter.class));
         Optional<String> optionalString1 = Optional.of(DEFAULT_GROUP_INSTANCE_ID);
         Optional<String> optionalString2 = Optional.of(DEFAULT_REMOTE_ASSIGNOR);
