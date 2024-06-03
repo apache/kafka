@@ -153,6 +153,7 @@ public class ConsumerNetworkThreadTest {
         assertFalse(consumerNetworkThread.isRunning());
     }
 
+    // Add a second RM to test to ensure Math.min() is computing correctly
     @ParameterizedTest
     @ValueSource(longs = {1, 100, 1000, 4999, 5001})
     public void testConsumerNetworkThreadWaitTimeComputations(long exampleTime) {
