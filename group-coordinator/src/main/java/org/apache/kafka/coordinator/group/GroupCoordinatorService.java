@@ -40,6 +40,8 @@ import org.apache.kafka.common.message.OffsetDeleteRequestData;
 import org.apache.kafka.common.message.OffsetDeleteResponseData;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.message.OffsetFetchResponseData;
+import org.apache.kafka.common.message.StreamsInitializeRequestData;
+import org.apache.kafka.common.message.StreamsInitializeResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
@@ -302,6 +304,35 @@ public class GroupCoordinatorService implements GroupCoordinator {
             request,
             exception,
             (error, message) -> new ConsumerGroupHeartbeatResponseData()
+                .setErrorCode(error.code())
+                .setErrorMessage(message)
+        ));
+    }
+
+    /**
+     * See {@link GroupCoordinator#streamsInitialize(RequestContext, StreamsInitializeRequestData)}.
+     */
+    @Override
+    public CompletableFuture<StreamsInitializeResponseData> streamsInitialize(
+        RequestContext context,
+        StreamsInitializeRequestData request
+    ) {
+        if (!isActive.get()) {
+            return CompletableFuture.completedFuture(new StreamsInitializeResponseData()
+                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+            );
+        }
+
+        return runtime.scheduleWriteOperation(
+            "streams-group-initialize",
+            topicPartitionFor(request.groupId()),
+            Duration.ofMillis(config.offsetCommitTimeoutMs),
+            coordinator -> coordinator.streamsInitialize(context, request)
+        ).exceptionally(exception -> handleOperationException(
+            "streams-group-initialize",
+            request,
+            exception,
+            (error, message) -> new StreamsInitializeResponseData()
                 .setErrorCode(error.code())
                 .setErrorMessage(message)
         ));

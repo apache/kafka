@@ -50,6 +50,8 @@ import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.common.message.StreamsInitializeRequestData;
+import org.apache.kafka.common.message.StreamsInitializeResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.protocol.Errors;
@@ -121,6 +123,7 @@ import static org.apache.kafka.common.protocol.Errors.UNKNOWN_SERVER_ERROR;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
+import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newStreamsGroupTopologyRecord;
 import static org.apache.kafka.coordinator.group.Group.GroupType.CONSUMER;
 import static org.apache.kafka.coordinator.group.Group.GroupType.CLASSIC;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newCurrentAssignmentRecord;
@@ -1049,6 +1052,26 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Validates the request.
+     *
+     * @param request The request to validate.
+     *
+     * @throws InvalidRequestException if the request is not valid.
+     * @throws UnsupportedAssignorException if the assignor is not supported.
+     */
+    private void throwIfStreamsInitializeRequestIsInvalid(
+        StreamsInitializeRequestData request
+    ) throws InvalidRequestException, UnsupportedAssignorException {
+        throwIfEmptyString(request.groupId(), "GroupId can't be empty.");
+
+        if (request.topology().isEmpty()) {
+            throw new InvalidRequestException("There must be at least one subtopology.");
+        }
+
+        // TODO: Check invariants
+    }
+
+    /**
      * Verifies that the partitions currently owned by the member (the ones set in the
      * request) matches the ones that the member should own. It matches if the consumer
      * only owns partitions which are in the assigned partitions. It does not match if
@@ -1559,6 +1582,30 @@ public class GroupMetadataManager {
         if (isFullRequest || hasAssignedPartitionsChanged(member, updatedMember)) {
             response.setAssignment(createResponseAssignment(updatedMember));
         }
+
+        return new CoordinatorResult<>(records, response);
+    }
+
+
+    /**
+     * Handles the initialization of the topology information on the broker side, that will be reused by all members of the group.
+     *
+     * @param groupId       The group id from the request.
+     * @param subtopologies The list of subtopologies
+     * @return A Result containing the StreamsInitialize response and a list of records to update the state machine.
+     */
+    private CoordinatorResult<StreamsInitializeResponseData, CoordinatorRecord> streamsInitialize(String groupId,
+                                                                                                  List<StreamsInitializeRequestData.Subtopology> subtopologies)
+        throws ApiException {
+        final List<CoordinatorRecord> records = new ArrayList<>();
+
+        // TODO: Throw if group does not exist or is not a streams group
+        //       similar to  final ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, createIfNotExists, records);
+        //                   throwIfStaticMemberIsUnknown(member, instanceId);
+
+        records.add(newStreamsGroupTopologyRecord(groupId, subtopologies));
+
+        StreamsInitializeResponseData response = new StreamsInitializeResponseData();
 
         return new CoordinatorResult<>(records, response);
     }
@@ -2312,6 +2359,27 @@ public class GroupMetadataManager {
                 request.topicPartitions()
             );
         }
+    }
+
+    /**
+     * Handles a ConsumerGroupHeartbeat request.
+     *
+     * @param context The request context.
+     * @param request The actual ConsumerGroupHeartbeat request.
+     *
+     * @return A Result containing the ConsumerGroupHeartbeat response and
+     *         a list of records to update the state machine.
+     */
+    public CoordinatorResult<StreamsInitializeResponseData, CoordinatorRecord> streamsInitialize(
+        RequestContext context,
+        StreamsInitializeRequestData request
+    ) throws ApiException {
+        throwIfStreamsInitializeRequestIsInvalid(request);
+
+        return streamsInitialize(
+            request.groupId(),
+            request.topology()
+        );
     }
 
     /**
