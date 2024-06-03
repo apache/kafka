@@ -1136,11 +1136,11 @@ public class MetadataTest {
         // "input-topic" partition 1 leader changes from node 1 to node 2
         metadata.updatePartitionLeadership(
             Collections.singletonMap(
-                    tp1,
-                    new Metadata.LeaderIdAndEpoch(
-                            Optional.of(2),
-                            Optional.of(3)
-                    )),
+                tp1,
+                new Metadata.LeaderIdAndEpoch(
+                    Optional.of(2),
+                    Optional.of(3)
+                )),
             Collections.singletonList(node1)
         );
         assertEquals(2, metadata.fetch().partitionsForTopic(topic).size());

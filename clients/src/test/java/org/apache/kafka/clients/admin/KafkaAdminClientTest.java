@@ -1598,14 +1598,14 @@ public class KafkaAdminClientTest {
                 .setName(topicName0)
                 .setIsInternal(false)
                 .setPartitions(singletonList(new DescribeTopicPartitionsResponsePartition()
-                        .setIsrNodes(singletonList(0))
-                        .setErrorCode((short) 0)
-                        .setLeaderEpoch(0)
-                        .setLeaderId(0)
-                        .setEligibleLeaderReplicas(singletonList(1))
-                        .setLastKnownElr(singletonList(2))
-                        .setPartitionIndex(0)
-                        .setReplicaNodes(asList(0, 1, 2))))
+                    .setIsrNodes(singletonList(0))
+                    .setErrorCode((short) 0)
+                    .setLeaderEpoch(0)
+                    .setLeaderId(0)
+                    .setEligibleLeaderReplicas(singletonList(1))
+                    .setLastKnownElr(singletonList(2))
+                    .setPartitionIndex(0)
+                    .setReplicaNodes(asList(0, 1, 2))))
             );
             dataFirstPart.topics().add(new DescribeTopicPartitionsResponseTopic()
                 .setErrorCode((short) 29)
@@ -3000,11 +3000,11 @@ public class KafkaAdminClientTest {
                 new ListGroupsResponse(new ListGroupsResponseData()
                     .setErrorCode(Errors.NONE.code())
                     .setGroups(singletonList(
-                            new ListGroupsResponseData.ListedGroup()
-                                    .setGroupId("group-1")
-                                    .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
-                                    .setGroupState("Stable")
-                                    .setGroupType(GroupType.CLASSIC.toString())))),
+                        new ListGroupsResponseData.ListedGroup()
+                            .setGroupId("group-1")
+                            .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                            .setGroupState("Stable")
+                            .setGroupType(GroupType.CLASSIC.toString())))),
                 env.cluster().nodeById(0));
 
             final ListConsumerGroupsOptions options = new ListConsumerGroupsOptions().inStates(singleton(ConsumerGroupState.STABLE));
@@ -3560,13 +3560,13 @@ public class KafkaAdminClientTest {
             DescribeGroupsResponseData data = new DescribeGroupsResponseData();
 
             data.groups().add(DescribeGroupsResponse.groupMetadata(
-                    GROUP_ID,
-                    Errors.NONE,
-                    "",
-                    "non-consumer",
-                    "",
-                    emptyList(),
-                    Collections.emptySet()));
+                GROUP_ID,
+                Errors.NONE,
+                "",
+                "non-consumer",
+                "",
+                emptyList(),
+                Collections.emptySet()));
 
             env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
 
@@ -5372,12 +5372,12 @@ public class KafkaAdminClientTest {
         pInfos.add(new PartitionInfo("qux", 0, node0, new Node[]{node0}, new Node[]{node0}));
         final Cluster cluster =
             new Cluster(
-                    "mockClusterId",
-                    singletonList(node0),
-                    pInfos,
-                    Collections.emptySet(),
-                    Collections.emptySet(),
-                    node0);
+                "mockClusterId",
+                singletonList(node0),
+                pInfos,
+                Collections.emptySet(),
+                Collections.emptySet(),
+                node0);
 
         final TopicPartition tp0 = new TopicPartition("foo", 0);
         final TopicPartition tp1 = new TopicPartition("bar", 0);

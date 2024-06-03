@@ -62,10 +62,10 @@ public class ListOffsetsRequestTest {
         for (short version = 1; version <= ApiKeys.LIST_OFFSETS.latestVersion(); version++) {
             List<ListOffsetsTopic> topics = Collections.singletonList(
                     new ListOffsetsTopic()
-                            .setName("topic")
-                            .setPartitions(Collections.singletonList(
-                                    new ListOffsetsPartition()
-                                            .setPartitionIndex(0))));
+                        .setName("topic")
+                        .setPartitions(Collections.singletonList(
+                                new ListOffsetsPartition()
+                                    .setPartitionIndex(0))));
             ListOffsetsRequest request = ListOffsetsRequest.Builder
                     .forConsumer(true, IsolationLevel.READ_COMMITTED, false)
                     .setTargetTimes(topics)
@@ -95,10 +95,10 @@ public class ListOffsetsRequestTest {
     public void testGetErrorResponseV0() {
         List<ListOffsetsTopic> topics = Collections.singletonList(
                 new ListOffsetsTopic()
-                        .setName("topic")
-                        .setPartitions(Collections.singletonList(
-                                new ListOffsetsPartition()
-                                        .setPartitionIndex(0))));
+                    .setName("topic")
+                    .setPartitions(Collections.singletonList(
+                            new ListOffsetsPartition()
+                                .setPartitionIndex(0))));
         ListOffsetsRequest request = ListOffsetsRequest.Builder
                 .forConsumer(true, IsolationLevel.READ_UNCOMMITTED, false)
                 .setTargetTimes(topics)

@@ -1336,12 +1336,12 @@ public class CommitRequestManagerTest {
                                                    Errors error) {
         OffsetCommitResponseData responseData = new OffsetCommitResponseData()
             .setTopics(Collections.singletonList(
-                    new OffsetCommitResponseData.OffsetCommitResponseTopic()
-                            .setName(topic)
-                            .setPartitions(Collections.singletonList(
-                                    new OffsetCommitResponseData.OffsetCommitResponsePartition()
-                                            .setErrorCode(error.code())
-                                            .setPartitionIndex(partition)))));
+                new OffsetCommitResponseData.OffsetCommitResponseTopic()
+                    .setName(topic)
+                    .setPartitions(Collections.singletonList(
+                        new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                            .setErrorCode(error.code())
+                            .setPartitionIndex(partition)))));
         OffsetCommitResponse response = mock(OffsetCommitResponse.class);
         when(response.data()).thenReturn(responseData);
         return new ClientResponse(
@@ -1362,12 +1362,12 @@ public class CommitRequestManagerTest {
                                                                NetworkClientDelegate.UnsentRequest unsentRequest) {
         OffsetCommitResponseData responseData = new OffsetCommitResponseData()
             .setTopics(Collections.singletonList(
-                    new OffsetCommitResponseData.OffsetCommitResponseTopic()
-                            .setName(topic)
-                            .setPartitions(Collections.singletonList(
-                                    new OffsetCommitResponseData.OffsetCommitResponsePartition()
-                                            .setErrorCode(Errors.NONE.code())
-                                            .setPartitionIndex(partition)))));
+                new OffsetCommitResponseData.OffsetCommitResponseTopic()
+                    .setName(topic)
+                    .setPartitions(Collections.singletonList(
+                        new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                            .setErrorCode(Errors.NONE.code())
+                            .setPartitionIndex(partition)))));
         OffsetCommitResponse response = mock(OffsetCommitResponse.class);
         when(response.data()).thenReturn(responseData);
         return new ClientResponse(

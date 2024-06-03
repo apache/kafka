@@ -311,8 +311,7 @@ public abstract class ConsumerCoordinatorTest {
             List<Collection<String>> capturedTopics = topicsCaptor.getAllValues();
 
             // expected the final group subscribed topics to be updated to "topic1"
-            Set<String> expectedTopicsGotCalled = new HashSet<>(singletonList(topic1));
-            assertEquals(expectedTopicsGotCalled, capturedTopics.get(0));
+            assertEquals(Collections.singleton(topic1), capturedTopics.get(0));
         }
 
         Mockito.clearInvocations(mockSubscriptionState);
