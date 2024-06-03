@@ -186,7 +186,7 @@ class BrokerServer(
       kafkaScheduler.startup()
 
       /* register broker metrics */
-      brokerTopicStats = new BrokerTopicStats(config.isRemoteLogStorageSystemEnabled)
+      brokerTopicStats = new BrokerTopicStats(config.remoteLogManagerConfig.enableRemoteStorageSystem())
 
       quotaManagers = QuotaFactory.instantiate(config, metrics, time, s"broker-${config.nodeId}-")
 
