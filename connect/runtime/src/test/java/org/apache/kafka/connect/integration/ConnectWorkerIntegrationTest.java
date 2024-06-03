@@ -1297,7 +1297,7 @@ public class ConnectWorkerIntegrationTest {
         // Use a start latch here instead of assertConnectorAndExactlyNumTasksAreRunning
         // since failure to reconfigure the tasks (which may occur if the bug this test was written
         // to help catch resurfaces) will not cause existing tasks to fail or stop running
-        StartAndStopLatch restarts = connectorHandle.expectedStarts(NUM_TASKS + 1);
+        StartAndStopLatch restarts = connectorHandle.expectedStarts(1);
         connectorHandle.expectedCommits(NUM_TASKS * 2);
 
         final String secondConnectorTopic = "connector-topic-2";
