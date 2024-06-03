@@ -73,6 +73,7 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DE
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_RETRY_BACKOFF_MAX_MS;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_RETRY_BACKOFF_MS;
 import static org.apache.kafka.common.utils.Utils.mkSortedSet;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -160,7 +161,7 @@ public class HeartbeatRequestManagerTest {
         HeartbeatRequestState heartbeatRequestState = new HeartbeatRequestState(
                 logContext,
                 time,
-                10,
+                DEFAULT_HEARTBEAT_INTERVAL_MS,
                 retryBackoffMs,
                 retryBackoffMaxMs,
                 .2
@@ -175,8 +176,10 @@ public class HeartbeatRequestManagerTest {
 
         String target = requestState.toStringBase() +
                 ", heartbeatTimer=" + heartbeatRequestState.heartbeatTimer() +
-                ", heartbeatIntervalMs=" + heartbeatRequestState.heartbeatIntervalMs();
+                ", heartbeatIntervalMs=" + DEFAULT_HEARTBEAT_INTERVAL_MS;
 
+        System.out.println(target);
+        assertDoesNotThrow(heartbeatRequestState::toString);
         assertEquals(target, heartbeatRequestState.toStringBase());
     }
 
