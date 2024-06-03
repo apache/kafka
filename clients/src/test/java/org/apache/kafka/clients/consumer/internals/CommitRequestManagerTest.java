@@ -194,7 +194,7 @@ public class CommitRequestManagerTest {
         offsets2.put(new TopicPartition("test", 4), new OffsetAndMetadata(20L));
 
         // Add the requests to the CommitRequestManager and store their futures
-        long expirationTimeMs = time.milliseconds() + defaultApiTimeoutMs;
+        long expirationTimeMs  = time.milliseconds() + defaultApiTimeoutMs;
         commitManager.commitSync(offsets1, expirationTimeMs);
         commitManager.fetchOffsets(Collections.singleton(new TopicPartition("test", 0)), expirationTimeMs);
         commitManager.commitSync(offsets2, expirationTimeMs);
@@ -748,12 +748,12 @@ public class CommitRequestManagerTest {
             new TopicPartition("topic", 1),
             new OffsetAndMetadata(0));
 
-        // Send sync offset commit request.
+        // Send sync offset commit request that fails with retriable error.
         long expirationTimeMs = time.milliseconds() + retryBackoffMs * 2;
         CompletableFuture<Void> commitResult = commitRequestManager.commitSync(offsets, expirationTimeMs);
         completeOffsetCommitRequestWithError(commitRequestManager, Errors.REQUEST_TIMED_OUT);
 
-        // Make the first request fail with a retriable error. Should not complete yet
+        // Request retried after backoff, and fails with retriable again. Should not complete yet
         // given that the request timeout hasn't expired.
         time.sleep(retryBackoffMs);
         completeOffsetCommitRequestWithError(commitRequestManager, Errors.REQUEST_TIMED_OUT);
