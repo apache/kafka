@@ -13168,7 +13168,6 @@ public class GroupMetadataManagerTest {
 
     @Test
     public void testNoConversionWhenSizeExceedsClassicMaxGroupSize() throws Exception {
-        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         String groupId = "group-id";
         String nonClassicMemberId = "1";
 
