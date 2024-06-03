@@ -26,7 +26,7 @@ import org.apache.kafka.common.utils.Utils;
 /**
  * Represents an immutable basic version range using 2 attributes: min and max, each of type short.
  * The min and max attributes need to satisfy 2 rules:
- *  - they are each expected to be >= 0, as we only consider positive version values to be valid.
+ *  - they are each expected to be >= 0, as we only consider non-negative version values to be valid.
  *  - max should be >= min.
  *
  * The class also provides API to convert the version range to a map.

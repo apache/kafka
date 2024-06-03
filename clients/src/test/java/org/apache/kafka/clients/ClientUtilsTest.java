@@ -78,6 +78,11 @@ public class ClientUtilsTest {
     }
 
     @Test
+    public void testInvalidPort() {
+        assertThrows(ConfigException.class, () -> checkWithoutLookup("localhost:70000"));
+    }
+
+    @Test
     public void testOnlyBadHostname() {
         assertThrows(ConfigException.class, () -> checkWithoutLookup("some.invalid.hostname.foo.bar.local:9999"));
     }

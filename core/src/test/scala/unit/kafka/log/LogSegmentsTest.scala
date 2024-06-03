@@ -27,6 +27,7 @@ import org.mockito.Mockito.{mock, when}
 
 import java.util.Arrays.asList
 import java.util.Optional
+import java.util.OptionalLong
 import scala.jdk.CollectionConverters._
 
 class LogSegmentsTest {
@@ -106,7 +107,10 @@ class LogSegmentsTest {
     assertEquals(0, segments.numberOfSegments)
     assertFalse(segments.contains(offset1))
 
-    segments.close()
+    // since we do segments.clear() before, we have to close segments one by one
+    seg1.close()
+    seg2.close()
+    seg3.close()
   }
 
   @Test
@@ -127,6 +131,7 @@ class LogSegmentsTest {
       segments.add(seg)
       assertEntry(seg1, segments.firstEntry.get)
       assertEquals(Optional.of(seg1), segments.firstSegment)
+      assertEquals(OptionalLong.of(1), segments.firstSegmentBaseOffset())
       assertEntry(seg, segments.lastEntry.get)
       assertEquals(Optional.of(seg), segments.lastSegment)
     }
@@ -147,6 +152,13 @@ class LogSegmentsTest {
     assertEquals(Seq(seg3), segments.values(3, 4).asScala.toSeq)
     assertEquals(Seq(), segments.values(4, 4).asScala.toSeq)
     assertEquals(Seq(seg4), segments.values(4, 5).asScala.toSeq)
+
+    // Test activeSegment
+    assertEquals(seg4, segments.activeSegment())
+
+    // Test nonActiveLogSegmentsFrom
+    assertEquals(Seq(seg2, seg3), segments.nonActiveLogSegmentsFrom(2).asScala.toSeq)
+    assertEquals(Seq(), segments.nonActiveLogSegmentsFrom(4).asScala.toSeq)
 
     segments.close()
   }
@@ -226,6 +238,8 @@ class LogSegmentsTest {
       val iterator = segments.higherSegments(9).iterator
       assertFalse(iterator.hasNext)
     }
+
+    segments.close()
   }
 
   @Test
@@ -238,5 +252,28 @@ class LogSegmentsTest {
     assertEquals(Int.MaxValue, LogSegments.sizeInBytes(asList(logSegment)))
     assertEquals(largeSize, LogSegments.sizeInBytes(asList(logSegment, logSegment)))
     assertTrue(UnifiedLog.sizeInBytes(asList(logSegment, logSegment)) > Int.MaxValue)
+
+    val logSegments: LogSegments = new LogSegments(topicPartition)
+    logSegments.add(logSegment)
+    assertEquals(Int.MaxValue, logSegments.sizeInBytes())
+
+    logSegment.close()
+  }
+
+  @Test
+  def testUpdateDir(): Unit = {
+    val seg1 = createSegment(1)
+    val segments = new LogSegments(topicPartition)
+    segments.add(seg1)
+
+    val newDir: File = TestUtils.tempDir()
+    segments.updateParentDir(newDir)
+    assertEquals(newDir, seg1.log().file().getParentFile)
+    assertEquals(newDir, seg1.timeIndexFile().getParentFile)
+    assertEquals(newDir, seg1.offsetIndexFile().getParentFile)
+    assertEquals(newDir, seg1.txnIndex().file().getParentFile)
+
+    seg1.close()
+    Utils.delete(newDir)
   }
 }

@@ -24,7 +24,7 @@ import kafka.utils.{Logging, TestUtils}
 import scala.jdk.CollectionConverters._
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 import com.yammer.metrics.core.Gauge
-import org.apache.kafka.server.config.{ReplicationConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{ServerConfigs, ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -39,7 +39,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
   private val createDeleteIterations = 3
 
   private val overridingProps = new Properties
-  overridingProps.put(KafkaConfig.DeleteTopicEnableProp, "true")
+  overridingProps.put(ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, "true")
   overridingProps.put(ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, "false")
   // speed up the test for UnderReplicatedPartitions, which relies on the ISR expiry thread to execute concurrently with topic creation
   // But the replica.lag.time.max.ms value still need to consider the slow Jenkins testing environment
