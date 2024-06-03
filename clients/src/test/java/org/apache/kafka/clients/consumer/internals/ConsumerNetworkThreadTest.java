@@ -145,7 +145,7 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testEnsureCloseStopsRunningThread() {
-        // consumerNetworkThread.running is set to true in the constructor
+        // consumerNetworkThread.running is set to true in its constructor
         assertTrue(consumerNetworkThread.isRunning());
 
         // close() should make consumerNetworkThread.running false by calling closeInternal(Duration timeout)
@@ -153,17 +153,25 @@ public class ConsumerNetworkThreadTest {
         assertFalse(consumerNetworkThread.isRunning());
     }
 
-    // Add a second RM to test to ensure Math.min() is computing correctly
     @ParameterizedTest
     @ValueSource(longs = {1, 100, 1000, 4999, 5001})
     public void testConsumerNetworkThreadWaitTimeComputations(long exampleTime) {
-        when(requestManagers.entries()).thenReturn(Collections.singletonList(Optional.of(coordinatorRequestManager)));
+        List<Optional<? extends RequestManager>> list = new ArrayList<>();
+        list.add(Optional.of(coordinatorRequestManager));
+        list.add(Optional.of(heartbeatRequestManager));
+
+        when(requestManagers.entries()).thenReturn(list);
 
         NetworkClientDelegate.PollResult pollResult = new NetworkClientDelegate.PollResult(exampleTime);
+        NetworkClientDelegate.PollResult pollResult1 = new NetworkClientDelegate.PollResult(exampleTime + 100);
 
-        when(coordinatorRequestManager.poll(anyLong())).thenReturn(pollResult);
-        when(coordinatorRequestManager.maximumTimeToWait(anyLong())).thenReturn(exampleTime);
+        long t = time.milliseconds();
+        when(coordinatorRequestManager.poll(t)).thenReturn(pollResult);
+        when(coordinatorRequestManager.maximumTimeToWait(t)).thenReturn(exampleTime);
+        when(heartbeatRequestManager.poll(t)).thenReturn(pollResult1);
+        when(heartbeatRequestManager.maximumTimeToWait(t)).thenReturn(exampleTime + 100);
         when(networkClientDelegate.addAll(pollResult)).thenReturn(pollResult.timeUntilNextPollMs);
+        when(networkClientDelegate.addAll(pollResult1)).thenReturn(pollResult1.timeUntilNextPollMs);
         consumerNetworkThread.runOnce();
 
         verify(networkClientDelegate).poll(exampleTime < 5001 ? exampleTime : 5000, time.milliseconds());
