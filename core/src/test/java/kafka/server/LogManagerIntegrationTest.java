@@ -33,8 +33,11 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.storage.internals.checkpoint.PartitionMetadataFile;
+import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -45,11 +48,13 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith(value = ClusterTestExtensions.class)
 @Tag("integration")
@@ -60,20 +65,43 @@ public class LogManagerIntegrationTest {
         this.cluster = cluster;
     }
 
-    @ClusterTest(types = {Type.KRAFT})
+    @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 3)
     public void testRestartBrokerNoErrorIfMissingPartitionMetadata() throws IOException, ExecutionException, InterruptedException {
-        RaftClusterInvocationContext.RaftClusterInstance raftInstance = (RaftClusterInvocationContext.RaftClusterInstance) cluster;
+        RaftClusterInvocationContext.RaftClusterInstance raftInstance =
+                (RaftClusterInvocationContext.RaftClusterInstance) cluster;
 
         try (Admin admin = cluster.createAdminClient()) {
-            admin.createTopics(Collections.singletonList(new NewTopic("foo", 1, (short) 1)));
+            admin.createTopics(Collections.singletonList(new NewTopic("foo", 1, (short) 3))).all().get();
         }
+        cluster.waitForTopic("foo", 1);
+
+        Optional<PartitionMetadataFile> partitionMetadataFile = Optional.ofNullable(
+                raftInstance.getUnderlying().brokers().get(0).logManager()
+                        .getLog(new TopicPartition("foo", 0), false).get()
+                        .partitionMetadataFile().getOrElse(null));
+        assertTrue(partitionMetadataFile.isPresent());
 
         raftInstance.getUnderlying().brokers().get(0).shutdown();
+        try (Admin admin = cluster.createAdminClient()) {
+            TestUtils.waitForCondition(() -> {
+                List<TopicPartitionInfo> partitionInfos = admin.describeTopics(Collections.singletonList("foo"))
+                        .topicNameValues().get("foo").get().partitions();
+                return partitionInfos.get(0).isr().size() == 2;
+            }, "isr size is not shrink to 2");
+        }
+
         // delete partition.metadata file here to simulate the scenario that partition.metadata not flush to disk yet
-        raftInstance.getUnderlying().brokers().get(0)
-                .logManager().getLog(new TopicPartition("foo", 0), false).get().partitionMetadataFile().get().delete();
+        partitionMetadataFile.get().delete();
         raftInstance.getUnderlying().brokers().get(0).startup();
+        // make sure there is no error during load logs
         assertDoesNotThrow(() -> raftInstance.getUnderlying().fatalFaultHandler().maybeRethrowFirstException());
+        try (Admin admin = cluster.createAdminClient()) {
+            TestUtils.waitForCondition(() -> {
+                List<TopicPartitionInfo> partitionInfos = admin.describeTopics(Collections.singletonList("foo"))
+                        .topicNameValues().get("foo").get().partitions();
+                return partitionInfos.get(0).isr().size() == 3;
+            }, "isr size is not expand to 3");
+        }
 
         // make sure topic still work fine
         Map<String, Object> producerConfigs = new HashMap<>();
