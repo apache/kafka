@@ -140,9 +140,12 @@ public class CommitRequestManagerTest {
                 Optional.of("groupInstanceId"),
                 metrics);
 
-        // Add some topic partitions to the hashset and test for it in the target
+        Set<TopicPartition> requestedPartitions = new HashSet<>();
+        TopicPartition topicPartition1 = new TopicPartition("topic-1", 1);
+        requestedPartitions.add(topicPartition1);
+
         CommitRequestManager.OffsetFetchRequestState offsetFetchRequestState = commitRequestManager.new OffsetFetchRequestState(
-                new HashSet<>(),
+                requestedPartitions,
                 retryBackoffMs,
                 retryBackoffMaxMs,
                 1000,
@@ -154,7 +157,6 @@ public class CommitRequestManagerTest {
                 retryBackoffMs,
                 retryBackoffMaxMs);
 
-        // Make parameterized test for expirationTimeMs
         String target = requestState.toStringBase() +
                 ", memberInfo=" + memberInfo +
                 ", expirationTimeMs=" + (offsetFetchRequestState.expirationTimeMs().isPresent() ? offsetFetchRequestState.expirationTimeMs() : "undefined") +
