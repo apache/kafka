@@ -1406,13 +1406,13 @@ public class CommitRequestManagerTest {
                                                                short apiKeyVersion,
                                                                NetworkClientDelegate.UnsentRequest unsentRequest) {
         OffsetCommitResponseData responseData = new OffsetCommitResponseData()
-                .setTopics(Arrays.asList(
-                    new OffsetCommitResponseData.OffsetCommitResponseTopic()
-                        .setName(topic)
-                        .setPartitions(Collections.singletonList(
-                            new OffsetCommitResponseData.OffsetCommitResponsePartition()
-                                .setErrorCode(Errors.NONE.code())
-                                .setPartitionIndex(partition)))));
+            .setTopics(Arrays.asList(
+                new OffsetCommitResponseData.OffsetCommitResponseTopic()
+                    .setName(topic)
+                    .setPartitions(Collections.singletonList(
+                        new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                            .setErrorCode(Errors.NONE.code())
+                            .setPartitionIndex(partition)))));
         OffsetCommitResponse response = mock(OffsetCommitResponse.class);
         when(response.data()).thenReturn(responseData);
         return new ClientResponse(
