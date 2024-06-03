@@ -57,10 +57,10 @@ public class AssignmentConfigs {
         } else if (HighAvailabilityTaskAssignor.class.getName().equals(assignorClassName)) {
             // TODO KAFKA-16869: replace with the HighAvailabilityTaskAssignor class once it implements the new TaskAssignor interface
             if (rackAwareTrafficCost == null) {
-                rackAwareTrafficCost = HighAvailabilityTaskAssignor.DEFAULT_STATEFUL_TRAFFIC_COST;
+                rackAwareTrafficCost = HighAvailabilityTaskAssignor.DEFAULT_HIGH_AVAILABILITY_TRAFFIC_COST;
             }
             if (rackAwareNonOverlapCost == null) {
-                rackAwareNonOverlapCost = HighAvailabilityTaskAssignor.DEFAULT_STATEFUL_NON_OVERLAP_COST;
+                rackAwareNonOverlapCost = HighAvailabilityTaskAssignor.DEFAULT_HIGH_AVAILABILITY_NON_OVERLAP_COST;
             }
         }
 
@@ -70,8 +70,8 @@ public class AssignmentConfigs {
             numStandbyReplicas,
             probingRebalanceIntervalMs,
             rackAwareAssignmentTags,
-            OptionalInt.of(rackAwareTrafficCost),
-            OptionalInt.of(rackAwareNonOverlapCost),
+            rackAwareTrafficCost != null ? OptionalInt.of(rackAwareTrafficCost) : OptionalInt.empty(),
+            rackAwareNonOverlapCost != null ? OptionalInt.of(rackAwareNonOverlapCost) : OptionalInt.empty(),
             rackAwareAssignmentStrategy
         );
     }

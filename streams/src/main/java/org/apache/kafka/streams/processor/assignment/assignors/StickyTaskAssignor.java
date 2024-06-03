@@ -75,7 +75,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         assignStandby(applicationState, assignmentState);
         optimizeStandby(applicationState, assignmentState);
 
-        final Map<ProcessId, KafkaStreamsAssignment> finalAssignments = assignmentState.newAssignments();
+        final Map<ProcessId, KafkaStreamsAssignment> finalAssignments = assignmentState.newAssignments;
         if (mustPreserveActiveTaskAssignment && !finalAssignments.isEmpty()) {
             // We set the followup deadline for only one of the clients.
             final ProcessId clientId = finalAssignments.entrySet().iterator().next().getKey();
@@ -92,7 +92,7 @@ public class StickyTaskAssignor implements TaskAssignor {
             return;
         }
 
-        final Map<ProcessId, KafkaStreamsAssignment> currentAssignments = assignmentState.newAssignments();
+        final Map<ProcessId, KafkaStreamsAssignment> currentAssignments = assignmentState.newAssignments;
 
         final Set<TaskId> statefulTasks = applicationState.allTasks().values().stream()
             .filter(TaskInfo::isStateful)
@@ -120,7 +120,7 @@ public class StickyTaskAssignor implements TaskAssignor {
             return;
         }
 
-        final Map<ProcessId, KafkaStreamsAssignment> currentAssignments = assignmentState.newAssignments();
+        final Map<ProcessId, KafkaStreamsAssignment> currentAssignments = assignmentState.newAssignments;
         final Map<ProcessId, KafkaStreamsAssignment> optimizedAssignments = TaskAssignmentUtils.optimizeRackAwareStandbyTasks(
             applicationState, currentAssignments);
         assignmentState.processOptimizedAssignments(optimizedAssignments);
@@ -177,7 +177,6 @@ public class StickyTaskAssignor implements TaskAssignor {
     private static void assignStandby(final ApplicationState applicationState,
                                       final AssignmentState assignmentState) {
         final Set<TaskInfo> statefulTasks = applicationState.allTasks().values().stream()
-            .filter(TaskInfo::isStateful)
             .filter(taskInfo -> taskInfo.topicPartitions().stream().anyMatch(TaskTopicPartition::isChangelog))
             .collect(Collectors.toSet());
         final int numStandbyReplicas = applicationState.assignmentConfigs().numStandbyReplicas();
@@ -259,7 +258,7 @@ public class StickyTaskAssignor implements TaskAssignor {
             ));
         }
 
-        public void finalizeAssignment(final TaskId taskId, final ProcessId client, final AssignedTask.Type type) {
+        private void finalizeAssignment(final TaskId taskId, final ProcessId client, final AssignedTask.Type type) {
             final Set<TaskId> newAssignmentsForClient = newAssignments.get(client).tasks().keySet();
             taskPairs.addPairs(taskId, newAssignmentsForClient);
 
@@ -267,11 +266,7 @@ public class StickyTaskAssignor implements TaskAssignor {
             newTaskLocations.computeIfAbsent(taskId, k -> new HashSet<>()).add(client);
         }
 
-        public Map<ProcessId, KafkaStreamsAssignment> newAssignments() {
-            return newAssignments;
-        }
-
-        public void processOptimizedAssignments(final Map<ProcessId, KafkaStreamsAssignment> optimizedAssignments) {
+        private void processOptimizedAssignments(final Map<ProcessId, KafkaStreamsAssignment> optimizedAssignments) {
             final Map<TaskId, Set<ProcessId>> newTaskLocations = new HashMap<>();
 
             for (final Map.Entry<ProcessId, KafkaStreamsAssignment> entry : optimizedAssignments.entrySet()) {
@@ -287,7 +282,7 @@ public class StickyTaskAssignor implements TaskAssignor {
             this.newAssignments = optimizedAssignments;
         }
 
-        public boolean hasRoomForActiveTask(final ProcessId processId, final int activeTasksPerThread) {
+        private boolean hasRoomForActiveTask(final ProcessId processId, final int activeTasksPerThread) {
             final int capacity = clients.get(processId).numProcessingThreads();
             final int newActiveTaskCount = newAssignments.computeIfAbsent(processId, k -> KafkaStreamsAssignment.of(processId, new HashSet<>()))
                 .tasks().values()
@@ -297,7 +292,7 @@ public class StickyTaskAssignor implements TaskAssignor {
             return newActiveTaskCount < capacity * activeTasksPerThread;
         }
 
-        public ProcessId findBestClientForTask(final TaskId taskId, final Set<ProcessId> clientsWithin) {
+        private ProcessId findBestClientForTask(final TaskId taskId, final Set<ProcessId> clientsWithin) {
             if (clientsWithin.size() == 1) {
                 return clientsWithin.iterator().next();
             }
@@ -318,7 +313,7 @@ public class StickyTaskAssignor implements TaskAssignor {
             return previousClient;
         }
 
-        public Set<ProcessId> findClientsWithoutAssignedTask(final TaskId taskId) {
+        private Set<ProcessId> findClientsWithoutAssignedTask(final TaskId taskId) {
             final Set<ProcessId> unavailableClients = newTaskLocations.get(taskId);
             return clients.values().stream()
                 .map(KafkaStreamsState::processId)
@@ -326,13 +321,13 @@ public class StickyTaskAssignor implements TaskAssignor {
                 .collect(Collectors.toSet());
         }
 
-        public double clientLoad(final ProcessId processId) {
+        private double clientLoad(final ProcessId processId) {
             final int capacity = clients.get(processId).numProcessingThreads();
-            final double totalTaskCount = newAssignments.getOrDefault(processId, KafkaStreamsAssignment.of(processId, new HashSet<>())).tasks().size();
+            final double totalTaskCount = newAssignments.get(processId).tasks().size();
             return totalTaskCount / capacity;
         }
 
-        public ProcessId findLeastLoadedClient(final TaskId taskId, final Set<ProcessId> clientIds) {
+        private ProcessId findLeastLoadedClient(final TaskId taskId, final Set<ProcessId> clientIds) {
             ProcessId leastLoaded = null;
             for (final ProcessId processId : clientIds) {
                 final double thisClientLoad = clientLoad(processId);
@@ -341,7 +336,7 @@ public class StickyTaskAssignor implements TaskAssignor {
                 }
 
                 if (leastLoaded == null || thisClientLoad < clientLoad(leastLoaded)) {
-                    final Set<TaskId> assignedTasks = newAssignments.getOrDefault(processId, KafkaStreamsAssignment.of(processId, new HashSet<>())).tasks().values()
+                    final Set<TaskId> assignedTasks = newAssignments.get(processId).tasks().values()
                         .stream().map(AssignedTask::id).collect(Collectors.toSet());
                     if (taskPairs.hasNewPair(taskId, assignedTasks)) {
                         leastLoaded = processId;
@@ -364,8 +359,8 @@ public class StickyTaskAssignor implements TaskAssignor {
             return leastLoaded;
         }
 
-        public ProcessId findLeastLoadedClientWithPreviousActiveOrStandbyTask(final TaskId taskId,
-                                                                              final Set<ProcessId> clientsWithin) {
+        private ProcessId findLeastLoadedClientWithPreviousActiveOrStandbyTask(final TaskId taskId,
+                                                                               final Set<ProcessId> clientsWithin) {
             final ProcessId previous = previousActiveAssignment.get(taskId);
             if (previous != null && clientsWithin.contains(previous)) {
                 return previous;
@@ -373,15 +368,15 @@ public class StickyTaskAssignor implements TaskAssignor {
             return findLeastLoadedClientWithPreviousStandbyTask(taskId, clientsWithin);
         }
 
-        public ProcessId findLeastLoadedClientWithPreviousStandbyTask(final TaskId taskId,
-                                                                      final Set<ProcessId> clientsWithin) {
+        private ProcessId findLeastLoadedClientWithPreviousStandbyTask(final TaskId taskId,
+                                                                       final Set<ProcessId> clientsWithin) {
             final Set<ProcessId> ids = previousStandbyAssignment.getOrDefault(taskId, new HashSet<>());
             final HashSet<ProcessId> constrainTo = new HashSet<>(ids);
             constrainTo.retainAll(clientsWithin);
             return findLeastLoadedClient(taskId, constrainTo);
         }
 
-        public boolean shouldBalanceLoad(final ProcessId client) {
+        private boolean shouldBalanceLoad(final ProcessId client) {
             final double thisClientLoad = clientLoad(client);
             if (thisClientLoad < 1) {
                 return false;

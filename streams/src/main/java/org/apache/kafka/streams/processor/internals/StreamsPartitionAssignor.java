@@ -592,14 +592,15 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         );
     }
 
-    private static void processStreamsPartitionAssignment(final org.apache.kafka.streams.processor.assignment.TaskAssignor assignor,
-                                                          final TaskAssignment taskAssignment,
-                                                          final AssignmentError assignmentError,
-                                                          final Map<UUID, ClientMetadata> clientMetadataMap,
-                                                          final GroupSubscription groupSubscription) {
+    private void processStreamsPartitionAssignment(final org.apache.kafka.streams.processor.assignment.TaskAssignor assignor,
+                                                   final TaskAssignment taskAssignment,
+                                                   final AssignmentError assignmentError,
+                                                   final Map<UUID, ClientMetadata> clientMetadataMap,
+                                                   final GroupSubscription groupSubscription) {
         if (assignmentError == AssignmentError.UNKNOWN_PROCESS_ID || assignmentError == AssignmentError.UNKNOWN_TASK_ID) {
-            assignor.onAssignmentComputed(null, groupSubscription, assignmentError);
-            throw new StreamsException("Task assignment with " + assignor.getClass() +
+            assignor.onAssignmentComputed(new GroupAssignment(Collections.emptyMap()), groupSubscription, assignmentError);
+            log.error("Task assignment returning empty GroupAssignment and failing due to error {}", assignmentError);
+            throw new StreamsException("Task assignment with " + assignor.getClass().getName() +
                                        " returned a fatal error: " + assignmentError);
         }
 
@@ -802,7 +803,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
         final Optional<org.apache.kafka.streams.processor.assignment.TaskAssignor> userTaskAssignor =
             customTaskAssignorSupplier.get();
-        final UserTaskAssignmentListener userTaskAssignmentListener;
+        final UserTaskAssignmentListener customTaskAssignmentListener;
         if (userTaskAssignor.isPresent()) {
             final ApplicationState applicationState = buildApplicationState(
                 taskManager.topologyMetadata(),
@@ -814,15 +815,16 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             final TaskAssignment taskAssignment = assignor.assign(applicationState);
             final AssignmentError assignmentError = validateTaskAssignment(applicationState, taskAssignment);
             processStreamsPartitionAssignment(assignor, taskAssignment, assignmentError, clientMetadataMap, groupSubscription);
-            userTaskAssignmentListener = (assignment, subscription) -> {
+            customTaskAssignmentListener = (assignment, subscription) -> {
                 assignor.onAssignmentComputed(assignment, subscription, assignmentError);
                 if (assignmentError != AssignmentError.NONE) {
-                    throw new StreamsException("Task assignment with " + assignor.getClass() +
+                    log.error("Task assignment returning empty GroupAssignment and failing due to error {}", assignmentError);
+                    throw new StreamsException("Task assignment with " + assignor.getClass().getName() +
                                                " returned an error: " + assignmentError);
                 }
             };
         } else {
-            userTaskAssignmentListener = (assignment, subscription) -> { };
+            customTaskAssignmentListener = (assignment, subscription) -> { };
             final TaskAssignor taskAssignor = createTaskAssignor(lagComputationSuccessful);
             final RackAwareTaskAssignor rackAwareTaskAssignor = new RackAwareTaskAssignor(
                 fullMetadata,
@@ -862,7 +864,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                      .sorted(comparingByKey())
                      .map(entry -> entry.getKey() + "=" + entry.getValue().currentAssignment())
                      .collect(Collectors.joining(Utils.NL)));
-        return userTaskAssignmentListener;
+        return customTaskAssignmentListener;
     }
 
     private TaskAssignor createTaskAssignor(final boolean lagComputationSuccessful) {
@@ -1521,7 +1523,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 topicToPartitionInfo = getTopicPartitionInfo(partitionsByHost);
                 encodedNextScheduledRebalanceMs = Long.MAX_VALUE;
                 break;
-            case 6: validateActiveTaskEncoding(partitions, info, logPrefix);
+            case 6:
+                validateActiveTaskEncoding(partitions, info, logPrefix);
 
                 activeTasks = getActiveTasks(partitions, info);
                 partitionsByHost = info.partitionsByHost();
