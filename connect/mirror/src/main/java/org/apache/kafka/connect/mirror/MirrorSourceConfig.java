@@ -101,10 +101,10 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
     public static final Class<?> CONFIG_PROPERTY_FILTER_CLASS_DEFAULT = DefaultConfigPropertyFilter.class;
 
     public static final String OFFSET_LAG_MAX = "offset.lag.max";
-    private static final String OFFSET_LAG_MAX_DOC = "Determines the maximum allowed lag between the source and target partitions before MirrorMaker emits an 'offset sync' event to the 'offset-syncs' topic which is then used by the <code>MirrorCheckpointTask</code> to translate source and target partitions. " +
-            "The lag is calculated as the difference between the latest offset in the source partition, and the last sync emitted to the 'offset-syncs' topic. " +
+    private static final String OFFSET_LAG_MAX_DOC = "Determines the maximum allowed lag between the source and target partitions before MirrorMaker emits an 'offset sync' event to the 'offset-syncs' topic, which is then used by the <code>MirrorCheckpointTask</code> to translate the source and target partitions. " +
+            "The lag is calculated as the difference between the latest offset in the source partition and the last sync emitted to the 'offset-syncs' topic. " +
             "A lower value will trigger more frequent offset syncs to keep the target partitions more closely in sync with the source for the low-throughput partitions. " +
-            "On the other hand, a higher value allows larger lags which can be useful when the source topic has high throughput and the target partitions can tolerate a larger lag." +
+            "On the other hand, a higher value allows larger lags, which can be useful when the source topic has high throughput and the target partitions can tolerate a larger lag." +
             "It's also possible to set <code>offset.lag.max</code> to 0, causing MirrorMaker to emit an 'offset sync' for every source record to a target partition. This will maximize the synchronization between source and target partitions but will increase the load and throughput on the 'offset-syncs' topic.";
     public static final long OFFSET_LAG_MAX_DEFAULT = 100L;
 
