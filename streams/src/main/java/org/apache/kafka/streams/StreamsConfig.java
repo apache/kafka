@@ -906,26 +906,26 @@ public class StreamsConfig extends AbstractConfig {
                     null,
                     Importance.MEDIUM,
                     DEFAULT_KEY_SERDE_CLASS_DOC)
-            .define(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS,
+            .define(CommonClientConfigs.LIST_KEY_SERDE_INNER_CLASS_DEFAULT,
                     Type.CLASS,
                     null,
                     Importance.MEDIUM,
-                    CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS_DOC)
-            .define(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS,
+                    CommonClientConfigs.LIST_KEY_SERDE_INNER_CLASS_DEFAULT_DOC)
+            .define(CommonClientConfigs.LIST_VALUE_SERDE_INNER_CLASS_DEFAULT,
                     Type.CLASS,
                     null,
                     Importance.MEDIUM,
-                    CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS_DOC)
-            .define(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS,
+                    CommonClientConfigs.LIST_VALUE_SERDE_INNER_CLASS_DEFAULT_DOC)
+            .define(CommonClientConfigs.LIST_KEY_SERDE_TYPE_CLASS_DEFAULT,
                     Type.CLASS,
                     null,
                     Importance.MEDIUM,
-                    CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS_DOC)
-            .define(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS,
+                    CommonClientConfigs.LIST_KEY_SERDE_TYPE_CLASS_DEFAULT_DOC)
+            .define(CommonClientConfigs.LIST_VALUE_SERDE_TYPE_CLASS_DEFAULT,
                     Type.CLASS,
                     null,
                     Importance.MEDIUM,
-                    CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS_DOC)
+                    CommonClientConfigs.LIST_VALUE_SERDE_TYPE_CLASS_DEFAULT_DOC)
             .define(DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG,
                     Type.CLASS,
                     DefaultProductionExceptionHandler.class.getName(),
@@ -997,7 +997,7 @@ public class StreamsConfig extends AbstractConfig {
                     REPLICATION_FACTOR_DOC)
             .define(SECURITY_PROTOCOL_CONFIG,
                     Type.STRING,
-                    CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
+                    CommonClientConfigs.SECURITY_PROTOCOL_DEFAULT,
                     ConfigDef.CaseInsensitiveValidString.in(Utils.enumOptions(SecurityProtocol.class)),
                     Importance.MEDIUM,
                     CommonClientConfigs.SECURITY_PROTOCOL_DOC)

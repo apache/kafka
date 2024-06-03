@@ -132,12 +132,12 @@ public class AdminClientConfig extends AbstractConfig {
     public static final String METRICS_RECORDING_LEVEL_CONFIG = CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG;
 
     public static final String SECURITY_PROTOCOL_CONFIG = CommonClientConfigs.SECURITY_PROTOCOL_CONFIG;
-    public static final String DEFAULT_SECURITY_PROTOCOL = CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL;
+    public static final String DEFAULT_SECURITY_PROTOCOL = CommonClientConfigs.SECURITY_PROTOCOL_DEFAULT;
     private static final String SECURITY_PROTOCOL_DOC = CommonClientConfigs.SECURITY_PROTOCOL_DOC;
     private static final String METRICS_RECORDING_LEVEL_DOC = CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC;
 
     public static final String RETRIES_CONFIG = CommonClientConfigs.RETRIES_CONFIG;
-    public static final String DEFAULT_API_TIMEOUT_MS_CONFIG = CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_CONFIG;
+    public static final String DEFAULT_API_TIMEOUT_MS_CONFIG = CommonClientConfigs.API_TIMEOUT_MS_DEFAULT_CONFIG;
 
     /**
      * <code>security.providers</code>
@@ -174,13 +174,13 @@ public class AdminClientConfig extends AbstractConfig {
                                         RECONNECT_BACKOFF_MAX_MS_DOC)
                                 .define(RETRY_BACKOFF_MS_CONFIG,
                                         Type.LONG,
-                                        CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,
+                                        CommonClientConfigs.RETRY_BACKOFF_MS_DEFAULT,
                                         atLeast(0L),
                                         Importance.LOW,
                                         RETRY_BACKOFF_MS_DOC)
                                 .define(RETRY_BACKOFF_MAX_MS_CONFIG,
                                         Type.LONG,
-                                        CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MAX_MS,
+                                        CommonClientConfigs.RETRY_BACKOFF_MAX_MS_DEFAULT,
                                         atLeast(0L),
                                         Importance.LOW,
                                         RETRY_BACKOFF_MAX_MS_DOC)
@@ -197,12 +197,12 @@ public class AdminClientConfig extends AbstractConfig {
                                         REQUEST_TIMEOUT_MS_DOC)
                                 .define(SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG,
                                         Type.LONG,
-                                        CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MS,
+                                        CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DEFAULT,
                                         Importance.MEDIUM,
                                         CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DOC)
                                 .define(SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG,
                                         Type.LONG,
-                                        CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS,
+                                        CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DEFAULT,
                                         Importance.MEDIUM,
                                         CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC)
                                 .define(CONNECTIONS_MAX_IDLE_MS_CONFIG,
@@ -221,7 +221,7 @@ public class AdminClientConfig extends AbstractConfig {
                                         60000,
                                         atLeast(0),
                                         Importance.MEDIUM,
-                                        CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_DOC)
+                                        CommonClientConfigs.API_TIMEOUT_MS_DEFAULT_DOC)
                                 .define(METRICS_SAMPLE_WINDOW_MS_CONFIG,
                                         Type.LONG,
                                         30000,

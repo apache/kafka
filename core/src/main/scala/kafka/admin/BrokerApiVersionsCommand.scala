@@ -228,7 +228,7 @@ object BrokerApiVersionsCommand {
         .define(
           CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
           ConfigDef.Type.STRING,
-          CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
+          CommonClientConfigs.SECURITY_PROTOCOL_DEFAULT,
           ConfigDef.CaseInsensitiveValidString.in(Utils.enumOptions(classOf[SecurityProtocol]):_*),
           ConfigDef.Importance.MEDIUM,
           CommonClientConfigs.SECURITY_PROTOCOL_DOC)
@@ -241,13 +241,13 @@ object BrokerApiVersionsCommand {
         .define(
           CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG,
           ConfigDef.Type.LONG,
-          CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MS,
+          CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DEFAULT,
           ConfigDef.Importance.MEDIUM,
           CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DOC)
         .define(
           CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG,
           ConfigDef.Type.LONG,
-          CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS,
+          CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DEFAULT,
           ConfigDef.Importance.MEDIUM,
           CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC)
         .define(
@@ -272,8 +272,8 @@ object BrokerApiVersionsCommand {
       val logContext = new LogContext(s"[LegacyAdminClient clientId=$clientId] ")
       val time = Time.SYSTEM
       val metrics = new Metrics(time)
-      val metadata = new Metadata(CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,
-        CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MAX_MS,
+      val metadata = new Metadata(CommonClientConfigs.RETRY_BACKOFF_MS_DEFAULT,
+        CommonClientConfigs.RETRY_BACKOFF_MAX_MS_DEFAULT,
         60 * 60 * 1000L, logContext,
         new ClusterResourceListeners)
       val channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext)

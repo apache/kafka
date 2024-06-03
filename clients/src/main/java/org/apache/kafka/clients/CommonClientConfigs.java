@@ -76,7 +76,12 @@ public class CommonClientConfigs {
 
     public static final String CLIENT_RACK_CONFIG = "client.rack";
     public static final String CLIENT_RACK_DOC = "A rack identifier for this client. This can be any string value which indicates where this client is physically located. It corresponds with the broker config 'broker.rack'";
+    /**
+     * @deprecated Use {@link #CLIENT_RACK_DEFAULT} instead.
+     */
+    @Deprecated
     public static final String DEFAULT_CLIENT_RACK = "";
+    public static final String CLIENT_RACK_DEFAULT = "";
 
     public static final String RECONNECT_BACKOFF_MS_CONFIG = "reconnect.backoff.ms";
     public static final String RECONNECT_BACKOFF_MS_DOC = "The base amount of time to wait before attempting to reconnect to a given host. " +
@@ -95,14 +100,24 @@ public class CommonClientConfigs {
     public static final String RETRY_BACKOFF_MS_DOC = "The amount of time to wait before attempting to retry a failed request to a given topic partition. " +
         "This avoids repeatedly sending requests in a tight loop under some failure scenarios. This value is the initial backoff value and will increase exponentially for each failed request, " +
         "up to the <code>retry.backoff.max.ms</code> value.";
+    /**
+     * @deprecated Use {@link #RETRY_BACKOFF_MS_DEFAULT} instead.
+     */
+    @Deprecated
     public static final Long DEFAULT_RETRY_BACKOFF_MS = 100L;
+    public static final Long RETRY_BACKOFF_MS_DEFAULT = 100L;
 
     public static final String RETRY_BACKOFF_MAX_MS_CONFIG = "retry.backoff.max.ms";
     public static final String RETRY_BACKOFF_MAX_MS_DOC = "The maximum amount of time in milliseconds to wait when retrying a request to the broker that has repeatedly failed. " +
         "If provided, the backoff per client will increase exponentially for each failed request, up to this maximum. To prevent all clients from being synchronized upon retry, " +
         "a randomized jitter with a factor of 0.2 will be applied to the backoff, resulting in the backoff falling within a range between 20% below and 20% above the computed value. " +
         "If <code>retry.backoff.ms</code> is set to be higher than <code>retry.backoff.max.ms</code>, then <code>retry.backoff.max.ms</code> will be used as a constant backoff from the beginning without any exponential increase";
+    /**
+     * @deprecated Use {@link #RETRY_BACKOFF_MAX_MS_DEFAULT} instead.
+     */
+    @Deprecated
     public static final Long DEFAULT_RETRY_BACKOFF_MAX_MS = 1000L;
+    public static final Long RETRY_BACKOFF_MAX_MS_DEFAULT = 1000L;
 
     public static final int RETRY_BACKOFF_EXP_BASE = 2;
     public static final double RETRY_BACKOFF_JITTER = 0.2;
@@ -131,20 +146,35 @@ public class CommonClientConfigs {
     public static final String SECURITY_PROTOCOL_CONFIG = "security.protocol";
     public static final String SECURITY_PROTOCOL_DOC = "Protocol used to communicate with brokers. Valid values are: " +
         String.join(", ", SecurityProtocol.names()) + ".";
+    /**
+     * @deprecated Use {@link #SECURITY_PROTOCOL_DEFAULT} instead.
+     */
+    @Deprecated
     public static final String DEFAULT_SECURITY_PROTOCOL = "PLAINTEXT";
+    public static final String SECURITY_PROTOCOL_DEFAULT = "PLAINTEXT";
 
     public static final String SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG = "socket.connection.setup.timeout.ms";
     public static final String SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DOC = "The amount of time the client will wait for the socket connection to be established. " +
         "If the connection is not built before the timeout elapses, clients will close the socket channel. " +
         "This value is the initial backoff value and will increase exponentially for each consecutive connection failure, " +
         "up to the <code>socket.connection.setup.timeout.max.ms</code> value.";
+    /**
+     * @deprecated Use {@link #SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DEFAULT} instead.
+     */
+    @Deprecated
     public static final Long DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MS = 10 * 1000L;
+    public static final Long SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DEFAULT = 10 * 1000L;
 
     public static final String SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG = "socket.connection.setup.timeout.max.ms";
     public static final String SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC = "The maximum amount of time the client will wait for the socket connection to be established. " +
         "The connection setup timeout will increase exponentially for each consecutive connection failure up to this maximum. To avoid connection storms, " +
         "a randomization factor of 0.2 will be applied to the timeout resulting in a random range between 20% below and 20% above the computed value.";
+    /**
+     * @deprecated Use {@link #SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DEFAULT} instead.
+     */
+    @Deprecated
     public static final Long DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS = 30 * 1000L;
+    public static final Long SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DEFAULT = 30 * 1000L;
 
     public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = "connections.max.idle.ms";
     public static final String CONNECTIONS_MAX_IDLE_MS_DOC = "Close idle connections after the number of milliseconds specified by this config.";
@@ -155,26 +185,73 @@ public class CommonClientConfigs {
                                                          + "elapses the client will resend the request if necessary or fail the request if "
                                                          + "retries are exhausted.";
 
+    /**
+     * @deprecated Use {@link #LIST_KEY_SERDE_INNER_CLASS_DEFAULT} instead.
+     */
+    @Deprecated
     public static final String DEFAULT_LIST_KEY_SERDE_INNER_CLASS = "default.list.key.serde.inner";
+    public static final String LIST_KEY_SERDE_INNER_CLASS_DEFAULT = "default.list.key.serde.inner";
+    /**
+     * @deprecated Use {@link #LIST_KEY_SERDE_INNER_CLASS_DEFAULT_DOC} instead.
+     */
+    @Deprecated
     public static final String DEFAULT_LIST_KEY_SERDE_INNER_CLASS_DOC = "Default inner class of list serde for key that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface. "
             + "This configuration will be read if and only if <code>default.key.serde</code> configuration is set to <code>org.apache.kafka.common.serialization.Serdes.ListSerde</code>";
+    public static final String LIST_KEY_SERDE_INNER_CLASS_DEFAULT_DOC = "Default inner class of list serde for key that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface. "
+            + "This configuration will be read if and only if <code>default.key.serde</code> configuration is set to <code>org.apache.kafka.common.serialization.Serdes.ListSerde</code>";
 
+    /**
+     * @deprecated Use {@link #LIST_VALUE_SERDE_INNER_CLASS_DEFAULT} instead.
+     */
+    @Deprecated
     public static final String DEFAULT_LIST_VALUE_SERDE_INNER_CLASS = "default.list.value.serde.inner";
+    public static final String LIST_VALUE_SERDE_INNER_CLASS_DEFAULT = "default.list.value.serde.inner";
+    /**
+     * @deprecated Use {@link #LIST_VALUE_SERDE_INNER_CLASS_DEFAULT_DOC} instead.
+     */
+    @Deprecated
     public static final String DEFAULT_LIST_VALUE_SERDE_INNER_CLASS_DOC = "Default inner class of list serde for value that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface. "
             + "This configuration will be read if and only if <code>default.value.serde</code> configuration is set to <code>org.apache.kafka.common.serialization.Serdes.ListSerde</code>";
+    public static final String LIST_VALUE_SERDE_INNER_CLASS_DEFAULT_DOC = "Default inner class of list serde for value that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface. "
+            + "This configuration will be read if and only if <code>default.value.serde</code> configuration is set to <code>org.apache.kafka.common.serialization.Serdes.ListSerde</code>";
 
+    /**
+     * @deprecated Use {@link #LIST_KEY_SERDE_TYPE_CLASS_DEFAULT} instead.
+     */
+    @Deprecated
     public static final String DEFAULT_LIST_KEY_SERDE_TYPE_CLASS = "default.list.key.serde.type";
+    public static final String LIST_KEY_SERDE_TYPE_CLASS_DEFAULT = "default.list.key.serde.type";
+    /**
+     * @deprecated Use {@link #LIST_KEY_SERDE_TYPE_CLASS_DEFAULT_DOC} instead.
+     */
+    @Deprecated
     public static final String DEFAULT_LIST_KEY_SERDE_TYPE_CLASS_DOC = "Default class for key that implements the <code>java.util.List</code> interface. "
             + "This configuration will be read if and only if <code>default.key.serde</code> configuration is set to <code>org.apache.kafka.common.serialization.Serdes.ListSerde</code> "
             + "Note when list serde class is used, one needs to set the inner serde class that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface via '"
-            + DEFAULT_LIST_KEY_SERDE_INNER_CLASS + "'";
+            + LIST_KEY_SERDE_INNER_CLASS_DEFAULT + "'";
+    public static final String LIST_KEY_SERDE_TYPE_CLASS_DEFAULT_DOC = "Default class for key that implements the <code>java.util.List</code> interface. "
+            + "This configuration will be read if and only if <code>default.key.serde</code> configuration is set to <code>org.apache.kafka.common.serialization.Serdes.ListSerde</code> "
+            + "Note when list serde class is used, one needs to set the inner serde class that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface via '"
+            + LIST_KEY_SERDE_INNER_CLASS_DEFAULT + "'";
 
+    /**
+     * @deprecated Use {@link #LIST_VALUE_SERDE_TYPE_CLASS_DEFAULT} instead.
+     */
+    @Deprecated
     public static final String DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS = "default.list.value.serde.type";
+    public static final String LIST_VALUE_SERDE_TYPE_CLASS_DEFAULT = "default.list.value.serde.type";
+    /**
+     * @deprecated Use {@link #LIST_VALUE_SERDE_TYPE_CLASS_DEFAULT_DOC} instead.
+     */
+    @Deprecated
     public static final String DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS_DOC = "Default class for value that implements the <code>java.util.List</code> interface. "
             + "This configuration will be read if and only if <code>default.value.serde</code> configuration is set to <code>org.apache.kafka.common.serialization.Serdes.ListSerde</code> "
             + "Note when list serde class is used, one needs to set the inner serde class that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface via '"
-            + DEFAULT_LIST_VALUE_SERDE_INNER_CLASS + "'";
-
+            + LIST_VALUE_SERDE_INNER_CLASS_DEFAULT + "'";
+    public static final String LIST_VALUE_SERDE_TYPE_CLASS_DEFAULT_DOC = "Default class for value that implements the <code>java.util.List</code> interface. "
+            + "This configuration will be read if and only if <code>default.value.serde</code> configuration is set to <code>org.apache.kafka.common.serialization.Serdes.ListSerde</code> "
+            + "Note when list serde class is used, one needs to set the inner serde class that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface via '"
+            + LIST_VALUE_SERDE_INNER_CLASS_DEFAULT + "'";
     public static final String GROUP_ID_CONFIG = "group.id";
     public static final String GROUP_ID_DOC = "A unique string that identifies the consumer group this consumer belongs to. This property is required if the consumer uses either the group management functionality by using <code>subscribe(topic)</code> or the Kafka-based offset management strategy.";
 
@@ -215,8 +292,19 @@ public class CommonClientConfigs {
                                                            + "The value must be set lower than <code>session.timeout.ms</code>, but typically should be set no higher "
                                                            + "than 1/3 of that value. It can be adjusted even lower to control the expected time for normal rebalances.";
 
-    public static final String DEFAULT_API_TIMEOUT_MS_CONFIG = "default.api.timeout.ms";
+    /**
+     * @deprecated Use {@link #API_TIMEOUT_MS_DEFAULT_CONFIG} instead.
+     */
+    @Deprecated
+    public static final String DEFAULT_API_TIMEOUT_MS_DEFAULT_CONFIG = "default.api.timeout.ms";
+    public static final String API_TIMEOUT_MS_DEFAULT_CONFIG = "default.api.timeout.ms";
+    /**
+     * @deprecated Use {@link #API_TIMEOUT_MS_DEFAULT_DOC} instead.
+     */
+    @Deprecated
     public static final String DEFAULT_API_TIMEOUT_MS_DOC = "Specifies the timeout (in milliseconds) for client APIs. " +
+            "This configuration is used as the default timeout for all client operations that do not specify a <code>timeout</code> parameter.";
+    public static final String API_TIMEOUT_MS_DEFAULT_DOC = "Specifies the timeout (in milliseconds) for client APIs. " +
             "This configuration is used as the default timeout for all client operations that do not specify a <code>timeout</code> parameter.";
 
     /**

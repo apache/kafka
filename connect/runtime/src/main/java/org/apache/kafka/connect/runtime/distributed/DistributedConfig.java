@@ -362,25 +362,25 @@ public class DistributedConfig extends WorkerConfig {
                     CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_DOC)
             .define(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG,
                     ConfigDef.Type.LONG,
-                    CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MS,
+                    CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DEFAULT,
                     atLeast(0L),
                     ConfigDef.Importance.LOW,
                     CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DOC)
             .define(CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG,
                     ConfigDef.Type.LONG,
-                    CommonClientConfigs.DEFAULT_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS,
+                    CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DEFAULT,
                     atLeast(0L),
                     ConfigDef.Importance.LOW,
                     CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC)
             .define(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG,
                     ConfigDef.Type.LONG,
-                    CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,
+                    CommonClientConfigs.RETRY_BACKOFF_MS_DEFAULT,
                     atLeast(0L),
                     ConfigDef.Importance.LOW,
                     CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
             .define(CommonClientConfigs.RETRY_BACKOFF_MAX_MS_CONFIG,
                     ConfigDef.Type.LONG,
-                    CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MAX_MS,
+                    CommonClientConfigs.RETRY_BACKOFF_MAX_MS_DEFAULT,
                     atLeast(0L),
                     ConfigDef.Importance.LOW,
                     CommonClientConfigs.RETRY_BACKOFF_MAX_MS_DOC)
@@ -399,7 +399,7 @@ public class DistributedConfig extends WorkerConfig {
             // security support
             .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                     ConfigDef.Type.STRING,
-                    CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
+                    CommonClientConfigs.SECURITY_PROTOCOL_DEFAULT,
                     in(Utils.enumOptions(SecurityProtocol.class)),
                     ConfigDef.Importance.MEDIUM,
                     CommonClientConfigs.SECURITY_PROTOCOL_DOC)

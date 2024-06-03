@@ -3566,7 +3566,7 @@ public class FetchRequestManagerTest {
                 fetchSize,
                 maxPollRecords,
                 true, // check crc
-                CommonClientConfigs.DEFAULT_CLIENT_RACK,
+                CommonClientConfigs.CLIENT_RACK_DEFAULT,
                 isolationLevel);
         FetchCollector<K, V> fetchCollector = new FetchCollector<>(logContext,
                 metadata,

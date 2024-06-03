@@ -305,7 +305,7 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
             .define(
                     CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                     ConfigDef.Type.STRING,
-                    CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
+                    CommonClientConfigs.SECURITY_PROTOCOL_DEFAULT,
                     in(Utils.enumOptions(SecurityProtocol.class)),
                     ConfigDef.Importance.MEDIUM,
                     CommonClientConfigs.SECURITY_PROTOCOL_DOC)

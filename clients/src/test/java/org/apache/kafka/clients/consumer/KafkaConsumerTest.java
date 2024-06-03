@@ -2906,7 +2906,7 @@ public class KafkaConsumerTest {
         configs.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, autoCommitIntervalMs);
         configs.put(ConsumerConfig.CHECK_CRCS_CONFIG, checkCrcs);
         configs.put(ConsumerConfig.CLIENT_ID_CONFIG, clientId);
-        configs.put(ConsumerConfig.CLIENT_RACK_CONFIG, CommonClientConfigs.DEFAULT_CLIENT_RACK);
+        configs.put(ConsumerConfig.CLIENT_RACK_CONFIG, CommonClientConfigs.CLIENT_RACK_DEFAULT);
         configs.put(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, defaultApiTimeoutMs);
         configs.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, autoCommitEnabled);
         configs.put(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, maxBytes);
