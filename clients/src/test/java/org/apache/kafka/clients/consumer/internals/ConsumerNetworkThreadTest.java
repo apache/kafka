@@ -16,17 +16,32 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.*;
+import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.internals.events.*;
+import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
+import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeEvent;
+import org.apache.kafka.clients.consumer.internals.events.AsyncCommitEvent;
+import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.CompletableEvent;
+import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
+import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
+import org.apache.kafka.clients.consumer.internals.events.PollEvent;
+import org.apache.kafka.clients.consumer.internals.events.ResetPositionsEvent;
+import org.apache.kafka.clients.consumer.internals.events.SyncCommitEvent;
+import org.apache.kafka.clients.consumer.internals.events.TopicMetadataEvent;
+import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsEvent;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.*;
+import org.apache.kafka.common.requests.FindCoordinatorRequest;
+import org.apache.kafka.common.requests.FindCoordinatorResponse;
+import org.apache.kafka.common.requests.OffsetCommitRequest;
+import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -39,7 +54,15 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Optional;
+import java.util.List;
+import java.util.LinkedList;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -55,7 +78,6 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -78,7 +100,6 @@ public class ConsumerNetworkThreadTest {
     private final CompletableEventReaper applicationEventReaper;
 
     ConsumerNetworkThreadTest() {
-        LogContext logContext = new LogContext();
         ConsumerConfig config = mock(ConsumerConfig.class);
         this.time = new MockTime();
         this.networkClientDelegate = mock(NetworkClientDelegate.class);
@@ -86,11 +107,12 @@ public class ConsumerNetworkThreadTest {
         this.offsetsRequestManager = mock(OffsetsRequestManager.class);
         this.heartbeatRequestManager = mock(HeartbeatRequestManager.class);
         this.coordinatorRequestManager = mock(CoordinatorRequestManager.class);
-        this.applicationEventsQueue = new LinkedBlockingQueue<>();
         this.metadata = mock(ConsumerMetadata.class);
         this.applicationEventProcessor = mock(ApplicationEventProcessor.class);
         this.applicationEventReaper = mock(CompletableEventReaper.class);
-        this.client = new MockClient(time);
+        this.client = mock(MockClient.class);
+        this.applicationEventsQueue = new LinkedBlockingQueue<>();
+        LogContext logContext = new LogContext();
 
         this.networkClient = new NetworkClientDelegate(
                 time,
@@ -143,7 +165,7 @@ public class ConsumerNetworkThreadTest {
         when(networkClientDelegate.addAll(pollResult)).thenReturn(pollResult.timeUntilNextPollMs);
         consumerNetworkThread.runOnce();
 
-        verify(networkClientDelegate).poll((exampleTime < 5001 ? exampleTime : 5000), time.milliseconds());
+        verify(networkClientDelegate).poll(exampleTime < 5001 ? exampleTime : 5000, time.milliseconds());
         assertEquals(consumerNetworkThread.maximumTimeToWait(), exampleTime);
     }
 
@@ -167,22 +189,14 @@ public class ConsumerNetworkThreadTest {
     @Test
     void testRequestManagersArePolledOnce() {
         consumerNetworkThread.runOnce();
-        requestManagers.entries().forEach(rmo -> rmo.ifPresent(rm -> verify(rm, times(1)).poll(anyLong())));
-        requestManagers.entries().forEach(rmo -> rmo.ifPresent(rm -> verify(rm, times(1)).maximumTimeToWait(anyLong())));
+        requestManagers.entries().forEach(rmo -> rmo.ifPresent(rm -> verify(rm).poll(anyLong())));
+        requestManagers.entries().forEach(rmo -> rmo.ifPresent(rm -> verify(rm).maximumTimeToWait(anyLong())));
         verify(networkClientDelegate).poll(anyLong(), anyLong());
     }
 
     @Test
     public void testApplicationEvent() {
         ApplicationEvent e = new PollEvent(100);
-        applicationEventsQueue.add(e);
-        consumerNetworkThread.runOnce();
-        verify(applicationEventProcessor).process(e);
-    }
-
-    @Test
-    public void testMetadataUpdateEvent() {
-        ApplicationEvent e = new NewTopicsMetadataUpdateRequestEvent();
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(e);
@@ -230,7 +244,7 @@ public class ConsumerNetworkThreadTest {
 
         ResetPositionsEvent event = new ResetPositionsEvent(calculateDeadlineMs(time, 100));
         applicationEventsQueue.add(event);
-        assertDoesNotThrow(consumerNetworkThread::runOnce);
+        assertDoesNotThrow(() -> consumerNetworkThread.runOnce());
 
         verify(applicationEventProcessor).process(any(ResetPositionsEvent.class));
     }
@@ -246,7 +260,7 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testAssignmentChangeEvent() {
-        HashMap<TopicPartition, OffsetAndMetadata> offset = mockTopicPartitionOffset();
+        Map<TopicPartition, OffsetAndMetadata> offset = mockTopicPartitionOffset();
 
         final long currentTimeMs = time.milliseconds();
         ApplicationEvent e = new AssignmentChangeEvent(offset, currentTimeMs);
@@ -254,7 +268,7 @@ public class ConsumerNetworkThreadTest {
 
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(AssignmentChangeEvent.class));
-        verify(networkClientDelegate, times(1)).poll(anyLong(), anyLong());
+        verify(networkClientDelegate).poll(anyLong(), anyLong());
     }
 
     @Test
@@ -308,7 +322,7 @@ public class ConsumerNetworkThreadTest {
         list.add(new Node(0, "host", 0));
         when(cluster.nodes()).thenReturn(list);
 
-        Queue<NetworkClientDelegate.UnsentRequest> queue = new LinkedList<>();
+        LinkedList<NetworkClientDelegate.UnsentRequest> queue = new LinkedList<>();
         when(networkClientDelegate.unsentRequests()).thenReturn(queue);
 
         // Mimic the logic of CompletableEventReaper.reap(Collection):
@@ -346,7 +360,7 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     void testCleanupInvokesReaper() {
-        Queue<NetworkClientDelegate.UnsentRequest> queue = new LinkedList<>();
+        LinkedList<NetworkClientDelegate.UnsentRequest> queue = new LinkedList<>();
         when(networkClientDelegate.unsentRequests()).thenReturn(queue);
         consumerNetworkThread.cleanup();
         verify(applicationEventReaper).reap(applicationEventsQueue);
@@ -358,10 +372,10 @@ public class ConsumerNetworkThreadTest {
         verify(applicationEventReaper).reap(any(Long.class));
     }
 
-    private HashMap<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {
+    private Map<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {
         final TopicPartition t0 = new TopicPartition("t0", 2);
         final TopicPartition t1 = new TopicPartition("t0", 3);
-        HashMap<TopicPartition, OffsetAndMetadata> topicPartitionOffsets = new HashMap<>();
+        final Map<TopicPartition, OffsetAndMetadata> topicPartitionOffsets = new HashMap<>();
         topicPartitionOffsets.put(t0, new OffsetAndMetadata(10L));
         topicPartitionOffsets.put(t1, new OffsetAndMetadata(20L));
         return topicPartitionOffsets;
