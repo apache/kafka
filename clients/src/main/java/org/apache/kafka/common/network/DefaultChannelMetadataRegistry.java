@@ -22,7 +22,9 @@ public class DefaultChannelMetadataRegistry implements ChannelMetadataRegistry {
 
     @Override
     public void registerCipherInformation(final CipherInformation cipherInformation) {
-        this.cipherInformation = cipherInformation;
+        if (this.cipherInformation != null) {
+            this.cipherInformation = cipherInformation;
+        }
     }
 
     @Override
