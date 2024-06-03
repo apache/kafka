@@ -39,6 +39,8 @@ import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsInitializeRequestData;
+import org.apache.kafka.common.message.StreamsInitializeResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
@@ -80,6 +82,20 @@ public interface GroupCoordinator {
     CompletableFuture<ConsumerGroupHeartbeatResponseData> consumerGroupHeartbeat(
         RequestContext context,
         ConsumerGroupHeartbeatRequestData request
+    );
+
+    /**
+     * Initialize a Streams Group.
+     *
+     * @param context           The request context.
+     * @param request           The StreamsHeartbeatRequest data.
+     *
+     * @return  A future yielding the response.
+     *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
+     */
+    CompletableFuture<StreamsInitializeResponseData> streamsInitialize(
+        RequestContext context,
+        StreamsInitializeRequestData request
     );
 
     /**

@@ -24,6 +24,8 @@ import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsInitializeRequestData;
+import org.apache.kafka.common.message.StreamsInitializeResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -124,6 +126,38 @@ public class GroupCoordinatorShardTest {
         )).thenReturn(result);
 
         assertEquals(result, coordinator.consumerGroupHeartbeat(context, request));
+    }
+
+    @Test
+    public void testStreamsInitialize() {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            groupMetadataManager,
+            offsetMetadataManager,
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
+        );
+
+        RequestContext context = requestContext(ApiKeys.STREAMS_INITIALIZE);
+        StreamsInitializeRequestData request = new StreamsInitializeRequestData();
+        CoordinatorResult<StreamsInitializeResponseData, CoordinatorRecord> result = new CoordinatorResult<>(
+            Collections.emptyList(),
+            new StreamsInitializeResponseData()
+        );
+
+        when(groupMetadataManager.streamsInitialize(
+            context,
+            request
+        )).thenReturn(result);
+
+        assertEquals(result, coordinator.streamsInitialize(context, request));
     }
 
     @Test
