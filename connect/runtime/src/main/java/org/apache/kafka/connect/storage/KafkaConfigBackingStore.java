@@ -997,11 +997,8 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
         synchronized (lock) {
             if (value.value() == null) {
                 // Connector deletion will be written as a null value
+                processConnectorRemoval(connectorName);
                 log.info("Successfully processed removal of connector '{}'", connectorName);
-                connectorConfigs.remove(connectorName);
-                connectorTaskCounts.remove(connectorName);
-                taskConfigs.keySet().removeIf(taskId -> taskId.connector().equals(connectorName));
-                deferredTaskUpdates.remove(connectorName);
                 removed = true;
             } else {
                 // Connector configs can be applied and callbacks invoked immediately
@@ -1064,6 +1061,21 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
     private void processTasksCommitRecord(String connectorName, SchemaAndValue value) {
         List<ConnectorTaskId> updatedTasks = new ArrayList<>();
         synchronized (lock) {
+            // Edge case: connector was deleted before these task configs were published,
+            // but compaction took place and both the original connector config and the
+            // tombstone message for it have been removed from the config topic
+            // We should ignore these task configs
+            if (!connectorConfigs.containsKey(connectorName)) {
+                processConnectorRemoval(connectorName);
+                log.debug(
+                        "Ignoring task configs for connector {}; it appears that the connector was deleted previously "
+                            + "and that log compaction has since removed any trace of its previous configurations "
+                            + "from the config topic",
+                        connectorName
+                );
+                return;
+            }
+
             // Apply any outstanding deferred task updates for the given connector. Note that just because we
             // encounter a commit message does not mean it will result in consistent output. In particular due to
             // compaction, there may be cases where . For example if we have the following sequence of writes:
@@ -1168,7 +1180,7 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
 
         log.debug("Setting task count record for connector '{}' to {}", connectorName, taskCount);
         connectorTaskCountRecords.put(connectorName, taskCount);
-        // If a task count record appears after the latest task configs, the connectors doesn't need a round of zombie
+        // If a task count record appears after the latest task configs, the connector doesn't need a round of zombie
         // fencing before it can start tasks with the latest configs
         connectorsPendingFencing.remove(connectorName);
     }
@@ -1242,6 +1254,13 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
                     namespace
             );
         }
+    }
+
+    private void processConnectorRemoval(String connectorName) {
+        connectorConfigs.remove(connectorName);
+        connectorTaskCounts.remove(connectorName);
+        taskConfigs.keySet().removeIf(taskId -> taskId.connector().equals(connectorName));
+        deferredTaskUpdates.remove(connectorName);
     }
 
     private ConnectorTaskId parseTaskId(String key) {
