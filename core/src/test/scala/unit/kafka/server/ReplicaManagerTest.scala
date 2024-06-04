@@ -5970,6 +5970,7 @@ class ReplicaManagerTest {
         .setPartitionId(0)
         .setTopicId(FOO_UUID)
         .setReplicas(util.Arrays.asList(localId, localId + 1, localId + 2))
+        .setDirectories(util.Arrays.asList(Uuid.fromString("fKgQ2axkQiuzt4ANqKbPkQ"), DirectoryId.UNASSIGNED, DirectoryId.UNASSIGNED))
         .setIsr(util.Arrays.asList(localId, localId + 1))
       )
       followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
