@@ -17,6 +17,12 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
+import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
+import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
+import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -28,7 +34,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static java.lang.Math.min;
-import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOGENEOUS;
+import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
 
 /**
  * This Range Assignor inherits properties of both the range assignor and the sticky assignor.

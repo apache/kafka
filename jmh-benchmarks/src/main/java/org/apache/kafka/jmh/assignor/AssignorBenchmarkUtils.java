@@ -19,8 +19,8 @@ package org.apache.kafka.jmh.assignor;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
-import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
-import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 import org.apache.kafka.image.MetadataDelta;
 
 import java.util.Arrays;

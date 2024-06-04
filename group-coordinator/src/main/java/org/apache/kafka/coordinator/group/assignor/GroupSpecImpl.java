@@ -17,6 +17,9 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
+import org.apache.kafka.coordinator.group.api.assignor.MemberSubscriptionSpec;
+import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 
 import java.util.Collection;
 import java.util.Collections;

@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.consumer.Assignment;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

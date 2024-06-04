@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.coordinator.group;
 
-import org.apache.kafka.coordinator.group.assignor.ConsumerGroupPartitionAssignor;
-import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
-import org.apache.kafka.coordinator.group.assignor.GroupSpec;
-import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
-import org.apache.kafka.coordinator.group.assignor.SubscribedTopicDescriber;
+import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
+import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
+import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 
 import java.util.stream.Collectors;
 

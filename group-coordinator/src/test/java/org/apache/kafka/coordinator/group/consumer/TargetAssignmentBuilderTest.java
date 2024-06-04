@@ -20,12 +20,12 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.AssignmentTestUtil;
 import org.apache.kafka.coordinator.group.MetadataImageBuilder;
 import org.apache.kafka.coordinator.group.assignor.GroupSpecImpl;
-import org.apache.kafka.coordinator.group.assignor.MemberSubscriptionSpec;
+import org.apache.kafka.coordinator.group.api.assignor.MemberSubscriptionSpec;
 import org.apache.kafka.coordinator.group.assignor.MemberSubscriptionSpecImpl;
-import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
-import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
-import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
-import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
+import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
+import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignor;
 import org.apache.kafka.image.TopicsImage;
 import org.junit.jupiter.api.Test;
 
@@ -44,7 +44,7 @@ import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssig
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTargetAssignmentEpochRecord;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTargetAssignmentRecord;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpersTest.mkMapOfPartitionRacks;
-import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOGENEOUS;
+import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
 import static org.apache.kafka.coordinator.group.consumer.TargetAssignmentBuilder.createMemberSubscriptionSpecImpl;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;

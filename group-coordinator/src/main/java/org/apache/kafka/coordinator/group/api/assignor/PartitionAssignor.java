@@ -14,38 +14,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.assignor;
+package org.apache.kafka.coordinator.group.api.assignor;
 
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.util.Set;
-
 /**
- * The subscribed topic describer is used by the {@link PartitionAssignor}
- * to obtain topic and partition metadata of the subscribed topics.
+ * Server-side partition assignor used by the GroupCoordinator.
  *
  * The interface is kept in an internal module until KIP-848 is fully
  * implemented and ready to be released.
  */
 @InterfaceStability.Unstable
-public interface SubscribedTopicDescriber {
+public interface PartitionAssignor {
     /**
-     * The number of partitions for the given topic Id.
-     *
-     * @param topicId   Uuid corresponding to the topic.
-     * @return The number of partitions corresponding to the given topic Id,
-     *         or -1 if the topic Id does not exist.
+     * Unique name for this assignor.
      */
-    int numPartitions(Uuid topicId);
+    String name();
 
     /**
-     * Returns all the available racks associated with the replicas of the given partition.
+     * Assigns partitions to group members based on the given assignment specification and topic metadata.
      *
-     * @param topicId       Uuid corresponding to the partition's topic.
-     * @param partition     Partition Id within topic.
-     * @return The set of racks corresponding to the replicas of the topic's partition.
-     *         If the topic Id does not exist, an empty set is returned.
+     * @param groupSpec           The assignment spec which includes member metadata.
+     * @param subscribedTopicDescriber The topic and partition metadata describer.
+     * @return The new assignment for the group.
      */
-    Set<String> racksForPartition(Uuid topicId, int partition);
+    GroupAssignment assign(
+        GroupSpec groupSpec,
+        SubscribedTopicDescriber subscribedTopicDescriber
+    ) throws PartitionAssignorException;
 }

@@ -14,28 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.assignor;
+package org.apache.kafka.coordinator.group.api.assignor;
 
-import org.apache.kafka.common.Uuid;
-
-import java.util.Optional;
-import java.util.Set;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * Interface representing the subscription metadata for a group member.
+ * Server-side partition assignor for consumer groups used by the GroupCoordinator.
+ *
+ * The interface is kept in an internal module until KIP-848 is fully
+ * implemented and ready to be released.
  */
-public interface MemberSubscriptionSpec {
-    /**
-     * Gets the rack Id if present.
-     *
-     * @return An Optional containing the rack Id, or an empty Optional if not present.
-     */
-    Optional<String> rackId();
-
-    /**
-     * Gets the set of subscribed topic Ids.
-     *
-     * @return The set of subscribed topic Ids.
-     */
-    Set<Uuid> subscribedTopicIds();
+@InterfaceStability.Unstable
+public interface ConsumerGroupPartitionAssignor extends PartitionAssignor {
 }

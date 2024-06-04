@@ -14,16 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.assignor;
+package org.apache.kafka.coordinator.group.api.assignor;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.errors.ApiException;
 
 /**
- * Server-side partition assignor for consumer groups used by the GroupCoordinator.
- *
- * The interface is kept in an internal module until KIP-848 is fully
- * implemented and ready to be released.
+ * Exception thrown by {@link PartitionAssignor#assign(GroupSpec, SubscribedTopicDescriber)}}. The exception
+ * is only used internally.
  */
-@InterfaceStability.Unstable
-public interface ConsumerGroupPartitionAssignor extends PartitionAssignor {
+public class PartitionAssignorException extends ApiException {
+
+    public PartitionAssignorException(String message) {
+        super(message);
+    }
+
+    public PartitionAssignorException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }

@@ -17,6 +17,9 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
+import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
 import org.apache.kafka.coordinator.group.consumer.Assignment;
 import org.apache.kafka.coordinator.group.consumer.SubscribedTopicMetadata;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
@@ -39,7 +42,7 @@ import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkOrderedAss
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.invertedTargetAssignment;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpersTest.mkMapOfPartitionRacks;
-import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOGENEOUS;
+import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -122,7 +125,8 @@ public class OptimizedUniformAssignmentBuilderTest {
             Collections.emptyMap()
         );
 
-        assertThrows(PartitionAssignorException.class,
+        assertThrows(
+            PartitionAssignorException.class,
             () -> assignor.assign(groupSpec, subscribedTopicMetadata));
     }
 

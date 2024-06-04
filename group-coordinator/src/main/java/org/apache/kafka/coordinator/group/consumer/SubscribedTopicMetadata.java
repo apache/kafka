@@ -17,8 +17,8 @@
 package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
-import org.apache.kafka.coordinator.group.assignor.SubscribedTopicDescriber;
+import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignor;
+import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 
 import java.util.Collections;
 import java.util.Map;
