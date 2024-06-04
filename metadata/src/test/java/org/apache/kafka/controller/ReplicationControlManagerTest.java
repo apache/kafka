@@ -2664,7 +2664,7 @@ public class ReplicationControlManagerTest {
         ctx.registerBrokersWithDirs(
                 0, Collections.emptyList(),
                 1, Collections.emptyList(),
-                2, singletonList(Uuid.fromString("ozwqsVMFSNiYQUPSJA3j0w")),
+                2, asList(Uuid.fromString("ozwqsVMFSNiYQUPSJA3j0w")),
                 3, asList(Uuid.fromString("SSDgCZ4BTyec5QojGT65qg"), Uuid.fromString("K8KwMrviRcOUvgI8FPOJWg")),
                 4, Collections.emptyList()
         );
