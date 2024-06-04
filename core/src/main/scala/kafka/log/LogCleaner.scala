@@ -32,6 +32,7 @@ import org.apache.kafka.common.record.MemoryRecords.RecordFilter
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
+import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.ShutdownableThread
 import org.apache.kafka.storage.internals.log.{AbortedTxn, CleanerConfig, LastRecord, LogDirFailureChannel, LogSegment, LogSegmentOffsetOverflowException, OffsetMap, SkimpyOffsetMap, TransactionIndex}
@@ -160,11 +161,18 @@ class LogCleaner(initialConfig: CleanerConfig,
   /**
    * Stop the background cleaner threads
    */
-  def shutdown(): Unit = {
+  private[this] def shutdownCleaners(): Unit = {
     info("Shutting down the log cleaner.")
+    cleaners.foreach(_.shutdown())
+    cleaners.clear()
+  }
+
+  /**
+   * Stop the background cleaner threads
+   */
+  def shutdown(): Unit = {
     try {
-      cleaners.foreach(_.shutdown())
-      cleaners.clear()
+      shutdownCleaners()
     } finally {
       removeMetrics()
     }
@@ -219,8 +227,8 @@ class LogCleaner(initialConfig: CleanerConfig,
       info(s"Updating logCleanerIoMaxBytesPerSecond: $maxIoBytesPerSecond")
       throttler.updateDesiredRatePerSec(maxIoBytesPerSecond)
     }
-
-    shutdown()
+    // call shutdownCleaners() instead of shutdown to avoid unnecessary deletion of metrics
+    shutdownCleaners()
     startup()
   }
 
@@ -499,7 +507,7 @@ object LogCleaner {
     CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP,
     CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_LOAD_FACTOR_PROP,
     CleanerConfig.LOG_CLEANER_IO_BUFFER_SIZE_PROP,
-    KafkaConfig.MessageMaxBytesProp,
+    ServerConfigs.MESSAGE_MAX_BYTES_CONFIG,
     CleanerConfig.LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP,
     CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP
   )

@@ -23,20 +23,21 @@ import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Test
 import kafka.server.FetcherThreadTestUtils.{initialFetchState, mkBatch}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.collection.Map
 
-class ReplicaFetcherTierStateMachineTest {
+class TierStateMachineTest {
 
-  val truncateOnFetch = true
   val topicIds = Map("topic1" -> Uuid.randomUuid(), "topic2" -> Uuid.randomUuid())
   val version = ApiKeys.FETCH.latestVersion()
   private val failedPartitions = new FailedPartitions
 
-  @Test
-  def testFollowerFetchMovedToTieredStore(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testFollowerFetchMovedToTieredStore(truncateOnFetch: Boolean): Unit = {
     val partition = new TopicPartition("topic", 0)
 
     val replicaLog = Seq(
@@ -94,8 +95,9 @@ class ReplicaFetcherTierStateMachineTest {
    *    tiered storage as well. Hence, `X < globalLogStartOffset`.
    * 4. Follower comes online and tries to fetch X from leader.
    */
-  @Test
-  def testFollowerFetchOffsetOutOfRangeWithTieredStore(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testFollowerFetchOffsetOutOfRangeWithTieredStore(truncateOnFetch: Boolean): Unit = {
     val partition = new TopicPartition("topic", 0)
 
     val replicaLog = Seq(
@@ -105,7 +107,7 @@ class ReplicaFetcherTierStateMachineTest {
 
     val replicaState = PartitionState(replicaLog, leaderEpoch = 7, highWatermark = 0L, rlmEnabled = true)
 
-    val mockLeaderEndpoint = new MockLeaderEndPoint
+    val mockLeaderEndpoint = new MockLeaderEndPoint(truncateOnFetch = truncateOnFetch, version = version)
     val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
     val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine)
 
@@ -153,8 +155,9 @@ class ReplicaFetcherTierStateMachineTest {
     assertEquals(11L, replicaState.logEndOffset)
   }
 
-  @Test
-  def testFencedOffsetResetAfterMovedToRemoteTier(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testFencedOffsetResetAfterMovedToRemoteTier(truncateOnFetch: Boolean): Unit = {
     val partition = new TopicPartition("topic", 0)
     var isErrorHandled = false
     val mockLeaderEndpoint = new MockLeaderEndPoint(truncateOnFetch = truncateOnFetch, version = version)
@@ -189,4 +192,5 @@ class ReplicaFetcherTierStateMachineTest {
     assertTrue(fetcher.fetchState(partition).isEmpty)
     assertTrue(failedPartitions.contains(partition))
   }
+
 }

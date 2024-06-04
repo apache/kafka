@@ -18,6 +18,7 @@
 package kafka.test.junit;
 
 import kafka.test.ClusterConfig;
+import kafka.test.annotation.ClusterFeature;
 import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.ClusterTestDefaults;
 import kafka.test.annotation.ClusterTests;
@@ -25,6 +26,7 @@ import kafka.test.annotation.ClusterTemplate;
 import kafka.test.annotation.ClusterConfigProperty;
 import kafka.test.annotation.Type;
 import kafka.test.annotation.AutoStart;
+import org.apache.kafka.server.common.Features;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContextProvider;
@@ -172,6 +174,10 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
                 .filter(e -> e.id() != -1)
                 .collect(Collectors.groupingBy(ClusterConfigProperty::id, Collectors.mapping(Function.identity(),
                         Collectors.toMap(ClusterConfigProperty::key, ClusterConfigProperty::value, (a, b) -> b))));
+
+        Map<Features, Short> features = Arrays.stream(annot.features())
+                .collect(Collectors.toMap(ClusterFeature::feature, ClusterFeature::version));
+
         ClusterConfig config = ClusterConfig.builder()
                 .setTypes(new HashSet<>(Arrays.asList(types)))
                 .setBrokers(annot.brokers() == 0 ? defaults.brokers() : annot.brokers())
@@ -184,6 +190,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
                 .setSecurityProtocol(annot.securityProtocol())
                 .setMetadataVersion(annot.metadataVersion())
                 .setTags(Arrays.asList(annot.tags()))
+                .setFeatures(features)
                 .build();
 
         return Arrays.stream(types).map(type -> type.invocationContexts(context.getRequiredTestMethod().getName(), config))

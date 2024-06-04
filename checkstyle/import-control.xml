@@ -211,6 +211,11 @@
       <allow pkg="org.apache.kafka.common" />
     </subpackage>
 
+    <subpackage name="errors">
+      <allow class="org.apache.kafka.common.header.Headers" />
+      <allow class="org.apache.kafka.common.record.TimestampType" />
+    </subpackage>
+
   </subpackage>
 
   <subpackage name="clients">
@@ -436,6 +441,7 @@
     <allow pkg="org.apache.kafka.common.message" />
     <allow pkg="org.apache.kafka.common.metadata" />
     <allow pkg="org.apache.kafka.common.metrics" />
+    <allow pkg="org.apache.kafka.common.network" />
     <allow pkg="org.apache.kafka.common.protocol" />
     <allow pkg="org.apache.kafka.common.record" />
     <allow pkg="org.apache.kafka.common.requests" />

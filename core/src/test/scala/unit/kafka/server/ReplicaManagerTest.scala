@@ -3361,12 +3361,8 @@ class ReplicaManagerTest {
     val props = TestUtils.createBrokerConfig(brokerId, TestUtils.MockZkConnect)
     val path1 = TestUtils.tempRelativeDir("data").getAbsolutePath
     val path2 = TestUtils.tempRelativeDir("data2").getAbsolutePath
-    if (enableRemoteStorage) {
-      props.put("log.dirs", path1)
-      props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, enableRemoteStorage.toString)
-    } else {
-      props.put("log.dirs", path1 + "," + path2)
-    }
+    props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, enableRemoteStorage.toString)
+    props.put("log.dirs", path1 + "," + path2)
     propsModifier.apply(props)
     val config = KafkaConfig.fromProps(props)
     val logProps = new Properties()
@@ -3393,7 +3389,7 @@ class ReplicaManagerTest {
     when(mockLog.remoteLogEnabled()).thenReturn(enableRemoteStorage)
     when(mockLog.remoteStorageSystemEnable).thenReturn(enableRemoteStorage)
     val aliveBrokers = aliveBrokerIds.map(brokerId => new Node(brokerId, s"host$brokerId", brokerId))
-    brokerTopicStats = new BrokerTopicStats(java.util.Optional.of(KafkaConfig.fromProps(props)))
+    brokerTopicStats = new BrokerTopicStats(KafkaConfig.fromProps(props).remoteLogManagerConfig.enableRemoteStorageSystem)
 
     val metadataCache: MetadataCache = mock(classOf[MetadataCache])
     when(metadataCache.topicIdInfo()).thenReturn((topicIds.asJava, topicNames.asJava))
@@ -4099,7 +4095,7 @@ class ReplicaManagerTest {
     val config = new AbstractConfig(RemoteLogManagerConfig.CONFIG_DEF, props)
     val remoteLogManagerConfig = new RemoteLogManagerConfig(config)
     val mockLog = mock(classOf[UnifiedLog])
-    val brokerTopicStats = new BrokerTopicStats(java.util.Optional.of(KafkaConfig.fromProps(props)))
+    val brokerTopicStats = new BrokerTopicStats(KafkaConfig.fromProps(props).remoteLogManagerConfig.enableRemoteStorageSystem())
     val remoteLogManager = new RemoteLogManager(
       remoteLogManagerConfig,
       0,
@@ -4108,7 +4104,9 @@ class ReplicaManagerTest {
       time,
       _ => Optional.of(mockLog),
       (TopicPartition, Long) => {},
-      brokerTopicStats)
+      brokerTopicStats,
+      metrics)
+    remoteLogManager.startup()
     val spyRLM = spy(remoteLogManager)
 
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog = true, remoteLogManager = Some(spyRLM))
@@ -4197,7 +4195,7 @@ class ReplicaManagerTest {
     val config = new AbstractConfig(RemoteLogManagerConfig.CONFIG_DEF, props)
     val remoteLogManagerConfig = new RemoteLogManagerConfig(config)
     val dummyLog = mock(classOf[UnifiedLog])
-    val brokerTopicStats = new BrokerTopicStats(java.util.Optional.of(KafkaConfig.fromProps(props)))
+    val brokerTopicStats = new BrokerTopicStats(KafkaConfig.fromProps(props).remoteLogManagerConfig.enableRemoteStorageSystem())
     val remoteLogManager = new RemoteLogManager(
       remoteLogManagerConfig,
       0,
@@ -4206,7 +4204,9 @@ class ReplicaManagerTest {
       time,
       _ => Optional.of(dummyLog),
       (TopicPartition, Long) => {},
-      brokerTopicStats)
+      brokerTopicStats,
+      metrics)
+    remoteLogManager.startup()
     val spyRLM = spy(remoteLogManager)
     val timer = new MockTimer(time)
 
@@ -5057,9 +5057,8 @@ class ReplicaManagerTest {
     assertEquals(followerPartitions, actualFollowerPartitions)
   }
 
-  // KAFKA-16031: Enabling remote storage after JBOD is supported in tiered storage
   @ParameterizedTest
-  @ValueSource(booleans = Array(false))
+  @ValueSource(booleans = Array(true, false))
   def testApplyDeltaShouldHandleReplicaAssignedToOnlineDirectory(enableRemoteStorage: Boolean): Unit = {
     val localId = 1
     val topicPartition0 = new TopicPartition("foo", 0)
@@ -6451,6 +6450,39 @@ class ReplicaManagerTest {
         assertEquals(Errors.NONE.code, response.errorCode)
         assertTrue(response.totalBytes > 0)
         assertTrue(response.usableBytes >= 0)
+        assertFalse(response.topics().isEmpty)
+        response.topics().forEach(t => assertFalse(t.partitions().isEmpty))
+      }
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
+  @Test
+  def testDescribeLogDirsWithoutAnyPartitionTopic(): Unit = {
+    val noneTopic = "none-topic"
+    val topicPartition = 0
+    val topicId = Uuid.randomUuid()
+    val followerBrokerId = 0
+    val leaderBrokerId = 1
+    val leaderEpoch = 1
+    val leaderEpochIncrement = 2
+    val countDownLatch = new CountDownLatch(1)
+    val offsetFromLeader = 5
+
+    // Prepare the mocked components for the test
+    val (replicaManager, mockLogMgr) = prepareReplicaManagerAndLogManager(new MockTimer(time),
+      topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId, leaderBrokerId, countDownLatch,
+      expectTruncation = false, localLogOffset = Some(10), offsetFromLeader = offsetFromLeader, topicId = Some(topicId))
+
+    try {
+      val responses = replicaManager.describeLogDirs(Set(new TopicPartition(noneTopic, topicPartition)))
+      assertEquals(mockLogMgr.liveLogDirs.size, responses.size)
+      responses.foreach { response =>
+        assertEquals(Errors.NONE.code, response.errorCode)
+        assertTrue(response.totalBytes > 0)
+        assertTrue(response.usableBytes >= 0)
+        assertTrue(response.topics().isEmpty)
       }
     } finally {
       replicaManager.shutdown(checkpointHW = false)

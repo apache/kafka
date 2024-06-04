@@ -118,8 +118,8 @@ public class LeaderAndIsrRequestTest {
                     .setIsr(asList(0, 1))
                     .setPartitionEpoch(10)
                     .setReplicas(asList(0, 1, 2))
-                    .setAddingReplicas(asList(3))
-                    .setRemovingReplicas(asList(2)),
+                    .setAddingReplicas(Collections.singletonList(3))
+                    .setRemovingReplicas(Collections.singletonList(2)),
                 new LeaderAndIsrPartitionState()
                     .setTopicName("topic0")
                     .setPartitionIndex(1)

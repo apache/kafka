@@ -21,11 +21,11 @@ import kafka.utils.TestUtils.assertFutureExceptionTypeEquals
 import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, AlterConfigsOptions, Config, ConfigEntry}
-import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
+import org.apache.kafka.common.config.{ConfigResource, SslConfigs, TopicConfig}
 import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException, PolicyViolationException}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.server.config.{KafkaSecurityConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.policy.AlterConfigPolicy
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertTrue}
@@ -127,10 +127,10 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
 
     // Set a mutable broker config
     val brokerResource = new ConfigResource(ConfigResource.Type.BROKER, brokers.head.config.brokerId.toString)
-    val brokerConfigs = Seq(new ConfigEntry(KafkaConfig.MessageMaxBytesProp, "50000")).asJava
+    val brokerConfigs = Seq(new ConfigEntry(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG, "50000")).asJava
     val alterResult1 = client.alterConfigs(Map(brokerResource -> new Config(brokerConfigs)).asJava)
     alterResult1.all.get
-    assertEquals(Set(KafkaConfig.MessageMaxBytesProp), validationsForResource(brokerResource).head.configs().keySet().asScala)
+    assertEquals(Set(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG), validationsForResource(brokerResource).head.configs().keySet().asScala)
     validations.clear()
 
     val topicConfigEntries1 = Seq(
@@ -142,7 +142,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
 
     val topicConfigEntries3 = Seq(new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "-1")).asJava
 
-    val brokerConfigEntries = Seq(new ConfigEntry(KafkaSecurityConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, "12313")).asJava
+    val brokerConfigEntries = Seq(new ConfigEntry(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, "12313")).asJava
 
     // Alter configs: second is valid, the others are invalid
     var alterResult = client.alterConfigs(Map(
@@ -172,7 +172,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
 
     assertEquals("0.8", configs.get(topicResource2).get(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG).value)
 
-    assertNull(configs.get(brokerResource).get(KafkaSecurityConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG).value)
+    assertNull(configs.get(brokerResource).get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG).value)
 
     // Alter configs with validateOnly = true: only second is valid
     topicConfigEntries2 = Seq(new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.7")).asJava
@@ -204,7 +204,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
 
     assertEquals("0.8", configs.get(topicResource2).get(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG).value)
 
-    assertNull(configs.get(brokerResource).get(KafkaSecurityConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG).value)
+    assertNull(configs.get(brokerResource).get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG).value)
 
     // Do an incremental alter config on the broker, ensure we don't see the broker config we set earlier in the policy
     alterResult = client.incrementalAlterConfigs(Map(
