@@ -55,12 +55,6 @@ public class TopicBasedRemoteLogMetadataManagerHarness extends IntegrationTestHa
 
     public void initializeRemoteLogMetadataManager(Set<TopicIdPartition> topicIdPartitions,
                                                    boolean startConsumerThread,
-                                                   Function<Integer, RemoteLogMetadataTopicPartitioner> remoteLogMetadataTopicPartitioner) {
-        initializeRemoteLogMetadataManager(topicIdPartitions, startConsumerThread, remoteLogMetadataTopicPartitioner, RemotePartitionMetadataStore::new);
-    }
-
-    public void initializeRemoteLogMetadataManager(Set<TopicIdPartition> topicIdPartitions,
-                                                   boolean startConsumerThread,
                                                    Function<Integer, RemoteLogMetadataTopicPartitioner> remoteLogMetadataTopicPartitioner,
                                                    Supplier<RemotePartitionMetadataStore> remotePartitionMetadataStoreSupplier) {
 
@@ -70,6 +64,7 @@ public class TopicBasedRemoteLogMetadataManagerHarness extends IntegrationTestHa
           .startConsumerThread(startConsumerThread)
           .remoteLogMetadataTopicPartitioner(remoteLogMetadataTopicPartitioner)
           .remotePartitionMetadataStore(remotePartitionMetadataStoreSupplier)
+          .overrideRemoteLogMetadataManagerProps(overrideRemoteLogMetadataManagerProps())
           .build();
     }
 
