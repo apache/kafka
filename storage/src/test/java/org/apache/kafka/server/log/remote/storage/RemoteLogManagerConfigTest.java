@@ -17,7 +17,7 @@
 package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.config.AbstractConfig;
-import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -27,6 +27,8 @@ import java.util.Map;
 
 import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_METADATA_MANAGER_CLASS_NAME;
 import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 public class RemoteLogManagerConfigTest {
 
@@ -43,13 +45,11 @@ public class RemoteLogManagerConfigTest {
         String rlmmPrefix = "__custom.rlmm.";
         Map<String, Object> rsmProps = Collections.singletonMap("rsm.prop", "val");
         Map<String, Object> rlmmProps = Collections.singletonMap("rlmm.prop", "val");
-        String remoteLogMetadataManagerClass = useDefaultRemoteLogMetadataManagerClass ? DEFAULT_REMOTE_LOG_METADATA_MANAGER_CLASS_NAME : "dummy.remote.log.metadata.class";
-        RemoteLogManagerConfig expectedRemoteLogManagerConfig
-                = new RemoteLogManagerConfig(true, "dummy.remote.storage.class", "dummy.remote.storage.class.path",
-                                             remoteLogMetadataManagerClass, "dummy.remote.log.metadata.class.path",
-                                             "listener.name", 1024 * 1024L, 1, 1, 1, 60000L, 100L, 60000L, 0.3, 10, 100, 100,
-                                             rsmPrefix, rsmProps, rlmmPrefix, rlmmProps, Long.MAX_VALUE, 11, 1,
-                                             Long.MAX_VALUE, 11, 1);
+        RemoteLogManagerConfig expectedRemoteLogManagerConfig = getRemoteLogManagerConfig(useDefaultRemoteLogMetadataManagerClass,
+                rsmPrefix,
+                rlmmPrefix,
+                rsmProps,
+                rlmmProps);
 
         Map<String, Object> props = extractProps(expectedRemoteLogManagerConfig);
         rsmProps.forEach((k, v) -> props.put(rsmPrefix + k, v));
@@ -60,7 +60,42 @@ public class RemoteLogManagerConfigTest {
         }
         TestConfig config = new TestConfig(props);
         RemoteLogManagerConfig remoteLogManagerConfig = new RemoteLogManagerConfig(config);
-        Assertions.assertEquals(expectedRemoteLogManagerConfig, remoteLogManagerConfig);
+        assertEquals(expectedRemoteLogManagerConfig, remoteLogManagerConfig);
+    }
+
+    private static RemoteLogManagerConfig getRemoteLogManagerConfig(boolean useDefaultRemoteLogMetadataManagerClass,
+                                                                    String rsmPrefix,
+                                                                    String rlmmPrefix,
+                                                                    Map<String, Object> rsmProps,
+                                                                    Map<String, Object> rlmmProps) {
+        String remoteLogMetadataManagerClass = useDefaultRemoteLogMetadataManagerClass ? DEFAULT_REMOTE_LOG_METADATA_MANAGER_CLASS_NAME : "dummy.remote.log.metadata.class";
+        return new RemoteLogManagerConfig(true,
+                "dummy.remote.storage.class",
+                "dummy.remote.storage.class.path",
+                remoteLogMetadataManagerClass,
+                "dummy.remote.log.metadata.class.path",
+                "listener.name",
+                1024 * 1024L,
+                1,
+                1,
+                1,
+                60000L,
+                100L,
+                60000L,
+                0.3,
+                10,
+                100,
+                100,
+                rsmPrefix,
+                rsmProps,
+                rlmmPrefix,
+                rlmmProps,
+                Long.MAX_VALUE,
+                11,
+                1,
+                Long.MAX_VALUE,
+                11,
+                1);
     }
 
     private Map<String, Object> extractProps(RemoteLogManagerConfig remoteLogManagerConfig) {
@@ -104,5 +139,59 @@ public class RemoteLogManagerConfigTest {
         props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP,
                   remoteLogManagerConfig.remoteLogMetadataManagerPrefix());
         return props;
+    }
+
+    @Test
+    public void testHashCodeAndEquals_ForAllAndTwoFields() {
+        String rsmPrefix = "__custom.rsm.";
+        String rlmmPrefix = "__custom.rlmm.";
+        Map<String, Object> rsmProps = Collections.singletonMap("rsm.prop", "val");
+        Map<String, Object> rlmmProps = Collections.singletonMap("rlmm.prop", "val");
+        RemoteLogManagerConfig config1 = getRemoteLogManagerConfig(false,
+                rsmPrefix,
+                rlmmPrefix,
+                rsmProps,
+                rlmmProps);
+        RemoteLogManagerConfig config2 = getRemoteLogManagerConfig(false,
+                rsmPrefix,
+                rlmmPrefix,
+                rsmProps,
+                rlmmProps);
+
+        // Initially, hash codes should be equal for default objects
+        assertEquals(config1.hashCode(), config2.hashCode());
+
+        // Initially, objects should be equal
+        assertEquals(config1, config2);
+
+        // Test for specific field remoteLogManagerCopierThreadPoolSize
+        RemoteLogManagerConfig config3 = new RemoteLogManagerConfig(true, "dummy.remote.storage.class",
+                "dummy.remote.storage.class.path",
+                "dummy.remote.log.metadata.class", "dummy.remote.log.metadata.class.path",
+                "listener.name",
+                1024 * 1024L,
+                1,
+                2, // Change here
+                2, // Change here
+                60000L,
+                100L,
+                60000L,
+                0.3,
+                10,
+                100,
+                100,
+                rsmPrefix,
+                rsmProps,
+                rlmmPrefix,
+                rlmmProps,
+                Long.MAX_VALUE,
+                11,
+                1,
+                Long.MAX_VALUE,
+                11,
+                1);
+        
+        assertNotEquals(config1.hashCode(), config3.hashCode());
+        assertNotEquals(config1, config3);
     }
 }
