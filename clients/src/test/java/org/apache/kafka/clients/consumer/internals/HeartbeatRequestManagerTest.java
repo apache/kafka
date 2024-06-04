@@ -98,6 +98,7 @@ public class HeartbeatRequestManagerTest {
     private SubscriptionState subscriptions;
     private Metadata metadata;
     private HeartbeatRequestManager heartbeatRequestManager;
+    private HeartbeatRequestManager heartbeatRequestManager1;
     private MembershipManager membershipManager;
     private MembershipManager membershipManager1;
     private HeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState;
@@ -109,7 +110,6 @@ public class HeartbeatRequestManagerTest {
     private RequestManagers requestManagers;
     private LogContext logContext;
     private ConsumerConfig config;
-    private CommitRequestManager commitRequestManager;
 
     @BeforeEach
     public void setUp() {
@@ -146,7 +146,7 @@ public class HeartbeatRequestManagerTest {
                 Optional.of(heartbeatRequestManager),
                 Optional.empty());
 
-        this.commitRequestManager = new CommitRequestManager(
+        CommitRequestManager commitRequestManager = new CommitRequestManager(
                 time, logContext, subscriptions, config, coordinatorRequestManager,
                 offsetCommitCallbackInvoker, DEFAULT_GROUP_ID, Optional.of(DEFAULT_GROUP_INSTANCE_ID),
                 new Metrics());
@@ -158,6 +158,17 @@ public class HeartbeatRequestManagerTest {
                 DEFAULT_RETRY_BACKOFF_MS,
                 DEFAULT_RETRY_BACKOFF_MAX_MS,
                 DEFAULT_HEARTBEAT_JITTER_MS);
+
+        this.heartbeatRequestManager1 = new HeartbeatRequestManager(
+                logContext,
+                pollTimer,
+                config,
+                coordinatorRequestManager,
+                membershipManager,
+                heartbeatState,
+                heartbeatRequestState,
+                backgroundEventHandler,
+                new Metrics());
 
         Optional<ClientTelemetryReporter> clientTelemetryReporter = Optional.of(mock(ClientTelemetryReporter.class));
         Optional<String> optionalString1 = Optional.of(DEFAULT_GROUP_INSTANCE_ID);
@@ -444,26 +455,15 @@ public class HeartbeatRequestManagerTest {
 
     @Test
     public void testNoCoordinator() {
-        heartbeatRequestManager = new HeartbeatRequestManager(
-                logContext,
-                pollTimer,
-                config,
-                coordinatorRequestManager,
-                membershipManager,
-                heartbeatState,
-                heartbeatRequestState,
-                backgroundEventHandler,
-                new Metrics());
-
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.empty());
-        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager1.poll(time.milliseconds());
 
         when(pollTimer.isExpired()).thenReturn(false);
         when(pollTimer.remainingMs()).thenReturn(2000L);
         when(heartbeatRequestState.timeToNextHeartbeatMs(time.milliseconds())).thenReturn(1000L);
 
         assertEquals(Long.MAX_VALUE, result.timeUntilNextPollMs);
-        assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()));
+        assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, heartbeatRequestManager1.maximumTimeToWait(time.milliseconds()));
         assertEquals(0, result.unsentRequests.size());
     }
 
@@ -792,17 +792,6 @@ public class HeartbeatRequestManagerTest {
 
     @Test
     public void testisExpiredByUsedForLogging() {
-        heartbeatRequestManager = new HeartbeatRequestManager(
-                new LogContext(),
-                pollTimer,
-                config(),
-                coordinatorRequestManager,
-                membershipManager,
-                heartbeatState,
-                heartbeatRequestState,
-                backgroundEventHandler,
-                new Metrics());
-
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
 
         int exceededTimeMs = 5;
@@ -810,13 +799,13 @@ public class HeartbeatRequestManagerTest {
 
         when(membershipManager.isLeavingGroup()).thenReturn(false);
         when(pollTimer.isExpired()).thenReturn(true);
-        NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.poll(time.milliseconds());
+        NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager1.poll(time.milliseconds());
         assertEquals(1, pollResult.unsentRequests.size());
         verify(membershipManager).transitionToSendingLeaveGroup(true);
         verify(pollTimer, never()).isExpiredBy();
 
         clearInvocations(pollTimer);
-        heartbeatRequestManager.resetPollTimer(time.milliseconds());
+        heartbeatRequestManager1.resetPollTimer(time.milliseconds());
         verify(pollTimer).isExpiredBy();
     }
 
