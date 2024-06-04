@@ -2538,13 +2538,14 @@ public class MembershipManagerImplTest {
         membershipManager.onHeartbeatSuccess(heartbeatResponse.data());
 
         if (triggerReconciliation) {
+            subscriptionState.assignFromSubscribed(Collections.emptyList());
+            when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(new CompletableFuture<>());
             membershipManager.poll(time.milliseconds());
             verify(subscriptionState).assignFromSubscribed(anyCollection());
         } else {
             verify(subscriptionState, never()).assignFromSubscribed(anyCollection());
         }
 
-        clearInvocations(membershipManager, commitRequestManager);
         return membershipManager;
     }
 
