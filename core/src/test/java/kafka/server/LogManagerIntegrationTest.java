@@ -54,6 +54,7 @@ import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith(value = ClusterTestExtensions.class)
@@ -92,6 +93,7 @@ public class LogManagerIntegrationTest {
 
         // delete partition.metadata file here to simulate the scenario that partition.metadata not flush to disk yet
         partitionMetadataFile.get().delete();
+        assertFalse(partitionMetadataFile.get().exists());
         raftInstance.getUnderlying().brokers().get(0).startup();
         // make sure there is no error during load logs
         assertDoesNotThrow(() -> raftInstance.getUnderlying().fatalFaultHandler().maybeRethrowFirstException());
