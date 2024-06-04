@@ -78,8 +78,8 @@ public class BootstrapMetadataTest {
 
     final static List<ApiMessageAndVersion> RECORDS_WITH_OLD_METADATA_VERSION = unmodifiableList(Collections.singletonList(
             new ApiMessageAndVersion(new FeatureLevelRecord().
-                    setName(FEATURE_NAME).
-                    setFeatureLevel(IBP_3_0_IV1.featureLevel()), (short) 0)));
+                setName(FEATURE_NAME).
+                setFeatureLevel(IBP_3_0_IV1.featureLevel()), (short) 0)));
 
     @Test
     public void testFromRecordsListWithOldMetadataVersion() {

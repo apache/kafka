@@ -169,8 +169,8 @@ public class FeatureControlManagerTest {
             setQuorumFeatures(features("foo", 1, 5, "bar", 0, 3)).
             setSnapshotRegistry(snapshotRegistry).
             setClusterFeatureSupportDescriber(createFakeClusterFeatureSupportDescriber(
-                    Collections.singletonList(new SimpleImmutableEntry<>(5, singletonMap("bar", VersionRange.of(0, 3)))),
-                    emptyList())).
+                Collections.singletonList(new SimpleImmutableEntry<>(5, singletonMap("bar", VersionRange.of(0, 3)))),
+                emptyList())).
             build();
 
         assertEquals(ControllerResult.atomicOf(emptyList(),
@@ -389,15 +389,15 @@ public class FeatureControlManagerTest {
         FeatureControlManager manager = new FeatureControlManager.Builder().
             setQuorumFeatures(new QuorumFeatures(0, localSupportedFeatures, emptyList())).
             setClusterFeatureSupportDescriber(createFakeClusterFeatureSupportDescriber(
-                    Collections.singletonList(new SimpleImmutableEntry<>(1, singletonMap("foo", VersionRange.of(0, 3)))),
-                    emptyList())).
+                Collections.singletonList(new SimpleImmutableEntry<>(1, singletonMap("foo", VersionRange.of(0, 3)))),
+                emptyList())).
                 build();
         ControllerResult<Map<String, ApiError>> result  = manager.updateFeatures(
                 Collections.singletonMap("foo", (short) 1),
                 Collections.singletonMap("foo", FeatureUpdate.UpgradeType.UPGRADE),
                 false);
         assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
-                        new FeatureLevelRecord().setName("foo").setFeatureLevel((short) 1), (short) 0)),
+                new FeatureLevelRecord().setName("foo").setFeatureLevel((short) 1), (short) 0)),
                         Collections.singletonMap("foo", ApiError.NONE)), result);
         RecordTestUtils.replayAll(manager, result.records());
         assertEquals(Optional.of((short) 1), manager.finalizedFeatures(Long.MAX_VALUE).get("foo"));

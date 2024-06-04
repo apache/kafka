@@ -373,12 +373,12 @@ public class RecordTestUtils {
                 ).iterator()
             )).
             setFeatures(new RegisterControllerRecord.ControllerFeatureCollection(
-                    Collections.singletonList(
-                            new RegisterControllerRecord.ControllerFeature().
-                                    setName(MetadataVersion.FEATURE_NAME).
-                                    setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()).
-                                    setMaxSupportedVersion(MetadataVersion.IBP_3_6_IV1.featureLevel())
-                    ).iterator()
+                Collections.singletonList(
+                    new RegisterControllerRecord.ControllerFeature().
+                        setName(MetadataVersion.FEATURE_NAME).
+                        setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()).
+                        setMaxSupportedVersion(MetadataVersion.IBP_3_6_IV1.featureLevel())
+                ).iterator()
             ));
     }
 }

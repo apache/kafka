@@ -270,7 +270,7 @@ public class QuorumControllerTest {
     @Test
     public void testFenceMultipleBrokers() throws Throwable {
         List<Integer> allBrokers = Arrays.asList(1, 2, 3, 4, 5);
-        List<Integer> brokersToKeepUnfenced = singletonList(1);
+        List<Integer> brokersToKeepUnfenced = Arrays.asList(1);
         List<Integer> brokersToFence = Arrays.asList(2, 3, 4, 5);
         short replicationFactor = (short) allBrokers.size();
         short numberOfPartitions = (short) allBrokers.size();
@@ -798,20 +798,20 @@ public class QuorumControllerTest {
                         setIncarnationId(new Uuid(3465346L, i)).
                         setZkMigrationReady(false).
                         setListeners(new ControllerRegistrationRequestData.ListenerCollection(
-                                singletonList(
-                                        new ControllerRegistrationRequestData.Listener().
-                                                setName("CONTROLLER").
-                                                setHost("localhost").
-                                                setPort(8000 + i).
-                                                setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+                            singletonList(
+                                new ControllerRegistrationRequestData.Listener().
+                                    setName("CONTROLLER").
+                                    setHost("localhost").
+                                    setPort(8000 + i).
+                                    setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
                                 ).iterator()
                         )).
                         setFeatures(new ControllerRegistrationRequestData.FeatureCollection(
-                                singletonList(
-                                        new ControllerRegistrationRequestData.Feature().
-                                                setName(MetadataVersion.FEATURE_NAME).
-                                                setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()).
-                                                setMaxSupportedVersion(MetadataVersion.IBP_3_7_IV0.featureLevel())
+                            singletonList(
+                                new ControllerRegistrationRequestData.Feature().
+                                    setName(MetadataVersion.FEATURE_NAME).
+                                    setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()).
+                                    setMaxSupportedVersion(MetadataVersion.IBP_3_7_IV0.featureLevel())
                                 ).iterator()
                         ))).get();
             }
@@ -824,8 +824,8 @@ public class QuorumControllerTest {
                         setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_7_IV0)).
                         setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + i)).
                         setListeners(new ListenerCollection(singletonList(new Listener().
-                                setName("PLAINTEXT").setHost("localhost").
-                                setPort(9092 + i)).iterator()))).get();
+                            setName("PLAINTEXT").setHost("localhost").
+                            setPort(9092 + i)).iterator()))).get();
                 brokerEpochs.put(i, reply.epoch());
             }
             for (int i = 0; i < numBrokers - 1; i++) {
@@ -872,59 +872,59 @@ public class QuorumControllerTest {
                 setControllerId(0).
                 setIncarnationId(Uuid.fromString("AAAAAAA04IIAAAAAAAAAAA")).
                 setEndPoints(new RegisterControllerRecord.ControllerEndpointCollection(
-                        singletonList(
-                                new RegisterControllerRecord.ControllerEndpoint().
-                                        setName("CONTROLLER").
-                                        setHost("localhost").
-                                        setPort(8000).
-                                        setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)).iterator())).
+                    singletonList(
+                        new RegisterControllerRecord.ControllerEndpoint().
+                            setName("CONTROLLER").
+                            setHost("localhost").
+                            setPort(8000).
+                            setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)).iterator())).
                 setFeatures(new RegisterControllerRecord.ControllerFeatureCollection(
-                        singletonList(
-                                new RegisterControllerRecord.ControllerFeature().
-                                        setName(MetadataVersion.FEATURE_NAME).
-                                        setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()).
-                                        setMaxSupportedVersion(MetadataVersion.IBP_3_7_IV0.featureLevel())).iterator())),
+                    singletonList(
+                        new RegisterControllerRecord.ControllerFeature().
+                            setName(MetadataVersion.FEATURE_NAME).
+                            setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()).
+                            setMaxSupportedVersion(MetadataVersion.IBP_3_7_IV0.featureLevel())).iterator())),
                     (short) 0),
             new ApiMessageAndVersion(new RegisterControllerRecord().
                 setControllerId(1).
                 setIncarnationId(Uuid.fromString("AAAAAAA04IIAAAAAAAAAAQ")).
                 setEndPoints(new RegisterControllerRecord.ControllerEndpointCollection(
-                        singletonList(
-                                new RegisterControllerRecord.ControllerEndpoint().
-                                        setName("CONTROLLER").
-                                        setHost("localhost").
-                                        setPort(8001).
-                                        setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)).iterator())).
+                    singletonList(
+                        new RegisterControllerRecord.ControllerEndpoint().
+                            setName("CONTROLLER").
+                            setHost("localhost").
+                            setPort(8001).
+                            setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)).iterator())).
                 setFeatures(new RegisterControllerRecord.ControllerFeatureCollection(
-                        singletonList(
-                                new RegisterControllerRecord.ControllerFeature().
-                                        setName(MetadataVersion.FEATURE_NAME).
-                                        setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()).
-                                        setMaxSupportedVersion(MetadataVersion.IBP_3_7_IV0.featureLevel())).iterator())),
+                    singletonList(
+                        new RegisterControllerRecord.ControllerFeature().
+                            setName(MetadataVersion.FEATURE_NAME).
+                            setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()).
+                            setMaxSupportedVersion(MetadataVersion.IBP_3_7_IV0.featureLevel())).iterator())),
                     (short) 0),
             new ApiMessageAndVersion(new RegisterControllerRecord().
                 setControllerId(2).
                 setIncarnationId(Uuid.fromString("AAAAAAA04IIAAAAAAAAAAg")).
                 setEndPoints(new RegisterControllerRecord.ControllerEndpointCollection(
-                        singletonList(
-                                new RegisterControllerRecord.ControllerEndpoint().
-                                        setName("CONTROLLER").
-                                        setHost("localhost").
-                                        setPort(8002).
-                                        setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)).iterator())).
+                    singletonList(
+                        new RegisterControllerRecord.ControllerEndpoint().
+                            setName("CONTROLLER").
+                            setHost("localhost").
+                            setPort(8002).
+                            setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)).iterator())).
                 setFeatures(new RegisterControllerRecord.ControllerFeatureCollection(
-                        singletonList(
-                                new RegisterControllerRecord.ControllerFeature().
-                                        setName(MetadataVersion.FEATURE_NAME).
-                                        setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()).
-                                        setMaxSupportedVersion(MetadataVersion.IBP_3_7_IV0.featureLevel())).iterator())),
+                    singletonList(
+                        new RegisterControllerRecord.ControllerFeature().
+                            setName(MetadataVersion.FEATURE_NAME).
+                            setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()).
+                            setMaxSupportedVersion(MetadataVersion.IBP_3_7_IV0.featureLevel())).iterator())),
                 (short) 0),
             new ApiMessageAndVersion(new RegisterBrokerRecord().
                 setBrokerId(0).setBrokerEpoch(brokerEpochs.get(0)).
                 setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB0")).
                 setEndPoints(new BrokerEndpointCollection(
-                        singletonList(new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
-                                setPort(9092).setSecurityProtocol((short) 0)).iterator())).
+                    singletonList(new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
+                        setPort(9092).setSecurityProtocol((short) 0)).iterator())).
                 setFeatures(registrationFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_7_IV0)).
                 setRack(null).
                 setFenced(true), (short) 2),
@@ -932,8 +932,8 @@ public class QuorumControllerTest {
                 setBrokerId(1).setBrokerEpoch(brokerEpochs.get(1)).
                 setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB1")).
                 setEndPoints(new BrokerEndpointCollection(singletonList(
-                        new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
-                                setPort(9093).setSecurityProtocol((short) 0)).iterator())).
+                    new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
+                        setPort(9093).setSecurityProtocol((short) 0)).iterator())).
                 setFeatures(registrationFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_7_IV0)).
                 setRack(null).
                 setFenced(true), (short) 2),
@@ -941,8 +941,8 @@ public class QuorumControllerTest {
                 setBrokerId(2).setBrokerEpoch(brokerEpochs.get(2)).
                 setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB2")).
                 setEndPoints(new BrokerEndpointCollection(
-                        singletonList(new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
-                                setPort(9094).setSecurityProtocol((short) 0)).iterator())).
+                    singletonList(new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
+                        setPort(9094).setSecurityProtocol((short) 0)).iterator())).
                 setFeatures(registrationFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_7_IV0)).
                 setRack(null).
                 setFenced(true), (short) 2),
@@ -950,8 +950,8 @@ public class QuorumControllerTest {
                 setBrokerId(3).setBrokerEpoch(brokerEpochs.get(3)).
                 setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB3")).
                 setEndPoints(new BrokerEndpointCollection(singletonList(
-                        new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
-                                setPort(9095).setSecurityProtocol((short) 0)).iterator())).
+                    new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
+                        setPort(9095).setSecurityProtocol((short) 0)).iterator())).
                 setFeatures(registrationFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_7_IV0)).
                 setRack(null).
                 setFenced(true), (short) 2),
@@ -1280,7 +1280,7 @@ public class QuorumControllerTest {
     @Test
     public void testFatalMetadataErrorDuringSnapshotLoading() throws Exception {
         InitialSnapshot invalidSnapshot = new InitialSnapshot(Collections.unmodifiableList(singletonList(
-                new ApiMessageAndVersion(new PartitionRecord(), (short) 0)))
+            new ApiMessageAndVersion(new PartitionRecord(), (short) 0)))
         );
 
         LocalLogManagerTestEnv.Builder logEnvBuilder = new LocalLogManagerTestEnv.Builder(3)
@@ -1305,7 +1305,7 @@ public class QuorumControllerTest {
     public void testFatalMetadataErrorDuringLogLoading() throws Exception {
         try (LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).build()) {
             logEnv.appendInitialRecords(Collections.unmodifiableList(singletonList(
-                    new ApiMessageAndVersion(new PartitionRecord(), (short) 0))
+                new ApiMessageAndVersion(new PartitionRecord(), (short) 0))
             ));
 
             try (QuorumControllerTestEnv controlEnv = new QuorumControllerTestEnv.Builder(logEnv).build()) {
@@ -1863,8 +1863,8 @@ public class QuorumControllerTest {
                     setFeatures(brokerFeatures(metadataVersion, metadataVersion)).
                     setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB0")).
                     setListeners(new ListenerCollection(singletonList(new Listener().
-                            setName("PLAINTEXT").setHost("localhost").
-                            setPort(9092)).iterator()))).get();
+                        setName("PLAINTEXT").setHost("localhost").
+                        setPort(9092)).iterator()))).get();
 
             // Start migration
             ZkRecordConsumer migrationConsumer = active.zkRecordConsumer();

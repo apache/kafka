@@ -253,15 +253,15 @@ public class MetadataLoaderTest {
             if (loadSnapshot) {
                 MockSnapshotReader snapshotReader = new MockSnapshotReader(
                     new MetadataProvenance(200, 100, 4000),
-                        Collections.singletonList(
-                                Batch.control(
-                                        200,
-                                        100,
-                                        4000,
-                                        10,
-                                        Collections.singletonList(new ControlRecord(ControlRecordType.SNAPSHOT_HEADER, new SnapshotHeaderRecord()))
-                                )
+                    Collections.singletonList(
+                        Batch.control(
+                            200,
+                            100,
+                            4000,
+                            10,
+                            Collections.singletonList(new ControlRecord(ControlRecordType.SNAPSHOT_HEADER, new SnapshotHeaderRecord()))
                         )
+                    )
                 );
                 loader.handleLoadSnapshot(snapshotReader);
                 TestUtils.retryOnExceptionWithTimeout(30_000, () -> {
@@ -305,11 +305,11 @@ public class MetadataLoaderTest {
             loader.installPublishers(publishers.subList(0, 2)).get();
             loader.removeAndClosePublisher(publishers.get(1)).get();
             MockSnapshotReader snapshotReader = MockSnapshotReader.fromRecordLists(
-                    new MetadataProvenance(100, 50, 2000),
-                    Collections.singletonList(Collections.singletonList(new ApiMessageAndVersion(
-                            new FeatureLevelRecord().
-                                    setName(MetadataVersion.FEATURE_NAME).
-                                    setFeatureLevel(IBP_3_3_IV2.featureLevel()), (short) 0))));
+                new MetadataProvenance(100, 50, 2000),
+                Collections.singletonList(Collections.singletonList(new ApiMessageAndVersion(
+                    new FeatureLevelRecord().
+                        setName(MetadataVersion.FEATURE_NAME).
+                        setFeatureLevel(IBP_3_3_IV2.featureLevel()), (short) 0))));
             assertFalse(snapshotReader.closed);
             loader.handleLoadSnapshot(snapshotReader);
             loader.waitForAllEventsToBeHandled();
@@ -364,15 +364,15 @@ public class MetadataLoaderTest {
     ) throws Exception {
         MockSnapshotReader snapshotReader = new MockSnapshotReader(
             new MetadataProvenance(offset, 100, 4000),
-                Collections.singletonList(
-                        Batch.control(
-                                200,
-                                100,
-                                4000,
-                                10,
-                                Collections.singletonList(new ControlRecord(ControlRecordType.SNAPSHOT_HEADER, new SnapshotHeaderRecord()))
-                        )
+            Collections.singletonList(
+                Batch.control(
+                    200,
+                    100,
+                    4000,
+                    10,
+                    Collections.singletonList(new ControlRecord(ControlRecordType.SNAPSHOT_HEADER, new SnapshotHeaderRecord()))
                 )
+            )
         );
         if (loader.time() instanceof MockTime) {
             snapshotReader.setTime((MockTime) loader.time());
@@ -462,16 +462,16 @@ public class MetadataLoaderTest {
             loadTestSnapshot(loader, 200);
             publishers.get(0).firstPublish.get(10, TimeUnit.SECONDS);
             MockBatchReader batchReader = new MockBatchReader(
-                    300,
-                    Collections.singletonList(
-                            Batch.control(
-                                    300,
-                                    100,
-                                    4000,
-                                    10,
-                                    Collections.singletonList(new ControlRecord(ControlRecordType.SNAPSHOT_HEADER, new SnapshotHeaderRecord()))
-                            )
+                300,
+                Collections.singletonList(
+                    Batch.control(
+                        300,
+                        100,
+                        4000,
+                        10,
+                        Collections.singletonList(new ControlRecord(ControlRecordType.SNAPSHOT_HEADER, new SnapshotHeaderRecord()))
                     )
+                )
             ).setTime(time);
             loader.handleCommit(batchReader);
             loader.waitForAllEventsToBeHandled();
@@ -508,12 +508,12 @@ public class MetadataLoaderTest {
             loader.installPublishers(publishers).get();
             loader.handleLoadSnapshot(MockSnapshotReader.fromRecordLists(
                 new MetadataProvenance(200, 100, 4000), asList(
-                            Collections.singletonList(new ApiMessageAndVersion(new FeatureLevelRecord().
-                                    setName(MetadataVersion.FEATURE_NAME).
-                                    setFeatureLevel(IBP_3_3_IV1.featureLevel()), (short) 0)),
-                            Collections.singletonList(new ApiMessageAndVersion(new TopicRecord().
-                                    setName("foo").
-                                    setTopicId(Uuid.fromString("Uum7sfhHQP-obSvfywmNUA")), (short) 0))
+                    Collections.singletonList(new ApiMessageAndVersion(new FeatureLevelRecord().
+                        setName(MetadataVersion.FEATURE_NAME).
+                        setFeatureLevel(IBP_3_3_IV1.featureLevel()), (short) 0)),
+                    Collections.singletonList(new ApiMessageAndVersion(new TopicRecord().
+                        setName("foo").
+                        setTopicId(Uuid.fromString("Uum7sfhHQP-obSvfywmNUA")), (short) 0))
                 )));
             for (MockPublisher publisher : publishers) {
                 publisher.firstPublish.get(1, TimeUnit.MINUTES);
@@ -521,9 +521,9 @@ public class MetadataLoaderTest {
             loader.waitForAllEventsToBeHandled();
             assertEquals(200L, loader.lastAppliedOffset());
             loader.handleCommit(new MockBatchReader(201, Collections.singletonList(
-                    MockBatchReader.newBatch(201, 100, Collections.singletonList(
-                            new ApiMessageAndVersion(new RemoveTopicRecord().
-                                    setTopicId(Uuid.fromString("Uum7sfhHQP-obSvfywmNUA")), (short) 0))))));
+                MockBatchReader.newBatch(201, 100, Collections.singletonList(
+                    new ApiMessageAndVersion(new RemoveTopicRecord().
+                        setTopicId(Uuid.fromString("Uum7sfhHQP-obSvfywmNUA")), (short) 0))))));
             loader.waitForAllEventsToBeHandled();
             assertEquals(201L, loader.lastAppliedOffset());
         }
@@ -638,10 +638,10 @@ public class MetadataLoaderTest {
             assertTrue(publishers.get(0).latestImage.topics().topicsByName().containsKey("bar"));
 
             loader.handleCommit(new MockBatchReader(500, Collections.singletonList(
-                    MockBatchReader.newBatch(500, 100, Collections.singletonList(
-                            new ApiMessageAndVersion(new FeatureLevelRecord().
-                                    setName(MetadataVersion.FEATURE_NAME).
-                                    setFeatureLevel(IBP_3_5_IV0.featureLevel()), (short) 0))))));
+                MockBatchReader.newBatch(500, 100, Collections.singletonList(
+                    new ApiMessageAndVersion(new FeatureLevelRecord().
+                        setName(MetadataVersion.FEATURE_NAME).
+                        setFeatureLevel(IBP_3_5_IV0.featureLevel()), (short) 0))))));
             loader.waitForAllEventsToBeHandled();
             assertEquals(IBP_3_5_IV0.featureLevel(),
                 loader.metrics().currentMetadataVersion().featureLevel());
@@ -691,7 +691,7 @@ public class MetadataLoaderTest {
             if (abortTxn) {
                 loader.handleCommit(
                     MockBatchReader.newSingleBatchReader(500, 100, Collections.singletonList(
-                            new ApiMessageAndVersion(new AbortTransactionRecord(), (short) 0)
+                        new ApiMessageAndVersion(new AbortTransactionRecord(), (short) 0)
                     )));
                 loader.waitForAllEventsToBeHandled();
 
@@ -700,7 +700,7 @@ public class MetadataLoaderTest {
             } else {
                 loader.handleCommit(
                     MockBatchReader.newSingleBatchReader(500, 100, Collections.singletonList(
-                            new ApiMessageAndVersion(new EndTransactionRecord(), (short) 0)
+                        new ApiMessageAndVersion(new EndTransactionRecord(), (short) 0)
                     )));
                 loader.waitForAllEventsToBeHandled();
 
@@ -769,10 +769,10 @@ public class MetadataLoaderTest {
             // loading a snapshot discards any in-flight transaction
             loader.handleLoadSnapshot(MockSnapshotReader.fromRecordLists(
                 new MetadataProvenance(600, 101, 4000), Collections.singletonList(
-                            Collections.singletonList(new ApiMessageAndVersion(new TopicRecord().
-                                    setName("foo").
-                                    setTopicId(Uuid.fromString("Uum7sfhHQP-obSvfywmNUA")), (short) 0))
-                    )));
+                    Collections.singletonList(new ApiMessageAndVersion(new TopicRecord().
+                        setName("foo").
+                        setTopicId(Uuid.fromString("Uum7sfhHQP-obSvfywmNUA")), (short) 0))
+                )));
             loader.waitForAllEventsToBeHandled();
             assertEquals("Uum7sfhHQP-obSvfywmNUA",
                 publisher.latestImage.topics().getTopic("foo").id().toString());

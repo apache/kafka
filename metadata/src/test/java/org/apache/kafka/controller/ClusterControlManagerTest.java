@@ -327,19 +327,19 @@ public class ClusterControlManagerTest {
         short expectedVersion = metadataVersion.registerBrokerRecordVersion();
 
         assertEquals(
-                Collections.singletonList(new ApiMessageAndVersion(new RegisterBrokerRecord().
-                        setBrokerEpoch(123L).
-                        setBrokerId(0).
-                        setRack(null).
-                        setIncarnationId(Uuid.fromString("0H4fUu1xQEKXFYwB1aBjhg")).
-                        setFenced(true).
-                        setLogDirs(logDirs).
-                        setFeatures(new RegisterBrokerRecord.BrokerFeatureCollection(Collections.singletonList(
-                                new RegisterBrokerRecord.BrokerFeature().
-                                        setName(MetadataVersion.FEATURE_NAME).
-                                        setMinSupportedVersion((short) 1).
-                                        setMaxSupportedVersion((short) 1)).iterator())).
-                        setInControlledShutdown(false), expectedVersion)),
+            Collections.singletonList(new ApiMessageAndVersion(new RegisterBrokerRecord().
+                setBrokerEpoch(123L).
+                setBrokerId(0).
+                setRack(null).
+                setIncarnationId(Uuid.fromString("0H4fUu1xQEKXFYwB1aBjhg")).
+                setFenced(true).
+                setLogDirs(logDirs).
+                setFeatures(new RegisterBrokerRecord.BrokerFeatureCollection(Collections.singletonList(
+                    new RegisterBrokerRecord.BrokerFeature().
+                        setName(MetadataVersion.FEATURE_NAME).
+                        setMinSupportedVersion((short) 1).
+                        setMaxSupportedVersion((short) 1)).iterator())).
+                setInControlledShutdown(false), expectedVersion)),
             result.records());
     }
 

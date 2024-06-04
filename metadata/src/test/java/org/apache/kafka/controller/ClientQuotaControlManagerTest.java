@@ -229,19 +229,19 @@ public class ClientQuotaControlManagerTest {
                 new EntityData().setEntityType("client-id").setEntityName(null))).
                     setKey("request_percentage").setValue(55.55).setRemove(false), (short) 0),
             new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Collections.singletonList(
-                            new EntityData().setEntityType("user").setEntityName("user-1"))).
+                new EntityData().setEntityType("user").setEntityName("user-1"))).
                     setKey("request_percentage").setValue(56.56).setRemove(false), (short) 0),
             new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Collections.singletonList(
-                            new EntityData().setEntityType("user").setEntityName("user-2"))).
+                new EntityData().setEntityType("user").setEntityName("user-2"))).
                     setKey("request_percentage").setValue(57.57).setRemove(false), (short) 0),
             new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Collections.singletonList(
-                            new EntityData().setEntityType("user").setEntityName("user-3"))).
+                new EntityData().setEntityType("user").setEntityName("user-3"))).
                     setKey("request_percentage").setValue(58.58).setRemove(false), (short) 0),
             new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Collections.singletonList(
-                            new EntityData().setEntityType("user").setEntityName(null))).
+                new EntityData().setEntityType("user").setEntityName(null))).
                     setKey("request_percentage").setValue(59.59).setRemove(false), (short) 0),
             new ApiMessageAndVersion(new ClientQuotaRecord().setEntity(Collections.singletonList(
-                            new EntityData().setEntityType("client-id").setEntityName("client-id-2"))).
+                new EntityData().setEntityType("client-id").setEntityName("client-id-2"))).
                     setKey("request_percentage").setValue(60.60).setRemove(false), (short) 0));
         records = new ArrayList<>(records);
         RecordTestUtils.deepSortRecords(records);
@@ -357,9 +357,9 @@ public class ClientQuotaControlManagerTest {
     @Test
     public void testConfigKeysForEntityTypeWithIp() {
         testConfigKeysForEntityType(Collections.singletonList(ClientQuotaEntity.IP),
-                Collections.singletonList(
-                        "connection_creation_rate"
-                ));
+            Collections.singletonList(
+                "connection_creation_rate"
+            ));
     }
 
     private static Map<String, String> keysToEntity(List<String> entityKeys) {

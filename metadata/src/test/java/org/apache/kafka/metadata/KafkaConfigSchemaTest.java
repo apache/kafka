@@ -26,7 +26,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -62,9 +61,9 @@ public class KafkaConfigSchemaTest {
     public static final Map<String, List<ConfigSynonym>> SYNONYMS = new HashMap<>();
 
     static {
-        SYNONYMS.put("abc", Collections.singletonList(new ConfigSynonym("foo.bar")));
-        SYNONYMS.put("def", Collections.singletonList(new ConfigSynonym("quux", HOURS_TO_MILLISECONDS)));
-        SYNONYMS.put("ghi", Collections.singletonList(new ConfigSynonym("ghi")));
+        SYNONYMS.put("abc", Arrays.asList(new ConfigSynonym("foo.bar")));
+        SYNONYMS.put("def", Arrays.asList(new ConfigSynonym("quux", HOURS_TO_MILLISECONDS)));
+        SYNONYMS.put("ghi", Arrays.asList(new ConfigSynonym("ghi")));
         SYNONYMS.put("xyz", Arrays.asList(new ConfigSynonym("quuux"), new ConfigSynonym("quuux2")));
     }
 

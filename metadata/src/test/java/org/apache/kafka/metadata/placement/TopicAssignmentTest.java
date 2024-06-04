@@ -45,18 +45,18 @@ public class TopicAssignmentTest {
     public void testConsistentEqualsAndHashCode() {
         List<TopicAssignment> topicAssignments = Arrays.asList(
             new TopicAssignment(
-                    Collections.singletonList(
-                            partitionAssignment(
-                                    Arrays.asList(0, 1, 2)
-                            )
+                Collections.singletonList(
+                    partitionAssignment(
+                        Arrays.asList(0, 1, 2)
                     )
+                )
             ),
             new TopicAssignment(
-                    Collections.singletonList(
-                            partitionAssignment(
-                                    Arrays.asList(1, 2, 0)
-                            )
+                Collections.singletonList(
+                    partitionAssignment(
+                        Arrays.asList(1, 2, 0)
                     )
+                )
             )
         );
 
@@ -83,7 +83,7 @@ public class TopicAssignmentTest {
                 Uuid.fromString("jUqCchHtTHqMxeVv4dw1RA")
         );
         List<PartitionAssignment> partitionAssignments = Collections.singletonList(
-                new PartitionAssignment(replicas, directories::get)
+            new PartitionAssignment(replicas, directories::get)
         );
         TopicAssignment topicAssignment = new TopicAssignment(partitionAssignments);
         assertEquals("TopicAssignment(assignments=[PartitionAssignment(replicas=[0, 1, 2], " +

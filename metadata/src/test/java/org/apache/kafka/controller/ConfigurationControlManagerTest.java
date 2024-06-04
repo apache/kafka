@@ -382,13 +382,13 @@ public class ConfigurationControlManagerTest {
             manager.replay((ConfigRecord) message.message());
         }
         assertEquals(ControllerResult.atomicOf(Collections.singletonList(
-                                new ApiMessageAndVersion(
-                                        new ConfigRecord()
-                                                .setResourceType(TOPIC.id())
-                                                .setResourceName("mytopic")
-                                                .setName("abc")
-                                                .setValue(null),
-                                        CONFIG_RECORD.highestSupportedVersion())),
+            new ApiMessageAndVersion(
+                new ConfigRecord()
+                    .setResourceType(TOPIC.id())
+                    .setResourceName("mytopic")
+                    .setName("abc")
+                    .setValue(null),
+                CONFIG_RECORD.highestSupportedVersion())),
             toMap(entry(MYTOPIC, ApiError.NONE))),
             manager.legacyAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("def", "901")))),
                 true));

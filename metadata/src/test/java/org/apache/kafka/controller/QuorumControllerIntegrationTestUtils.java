@@ -99,11 +99,11 @@ public class QuorumControllerIntegrationTestUtils {
                         Uuid.fromString("TESTBROKER" + Integer.toString(100000 + brokerId).substring(1) + "DIRAAAA")
                     ))
                     .setListeners(new ListenerCollection(
-                            Collections.singletonList(
-                                    new Listener()
-                                            .setName("PLAINTEXT")
-                                            .setHost("localhost")
-                                            .setPort(9092 + brokerId)
+                        Collections.singletonList(
+                            new Listener()
+                                .setName("PLAINTEXT")
+                                .setHost("localhost")
+                                .setPort(9092 + brokerId)
                             ).iterator()
                         )
                     )

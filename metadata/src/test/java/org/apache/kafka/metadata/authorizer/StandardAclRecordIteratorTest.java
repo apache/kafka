@@ -49,7 +49,7 @@ public class StandardAclRecordIteratorTest {
             iterator.next());
         assertTrue(iterator.hasNext());
         assertEquals(Collections.singletonList(
-                        new ApiMessageAndVersion(TEST_ACLS.get(4).toRecord(), (short) 0)),
+            new ApiMessageAndVersion(TEST_ACLS.get(4).toRecord(), (short) 0)),
             iterator.next());
         assertFalse(iterator.hasNext());
     }

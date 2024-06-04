@@ -193,8 +193,8 @@ public class ClusterImageTest {
         DELTA2_RECORDS.add(new ApiMessageAndVersion(new RegisterBrokerRecord().
             setBrokerId(2).setIsMigratingZkBroker(true).setIncarnationId(Uuid.fromString("Am5Yse7GQxaw0b2alM74bP")).
             setBrokerEpoch(1002).setEndPoints(new BrokerEndpointCollection(
-                        Collections.singletonList(new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
-                                setPort(9094).setSecurityProtocol((short) 0)).iterator())).
+                Collections.singletonList(new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
+                    setPort(9094).setSecurityProtocol((short) 0)).iterator())).
             setFeatures(new BrokerFeatureCollection(
                 Collections.singleton(new BrokerFeature().
                     setName(MetadataVersion.FEATURE_NAME).
