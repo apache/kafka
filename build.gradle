@@ -799,7 +799,7 @@ subprojects {
     skipConfigurations = [ "zinc" ]
   }
 
-  if (project.name in spotlessApplyModules) {
+  if (project.path in spotlessApplyModules) {
     apply plugin: 'com.diffplug.spotless'
     spotless {
       java {
