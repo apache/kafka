@@ -333,6 +333,10 @@ public class LeaderStateTest {
         // HW cannot change until after node2 catches up to last HW
         assertFalse(state.updateReplicaState(node2, 0, new LogOffsetMetadata(14L)));
         assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(18L), voterSetWithoutNode1));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+        assertFalse(state.updateReplicaState(node1, 0, new LogOffsetMetadata(18L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
         assertFalse(state.updateReplicaState(node2, 0, new LogOffsetMetadata(15L)));
         assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
 
@@ -359,6 +363,8 @@ public class LeaderStateTest {
 
         // HW cannot change until node2 catches up to last HW
         assertFalse(state.updateReplicaState(node1, 0, new LogOffsetMetadata(16L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(18L), voterSetWithoutLeader));
         assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
         assertFalse(state.updateReplicaState(node2, 0, new LogOffsetMetadata(14L)));
         assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
