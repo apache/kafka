@@ -101,8 +101,8 @@ public class StreamsConfigTest {
     public void setUp() {
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-config-test");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
-        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG_DEFAULT, Serdes.String().getClass().getName());
+        props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG_DEFAULT, Serdes.String().getClass().getName());
         props.put("key.deserializer.encoding", StandardCharsets.UTF_8.name());
         props.put("value.deserializer.encoding", StandardCharsets.UTF_16.name());
         streamsConfig = new StreamsConfig(props);
@@ -386,14 +386,14 @@ public class StreamsConfigTest {
 
     @Test
     public void shouldThrowStreamsExceptionIfKeySerdeConfigFails() {
-        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
+        props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG_DEFAULT, MisconfiguredSerde.class);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         assertThrows(StreamsException.class, streamsConfig::defaultKeySerde);
     }
 
     @Test
     public void shouldThrowStreamsExceptionIfValueSerdeConfigFails() {
-        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
+        props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG_DEFAULT, MisconfiguredSerde.class);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         assertThrows(StreamsException.class, streamsConfig::defaultValueSerde);
     }
@@ -864,9 +864,9 @@ public class StreamsConfigTest {
     @Test
     public void shouldUseNewConfigsWhenPresent() {
         final Properties props = getStreamsConfig();
-        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
-        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
-        props.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class);
+        props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG_DEFAULT, Serdes.Long().getClass());
+        props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG_DEFAULT, Serdes.Long().getClass());
+        props.put(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG_DEFAULT, MockTimestampExtractor.class);
 
         final StreamsConfig config = new StreamsConfig(props);
         assertInstanceOf(Serdes.LongSerde.class, config.defaultKeySerde());
@@ -886,7 +886,7 @@ public class StreamsConfigTest {
     @Test
     public void shouldSpecifyCorrectKeySerdeClassOnError() {
         final Properties props = getStreamsConfig();
-        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
+        props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG_DEFAULT, MisconfiguredSerde.class);
         final StreamsConfig config = new StreamsConfig(props);
         try {
             config.defaultKeySerde();
@@ -902,7 +902,7 @@ public class StreamsConfigTest {
     @Test
     public void shouldSpecifyCorrectValueSerdeClassOnError() {
         final Properties props = getStreamsConfig();
-        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
+        props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG_DEFAULT, MisconfiguredSerde.class);
         final StreamsConfig config = new StreamsConfig(props);
         try {
             config.defaultValueSerde();
@@ -1472,7 +1472,7 @@ public class StreamsConfigTest {
 
     @Test
     public void shouldThrowOnInvalidClientSupplier() {
-        props.put(StreamsConfig.DEFAULT_CLIENT_SUPPLIER_CONFIG, "invalid.class");
+        props.put(StreamsConfig.CLIENT_SUPPLIER_CONFIG_DEFAULT, "invalid.class");
         assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 

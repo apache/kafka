@@ -241,8 +241,8 @@ public class KTableKTableForeignKeyJoinScenarioTest {
     private void validateTopologyCanProcessData(final StreamsBuilder builder) {
         final Properties config = new Properties();
         final String safeTestName = safeUniqueTestName(testName);
-        config.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class.getName());
-        config.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class.getName());
+        config.setProperty(StreamsConfig.KEY_SERDE_CLASS_CONFIG_DEFAULT, Serdes.IntegerSerde.class.getName());
+        config.setProperty(StreamsConfig.VALUE_SERDE_CLASS_CONFIG_DEFAULT, Serdes.StringSerde.class.getName());
         config.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
         try (final TopologyTestDriver topologyTestDriver = new TopologyTestDriver(builder.build(), config)) {
             final TestInputTopic<Integer, String> aTopic = topologyTestDriver.createInputTopic("A", new IntegerSerializer(), new StringSerializer());

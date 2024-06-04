@@ -164,10 +164,10 @@ class KafkaServerTest extends QuorumTestHarness {
   @Test
   def testRemoteLogManagerInstantiation(): Unit = {
     val props = TestUtils.createBrokerConfigs(1, zkConnect).head
-    props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true.toString)
-    props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP,
+    props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_CONFIG, true.toString)
+    props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_CONFIG,
       "org.apache.kafka.server.log.remote.storage.NoOpRemoteLogMetadataManager")
-    props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP,
+    props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_CONFIG,
       "org.apache.kafka.server.log.remote.storage.NoOpRemoteStorageManager")
 
     val server = TestUtils.createServer(KafkaConfig.fromProps(props))

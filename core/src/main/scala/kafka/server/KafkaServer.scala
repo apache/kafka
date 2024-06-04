@@ -559,7 +559,7 @@ class KafkaServer(
           if (listenerName != null) {
             brokerInfo.broker.endPoints
               .find(e => e.listenerName.equals(ListenerName.normalised(listenerName)))
-              .orElse(throw new ConfigException(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP,
+              .orElse(throw new ConfigException(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_CONFIG,
                 listenerName, "Should be set as a listener name within valid broker listener name list: "
                   + brokerInfo.broker.endPoints.map(_.listenerName).mkString(",")))
               .foreach(e => rlm.onEndPointCreated(e))

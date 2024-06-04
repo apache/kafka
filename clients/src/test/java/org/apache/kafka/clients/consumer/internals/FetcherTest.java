@@ -2845,7 +2845,7 @@ public class FetcherTest {
                 fetchSize,
                 2 * numPartitions,
                 true, // check crcs
-                CommonClientConfigs.DEFAULT_CLIENT_RACK,
+                CommonClientConfigs.CLIENT_RACK_DEFAULT,
                 isolationLevel);
         fetcher = new Fetcher<byte[], byte[]>(
                 logContext,
@@ -3868,7 +3868,7 @@ public class FetcherTest {
                 fetchSize,
                 maxPollRecords,
                 true, // check crc
-                CommonClientConfigs.DEFAULT_CLIENT_RACK,
+                CommonClientConfigs.CLIENT_RACK_DEFAULT,
                 isolationLevel);
         fetcher = spy(new Fetcher<>(
                 logContext,

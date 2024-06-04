@@ -444,7 +444,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
       assertEquals(100000, segmentBytesConfig.value.toLong)
       assertEquals(ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG, segmentBytesConfig.source)
       val compressionConfig = topicConfigs.find(_.name == TopicConfig.COMPRESSION_TYPE_CONFIG).get
-      assertEquals(LogConfig.DEFAULT_COMPRESSION_TYPE, compressionConfig.value)
+      assertEquals(LogConfig.COMPRESSION_TYPE_DEFAULT, compressionConfig.value)
       assertEquals(ConfigEntry.ConfigSource.DEFAULT_CONFIG, compressionConfig.source)
 
       assertFutureExceptionTypeEquals(result.numPartitions(topic2), classOf[TopicAuthorizationException])

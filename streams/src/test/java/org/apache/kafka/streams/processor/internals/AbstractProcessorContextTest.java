@@ -190,8 +190,8 @@ public class AbstractProcessorContextTest {
             config = getStreamsConfig();
             // Value must be a string to test className -> class conversion
             config.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, RocksDBConfigSetter.class.getName());
-            config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
-            config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
+            config.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG_DEFAULT, Serdes.ByteArraySerde.class);
+            config.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG_DEFAULT, Serdes.ByteArraySerde.class);
             config.put("user.supplied.config", "user-supplied-value");
         }
 

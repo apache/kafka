@@ -44,15 +44,15 @@ import static org.apache.kafka.server.config.ServerLogConfigs.LOG_INITIAL_TASK_D
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_INITIALIZATION_RETRY_INTERVAL_MS_PROP;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorage.DELETE_ON_CLOSE_CONFIG;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorage.STORAGE_DIR_CONFIG;
-import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP;
-import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP;
-import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP;
-import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP;
-import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP;
-import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP;
-import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP;
+import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_CONFIG;
+import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_CONFIG;
+import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_CONFIG;
+import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_CONFIG;
+import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_CONFIG;
+import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_CONFIG;
+import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_CONFIG;
 import static org.apache.kafka.server.config.ServerLogConfigs.LOG_CLEANUP_INTERVAL_MS_CONFIG;
-import static org.apache.kafka.storage.internals.log.CleanerConfig.LOG_CLEANER_ENABLE_PROP;
+import static org.apache.kafka.storage.internals.log.CleanerConfig.LOG_CLEANER_ENABLE_CONFIG;
 
 public class TieredStorageTestUtils {
 
@@ -118,15 +118,15 @@ public class TieredStorageTestUtils {
         //
         // The second-tier storage system is mocked via the LocalTieredStorage instance which persists transferred
         // data files on the local file system.
-        overridingProps.setProperty(REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true");
-        overridingProps.setProperty(REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, LocalTieredStorage.class.getName());
-        overridingProps.setProperty(REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP,
+        overridingProps.setProperty(REMOTE_LOG_STORAGE_SYSTEM_ENABLE_CONFIG, "true");
+        overridingProps.setProperty(REMOTE_STORAGE_MANAGER_CLASS_NAME_CONFIG, LocalTieredStorage.class.getName());
+        overridingProps.setProperty(REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_CONFIG,
                 TopicBasedRemoteLogMetadataManager.class.getName());
-        overridingProps.setProperty(REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP, RLM_TASK_INTERVAL_MS.toString());
-        overridingProps.setProperty(REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP, "PLAINTEXT");
+        overridingProps.setProperty(REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_CONFIG, RLM_TASK_INTERVAL_MS.toString());
+        overridingProps.setProperty(REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_CONFIG, "PLAINTEXT");
 
-        overridingProps.setProperty(REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP, storageConfigPrefix(testClassName, ""));
-        overridingProps.setProperty(REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP, metadataConfigPrefix(testClassName, ""));
+        overridingProps.setProperty(REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_CONFIG, storageConfigPrefix(testClassName, ""));
+        overridingProps.setProperty(REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_CONFIG, metadataConfigPrefix(testClassName, ""));
 
         overridingProps.setProperty(
                 metadataConfigPrefix(testClassName, TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP),
@@ -155,7 +155,7 @@ public class TieredStorageTestUtils {
         // Set 2 log dirs to make sure JBOD feature is working correctly
         overridingProps.setProperty(ServerLogConfigs.LOG_DIRS_CONFIG, TestUtils.tempDir().getAbsolutePath() + "," + TestUtils.tempDir().getAbsolutePath());
         // Disable unnecessary log cleaner
-        overridingProps.setProperty(LOG_CLEANER_ENABLE_PROP, "false");
+        overridingProps.setProperty(LOG_CLEANER_ENABLE_CONFIG, "false");
 
         return overridingProps;
     }

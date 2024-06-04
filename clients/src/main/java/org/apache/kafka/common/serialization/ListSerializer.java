@@ -70,7 +70,7 @@ public class ListSerializer<Inner> implements Serializer<List<Inner>> {
             log.error("Could not configure ListSerializer as the parameter has already been set -- inner: {}", inner);
             throw new ConfigException("List serializer was already initialized using a non-default constructor");
         }
-        final String innerSerdePropertyName = isKey ? CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS : CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS;
+        final String innerSerdePropertyName = isKey ? CommonClientConfigs.LIST_KEY_SERDE_INNER_CLASS_DEFAULT : CommonClientConfigs.LIST_VALUE_SERDE_INNER_CLASS_DEFAULT;
         final Object innerSerdeClassOrName = configs.get(innerSerdePropertyName);
         if (innerSerdeClassOrName == null) {
             throw new ConfigException("Not able to determine the serializer class because it was neither passed via the constructor nor set in the config.");

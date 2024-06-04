@@ -262,7 +262,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     val valueLengthSize = 3
     val overhead = Records.LOG_OVERHEAD + DefaultRecordBatch.RECORD_BATCH_OVERHEAD + DefaultRecord.MAX_RECORD_OVERHEAD +
       keyLengthSize + headerLengthSize + valueLengthSize
-    val valueSize = LogConfig.DEFAULT_MAX_MESSAGE_BYTES - overhead
+    val valueSize = LogConfig.MAX_MESSAGE_BYTES_DEFAULT - overhead
 
     val record0 = new ProducerRecord(topic, new Array[Byte](0), new Array[Byte](valueSize))
     assertEquals(record0.value.length, producer.send(record0).get.serializedValueSize)

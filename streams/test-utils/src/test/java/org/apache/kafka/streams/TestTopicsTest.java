@@ -73,8 +73,8 @@ public class TestTopicsTest {
         mapped.to(OUTPUT_TOPIC_MAP, Produced.with(stringSerde, longSerde));
 
         final Properties properties = new Properties();
-        properties.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
-        properties.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class);
+        properties.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG_DEFAULT, Serdes.ByteArraySerde.class);
+        properties.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG_DEFAULT, Serdes.ByteArraySerde.class);
         testDriver = new TopologyTestDriver(builder.build(), properties);
     }
 

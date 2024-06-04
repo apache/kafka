@@ -80,8 +80,8 @@ public class Topology {
 
     /**
      * Add a new source that consumes the named topics and forward the records to child processor and/or sink nodes.
-     * The source will use the {@link StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG default key deserializer} and
-     * {@link StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG default value deserializer} specified in the
+     * The source will use the {@link StreamsConfig#KEY_SERDE_CLASS_CONFIG_DEFAULT default key deserializer} and
+     * {@link StreamsConfig#VALUE_SERDE_CLASS_CONFIG_DEFAULT default value deserializer} specified in the
      * {@link StreamsConfig stream configuration}.
      * The default {@link TimestampExtractor} as specified in the {@link StreamsConfig config} is used.
      *
@@ -100,8 +100,8 @@ public class Topology {
     /**
      * Add a new source that consumes from topics matching the given pattern
      * and forward the records to child processor and/or sink nodes.
-     * The source will use the {@link StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG default key deserializer} and
-     * {@link StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG default value deserializer} specified in the
+     * The source will use the {@link StreamsConfig#KEY_SERDE_CLASS_CONFIG_DEFAULT default key deserializer} and
+     * {@link StreamsConfig#VALUE_SERDE_CLASS_CONFIG_DEFAULT default value deserializer} specified in the
      * {@link StreamsConfig stream configuration}.
      * The default {@link TimestampExtractor} as specified in the {@link StreamsConfig config} is used.
      *
@@ -119,8 +119,8 @@ public class Topology {
 
     /**
      * Add a new source that consumes the named topics and forward the records to child processor and/or sink nodes.
-     * The source will use the {@link StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG default key deserializer} and
-     * {@link StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG default value deserializer} specified in the
+     * The source will use the {@link StreamsConfig#KEY_SERDE_CLASS_CONFIG_DEFAULT default key deserializer} and
+     * {@link StreamsConfig#VALUE_SERDE_CLASS_CONFIG_DEFAULT default value deserializer} specified in the
      * {@link StreamsConfig stream configuration}.
      * The default {@link TimestampExtractor} as specified in the {@link StreamsConfig config} is used.
      *
@@ -141,8 +141,8 @@ public class Topology {
     /**
      * Add a new source that consumes from topics matching the given pattern
      * and forward the records to child processor and/or sink nodes.
-     * The source will use the {@link StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG default key deserializer} and
-     * {@link StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG default value deserializer} specified in the
+     * The source will use the {@link StreamsConfig#KEY_SERDE_CLASS_CONFIG_DEFAULT default key deserializer} and
+     * {@link StreamsConfig#VALUE_SERDE_CLASS_CONFIG_DEFAULT default value deserializer} specified in the
      * {@link StreamsConfig stream configuration}.
      * The default {@link TimestampExtractor} as specified in the {@link StreamsConfig config} is used.
      *
@@ -162,8 +162,8 @@ public class Topology {
 
     /**
      * Add a new source that consumes the named topics and forward the records to child processor and/or sink nodes.
-     * The source will use the {@link StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG default key deserializer} and
-     * {@link StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG default value deserializer} specified in the
+     * The source will use the {@link StreamsConfig#KEY_SERDE_CLASS_CONFIG_DEFAULT default key deserializer} and
+     * {@link StreamsConfig#VALUE_SERDE_CLASS_CONFIG_DEFAULT default value deserializer} specified in the
      * {@link StreamsConfig stream configuration}.
      *
      * @param timestampExtractor the stateless timestamp extractor used for this source,
@@ -184,8 +184,8 @@ public class Topology {
     /**
      * Add a new source that consumes from topics matching the given pattern
      * and forward the records to child processor and/or sink nodes.
-     * The source will use the {@link StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG default key deserializer} and
-     * {@link StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG default value deserializer} specified in the
+     * The source will use the {@link StreamsConfig#KEY_SERDE_CLASS_CONFIG_DEFAULT default key deserializer} and
+     * {@link StreamsConfig#VALUE_SERDE_CLASS_CONFIG_DEFAULT default value deserializer} specified in the
      * {@link StreamsConfig stream configuration}.
      *
      * @param timestampExtractor the stateless timestamp extractor used for this source,
@@ -205,8 +205,8 @@ public class Topology {
 
     /**
      * Add a new source that consumes the named topics and forward the records to child processor and/or sink nodes.
-     * The source will use the {@link StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG default key deserializer} and
-     * {@link StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG default value deserializer} specified in the
+     * The source will use the {@link StreamsConfig#KEY_SERDE_CLASS_CONFIG_DEFAULT default key deserializer} and
+     * {@link StreamsConfig#VALUE_SERDE_CLASS_CONFIG_DEFAULT default value deserializer} specified in the
      * {@link StreamsConfig stream configuration}.
      *
      * @param offsetReset        the auto offset reset policy to use for this source if no committed offsets found;
@@ -230,8 +230,8 @@ public class Topology {
     /**
      * Add a new source that consumes from topics matching the given pattern and forward the records to child processor
      * and/or sink nodes.
-     * The source will use the {@link StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG default key deserializer} and
-     * {@link StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG default value deserializer} specified in the
+     * The source will use the {@link StreamsConfig#KEY_SERDE_CLASS_CONFIG_DEFAULT default key deserializer} and
+     * {@link StreamsConfig#VALUE_SERDE_CLASS_CONFIG_DEFAULT default value deserializer} specified in the
      * {@link StreamsConfig stream configuration}.
      *
      * @param offsetReset        the auto offset reset policy value for this source if no committed offsets found;
@@ -421,8 +421,8 @@ public class Topology {
 
     /**
      * Add a new sink that forwards records from upstream parent processor and/or source nodes to the named Kafka topic.
-     * The sink will use the {@link StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG default key serializer} and
-     * {@link StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG default value serializer} specified in the
+     * The sink will use the {@link StreamsConfig#KEY_SERDE_CLASS_CONFIG_DEFAULT default key serializer} and
+     * {@link StreamsConfig#VALUE_SERDE_CLASS_CONFIG_DEFAULT default value serializer} specified in the
      * {@link StreamsConfig stream configuration}.
      *
      * @param name the unique name of the sink
@@ -445,8 +445,8 @@ public class Topology {
     /**
      * Add a new sink that forwards records from upstream parent processor and/or source nodes to the named Kafka topic,
      * using the supplied partitioner.
-     * The sink will use the {@link StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG default key serializer} and
-     * {@link StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG default value serializer} specified in the
+     * The sink will use the {@link StreamsConfig#KEY_SERDE_CLASS_CONFIG_DEFAULT default key serializer} and
+     * {@link StreamsConfig#VALUE_SERDE_CLASS_CONFIG_DEFAULT default value serializer} specified in the
      * {@link StreamsConfig stream configuration}.
      * <p>
      * The sink will also use the specified {@link StreamPartitioner} to determine how records are distributed among
@@ -482,10 +482,10 @@ public class Topology {
      * @param name the unique name of the sink
      * @param topic the name of the Kafka topic to which this sink should write its records
      * @param keySerializer the {@link Serializer key serializer} used when consuming records; may be null if the sink
-     * should use the {@link StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG default key serializer} specified in the
+     * should use the {@link StreamsConfig#KEY_SERDE_CLASS_CONFIG_DEFAULT default key serializer} specified in the
      * {@link StreamsConfig stream configuration}
      * @param valueSerializer the {@link Serializer value serializer} used when consuming records; may be null if the sink
-     * should use the {@link StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG default value serializer} specified in the
+     * should use the {@link StreamsConfig#VALUE_SERDE_CLASS_CONFIG_DEFAULT default value serializer} specified in the
      * {@link StreamsConfig stream configuration}
      * @param parentNames the name of one or more source or processor nodes whose output records this sink should consume
      * and write to its topic
@@ -511,10 +511,10 @@ public class Topology {
      * @param name the unique name of the sink
      * @param topic the name of the Kafka topic to which this sink should write its records
      * @param keySerializer the {@link Serializer key serializer} used when consuming records; may be null if the sink
-     * should use the {@link StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG default key serializer} specified in the
+     * should use the {@link StreamsConfig#KEY_SERDE_CLASS_CONFIG_DEFAULT default key serializer} specified in the
      * {@link StreamsConfig stream configuration}
      * @param valueSerializer the {@link Serializer value serializer} used when consuming records; may be null if the sink
-     * should use the {@link StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG default value serializer} specified in the
+     * should use the {@link StreamsConfig#VALUE_SERDE_CLASS_CONFIG_DEFAULT default value serializer} specified in the
      * {@link StreamsConfig stream configuration}
      * @param partitioner the function that should be used to determine the partition for each record processed by the sink
      * @param parentNames the name of one or more source or processor nodes whose output records this sink should consume
@@ -538,8 +538,8 @@ public class Topology {
     /**
      * Add a new sink that forwards records from upstream parent processor and/or source nodes to Kafka topics based on {@code topicExtractor}.
      * The topics that it may ever send to should be pre-created.
-     * The sink will use the {@link StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG default key serializer} and
-     * {@link StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG default value serializer} specified in the
+     * The sink will use the {@link StreamsConfig#KEY_SERDE_CLASS_CONFIG_DEFAULT default key serializer} and
+     * {@link StreamsConfig#VALUE_SERDE_CLASS_CONFIG_DEFAULT default value serializer} specified in the
      * {@link StreamsConfig stream configuration}.
      *
      * @param name              the unique name of the sink
@@ -563,8 +563,8 @@ public class Topology {
      * Add a new sink that forwards records from upstream parent processor and/or source nodes to Kafka topics based on {@code topicExtractor},
      * using the supplied partitioner.
      * The topics that it may ever send to should be pre-created.
-     * The sink will use the {@link StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG default key serializer} and
-     * {@link StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG default value serializer} specified in the
+     * The sink will use the {@link StreamsConfig#KEY_SERDE_CLASS_CONFIG_DEFAULT default key serializer} and
+     * {@link StreamsConfig#VALUE_SERDE_CLASS_CONFIG_DEFAULT default value serializer} specified in the
      * {@link StreamsConfig stream configuration}.
      * <p>
      * The sink will also use the specified {@link StreamPartitioner} to determine how records are distributed among
@@ -601,10 +601,10 @@ public class Topology {
      * @param name              the unique name of the sink
      * @param topicExtractor    the extractor to determine the name of the Kafka topic to which this sink should write for each record
      * @param keySerializer     the {@link Serializer key serializer} used when consuming records; may be null if the sink
-     *                          should use the {@link StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG default key serializer} specified in the
+     *                          should use the {@link StreamsConfig#KEY_SERDE_CLASS_CONFIG_DEFAULT default key serializer} specified in the
      *                          {@link StreamsConfig stream configuration}
      * @param valueSerializer   the {@link Serializer value serializer} used when consuming records; may be null if the sink
-     *                          should use the {@link StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG default value serializer} specified in the
+     *                          should use the {@link StreamsConfig#VALUE_SERDE_CLASS_CONFIG_DEFAULT default value serializer} specified in the
      *                          {@link StreamsConfig stream configuration}
      * @param parentNames       the name of one or more source or processor nodes whose output records this sink should consume
      *                          and dynamically write to topics
@@ -631,10 +631,10 @@ public class Topology {
      * @param name              the unique name of the sink
      * @param topicExtractor    the extractor to determine the name of the Kafka topic to which this sink should write for each record
      * @param keySerializer     the {@link Serializer key serializer} used when consuming records; may be null if the sink
-     *                          should use the {@link StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG default key serializer} specified in the
+     *                          should use the {@link StreamsConfig#KEY_SERDE_CLASS_CONFIG_DEFAULT default key serializer} specified in the
      *                          {@link StreamsConfig stream configuration}
      * @param valueSerializer   the {@link Serializer value serializer} used when consuming records; may be null if the sink
-     *                          should use the {@link StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG default value serializer} specified in the
+     *                          should use the {@link StreamsConfig#VALUE_SERDE_CLASS_CONFIG_DEFAULT default value serializer} specified in the
      *                          {@link StreamsConfig stream configuration}
      * @param partitioner       the function that should be used to determine the partition for each record processed by the sink
      * @param parentNames       the name of one or more source or processor nodes whose output records this sink should consume

@@ -82,7 +82,7 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
     }
 
     private void configureListClass(Map<String, ?> configs, boolean isKey) {
-        String listTypePropertyName = isKey ? CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_TYPE_CLASS : CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS;
+        String listTypePropertyName = isKey ? CommonClientConfigs.LIST_KEY_SERDE_TYPE_CLASS_DEFAULT : CommonClientConfigs.LIST_VALUE_SERDE_TYPE_CLASS_DEFAULT;
         final Object listClassOrName = configs.get(listTypePropertyName);
         if (listClassOrName == null) {
             throw new ConfigException("Not able to determine the list class because it was neither passed via the constructor nor set in the config.");
@@ -102,7 +102,7 @@ public class ListDeserializer<Inner> implements Deserializer<List<Inner>> {
 
     @SuppressWarnings("unchecked")
     private void configureInnerSerde(Map<String, ?> configs, boolean isKey) {
-        String innerSerdePropertyName = isKey ? CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS : CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS;
+        String innerSerdePropertyName = isKey ? CommonClientConfigs.LIST_KEY_SERDE_INNER_CLASS_DEFAULT : CommonClientConfigs.LIST_VALUE_SERDE_INNER_CLASS_DEFAULT;
         final Object innerSerdeClassOrName = configs.get(innerSerdePropertyName);
         if (innerSerdeClassOrName == null) {
             throw new ConfigException("Not able to determine the inner serde class because it was neither passed via the constructor nor set in the config.");

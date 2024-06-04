@@ -39,7 +39,7 @@ public class ListSerializerTest {
 
     @Test
     public void testListKeySerializerNoArgConstructorsWithClassName() {
-        props.put(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS, Serdes.StringSerde.class.getName());
+        props.put(CommonClientConfigs.LIST_KEY_SERDE_INNER_CLASS_DEFAULT, Serdes.StringSerde.class.getName());
         listSerializer.configure(props, true);
         final Serializer<?> inner = listSerializer.getInnerSerializer();
         assertNotNull(inner, "Inner serializer should be not null");
@@ -48,7 +48,7 @@ public class ListSerializerTest {
 
     @Test
     public void testListValueSerializerNoArgConstructorsWithClassName() {
-        props.put(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS, Serdes.StringSerde.class.getName());
+        props.put(CommonClientConfigs.LIST_VALUE_SERDE_INNER_CLASS_DEFAULT, Serdes.StringSerde.class.getName());
         listSerializer.configure(props, false);
         final Serializer<?> inner = listSerializer.getInnerSerializer();
         assertNotNull(inner, "Inner serializer should be not null");
@@ -57,7 +57,7 @@ public class ListSerializerTest {
 
     @Test
     public void testListKeySerializerNoArgConstructorsWithClassObject() {
-        props.put(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS, Serdes.StringSerde.class);
+        props.put(CommonClientConfigs.LIST_KEY_SERDE_INNER_CLASS_DEFAULT, Serdes.StringSerde.class);
         listSerializer.configure(props, true);
         final Serializer<?> inner = listSerializer.getInnerSerializer();
         assertNotNull(inner, "Inner serializer should be not null");
@@ -66,7 +66,7 @@ public class ListSerializerTest {
 
     @Test
     public void testListValueSerializerNoArgConstructorsWithClassObject() {
-        props.put(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS, Serdes.StringSerde.class);
+        props.put(CommonClientConfigs.LIST_VALUE_SERDE_INNER_CLASS_DEFAULT, Serdes.StringSerde.class);
         listSerializer.configure(props, false);
         final Serializer<?> inner = listSerializer.getInnerSerializer();
         assertNotNull(inner, "Inner serializer should be not null");
@@ -90,47 +90,47 @@ public class ListSerializerTest {
 
     @Test
     public void testListKeySerializerNoArgConstructorsShouldThrowKafkaExceptionDueInvalidClass() {
-        props.put(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS, new FakeObject());
+        props.put(CommonClientConfigs.LIST_KEY_SERDE_INNER_CLASS_DEFAULT, new FakeObject());
         final KafkaException exception = assertThrows(
             KafkaException.class,
             () -> listSerializer.configure(props, true)
         );
-        assertEquals("Could not create a serializer class instance using \"" + CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS + "\" property.", exception.getMessage());
+        assertEquals("Could not create a serializer class instance using \"" + CommonClientConfigs.LIST_KEY_SERDE_INNER_CLASS_DEFAULT + "\" property.", exception.getMessage());
     }
 
     @Test
     public void testListValueSerializerNoArgConstructorsShouldThrowKafkaExceptionDueInvalidClass() {
-        props.put(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS, new FakeObject());
+        props.put(CommonClientConfigs.LIST_VALUE_SERDE_INNER_CLASS_DEFAULT, new FakeObject());
         final KafkaException exception = assertThrows(
             KafkaException.class,
             () -> listSerializer.configure(props, false)
         );
-        assertEquals("Could not create a serializer class instance using \"" + CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS + "\" property.", exception.getMessage());
+        assertEquals("Could not create a serializer class instance using \"" + CommonClientConfigs.LIST_VALUE_SERDE_INNER_CLASS_DEFAULT + "\" property.", exception.getMessage());
     }
 
     @Test
     public void testListKeySerializerNoArgConstructorsShouldThrowKafkaExceptionDueClassNotFound() {
-        props.put(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS, nonExistingClass);
+        props.put(CommonClientConfigs.LIST_KEY_SERDE_INNER_CLASS_DEFAULT, nonExistingClass);
         final KafkaException exception = assertThrows(
             KafkaException.class,
             () -> listSerializer.configure(props, true)
         );
-        assertEquals("Invalid value non.existing.class for configuration " + CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS + ": Serializer class " + nonExistingClass + " could not be found.", exception.getMessage());
+        assertEquals("Invalid value non.existing.class for configuration " + CommonClientConfigs.LIST_KEY_SERDE_INNER_CLASS_DEFAULT + ": Serializer class " + nonExistingClass + " could not be found.", exception.getMessage());
     }
 
     @Test
     public void testListValueSerializerNoArgConstructorsShouldThrowKafkaExceptionDueClassNotFound() {
-        props.put(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS, nonExistingClass);
+        props.put(CommonClientConfigs.LIST_VALUE_SERDE_INNER_CLASS_DEFAULT, nonExistingClass);
         final KafkaException exception = assertThrows(
             KafkaException.class,
             () -> listSerializer.configure(props, false)
         );
-        assertEquals("Invalid value non.existing.class for configuration " + CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS + ": Serializer class " + nonExistingClass + " could not be found.", exception.getMessage());
+        assertEquals("Invalid value non.existing.class for configuration " + CommonClientConfigs.LIST_VALUE_SERDE_INNER_CLASS_DEFAULT + ": Serializer class " + nonExistingClass + " could not be found.", exception.getMessage());
     }
 
     @Test
     public void testListKeySerializerShouldThrowConfigExceptionDueAlreadyInitialized() {
-        props.put(CommonClientConfigs.DEFAULT_LIST_KEY_SERDE_INNER_CLASS, Serdes.StringSerde.class);
+        props.put(CommonClientConfigs.LIST_KEY_SERDE_INNER_CLASS_DEFAULT, Serdes.StringSerde.class);
         final ListSerializer<Integer> initializedListSerializer = new ListSerializer<>(Serdes.Integer().serializer());
         final ConfigException exception = assertThrows(
             ConfigException.class,
@@ -141,7 +141,7 @@ public class ListSerializerTest {
 
     @Test
     public void testListValueSerializerShouldThrowConfigExceptionDueAlreadyInitialized() {
-        props.put(CommonClientConfigs.DEFAULT_LIST_VALUE_SERDE_INNER_CLASS, Serdes.StringSerde.class);
+        props.put(CommonClientConfigs.LIST_VALUE_SERDE_INNER_CLASS_DEFAULT, Serdes.StringSerde.class);
         final ListSerializer<Integer> initializedListSerializer = new ListSerializer<>(Serdes.Integer().serializer());
         final ConfigException exception = assertThrows(
             ConfigException.class,

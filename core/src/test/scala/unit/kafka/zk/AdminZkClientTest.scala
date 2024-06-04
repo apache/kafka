@@ -257,7 +257,7 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
 
     //Now delete the config
     adminZkClient.changeTopicConfig(topic, new Properties)
-    checkConfig(LogConfig.DEFAULT_MAX_MESSAGE_BYTES, LogConfig.DEFAULT_RETENTION_MS, "", "", quotaManagerIsThrottled = false)
+    checkConfig(LogConfig.MAX_MESSAGE_BYTES_DEFAULT, LogConfig.RETENTION_MS_DEFAULT, "", "", quotaManagerIsThrottled = false)
 
     //Add config back
     adminZkClient.changeTopicConfig(topic, makeConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1"))
@@ -265,7 +265,7 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
 
     //Now ensure updating to "" removes the throttled replica list also
     adminZkClient.changeTopicConfig(topic, propsWith((QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, ""), (QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "")))
-    checkConfig(LogConfig.DEFAULT_MAX_MESSAGE_BYTES, LogConfig.DEFAULT_RETENTION_MS, "", "",  quotaManagerIsThrottled = false)
+    checkConfig(LogConfig.MAX_MESSAGE_BYTES_DEFAULT, LogConfig.RETENTION_MS_DEFAULT, "", "",  quotaManagerIsThrottled = false)
   }
 
   @Test
