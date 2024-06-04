@@ -74,6 +74,10 @@ public final class LocalReplicaChanges {
         return topicIds;
     }
 
+    public Map<TopicIdPartition, Uuid> directoryIds() {
+        return directoryIds;
+    }
+
     @Override
     public String toString() {
         return String.format(
@@ -87,10 +91,6 @@ public final class LocalReplicaChanges {
         );
     }
 
-    public Map<TopicIdPartition, Uuid> directoryIds() {
-        return directoryIds;
-    }
-
     public static final class PartitionInfo {
         private final Uuid topicId;
         private final PartitionRegistration partition;
@@ -100,17 +100,17 @@ public final class LocalReplicaChanges {
             this.partition = partition;
         }
 
-        @Override
-        public String toString() {
-            return String.format("PartitionInfo(topicId = %s, partition = %s)", topicId, partition);
-        }
-
         public Uuid topicId() {
             return topicId;
         }
 
         public PartitionRegistration partition() {
             return partition;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("PartitionInfo(topicId = %s, partition = %s)", topicId, partition);
         }
     }
 }
