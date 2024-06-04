@@ -2341,6 +2341,13 @@ public class MembershipManagerImplTest {
         verifyReconciliationTriggered(membershipManager);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
 
+        ConsumerRebalanceListenerCallbackNeededEvent neededEvent = new ConsumerRebalanceListenerCallbackNeededEvent(
+                ConsumerRebalanceListenerMethodName.ON_PARTITIONS_REVOKED,
+                topicPartitions(ownedPartition.topic(), ownedPartition.partition()));
+        when(backgroundEventQueue.size()).thenReturn(1);
+        when(backgroundEventQueue.peek()).thenReturn(mock(ConsumerRebalanceListenerCallbackNeededEvent.class));
+        when(backgroundEventQueue.poll()).thenReturn(neededEvent);
+
         return performCallback(
             membershipManager,
             invoker,
@@ -2364,6 +2371,13 @@ public class MembershipManagerImplTest {
         membershipManager.poll(time.milliseconds());
         verifyReconciliationTriggered(membershipManager);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
+
+        ConsumerRebalanceListenerCallbackNeededEvent neededEvent = new ConsumerRebalanceListenerCallbackNeededEvent(
+                ConsumerRebalanceListenerMethodName.ON_PARTITIONS_ASSIGNED,
+                topicPartitions(topicName, newPartition));
+        when(backgroundEventQueue.size()).thenReturn(1);
+        when(backgroundEventQueue.peek()).thenReturn(mock(ConsumerRebalanceListenerCallbackNeededEvent.class));
+        when(backgroundEventQueue.poll()).thenReturn(neededEvent);
 
         return performCallback(
             membershipManager,
@@ -2581,6 +2595,7 @@ public class MembershipManagerImplTest {
         assertEquals(assignmentAfterRejoin, membershipManager.topicPartitionsAwaitingReconciliation());
 
         // Stale reconciliation should have been aborted and a new one should be triggered on the next poll.
+        membershipManager.markReconciliationCompleted();
         assertFalse(membershipManager.reconciliationInProgress());
         membershipManager.poll(time.milliseconds());
     }
