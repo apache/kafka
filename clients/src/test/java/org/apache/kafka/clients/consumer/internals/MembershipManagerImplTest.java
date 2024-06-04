@@ -85,7 +85,6 @@ import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -140,19 +139,19 @@ public class MembershipManagerImplTest {
     }
 
     private MembershipManagerImpl createMembershipManager(String groupInstanceId) {
-        return spy(new MembershipManagerImpl(
+        return new MembershipManagerImpl(
             GROUP_ID, Optional.ofNullable(groupInstanceId), REBALANCE_TIMEOUT, Optional.empty(),
             subscriptionState, commitRequestManager, metadata, logContext, Optional.empty(),
-            backgroundEventHandler, time, rebalanceMetricsManager));
+            backgroundEventHandler, time, rebalanceMetricsManager);
     }
 
     private MembershipManagerImpl createMembershipManagerJoiningGroup(String groupInstanceId,
                                                                       String serverAssignor) {
-        MembershipManagerImpl manager = spy(new MembershipManagerImpl(
+        MembershipManagerImpl manager = new MembershipManagerImpl(
                 GROUP_ID, Optional.ofNullable(groupInstanceId), REBALANCE_TIMEOUT,
                 Optional.ofNullable(serverAssignor), subscriptionState, commitRequestManager,
                 metadata, logContext, Optional.empty(), backgroundEventHandler, time,
-                rebalanceMetricsManager));
+                rebalanceMetricsManager);
         manager.transitionToJoining();
         return manager;
     }
