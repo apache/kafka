@@ -1280,7 +1280,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         if (autoCommitEnabled)
             autoCommitSync(timer);
 
-        applicationEventHandler.add(new CommitOnCloseEvent(calculateDeadlineMs(timer)));
+        applicationEventHandler.add(new CommitOnCloseEvent());
         completeQuietly(
             () -> {
                 maybeRevokePartitions();

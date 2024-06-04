@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-public class CommitOnCloseEvent extends CompletableApplicationEvent<Void> {
+public class CommitOnCloseEvent extends ApplicationEvent {
 
-    public CommitOnCloseEvent(final long deadlineMs) {
-        super(Type.COMMIT_ON_CLOSE, deadlineMs);
+    public CommitOnCloseEvent() {
+        super(Type.COMMIT_ON_CLOSE);
     }
 }
