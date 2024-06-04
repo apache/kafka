@@ -224,7 +224,7 @@ If needed, you can specify the Scala version with `-PscalaVersion=2.13`.
 There are two code quality analysis tools that we regularly run, spotbugs and checkstyle.
 
 #### Checkstyle ####
-Checkstyle enforces a consistent coding style in Kafka. Make sure you pass it before you submit.
+Checkstyle enforces a consistent coding style in Kafka.
 You can run checkstyle using:
 
     ./gradlew checkstyleMain checkstyleTest spotlessCheck
