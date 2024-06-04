@@ -647,7 +647,7 @@ public class StreamsPartitionAssignorTest {
             singletonList(3))
         );
 
-        List<Map<String, List<TopicPartitionInfo>>> partitionInfo = singletonList(mkMap(mkEntry(
+        final List<Map<String, List<TopicPartitionInfo>>> partitionInfo = singletonList(mkMap(mkEntry(
                 "stream-partition-assignor-test-store-changelog",
                 singletonList(
                     new TopicPartitionInfo(
@@ -2393,7 +2393,7 @@ public class StreamsPartitionAssignorTest {
                           ));
 
         configureDefault();
-        List<Map<String, List<TopicPartitionInfo>>> partitionInfo = singletonList(mkMap(mkEntry(
+        final List<Map<String, List<TopicPartitionInfo>>> partitionInfo = singletonList(mkMap(mkEntry(
                 "stream-partition-assignor-test-store-changelog",
                 singletonList(
                     new TopicPartitionInfo(
@@ -2446,7 +2446,7 @@ public class StreamsPartitionAssignorTest {
             ));
 
         configureDefault();
-        List<Map<String, List<TopicPartitionInfo>>> partitionInfo = singletonList(mkMap(mkEntry(
+        final List<Map<String, List<TopicPartitionInfo>>> partitionInfo = singletonList(mkMap(mkEntry(
                 "stream-partition-assignor-test-store-changelog",
                 singletonList(
                     new TopicPartitionInfo(
