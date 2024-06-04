@@ -26,6 +26,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 
+/**
+ * Retrieves Linux /proc/self/io metrics.
+ */
 public class LinuxIoMetricsCollector {
 
     private static final Logger LOG = LoggerFactory.getLogger(LinuxIoMetricsCollector.class);
@@ -82,15 +85,13 @@ public class LinuxIoMetricsCollector {
                 cachedReadBytes = -1L;
                 cachedWriteBytes = -1L;
                 List<String> lines = Files.readAllLines(path, StandardCharsets.UTF_8);
-                lines.forEach(line -> {
-                    synchronized (this) {
-                        if (line.startsWith(READ_BYTES_PREFIX)) {
-                            cachedReadBytes = Long.parseLong(line.substring(READ_BYTES_PREFIX.length()));
-                        } else if (line.startsWith(WRITE_BYTES_PREFIX)) {
-                            cachedWriteBytes = Long.parseLong(line.substring(WRITE_BYTES_PREFIX.length()));
-                        }
+                for (String line : lines) {
+                    if (line.startsWith(READ_BYTES_PREFIX)) {
+                        cachedReadBytes = Long.parseLong(line.substring(READ_BYTES_PREFIX.length()));
+                    } else if (line.startsWith(WRITE_BYTES_PREFIX)) {
+                        cachedWriteBytes = Long.parseLong(line.substring(WRITE_BYTES_PREFIX.length()));
                     }
-                });
+                }
                 lastUpdateMs = now;
                 return true;
             } catch (Throwable t) {
