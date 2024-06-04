@@ -36,6 +36,7 @@ public final class LocalReplicaChanges {
     private final Map<TopicPartition, PartitionInfo> followers;
     // The topic name -> topic id map in leaders and followers changes
     private final Map<String, Uuid> topicIds;
+    // partitions for which directory id changes or newly added to the broker
     private final Map<TopicIdPartition, Uuid> directoryIds;
 
     LocalReplicaChanges(
