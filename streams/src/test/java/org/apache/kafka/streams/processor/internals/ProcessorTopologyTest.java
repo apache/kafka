@@ -109,9 +109,9 @@ public class ProcessorTopologyTest {
         // Create a new directory in which we'll put all of the state for this test, enabling running tests in parallel ...
         final File localState = TestUtils.tempDirectory();
         props.setProperty(StreamsConfig.STATE_DIR_CONFIG, localState.getAbsolutePath());
-        props.setProperty(StreamsConfig.KEY_SERDE_CLASS_DEFAULT_CONFIG, Serdes.String().getClass().getName());
-        props.setProperty(StreamsConfig.VALUE_SERDE_CLASS_DEFAULT_CONFIG, Serdes.String().getClass().getName());
-        props.setProperty(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_DEFAULT_CONFIG, CustomTimestampExtractor.class.getName());
+        props.setProperty(StreamsConfig.KEY_SERDE_CLASS_CONFIG_DEFAULT, Serdes.String().getClass().getName());
+        props.setProperty(StreamsConfig.VALUE_SERDE_CLASS_CONFIG_DEFAULT, Serdes.String().getClass().getName());
+        props.setProperty(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG_DEFAULT, CustomTimestampExtractor.class.getName());
     }
 
     @After

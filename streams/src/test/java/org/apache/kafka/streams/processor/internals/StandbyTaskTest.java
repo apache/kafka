@@ -123,7 +123,7 @@ public class StandbyTaskTest {
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
             mkEntry(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3"),
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, baseDir.getCanonicalPath()),
-            mkEntry(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_DEFAULT_CONFIG, MockTimestampExtractor.class.getName())
+            mkEntry(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG_DEFAULT, MockTimestampExtractor.class.getName())
         )));
     }
 

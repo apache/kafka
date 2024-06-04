@@ -146,8 +146,8 @@ public class SuppressionIntegrationTest {
             .to(outputRaw);
 
         final Properties streamsConfig = getStreamsConfig(appId);
-        streamsConfig.put(StreamsConfig.KEY_SERDE_CLASS_DEFAULT_CONFIG, Serdes.StringSerde.class);
-        streamsConfig.put(StreamsConfig.VALUE_SERDE_CLASS_DEFAULT_CONFIG, Serdes.StringSerde.class);
+        streamsConfig.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG_DEFAULT, Serdes.StringSerde.class);
+        streamsConfig.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG_DEFAULT, Serdes.StringSerde.class);
 
         final KafkaStreams driver = IntegrationTestUtils.getStartedStreams(streamsConfig, builder, true);
         try {
@@ -199,8 +199,8 @@ public class SuppressionIntegrationTest {
             .to(outputRaw);
 
         final Properties streamsConfig = getStreamsConfig(appId);
-        streamsConfig.put(StreamsConfig.KEY_SERDE_CLASS_DEFAULT_CONFIG, Serdes.StringSerde.class);
-        streamsConfig.put(StreamsConfig.VALUE_SERDE_CLASS_DEFAULT_CONFIG, Serdes.StringSerde.class);
+        streamsConfig.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG_DEFAULT, Serdes.StringSerde.class);
+        streamsConfig.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG_DEFAULT, Serdes.StringSerde.class);
 
         final KafkaStreams driver = IntegrationTestUtils.getStartedStreams(streamsConfig, builder, true);
         try {
@@ -366,8 +366,8 @@ public class SuppressionIntegrationTest {
             .to(outputRaw);
 
         final Properties streamsConfig = getStreamsConfig(appId);
-        streamsConfig.put(StreamsConfig.KEY_SERDE_CLASS_DEFAULT_CONFIG, Serdes.StringSerde.class);
-        streamsConfig.put(StreamsConfig.VALUE_SERDE_CLASS_DEFAULT_CONFIG, Serdes.StringSerde.class);
+        streamsConfig.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG_DEFAULT, Serdes.StringSerde.class);
+        streamsConfig.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG_DEFAULT, Serdes.StringSerde.class);
 
         final KafkaStreams driver = IntegrationTestUtils.getStartedStreams(streamsConfig, builder, true);
         try {
@@ -424,8 +424,8 @@ public class SuppressionIntegrationTest {
             .to(outputRaw);
 
         final Properties streamsConfig = getStreamsConfig(appId);
-        streamsConfig.put(StreamsConfig.KEY_SERDE_CLASS_DEFAULT_CONFIG, Serdes.StringSerde.class);
-        streamsConfig.put(StreamsConfig.VALUE_SERDE_CLASS_DEFAULT_CONFIG, Serdes.StringSerde.class);
+        streamsConfig.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG_DEFAULT, Serdes.StringSerde.class);
+        streamsConfig.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG_DEFAULT, Serdes.StringSerde.class);
 
         final KafkaStreams driver = IntegrationTestUtils.getStartedStreams(streamsConfig, builder, true);
         try {
@@ -480,8 +480,8 @@ public class SuppressionIntegrationTest {
             .to(outputRaw);
 
         final Properties streamsConfig = getStreamsConfig(appId);
-        streamsConfig.put(StreamsConfig.KEY_SERDE_CLASS_DEFAULT_CONFIG, Serdes.StringSerde.class);
-        streamsConfig.put(StreamsConfig.VALUE_SERDE_CLASS_DEFAULT_CONFIG, Serdes.StringSerde.class);
+        streamsConfig.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG_DEFAULT, Serdes.StringSerde.class);
+        streamsConfig.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG_DEFAULT, Serdes.StringSerde.class);
 
         final KafkaStreams driver = IntegrationTestUtils.getStartedStreams(streamsConfig, builder, true);
         try {

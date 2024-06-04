@@ -66,12 +66,12 @@ public class KTableSourceTopicRestartIntegrationTest {
     public static void startCluster() throws IOException {
         CLUSTER.start();
         STREAMS_CONFIG.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        STREAMS_CONFIG.put(StreamsConfig.KEY_SERDE_CLASS_DEFAULT_CONFIG, Serdes.String().getClass().getName());
-        STREAMS_CONFIG.put(StreamsConfig.VALUE_SERDE_CLASS_DEFAULT_CONFIG, Serdes.String().getClass().getName());
+        STREAMS_CONFIG.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG_DEFAULT, Serdes.String().getClass().getName());
+        STREAMS_CONFIG.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG_DEFAULT, Serdes.String().getClass().getName());
         STREAMS_CONFIG.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         STREAMS_CONFIG.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         STREAMS_CONFIG.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 5L);
-        STREAMS_CONFIG.put(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_DEFAULT_CONFIG, WallclockTimestampExtractor.class);
+        STREAMS_CONFIG.put(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG_DEFAULT, WallclockTimestampExtractor.class);
         STREAMS_CONFIG.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000);
         STREAMS_CONFIG.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 300);
 

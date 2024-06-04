@@ -132,8 +132,8 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends StreamToTableJ
 
     val streamsConfiguration: Properties = getStreamsConfiguration()
 
-    streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_DEFAULT_CONFIG, NewSerdes.stringSerde.getClass.getName)
-    streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_DEFAULT_CONFIG, NewSerdes.stringSerde.getClass.getName)
+    streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG_DEFAULT, NewSerdes.stringSerde.getClass.getName)
+    streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG_DEFAULT, NewSerdes.stringSerde.getClass.getName)
 
     val builder: StreamsBuilderJ = new StreamsBuilderJ()
 

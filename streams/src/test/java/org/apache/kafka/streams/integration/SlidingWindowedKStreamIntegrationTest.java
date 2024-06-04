@@ -145,8 +145,8 @@ public class SlidingWindowedKStreamIntegrationTest {
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
-        streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_DEFAULT_CONFIG, Serdes.String().getClass());
-        streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_DEFAULT_CONFIG, Serdes.String().getClass());
+        streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG_DEFAULT, Serdes.String().getClass());
+        streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG_DEFAULT, Serdes.String().getClass());
         streamsConfiguration.put(InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_WINDOWED_AGGREGATION, 0); // Always process
         streamsConfiguration.put(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG, Long.MAX_VALUE); // Don't expire changelog
 

@@ -116,8 +116,8 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
                 mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
                 mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
                 mkEntry(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2),
-                mkEntry(StreamsConfig.KEY_SERDE_CLASS_DEFAULT_CONFIG, Serdes.StringSerde.class),
-                mkEntry(StreamsConfig.VALUE_SERDE_CLASS_DEFAULT_CONFIG, Serdes.StringSerde.class),
+                mkEntry(StreamsConfig.KEY_SERDE_CLASS_CONFIG_DEFAULT, Serdes.StringSerde.class),
+                mkEntry(StreamsConfig.VALUE_SERDE_CLASS_CONFIG_DEFAULT, Serdes.StringSerde.class),
                 mkEntry(StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), 10000)
             )
         );
@@ -231,8 +231,8 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
         properties.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 300000L);
         properties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
-        properties.put(StreamsConfig.KEY_SERDE_CLASS_DEFAULT_CONFIG, Serdes.IntegerSerde.class);
-        properties.put(StreamsConfig.VALUE_SERDE_CLASS_DEFAULT_CONFIG, Serdes.StringSerde.class);
+        properties.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG_DEFAULT, Serdes.IntegerSerde.class);
+        properties.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG_DEFAULT, Serdes.StringSerde.class);
         properties.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000);
 
         final AtomicBoolean shouldThrow = new AtomicBoolean(true);

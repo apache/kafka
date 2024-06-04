@@ -66,8 +66,8 @@ public class StreamsBrokerDownResilienceTest {
         }
 
         streamsProperties.put(StreamsConfig.APPLICATION_ID_CONFIG, "kafka-streams-resilience");
-        streamsProperties.put(StreamsConfig.KEY_SERDE_CLASS_DEFAULT_CONFIG, Serdes.String().getClass());
-        streamsProperties.put(StreamsConfig.VALUE_SERDE_CLASS_DEFAULT_CONFIG, Serdes.String().getClass());
+        streamsProperties.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG_DEFAULT, Serdes.String().getClass());
+        streamsProperties.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG_DEFAULT, Serdes.String().getClass());
         streamsProperties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
 
 

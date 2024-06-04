@@ -88,8 +88,8 @@ public class StreamsNamedRepartitionTest {
 
         config.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "StreamsNamedRepartitionTest");
         config.setProperty(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, "0");
-        config.setProperty(StreamsConfig.KEY_SERDE_CLASS_DEFAULT_CONFIG, Serdes.String().getClass().getName());
-        config.setProperty(StreamsConfig.VALUE_SERDE_CLASS_DEFAULT_CONFIG, Serdes.String().getClass().getName());
+        config.setProperty(StreamsConfig.KEY_SERDE_CLASS_CONFIG_DEFAULT, Serdes.String().getClass().getName());
+        config.setProperty(StreamsConfig.VALUE_SERDE_CLASS_CONFIG_DEFAULT, Serdes.String().getClass().getName());
 
 
         config.putAll(streamsProperties);

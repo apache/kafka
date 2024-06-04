@@ -255,7 +255,7 @@ public class StreamTaskTest {
             mkEntry(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3"),
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, canonicalPath),
             mkEntry(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, DEBUG.name),
-            mkEntry(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_DEFAULT_CONFIG, MockTimestampExtractor.class.getName()),
+            mkEntry(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG_DEFAULT, MockTimestampExtractor.class.getName()),
             mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig),
             mkEntry(StreamsConfig.MAX_TASK_IDLE_MS_CONFIG, enforcedProcessingValue),
             mkEntry(StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG_DEFAULT, deserializationExceptionHandler)

@@ -72,8 +72,8 @@ public class DeveloperGuideTesting {
 
         // setup test driver
         final Properties props = new Properties();
-        props.setProperty(StreamsConfig.KEY_SERDE_CLASS_DEFAULT_CONFIG, Serdes.StringSerde.class.getName());
-        props.setProperty(StreamsConfig.VALUE_SERDE_CLASS_DEFAULT_CONFIG, Serdes.LongSerde.class.getName());
+        props.setProperty(StreamsConfig.KEY_SERDE_CLASS_CONFIG_DEFAULT, Serdes.StringSerde.class.getName());
+        props.setProperty(StreamsConfig.VALUE_SERDE_CLASS_CONFIG_DEFAULT, Serdes.LongSerde.class.getName());
         testDriver = new TopologyTestDriver(topology, props);
 
         // setup test topics

@@ -149,8 +149,8 @@ public class JoinGracePeriodDurabilityIntegrationTest {
             mkEntry(StreamsConfig.POLL_MS_CONFIG, Long.toString(COMMIT_INTERVAL)),
             mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, processingGuaranteee),
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-            mkEntry(StreamsConfig.KEY_SERDE_CLASS_DEFAULT_CONFIG, Serdes.StringSerde.class),
-            mkEntry(StreamsConfig.VALUE_SERDE_CLASS_DEFAULT_CONFIG, Serdes.StringSerde.class)
+            mkEntry(StreamsConfig.KEY_SERDE_CLASS_CONFIG_DEFAULT, Serdes.StringSerde.class),
+            mkEntry(StreamsConfig.VALUE_SERDE_CLASS_CONFIG_DEFAULT, Serdes.StringSerde.class)
         ));
 
         streamsConfig.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL);

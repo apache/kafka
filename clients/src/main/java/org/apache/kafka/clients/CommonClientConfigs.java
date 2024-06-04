@@ -192,12 +192,12 @@ public class CommonClientConfigs {
     public static final String DEFAULT_LIST_KEY_SERDE_INNER_CLASS = "default.list.key.serde.inner";
     public static final String LIST_KEY_SERDE_INNER_CLASS_DEFAULT = "default.list.key.serde.inner";
     /**
-     * @deprecated Use {@link #LIST_KEY_SERDE_INNER_CLASS_DEFAULT_DOC} instead.
+     * @deprecated Use {@link #LIST_KEY_SERDE_INNER_CLASS_DOC_DEFAULT} instead.
      */
     @Deprecated
     public static final String DEFAULT_LIST_KEY_SERDE_INNER_CLASS_DOC = "Default inner class of list serde for key that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface. "
             + "This configuration will be read if and only if <code>default.key.serde</code> configuration is set to <code>org.apache.kafka.common.serialization.Serdes.ListSerde</code>";
-    public static final String LIST_KEY_SERDE_INNER_CLASS_DEFAULT_DOC = "Default inner class of list serde for key that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface. "
+    public static final String LIST_KEY_SERDE_INNER_CLASS_DOC_DEFAULT = "Default inner class of list serde for key that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface. "
             + "This configuration will be read if and only if <code>default.key.serde</code> configuration is set to <code>org.apache.kafka.common.serialization.Serdes.ListSerde</code>";
 
     /**
@@ -207,12 +207,12 @@ public class CommonClientConfigs {
     public static final String DEFAULT_LIST_VALUE_SERDE_INNER_CLASS = "default.list.value.serde.inner";
     public static final String LIST_VALUE_SERDE_INNER_CLASS_DEFAULT = "default.list.value.serde.inner";
     /**
-     * @deprecated Use {@link #LIST_VALUE_SERDE_INNER_CLASS_DEFAULT_DOC} instead.
+     * @deprecated Use {@link #LIST_VALUE_SERDE_INNER_CLASS_DOC_DEFAULT} instead.
      */
     @Deprecated
     public static final String DEFAULT_LIST_VALUE_SERDE_INNER_CLASS_DOC = "Default inner class of list serde for value that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface. "
             + "This configuration will be read if and only if <code>default.value.serde</code> configuration is set to <code>org.apache.kafka.common.serialization.Serdes.ListSerde</code>";
-    public static final String LIST_VALUE_SERDE_INNER_CLASS_DEFAULT_DOC = "Default inner class of list serde for value that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface. "
+    public static final String LIST_VALUE_SERDE_INNER_CLASS_DOC_DEFAULT = "Default inner class of list serde for value that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface. "
             + "This configuration will be read if and only if <code>default.value.serde</code> configuration is set to <code>org.apache.kafka.common.serialization.Serdes.ListSerde</code>";
 
     /**
@@ -222,14 +222,14 @@ public class CommonClientConfigs {
     public static final String DEFAULT_LIST_KEY_SERDE_TYPE_CLASS = "default.list.key.serde.type";
     public static final String LIST_KEY_SERDE_TYPE_CLASS_DEFAULT = "default.list.key.serde.type";
     /**
-     * @deprecated Use {@link #LIST_KEY_SERDE_TYPE_CLASS_DEFAULT_DOC} instead.
+     * @deprecated Use {@link #LIST_KEY_SERDE_TYPE_CLASS_DOC_DEFAULT} instead.
      */
     @Deprecated
     public static final String DEFAULT_LIST_KEY_SERDE_TYPE_CLASS_DOC = "Default class for key that implements the <code>java.util.List</code> interface. "
             + "This configuration will be read if and only if <code>default.key.serde</code> configuration is set to <code>org.apache.kafka.common.serialization.Serdes.ListSerde</code> "
             + "Note when list serde class is used, one needs to set the inner serde class that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface via '"
             + LIST_KEY_SERDE_INNER_CLASS_DEFAULT + "'";
-    public static final String LIST_KEY_SERDE_TYPE_CLASS_DEFAULT_DOC = "Default class for key that implements the <code>java.util.List</code> interface. "
+    public static final String LIST_KEY_SERDE_TYPE_CLASS_DOC_DEFAULT = "Default class for key that implements the <code>java.util.List</code> interface. "
             + "This configuration will be read if and only if <code>default.key.serde</code> configuration is set to <code>org.apache.kafka.common.serialization.Serdes.ListSerde</code> "
             + "Note when list serde class is used, one needs to set the inner serde class that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface via '"
             + LIST_KEY_SERDE_INNER_CLASS_DEFAULT + "'";
@@ -241,14 +241,14 @@ public class CommonClientConfigs {
     public static final String DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS = "default.list.value.serde.type";
     public static final String LIST_VALUE_SERDE_TYPE_CLASS_DEFAULT = "default.list.value.serde.type";
     /**
-     * @deprecated Use {@link #LIST_VALUE_SERDE_TYPE_CLASS_DEFAULT_DOC} instead.
+     * @deprecated Use {@link #LIST_VALUE_SERDE_TYPE_CLASS_DOC_DEFAULT} instead.
      */
     @Deprecated
     public static final String DEFAULT_LIST_VALUE_SERDE_TYPE_CLASS_DOC = "Default class for value that implements the <code>java.util.List</code> interface. "
             + "This configuration will be read if and only if <code>default.value.serde</code> configuration is set to <code>org.apache.kafka.common.serialization.Serdes.ListSerde</code> "
             + "Note when list serde class is used, one needs to set the inner serde class that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface via '"
             + LIST_VALUE_SERDE_INNER_CLASS_DEFAULT + "'";
-    public static final String LIST_VALUE_SERDE_TYPE_CLASS_DEFAULT_DOC = "Default class for value that implements the <code>java.util.List</code> interface. "
+    public static final String LIST_VALUE_SERDE_TYPE_CLASS_DOC_DEFAULT = "Default class for value that implements the <code>java.util.List</code> interface. "
             + "This configuration will be read if and only if <code>default.value.serde</code> configuration is set to <code>org.apache.kafka.common.serialization.Serdes.ListSerde</code> "
             + "Note when list serde class is used, one needs to set the inner serde class that implements the <code>org.apache.kafka.common.serialization.Serde</code> interface via '"
             + LIST_VALUE_SERDE_INNER_CLASS_DEFAULT + "'";
@@ -293,18 +293,18 @@ public class CommonClientConfigs {
                                                            + "than 1/3 of that value. It can be adjusted even lower to control the expected time for normal rebalances.";
 
     /**
-     * @deprecated Use {@link #API_TIMEOUT_MS_DEFAULT_CONFIG} instead.
+     * @deprecated Use {@link #API_TIMEOUT_MS_CONFIG_DEFAULT} instead.
      */
     @Deprecated
-    public static final String DEFAULT_API_TIMEOUT_MS_DEFAULT_CONFIG = "default.api.timeout.ms";
-    public static final String API_TIMEOUT_MS_DEFAULT_CONFIG = "default.api.timeout.ms";
+    public static final String DEFAULT_API_TIMEOUT_MS_CONFIG = "default.api.timeout.ms";
+    public static final String API_TIMEOUT_MS_CONFIG_DEFAULT = "default.api.timeout.ms";
     /**
-     * @deprecated Use {@link #API_TIMEOUT_MS_DEFAULT_DOC} instead.
+     * @deprecated Use {@link #API_TIMEOUT_MS_DOC_DEFAULT} instead.
      */
     @Deprecated
     public static final String DEFAULT_API_TIMEOUT_MS_DOC = "Specifies the timeout (in milliseconds) for client APIs. " +
             "This configuration is used as the default timeout for all client operations that do not specify a <code>timeout</code> parameter.";
-    public static final String API_TIMEOUT_MS_DEFAULT_DOC = "Specifies the timeout (in milliseconds) for client APIs. " +
+    public static final String API_TIMEOUT_MS_DOC_DEFAULT = "Specifies the timeout (in milliseconds) for client APIs. " +
             "This configuration is used as the default timeout for all client operations that do not specify a <code>timeout</code> parameter.";
 
     /**

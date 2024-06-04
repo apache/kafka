@@ -73,8 +73,8 @@ public class TemperatureDemo {
         final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-temperature");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        props.put(StreamsConfig.KEY_SERDE_CLASS_DEFAULT_CONFIG, Serdes.StringSerde.class);
-        props.put(StreamsConfig.VALUE_SERDE_CLASS_DEFAULT_CONFIG, Serdes.StringSerde.class);
+        props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG_DEFAULT, Serdes.StringSerde.class);
+        props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG_DEFAULT, Serdes.StringSerde.class);
 
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);

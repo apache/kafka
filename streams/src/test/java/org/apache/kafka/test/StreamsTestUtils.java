@@ -69,8 +69,8 @@ public final class StreamsTestUtils {
         final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
-        props.put(StreamsConfig.KEY_SERDE_CLASS_DEFAULT_CONFIG, keySerdeClassName);
-        props.put(StreamsConfig.VALUE_SERDE_CLASS_DEFAULT_CONFIG, valueSerdeClassName);
+        props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG_DEFAULT, keySerdeClassName);
+        props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG_DEFAULT, valueSerdeClassName);
         props.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         props.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, DEBUG.name);
         props.putAll(additional);

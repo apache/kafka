@@ -210,8 +210,8 @@ public class ConsistencyVectorIntegrationTest {
         config.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + (++port));
         config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
         config.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
-        config.put(StreamsConfig.KEY_SERDE_CLASS_DEFAULT_CONFIG, Serdes.IntegerSerde.class);
-        config.put(StreamsConfig.VALUE_SERDE_CLASS_DEFAULT_CONFIG, Serdes.IntegerSerde.class);
+        config.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG_DEFAULT, Serdes.IntegerSerde.class);
+        config.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG_DEFAULT, Serdes.IntegerSerde.class);
         config.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         config.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 100);
         config.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 200);

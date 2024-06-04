@@ -313,7 +313,7 @@ public class ConsumerConfig extends AbstractConfig {
     private static final String REQUEST_TIMEOUT_MS_DOC = CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC;
 
     /** <code>default.api.timeout.ms</code> */
-    public static final String DEFAULT_API_TIMEOUT_MS_CONFIG = CommonClientConfigs.API_TIMEOUT_MS_DEFAULT_CONFIG;
+    public static final String DEFAULT_API_TIMEOUT_MS_CONFIG = CommonClientConfigs.API_TIMEOUT_MS_CONFIG_DEFAULT;
 
     /** <code>interceptor.classes</code> */
     public static final String INTERCEPTOR_CLASSES_CONFIG = "interceptor.classes";
@@ -569,7 +569,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         60 * 1000,
                                         atLeast(0),
                                         Importance.MEDIUM,
-                                        CommonClientConfigs.API_TIMEOUT_MS_DEFAULT_DOC)
+                                        CommonClientConfigs.API_TIMEOUT_MS_DOC_DEFAULT)
                                 .define(SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG,
                                         Type.LONG,
                                         CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_DEFAULT,

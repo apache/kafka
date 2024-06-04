@@ -137,7 +137,7 @@ public class AdminClientConfig extends AbstractConfig {
     private static final String METRICS_RECORDING_LEVEL_DOC = CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC;
 
     public static final String RETRIES_CONFIG = CommonClientConfigs.RETRIES_CONFIG;
-    public static final String DEFAULT_API_TIMEOUT_MS_CONFIG = CommonClientConfigs.API_TIMEOUT_MS_DEFAULT_CONFIG;
+    public static final String DEFAULT_API_TIMEOUT_MS_CONFIG = CommonClientConfigs.API_TIMEOUT_MS_CONFIG_DEFAULT;
 
     /**
      * <code>security.providers</code>
@@ -221,7 +221,7 @@ public class AdminClientConfig extends AbstractConfig {
                                         60000,
                                         atLeast(0),
                                         Importance.MEDIUM,
-                                        CommonClientConfigs.API_TIMEOUT_MS_DEFAULT_DOC)
+                                        CommonClientConfigs.API_TIMEOUT_MS_DOC_DEFAULT)
                                 .define(METRICS_SAMPLE_WINDOW_MS_CONFIG,
                                         Type.LONG,
                                         30000,

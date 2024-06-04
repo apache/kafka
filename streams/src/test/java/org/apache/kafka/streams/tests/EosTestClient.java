@@ -108,8 +108,8 @@ public class EosTestClient extends SmokeTestUtil {
         props.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 3);
         props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 5000L); // increase commit interval to make sure a client is killed having an open transaction
-        props.put(StreamsConfig.KEY_SERDE_CLASS_DEFAULT_CONFIG, Serdes.String().getClass());
-        props.put(StreamsConfig.VALUE_SERDE_CLASS_DEFAULT_CONFIG, Serdes.Integer().getClass());
+        props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG_DEFAULT, Serdes.String().getClass());
+        props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG_DEFAULT, Serdes.Integer().getClass());
 
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, Integer> data = builder.stream("data");

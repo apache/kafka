@@ -97,8 +97,8 @@ public class TopologyTest {
 
         // not used, but required for StreamsConfig
         configs.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        configs.put(StreamsConfig.KEY_SERDE_CLASS_DEFAULT_CONFIG, Serdes.StringSerde.class);
-        configs.put(StreamsConfig.VALUE_SERDE_CLASS_DEFAULT_CONFIG, Serdes.StringSerde.class);
+        configs.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG_DEFAULT, Serdes.StringSerde.class);
+        configs.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG_DEFAULT, Serdes.StringSerde.class);
 
         streamsConfig = new StreamsConfig(configs);
     }
@@ -382,8 +382,8 @@ public class TopologyTest {
             .addProcessor(badNodeName, new LocalMockProcessorSupplier(), sourceNodeName);
 
         final Properties config = new Properties();
-        config.put(StreamsConfig.KEY_SERDE_CLASS_DEFAULT_CONFIG, Serdes.ByteArraySerde.class);
-        config.put(StreamsConfig.VALUE_SERDE_CLASS_DEFAULT_CONFIG, Serdes.ByteArraySerde.class);
+        config.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG_DEFAULT, Serdes.ByteArraySerde.class);
+        config.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG_DEFAULT, Serdes.ByteArraySerde.class);
         try {
             new TopologyTestDriver(topology, config);
             fail("Should have thrown StreamsException");

@@ -122,8 +122,8 @@ public class GlobalStreamThreadTest {
         properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "blah");
         properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "testAppId");
         properties.put(StreamsConfig.STATE_DIR_CONFIG, baseDirectoryName);
-        properties.put(StreamsConfig.KEY_SERDE_CLASS_DEFAULT_CONFIG, Serdes.ByteArraySerde.class.getName());
-        properties.put(StreamsConfig.VALUE_SERDE_CLASS_DEFAULT_CONFIG, Serdes.ByteArraySerde.class.getName());
+        properties.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG_DEFAULT, Serdes.ByteArraySerde.class.getName());
+        properties.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG_DEFAULT, Serdes.ByteArraySerde.class.getName());
         config = new StreamsConfig(properties);
         globalStreamThread = new GlobalStreamThread(
             builder.rewriteTopology(config).buildGlobalStateTopology(),

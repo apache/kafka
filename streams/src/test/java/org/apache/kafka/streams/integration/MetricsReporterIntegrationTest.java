@@ -79,8 +79,8 @@ public class MetricsReporterIntegrationTest {
         streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_DEFAULT_CONFIG, Serdes.Integer().getClass());
-        streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_DEFAULT_CONFIG, Serdes.String().getClass());
+        streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG_DEFAULT, Serdes.Integer().getClass());
+        streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG_DEFAULT, Serdes.String().getClass());
         streamsConfiguration.put(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, MetricReporterImpl.class.getName());
     }
 

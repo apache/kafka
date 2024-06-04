@@ -349,8 +349,8 @@ public class MockProcessorContextTest {
     public void fullConstructorShouldSetAllExpectedAttributes() {
         final Properties config = new Properties();
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "testFullConstructor");
-        config.put(StreamsConfig.KEY_SERDE_CLASS_DEFAULT_CONFIG, Serdes.String().getClass());
-        config.put(StreamsConfig.VALUE_SERDE_CLASS_DEFAULT_CONFIG, Serdes.Long().getClass());
+        config.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG_DEFAULT, Serdes.String().getClass());
+        config.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG_DEFAULT, Serdes.Long().getClass());
 
         final File dummyFile = new File("");
         final MockProcessorContext context = new MockProcessorContext(config, new TaskId(1, 1), dummyFile);

@@ -404,8 +404,8 @@ public class StandbyTaskEOSIntegrationTest {
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, stateDirPath);
         streamsConfiguration.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         streamsConfiguration.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
-        streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_DEFAULT_CONFIG, Serdes.Integer().getClass());
-        streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_DEFAULT_CONFIG, Serdes.Integer().getClass());
+        streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG_DEFAULT, Serdes.Integer().getClass());
+        streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG_DEFAULT, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
         // need to set to zero to get predictable active/standby task assignments
         streamsConfiguration.put(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, 0);

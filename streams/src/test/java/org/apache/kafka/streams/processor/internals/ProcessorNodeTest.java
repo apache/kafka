@@ -132,8 +132,8 @@ public class ProcessorNodeTest {
             .flatMapValues(value -> Collections.singletonList(""));
         final Topology topology = builder.build();
         final Properties config = new Properties();
-        config.put(StreamsConfig.KEY_SERDE_CLASS_DEFAULT_CONFIG, Serdes.ByteArraySerde.class);
-        config.put(StreamsConfig.VALUE_SERDE_CLASS_DEFAULT_CONFIG, Serdes.ByteArraySerde.class);
+        config.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG_DEFAULT, Serdes.ByteArraySerde.class);
+        config.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG_DEFAULT, Serdes.ByteArraySerde.class);
 
         try (final TopologyTestDriver testDriver = new TopologyTestDriver(topology, config)) {
             final TestInputTopic<String, String> topic = testDriver.createInputTopic("streams-plaintext-input", new StringSerializer(), new StringSerializer());

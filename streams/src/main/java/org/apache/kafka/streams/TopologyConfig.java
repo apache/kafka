@@ -46,9 +46,9 @@ import static org.apache.kafka.streams.StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_D
 import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_DOC;
 import static org.apache.kafka.streams.StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG_DEFAULT;
-import static org.apache.kafka.streams.StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DEFAULT_DOC;
-import static org.apache.kafka.streams.StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_DEFAULT_CONFIG;
-import static org.apache.kafka.streams.StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_DEFAULT_DOC;
+import static org.apache.kafka.streams.StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC_DEFAULT;
+import static org.apache.kafka.streams.StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG_DEFAULT;
+import static org.apache.kafka.streams.StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_DOC_DEFAULT;
 import static org.apache.kafka.streams.StreamsConfig.MAX_TASK_IDLE_MS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.MAX_TASK_IDLE_MS_DOC;
 import static org.apache.kafka.streams.StreamsConfig.TASK_TIMEOUT_MS_CONFIG;
@@ -89,12 +89,12 @@ public class TopologyConfig extends AbstractConfig {
                 Type.CLASS,
                 null,
                 Importance.MEDIUM,
-                    DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DEFAULT_DOC)
-            .define(TIMESTAMP_EXTRACTOR_CLASS_DEFAULT_CONFIG,
+                    DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC_DEFAULT)
+            .define(TIMESTAMP_EXTRACTOR_CLASS_CONFIG_DEFAULT,
                 Type.CLASS,
                 null,
                 Importance.MEDIUM,
-                    TIMESTAMP_EXTRACTOR_CLASS_DEFAULT_DOC)
+                    TIMESTAMP_EXTRACTOR_CLASS_DOC_DEFAULT)
             .define(MAX_TASK_IDLE_MS_CONFIG,
                 Type.LONG,
                 null,
@@ -211,11 +211,11 @@ public class TopologyConfig extends AbstractConfig {
             taskTimeoutMs = globalAppConfigs.getLong(TASK_TIMEOUT_MS_CONFIG);
         }
 
-        if (isTopologyOverride(TIMESTAMP_EXTRACTOR_CLASS_DEFAULT_CONFIG, topologyOverrides)) {
-            timestampExtractorSupplier = () -> getConfiguredInstance(TIMESTAMP_EXTRACTOR_CLASS_DEFAULT_CONFIG, TimestampExtractor.class);
-            log.info("Topology {} is overriding {} to {}", topologyName, TIMESTAMP_EXTRACTOR_CLASS_DEFAULT_CONFIG, getClass(TIMESTAMP_EXTRACTOR_CLASS_DEFAULT_CONFIG));
+        if (isTopologyOverride(TIMESTAMP_EXTRACTOR_CLASS_CONFIG_DEFAULT, topologyOverrides)) {
+            timestampExtractorSupplier = () -> getConfiguredInstance(TIMESTAMP_EXTRACTOR_CLASS_CONFIG_DEFAULT, TimestampExtractor.class);
+            log.info("Topology {} is overriding {} to {}", topologyName, TIMESTAMP_EXTRACTOR_CLASS_CONFIG_DEFAULT, getClass(TIMESTAMP_EXTRACTOR_CLASS_CONFIG_DEFAULT));
         } else {
-            timestampExtractorSupplier = () -> globalAppConfigs.getConfiguredInstance(TIMESTAMP_EXTRACTOR_CLASS_DEFAULT_CONFIG, TimestampExtractor.class);
+            timestampExtractorSupplier = () -> globalAppConfigs.getConfiguredInstance(TIMESTAMP_EXTRACTOR_CLASS_CONFIG_DEFAULT, TimestampExtractor.class);
         }
 
         if (isTopologyOverride(DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG_DEFAULT, topologyOverrides)) {

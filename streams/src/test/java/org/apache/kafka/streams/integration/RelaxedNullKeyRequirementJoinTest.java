@@ -144,8 +144,8 @@ public class RelaxedNullKeyRequirementJoinTest {
 
     private static Properties props() {
         final Properties props = new Properties();
-        props.setProperty(StreamsConfig.KEY_SERDE_CLASS_DEFAULT_CONFIG, Serdes.String().getClass().getName());
-        props.setProperty(StreamsConfig.VALUE_SERDE_CLASS_DEFAULT_CONFIG, Serdes.String().getClass().getName());
+        props.setProperty(StreamsConfig.KEY_SERDE_CLASS_CONFIG_DEFAULT, Serdes.String().getClass().getName());
+        props.setProperty(StreamsConfig.VALUE_SERDE_CLASS_CONFIG_DEFAULT, Serdes.String().getClass().getName());
         return props;
     }
 }
