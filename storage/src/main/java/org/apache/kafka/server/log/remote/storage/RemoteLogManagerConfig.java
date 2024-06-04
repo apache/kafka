@@ -368,6 +368,10 @@ public final class RemoteLogManagerConfig extends AbstractConfig {
         return getBoolean(REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP);
     }
 
+    public String remoteStorageManagerClassName() {
+        return getString(REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP);
+    }
+
     public String remoteStorageManagerClassPath() {
         return getString(REMOTE_STORAGE_MANAGER_CLASS_PATH_PROP);
     }
