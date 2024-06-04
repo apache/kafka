@@ -224,7 +224,7 @@ def excludedSpotlessModules = [':clients',
                                ':server-common',
                                ':shell',
                                ':storage',
-                               ':storage:api',
+                               ':storage:storage-api', //  rename in settings.gradle
                                ':streams',
                                ':streams:examples',
                                ':streams:streams-scala',
