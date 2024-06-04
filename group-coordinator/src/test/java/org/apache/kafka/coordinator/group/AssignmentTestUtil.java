@@ -95,8 +95,9 @@ public class AssignmentTestUtil {
         Map<String, MemberSubscriptionSpecImpl> members
     ) {
         Map<Uuid, Map<Integer, String>> invertedTargetAssignment = new HashMap<>();
-        for (String memberId : members.keySet()) {
-            Map<Uuid, Set<Integer>> memberAssignment = members.get(memberId).memberAssignment();
+        for (Map.Entry<String, MemberSubscriptionSpecImpl> memberEntry : members.entrySet()) {
+            String memberId = memberEntry.getKey();
+            Map<Uuid, Set<Integer>> memberAssignment = memberEntry.getValue().memberAssignment();
 
             for (Map.Entry<Uuid, Set<Integer>> topicEntry : memberAssignment.entrySet()) {
                 Uuid topicId = topicEntry.getKey();

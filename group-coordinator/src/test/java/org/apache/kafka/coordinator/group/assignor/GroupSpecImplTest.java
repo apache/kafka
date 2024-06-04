@@ -35,12 +35,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 public class GroupSpecImplTest {
+    private static final String TEST_MEMBER = "test-member";
     private Map<String, MemberSubscriptionSpecImpl> members;
     private SubscriptionType subscriptionType;
     private Map<Uuid, Map<Integer, String>> invertedTargetAssignment;
     private GroupSpecImpl groupSpec;
     private Uuid topicId;
-    private final String testMember = "test-member";
 
     @BeforeEach
     void setUp() {
@@ -49,7 +49,7 @@ public class GroupSpecImplTest {
         invertedTargetAssignment = new HashMap<>();
         topicId = Uuid.randomUuid();
 
-        members.put(testMember,  new MemberSubscriptionSpecImpl(
+        members.put(TEST_MEMBER,  new MemberSubscriptionSpecImpl(
             Optional.empty(),
             mkSet(topicId),
             Assignment.EMPTY
@@ -84,25 +84,25 @@ public class GroupSpecImplTest {
     }
 
     @Test
-    void testMemberSubscriptionSpec() {
-        assertEquals(members.get(testMember), groupSpec.memberSubscription(testMember));
-        assertThrows(IllegalStateException.class, () -> groupSpec.memberSubscription("unknown-member"));
+    void testMemberSubscription() {
+        assertEquals(members.get(TEST_MEMBER), groupSpec.memberSubscription(TEST_MEMBER));
+        assertThrows(IllegalArgumentException.class, () -> groupSpec.memberSubscription("unknown-member"));
     }
 
     @Test
-    void testCurrentMemberAssignment() {
+    void testMemberAssignment() {
         Map<Uuid, Set<Integer>> topicPartitions = new HashMap<>();
         topicPartitions.put(
             topicId,
             mkSet(0, 1)
         );
-        members.put(testMember, new MemberSubscriptionSpecImpl(
+        members.put(TEST_MEMBER, new MemberSubscriptionSpecImpl(
             Optional.empty(),
             mkSet(topicId),
             new Assignment(topicPartitions)
         ));
 
-        assertEquals(topicPartitions, groupSpec.memberAssignment(testMember));
+        assertEquals(topicPartitions, groupSpec.memberAssignment(TEST_MEMBER));
         assertEquals(Collections.emptyMap(), groupSpec.memberAssignment("unknown-member"));
     }
 }

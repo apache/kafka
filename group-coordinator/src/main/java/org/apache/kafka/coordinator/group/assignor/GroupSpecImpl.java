@@ -84,13 +84,12 @@ public class GroupSpecImpl implements GroupSpec {
 
     /**
      * {@inheritDoc}
-     * @throws IllegalStateException If the member Id is not found.
      */
     @Override
     public MemberSubscriptionSpec memberSubscription(String memberId) {
         MemberSubscriptionSpec memberSubscription = memberSubscriptions.get(memberId);
         if (memberSubscription == null) {
-            throw new IllegalStateException("Member Id " + memberId + " not found.");
+            throw new IllegalArgumentException("Member Id " + memberId + " not found.");
         }
         return memberSubscription;
     }

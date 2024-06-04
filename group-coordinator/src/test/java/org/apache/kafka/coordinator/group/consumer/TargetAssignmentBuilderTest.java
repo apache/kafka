@@ -37,6 +37,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.coordinator.group.Assertions.assertUnorderedListEquals;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
@@ -165,18 +166,15 @@ public class TargetAssignmentBuilderTest {
             TopicsImage topicsImage = topicsImageBuilder.build().topics();
             // Prepare expected member specs.
             Map<String, MemberSubscriptionSpecImpl> memberSubscriptions = new HashMap<>();
-            Map<String, Map<Uuid, Set<Integer>>> targetAssignment = new HashMap<>(members.size());
 
             // All the existing members are prepared.
-            members.forEach((memberId, member) -> {
-                Assignment assignment = this.targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
-
+            members.forEach((memberId, member) ->
                 memberSubscriptions.put(memberId, createMemberSubscriptionSpecImpl(
                     member,
-                    topicsImage,
-                    assignment
-                ));
-            });
+                    targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
+                    topicsImage
+                ))
+            );
 
             // All the updated are added and all the deleted
             // members are removed.
@@ -184,20 +182,20 @@ public class TargetAssignmentBuilderTest {
                 if (updatedMemberOrNull == null) {
                     memberSubscriptions.remove(memberId);
                 } else {
-                    Assignment assignment = this.targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
+                    Assignment assignment = targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
 
                     // A new static member joins and needs to replace an existing departed one.
                     if (updatedMemberOrNull.instanceId() != null) {
                         String previousMemberId = staticMembers.get(updatedMemberOrNull.instanceId());
                         if (previousMemberId != null && !previousMemberId.equals(memberId)) {
-                            assignment = this.targetAssignment.getOrDefault(previousMemberId, Assignment.EMPTY);
+                            assignment = targetAssignment.getOrDefault(previousMemberId, Assignment.EMPTY);
                         }
                     }
 
                     memberSubscriptions.put(memberId, createMemberSubscriptionSpecImpl(
                         updatedMemberOrNull,
-                        topicsImage,
-                        assignment
+                        assignment,
+                        topicsImage
                     ));
                 }
             });
@@ -233,7 +231,7 @@ public class TargetAssignmentBuilderTest {
                 .withStaticMembers(staticMembers)
                 .withSubscriptionMetadata(subscriptionMetadata)
                 .withSubscriptionType(subscriptionType)
-                .withTargetAssignment(this.targetAssignment)
+                .withTargetAssignment(targetAssignment)
                 .withInvertedTargetAssignment(invertedTargetAssignment)
                 .withTopicsImage(topicsImage);
 
@@ -274,17 +272,22 @@ public class TargetAssignmentBuilderTest {
             .setInstanceId("instanceId")
             .build();
 
+        Assignment assignment = new Assignment(mkAssignment(
+            mkTopicAssignment(fooTopicId, 1, 2, 3),
+            mkTopicAssignment(barTopicId, 1, 2, 3)
+        ));
+
         MemberSubscriptionSpec subscriptionSpec = createMemberSubscriptionSpecImpl(
             member,
-            topicsImage,
-            new Assignment(Collections.emptyMap())
+            assignment,
+            topicsImage
         );
 
         assertEquals(new MemberSubscriptionSpecImpl(
             Optional.of("rackId"),
-            new TopicIds(member.subscribedTopicNames(), topicsImage),
-            new Assignment(Collections.emptyMap())
-        ), subscriptionSpec);
+            new TopicIds(mkSet("bar", "foo", "zar"), topicsImage),
+            assignment
+            ), subscriptionSpec);
     }
 
     @Test

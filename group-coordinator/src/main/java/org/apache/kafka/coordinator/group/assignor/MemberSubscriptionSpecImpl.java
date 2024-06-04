@@ -37,6 +37,7 @@ public class MemberSubscriptionSpecImpl implements MemberSubscriptionSpec {
      *
      * @param rackId                The rack Id.
      * @param subscribedTopicIds    The set of subscribed topic Ids.
+     * @param memberAssignment      The current member assignment.
      */
     public MemberSubscriptionSpecImpl(
         Optional<String> rackId,
@@ -68,13 +69,15 @@ public class MemberSubscriptionSpecImpl implements MemberSubscriptionSpec {
         if (o == null || getClass() != o.getClass()) return false;
         MemberSubscriptionSpecImpl that = (MemberSubscriptionSpecImpl) o;
         return rackId.equals(that.rackId) &&
-            subscribedTopicIds.equals(that.subscribedTopicIds);
+            subscribedTopicIds.equals(that.subscribedTopicIds) &&
+            memberAssignment.equals(that.memberAssignment);
     }
 
     @Override
     public int hashCode() {
         int result = rackId.hashCode();
         result = 31 * result + subscribedTopicIds.hashCode();
+        result = 31 * result + memberAssignment.hashCode();
         return result;
     }
 
@@ -82,6 +85,7 @@ public class MemberSubscriptionSpecImpl implements MemberSubscriptionSpec {
     public String toString() {
         return "MemberSubscriptionSpecImpl(rackId=" + rackId.orElse("N/A") +
             ", subscribedTopicIds=" + subscribedTopicIds +
+            ", memberAssignment=" + memberAssignment +
             ')';
     }
 }

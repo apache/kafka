@@ -328,26 +328,23 @@ public class RangeAssignorTest {
         ));
 
         Map<String, MemberSubscriptionSpecImpl> members = new TreeMap<>();
-        Map<Uuid, Set<Integer>> targetAssignment;
 
-        targetAssignment = mkAssignment(
-            mkTopicAssignment(topic1Uuid, 0),
-            mkTopicAssignment(topic2Uuid, 0)
-        );
         members.put(memberA, new MemberSubscriptionSpecImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
-            new Assignment(targetAssignment)
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic1Uuid, 0),
+                mkTopicAssignment(topic2Uuid, 0)
+            ))
         ));
 
-        targetAssignment = mkAssignment(
-            mkTopicAssignment(topic1Uuid, 1),
-            mkTopicAssignment(topic2Uuid, 1)
-        );
         members.put(memberB, new MemberSubscriptionSpecImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
-            new Assignment(targetAssignment)
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic1Uuid, 1),
+                mkTopicAssignment(topic2Uuid, 1)
+            ))
         ));
 
         // Add a new consumer to trigger a re-assignment
@@ -402,26 +399,23 @@ public class RangeAssignorTest {
         ));
 
         Map<String, MemberSubscriptionSpecImpl> members = new TreeMap<>();
-        Map<Uuid, Set<Integer>> targetAssignment;
 
-        targetAssignment = mkAssignment(
-            mkTopicAssignment(topic1Uuid, 0, 1),
-            mkTopicAssignment(topic2Uuid, 0, 1)
-        );
         members.put(memberA, new MemberSubscriptionSpecImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
-            new Assignment(targetAssignment)
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic1Uuid, 0, 1),
+                mkTopicAssignment(topic2Uuid, 0, 1)
+            ))
         ));
 
-        targetAssignment = mkAssignment(
-            mkTopicAssignment(topic1Uuid, 2),
-            mkTopicAssignment(topic2Uuid, 2)
-        );
         members.put(memberB, new MemberSubscriptionSpecImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
-            new Assignment(targetAssignment)
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic1Uuid, 2),
+                mkTopicAssignment(topic2Uuid, 2)
+            ))
         ));
 
         GroupSpec groupSpec = new GroupSpecImpl(
@@ -466,26 +460,23 @@ public class RangeAssignorTest {
         ));
 
         Map<String, MemberSubscriptionSpecImpl> members = new TreeMap<>();
-        Map<Uuid, Set<Integer>> targetAssignment;
 
-        targetAssignment = mkAssignment(
-            mkTopicAssignment(topic1Uuid, 0, 1),
-            mkTopicAssignment(topic2Uuid, 0, 1)
-        );
         members.put(memberA, new MemberSubscriptionSpecImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
-            new Assignment(targetAssignment)
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic1Uuid, 0, 1),
+                mkTopicAssignment(topic2Uuid, 0, 1)
+            ))
         ));
 
-        targetAssignment = mkAssignment(
-            mkTopicAssignment(topic1Uuid, 2),
-            mkTopicAssignment(topic2Uuid, 2)
-        );
         members.put(memberB, new MemberSubscriptionSpecImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
-            new Assignment(targetAssignment)
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic1Uuid, 2),
+                mkTopicAssignment(topic2Uuid, 2)
+            ))
         ));
 
         // Add a new consumer to trigger a re-assignment
@@ -542,26 +533,23 @@ public class RangeAssignorTest {
         ));
 
         Map<String, MemberSubscriptionSpecImpl> members = new TreeMap<>();
-        Map<Uuid, Set<Integer>> targetAssignment;
 
-        targetAssignment = mkAssignment(
-            mkTopicAssignment(topic1Uuid, 0, 1),
-            mkTopicAssignment(topic2Uuid, 0, 1)
-        );
         members.put(memberA, new MemberSubscriptionSpecImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
-            new Assignment(targetAssignment)
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic1Uuid, 0, 1),
+                mkTopicAssignment(topic2Uuid, 0, 1)
+            ))
         ));
 
-        targetAssignment = mkAssignment(
-            mkTopicAssignment(topic1Uuid, 2),
-            mkTopicAssignment(topic2Uuid, 2)
-        );
         members.put(memberB, new MemberSubscriptionSpecImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
-            new Assignment(targetAssignment)
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic1Uuid, 2),
+                mkTopicAssignment(topic2Uuid, 2)
+            ))
         ));
 
         // Add a new consumer to trigger a re-assignment
@@ -616,18 +604,16 @@ public class RangeAssignorTest {
         ));
 
         Map<String, MemberSubscriptionSpecImpl> members = new TreeMap<>();
-        Map<Uuid, Set<Integer>> targetAssignment;
 
         // Consumer A was removed
 
-        targetAssignment = mkAssignment(
-            mkTopicAssignment(topic1Uuid, 2),
-            mkTopicAssignment(topic2Uuid, 2)
-        );
         members.put(memberB, new MemberSubscriptionSpecImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
-            new Assignment(targetAssignment)
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic1Uuid, 2),
+                mkTopicAssignment(topic2Uuid, 2)
+            ))
         ));
 
         GroupSpec groupSpec = new GroupSpecImpl(
@@ -676,35 +662,31 @@ public class RangeAssignorTest {
         // Let initial subscriptions be A -> T1, T2 // B -> T2 // C -> T2, T3
         // Change the subscriptions to A -> T1 // B -> T1, T2, T3 // C -> T2
         Map<String, MemberSubscriptionSpecImpl> members = new TreeMap<>();
-        Map<Uuid, Set<Integer>> targetAssignment;
 
-        targetAssignment = mkAssignment(
-            mkTopicAssignment(topic1Uuid, 0, 1, 2),
-            mkTopicAssignment(topic2Uuid, 0)
-        );
         members.put(memberA, new MemberSubscriptionSpecImpl(
             Optional.empty(),
             mkSet(topic1Uuid),
-            new Assignment(targetAssignment)
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic1Uuid, 0, 1, 2),
+                mkTopicAssignment(topic2Uuid, 0)
+            ))
         ));
 
-        targetAssignment = mkAssignment(
-            mkTopicAssignment(topic2Uuid, 1)
-        );
         members.put(memberB, new MemberSubscriptionSpecImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid, topic3Uuid),
-            new Assignment(targetAssignment)
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic2Uuid, 1)
+            ))
         ));
 
-        targetAssignment = mkAssignment(
-            mkTopicAssignment(topic2Uuid, 2),
-            mkTopicAssignment(topic3Uuid, 0, 1)
-        );
         members.put(memberC, new MemberSubscriptionSpecImpl(
             Optional.empty(),
             mkSet(topic2Uuid),
-            new Assignment(targetAssignment)
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic2Uuid, 2),
+                mkTopicAssignment(topic3Uuid, 0, 1)
+            ))
         ));
 
         GroupSpec groupSpec = new GroupSpecImpl(

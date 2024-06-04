@@ -293,18 +293,16 @@ public class TargetAssignmentBuilder {
      * @throws PartitionAssignorException if the target assignment cannot be computed.
      */
     public TargetAssignmentResult build() throws PartitionAssignorException {
-        Map<String, MemberSubscriptionSpecImpl> memberSpecs = new HashMap<>(members.size());
+        Map<String, MemberSubscriptionSpecImpl> memberSpecs = new HashMap<>();
 
         // Prepare the member spec for all members.
-        members.forEach((memberId, member) -> {
-            Assignment assignment = targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
-
+        members.forEach((memberId, member) ->
             memberSpecs.put(memberId, createMemberSubscriptionSpecImpl(
                 member,
-                topicsImage,
-                assignment
-            ));
-        });
+                targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
+                topicsImage
+            ))
+        );
 
         // Update the member spec if updated or deleted members.
         updatedMembers.forEach((memberId, updatedMemberOrNull) -> {
@@ -323,8 +321,8 @@ public class TargetAssignmentBuilder {
 
                 memberSpecs.put(memberId, createMemberSubscriptionSpecImpl(
                     updatedMemberOrNull,
-                    topicsImage,
-                    assignment
+                    assignment,
+                    topicsImage
                 ));
             }
         });
@@ -354,7 +352,7 @@ public class TargetAssignmentBuilder {
         Map<String, Assignment> newTargetAssignment = new HashMap<>();
 
         memberSpecs.keySet().forEach(memberId -> {
-            Assignment oldMemberAssignment = this.targetAssignment.get(memberId);
+            Assignment oldMemberAssignment = targetAssignment.get(memberId);
             Assignment newMemberAssignment = newMemberAssignment(newGroupAssignment, memberId);
 
             newTargetAssignment.put(memberId, newMemberAssignment);
@@ -400,8 +398,8 @@ public class TargetAssignmentBuilder {
     // private for testing
     static MemberSubscriptionSpecImpl createMemberSubscriptionSpecImpl(
         ConsumerGroupMember member,
-        TopicsImage topicsImage,
-        Assignment memberAssignment
+        Assignment memberAssignment,
+        TopicsImage topicsImage
     ) {
         return new MemberSubscriptionSpecImpl(
             Optional.ofNullable(member.rackId()),
