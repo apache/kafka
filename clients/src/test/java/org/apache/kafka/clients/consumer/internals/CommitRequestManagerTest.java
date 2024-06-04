@@ -614,6 +614,35 @@ public class CommitRequestManagerTest {
         }
     }
 
+    @ParameterizedTest
+    @MethodSource("offsetFetchExceptionSupplier")
+    public void testOffsetFetchRequestTimeoutRequests(final Errors error,
+                                                      final boolean isRetriable) {
+        CommitRequestManager commitRequestManager = create(true, 100);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+
+        Set<TopicPartition> partitions = new HashSet<>();
+        partitions.add(new TopicPartition("t1", 0));
+        List<CompletableFuture<Map<TopicPartition, OffsetAndMetadata>>> futures = sendAndVerifyDuplicatedOffsetFetchRequests(
+                commitRequestManager,
+                partitions,
+                1,
+                error);
+
+        if (isRetriable) {
+            futures.forEach(f -> assertFalse(f.isDone()));
+
+            // Insert a long enough sleep to force a timeout of the operation. Invoke poll() again so that each
+            // OffsetFetchRequestState is evaluated via isExpired().
+            time.sleep(defaultApiTimeoutMs);
+            commitRequestManager.poll(time.milliseconds());
+            futures.forEach(f -> assertFutureThrows(f, TimeoutException.class));
+        } else {
+            futures.forEach(f -> assertFutureThrows(f, KafkaException.class));
+            assertEmptyPendingRequests(commitRequestManager);
+        }
+    }
+
     @Test
     public void testSuccessfulOffsetFetch() {
         CommitRequestManager commitManager = create(false, 100);
