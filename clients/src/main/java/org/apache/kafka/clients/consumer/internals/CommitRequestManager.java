@@ -524,7 +524,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             } else {
                 if (error instanceof RetriableException || isStaleEpochErrorAndValidEpochAvailable(error)) {
                     if (fetchRequest.isExpired()) {
-                        log.debug("Fetch request for {} timed out and won't be retried anymore", fetchRequest.requestedPartitions);
+                        log.debug("OffsetFetch request for {} timed out and won't be retried anymore", fetchRequest.requestedPartitions);
                         result.completeExceptionally(maybeWrapAsTimeoutException(error));
                     } else {
                         fetchRequest.resetFuture();
@@ -824,7 +824,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          * reached, based on the provided current time.
          */
         void maybeExpire() {
-            if (retryTimeoutExpired()) {
+            if (numAttempts > 0 && isExpired()) {
                 removeRequest();
                 future().completeExceptionally(new TimeoutException(requestDescription() +
                     " could not complete before timeout expired."));
@@ -866,14 +866,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         abstract void onResponse(final ClientResponse response);
-
-        /**
-         * If at least one attempt has been sent, and the user-provided timeout has elapsed, consider the
-         * request as expired.
-         */
-        boolean retryTimeoutExpired() {
-            return numAttempts > 0 && isExpired();
-        }
 
         abstract void removeRequest();
     }
