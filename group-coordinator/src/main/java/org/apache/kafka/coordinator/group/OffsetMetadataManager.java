@@ -329,7 +329,8 @@ public class OffsetMetadataManager {
             request.memberId(),
             request.groupInstanceId(),
             request.generationIdOrMemberEpoch(),
-            false
+            false,
+            context.apiVersion()
         );
 
         return group;
@@ -338,9 +339,11 @@ public class OffsetMetadataManager {
     /**
      * Validates an TxnOffsetCommit request.
      *
+     * @param context The request context.
      * @param request The actual request.
      */
     private Group validateTransactionalOffsetCommit(
+        RequestContext context,
         TxnOffsetCommitRequestData request
     ) throws ApiException {
         Group group;
@@ -363,7 +366,8 @@ public class OffsetMetadataManager {
                 request.memberId(),
                 request.groupInstanceId(),
                 request.generationId(),
-                true
+                true,
+                context.apiVersion()
             );
         } catch (StaleMemberEpochException ex) {
             throw Errors.ILLEGAL_GENERATION.exception();
@@ -518,7 +522,7 @@ public class OffsetMetadataManager {
         RequestContext context,
         TxnOffsetCommitRequestData request
     ) throws ApiException {
-        validateTransactionalOffsetCommit(request);
+        validateTransactionalOffsetCommit(context, request);
 
         final TxnOffsetCommitResponseData response = new TxnOffsetCommitResponseData();
         final List<CoordinatorRecord> records = new ArrayList<>();

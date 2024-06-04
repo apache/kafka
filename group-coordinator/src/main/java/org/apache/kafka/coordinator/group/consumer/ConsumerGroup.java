@@ -24,6 +24,7 @@ import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.protocol.Errors;
@@ -793,6 +794,7 @@ public class ConsumerGroup implements Group {
      * @param memberEpoch       The member epoch.
      * @param isTransactional   Whether the offset commit is transactional or not. It has no
      *                          impact when a consumer group is used.
+     * @param version           The request context api version.
      * @throws UnknownMemberIdException     If the member is not found.
      * @throws StaleMemberEpochException    If the member uses the consumer protocol and the provided
      *                                      member epoch doesn't match the actual member epoch.
@@ -804,7 +806,8 @@ public class ConsumerGroup implements Group {
         String memberId,
         String groupInstanceId,
         int memberEpoch,
-        boolean isTransactional
+        boolean isTransactional,
+        short version
     ) throws UnknownMemberIdException, StaleMemberEpochException, IllegalGenerationException {
         // When the member epoch is -1, the request comes from either the admin client
         // or a consumer which does not use the group management facility. In this case,
@@ -812,6 +815,13 @@ public class ConsumerGroup implements Group {
         if (memberEpoch < 0 && members().isEmpty()) return;
 
         final ConsumerGroupMember member = getOrMaybeCreateMember(memberId, false);
+
+        // If the commit is not transactional and the member uses the new consumer protocol (KIP-848),
+        // the member should be using the OffsetCommit API version >= 9.
+        if (!isTransactional && !member.useClassicProtocol() && version < 9) {
+            throw new UnsupportedVersionException(String.format("The OffsetCommit API version %d " +
+                "is smaller than the lowest version supporting new consumer protocol 9.", version));
+        }
         validateMemberEpoch(memberEpoch, member.memberEpoch(), member.useClassicProtocol());
     }
 

@@ -30,6 +30,7 @@ import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProt
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -989,71 +990,76 @@ public class ClassicGroupTest {
 
     @Test
     public void testValidateOffsetCommit() {
-        // A call from the admin client without any parameters should pass.
-        group.validateOffsetCommit("", "", -1, false);
+        for (short v = ApiKeys.OFFSET_COMMIT.oldestVersion(); v <= ApiKeys.OFFSET_COMMIT.latestVersion(); v++) {
+            final short version = v;
+            initialize();
 
-        // Add a member.
-        group.add(new ClassicGroupMember(
-            "member-id",
-            Optional.of("instance-id"),
-            "",
-            "",
-            100,
-            100,
-            "consumer",
-            new JoinGroupRequestProtocolCollection(Collections.singletonList(
-                new JoinGroupRequestProtocol()
-                    .setName("roundrobin")
-                    .setMetadata(new byte[0])).iterator())
-        ));
+            // A call from the admin client without any parameters should pass.
+            group.validateOffsetCommit("", "", -1, false, version);
 
-        group.transitionTo(PREPARING_REBALANCE);
-        group.initNextGeneration();
+            // Add a member.
+            group.add(new ClassicGroupMember(
+                "member-id",
+                Optional.of("instance-id"),
+                "",
+                "",
+                100,
+                100,
+                "consumer",
+                new JoinGroupRequestProtocolCollection(Collections.singletonList(
+                    new JoinGroupRequestProtocol()
+                        .setName("roundrobin")
+                        .setMetadata(new byte[0])).iterator())
+            ));
 
-        // No parameters and the group is not empty.
-        assertThrows(UnknownMemberIdException.class,
-            () -> group.validateOffsetCommit("", "", -1, false));
+            group.transitionTo(PREPARING_REBALANCE);
+            group.initNextGeneration();
 
-        // A transactional offset commit without any parameters
-        // and a non-empty group is accepted.
-        group.validateOffsetCommit("", null, -1, true);
+            // No parameters and the group is not empty.
+            assertThrows(UnknownMemberIdException.class,
+                () -> group.validateOffsetCommit("", "", -1, false, version));
 
-        // The member id does not exist.
-        assertThrows(UnknownMemberIdException.class,
-            () -> group.validateOffsetCommit("unknown", "unknown", -1, false));
+            // A transactional offset commit without any parameters
+            // and a non-empty group is accepted.
+            group.validateOffsetCommit("", null, -1, true, version);
 
-        // The instance id does not exist.
-        assertThrows(UnknownMemberIdException.class,
-            () -> group.validateOffsetCommit("member-id", "unknown", -1, false));
+            // The member id does not exist.
+            assertThrows(UnknownMemberIdException.class,
+                () -> group.validateOffsetCommit("unknown", "unknown", -1, false, version));
 
-        // The generation id is invalid.
-        assertThrows(IllegalGenerationException.class,
-            () -> group.validateOffsetCommit("member-id", "instance-id", 0, false));
+            // The instance id does not exist.
+            assertThrows(UnknownMemberIdException.class,
+                () -> group.validateOffsetCommit("member-id", "unknown", -1, false, version));
 
-        // Group is in prepare rebalance state.
-        assertThrows(RebalanceInProgressException.class,
-            () -> group.validateOffsetCommit("member-id", "instance-id", 1, false));
+            // The generation id is invalid.
+            assertThrows(IllegalGenerationException.class,
+                () -> group.validateOffsetCommit("member-id", "instance-id", 0, false, version));
 
-        // Group transitions to stable.
-        group.transitionTo(STABLE);
+            // Group is in prepare rebalance state.
+            assertThrows(RebalanceInProgressException.class,
+                () -> group.validateOffsetCommit("member-id", "instance-id", 1, false, version));
 
-        // This should work.
-        group.validateOffsetCommit("member-id", "instance-id", 1, false);
+            // Group transitions to stable.
+            group.transitionTo(STABLE);
 
-        // Replace static member.
-        group.replaceStaticMember("instance-id", "member-id", "new-member-id");
+            // This should work.
+            group.validateOffsetCommit("member-id", "instance-id", 1, false, version);
 
-        // The old instance id should be fenced.
-        assertThrows(FencedInstanceIdException.class,
-            () -> group.validateOffsetCommit("member-id", "instance-id", 1, false));
+            // Replace static member.
+            group.replaceStaticMember("instance-id", "member-id", "new-member-id");
 
-        // Remove member and transitions to dead.
-        group.remove("new-instance-id");
-        group.transitionTo(DEAD);
+            // The old instance id should be fenced.
+            assertThrows(FencedInstanceIdException.class,
+                () -> group.validateOffsetCommit("member-id", "instance-id", 1, false, version));
 
-        // This should fail with CoordinatorNotAvailableException.
-        assertThrows(CoordinatorNotAvailableException.class,
-            () -> group.validateOffsetCommit("member-id", "new-instance-id", 1, false));
+            // Remove member and transitions to dead.
+            group.remove("new-instance-id");
+            group.transitionTo(DEAD);
+
+            // This should fail with CoordinatorNotAvailableException.
+            assertThrows(CoordinatorNotAvailableException.class,
+                () -> group.validateOffsetCommit("member-id", "new-instance-id", 1, false, version));
+        }
     }
 
     @Test
