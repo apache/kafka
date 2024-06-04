@@ -252,14 +252,11 @@ public class OptimizedUniformAssignmentBuilderTest {
             ));
         }
 
-        List<Uuid> subscribedTopics = new ArrayList<>(topicMetadata.keySet());
-
         Map<String, MemberSubscriptionSpecImpl> members = new TreeMap<>();
-
         for (int i = 1; i < 50; i++) {
             members.put("member" + i, new MemberSubscriptionSpecImpl(
                 Optional.empty(),
-                new HashSet<>(subscribedTopics),
+                topicMetadata.keySet(),
                 Assignment.EMPTY
             ));
         }

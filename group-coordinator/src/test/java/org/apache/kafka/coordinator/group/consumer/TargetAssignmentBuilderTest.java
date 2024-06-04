@@ -287,7 +287,7 @@ public class TargetAssignmentBuilderTest {
             Optional.of("rackId"),
             new TopicIds(mkSet("bar", "foo", "zar"), topicsImage),
             assignment
-            ), subscriptionSpec);
+        ), subscriptionSpec);
     }
 
     @Test
