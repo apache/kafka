@@ -17,9 +17,11 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.utils.ConfigUtils;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -166,6 +168,26 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
         return Duration.ofMillis(getLong(CONSUMER_POLL_TIMEOUT_MILLIS));
     }
 
+    public List<ConfigValue> validate() {
+        Boolean emitCheckpointsValue = this.getBoolean(MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED);
+        Boolean syncGroupOffsetsValue = this.getBoolean(MirrorCheckpointConfig.SYNC_GROUP_OFFSETS_ENABLED);
+
+        List<ConfigValue> invalidConfigs = new ArrayList<>();
+        if (!emitCheckpointsValue && !syncGroupOffsetsValue) {
+            ConfigValue syncGroupOffsets = new ConfigValue(MirrorCheckpointConfig.SYNC_GROUP_OFFSETS_ENABLED);
+            ConfigValue emitCheckpoints = new ConfigValue(MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED);
+
+            String errorMessage = "MirrorCheckpointConnector can't run with both" +
+                    MirrorCheckpointConfig.SYNC_GROUP_OFFSETS_ENABLED + ", " + MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED + "set to false";
+            syncGroupOffsets.addErrorMessage(errorMessage);
+            emitCheckpoints.addErrorMessage(errorMessage);
+            invalidConfigs.add(syncGroupOffsets);
+            invalidConfigs.add(emitCheckpoints);
+        }
+
+        return invalidConfigs;
+    }
+
     private static ConfigDef defineCheckpointConfig(ConfigDef baseConfig) {
         return baseConfig
                 .define(
@@ -252,13 +274,7 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
                         ConfigDef.Type.CLASS,
                         TOPIC_FILTER_CLASS_DEFAULT,
                         ConfigDef.Importance.LOW,
-                        TOPIC_FILTER_CLASS_DOC)
-                .define(
-                        EMIT_OFFSET_SYNCS_ENABLED,
-                        ConfigDef.Type.BOOLEAN,
-                        EMIT_OFFSET_SYNCS_ENABLED_DEFAULT,
-                        ConfigDef.Importance.LOW,
-                        EMIT_OFFSET_SYNCS_ENABLED_DOC);
+                        TOPIC_FILTER_CLASS_DOC);
     }
 
     protected final static ConfigDef CONNECTOR_CONFIG_DEF = defineCheckpointConfig(new ConfigDef(BASE_CONNECTOR_CONFIG_DEF));

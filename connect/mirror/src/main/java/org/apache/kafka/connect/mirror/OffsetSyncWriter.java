@@ -29,6 +29,9 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
 
+/**
+ * Used internally by MirrorMaker to write, queued, and promote the new translated offsets into offset-syncs topic.
+ */
 class OffsetSyncWriter implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(OffsetSyncWriter.class);
     private static final int MAX_OUTSTANDING_OFFSET_SYNCS = 10;

@@ -38,7 +38,6 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
@@ -111,47 +110,15 @@ public class MirrorCheckpointConnector extends SourceConnector {
     @Override
     public Config validate(Map<String, String> props) {
         List<ConfigValue> configValues = super.validate(props).configValues();
-        MirrorCheckpointConfig config = new MirrorCheckpointConfig(props);
-        Boolean emitCheckpointsValue = config.getBoolean(MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED);
-        Boolean syncGroupOffsetsValue = config.getBoolean(MirrorCheckpointConfig.SYNC_GROUP_OFFSETS_ENABLED);
-        Boolean emitOffsetSyncsValue = config.getBoolean(MirrorConnectorConfig.EMIT_OFFSET_SYNCS_ENABLED);
+        new MirrorCheckpointConfig(props).validate()
+                .forEach(invalidConfig ->
+                        configValues.stream()
+                            .filter(conf -> conf.name().equals(invalidConfig.name()))
+                            .forEach(conf -> invalidConfig.errorMessages().forEach(msg -> conf.addErrorMessage(msg))));
 
-        if (!emitCheckpointsValue && !syncGroupOffsetsValue) {
-            ConfigValue syncGroupOffsets = configValues.stream().filter(prop -> MirrorCheckpointConfig.SYNC_GROUP_OFFSETS_ENABLED.equals(prop.name()))
-                    .findAny()
-                    .orElseGet(() -> {
-                        ConfigValue result = new ConfigValue(MirrorCheckpointConfig.SYNC_GROUP_OFFSETS_ENABLED);
-                        configValues.add(result);
-                        return result;
-                    });
-
-            ConfigValue emitCheckpoints = configValues.stream().filter(prop -> MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED.equals(prop.name()))
-                    .findAny()
-                    .orElseGet(() -> {
-                        ConfigValue result = new ConfigValue(MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED);
-                        configValues.add(result);
-                        return result;
-                    });
-
-            String errorMessage = "MirrorCheckpointConnector can't run with both" +
-                    MirrorCheckpointConfig.SYNC_GROUP_OFFSETS_ENABLED + ", " + MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED + "set to false";
-            syncGroupOffsets.addErrorMessage(errorMessage);
-            emitCheckpoints.addErrorMessage(errorMessage);
-        }
-        if (!emitOffsetSyncsValue && (emitCheckpointsValue || syncGroupOffsetsValue)) {
-            ConfigValue emitOffsetSyncs = configValues.stream().filter(prop -> MirrorConnectorConfig.EMIT_OFFSET_SYNCS_ENABLED.equals(prop.name()))
-                    .findAny()
-                    .orElseGet(() -> {
-                        ConfigValue result = new ConfigValue(MirrorConnectorConfig.EMIT_OFFSET_SYNCS_ENABLED);
-                        configValues.add(result);
-                        return result;
-                    });
-
-            emitOffsetSyncs.addErrorMessage("MirrorCheckpointConnector can't run while MirrorSourceConnector configured with" +
-                    MirrorConnectorConfig.EMIT_OFFSET_SYNCS_ENABLED + "set to false");
-        }
         return new Config(configValues);
     }
+
     @Override
     public Class<? extends Task> taskClass() {
         return MirrorCheckpointTask.class;

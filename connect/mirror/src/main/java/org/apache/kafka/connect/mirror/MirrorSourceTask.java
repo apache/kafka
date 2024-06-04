@@ -57,7 +57,6 @@ public class MirrorSourceTask extends SourceTask {
     private boolean stopping = false;
     private Semaphore consumerAccess;
     private OffsetSyncWriter offsetSyncWriter;
-    private boolean emitOffsetSyncEnabled;
 
     public MirrorSourceTask() {}
 
@@ -74,21 +73,19 @@ public class MirrorSourceTask extends SourceTask {
         if (emitOffsetSyncEnabled) {
             this.offsetSyncWriter = new OffsetSyncWriter(producer, offsetSyncsTopic, outstandingOffsetSyncs, maxOffsetLag);
         }
-        this.emitOffsetSyncEnabled = emitOffsetSyncEnabled;
         this.partitionStates = partitionStates;
     }
 
     @Override
     public void start(Map<String, String> props) {
         MirrorSourceTaskConfig config = new MirrorSourceTaskConfig(props);
-        emitOffsetSyncEnabled = config.emitOffsetSyncEnabled();
         consumerAccess = new Semaphore(1);  // let one thread at a time access the consumer
         sourceClusterAlias = config.sourceClusterAlias();
         metrics = config.metrics();
         pollTimeout = config.consumerPollTimeout();
         replicationPolicy = config.replicationPolicy();
         partitionStates = new HashMap<>();
-        if (this.emitOffsetSyncEnabled) {
+        if (config.emitOffsetSyncEnabled()) {
             offsetSyncWriter = new OffsetSyncWriter(config);
         }
         consumer = MirrorUtils.newConsumer(config.sourceConsumerConfig("replication-consumer"));
