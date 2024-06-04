@@ -54,15 +54,16 @@ object StorageTool extends Logging {
   def runMain(args: Array[String]): Int = {
     val namespace = parseArguments(args)
     val command = namespace.getString("command")
-    val config = parseConfig(namespace.getString("config"))
+    val config = Option(namespace.getString("config")).flatMap(
+      p => Some(new KafkaConfig(Utils.loadProps(p))))
     command match {
       case "info" =>
-        val directories = configToLogDirectories(config)
-        val selfManagedMode = configToSelfManagedMode(config)
+        val directories = configToLogDirectories(config.get)
+        val selfManagedMode = configToSelfManagedMode(config.get)
         infoCommand(System.out, selfManagedMode, directories)
 
       case "format" =>
-        runFormatCommand(namespace, config)
+        runFormatCommand(namespace, config.get)
 
       case "random-uuid" =>
         System.out.println(Uuid.randomUuid)
@@ -84,14 +85,6 @@ object StorageTool extends Logging {
     }
     message.foreach(System.err.println)
     Exit.exit(exitCode, message)
-  }
-
-  private def parseConfig(configFilename: String): KafkaConfig = {
-    try {
-      new KafkaConfig(Utils.loadProps(configFilename))
-    } catch {
-      case e: IllegalArgumentException => throw new TerseFailure(s"Invalid configuration: ${e.getMessage}")
-    }
   }
 
   /**
