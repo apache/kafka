@@ -16,13 +16,17 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyConfig;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.processor.StateStore;
@@ -144,7 +148,11 @@ public class InternalTopologyBuilder {
 
     private String applicationId = null;
 
+    // keyed by subtopology id
     private Map<Integer, Set<String>> nodeGroups = null;
+
+    // keyed by subtopology id
+    private Map<Integer, Set<String>> subtopologyIdToStateStoreNames = null;
 
     // The name of the topology this builder belongs to, or null if this is not a NamedTopology
     private final String topologyName;
@@ -937,14 +945,15 @@ public class InternalTopologyBuilder {
      * @return the full topology minus any global state
      */
     public synchronized ProcessorTopology buildTopology() {
-        final Set<String> nodeGroup = new HashSet<>();
+        final Set<String> allNodes = new HashSet<>();
         for (final Set<String> value : nodeGroups().values()) {
-            nodeGroup.addAll(value);
+            allNodes.addAll(value);
         }
-        nodeGroup.removeAll(globalNodeGroups());
+        allNodes.removeAll(globalNodeGroups());
 
         initializeSubscription();
-        return build(nodeGroup);
+        initializeSubtopologyIdToStateStoreNamesMap();
+        return build(allNodes);
     }
 
     /**
@@ -1498,6 +1507,39 @@ public class InternalTopologyBuilder {
             return topics != null && topics.size() == 1 && globalTopics.contains(topics.get(0));
         }
         return false;
+    }
+
+    public Set<String> stateStoreNamesForSubtopology(final int subtopologyId) {
+        return subtopologyIdToStateStoreNames.get(subtopologyId);
+    }
+
+    private void initializeSubtopologyIdToStateStoreNamesMap() {
+        if (subtopologyIdToStateStoreNames != null) {
+            log.error("Attempted to initialize subtopologyIdToStateStores map but it was not null");
+            throw new StreamsException("Double initialization of subtopologyIdToStateStores map");
+        }
+
+        final ConcurrentMap<Integer, Set<String>> storeNames = new ConcurrentHashMap<>();
+
+        for (final Map.Entry<Integer, Set<String>> nodeGroup : makeNodeGroups().entrySet()) {
+            final Set<String> subtopologyNodes = nodeGroup.getValue();
+            final boolean isNodeGroupOfGlobalStores = nodeGroupContainsGlobalSourceNode(subtopologyNodes);
+
+            if (!isNodeGroupOfGlobalStores) {
+                final int subtopologyId = nodeGroup.getKey();
+                final Set<String> subtopologyStoreNames = new HashSet<>();
+
+                for (final String nodeName : subtopologyNodes) {
+                    final AbstractNode node = nodeFactories.get(nodeName).describe();
+                    if (node instanceof Processor) {
+                        subtopologyStoreNames.addAll(((Processor) node).stores());
+                    }
+                }
+
+                storeNames.put(subtopologyId, subtopologyStoreNames);
+            }
+        }
+        subtopologyIdToStateStoreNames = storeNames;
     }
 
     public TopologyDescription describe() {
