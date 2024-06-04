@@ -184,6 +184,7 @@ class MetadataVersionTest {
         assertEquals(IBP_3_7_IV3, MetadataVersion.fromVersionString("3.7-IV3"));
         assertEquals(IBP_3_7_IV4, MetadataVersion.fromVersionString("3.7-IV4"));
 
+        // 3.8-IV1 is the latest production version in the 3.8 line
         assertEquals(IBP_3_8_IV0, MetadataVersion.fromVersionString("3.8-IV0"));
         assertEquals(IBP_3_8_IV1, MetadataVersion.fromVersionString("3.8-IV1"));
 
@@ -248,6 +249,7 @@ class MetadataVersionTest {
         assertEquals("3.7", IBP_3_7_IV3.shortVersion());
         assertEquals("3.7", IBP_3_7_IV4.shortVersion());
         assertEquals("3.8", IBP_3_8_IV0.shortVersion());
+        assertEquals("3.8", IBP_3_8_IV1.shortVersion());
         assertEquals("4.0", IBP_4_0_IV0.shortVersion());
     }
 
@@ -367,7 +369,7 @@ class MetadataVersionTest {
     @ParameterizedTest
     @EnumSource(value = MetadataVersion.class)
     public void testIsElrSupported(MetadataVersion metadataVersion) {
-        assertEquals(metadataVersion.isAtLeast(IBP_3_8_IV0), metadataVersion.isElrSupported());
+        assertEquals(metadataVersion.isAtLeast(IBP_4_0_IV0), metadataVersion.isElrSupported());
     }
 
     @ParameterizedTest

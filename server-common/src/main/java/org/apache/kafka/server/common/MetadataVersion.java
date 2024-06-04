@@ -210,7 +210,7 @@ public enum MetadataVersion {
     IBP_3_8_IV1(21, "3.8", "IV1", false),
 
     // Introduce version 1 of the GroupVersion feature (KIP-848).
-    IBP_4_0_IV0(21, "4.0", "IV0", false);
+    IBP_4_0_IV0(22, "4.0", "IV0", false);
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version
@@ -335,7 +335,7 @@ public enum MetadataVersion {
     }
 
     public boolean isElrSupported() {
-        return this.isAtLeast(IBP_4_0_IVO);
+        return this.isAtLeast(IBP_4_0_IV0);
     }
 
     public boolean isKRaftSupported() {
