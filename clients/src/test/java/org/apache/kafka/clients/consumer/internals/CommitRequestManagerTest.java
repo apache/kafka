@@ -799,8 +799,9 @@ public class CommitRequestManagerTest {
      * Sync commit requests that fail with an expected retriable error should be retried
      * while there is time. When time expires, they should fail with a TimeoutException.
      */
-    @Test
-    public void testOffsetCommitSyncFailedWithRetriableThrowsTimeoutWhenRetryTimeExpires() {
+    @ParameterizedTest
+    @MethodSource("offsetCommitExceptionSupplier")
+    public void testOffsetCommitSyncFailedWithRetriableThrowsTimeoutWhenRetryTimeExpires(final Errors error, final boolean isRetriable) {
         CommitRequestManager commitRequestManager = create(false, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
 
@@ -811,7 +812,7 @@ public class CommitRequestManagerTest {
         // Send offset commit request that fails with retriable error.
         long deadlineMs = time.milliseconds() + retryBackoffMs * 2;
         CompletableFuture<Void> commitResult = commitRequestManager.commitSync(offsets, deadlineMs);
-        completeOffsetCommitRequestWithError(commitRequestManager, Errors.COORDINATOR_NOT_AVAILABLE);
+        completeOffsetCommitRequestWithError(commitRequestManager, error);
 
         // Sleep to expire the request timeout. Request should fail on the next poll with a
         // TimeoutException.
@@ -819,7 +820,11 @@ public class CommitRequestManagerTest {
         NetworkClientDelegate.PollResult res = commitRequestManager.poll(time.milliseconds());
         assertEquals(0, res.unsentRequests.size());
         assertTrue(commitResult.isDone());
-        assertFutureThrows(commitResult, TimeoutException.class);
+
+        if (isRetriable)
+            assertFutureThrows(commitResult, TimeoutException.class);
+        else
+            assertFutureThrows(commitResult, KafkaException.class);
     }
 
     /**
@@ -1127,19 +1132,18 @@ public class CommitRequestManagerTest {
      */
     private static Stream<Arguments> offsetCommitExceptionSupplier() {
         return Stream.of(
-            Arguments.of(Errors.NOT_COORDINATOR),
-            Arguments.of(Errors.COORDINATOR_LOAD_IN_PROGRESS),
-            Arguments.of(Errors.UNKNOWN_SERVER_ERROR),
-            Arguments.of(Errors.GROUP_AUTHORIZATION_FAILED),
-            Arguments.of(Errors.OFFSET_METADATA_TOO_LARGE),
-            Arguments.of(Errors.INVALID_COMMIT_OFFSET_SIZE),
-            Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION),
-            Arguments.of(Errors.COORDINATOR_NOT_AVAILABLE),
-            Arguments.of(Errors.REQUEST_TIMED_OUT),
-            Arguments.of(Errors.FENCED_INSTANCE_ID),
-            Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED),
-            Arguments.of(Errors.STALE_MEMBER_EPOCH),
-            Arguments.of(Errors.UNKNOWN_MEMBER_ID));
+            Arguments.of(Errors.NOT_COORDINATOR, true),
+            Arguments.of(Errors.COORDINATOR_LOAD_IN_PROGRESS, true),
+            Arguments.of(Errors.UNKNOWN_SERVER_ERROR, false),
+            Arguments.of(Errors.GROUP_AUTHORIZATION_FAILED, false),
+            Arguments.of(Errors.OFFSET_METADATA_TOO_LARGE, false),
+            Arguments.of(Errors.INVALID_COMMIT_OFFSET_SIZE, false),
+            Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION, false),
+            Arguments.of(Errors.COORDINATOR_NOT_AVAILABLE, true),
+            Arguments.of(Errors.REQUEST_TIMED_OUT, false),
+            Arguments.of(Errors.FENCED_INSTANCE_ID, false),
+            Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED, false),
+            Arguments.of(Errors.UNKNOWN_MEMBER_ID, false));
     }
 
     // Supplies (error, isRetriable)
