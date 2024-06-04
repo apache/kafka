@@ -2300,7 +2300,6 @@ public class OffsetMetadataManagerTest {
                 .build()
         );
 
-        // Fetch offsets case.
         List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics = Collections.singletonList(
             new OffsetFetchRequestData.OffsetFetchRequestTopics()
                 .setName("foo")
