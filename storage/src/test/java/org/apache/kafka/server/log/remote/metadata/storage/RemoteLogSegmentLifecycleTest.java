@@ -18,6 +18,7 @@ package org.apache.kafka.server.log.remote.metadata.storage;
 
 import kafka.test.ClusterInstance;
 import kafka.test.annotation.ClusterTest;
+import kafka.test.annotation.ClusterTestDefaults;
 import kafka.test.junit.ClusterTestExtensions;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
@@ -54,19 +55,20 @@ import static org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState.C
 import static org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState.DELETE_SEGMENT_STARTED;
 import static org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState.DELETE_SEGMENT_FINISHED;
 
+@ClusterTestDefaults(brokers = 3)
 @ExtendWith(value = ClusterTestExtensions.class)
 @Tag("integration")
 public class RemoteLogSegmentLifecycleTest {
 
-    int segSize = 1048576;
-    int brokerId0 = 0;
-    int brokerId1 = 1;
-    Uuid topicId = Uuid.randomUuid();
-    TopicPartition tp = new TopicPartition("foo", 0);
-    TopicIdPartition topicIdPartition = new TopicIdPartition(topicId, tp);
-    Time time = new MockTime(1);
-    RemotePartitionMetadataStore spyRemotePartitionMetadataStore = spy(new RemotePartitionMetadataStore());
-    ClusterInstance clusterInstance;
+    private final int segSize = 1048576;
+    private final int brokerId0 = 0;
+    private final int brokerId1 = 1;
+    private final Uuid topicId = Uuid.randomUuid();
+    private final TopicPartition tp = new TopicPartition("foo", 0);
+    private final TopicIdPartition topicIdPartition = new TopicIdPartition(topicId, tp);
+    private final Time time = new MockTime(1);
+    private final RemotePartitionMetadataStore spyRemotePartitionMetadataStore = spy(new RemotePartitionMetadataStore());
+    private final ClusterInstance clusterInstance;
 
     RemoteLogSegmentLifecycleTest(ClusterInstance clusterInstance) {     // Constructor injections
         this.clusterInstance = clusterInstance;
@@ -81,7 +83,7 @@ public class RemoteLogSegmentLifecycleTest {
                 .build();
     }
 
-    @ClusterTest(brokers = 3)
+    @ClusterTest
     public void testRemoteLogSegmentLifeCycle() throws Exception {
         try (RemoteLogMetadataManager metadataManager = createTopicBasedRemoteLogMetadataManager()) {
             metadataManager.onPartitionLeadershipChanges(Collections.singleton(topicIdPartition), Collections.emptySet());
@@ -246,12 +248,12 @@ public class RemoteLogSegmentLifecycleTest {
         assertEquals(expectedMetadata, metadataIter.next());
 
         // cache.listAllRemoteLogSegments() should contain the above segment.
-        Iterator<RemoteLogSegmentMetadata> allSegmentsIter = metadataManager.listRemoteLogSegments(topicIdPartition);
-        assertTrue(allSegmentsIter.hasNext());
-        assertEquals(expectedMetadata, allSegmentsIter.next());
+        Iterator<RemoteLogSegmentMetadata> allMetadataIter = metadataManager.listRemoteLogSegments(topicIdPartition);
+        assertTrue(allMetadataIter.hasNext());
+        assertEquals(expectedMetadata, allMetadataIter.next());
     }
 
-    @ClusterTest(brokers = 3)
+    @ClusterTest
     public void testCacheSegmentWithCopySegmentStartedState() throws Exception {
         try (RemoteLogMetadataManager metadataManager = createTopicBasedRemoteLogMetadataManager()) {
             metadataManager.onPartitionLeadershipChanges(Collections.singleton(topicIdPartition), Collections.emptySet());
@@ -273,7 +275,7 @@ public class RemoteLogSegmentLifecycleTest {
         }
     }
 
-    @ClusterTest(brokers = 3)
+    @ClusterTest
     public void testCacheSegmentWithCopySegmentFinishedState() throws Exception {
         try (RemoteLogMetadataManager metadataManager = createTopicBasedRemoteLogMetadataManager()) {
             metadataManager.onPartitionLeadershipChanges(Collections.singleton(topicIdPartition), Collections.emptySet());
@@ -292,7 +294,7 @@ public class RemoteLogSegmentLifecycleTest {
         }
     }
 
-    @ClusterTest(brokers = 3)
+    @ClusterTest
     public void testCacheSegmentWithDeleteSegmentStartedState() throws Exception {
         try (RemoteLogMetadataManager metadataManager = createTopicBasedRemoteLogMetadataManager()) {
             metadataManager.onPartitionLeadershipChanges(Collections.singleton(topicIdPartition), Collections.emptySet());
@@ -309,7 +311,7 @@ public class RemoteLogSegmentLifecycleTest {
         }
     }
 
-    @ClusterTest(brokers = 3)
+    @ClusterTest
     public void testCacheSegmentsWithDeleteSegmentFinishedState() throws Exception {
         try (RemoteLogMetadataManager metadataManager = createTopicBasedRemoteLogMetadataManager()) {
             metadataManager.onPartitionLeadershipChanges(Collections.singleton(topicIdPartition), Collections.emptySet());
@@ -333,7 +335,7 @@ public class RemoteLogSegmentLifecycleTest {
         }
     }
 
-    @ClusterTest(brokers = 3)
+    @ClusterTest
     public void testCacheListSegments() throws Exception {
         try (RemoteLogMetadataManager metadataManager = createTopicBasedRemoteLogMetadataManager()) {
             metadataManager.onPartitionLeadershipChanges(Collections.singleton(topicIdPartition), Collections.emptySet());
