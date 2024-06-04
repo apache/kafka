@@ -591,9 +591,9 @@ public class CoordinatorRecordHelpers {
                 return new StreamsGroupTopologyValue.TopicInfo().setName(topicInfo.name()).setTopicConfigs(topicConfigs);
             }).collect(Collectors.toList());
 
-            value.topology().add(new StreamsGroupTopologyValue.Subtopology().setSourceTopics(subtopology.sourceTopics())
-                .setSinkTopics(subtopology.sinkTopics()).setRepartitionSourceTopics(repartitionSourceTopics)
-                .setStateChangelogTopics(stateChangelogTopics));
+            value.topology().add(new StreamsGroupTopologyValue.Subtopology().setSubtopology(subtopology.subtopology())
+                .setSourceTopics(subtopology.sourceTopics()).setSinkTopics(subtopology.sinkTopics())
+                .setRepartitionSourceTopics(repartitionSourceTopics).setStateChangelogTopics(stateChangelogTopics));
         });
 
         return new CoordinatorRecord(new ApiMessageAndVersion(new StreamsGroupTopologyKey().setGroupId(groupId), (short) 15),
