@@ -480,12 +480,10 @@ class BrokerServer(
           authorizer
         ),
         sharedServer.initialBrokerMetadataLoadFaultHandler,
-        sharedServer.metadataPublishingFaultHandler,
-        lifecycleManager
+        sharedServer.metadataPublishingFaultHandler
       )
       metadataPublishers.add(brokerMetadataPublisher)
       brokerRegistrationTracker = new BrokerRegistrationTracker(config.brokerId,
-        logManager.directoryIdsSet.toList.asJava,
         () => lifecycleManager.resendBrokerRegistrationUnlessZkMode())
       metadataPublishers.add(brokerRegistrationTracker)
 
