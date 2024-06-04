@@ -88,7 +88,7 @@ public class SchemaBuilder implements Schema {
 
     @Override
     public boolean isOptional() {
-        return optional == null ? false : optional;
+        return optional != null && optional;
     }
 
     /**

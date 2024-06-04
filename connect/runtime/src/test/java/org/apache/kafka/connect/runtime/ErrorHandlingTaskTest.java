@@ -134,8 +134,8 @@ public class ErrorHandlingTaskTest {
 
     private static final TaskConfig TASK_CONFIG = new TaskConfig(TASK_PROPS);
 
-    private ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
-    private TargetState initialState = TargetState.STARTED;
+    private final ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
+    private final TargetState initialState = TargetState.STARTED;
     private Time time;
     private MockConnectMetrics metrics;
     @SuppressWarnings("unused")
@@ -179,7 +179,7 @@ public class ErrorHandlingTaskTest {
 
     private ErrorHandlingMetrics errorHandlingMetrics;
 
-    private boolean enableTopicCreation;
+    private final boolean enableTopicCreation;
 
     @Parameterized.Parameters
     public static Collection<Boolean> parameters() {

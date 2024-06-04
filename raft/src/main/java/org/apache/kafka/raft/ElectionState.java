@@ -30,9 +30,9 @@ import org.apache.kafka.raft.internals.ReplicaKey;
  * Encapsulate election state stored on disk after every state change.
  */
 final public class ElectionState {
-    private static int unknownLeaderId = -1;
-    private static int notVoted = -1;
-    private static Uuid noVotedDirectoryId = Uuid.ZERO_UUID;
+    private static final int UNKNOWN_LEADER_ID = -1;
+    private static final int NOT_VOTED = -1;
+    private static final Uuid NO_VOTED_DIRECTORY_ID = Uuid.ZERO_UUID;
 
     private final int epoch;
     private final OptionalInt leaderId;
@@ -95,7 +95,7 @@ final public class ElectionState {
     }
 
     public int leaderIdOrSentinel() {
-        return leaderId.orElse(unknownLeaderId);
+        return leaderId.orElse(UNKNOWN_LEADER_ID);
     }
 
     public OptionalInt optionalLeaderId() {
@@ -126,7 +126,7 @@ final public class ElectionState {
         QuorumStateData data = new QuorumStateData()
             .setLeaderEpoch(epoch)
             .setLeaderId(leaderIdOrSentinel())
-            .setVotedId(votedKey.map(ReplicaKey::id).orElse(notVoted));
+            .setVotedId(votedKey.map(ReplicaKey::id).orElse(NOT_VOTED));
 
         if (version == 0) {
             List<QuorumStateData.Voter> dataVoters = voters
@@ -135,7 +135,7 @@ final public class ElectionState {
                 .collect(Collectors.toList());
             data.setCurrentVoters(dataVoters);
         } else if (version == 1) {
-            data.setVotedDirectoryId(votedKey.flatMap(ReplicaKey::directoryId).orElse(noVotedDirectoryId));
+            data.setVotedDirectoryId(votedKey.flatMap(ReplicaKey::directoryId).orElse(NO_VOTED_DIRECTORY_ID));
         } else {
             throw new IllegalStateException(
                 String.format(
@@ -198,17 +198,17 @@ final public class ElectionState {
     }
 
     public static ElectionState fromQuorumStateData(QuorumStateData data) {
-        Optional<Uuid> votedDirectoryId = data.votedDirectoryId().equals(noVotedDirectoryId) ?
+        Optional<Uuid> votedDirectoryId = data.votedDirectoryId().equals(NO_VOTED_DIRECTORY_ID) ?
             Optional.empty() :
             Optional.of(data.votedDirectoryId());
 
-        Optional<ReplicaKey> votedKey = data.votedId() == notVoted ?
+        Optional<ReplicaKey> votedKey = data.votedId() == NOT_VOTED ?
             Optional.empty() :
             Optional.of(ReplicaKey.of(data.votedId(), votedDirectoryId));
 
         return new ElectionState(
             data.leaderEpoch(),
-            data.leaderId() == unknownLeaderId ? OptionalInt.empty() : OptionalInt.of(data.leaderId()),
+            data.leaderId() == UNKNOWN_LEADER_ID ? OptionalInt.empty() : OptionalInt.of(data.leaderId()),
             votedKey,
             data.currentVoters().stream().map(QuorumStateData.Voter::voterId).collect(Collectors.toSet())
         );

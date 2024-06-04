@@ -105,7 +105,7 @@ public class MockAdminClient extends AdminClient {
 
     private KafkaException listConsumerGroupOffsetsException;
 
-    private Map<MetricName, Metric> mockMetrics = new HashMap<>();
+    private final Map<MetricName, Metric> mockMetrics = new HashMap<>();
 
     private final List<DelegationToken> allTokens = new ArrayList<>();
 

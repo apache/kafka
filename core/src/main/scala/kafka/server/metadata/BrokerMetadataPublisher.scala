@@ -29,7 +29,6 @@ import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.image.loader.LoaderManifest
 import org.apache.kafka.image.publisher.MetadataPublisher
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, TopicDelta}
-import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.fault.FaultHandler
 
 import java.util.concurrent.CompletableFuture
@@ -127,21 +126,6 @@ class BrokerMetadataPublisher(
         initializeManagers(newImage)
       } else if (isDebugEnabled) {
         debug(s"Publishing metadata at offset $highestOffsetAndEpoch with $metadataVersionLogMsg.")
-      }
-
-      Option(delta.featuresDelta()).foreach { featuresDelta =>
-        featuresDelta.metadataVersionChange().ifPresent{ metadataVersion =>
-          info(s"Updating metadata.version to ${metadataVersion.featureLevel()} at offset $highestOffsetAndEpoch.")
-          val currentMetadataVersion = delta.image().features().metadataVersion()
-          if (currentMetadataVersion.isLessThan(MetadataVersion.IBP_3_7_IV2) && metadataVersion.isAtLeast(MetadataVersion.IBP_3_7_IV2)) {
-            info(
-              s"""Resending BrokerRegistration with existing incarnation-id to inform the
-                 |controller about log directories in the broker following metadata update:
-                 |previousMetadataVersion: ${delta.image().features().metadataVersion()}
-                 |newMetadataVersion: $metadataVersion""".stripMargin.linesIterator.mkString(" ").trim)
-            brokerLifecycleManager.handleKraftJBODMetadataVersionUpdate()
-          }
-        }
       }
 
       // Apply topic deltas.

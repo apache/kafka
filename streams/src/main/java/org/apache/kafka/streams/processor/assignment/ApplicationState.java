@@ -17,8 +17,8 @@
 package org.apache.kafka.streams.processor.assignment;
 
 import java.util.Map;
-import java.util.Set;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
+import org.apache.kafka.streams.processor.TaskId;
 
 /**
  * A read-only metadata class representing the state of the application and the current rebalance.
@@ -48,5 +48,5 @@ public interface ApplicationState {
     /**
      * @return the set of all tasks in this topology which must be assigned
      */
-    Set<TaskInfo> allTasks();
+    Map<TaskId, TaskInfo> allTasks();
 }
