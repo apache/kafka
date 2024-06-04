@@ -100,14 +100,14 @@ public interface Group {
      * @param generationIdOrMemberEpoch The generation id for genetic groups or the member epoch
      *                                  for consumer groups.
      * @param isTransactional           Whether the offset commit is transactional or not.
-     * @param version                   The reqyest context api version.
+     * @param apiVersion                The api version.
      */
     void validateOffsetCommit(
         String memberId,
         String groupInstanceId,
         int generationIdOrMemberEpoch,
         boolean isTransactional,
-        short version
+        short apiVersion
 
     ) throws KafkaException;
 

@@ -794,7 +794,7 @@ public class ConsumerGroup implements Group {
      * @param memberEpoch       The member epoch.
      * @param isTransactional   Whether the offset commit is transactional or not. It has no
      *                          impact when a consumer group is used.
-     * @param version           The request context api version.
+     * @param apiVersion        The api version.
      * @throws UnknownMemberIdException     If the member is not found.
      * @throws StaleMemberEpochException    If the member uses the consumer protocol and the provided
      *                                      member epoch doesn't match the actual member epoch.
@@ -807,7 +807,7 @@ public class ConsumerGroup implements Group {
         String groupInstanceId,
         int memberEpoch,
         boolean isTransactional,
-        short version
+        short apiVersion
     ) throws UnknownMemberIdException, StaleMemberEpochException, IllegalGenerationException {
         // When the member epoch is -1, the request comes from either the admin client
         // or a consumer which does not use the group management facility. In this case,
@@ -818,10 +818,11 @@ public class ConsumerGroup implements Group {
 
         // If the commit is not transactional and the member uses the new consumer protocol (KIP-848),
         // the member should be using the OffsetCommit API version >= 9.
-        if (!isTransactional && !member.useClassicProtocol() && version < 9) {
-            throw new UnsupportedVersionException(String.format("The OffsetCommit API version %d " +
-                "is smaller than the lowest version supporting new consumer protocol 9.", version));
+        if (!isTransactional && !member.useClassicProtocol() && apiVersion < 9) {
+            throw new UnsupportedVersionException("OffsetCommit version 9 or above must be used " +
+                "by members using the consumer group protocol");
         }
+
         validateMemberEpoch(memberEpoch, member.memberEpoch(), member.useClassicProtocol());
     }
 
