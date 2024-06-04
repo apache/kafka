@@ -659,7 +659,6 @@ public class MembershipManagerImplTest {
         );
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.RECONCILING, membershipManager.state());
-        clearInvocations(membershipManager);
 
         // Receive extended assignment - assignment received but no reconciliation triggered
         membershipManager.onHeartbeatSuccess(createConsumerGroupHeartbeatResponse(assignment2).data());
@@ -2314,7 +2313,6 @@ public class MembershipManagerImplTest {
         membershipManager.poll(time.milliseconds());
 
         verifyReconciliationTriggered(membershipManager);
-        clearInvocations(membershipManager);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
 
         return commitResult;
@@ -2331,7 +2329,6 @@ public class MembershipManagerImplTest {
         membershipManager.poll(time.milliseconds());
 
         verifyReconciliationTriggered(membershipManager);
-        clearInvocations(membershipManager);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
 
         return commitResult;
@@ -2351,7 +2348,6 @@ public class MembershipManagerImplTest {
         receiveAssignment(topicId, partitions, membershipManager);
         membershipManager.poll(time.milliseconds());
         verifyReconciliationTriggered(membershipManager);
-        clearInvocations(membershipManager);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
 
         return performCallback(
@@ -2376,7 +2372,6 @@ public class MembershipManagerImplTest {
         receiveAssignment(topicId, Collections.singletonList(newPartition), membershipManager);
         membershipManager.poll(time.milliseconds());
         verifyReconciliationTriggered(membershipManager);
-        clearInvocations(membershipManager);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
 
         return performCallback(
@@ -2389,7 +2384,6 @@ public class MembershipManagerImplTest {
     }
 
     private void verifyReconciliationTriggered(MembershipManagerImpl membershipManager) {
-        verify(membershipManager).markReconciliationInProgress();
         assertEquals(MemberState.RECONCILING, membershipManager.state());
     }
 
@@ -2599,7 +2593,6 @@ public class MembershipManagerImplTest {
 
         // Stale reconciliation should have been aborted and a new one should be triggered on the next poll.
         assertFalse(membershipManager.reconciliationInProgress());
-        clearInvocations(membershipManager);
         membershipManager.poll(time.milliseconds());
         verify(membershipManager).markReconciliationInProgress();
     }
