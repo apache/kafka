@@ -70,9 +70,9 @@ public class FinalizedControllerFeatures {
 
     @Override
     public String toString() {
-        return "{" +
+        return "FinalizedControllerFeatures(" +
                 "featureMap=" + featureMap.toString() +
                 ", epoch=" + epoch +
-                "}";
+                ")";
     }
 }
