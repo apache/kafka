@@ -125,8 +125,7 @@ public class OptimizedUniformAssignmentBuilderTest {
             Collections.emptyMap()
         );
 
-        assertThrows(
-            PartitionAssignorException.class,
+        assertThrows(PartitionAssignorException.class,
             () -> assignor.assign(groupSpec, subscribedTopicMetadata));
     }
 

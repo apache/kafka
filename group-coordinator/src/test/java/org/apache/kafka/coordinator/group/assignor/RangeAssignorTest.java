@@ -120,8 +120,7 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         );
 
-        assertThrows(
-            PartitionAssignorException.class,
+        assertThrows(PartitionAssignorException.class,
             () -> assignor.assign(groupSpec, subscribedTopicMetadata));
     }
 
