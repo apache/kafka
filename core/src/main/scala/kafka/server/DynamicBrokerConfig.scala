@@ -1203,6 +1203,7 @@ class DynamicRemoteLogConfig(server: KafkaBroker) extends BrokerReconfigurable w
 
 object DynamicRemoteLogConfig {
   val ReconfigurableConfigs = Set(
-    RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP
+    RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP,
+    RemoteLogManagerConfig.REMOTE_FETCH_MAX_WAIT_MS_PROP
   )
 }

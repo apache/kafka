@@ -95,8 +95,7 @@ public class RemoteLogManagerConfigTest {
                 1,
                 Long.MAX_VALUE,
                 11,
-                1,
-                500);
+                1);
     }
 
     private Map<String, Object> extractProps(RemoteLogManagerConfig remoteLogManagerConfig) {
@@ -190,8 +189,7 @@ public class RemoteLogManagerConfigTest {
                 1,
                 Long.MAX_VALUE,
                 11,
-                1,
-                500);
+                1);
         
         assertNotEquals(config1.hashCode(), config3.hashCode());
         assertNotEquals(config1, config3);
