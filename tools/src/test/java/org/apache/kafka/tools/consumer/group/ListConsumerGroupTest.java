@@ -78,14 +78,6 @@ public class ListConsumerGroupTest {
         this.clusterInstance = clusterInstance;
     }
 
-    private static List<ClusterConfig> defaultGenerator() {
-        return ConsumerGroupCommandTestUtils.generator();
-    }
-
-    private static List<ClusterConfig> consumerProtocolOnlyGenerator() {
-        return ConsumerGroupCommandTestUtils.forConsumerGroupCoordinator();
-    }
-
     private List<GroupProtocol> supportedGroupProtocols() {
         return new ArrayList<>(clusterInstance.supportedGroupProtocols());
     }
@@ -103,7 +95,7 @@ public class ListConsumerGroupTest {
             try (AutoCloseable topicPartitionsConsumerGroupExecutor = consumerGroupClosable(topicPartitionsGroup, Collections.singleton(new TopicPartition(topic, 0)));
                  AutoCloseable topicConsumerGroupExecutor = consumerGroupClosable(GroupProtocol.CLASSIC, topicGroup, topic);
                  AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, protocolGroup, topic);
-                 ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--list"});
+                 ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--list"})
             ) {
                 Set<String> expectedGroups = set(Arrays.asList(topicPartitionsGroup, topicGroup, protocolGroup));
                 final AtomicReference<Set> foundGroups = new AtomicReference<>();
@@ -136,7 +128,7 @@ public class ListConsumerGroupTest {
 
             try (AutoCloseable topicPartitionsConsumerGroupExecutor = consumerGroupClosable(topicPartitionsGroup, Collections.singleton(new TopicPartition(topic, 0)));
                  AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, protocolGroup, topic);
-                 ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state"});
+                 ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state"})
             ) {
                 Set<ConsumerGroupListing> expectedListing = mkSet(
                         new ConsumerGroupListing(
@@ -199,7 +191,7 @@ public class ListConsumerGroupTest {
 
         try (AutoCloseable topicPartitionsConsumerGroupExecutor = consumerGroupClosable(topicPartitionsGroup, Collections.singleton(new TopicPartition(topic, 0)));
              AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, protocolGroup, topic);
-             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state"});
+             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state"})
         ) {
             Set<ConsumerGroupListing> expectedListing = mkSet(
                     new ConsumerGroupListing(
@@ -255,7 +247,7 @@ public class ListConsumerGroupTest {
         try (AutoCloseable topicPartitionsConsumerGroupExecutor = consumerGroupClosable(topicPartitionsGroup, Collections.singleton(new TopicPartition(topic, 0)));
              AutoCloseable topicConsumerGroupExecutor = consumerGroupClosable(GroupProtocol.CLASSIC, topicGroup, topic);
              AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, protocolGroup, topic);
-             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--list"});
+             ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--list"})
         ) {
 
 

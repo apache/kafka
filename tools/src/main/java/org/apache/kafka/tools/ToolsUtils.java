@@ -43,12 +43,12 @@ public class ToolsUtils {
             for (Metric metric : metrics.values()) {
                 MetricName mName = metric.metricName();
                 String mergedName = mName.group() + ":" + mName.name() + ":" + mName.tags();
-                maxLengthOfDisplayName = maxLengthOfDisplayName < mergedName.length() ? mergedName.length() : maxLengthOfDisplayName;
+                maxLengthOfDisplayName = Math.max(maxLengthOfDisplayName, mergedName.length());
                 sortedMetrics.put(mergedName, metric.metricValue());
             }
             String doubleOutputFormat = "%-" + maxLengthOfDisplayName + "s : %.3f";
             String defaultOutputFormat = "%-" + maxLengthOfDisplayName + "s : %s";
-            System.out.println(String.format("\n%-" + maxLengthOfDisplayName + "s   %s", "Metric Name", "Value"));
+            System.out.printf("\n%-" + maxLengthOfDisplayName + "s   %s%n", "Metric Name", "Value");
 
             for (Map.Entry<String, Object> entry : sortedMetrics.entrySet()) {
                 String outputFormat;
@@ -56,7 +56,7 @@ public class ToolsUtils {
                     outputFormat = doubleOutputFormat;
                 else
                     outputFormat = defaultOutputFormat;
-                System.out.println(String.format(outputFormat, entry.getKey(), entry.getValue()));
+                System.out.printf((outputFormat) + "%n", entry.getKey(), entry.getValue());
             }
         }
     }

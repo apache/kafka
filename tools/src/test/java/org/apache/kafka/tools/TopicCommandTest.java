@@ -79,7 +79,7 @@ public class TopicCommandTest {
             new TopicPartitionInfo(0, new Node(1, "localhost", 9091), replicas,
                 Collections.singletonList(new Node(1, "localhost", 9091))),
             null, false,
-                new PartitionReassignment(replicaIds, Arrays.asList(2), Collections.emptyList())
+                new PartitionReassignment(replicaIds, Collections.singletonList(2), Collections.emptyList())
         );
 
         assertFalse(partitionDescription.isUnderReplicated());
@@ -222,7 +222,7 @@ public class TopicCommandTest {
             .configs(Collections.emptyMap());
 
         verify(adminClient, times(1)).createTopics(
-            eq(new HashSet<>(Arrays.asList(expectedNewTopic))),
+            eq(new HashSet<>(Collections.singletonList(expectedNewTopic))),
             argThat(exception -> !exception.shouldRetryOnQuotaViolation())
         );
     }
@@ -247,7 +247,7 @@ public class TopicCommandTest {
         assertInstanceOf(ThrottlingQuotaExceededException.class, exception.getCause());
 
         verify(adminClient).deleteTopics(
-            argThat((Collection<String> topics) -> topics.equals(Arrays.asList(topicName))),
+            argThat((Collection<String> topics) -> topics.equals(Collections.singletonList(topicName))),
             argThat((DeleteTopicsOptions options) -> !options.shouldRetryOnQuotaViolation()));
     }
 

@@ -144,7 +144,7 @@ public class ReassignPartitionsUnitTest {
                 asList(b.get(1), b.get(2), b.get(3)),
                 asList(b.get(1), b.get(2), b.get(3)))
         ), Collections.emptyMap());
-        adminClient.addTopic(false, "bar", asList(
+        adminClient.addTopic(false, "bar", Collections.singletonList(
             new TopicPartitionInfo(0, b.get(2),
                 asList(b.get(2), b.get(3), b.get(0)),
                 asList(b.get(2), b.get(3), b.get(0)))
@@ -219,7 +219,7 @@ public class ReassignPartitionsUnitTest {
 
             addTopics(adminClient);
             List<Node> b = adminClient.brokers();
-            adminClient.addTopic(false, "quux", asList(
+            adminClient.addTopic(false, "quux", Collections.singletonList(
                     new TopicPartitionInfo(0, b.get(2),
                         asList(b.get(1), b.get(2), b.get(3)),
                         asList(b.get(1), b.get(2), b.get(3)))),
@@ -289,7 +289,7 @@ public class ReassignPartitionsUnitTest {
             assignments.put(new TopicPartition("foo", 0), asList(0, 1, 2));
             assignments.put(new TopicPartition("foo", 1), asList(1, 2, 3));
 
-            assertEquals(assignments, getReplicaAssignmentForTopics(adminClient, asList("foo")));
+            assertEquals(assignments, getReplicaAssignmentForTopics(adminClient, Collections.singletonList("foo")));
 
             assignments.clear();
 
@@ -747,7 +747,7 @@ public class ReassignPartitionsUnitTest {
             assignment.put(new TopicPartitionReplica("quux", 1, 0), "/tmp/kafka-logs1");
 
             assertEquals(
-                new HashSet<>(asList(new TopicPartitionReplica("foo", 0, 0))),
+                new HashSet<>(Collections.singletonList(new TopicPartitionReplica("foo", 0, 0))),
                 alterReplicaLogDirs(adminClient, assignment)
             );
         }

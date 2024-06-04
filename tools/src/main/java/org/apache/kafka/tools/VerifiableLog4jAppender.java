@@ -47,7 +47,7 @@ public class VerifiableLog4jAppender {
     Logger logger = Logger.getLogger(VerifiableLog4jAppender.class);
 
     // If maxMessages < 0, log until the process is killed externally
-    private long maxMessages = -1;
+    private long maxMessages;
 
     // Hook to trigger logging thread to stop logging messages
     private volatile boolean stopLogging = false;

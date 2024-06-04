@@ -65,10 +65,6 @@ public class DeleteOffsetsConsumerGroupCommandIntegrationTest {
         this.clusterInstance = clusterInstance;
     }
 
-    private static List<ClusterConfig> generator() {
-        return ConsumerGroupCommandTestUtils.generator();
-    }
-
     @ClusterTemplate("generator")
     public void testDeleteOffsetsNonExistingGroup() {
         String group = "missing.group";

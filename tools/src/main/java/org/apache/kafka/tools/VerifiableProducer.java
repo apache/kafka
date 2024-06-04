@@ -63,7 +63,7 @@ public class VerifiableProducer implements AutoCloseable {
     private final String topic;
     private final Producer<String, String> producer;
     // If maxMessages < 0, produce until the process is killed externally
-    private long maxMessages = -1;
+    private long maxMessages;
 
     // Number of messages for which acks were received
     private long numAcked = 0;
@@ -270,7 +270,7 @@ public class VerifiableProducer implements AutoCloseable {
         ProducerRecord<String, String> record;
 
         // Older versions of ProducerRecord don't include the message create time in the constructor. So including
-        // even a 'null' argument results in a NoSuchMethodException. Thus we only include the create time if it is
+        // even a 'null' argument results in a NoSuchMethodException. Thus, we only include the create time if it is
         // explicitly specified to remain fully backward compatible with older clients.
         if (createTime != null) {
             record = new ProducerRecord<>(topic, null, createTime, key, value);
