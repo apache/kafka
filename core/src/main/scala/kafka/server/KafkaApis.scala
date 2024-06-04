@@ -256,6 +256,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS => handleGetTelemetrySubscriptionsRequest(request)
         case ApiKeys.PUSH_TELEMETRY => handlePushTelemetryRequest(request)
         case ApiKeys.LIST_CLIENT_METRICS_RESOURCES => handleListClientMetricsResources(request)
+        case ApiKeys.SHARE_FETCH => handleShareFetchRequest(request)
+        case ApiKeys.SHARE_ACKNOWLEDGE => handleShareAcknowledgeRequest(request)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {
@@ -3925,6 +3927,36 @@ class KafkaApis(val requestChannel: RequestChannel,
           requestHelper.sendMaybeThrottle(request, listClientMetricsResourcesRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
       }
     }
+  }
+
+  def handleShareFetchRequest(request: RequestChannel.Request): Unit = {
+    val shareFetchRequest = request.body[ShareFetchRequest]
+
+    if (!config.isNewGroupCoordinatorEnabled) {
+      // The API is not supported by the "old" group coordinator (the default). If the
+      // new one is not enabled, we fail directly here.
+      requestHelper.sendMaybeThrottle(request, shareFetchRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      CompletableFuture.completedFuture[Unit](())
+      return
+    }
+    // TODO: Implement the ShareFetchRequest handling
+    requestHelper.sendMaybeThrottle(request, shareFetchRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+    CompletableFuture.completedFuture[Unit](())
+  }
+
+  def handleShareAcknowledgeRequest(request: RequestChannel.Request): Unit = {
+    val shareAcknowledgeRequest = request.body[ShareAcknowledgeRequest]
+
+    if (!config.isNewGroupCoordinatorEnabled) {
+      // The API is not supported by the "old" group coordinator (the default). If the
+      // new one is not enabled, we fail directly here. (KIP-848)
+      requestHelper.sendMaybeThrottle(request, shareAcknowledgeRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      CompletableFuture.completedFuture[Unit](())
+      return
+    }
+    // TODO: Implement the ShareAcknowledgeRequest handling
+    requestHelper.sendMaybeThrottle(request, shareAcknowledgeRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+    CompletableFuture.completedFuture[Unit](())
   }
 
   private def updateRecordConversionStats(request: RequestChannel.Request,
