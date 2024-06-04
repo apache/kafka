@@ -2693,6 +2693,12 @@ public class MembershipManagerImplTest {
 
         // Start leaving group, blocked waiting for callback to complete.
         CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
+        ConsumerRebalanceListenerCallbackNeededEvent neededEvent = new ConsumerRebalanceListenerCallbackNeededEvent(
+            ConsumerRebalanceListenerMethodName.ON_PARTITIONS_REVOKED,
+            topicPartitions(ownedPartition.topic(), ownedPartition.partition()));
+        when(backgroundEventQueue.size()).thenReturn(1);
+        when(backgroundEventQueue.peek()).thenReturn(mock(ConsumerRebalanceListenerCallbackNeededEvent.class));
+        when(backgroundEventQueue.poll()).thenReturn(neededEvent);
         when(subscriptionState.assignedPartitions()).thenReturn(Collections.singleton(ownedPartition));
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
         when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
