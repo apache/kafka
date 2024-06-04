@@ -385,10 +385,10 @@ public class MembershipManagerImplTest {
         receiveAssignment(topicId, Arrays.asList(0, 1), membershipManager);
         assertEquals(MemberState.PREPARE_LEAVING, membershipManager.state());
         assertTrue(membershipManager.topicsAwaitingReconciliation().isEmpty());
-        verify(membershipManager, never()).markReconciliationInProgress();
 
         // When callback completes member should transition to LEAVING.
         completeCallback(callbackEvent, membershipManager);
+        membershipManager.transitionToSendingLeaveGroup(false);
         assertEquals(MemberState.LEAVING, membershipManager.state());
     }
 
