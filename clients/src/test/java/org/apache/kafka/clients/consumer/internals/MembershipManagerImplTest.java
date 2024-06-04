@@ -112,12 +112,11 @@ public class MembershipManagerImplTest {
 
     @BeforeEach
     public void setup() {
-        testBuilder = new ConsumerTestBuilder(ConsumerTestBuilder.createDefaultGroupInformation());
-        metadata = testBuilder.metadata;
-        subscriptionState = testBuilder.subscriptions;
-        commitRequestManager = testBuilder.commitRequestManager.orElseThrow(IllegalStateException::new);
-        backgroundEventQueue = testBuilder.backgroundEventQueue;
-        backgroundEventHandler = testBuilder.backgroundEventHandler;
+        metadata = mock(ConsumerMetadata.class);
+        subscriptionState = mock(SubscriptionState.class);
+        commitRequestManager = mock(CommitRequestManager.class);
+        backgroundEventQueue = mock(BlockingQueue.class);
+        backgroundEventHandler = mock(BackgroundEventHandler.class);
         time = new MockTime(0);
         metrics = new Metrics(time);
         rebalanceMetricsManager = new RebalanceMetricsManager(metrics);
