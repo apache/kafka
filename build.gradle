@@ -47,10 +47,8 @@ plugins {
   // Updating the shadow plugin version to 8.1.1 causes issue with signing and publishing the shadowed
   // artifacts - see https://github.com/johnrengelman/shadow/issues/901
   id 'com.github.johnrengelman.shadow' version '8.1.0' apply false
-  //  the spotless before 6.14.0 support JDK8, after 6.23.3 support JDK21
-  //  we have to give in support JDK 8
-  //  refer:https://github.com/diffplug/spotless/tree/main/plugin-gradle#requirements
-  //  https://github.com/diffplug/spotless/pull/1920
+  //  Spotless 6.13.0 has issue with Java 21 (see https://github.com/diffplug/spotless/pull/1920), and Spotless 6.14.0+ requires JRE 11
+  //  We are going to drop JDK8 support. Hence, the spotless is upgrade to newest version and be applied only if the build env is compatible with JDK 11.
   id 'com.diffplug.spotless' version "6.25.0" apply false
 }
 
