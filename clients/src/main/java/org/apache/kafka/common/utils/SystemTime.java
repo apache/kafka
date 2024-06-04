@@ -31,11 +31,11 @@ public class SystemTime implements Time {
      * to avoid the overhead of synchronization
      */
     private static class SingletonInstance {
-        private static final SystemTime instance = new SystemTime();
+        private static final SystemTime INSTANCE = new SystemTime();
     }
 
     public static SystemTime getInstance() {
-        return SingletonInstance.instance;
+        return SingletonInstance.INSTANCE;
     }
 
     @Override
