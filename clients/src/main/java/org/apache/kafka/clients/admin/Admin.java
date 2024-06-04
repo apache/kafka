@@ -901,7 +901,7 @@ public interface Admin extends AutoCloseable {
      * List the consumer groups available in the cluster.
      *
      * @param options The options to use when listing the consumer groups.
-     * @return The ListGroupsResult.
+     * @return The ListConsumerGroupsResult.
      */
     ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options);
 
@@ -911,7 +911,7 @@ public interface Admin extends AutoCloseable {
      * This is a convenience method for {@link #listConsumerGroups(ListConsumerGroupsOptions)} with default options.
      * See the overload for more details.
      *
-     * @return The ListGroupsResult.
+     * @return The ListConsumerGroupsResult.
      */
     default ListConsumerGroupsResult listConsumerGroups() {
         return listConsumerGroups(new ListConsumerGroupsOptions());
@@ -921,7 +921,7 @@ public interface Admin extends AutoCloseable {
      * List the consumer group offsets available in the cluster.
      *
      * @param options The options to use when listing the consumer group offsets.
-     * @return The ListGroupOffsetsResult
+     * @return The ListConsumerGroupOffsetsResult
      */
     default ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId, ListConsumerGroupOffsetsOptions options) {
         @SuppressWarnings("deprecation")
@@ -939,7 +939,7 @@ public interface Admin extends AutoCloseable {
      * This is a convenience method for {@link #listConsumerGroupOffsets(Map, ListConsumerGroupOffsetsOptions)}
      * to list offsets of all partitions of one group with default options.
      *
-     * @return The ListGroupOffsetsResult.
+     * @return The ListConsumerGroupOffsetsResult.
      */
     default ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId) {
         return listConsumerGroupOffsets(groupId, new ListConsumerGroupOffsetsOptions());
