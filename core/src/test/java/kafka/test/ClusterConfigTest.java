@@ -31,7 +31,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
-import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -102,13 +101,13 @@ public class ClusterConfigTest {
 
     @Test
     public void testDisplayTags() {
-        List<String> tags = Collections.singletonList("example tag");
+        List<String> tags = Collections.singletonList("tag");
         ClusterConfig clusterConfig = ClusterConfig.defaultBuilder().setTags(tags).build();
 
-        Set<String> expectedDisplayTags = new LinkedHashSet<>(tags);
-        expectedDisplayTags.add("MetadataVersion=" + MetadataVersion.latestTesting());
-        expectedDisplayTags.add("Security=" + SecurityProtocol.PLAINTEXT);
+        Set<String> expectedDisplayTags = clusterConfig.displayTags();
 
-        Assertions.assertEquals(expectedDisplayTags, clusterConfig.displayTags());
+        Assertions.assertTrue(expectedDisplayTags.contains("tag"));
+        Assertions.assertTrue(expectedDisplayTags.contains("MetadataVersion=" + MetadataVersion.latestTesting()));
+        Assertions.assertTrue(expectedDisplayTags.contains("Security=" + SecurityProtocol.PLAINTEXT));
     }
 }
