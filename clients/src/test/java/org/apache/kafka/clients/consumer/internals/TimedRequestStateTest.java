@@ -74,4 +74,27 @@ public class TimedRequestStateTest {
         Timer timer = TimedRequestState.deadlineTimer(time, deadlineMs);
         assertEquals(0, timer.remainingMs());
     }
+
+    @Test
+    public void testToStringUpdatesTimer() {
+        TimedRequestState state = new TimedRequestState(
+            new LogContext(),
+            this.getClass().getSimpleName(),
+            100,
+            1000,
+            time.timer(DEFAULT_TIMEOUT_MS)
+        );
+
+        assertToString(state, DEFAULT_TIMEOUT_MS);
+        time.sleep(DEFAULT_TIMEOUT_MS);
+        assertToString(state, 0);
+    }
+
+    private void assertToString(TimedRequestState state, long timerMs) {
+        String[] toString = state.toString().split(", ");
+        assertTrue(toString.length > 0);
+        String expected = "timer=" + timerMs + "}";
+        String actual = toString[toString.length - 1];
+        assertEquals(expected, actual);
+    }
 }
