@@ -182,8 +182,20 @@ public class PartitionRegistration {
         return record.directories();
     }
 
+    private static boolean migratingDirectories(Uuid[] directories) {
+        if (directories == null) {
+            return true;
+        }
+        for (Uuid directory : directories) {
+            if (!DirectoryId.MIGRATING.equals(directory)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private static Uuid[] defaultToMigrating(Uuid[] directories, int numReplicas) {
-        if (directories == null || directories.length == 0) {
+        if (migratingDirectories(directories)) {
             return DirectoryId.migratingArray(numReplicas);
         }
         return directories;
@@ -228,14 +240,11 @@ public class PartitionRegistration {
     public PartitionRegistration merge(PartitionChangeRecord record) {
         int[] newReplicas = (record.replicas() == null) ?
             replicas : Replicas.toArray(record.replicas());
-        Uuid[] newDirectories;
-        if (record.directories() != null && !record.directories().isEmpty()) {
-            newDirectories = Uuid.toArray(checkDirectories(record));
-        } else if (record.replicas() != null) {
-            newDirectories = Uuid.toArray(DirectoryId.createDirectoriesFrom(replicas, directories, record.replicas()));
-        } else {
-            newDirectories = directories;
-        }
+        Uuid[] newDirectories = defaultToMigrating(
+                (record.directories() == null) ?
+                        directories : Uuid.toArray(checkDirectories(record)),
+                newReplicas.length
+        );
         int[] newIsr = (record.isr() == null) ? isr : Replicas.toArray(record.isr());
         int[] newRemovingReplicas = (record.removingReplicas() == null) ?
             removingReplicas : Replicas.toArray(record.removingReplicas());
@@ -257,7 +266,7 @@ public class PartitionRegistration {
         int[] newElr = (record.eligibleLeaderReplicas() == null) ? elr : Replicas.toArray(record.eligibleLeaderReplicas());
         int[] newLastKnownElr = (record.lastKnownElr() == null) ? lastKnownElr : Replicas.toArray(record.lastKnownElr());
         return new PartitionRegistration(newReplicas,
-            defaultToMigrating(newDirectories, replicas.length),
+            newDirectories,
             newIsr,
             newRemovingReplicas,
             newAddingReplicas,

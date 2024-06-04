@@ -26,11 +26,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -60,7 +59,7 @@ public class CandidateStateTest {
 
     @Test
     public void testSingleNodeQuorum() {
-        CandidateState state = newCandidateState(voterSetWithLocal(Collections.emptyList()));
+        CandidateState state = newCandidateState(voterSetWithLocal(IntStream.empty()));
         assertTrue(state.isVoteGranted());
         assertFalse(state.isVoteRejected());
         assertEquals(Collections.emptySet(), state.unrecordedVoters());
@@ -70,7 +69,7 @@ public class CandidateStateTest {
     public void testTwoNodeQuorumVoteRejected() {
         int otherNodeId = 1;
         CandidateState state = newCandidateState(
-            voterSetWithLocal(Collections.singletonList(otherNodeId))
+            voterSetWithLocal(IntStream.of(otherNodeId))
         );
         assertFalse(state.isVoteGranted());
         assertFalse(state.isVoteRejected());
@@ -84,7 +83,7 @@ public class CandidateStateTest {
     public void testTwoNodeQuorumVoteGranted() {
         int otherNodeId = 1;
         CandidateState state = newCandidateState(
-            voterSetWithLocal(Collections.singletonList(otherNodeId))
+            voterSetWithLocal(IntStream.of(otherNodeId))
         );
         assertFalse(state.isVoteGranted());
         assertFalse(state.isVoteRejected());
@@ -100,7 +99,7 @@ public class CandidateStateTest {
         int node1 = 1;
         int node2 = 2;
         CandidateState state = newCandidateState(
-            voterSetWithLocal(Arrays.asList(node1, node2))
+            voterSetWithLocal(IntStream.of(node1, node2))
         );
         assertFalse(state.isVoteGranted());
         assertFalse(state.isVoteRejected());
@@ -120,7 +119,7 @@ public class CandidateStateTest {
         int node1 = 1;
         int node2 = 2;
         CandidateState state = newCandidateState(
-            voterSetWithLocal(Arrays.asList(node1, node2))
+            voterSetWithLocal(IntStream.of(node1, node2))
         );
         assertFalse(state.isVoteGranted());
         assertFalse(state.isVoteRejected());
@@ -139,7 +138,7 @@ public class CandidateStateTest {
     public void testCannotRejectVoteFromLocalId() {
         int otherNodeId = 1;
         CandidateState state = newCandidateState(
-            voterSetWithLocal(Collections.singletonList(otherNodeId))
+            voterSetWithLocal(IntStream.of(otherNodeId))
         );
         assertThrows(
             IllegalArgumentException.class,
@@ -151,7 +150,7 @@ public class CandidateStateTest {
     public void testCannotChangeVoteGrantedToRejected() {
         int otherNodeId = 1;
         CandidateState state = newCandidateState(
-            voterSetWithLocal(Collections.singletonList(otherNodeId))
+            voterSetWithLocal(IntStream.of(otherNodeId))
         );
         assertTrue(state.recordGrantedVote(otherNodeId));
         assertThrows(IllegalArgumentException.class, () -> state.recordRejectedVote(otherNodeId));
@@ -162,7 +161,7 @@ public class CandidateStateTest {
     public void testCannotChangeVoteRejectedToGranted() {
         int otherNodeId = 1;
         CandidateState state = newCandidateState(
-            voterSetWithLocal(Collections.singletonList(otherNodeId))
+            voterSetWithLocal(IntStream.of(otherNodeId))
         );
         assertTrue(state.recordRejectedVote(otherNodeId));
         assertThrows(IllegalArgumentException.class, () -> state.recordGrantedVote(otherNodeId));
@@ -172,7 +171,7 @@ public class CandidateStateTest {
     @Test
     public void testCannotGrantOrRejectNonVoters() {
         int nonVoterId = 1;
-        CandidateState state = newCandidateState(voterSetWithLocal(Collections.emptyList()));
+        CandidateState state = newCandidateState(voterSetWithLocal(IntStream.empty()));
         assertThrows(IllegalArgumentException.class, () -> state.recordGrantedVote(nonVoterId));
         assertThrows(IllegalArgumentException.class, () -> state.recordRejectedVote(nonVoterId));
     }
@@ -181,7 +180,7 @@ public class CandidateStateTest {
     public void testIdempotentGrant() {
         int otherNodeId = 1;
         CandidateState state = newCandidateState(
-            voterSetWithLocal(Collections.singletonList(otherNodeId))
+            voterSetWithLocal(IntStream.of(otherNodeId))
         );
         assertTrue(state.recordGrantedVote(otherNodeId));
         assertFalse(state.recordGrantedVote(otherNodeId));
@@ -191,7 +190,7 @@ public class CandidateStateTest {
     public void testIdempotentReject() {
         int otherNodeId = 1;
         CandidateState state = newCandidateState(
-            voterSetWithLocal(Collections.singletonList(otherNodeId))
+            voterSetWithLocal(IntStream.of(otherNodeId))
         );
         assertTrue(state.recordRejectedVote(otherNodeId));
         assertFalse(state.recordRejectedVote(otherNodeId));
@@ -201,7 +200,7 @@ public class CandidateStateTest {
     @ValueSource(booleans = {true, false})
     public void testGrantVote(boolean isLogUpToDate) {
         CandidateState state = newCandidateState(
-            voterSetWithLocal(Arrays.asList(1, 2, 3))
+            voterSetWithLocal(IntStream.of(1, 2, 3))
         );
 
         assertFalse(state.canGrantVote(ReplicaKey.of(0, Optional.empty()), isLogUpToDate));
@@ -212,7 +211,7 @@ public class CandidateStateTest {
 
     @Test
     public void testElectionState() {
-        VoterSet voters = voterSetWithLocal(Arrays.asList(1, 2, 3));
+        VoterSet voters = voterSetWithLocal(IntStream.of(1, 2, 3));
         CandidateState state = newCandidateState(voters);
         assertEquals(
             ElectionState.withVotedCandidate(
@@ -228,11 +227,11 @@ public class CandidateStateTest {
     public void testInvalidVoterSet() {
         assertThrows(
             IllegalArgumentException.class,
-            () -> newCandidateState(VoterSetTest.voterSet(VoterSetTest.voterMap(Arrays.asList(1, 2, 3), true)))
+            () -> newCandidateState(VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true)))
         );
     }
 
-    private VoterSet voterSetWithLocal(Collection<Integer> remoteVoters) {
+    private VoterSet voterSetWithLocal(IntStream remoteVoters) {
         Map<Integer, VoterSet.VoterNode> voterMap = VoterSetTest.voterMap(remoteVoters, true);
         voterMap.put(localNode.voterKey().id(), localNode);
 

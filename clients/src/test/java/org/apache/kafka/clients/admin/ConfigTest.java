@@ -21,6 +21,7 @@ import org.apache.kafka.clients.admin.ConfigEntry.ConfigType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
 import java.util.List;
 
 import static java.util.Arrays.asList;
@@ -61,7 +62,7 @@ public class ConfigTest {
     public void shouldImplementEqualsProperly() {
         assertEquals(config, config);
         assertEquals(config, new Config(config.entries()));
-        assertNotEquals(new Config(asList(E1)), config);
+        assertNotEquals(new Config(Collections.singletonList(E1)), config);
         assertNotEquals(config, "this");
     }
 
@@ -69,7 +70,7 @@ public class ConfigTest {
     public void shouldImplementHashCodeProperly() {
         assertEquals(config.hashCode(), config.hashCode());
         assertEquals(config.hashCode(), new Config(config.entries()).hashCode());
-        assertNotEquals(new Config(asList(E1)).hashCode(), config.hashCode());
+        assertNotEquals(new Config(Collections.singletonList(E1)).hashCode(), config.hashCode());
     }
 
     @Test

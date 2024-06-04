@@ -69,8 +69,8 @@ import java.util.Set;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.coordinator.group.Assertions.assertRecordEquals;
-import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkSortedAssignment;
-import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkSortedTopicAssignment;
+import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkOrderedAssignment;
+import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkOrderedTopicAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newCurrentAssignmentRecord;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newCurrentAssignmentTombstoneRecord;
@@ -297,7 +297,7 @@ public class CoordinatorRecordHelpersTest {
         Uuid topicId1 = Uuid.randomUuid();
         Uuid topicId2 = Uuid.randomUuid();
 
-        Map<Uuid, Set<Integer>> partitions = mkSortedAssignment(
+        Map<Uuid, Set<Integer>> partitions = mkOrderedAssignment(
             mkTopicAssignment(topicId1, 11, 12, 13),
             mkTopicAssignment(topicId2, 21, 22, 23)
         );
@@ -379,14 +379,14 @@ public class CoordinatorRecordHelpersTest {
         Uuid topicId1 = Uuid.randomUuid();
         Uuid topicId2 = Uuid.randomUuid();
 
-        Map<Uuid, Set<Integer>> assigned = mkSortedAssignment(
-            mkSortedTopicAssignment(topicId1, 11, 12, 13),
-            mkSortedTopicAssignment(topicId2, 21, 22, 23)
+        Map<Uuid, Set<Integer>> assigned = mkOrderedAssignment(
+            mkOrderedTopicAssignment(topicId1, 11, 12, 13),
+            mkOrderedTopicAssignment(topicId2, 21, 22, 23)
         );
 
-        Map<Uuid, Set<Integer>> revoking = mkSortedAssignment(
-            mkSortedTopicAssignment(topicId1, 14, 15, 16),
-            mkSortedTopicAssignment(topicId2, 24, 25, 26)
+        Map<Uuid, Set<Integer>> revoking = mkOrderedAssignment(
+            mkOrderedTopicAssignment(topicId1, 14, 15, 16),
+            mkOrderedTopicAssignment(topicId2, 24, 25, 26)
         );
 
         CoordinatorRecord expectedRecord = new CoordinatorRecord(
