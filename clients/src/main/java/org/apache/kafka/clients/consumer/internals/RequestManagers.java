@@ -163,7 +163,7 @@ public class RequestManagers implements Closeable {
 
                 if (groupRebalanceConfig != null && groupRebalanceConfig.groupId != null) {
                     Optional<String> serverAssignor = Optional.ofNullable(config.getString(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG));
-                    coordinator = new CoordinatorRequestManager(time,
+                    coordinator = new CoordinatorRequestManager(
                             logContext,
                             retryBackoffMs,
                             retryBackoffMaxMs,

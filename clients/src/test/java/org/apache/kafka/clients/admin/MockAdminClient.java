@@ -646,8 +646,8 @@ public class MockAdminClient extends AdminClient {
     synchronized public RenewDelegationTokenResult renewDelegationToken(byte[] hmac, RenewDelegationTokenOptions options) {
         KafkaFutureImpl<Long> future = new KafkaFutureImpl<>();
 
-        Boolean tokenFound = false;
-        Long expiryTimestamp = options.renewTimePeriodMs();
+        boolean tokenFound = false;
+        long expiryTimestamp = options.renewTimePeriodMs();
         for (DelegationToken token : allTokens) {
             if (Arrays.equals(token.hmac(), hmac)) {
                 token.tokenInfo().setExpiryTimestamp(expiryTimestamp);
@@ -668,9 +668,9 @@ public class MockAdminClient extends AdminClient {
     synchronized public ExpireDelegationTokenResult expireDelegationToken(byte[] hmac, ExpireDelegationTokenOptions options) {
         KafkaFutureImpl<Long> future = new KafkaFutureImpl<>();
 
-        Long expiryTimestamp = options.expiryTimePeriodMs();
+        long expiryTimestamp = options.expiryTimePeriodMs();
         List<DelegationToken> tokensToRemove = new ArrayList<>();
-        Boolean tokenFound = false;
+        boolean tokenFound = false;
         for (DelegationToken token : allTokens) {
             if (Arrays.equals(token.hmac(), hmac)) {
                 if (expiryTimestamp == -1 || expiryTimestamp < System.currentTimeMillis()) {
@@ -1333,10 +1333,6 @@ public class MockAdminClient extends AdminClient {
 
     public synchronized void updateConsumerGroupOffsets(final Map<TopicPartition, Long> newOffsets) {
         committedOffsets.putAll(newOffsets);
-    }
-
-    public synchronized void throwOnListConsumerGroupOffsets(final KafkaException exception) {
-        listConsumerGroupOffsetsException = exception;
     }
 
     private final static class TopicMetadata {
