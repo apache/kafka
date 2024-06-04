@@ -59,7 +59,6 @@ public class TimedRequestState extends RequestState {
     }
 
     public static Timer deadlineTimer(final Time time, final long deadlineMs) {
-        // Prevent the timer from being negative.
         long diff = Math.max(0, deadlineMs - time.milliseconds());
         return time.timer(diff);
     }
