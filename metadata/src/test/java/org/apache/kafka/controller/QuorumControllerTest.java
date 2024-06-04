@@ -812,7 +812,7 @@ public class QuorumControllerTest {
                                     setName(MetadataVersion.FEATURE_NAME).
                                     setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()).
                                     setMaxSupportedVersion(MetadataVersion.IBP_3_7_IV0.featureLevel())
-                                ).iterator()
+                            ).iterator()
                         ))).get();
             }
             for (int i = 0; i < numBrokers; i++) {
