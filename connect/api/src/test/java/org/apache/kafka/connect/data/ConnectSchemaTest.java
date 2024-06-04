@@ -340,8 +340,8 @@ public class ConnectSchemaTest {
         String fieldName = "field";
         assertInvalidValueForSchema(fieldName, new FakeSchema(), new Object(),
                 "Invalid Java object for schema \"fake\" with type null: class java.lang.Object for field: \"field\"");
-        assertInvalidValueForSchema(fieldName, Schema.INT8_SCHEMA, new Object(),
-                "Invalid Java object for schema with type INT8: class java.lang.Object for field: \"field\"");
+        assertInvalidValueForSchema(null, Schema.INT8_SCHEMA, new Object(),
+                "Invalid Java object for schema with type INT8: class java.lang.Object for value");
         assertInvalidValueForSchema(fieldName, Schema.INT8_SCHEMA, new Object(),
                 "Invalid Java object for schema with type INT8: class java.lang.Object for field: \"field\"");
     }
@@ -371,38 +371,38 @@ public class ConnectSchemaTest {
         ConnectSchema.validateValue(fieldName, optionalStrings, Arrays.asList("hello", null));
         ConnectSchema.validateValue(fieldName, optionalStrings, Arrays.asList(null, "world"));
         assertInvalidValueForSchema(fieldName, optionalStrings, Collections.singletonList(true),
-                "Invalid Java object for schema with type STRING: class java.lang.Boolean for field: \"entry\"");
+                "Invalid Java object for schema with type STRING: class java.lang.Boolean for element of array field: \"field\"");
 
         // Required element schema
         Schema requiredStrings = SchemaBuilder.array(Schema.STRING_SCHEMA);
         ConnectSchema.validateValue(fieldName, requiredStrings, Collections.emptyList());
         ConnectSchema.validateValue(fieldName, requiredStrings, Collections.singletonList("hello"));
         assertInvalidValueForSchema(fieldName, requiredStrings, Collections.singletonList(null),
-                "Invalid value: null used for required field: \"entry\", schema type: STRING");
+                "Invalid value: null used for required element of array field: \"field\", schema type: STRING");
         ConnectSchema.validateValue(fieldName, requiredStrings, Arrays.asList("hello", "world"));
         assertInvalidValueForSchema(fieldName, requiredStrings, Arrays.asList("hello", null),
-                "Invalid value: null used for required field: \"entry\", schema type: STRING");
+                "Invalid value: null used for required element of array field: \"field\", schema type: STRING");
         assertInvalidValueForSchema(fieldName, requiredStrings, Arrays.asList(null, "world"),
-                "Invalid value: null used for required field: \"entry\", schema type: STRING");
+                "Invalid value: null used for required element of array field: \"field\", schema type: STRING");
         assertInvalidValueForSchema(fieldName, optionalStrings, Collections.singletonList(true),
-                "Invalid Java object for schema with type STRING: class java.lang.Boolean for field: \"entry\"");
+                "Invalid Java object for schema with type STRING: class java.lang.Boolean for element of array field: \"field\"");
 
         // Null element schema
         Schema nullElements = SchemaBuilder.type(Schema.Type.ARRAY);
         assertInvalidValueForSchema(fieldName, nullElements, Collections.emptyList(),
-                "No schema defined for elements of field: \"field\"");
+                "No schema defined for element of array field: \"field\"");
         assertInvalidValueForSchema(fieldName, nullElements, Collections.singletonList("hello"),
-                "No schema defined for elements of field: \"field\"");
+                "No schema defined for element of array field: \"field\"");
         assertInvalidValueForSchema(fieldName, nullElements, Collections.singletonList(null),
-                "No schema defined for elements of field: \"field\"");
+                "No schema defined for element of array field: \"field\"");
         assertInvalidValueForSchema(fieldName, nullElements, Arrays.asList("hello", "world"),
-                "No schema defined for elements of field: \"field\"");
+                "No schema defined for element of array field: \"field\"");
         assertInvalidValueForSchema(fieldName, nullElements, Arrays.asList("hello", null),
-                "No schema defined for elements of field: \"field\"");
+                "No schema defined for element of array field: \"field\"");
         assertInvalidValueForSchema(fieldName, nullElements, Arrays.asList(null, "world"),
-                "No schema defined for elements of field: \"field\"");
+                "No schema defined for element of array field: \"field\"");
         assertInvalidValueForSchema(fieldName, nullElements, Collections.singletonList(true),
-                "No schema defined for elements of field: \"field\"");
+                "No schema defined for element of array field: \"field\"");
     }
 
     @Test
@@ -417,40 +417,57 @@ public class ConnectSchemaTest {
         ConnectSchema.validateValue(fieldName, optionalStrings, Collections.singletonMap(null, "value"));
         ConnectSchema.validateValue(fieldName, optionalStrings, Collections.singletonMap(null, null));
         assertInvalidValueForSchema(fieldName, optionalStrings, Collections.singletonMap("key", true),
-                "Invalid Java object for schema with type STRING: class java.lang.Boolean for field: \"value\"");
+                "Invalid Java object for schema with type STRING: class java.lang.Boolean for value of map field: \"field\"");
         assertInvalidValueForSchema(fieldName, optionalStrings, Collections.singletonMap(true, "value"),
-                "Invalid Java object for schema with type STRING: class java.lang.Boolean for field: \"key\"");
+                "Invalid Java object for schema with type STRING: class java.lang.Boolean for key of map field: \"field\"");
 
         // Required element schema
         Schema requiredStrings = SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.STRING_SCHEMA);
         ConnectSchema.validateValue(fieldName, requiredStrings, Collections.emptyMap());
         ConnectSchema.validateValue(fieldName, requiredStrings, Collections.singletonMap("key", "value"));
         assertInvalidValueForSchema(fieldName, requiredStrings, Collections.singletonMap("key", null),
-                "Invalid value: null used for required field: \"value\", schema type: STRING");
+                "Invalid value: null used for required value of map field: \"field\", schema type: STRING");
         assertInvalidValueForSchema(fieldName, requiredStrings, Collections.singletonMap(null, "value"),
-                "Invalid value: null used for required field: \"key\", schema type: STRING");
+                "Invalid value: null used for required key of map field: \"field\", schema type: STRING");
         assertInvalidValueForSchema(fieldName, requiredStrings, Collections.singletonMap(null, null),
-                "Invalid value: null used for required field: \"key\", schema type: STRING");
+                "Invalid value: null used for required key of map field: \"field\", schema type: STRING");
         assertInvalidValueForSchema(fieldName, requiredStrings, Collections.singletonMap("key", true),
-                "Invalid Java object for schema with type STRING: class java.lang.Boolean for field: \"value\"");
+                "Invalid Java object for schema with type STRING: class java.lang.Boolean for value of map field: \"field\"");
         assertInvalidValueForSchema(fieldName, requiredStrings, Collections.singletonMap(true, "value"),
-                "Invalid Java object for schema with type STRING: class java.lang.Boolean for field: \"key\"");
+                "Invalid Java object for schema with type STRING: class java.lang.Boolean for key of map field: \"field\"");
 
-        // Null element schema
-        Schema nullElements = SchemaBuilder.type(Schema.Type.MAP);
-        assertInvalidValueForSchema(fieldName, nullElements, Collections.emptyMap(),
-                "No schema defined for keys of field: \"field\"");
-        assertInvalidValueForSchema(fieldName, nullElements, Collections.singletonMap("key", "value"),
-                "No schema defined for keys of field: \"field\"");
-        assertInvalidValueForSchema(fieldName, nullElements, Collections.singletonMap("key", null),
-                "No schema defined for keys of field: \"field\"");
-        assertInvalidValueForSchema(fieldName, nullElements, Collections.singletonMap(null, "value"),
-                "No schema defined for keys of field: \"field\"");
-        assertInvalidValueForSchema(fieldName, nullElements, Collections.singletonMap(null, null),
-                "No schema defined for keys of field: \"field\"");
-        assertInvalidValueForSchema(fieldName, nullElements, Collections.singletonMap("key", true),
-                "No schema defined for keys of field: \"field\"");
-        assertInvalidValueForSchema(fieldName, nullElements, Collections.singletonMap(true, "value"),
-                "No schema defined for keys of field: \"field\"");
+        // Null key schema
+        Schema nullKeys = SchemaBuilder.type(Schema.Type.MAP);
+        assertInvalidValueForSchema(fieldName, nullKeys, Collections.emptyMap(),
+                "No schema defined for key of map field: \"field\"");
+        assertInvalidValueForSchema(fieldName, nullKeys, Collections.singletonMap("key", "value"),
+                "No schema defined for key of map field: \"field\"");
+        assertInvalidValueForSchema(fieldName, nullKeys, Collections.singletonMap("key", null),
+                "No schema defined for key of map field: \"field\"");
+        assertInvalidValueForSchema(fieldName, nullKeys, Collections.singletonMap(null, "value"),
+                "No schema defined for key of map field: \"field\"");
+        assertInvalidValueForSchema(fieldName, nullKeys, Collections.singletonMap(null, null),
+                "No schema defined for key of map field: \"field\"");
+        assertInvalidValueForSchema(fieldName, nullKeys, Collections.singletonMap("key", true),
+                "No schema defined for key of map field: \"field\"");
+        assertInvalidValueForSchema(fieldName, nullKeys, Collections.singletonMap(true, "value"),
+                "No schema defined for key of map field: \"field\"");
+
+        // Null value schema
+        Schema nullValues = SchemaBuilder.mapWithNullValues(Schema.OPTIONAL_STRING_SCHEMA);
+        assertInvalidValueForSchema(fieldName, nullValues, Collections.emptyMap(),
+                "No schema defined for value of map field: \"field\"");
+        assertInvalidValueForSchema(fieldName, nullValues, Collections.singletonMap("key", "value"),
+                "No schema defined for value of map field: \"field\"");
+        assertInvalidValueForSchema(fieldName, nullValues, Collections.singletonMap("key", null),
+                "No schema defined for value of map field: \"field\"");
+        assertInvalidValueForSchema(fieldName, nullValues, Collections.singletonMap(null, "value"),
+                "No schema defined for value of map field: \"field\"");
+        assertInvalidValueForSchema(fieldName, nullValues, Collections.singletonMap(null, null),
+                "No schema defined for value of map field: \"field\"");
+        assertInvalidValueForSchema(fieldName, nullValues, Collections.singletonMap("key", true),
+                "No schema defined for value of map field: \"field\"");
+        assertInvalidValueForSchema(fieldName, nullValues, Collections.singletonMap(true, "value"),
+                "No schema defined for value of map field: \"field\"");
     }
 }
