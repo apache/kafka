@@ -1914,11 +1914,13 @@ public class GroupMetadataManager {
                 assignmentResultBuilder.removeMember(member.memberId());
             }
 
+            long startTimeMs = time.milliseconds();
             TargetAssignmentBuilder.TargetAssignmentResult assignmentResult =
                 assignmentResultBuilder.build();
+            long assignorTimeMs = time.milliseconds() - startTimeMs;
 
-            log.info("[GroupId {}] Computed a new target assignment for epoch {} with '{}' assignor: {}.",
-                group.groupId(), groupEpoch, preferredServerAssignor, assignmentResult.targetAssignment());
+            log.info("[GroupId {}] Computed a new target assignment for epoch {} with '{}' assignor in {}ms: {}.",
+                group.groupId(), groupEpoch, preferredServerAssignor, assignorTimeMs, assignmentResult.targetAssignment());
 
             records.addAll(assignmentResult.records());
 

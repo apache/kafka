@@ -18,16 +18,18 @@ package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
 
+import java.util.Collection;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * The group metadata specifications required to compute the target assignment.
  */
 public interface GroupSpec {
     /**
-     * @return Member metadata keyed by member Id.
+     * @return All the member Ids of the consumer group.
      */
-    Map<String, AssignmentMemberSpec> members();
+    Collection<String> memberIds();
 
     /**
      * @return The group's subscription type.
@@ -39,4 +41,22 @@ public interface GroupSpec {
      *         False, otherwise.
      */
     boolean isPartitionAssigned(Uuid topicId, int partitionId);
+
+    /**
+     * Gets the member subscription specification for a member.
+     *
+     * @param memberId          The member Id.
+     * @return The member's subscription metadata.
+     * @throws IllegalArgumentException If the member Id isn't found.
+     */
+    MemberSubscriptionSpec memberSubscription(String memberId);
+
+    /**
+     * Gets the current assignment of the member.
+     *
+     * @param memberId          The member Id.
+     * @return A map of topic Ids to sets of partition numbers.
+     *         An empty map is returned if the member Id isn't found.
+     */
+    Map<Uuid, Set<Integer>> memberAssignment(String memberId);
 }
