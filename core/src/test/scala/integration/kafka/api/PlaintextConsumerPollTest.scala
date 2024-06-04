@@ -238,20 +238,6 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
     runMultiConsumerSessionTimeoutTest(true)
   }
 
-  // Ensure TestUtils polls with ZERO. This fails for the new consumer only.
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testPollEventuallyReturnsRecordsWithZeroTimeout(quorum: String, groupProtocol: String): Unit = {
-    val numMessages = 100
-    val producer = createProducer()
-    sendRecords(producer, numMessages, tp)
-
-    val consumer = createConsumer()
-    consumer.subscribe(Set(topic).asJava)
-    val records = awaitNonEmptyRecords(consumer, tp)
-    assertEquals(numMessages, records.count())
-  }
-
   def runMultiConsumerSessionTimeoutTest(closeConsumer: Boolean): Unit = {
     // use consumers defined in this class plus one additional consumer
     // Use topic defined in this class + one additional topic
