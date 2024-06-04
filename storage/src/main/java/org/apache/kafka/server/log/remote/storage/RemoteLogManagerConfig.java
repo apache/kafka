@@ -356,6 +356,118 @@ public final class RemoteLogManagerConfig extends AbstractConfig {
                         REMOTE_FETCH_MAX_WAIT_MS_DOC);
     }
 
+    public boolean enableRemoteStorageSystem() {
+        return getBoolean(REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP);
+    }
+
+    public String remoteStorageManagerClassName() {
+        return getString(REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP);
+    }
+
+    public String remoteStorageManagerClassPath() {
+        return getString(REMOTE_STORAGE_MANAGER_CLASS_PATH_PROP);
+    }
+
+    public String remoteLogMetadataManagerClassName() {
+        return getString(REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP);
+    }
+
+    public String remoteLogMetadataManagerClassPath() {
+        return getString(REMOTE_LOG_METADATA_MANAGER_CLASS_PATH_PROP);
+    }
+
+    public long remoteLogIndexFileCacheTotalSizeBytes() {
+        return getLong(REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP);
+    }
+
+    public int remoteLogManagerThreadPoolSize() {
+        return getInt(REMOTE_LOG_MANAGER_THREAD_POOL_SIZE_PROP);
+    }
+
+    public int remoteLogManagerCopierThreadPoolSize() {
+        return getInt(REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP);
+    }
+
+    public int remoteLogManagerExpirationThreadPoolSize() {
+        return getInt(REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP);
+    }
+
+    public long remoteLogManagerTaskIntervalMs() {
+        return getLong(REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP);
+    }
+
+    public long remoteLogManagerTaskRetryBackoffMs() {
+        return getLong(REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MS_PROP);
+    }
+
+    public long remoteLogManagerTaskRetryBackoffMaxMs() {
+        return getLong(REMOTE_LOG_MANAGER_TASK_RETRY_BACK_OFF_MAX_MS_PROP);
+    }
+
+    public double remoteLogManagerTaskRetryJitter() {
+        return getDouble(REMOTE_LOG_MANAGER_TASK_RETRY_JITTER_PROP);
+    }
+
+    public int remoteLogReaderThreads() {
+        return getInt(REMOTE_LOG_READER_THREADS_PROP);
+    }
+
+    public int remoteLogReaderMaxPendingTasks() {
+        return getInt(REMOTE_LOG_READER_MAX_PENDING_TASKS_PROP);
+    }
+
+    public String remoteLogMetadataManagerListenerName() {
+        return getString(REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP);
+    }
+
+    public int remoteLogMetadataCustomMetadataMaxBytes() {
+        return getInt(REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_BYTES_PROP);
+    }
+
+    public String remoteStorageManagerPrefix() {
+        return getString(REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP);
+    }
+
+    public String remoteLogMetadataManagerPrefix() {
+        return getString(REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP);
+    }
+
+    public Map<String, Object> remoteStorageManagerProps() {
+        return Collections.unmodifiableMap(getString(REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP) != null
+                ? originalsWithPrefix(getString(REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP))
+                : Collections.emptyMap());
+    }
+
+    public Map<String, Object> remoteLogMetadataManagerProps() {
+        return Collections.unmodifiableMap(getString(REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP) != null
+                ? originalsWithPrefix(getString(REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP))
+                : Collections.emptyMap());
+    }
+
+    public long remoteLogManagerCopyMaxBytesPerSecond() {
+        return getLong(REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP);
+    }
+
+    public int remoteLogManagerCopyNumQuotaSamples() {
+        return getInt(REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_NUM_PROP);
+    }
+
+    public int remoteLogManagerCopyQuotaWindowSizeSeconds() {
+        return getInt(REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_SIZE_SECONDS_PROP);
+    }
+
+    public long remoteLogManagerFetchMaxBytesPerSecond() {
+        return getLong(REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP);
+    }
+
+    public int remoteLogManagerFetchNumQuotaSamples() {
+        return getInt(REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_NUM_PROP);
+    }
+
+    public int remoteLogManagerFetchQuotaWindowSizeSeconds() {
+        return getInt(REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_SIZE_SECONDS_PROP);
+    }
+
     public RemoteLogManagerConfig(Map<?, ?> props) {
         this(props, false);
     }
