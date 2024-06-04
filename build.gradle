@@ -49,7 +49,8 @@ plugins {
   id 'com.github.johnrengelman.shadow' version '8.1.0' apply false
   //  Spotless 6.13.0 has issue with Java 21 (see https://github.com/diffplug/spotless/pull/1920), and Spotless 6.14.0+ requires JRE 11
   //  We are going to drop JDK8 support. Hence, the spotless is upgrade to newest version and be applied only if the build env is compatible with JDK 11.
-  id 'com.diffplug.spotless' version "6.24.0" apply false
+  //  spotless 6.25.0 has issue in runtime with JDK8 even through we define it with `apply:false`. see https://github.com/diffplug/spotless/issues/2156 for more details
+  id 'com.diffplug.spotless' version "6.14.0" apply false
 }
 
 ext {
