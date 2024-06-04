@@ -17,8 +17,11 @@
 package org.apache.kafka.streams.processor.assignment;
 
 import java.util.List;
+import java.util.OptionalInt;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.processor.assignment.assignors.StickyTaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor;
 
 /**
  * Assignment related configs for the Kafka Streams {@link TaskAssignor}.
@@ -29,20 +32,47 @@ public class AssignmentConfigs {
     private final int numStandbyReplicas;
     private final long probingRebalanceIntervalMs;
     private final List<String> rackAwareAssignmentTags;
-    private final int rackAwareTrafficCost;
-    private final int rackAwareNonOverlapCost;
+    private final OptionalInt rackAwareTrafficCost;
+    private final OptionalInt rackAwareNonOverlapCost;
     private final String rackAwareAssignmentStrategy;
 
-    public AssignmentConfigs(final StreamsConfig configs) {
-        this(
-            configs.getLong(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG),
-            configs.getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG),
-            configs.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG),
-            configs.getLong(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG),
-            configs.getList(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG),
-            configs.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG),
-            configs.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG),
-            configs.getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG)
+    public static AssignmentConfigs of(final StreamsConfig configs) {
+        final long acceptableRecoveryLag = configs.getLong(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG);
+        final int maxWarmupReplicas = configs.getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG);
+        final int numStandbyReplicas = configs.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
+        final long probingRebalanceIntervalMs = configs.getLong(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG);
+        final List<String> rackAwareAssignmentTags = configs.getList(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
+        final String rackAwareAssignmentStrategy = configs.getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG);
+        Integer rackAwareTrafficCost = configs.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG);
+        Integer rackAwareNonOverlapCost = configs.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG);
+
+        final String assignorClassName = configs.getString(StreamsConfig.TASK_ASSIGNOR_CLASS_CONFIG);
+        if (StickyTaskAssignor.class.getName().equals(assignorClassName)) {
+            if (rackAwareTrafficCost == null) {
+                rackAwareTrafficCost = StickyTaskAssignor.DEFAULT_STICKY_TRAFFIC_COST;
+            }
+            if (rackAwareNonOverlapCost == null) {
+                rackAwareNonOverlapCost = StickyTaskAssignor.DEFAULT_STICKY_NON_OVERLAP_COST;
+            }
+        } else if (HighAvailabilityTaskAssignor.class.getName().equals(assignorClassName)) {
+            // TODO KAFKA-16869: replace with the HighAvailabilityTaskAssignor class once it implements the new TaskAssignor interface
+            if (rackAwareTrafficCost == null) {
+                rackAwareTrafficCost = HighAvailabilityTaskAssignor.DEFAULT_HIGH_AVAILABILITY_TRAFFIC_COST;
+            }
+            if (rackAwareNonOverlapCost == null) {
+                rackAwareNonOverlapCost = HighAvailabilityTaskAssignor.DEFAULT_HIGH_AVAILABILITY_NON_OVERLAP_COST;
+            }
+        }
+
+        return new AssignmentConfigs(
+            acceptableRecoveryLag,
+            maxWarmupReplicas,
+            numStandbyReplicas,
+            probingRebalanceIntervalMs,
+            rackAwareAssignmentTags,
+            rackAwareTrafficCost != null ? OptionalInt.of(rackAwareTrafficCost) : OptionalInt.empty(),
+            rackAwareNonOverlapCost != null ? OptionalInt.of(rackAwareNonOverlapCost) : OptionalInt.empty(),
+            rackAwareAssignmentStrategy
         );
     }
 
@@ -51,10 +81,9 @@ public class AssignmentConfigs {
                              final int numStandbyReplicas,
                              final long probingRebalanceIntervalMs,
                              final List<String> rackAwareAssignmentTags,
-                             final int rackAwareTrafficCost,
-                             final int rackAwareNonOverlapCost,
-                             final String rackAwareAssignmentStrategy
-    ) {
+                             final OptionalInt rackAwareTrafficCost,
+                             final OptionalInt  rackAwareNonOverlapCost,
+                             final String rackAwareAssignmentStrategy) {
         this.acceptableRecoveryLag = validated(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, acceptableRecoveryLag);
         this.maxWarmupReplicas = validated(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, maxWarmupReplicas);
         this.numStandbyReplicas = validated(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, numStandbyReplicas);
@@ -70,6 +99,7 @@ public class AssignmentConfigs {
             rackAwareAssignmentStrategy
         );
     }
+
 
     /**
      * The configured acceptable recovery lag according to
@@ -115,7 +145,7 @@ public class AssignmentConfigs {
      * The rack-aware assignment traffic cost as configured via
      * {@link StreamsConfig#RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG}
      */
-    public int rackAwareTrafficCost() {
+    public OptionalInt rackAwareTrafficCost() {
         return rackAwareTrafficCost;
     }
 
@@ -123,7 +153,7 @@ public class AssignmentConfigs {
      * The rack-aware assignment non-overlap cost as configured via
      * {@link StreamsConfig#RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG}
      */
-    public int rackAwareNonOverlapCost() {
+    public OptionalInt rackAwareNonOverlapCost() {
         return rackAwareNonOverlapCost;
     }
 
