@@ -214,11 +214,13 @@ public class ConsumerNetworkThreadTest {
         list.add(Optional.of(coordinatorRequestManager));
         list.add(Optional.of(heartbeatRequestManager));
         list.add(Optional.of(offsetsRequestManager));
-        
+
         when(requestManagers.entries()).thenReturn(list);
+        when(coordinatorRequestManager.poll(anyLong())).thenReturn(mock(NetworkClientDelegate.PollResult.class));
         consumerNetworkThread.runOnce();
         requestManagers.entries().forEach(rmo -> rmo.ifPresent(rm -> verify(rm).poll(anyLong())));
         requestManagers.entries().forEach(rmo -> rmo.ifPresent(rm -> verify(rm).maximumTimeToWait(anyLong())));
+        verify(networkClientDelegate).addAll(any(NetworkClientDelegate.PollResult.class));
         verify(networkClientDelegate).poll(anyLong(), anyLong());
     }
 
@@ -346,9 +348,7 @@ public class ConsumerNetworkThreadTest {
         Cluster cluster = mock(Cluster.class);
         when(metadata.fetch()).thenReturn(cluster);
 
-        List<Node> list = new ArrayList<>();
-        list.add(new Node(0, "host", 0));
-        when(cluster.nodes()).thenReturn(list);
+        when(cluster.nodes()).thenReturn(Collections.singletonList(new Node(0, "host", 0)));
 
         LinkedList<NetworkClientDelegate.UnsentRequest> queue = new LinkedList<>();
         when(networkClientDelegate.unsentRequests()).thenReturn(queue);
