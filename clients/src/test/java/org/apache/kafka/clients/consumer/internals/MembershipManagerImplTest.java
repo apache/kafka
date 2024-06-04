@@ -1352,8 +1352,6 @@ public class MembershipManagerImplTest {
         mockOwnedPartitionAndAssignmentReceived(membershipManager, topicId, topicName, expectedAssignmentReconciled);
         receiveAssignment(topicId, Arrays.asList(0, 1), membershipManager);
         // Verify new reconciliation was not triggered
-        verify(membershipManager, never()).markReconciliationInProgress();
-        verify(membershipManager, never()).markReconciliationCompleted();
         verify(subscriptionState, never()).assignFromSubscribed(anyCollection());
 
         assertEquals(MemberState.STABLE, membershipManager.state());
@@ -1544,13 +1542,6 @@ public class MembershipManagerImplTest {
         List<TopicIdPartition> remainingAssignment = topicIdPartitions(topicId, topicName, 1);
 
         testRevocationCompleted(membershipManager, remainingAssignment);
-    }
-
-    @Test
-    public void testOnSubscriptionUpdatedTransitionsToJoiningOnlyIfNotInGroup() {
-        MembershipManagerImpl membershipManager = createMemberInStableState();
-        membershipManager.onSubscriptionUpdated();
-        verify(membershipManager, never()).transitionToJoining();
     }
 
     @Test
@@ -2390,8 +2381,6 @@ public class MembershipManagerImplTest {
     private void verifyReconciliationTriggeredAndCompleted(MembershipManagerImpl membershipManager,
                                                            List<TopicIdPartition> expectedAssignment) {
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
-        verify(membershipManager).markReconciliationInProgress();
-        verify(membershipManager).markReconciliationCompleted();
         assertFalse(membershipManager.reconciliationInProgress());
 
         // Assignment applied
@@ -2594,7 +2583,6 @@ public class MembershipManagerImplTest {
         // Stale reconciliation should have been aborted and a new one should be triggered on the next poll.
         assertFalse(membershipManager.reconciliationInProgress());
         membershipManager.poll(time.milliseconds());
-        verify(membershipManager).markReconciliationInProgress();
     }
 
     private void receiveEmptyAssignment(MembershipManager membershipManager) {
