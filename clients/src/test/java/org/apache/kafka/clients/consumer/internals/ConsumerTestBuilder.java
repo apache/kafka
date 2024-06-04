@@ -179,9 +179,7 @@ public class ConsumerTestBuilder implements Closeable {
         if (groupInfo.isPresent()) {
             GroupInformation gi = groupInfo.get();
             CoordinatorRequestManager coordinator = spy(new CoordinatorRequestManager(
-                    time,
                     logContext,
-                    requestTimeoutMs,
                     DEFAULT_RETRY_BACKOFF_MS,
                     DEFAULT_RETRY_BACKOFF_MAX_MS,
                     backgroundEventHandler,
@@ -225,7 +223,6 @@ public class ConsumerTestBuilder implements Closeable {
                     gi.heartbeatJitterMs));
             HeartbeatRequestManager heartbeat = spy(new HeartbeatRequestManager(
                     logContext,
-                    time,
                     pollTimer,
                     config,
                     coordinator,
@@ -259,8 +256,7 @@ public class ConsumerTestBuilder implements Closeable {
                 fetchBuffer,
                 metricsManager,
                 networkClientDelegate,
-                apiVersions,
-                requestTimeoutMs));
+                apiVersions));
         this.requestManagers = new RequestManagers(logContext,
                 offsetsRequestManager,
                 topicMetadataRequestManager,

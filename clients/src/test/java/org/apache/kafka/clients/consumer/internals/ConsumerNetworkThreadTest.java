@@ -251,8 +251,8 @@ public class ConsumerNetworkThreadTest {
                         new FindCoordinatorRequestData()
                                 .setKeyType(FindCoordinatorRequest.CoordinatorType.TRANSACTION.id())
                                 .setKey("foobar")),
-                Optional.empty(),
-                time.timer(DEFAULT_REQUEST_TIMEOUT_MS));
+                Optional.empty());
+        req.setTimer(time, DEFAULT_REQUEST_TIMEOUT_MS);
 
         // purposely setting a non-MAX time to ensure it is returning Long.MAX_VALUE upon success
         NetworkClientDelegate.PollResult success = new NetworkClientDelegate.PollResult(

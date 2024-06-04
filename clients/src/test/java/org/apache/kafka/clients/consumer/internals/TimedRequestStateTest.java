@@ -93,7 +93,7 @@ public class TimedRequestStateTest {
     private void assertToString(TimedRequestState state, long timerMs) {
         String[] toString = state.toString().split(", ");
         assertTrue(toString.length > 0);
-        String expected = "timer=" + timerMs + "}";
+        String expected = "remainingMs=" + timerMs + "}";
         String actual = toString[toString.length - 1];
         assertEquals(expected, actual);
     }

@@ -66,6 +66,6 @@ public class TimedRequestState extends RequestState {
 
     @Override
     protected String toStringBase() {
-        return super.toStringBase() + ", timer=" + remainingMs();
+        return super.toStringBase() + ", remainingMs=" + remainingMs();
     }
 }

@@ -236,6 +236,7 @@ public class NetworkClientDelegate implements AutoCloseable {
     public void add(final UnsentRequest r) {
         Objects.requireNonNull(r);
         unsentRequests.add(r);
+        r.setTimer(this.time, this.requestTimeoutMs);
     }
 
     public static class PollResult {
@@ -267,16 +268,22 @@ public class NetworkClientDelegate implements AutoCloseable {
         private final FutureCompletionHandler handler;
         private final Optional<Node> node; // empty if random node can be chosen
 
-        private final Timer timer;
+        private Timer timer;
 
         public UnsentRequest(final AbstractRequest.Builder<?> requestBuilder,
-                             final Optional<Node> node,
-                             final Timer timer) {
+                             final Optional<Node> node) {
             Objects.requireNonNull(requestBuilder);
             this.requestBuilder = requestBuilder;
             this.node = node;
             this.handler = new FutureCompletionHandler();
-            this.timer = timer;
+        }
+
+        void setTimer(final Time time, final long requestTimeoutMs) {
+            this.timer = time.timer(requestTimeoutMs);
+        }
+
+        Timer timer() {
+            return timer;
         }
 
         CompletableFuture<ClientResponse> future() {
@@ -302,11 +309,20 @@ public class NetworkClientDelegate implements AutoCloseable {
 
         @Override
         public String toString() {
+            String remainingMs;
+
+            if (timer != null) {
+                timer.update();
+                remainingMs = String.valueOf(timer.remainingMs());
+            } else {
+                remainingMs = "<not set>";
+            }
+
             return "UnsentRequest{" +
                     "requestBuilder=" + requestBuilder +
                     ", handler=" + handler +
                     ", node=" + node +
-                    ", timer=" + timer.remainingMs() +
+                    ", remainingMs=" + remainingMs +
                     '}';
         }
     }
