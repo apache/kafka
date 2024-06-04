@@ -66,7 +66,7 @@ public class UniformAssignor implements ConsumerGroupPartitionAssignor {
         GroupSpec groupSpec,
         SubscribedTopicDescriber subscribedTopicDescriber
     ) throws PartitionAssignorException {
-        if (groupSpec.members().isEmpty())
+        if (groupSpec.memberIds().isEmpty())
             return new GroupAssignment(Collections.emptyMap());
 
         if (groupSpec.subscriptionType().equals(HOMOGENEOUS)) {

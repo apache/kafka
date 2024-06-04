@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.consumer.Assignment;
 import org.apache.kafka.coordinator.group.consumer.SubscribedTopicMetadata;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
 import org.junit.jupiter.api.Test;
@@ -69,13 +70,12 @@ public class OptimizedUniformAssignmentBuilderTest {
             )
         );
 
-        Map<String, AssignmentMemberSpec> members = Collections.singletonMap(
+        Map<String, MemberSubscriptionSpecImpl> members = Collections.singletonMap(
             memberA,
-            new AssignmentMemberSpec(
-                Optional.empty(),
+            new MemberSubscriptionSpecImpl(
                 Optional.empty(),
                 Collections.emptySet(),
-                Collections.emptyMap()
+                Assignment.EMPTY
             )
         );
 
@@ -107,13 +107,12 @@ public class OptimizedUniformAssignmentBuilderTest {
             )
         );
 
-        Map<String, AssignmentMemberSpec> members = Collections.singletonMap(
+        Map<String, MemberSubscriptionSpecImpl> members = Collections.singletonMap(
             memberA,
-            new AssignmentMemberSpec(
-                Optional.empty(),
+            new MemberSubscriptionSpecImpl(
                 Optional.empty(),
                 Collections.singleton(topic2Uuid),
-                Collections.emptyMap()
+                Assignment.EMPTY
             )
         );
 
@@ -143,18 +142,18 @@ public class OptimizedUniformAssignmentBuilderTest {
             mkMapOfPartitionRacks(2)
         ));
 
-        Map<String, AssignmentMemberSpec> members = new TreeMap<>();
-        members.put(memberA, new AssignmentMemberSpec(
-            Optional.empty(),
+        Map<String, MemberSubscriptionSpecImpl> members = new TreeMap<>();
+
+        members.put(memberA, new MemberSubscriptionSpecImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic3Uuid),
-            Collections.emptyMap()
+            Assignment.EMPTY
         ));
-        members.put(memberB, new AssignmentMemberSpec(
-            Optional.empty(),
+
+        members.put(memberB, new MemberSubscriptionSpecImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic3Uuid),
-            Collections.emptyMap()
+            Assignment.EMPTY
         ));
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
@@ -192,24 +191,24 @@ public class OptimizedUniformAssignmentBuilderTest {
             mkMapOfPartitionRacks(2)
         ));
 
-        Map<String, AssignmentMemberSpec> members = new TreeMap<>();
-        members.put(memberA, new AssignmentMemberSpec(
-            Optional.empty(),
+        Map<String, MemberSubscriptionSpecImpl> members = new TreeMap<>();
+
+        members.put(memberA, new MemberSubscriptionSpecImpl(
             Optional.empty(),
             Collections.singleton(topic3Uuid),
-            Collections.emptyMap()
+            Assignment.EMPTY
         ));
-        members.put(memberB, new AssignmentMemberSpec(
-            Optional.empty(),
+
+        members.put(memberB, new MemberSubscriptionSpecImpl(
             Optional.empty(),
             Collections.singleton(topic3Uuid),
-            Collections.emptyMap()
+            Assignment.EMPTY
         ));
-        members.put(memberC, new AssignmentMemberSpec(
-            Optional.empty(),
+
+        members.put(memberC, new MemberSubscriptionSpecImpl(
             Optional.empty(),
             Collections.singleton(topic3Uuid),
-            Collections.emptyMap()
+            Assignment.EMPTY
         ));
 
         // Topic 3 has 2 partitions but three members subscribed to it - one of them should not get an assignment.
@@ -253,13 +252,12 @@ public class OptimizedUniformAssignmentBuilderTest {
             ));
         }
 
-        Map<String, AssignmentMemberSpec> members = new TreeMap<>();
+        Map<String, MemberSubscriptionSpecImpl> members = new TreeMap<>();
         for (int i = 1; i < 50; i++) {
-            members.put("member" + i, new AssignmentMemberSpec(
-                Optional.empty(),
+            members.put("member" + i, new MemberSubscriptionSpecImpl(
                 Optional.empty(),
                 topicMetadata.keySet(),
-                Collections.emptyMap()
+                Assignment.EMPTY
             ));
         }
 
@@ -294,26 +292,24 @@ public class OptimizedUniformAssignmentBuilderTest {
             mkMapOfPartitionRacks(3)
         ));
 
-        Map<String, AssignmentMemberSpec> members = new TreeMap<>();
+        Map<String, MemberSubscriptionSpecImpl> members = new TreeMap<>();
 
-        members.put(memberA, new AssignmentMemberSpec(
-            Optional.empty(),
+        members.put(memberA, new MemberSubscriptionSpecImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
-            mkOrderedAssignment(
+            new Assignment(mkOrderedAssignment(
                 mkTopicAssignment(topic1Uuid, 0, 1),
                 mkTopicAssignment(topic2Uuid, 0, 1)
-            )
+            ))
         ));
 
-        members.put(memberB, new AssignmentMemberSpec(
-            Optional.empty(),
+        members.put(memberB, new MemberSubscriptionSpecImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
-            mkOrderedAssignment(
+            new Assignment(mkOrderedAssignment(
                 mkTopicAssignment(topic1Uuid, 2),
                 mkTopicAssignment(topic2Uuid, 2)
-            )
+            ))
         ));
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
@@ -359,26 +355,24 @@ public class OptimizedUniformAssignmentBuilderTest {
             mkMapOfPartitionRacks(5)
         ));
 
-        Map<String, AssignmentMemberSpec> members = new TreeMap<>();
+        Map<String, MemberSubscriptionSpecImpl> members = new TreeMap<>();
 
-        members.put(memberA, new AssignmentMemberSpec(
-            Optional.empty(),
+        members.put(memberA, new MemberSubscriptionSpecImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
-            mkOrderedAssignment(
+            new Assignment(mkOrderedAssignment(
                 mkTopicAssignment(topic1Uuid, 0, 2),
                 mkTopicAssignment(topic2Uuid, 0)
-            )
+            ))
         ));
 
-        members.put(memberB, new AssignmentMemberSpec(
-            Optional.empty(),
+        members.put(memberB, new MemberSubscriptionSpecImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
-            mkOrderedAssignment(
+            new Assignment(mkOrderedAssignment(
                 mkTopicAssignment(topic1Uuid, 1),
                 mkTopicAssignment(topic2Uuid, 1, 2)
-            )
+            ))
         ));
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
@@ -423,34 +417,31 @@ public class OptimizedUniformAssignmentBuilderTest {
             mkMapOfPartitionRacks(3)
         ));
 
-        Map<String, AssignmentMemberSpec> members = new HashMap<>();
+        Map<String, MemberSubscriptionSpecImpl> members = new TreeMap<>();
 
-        members.put(memberA, new AssignmentMemberSpec(
-            Optional.empty(),
+        members.put(memberA, new MemberSubscriptionSpecImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
-            mkOrderedAssignment(
+            new Assignment(mkOrderedAssignment(
                 mkTopicAssignment(topic1Uuid, 0, 2),
                 mkTopicAssignment(topic2Uuid, 0)
-            )
+            ))
         ));
 
-        members.put(memberB, new AssignmentMemberSpec(
-            Optional.empty(),
+        members.put(memberB, new MemberSubscriptionSpecImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
-            mkOrderedAssignment(
+            new Assignment(mkOrderedAssignment(
                 mkTopicAssignment(topic1Uuid, 1),
                 mkTopicAssignment(topic2Uuid, 1, 2)
-            )
+            ))
         ));
 
         // Add a new member to trigger a re-assignment.
-        members.put(memberC, new AssignmentMemberSpec(
-            Optional.empty(),
+        members.put(memberC, new MemberSubscriptionSpecImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
-            Collections.emptyMap()
+            Assignment.EMPTY
         ));
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
@@ -497,26 +488,24 @@ public class OptimizedUniformAssignmentBuilderTest {
             mkMapOfPartitionRacks(3)
         ));
 
-        Map<String, AssignmentMemberSpec> members = new HashMap<>();
+        Map<String, MemberSubscriptionSpecImpl> members = new TreeMap<>();
 
-        members.put(memberA, new AssignmentMemberSpec(
-            Optional.empty(),
+        members.put(memberA, new MemberSubscriptionSpecImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
-            mkAssignment(
+            new Assignment(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 0),
                 mkTopicAssignment(topic2Uuid, 0)
-            )
+            ))
         ));
 
-        members.put(memberB, new AssignmentMemberSpec(
-            Optional.empty(),
+        members.put(memberB, new MemberSubscriptionSpecImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
-            mkAssignment(
+            new Assignment(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 1),
                 mkTopicAssignment(topic2Uuid, 1)
-            )
+            ))
         ));
 
         // Member C was removed
@@ -564,26 +553,24 @@ public class OptimizedUniformAssignmentBuilderTest {
         ));
 
         // Initial subscriptions were [T1, T2]
-        Map<String, AssignmentMemberSpec> members = new HashMap<>();
+        Map<String, MemberSubscriptionSpecImpl> members = new TreeMap<>();
 
-        members.put(memberA, new AssignmentMemberSpec(
-            Optional.empty(),
+        members.put(memberA, new MemberSubscriptionSpecImpl(
             Optional.empty(),
             Collections.singleton(topic2Uuid),
-            mkAssignment(
+            new Assignment(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 0),
                 mkTopicAssignment(topic2Uuid, 0)
-            )
+            ))
         ));
 
-        members.put(memberB, new AssignmentMemberSpec(
-            Optional.empty(),
+        members.put(memberB, new MemberSubscriptionSpecImpl(
             Optional.empty(),
             Collections.singleton(topic2Uuid),
-            mkAssignment(
+            new Assignment(mkAssignment(
                 mkTopicAssignment(topic1Uuid, 1),
                 mkTopicAssignment(topic2Uuid, 1)
-            )
+            ))
         ));
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
@@ -616,14 +603,14 @@ public class OptimizedUniformAssignmentBuilderTest {
      *      - each member is subscribed to topics of all partitions assigned to it, and
      *      - each partition is assigned to no more than one member.
      * Balance requirements:
-     *      - the assignment is fully balanced (the numbers of topic partitions assigned to members differ by at most one), or
+     *      - the assignment is fully balanced (the numbers of topic partitions assigned to memberSubscriptionSpec differ by at most one), or
      *      - there is no topic partition that can be moved from one member to another with 2+ fewer topic partitions.
      *
-     * @param members                   Members data structure from the assignment Spec.
-     * @param computedGroupAssignment   Assignment computed by the uniform assignor.
+     * @param memberSubscriptionSpec        Members subscription metadata structure from the group Spec.
+     * @param computedGroupAssignment       Assignment computed by the uniform assignor.
      */
     private void checkValidityAndBalance(
-        Map<String, AssignmentMemberSpec> members,
+        Map<String, MemberSubscriptionSpecImpl> memberSubscriptionSpec,
         GroupAssignment computedGroupAssignment
     ) {
         List<String> membersList = new ArrayList<>(computedGroupAssignment.members().keySet());
@@ -643,9 +630,9 @@ public class OptimizedUniformAssignmentBuilderTest {
             // Each member is subscribed to topics of all the partitions assigned to it.
             computedAssignmentForMember.keySet().forEach(topicId -> {
                 // Check if the topic exists in the subscription.
-                assertTrue(members.get(memberId).subscribedTopicIds().contains(topicId),
-                        "Error: Partitions for topic " + topicId + " are assigned to member " + memberId +
-                                " but it is not part of the members subscription ");
+                assertTrue(memberSubscriptionSpec.get(memberId).subscribedTopicIds().contains(topicId),
+                    "Error: Partitions for topic " + topicId + " are assigned to member " + memberId +
+                        " but it is not part of the members subscription ");
             });
 
             for (int j = i + 1; j < numMembers; j++) {
