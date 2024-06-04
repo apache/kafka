@@ -87,7 +87,7 @@ public class StreamsStandByReplicaTest {
 
         if (sourceTopic == null || sinkTopic1 == null || sinkTopic2 == null) {
             System.err.printf(
-                    "one or more required topics null sourceTopic[%s], sinkTopic1[%s], sinkTopic2[%s]%n",
+                "one or more required topics null sourceTopic[%s], sinkTopic1[%s], sinkTopic2[%s]%n",
                 sourceTopic,
                 sinkTopic1,
                 sinkTopic2);

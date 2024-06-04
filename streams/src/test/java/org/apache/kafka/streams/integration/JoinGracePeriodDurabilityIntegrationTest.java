@@ -179,9 +179,9 @@ public class JoinGracePeriodDurabilityIntegrationTest {
             // flush those recovered buffered events out.
             produceSynchronouslyToPartitionZero(
                 streamInput,
-                    Collections.singletonList(
-                            new KeyValueTimestamp<>("k6", "v6", scaledTime(20L))
-                    )
+                Collections.singletonList(
+                    new KeyValueTimestamp<>("k6", "v6", scaledTime(20L))
+                )
             );
             verifyOutput(
                 output,

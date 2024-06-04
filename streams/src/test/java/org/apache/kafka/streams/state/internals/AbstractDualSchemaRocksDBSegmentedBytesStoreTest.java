@@ -484,7 +484,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
             null, Bytes.wrap(keyA.getBytes()), startEdgeTime, endEdgeTime - 1L)) {
 
             final List<KeyValue<Windowed<String>, Long>> expected = Collections.singletonList(
-                    KeyValue.pair(new Windowed<>(keyA, startEdgeWindow), 10L)
+                KeyValue.pair(new Windowed<>(keyA, startEdgeWindow), 10L)
             );
 
             assertEquals(expected, toList(values));
@@ -494,7 +494,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
             Bytes.wrap(keyB.getBytes()), null, startEdgeTime + 1, endEdgeTime)) {
 
             final List<KeyValue<Windowed<String>, Long>> expected = Collections.singletonList(
-                    KeyValue.pair(new Windowed<>(keyB, endEdgeWindow), 150L)
+                KeyValue.pair(new Windowed<>(keyB, endEdgeWindow), 150L)
             );
 
             assertEquals(expected, toList(values));
@@ -664,7 +664,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
             null, Bytes.wrap(keyA.getBytes()), startEdgeTime, endEdgeTime - 1L)) {
 
             final List<KeyValue<Windowed<String>, Long>> expected = Collections.singletonList(
-                    KeyValue.pair(new Windowed<>(keyA, startEdgeWindow), 10L)
+                KeyValue.pair(new Windowed<>(keyA, startEdgeWindow), 10L)
             );
 
             assertEquals(expected, toList(values));
@@ -674,7 +674,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
             Bytes.wrap(keyB.getBytes()), null, startEdgeTime + 1, endEdgeTime)) {
 
             final List<KeyValue<Windowed<String>, Long>> expected = Collections.singletonList(
-                    KeyValue.pair(new Windowed<>(keyB, endEdgeWindow), 150L)
+                KeyValue.pair(new Windowed<>(keyB, endEdgeWindow), 150L)
             );
 
             assertEquals(expected, toList(values));
@@ -742,7 +742,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
             Bytes.wrap(keyA.getBytes()), 0, Long.MAX_VALUE)) {
 
             final List<KeyValue<Windowed<String>, Long>> expected = Collections.singletonList(
-                    KeyValue.pair(new Windowed<>(keyA, maxWindow), 10L)
+                KeyValue.pair(new Windowed<>(keyA, maxWindow), 10L)
             );
 
             assertEquals(expected, toList(values));
@@ -825,7 +825,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStoreTest {
             Bytes.wrap(keyA.getBytes()), 0, Long.MAX_VALUE)) {
 
             final List<KeyValue<Windowed<String>, Long>> expected = Collections.singletonList(
-                    KeyValue.pair(new Windowed<>(keyA, maxWindow), 10L)
+                KeyValue.pair(new Windowed<>(keyA, maxWindow), 10L)
             );
 
             assertEquals(expected, toList(values));
