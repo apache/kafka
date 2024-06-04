@@ -319,6 +319,7 @@ public class MembershipManagerImplTest {
     private void mockStableMember(MembershipManagerImpl membershipManager) {
         ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(new Assignment());
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
+        membershipManager.updateAssignment(mock(Map.class));
         membershipManager.onHeartbeatSuccess(heartbeatResponse.data());
         membershipManager.poll(time.milliseconds());
         membershipManager.onHeartbeatRequestSent();
