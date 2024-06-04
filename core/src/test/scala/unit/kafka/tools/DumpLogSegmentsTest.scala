@@ -22,8 +22,8 @@ import java.nio.ByteBuffer
 import java.util
 import java.util.Collections
 import java.util.Optional
-import java.util.Arrays
 import java.util.Properties
+import java.util.stream.IntStream
 import kafka.log.{LogTestUtils, UnifiedLog}
 import kafka.raft.{KafkaMetadataLog, MetadataLogConfig}
 import kafka.server.{BrokerTopicStats, KafkaRaftServer}
@@ -338,7 +338,7 @@ class DumpLogSegmentsTest {
         .setLastContainedLogTimestamp(lastContainedLogTimestamp)
         .setRawSnapshotWriter(metadataLog.createNewSnapshot(new OffsetAndEpoch(0, 0)).get)
         .setKraftVersion(1)
-        .setVoterSet(Optional.of(VoterSetTest.voterSet(VoterSetTest.voterMap(Arrays.asList(1, 2, 3), true))))
+        .setVoterSet(Optional.of(VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true))))
         .build(MetadataRecordSerde.INSTANCE)
     ) { snapshotWriter =>
       snapshotWriter.append(metadataRecords.asJava)

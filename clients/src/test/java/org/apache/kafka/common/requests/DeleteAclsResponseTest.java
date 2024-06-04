@@ -80,7 +80,7 @@ public class DeleteAclsResponseTest {
     private static final DeleteAclsFilterResult PREFIXED_RESPONSE = new DeleteAclsFilterResult().setMatchingAcls(asList(
         LITERAL_ACL1, PREFIXED_ACL1));
 
-    private static final DeleteAclsFilterResult UNKNOWN_RESPONSE = new DeleteAclsFilterResult().setMatchingAcls(asList(
+    private static final DeleteAclsFilterResult UNKNOWN_RESPONSE = new DeleteAclsFilterResult().setMatchingAcls(singletonList(
             UNKNOWN_ACL));
 
     @Test

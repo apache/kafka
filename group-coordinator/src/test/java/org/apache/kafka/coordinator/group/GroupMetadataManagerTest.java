@@ -13166,6 +13166,49 @@ public class GroupMetadataManagerTest {
         assertEquals(Collections.emptyList(), leaveResult.records());
     }
 
+    @Test
+    public void testNoConversionWhenSizeExceedsClassicMaxGroupSize() throws Exception {
+        String groupId = "group-id";
+        String nonClassicMemberId = "1";
+
+        List<ConsumerGroupMemberMetadataValue.ClassicProtocol> protocols = Collections.singletonList(
+            new ConsumerGroupMemberMetadataValue.ClassicProtocol()
+                .setName("range")
+                .setMetadata(new byte[0])
+        );
+
+        ConsumerGroupMember member = new ConsumerGroupMember.Builder(nonClassicMemberId).build();
+        ConsumerGroupMember classicMember1 = new ConsumerGroupMember.Builder("2")
+            .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata().setSupportedProtocols(protocols))
+            .build();
+        ConsumerGroupMember classicMember2 = new ConsumerGroupMember.Builder("3")
+            .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata().setSupportedProtocols(protocols))
+            .build();
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withClassicGroupMaxSize(1)
+            .withConsumerGroupMigrationPolicy(ConsumerGroupMigrationPolicy.DOWNGRADE)
+            .withConsumerGroup(
+                new ConsumerGroupBuilder(groupId, 10)
+                    .withMember(member)
+                    .withMember(classicMember1)
+                    .withMember(classicMember2)
+            )
+            .build();
+
+        assertEquals(Group.GroupType.CONSUMER, context.groupMetadataManager.group(groupId).type());
+
+        context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(nonClassicMemberId)
+                .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
+                .setRebalanceTimeoutMs(5000)
+        );
+
+        assertEquals(Group.GroupType.CONSUMER, context.groupMetadataManager.group(groupId).type());
+    }
+
     private static void checkJoinGroupResponse(
         JoinGroupResponseData expectedResponse,
         JoinGroupResponseData actualResponse,

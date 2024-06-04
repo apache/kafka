@@ -70,9 +70,9 @@ import java.net.{InetAddress, SocketTimeoutException}
 import java.nio.file.{Files, Paths}
 import java.time.Duration
 import java.util
-import java.util.{Optional, OptionalInt, OptionalLong}
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
+import java.util.{Optional, OptionalInt, OptionalLong}
 import scala.collection.{Map, Seq}
 import scala.compat.java8.OptionConverters.RichOptionForJava8
 import scala.jdk.CollectionConverters._
@@ -276,7 +276,7 @@ class KafkaServer(
         createCurrentControllerIdMetric()
 
         /* register broker metrics */
-        _brokerTopicStats = new BrokerTopicStats(config.isRemoteLogStorageSystemEnabled)
+        _brokerTopicStats = new BrokerTopicStats(config.remoteLogManagerConfig.enableRemoteStorageSystem())
 
         quotaManagers = QuotaFactory.instantiate(config, metrics, time, threadNamePrefix.getOrElse(""))
         KafkaBroker.notifyClusterListeners(clusterId, kafkaMetricsReporters ++ metrics.reporters.asScala)
@@ -439,6 +439,7 @@ class KafkaServer(
             metrics,
             threadNamePrefix,
             CompletableFuture.completedFuture(quorumVoters),
+            QuorumConfig.parseBootstrapServers(config.quorumBootstrapServers),
             fatalFaultHandler = new LoggingFaultHandler("raftManager", () => shutdown())
           )
           quorumControllerNodeProvider = RaftControllerNodeProvider(raftManager, config)

@@ -72,8 +72,10 @@ public class TopicBasedRemoteLogMetadataManagerRestartTest {
             NewTopic newLeaderTopic = new NewTopic(leaderTopic, Collections.singletonMap(0, Arrays.asList(0, 1, 2)));
             // Set broker id 1 as the first entry which is taken as the leader.
             NewTopic newFollowerTopic = new NewTopic(followerTopic, Collections.singletonMap(0, Arrays.asList(1, 2, 0)));
-            admin.createTopics(Arrays.asList(newLeaderTopic, newFollowerTopic));
+            admin.createTopics(Arrays.asList(newLeaderTopic, newFollowerTopic)).all().get();
         }
+        clusterInstance.waitForTopic(leaderTopic, 1);
+        clusterInstance.waitForTopic(followerTopic, 1);
 
         final TopicIdPartition leaderTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition(leaderTopic, 0));
         final TopicIdPartition followerTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition(followerTopic, 0));
