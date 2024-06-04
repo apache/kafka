@@ -210,6 +210,12 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     void testRequestManagersArePolledOnce() {
+        List<Optional<? extends RequestManager>> list = new ArrayList<>();
+        list.add(Optional.of(coordinatorRequestManager));
+        list.add(Optional.of(heartbeatRequestManager));
+        list.add(Optional.of(offsetsRequestManager));
+        
+        when(requestManagers.entries()).thenReturn(list);
         consumerNetworkThread.runOnce();
         requestManagers.entries().forEach(rmo -> rmo.ifPresent(rm -> verify(rm).poll(anyLong())));
         requestManagers.entries().forEach(rmo -> rmo.ifPresent(rm -> verify(rm).maximumTimeToWait(anyLong())));
