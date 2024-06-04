@@ -1345,7 +1345,7 @@ project(':metadata') {
   }
 }
 
-project(':group-coordinator:api') {
+project(':group-coordinator:group-coordinator-api') {
   base {
     archivesName = "kafka-group-coordinator-api"
   }
@@ -1397,7 +1397,7 @@ project(':group-coordinator:api') {
   }
 
   javadoc {
-    include "**/org/apache/kafka/coordinator/group/**"
+    include "**/org/apache/kafka/coordinator/group/api/**"
   }
 
   checkstyle {
@@ -1418,7 +1418,7 @@ project(':group-coordinator') {
     implementation project(':server-common')
     implementation project(':clients')
     implementation project(':metadata')
-    implementation project(':group-coordinator:api')
+    implementation project(':group-coordinator:group-coordinator-api')
     implementation project(':storage')
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
@@ -2963,6 +2963,7 @@ project(':jmh-benchmarks') {
     implementation project(':raft')
     implementation project(':clients')
     implementation project(':group-coordinator')
+    implementation project(':group-coordinator:group-coordinator-api')
     implementation project(':metadata')
     implementation project(':storage')
     implementation project(':streams')
