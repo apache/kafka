@@ -86,7 +86,7 @@ class KafkaConfigTest {
 
   @Test
   def testBrokerRoleNodeIdValidation(): Unit = {
-    // Ensure that validation is happening at startup to check that brokers do not use their node.id as a voter in controller.quorum.voters 
+    // Ensure that validation is happening at startup to check that brokers do not use their node.id as a voter in controller.quorum.voters
     val propertiesFile = new Properties
     propertiesFile.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
     propertiesFile.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
@@ -102,7 +102,7 @@ class KafkaConfigTest {
 
   @Test
   def testControllerRoleNodeIdValidation(): Unit = {
-    // Ensure that validation is happening at startup to check that controllers use their node.id as a voter in controller.quorum.voters 
+    // Ensure that validation is happening at startup to check that controllers use their node.id as a voter in controller.quorum.voters
     val propertiesFile = new Properties
     propertiesFile.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
     propertiesFile.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")

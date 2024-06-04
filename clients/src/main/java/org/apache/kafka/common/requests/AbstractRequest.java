@@ -326,6 +326,14 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return ListClientMetricsResourcesRequest.parse(buffer, apiVersion);
             case DESCRIBE_TOPIC_PARTITIONS:
                 return DescribeTopicPartitionsRequest.parse(buffer, apiVersion);
+            case SHARE_GROUP_HEARTBEAT:
+                return ShareGroupHeartbeatRequest.parse(buffer, apiVersion);
+            case SHARE_GROUP_DESCRIBE:
+                return ShareGroupDescribeRequest.parse(buffer, apiVersion);
+            case SHARE_FETCH:
+                return ShareFetchRequest.parse(buffer, apiVersion);
+            case SHARE_ACKNOWLEDGE:
+                return ShareAcknowledgeRequest.parse(buffer, apiVersion);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseRequest`, the " +
                         "code should be updated to do so.", apiKey));

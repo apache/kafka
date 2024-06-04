@@ -52,7 +52,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mockito;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -1338,7 +1337,7 @@ public class CommitRequestManagerTest {
                                                    long receivedTimeMs,
                                                    Errors error) {
         OffsetCommitResponseData responseData = new OffsetCommitResponseData()
-            .setTopics(Arrays.asList(
+            .setTopics(Collections.singletonList(
                 new OffsetCommitResponseData.OffsetCommitResponseTopic()
                     .setName(topic)
                     .setPartitions(Collections.singletonList(
@@ -1364,7 +1363,7 @@ public class CommitRequestManagerTest {
                                                                short apiKeyVersion,
                                                                NetworkClientDelegate.UnsentRequest unsentRequest) {
         OffsetCommitResponseData responseData = new OffsetCommitResponseData()
-            .setTopics(Arrays.asList(
+            .setTopics(Collections.singletonList(
                 new OffsetCommitResponseData.OffsetCommitResponseTopic()
                     .setName(topic)
                     .setPartitions(Collections.singletonList(
