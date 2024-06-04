@@ -1219,25 +1219,25 @@ public class RequestResponseTest {
                 .setDirectories(Arrays.asList(
                         new AssignReplicasToDirsRequestData.DirectoryData()
                                 .setId(Uuid.randomUuid())
-                                .setTopics(Arrays.asList(
+                                .setTopics(singletonList(
                                         new AssignReplicasToDirsRequestData.TopicData()
                                                 .setTopicId(Uuid.fromString("qo0Pcp70TdGnAa7YKMKCqw"))
-                                                .setPartitions(Arrays.asList(
+                                                .setPartitions(singletonList(
                                                         new AssignReplicasToDirsRequestData.PartitionData()
                                                                 .setPartitionIndex(8)
                                                 ))
                                 )),
                         new AssignReplicasToDirsRequestData.DirectoryData()
                                 .setId(Uuid.randomUuid())
-                                .setTopics(Arrays.asList(
+                                .setTopics(singletonList(
                                         new AssignReplicasToDirsRequestData.TopicData()
                                                 .setTopicId(Uuid.fromString("yEu11V7HTRGIwm6FDWFhzg"))
-                                                .setPartitions(Arrays.asList(
+                                                .setPartitions(asList(
                                                         new AssignReplicasToDirsRequestData.PartitionData()
                                                                 .setPartitionIndex(2),
                                                         new AssignReplicasToDirsRequestData.PartitionData()
                                                                 .setPartitionIndex(80)
-                                                        ))
+                                                ))
                                 ))
                 ));
         return new AssignReplicasToDirsRequest.Builder(data).build(version);
@@ -1250,10 +1250,10 @@ public class RequestResponseTest {
                 .setDirectories(Arrays.asList(
                         new AssignReplicasToDirsResponseData.DirectoryData()
                                 .setId(Uuid.randomUuid())
-                                .setTopics(Arrays.asList(
+                                .setTopics(singletonList(
                                         new AssignReplicasToDirsResponseData.TopicData()
                                                 .setTopicId(Uuid.fromString("sKhZV8LnTA275KvByB9bVg"))
-                                                .setPartitions(Arrays.asList(
+                                                .setPartitions(singletonList(
                                                         new AssignReplicasToDirsResponseData.PartitionData()
                                                                 .setPartitionIndex(8)
                                                                 .setErrorCode(Errors.NONE.code())
@@ -1261,10 +1261,10 @@ public class RequestResponseTest {
                                 )),
                         new AssignReplicasToDirsResponseData.DirectoryData()
                                 .setId(Uuid.randomUuid())
-                                .setTopics(Arrays.asList(
+                                .setTopics(singletonList(
                                         new AssignReplicasToDirsResponseData.TopicData()
                                                 .setTopicId(Uuid.fromString("ORLP5NEzRo64SvKq1hIVQg"))
-                                                .setPartitions(Arrays.asList(
+                                                .setPartitions(asList(
                                                         new AssignReplicasToDirsResponseData.PartitionData()
                                                                 .setPartitionIndex(2)
                                                                 .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code()),
@@ -1279,7 +1279,7 @@ public class RequestResponseTest {
 
     private DescribeTopicPartitionsRequest createDescribeTopicPartitionsRequest(short version) {
         DescribeTopicPartitionsRequestData data = new DescribeTopicPartitionsRequestData()
-                .setTopics(Arrays.asList(new DescribeTopicPartitionsRequestData.TopicRequest().setName("foo")))
+                .setTopics(singletonList(new DescribeTopicPartitionsRequestData.TopicRequest().setName("foo")))
                 .setCursor(new DescribeTopicPartitionsRequestData.Cursor().setTopicName("foo").setPartitionIndex(1));
         return new DescribeTopicPartitionsRequest.Builder(data).build(version);
     }
@@ -1294,13 +1294,13 @@ public class RequestResponseTest {
                         .setIsInternal(false)
                         .setName("foo")
                         .setTopicAuthorizedOperations(0)
-                        .setPartitions(Arrays.asList(
+                        .setPartitions(singletonList(
                                 new DescribeTopicPartitionsResponseData.DescribeTopicPartitionsResponsePartition()
                                         .setErrorCode((short) 0)
-                                        .setIsrNodes(Arrays.asList(1))
+                                        .setIsrNodes(singletonList(1))
                                         .setPartitionIndex(1)
                                         .setLeaderId(1)
-                                        .setReplicaNodes(Arrays.asList(1))
+                                        .setReplicaNodes(singletonList(1))
                                         .setLeaderEpoch(0)
                         ))
         );
@@ -1465,7 +1465,7 @@ public class RequestResponseTest {
                 setIncarnationId(Uuid.fromString("qiTdnbu6RPazh1Aufq4dxw")).
                 setZkMigrationReady(true).
                 setFeatures(new ControllerRegistrationRequestData.FeatureCollection(
-                        Arrays.asList(
+                        singletonList(
                                 new ControllerRegistrationRequestData.Feature().
                                         setName("metadata.version").
                                         setMinSupportedVersion((short) 1).
@@ -1473,7 +1473,7 @@ public class RequestResponseTest {
                         ).iterator()
                 )).
                 setListeners(new ControllerRegistrationRequestData.ListenerCollection(
-                        Arrays.asList(
+                        singletonList(
                                 new ControllerRegistrationRequestData.Listener().
                                         setName("CONTROLLER").
                                         setName("localhost").
@@ -3672,7 +3672,7 @@ public class RequestResponseTest {
                 .setListeners(new BrokerRegistrationRequestData.ListenerCollection(singletonList(
                         new BrokerRegistrationRequestData.Listener()).iterator()))
                 .setIncarnationId(Uuid.randomUuid())
-                .setLogDirs(Arrays.asList(Uuid.fromString("qaJjNJ05Q36kEgeTBDcj0Q")))
+                .setLogDirs(singletonList(Uuid.fromString("qaJjNJ05Q36kEgeTBDcj0Q")))
                 .setPreviousBrokerEpoch(123L);
         return new BrokerRegistrationRequest.Builder(data).build(v);
     }

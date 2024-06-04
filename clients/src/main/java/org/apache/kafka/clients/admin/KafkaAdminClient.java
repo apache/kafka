@@ -4569,7 +4569,7 @@ public class KafkaAdminClient extends AdminClient {
     public FenceProducersResult fenceProducers(Collection<String> transactionalIds, FenceProducersOptions options) {
         AdminApiFuture.SimpleAdminApiFuture<CoordinatorKey, ProducerIdAndEpoch> future =
             FenceProducersHandler.newFuture(transactionalIds);
-        FenceProducersHandler handler = new FenceProducersHandler(logContext);
+        FenceProducersHandler handler = new FenceProducersHandler(options, logContext, requestTimeoutMs);
         invokeDriver(handler, future, options.timeoutMs);
         return new FenceProducersResult(future.all());
     }

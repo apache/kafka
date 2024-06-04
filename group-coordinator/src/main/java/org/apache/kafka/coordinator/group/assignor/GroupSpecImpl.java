@@ -18,20 +18,23 @@ package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
 
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * The assignment specification for a consumer group.
  */
 public class GroupSpecImpl implements GroupSpec {
     /**
-     * The member metadata keyed by member Id.
+     * Member subscription metadata keyed by member Id.
      */
-    private final Map<String, AssignmentMemberSpec> members;
+    private final Map<String, MemberSubscriptionSpecImpl> memberSubscriptions;
 
     /**
-     * The subscription type followed by the group.
+     * The subscription type of the group.
      */
     private final SubscriptionType subscriptionType;
 
@@ -39,27 +42,24 @@ public class GroupSpecImpl implements GroupSpec {
      * Reverse lookup map representing topic partitions with
      * their current member assignments.
      */
-    private final Map<Uuid, Map<Integer, String>> invertedTargetAssignment;
+    private final Map<Uuid, Map<Integer, String>> invertedMemberAssignment;
 
     public GroupSpecImpl(
-        Map<String, AssignmentMemberSpec> members,
+        Map<String, MemberSubscriptionSpecImpl> memberSubscriptions,
         SubscriptionType subscriptionType,
-        Map<Uuid, Map<Integer, String>> invertedTargetAssignment
+        Map<Uuid, Map<Integer, String>> invertedMemberAssignment
     ) {
-        Objects.requireNonNull(members);
-        Objects.requireNonNull(subscriptionType);
-        Objects.requireNonNull(invertedTargetAssignment);
-        this.members = members;
-        this.subscriptionType = subscriptionType;
-        this.invertedTargetAssignment = invertedTargetAssignment;
+        this.memberSubscriptions = Objects.requireNonNull(memberSubscriptions);
+        this.subscriptionType = Objects.requireNonNull(subscriptionType);
+        this.invertedMemberAssignment = Objects.requireNonNull(invertedMemberAssignment);
     }
 
     /**
      * {@inheritDoc}
      */
     @Override
-    public Map<String, AssignmentMemberSpec> members() {
-        return members;
+    public Collection<String> memberIds() {
+        return memberSubscriptions.keySet();
     }
 
     /**
@@ -75,11 +75,35 @@ public class GroupSpecImpl implements GroupSpec {
      */
     @Override
     public boolean isPartitionAssigned(Uuid topicId, int partitionId) {
-        Map<Integer, String> partitionMap = invertedTargetAssignment.get(topicId);
+        Map<Integer, String> partitionMap = invertedMemberAssignment.get(topicId);
         if (partitionMap == null) {
             return false;
         }
         return partitionMap.containsKey(partitionId);
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public MemberSubscriptionSpec memberSubscription(String memberId) {
+        MemberSubscriptionSpec memberSubscription = memberSubscriptions.get(memberId);
+        if (memberSubscription == null) {
+            throw new IllegalArgumentException("Member Id " + memberId + " not found.");
+        }
+        return memberSubscription;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Map<Uuid, Set<Integer>> memberAssignment(String memberId) {
+        MemberSubscriptionSpecImpl memberSubscription = memberSubscriptions.get(memberId);
+        if (memberSubscription == null) {
+            return Collections.emptyMap();
+        }
+        return memberSubscription.memberAssignment();
     }
 
     @Override
@@ -88,23 +112,23 @@ public class GroupSpecImpl implements GroupSpec {
         if (o == null || getClass() != o.getClass()) return false;
         GroupSpecImpl that = (GroupSpecImpl) o;
         return subscriptionType == that.subscriptionType &&
-            members.equals(that.members) &&
-            invertedTargetAssignment.equals(that.invertedTargetAssignment);
+            memberSubscriptions.equals(that.memberSubscriptions) &&
+            invertedMemberAssignment.equals(that.invertedMemberAssignment);
     }
 
     @Override
     public int hashCode() {
-        int result = members.hashCode();
+        int result = memberSubscriptions.hashCode();
         result = 31 * result + subscriptionType.hashCode();
-        result = 31 * result + invertedTargetAssignment.hashCode();
+        result = 31 * result + invertedMemberAssignment.hashCode();
         return result;
     }
 
     @Override
     public String toString() {
-        return "GroupSpecImpl(members=" + members +
+        return "GroupSpecImpl(memberSubscriptions=" + memberSubscriptions +
             ", subscriptionType=" + subscriptionType +
-            ", invertedTargetAssignment=" + invertedTargetAssignment +
+            ", invertedMemberAssignment=" + invertedMemberAssignment +
             ')';
     }
 }
