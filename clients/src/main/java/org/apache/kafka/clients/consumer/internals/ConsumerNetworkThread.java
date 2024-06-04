@@ -289,7 +289,6 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         }
     }
 
-    // Add test to see if poll() is run once with timer of 0
     /**
      * Check the unsent queue one last time and poll until all requests are sent or the timer runs out.
      */
