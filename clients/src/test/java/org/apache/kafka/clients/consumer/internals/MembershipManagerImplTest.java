@@ -119,6 +119,8 @@ public class MembershipManagerImplTest {
         time = new MockTime(0);
         metrics = new Metrics(time);
         rebalanceMetricsManager = new RebalanceMetricsManager(metrics);
+
+        when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(new CompletableFuture<>());
     }
 
     @AfterEach
@@ -2539,7 +2541,6 @@ public class MembershipManagerImplTest {
 
         if (triggerReconciliation) {
             subscriptionState.assignFromSubscribed(Collections.emptyList());
-            when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(new CompletableFuture<>());
             membershipManager.poll(time.milliseconds());
             verify(subscriptionState).assignFromSubscribed(anyCollection());
         } else {
