@@ -115,6 +115,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         private CoordinatorMetrics coordinatorMetrics;
         private Serializer<U> serializer;
         private Compression compression;
+        private int appendLingerMs;
 
         public Builder<S, U> withLogPrefix(String logPrefix) {
             this.logPrefix = logPrefix;
@@ -181,6 +182,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             return this;
         }
 
+        public Builder<S, U> withAppendLingerMs(int appendLingerMs) {
+            this.appendLingerMs = appendLingerMs;
+            return this;
+        }
+
         public CoordinatorRuntime<S, U> build() {
             if (logPrefix == null)
                 logPrefix = "";
@@ -206,6 +212,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 throw new IllegalArgumentException("Serializer must be set.");
             if (compression == null)
                 compression = Compression.NONE;
+            if (appendLingerMs < 0)
+                throw new IllegalArgumentException("AppendLinger must be >= 0");
 
             return new CoordinatorRuntime<>(
                 logPrefix,
@@ -220,7 +228,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 runtimeMetrics,
                 coordinatorMetrics,
                 serializer,
-                compression
+                compression,
+                appendLingerMs
             );
         }
     }
@@ -1450,6 +1459,12 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     private final Compression compression;
 
     /**
+     * The duration in milliseconds that the coordinator will wait for writes to
+     * accumulate before flushing them to disk.
+     */
+    private final int appendLingerMs;
+
+    /**
      * Atomic boolean indicating whether the runtime is running.
      */
     private final AtomicBoolean isRunning = new AtomicBoolean(true);
@@ -1475,7 +1490,9 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * @param coordinatorMetrics                The coordinator metrics.
      * @param serializer                        The serializer.
      * @param compression                       The compression codec.
+     * @param appendLingerMs                    The append linger time in ms.
      */
+    @SuppressWarnings("checkstyle:ParameterNumber")
     private CoordinatorRuntime(
         String logPrefix,
         LogContext logContext,
@@ -1489,7 +1506,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         CoordinatorRuntimeMetrics runtimeMetrics,
         CoordinatorMetrics coordinatorMetrics,
         Serializer<U> serializer,
-        Compression compression
+        Compression compression,
+        int appendLingerMs
     ) {
         this.logPrefix = logPrefix;
         this.logContext = logContext;
@@ -1506,6 +1524,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         this.coordinatorMetrics = coordinatorMetrics;
         this.serializer = serializer;
         this.compression = compression;
+        this.appendLingerMs = appendLingerMs;
     }
 
     /**
