@@ -20,6 +20,7 @@ import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.ShareGroupState;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
@@ -210,6 +211,14 @@ import org.apache.kafka.common.message.SaslAuthenticateRequestData;
 import org.apache.kafka.common.message.SaslAuthenticateResponseData;
 import org.apache.kafka.common.message.SaslHandshakeRequestData;
 import org.apache.kafka.common.message.SaslHandshakeResponseData;
+import org.apache.kafka.common.message.ShareAcknowledgeRequestData;
+import org.apache.kafka.common.message.ShareAcknowledgeResponseData;
+import org.apache.kafka.common.message.ShareFetchRequestData;
+import org.apache.kafka.common.message.ShareFetchResponseData;
+import org.apache.kafka.common.message.ShareGroupDescribeRequestData;
+import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
+import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
+import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState;
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaTopicState;
 import org.apache.kafka.common.message.StopReplicaResponseData;
@@ -1001,6 +1010,10 @@ public class RequestResponseTest {
         assertEquals(1, createTxnOffsetCommitResponse().errorCounts().get(Errors.NONE));
         assertEquals(1, createUpdateMetadataResponse().errorCounts().get(Errors.NONE));
         assertEquals(1, createWriteTxnMarkersResponse().errorCounts().get(Errors.NONE));
+        assertEquals(1, createShareGroupHeartbeatResponse().errorCounts().get(Errors.NONE));
+        assertEquals(1, createShareGroupDescribeResponse().errorCounts().get(Errors.NONE));
+        assertEquals(2, createShareFetchResponse().errorCounts().get(Errors.NONE));
+        assertEquals(2, createShareAcknowledgeResponse().errorCounts().get(Errors.NONE));
     }
 
     private AbstractRequest getRequest(ApiKeys apikey, short version) {
@@ -1081,6 +1094,10 @@ public class RequestResponseTest {
             case ASSIGN_REPLICAS_TO_DIRS: return createAssignReplicasToDirsRequest(version);
             case LIST_CLIENT_METRICS_RESOURCES: return createListClientMetricsResourcesRequest(version);
             case DESCRIBE_TOPIC_PARTITIONS: return createDescribeTopicPartitionsRequest(version);
+            case SHARE_GROUP_HEARTBEAT: return createShareGroupHeartbeatRequest(version);
+            case SHARE_GROUP_DESCRIBE: return createShareGroupDescribeRequest(version);
+            case SHARE_FETCH: return createShareFetchRequest(version);
+            case SHARE_ACKNOWLEDGE: return createShareAcknowledgeRequest(version);
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1163,6 +1180,10 @@ public class RequestResponseTest {
             case ASSIGN_REPLICAS_TO_DIRS: return createAssignReplicasToDirsResponse();
             case LIST_CLIENT_METRICS_RESOURCES: return createListClientMetricsResourcesResponse();
             case DESCRIBE_TOPIC_PARTITIONS: return createDescribeTopicPartitionsResponse();
+            case SHARE_GROUP_HEARTBEAT: return createShareGroupHeartbeatResponse();
+            case SHARE_GROUP_DESCRIBE: return createShareGroupDescribeResponse();
+            case SHARE_FETCH: return createShareFetchResponse();
+            case SHARE_ACKNOWLEDGE: return createShareAcknowledgeResponse();
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1328,6 +1349,114 @@ public class RequestResponseTest {
                 ))
             );
         return new ConsumerGroupHeartbeatResponse(data);
+    }
+
+    private ShareGroupHeartbeatRequest createShareGroupHeartbeatRequest(short version) {
+        ShareGroupHeartbeatRequestData data = new ShareGroupHeartbeatRequestData()
+                .setGroupId("group")
+                .setMemberId("memberid")
+                .setMemberEpoch(10)
+                .setRackId("rackid")
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar"));
+        return new ShareGroupHeartbeatRequest.Builder(data).build(version);
+    }
+
+    private ShareGroupHeartbeatResponse createShareGroupHeartbeatResponse() {
+        ShareGroupHeartbeatResponseData data = new ShareGroupHeartbeatResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setThrottleTimeMs(1000)
+                .setMemberId("memberid")
+                .setMemberEpoch(11)
+                .setAssignment(new ShareGroupHeartbeatResponseData.Assignment()
+                        .setTopicPartitions(Arrays.asList(
+                                new ShareGroupHeartbeatResponseData.TopicPartitions()
+                                        .setTopicId(Uuid.randomUuid())
+                                        .setPartitions(Arrays.asList(0, 1, 2)),
+                                new ShareGroupHeartbeatResponseData.TopicPartitions()
+                                        .setTopicId(Uuid.randomUuid())
+                                        .setPartitions(Arrays.asList(3, 4, 5))
+                        ))
+                );
+        return new ShareGroupHeartbeatResponse(data);
+    }
+
+    private ShareGroupDescribeRequest createShareGroupDescribeRequest(short version) {
+        ShareGroupDescribeRequestData data = new ShareGroupDescribeRequestData()
+                .setGroupIds(Collections.singletonList("group"))
+                .setIncludeAuthorizedOperations(false);
+        return new ShareGroupDescribeRequest.Builder(data).build(version);
+    }
+
+    private ShareGroupDescribeResponse createShareGroupDescribeResponse() {
+        ShareGroupDescribeResponseData data = new ShareGroupDescribeResponseData()
+                .setGroups(Collections.singletonList(
+                        new ShareGroupDescribeResponseData.DescribedGroup()
+                                .setGroupId("group")
+                                .setErrorCode((short) 0)
+                                .setErrorMessage(Errors.forCode((short) 0).message())
+                                .setGroupState(ShareGroupState.EMPTY.toString())
+                                .setMembers(new ArrayList<>(0))
+                ))
+                .setThrottleTimeMs(1000);
+        return new ShareGroupDescribeResponse(data);
+    }
+
+    private ShareFetchRequest createShareFetchRequest(short version) {
+        ShareFetchRequestData data = new ShareFetchRequestData()
+                .setGroupId("group")
+                .setMemberId(Uuid.randomUuid().toString())
+                .setTopics(singletonList(new ShareFetchRequestData.FetchTopic()
+                        .setTopicId(Uuid.randomUuid())
+                        .setPartitions(singletonList(new ShareFetchRequestData.FetchPartition()
+                                .setPartitionIndex(0)))));
+        return new ShareFetchRequest.Builder(data).build(version);
+    }
+
+    private ShareFetchResponse createShareFetchResponse() {
+        ShareFetchResponseData data = new ShareFetchResponseData();
+        MemoryRecords records = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("blah".getBytes()));
+        ShareFetchResponseData.PartitionData partition = new ShareFetchResponseData.PartitionData()
+                .setPartitionIndex(0)
+                .setErrorCode(Errors.NONE.code())
+                .setRecords(records)
+                .setAcquiredRecords(singletonList(new ShareFetchResponseData.AcquiredRecords()
+                        .setFirstOffset(0)
+                        .setLastOffset(0)
+                        .setDeliveryCount((short) 1)));
+        ShareFetchResponseData.ShareFetchableTopicResponse response = new ShareFetchResponseData.ShareFetchableTopicResponse()
+                .setTopicId(Uuid.randomUuid())
+                .setPartitions(singletonList(partition));
+
+        data.setResponses(singletonList(response));
+        data.setThrottleTimeMs(345);
+        data.setErrorCode(Errors.NONE.code());
+        return new ShareFetchResponse(data);
+    }
+
+    private ShareAcknowledgeRequest createShareAcknowledgeRequest(short version) {
+        ShareAcknowledgeRequestData data = new ShareAcknowledgeRequestData()
+                .setMemberId(Uuid.randomUuid().toString())
+                .setTopics(singletonList(new ShareAcknowledgeRequestData.AcknowledgeTopic()
+                        .setTopicId(Uuid.randomUuid())
+                        .setPartitions(singletonList(new ShareAcknowledgeRequestData.AcknowledgePartition()
+                                .setPartitionIndex(0)
+                                .setAcknowledgementBatches(singletonList(new ShareAcknowledgeRequestData.AcknowledgementBatch()
+                                        .setFirstOffset(0)
+                                        .setLastOffset(0)
+                                        .setAcknowledgeTypes(Collections.singletonList((byte) 0))))))));
+        return new ShareAcknowledgeRequest.Builder(data).build(version);
+    }
+
+    private ShareAcknowledgeResponse createShareAcknowledgeResponse() {
+        ShareAcknowledgeResponseData data = new ShareAcknowledgeResponseData();
+        data.setResponses(singletonList(new ShareAcknowledgeResponseData.ShareAcknowledgeTopicResponse()
+                .setTopicId(Uuid.randomUuid())
+                .setPartitions(singletonList(new ShareAcknowledgeResponseData.PartitionData()
+                        .setPartitionIndex(0)
+                        .setErrorCode(Errors.NONE.code())))));
+        data.setThrottleTimeMs(345);
+        data.setErrorCode(Errors.NONE.code());
+        return new ShareAcknowledgeResponse(data);
     }
 
     private ControllerRegistrationRequest createControllerRegistrationRequest(short version) {
