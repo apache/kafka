@@ -146,11 +146,6 @@ public class HeartbeatRequestManagerTest {
                 Optional.of(heartbeatRequestManager),
                 Optional.empty());
 
-        CommitRequestManager commitRequestManager = new CommitRequestManager(
-                time, logContext, subscriptions, config, coordinatorRequestManager,
-                offsetCommitCallbackInvoker, DEFAULT_GROUP_ID, Optional.of(DEFAULT_GROUP_INSTANCE_ID),
-                new Metrics());
-
         this.heartbeatRequestState1 = new HeartbeatRequestState(
                 logContext,
                 time,
@@ -158,6 +153,11 @@ public class HeartbeatRequestManagerTest {
                 DEFAULT_RETRY_BACKOFF_MS,
                 DEFAULT_RETRY_BACKOFF_MAX_MS,
                 DEFAULT_HEARTBEAT_JITTER_MS);
+
+        CommitRequestManager commitRequestManager = new CommitRequestManager(
+                time, logContext, subscriptions, config, coordinatorRequestManager,
+                offsetCommitCallbackInvoker, DEFAULT_GROUP_ID, Optional.of(DEFAULT_GROUP_INSTANCE_ID),
+                new Metrics());
 
         this.heartbeatRequestManager1 = new HeartbeatRequestManager(
                 logContext,
