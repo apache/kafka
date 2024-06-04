@@ -178,7 +178,7 @@ public class FetchRequestManagerTest {
     private final int maxWaitMs = 0;
     private final int fetchSize = 1000;
     private final long retryBackoffMs = 100;
-    private final int requestTimeoutMs = 30000;
+    private final long requestTimeoutMs = 30000;
     private final ApiVersions apiVersions = new ApiVersions();
     private MockTime time = new MockTime(1);
     private SubscriptionState subscriptions;
@@ -3592,7 +3592,7 @@ public class FetchRequestManagerTest {
                 metadata,
                 time,
                 retryBackoffMs,
-                requestTimeoutMs,
+                (int) requestTimeoutMs,
                 Integer.MAX_VALUE);
         offsetFetcher = new OffsetFetcher(logContext,
                 consumerNetworkClient,

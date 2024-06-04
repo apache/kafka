@@ -77,7 +77,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     private final CoordinatorRequestManager coordinatorRequestManager;
     private final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker;
     private final OffsetCommitMetricsManager metricsManager;
-    private final int requestTimeoutMs;
     private final long retryBackoffMs;
     private final String groupId;
     private final Optional<String> groupInstanceId;
@@ -114,7 +113,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             offsetCommitCallbackInvoker,
             groupId,
             groupInstanceId,
-            config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
             config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG),
             config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG),
             OptionalDouble.empty(),
@@ -131,7 +129,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
         final String groupId,
         final Optional<String> groupInstanceId,
-        final int requestTimeoutMs,
         final long retryBackoffMs,
         final long retryBackoffMaxMs,
         final OptionalDouble jitter,
@@ -152,7 +149,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         this.groupId = groupId;
         this.groupInstanceId = groupInstanceId;
         this.subscriptions = subscriptions;
-        this.requestTimeoutMs = requestTimeoutMs;
         this.retryBackoffMs = retryBackoffMs;
         this.retryBackoffMaxMs = retryBackoffMaxMs;
         this.jitter = jitter;

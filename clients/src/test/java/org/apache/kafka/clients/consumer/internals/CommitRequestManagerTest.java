@@ -94,7 +94,6 @@ import static org.mockito.Mockito.when;
 
 public class CommitRequestManagerTest {
 
-    private final int requestTimeoutMs = 1000;
     private final long retryBackoffMs = 100;
     private final long retryBackoffMaxMs = 1000;
     private static final String CONSUMER_COORDINATOR_METRICS = "consumer-coordinator-metrics";
@@ -1316,7 +1315,6 @@ public class CommitRequestManagerTest {
                 this.offsetCommitCallbackInvoker,
                 DEFAULT_GROUP_ID,
                 Optional.of(DEFAULT_GROUP_INSTANCE_ID),
-                requestTimeoutMs,
                 retryBackoffMs,
                 retryBackoffMaxMs,
                 OptionalDouble.of(0),
