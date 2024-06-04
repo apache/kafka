@@ -1932,6 +1932,12 @@ public class MembershipManagerImplTest {
         verify(backgroundEventHandler).add(any(ConsumerRebalanceListenerCallbackNeededEvent.class));
 
         // Stale member triggers onPartitionLost callback that will not complete just yet
+        ConsumerRebalanceListenerCallbackNeededEvent neededEvent = new ConsumerRebalanceListenerCallbackNeededEvent(
+                ConsumerRebalanceListenerMethodName.ON_PARTITIONS_LOST,
+                topicPartitions(topicName, ownedPartition));
+        when(backgroundEventQueue.size()).thenReturn(1);
+        when(backgroundEventQueue.peek()).thenReturn(mock(ConsumerRebalanceListenerCallbackNeededEvent.class));
+        when(backgroundEventQueue.poll()).thenReturn(neededEvent);
         ConsumerRebalanceListenerCallbackCompletedEvent callbackEvent = performCallback(
             membershipManager,
             invoker,
@@ -1949,6 +1955,8 @@ public class MembershipManagerImplTest {
         verify(subscriptionState, never()).assignFromSubscribed(any());
 
         completeCallback(callbackEvent, membershipManager);
+        membershipManager.transitionToJoining();
+        subscriptionState.assignFromSubscribed(Collections.emptySet());
         assertEquals(MemberState.JOINING, membershipManager.state());
         verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
     }
