@@ -618,9 +618,9 @@ public class RemoteLogManager implements Closeable {
      * Visible for testing.
      *
      * @param log         The actual log from where to take the leader-epoch checkpoint
-     * @param startOffset The start offset of the epoch entries (exclusive).
+     * @param startOffset The start offset of the epoch entries (inclusive).
      *                    If start offset is 6, then it will retain an entry at offset 6.
-     * @param endOffset   The end offset of the epoch entries (inclusive)
+     * @param endOffset   The end offset of the epoch entries (exclusive)
      *                    If end offset is 100, then it will remove the entries greater than or equal to 100.
      * @return the leader epoch entries
      */

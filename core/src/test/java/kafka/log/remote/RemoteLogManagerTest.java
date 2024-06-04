@@ -2447,8 +2447,8 @@ public class RemoteLogManagerTest {
         }
         myCheckpoint.write(entries);
         LeaderEpochFileCache cache = new LeaderEpochFileCache(null, myCheckpoint, scheduler);
-        cache.truncateFromStart(startOffset);
-        cache.truncateFromEnd(endOffset);
+        cache.truncateFromStartAsyncFlush(startOffset);
+        cache.truncateFromEndAsyncFlush(endOffset);
         return myCheckpoint.read().stream().collect(Collectors.toMap(e -> e.epoch, e -> e.startOffset));
     }
 

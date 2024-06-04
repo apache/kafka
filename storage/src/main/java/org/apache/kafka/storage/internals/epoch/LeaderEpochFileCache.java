@@ -46,7 +46,7 @@ import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UND
  * Leader Epoch = epoch assigned to each leader by the controller.
  * Offset = offset of the first message in each epoch.
  * <p>
- * Note that {@link #truncateFromStart},{@link #truncateFromEnd} flush the epoch-entry changes to checkpoint asynchronously.
+ * Note that {@link #truncateFromStartAsyncFlush},{@link #truncateFromEndAsyncFlush} flush the epoch-entry changes to checkpoint asynchronously.
  * Hence, it is instantiater's responsibility to ensure restoring the cache to the correct state after instantiating
  * this class from checkpoint (which might contain stale epoch entries right after instantiation).
  */
@@ -149,8 +149,8 @@ public class LeaderEpochFileCache {
      * Remove any entries which violate monotonicity prior to appending a new entry
      */
     private void maybeTruncateNonMonotonicEntries(EpochEntry newEntry) {
-        List<EpochEntry> removedEpochs = removeFromEnd(
-                epochs,
+        List<EpochEntry> removedEpochs = removeWhileMatching(
+                epochs.descendingMap().entrySet().iterator(),
                 entry -> entry.epoch >= newEntry.epoch || entry.startOffset >= newEntry.startOffset);
 
         if (removedEpochs.size() > 1 || (!removedEpochs.isEmpty() && removedEpochs.get(0).startOffset != newEntry.startOffset)) {
@@ -160,16 +160,6 @@ public class LeaderEpochFileCache {
             // is expected.
             log.warn("New epoch entry {} caused truncation of conflicting entries {}. " + "Cache now contains {} entries.", newEntry, removedEpochs, epochs.size());
         }
-    }
-
-    private static List<EpochEntry> removeFromEnd(
-            TreeMap<Integer, EpochEntry> epochs, Predicate<EpochEntry> predicate) {
-        return removeWhileMatching(epochs.descendingMap().entrySet().iterator(), predicate);
-    }
-
-    private static List<EpochEntry> removeFromStart(
-            TreeMap<Integer, EpochEntry> epochs, Predicate<EpochEntry> predicate) {
-        return removeWhileMatching(epochs.entrySet().iterator(), predicate);
     }
 
     private static List<EpochEntry> removeWhileMatching(Iterator<Map.Entry<Integer, EpochEntry>> iterator, Predicate<EpochEntry> predicate) {
@@ -344,7 +334,7 @@ public class LeaderEpochFileCache {
      * <p>
      * Checkpoint-flushing is done asynchronously.
      */
-    public void truncateFromEnd(long endOffset) {
+    public void truncateFromEndAsyncFlush(long endOffset) {
         lock.writeLock().lock();
         try {
             List<EpochEntry> removedEntries = truncateFromEnd(epochs, endOffset);
@@ -376,7 +366,7 @@ public class LeaderEpochFileCache {
      *
      * @param startOffset the offset to clear up to
      */
-    public void truncateFromStart(long startOffset) {
+    public void truncateFromStartAsyncFlush(long startOffset) {
         lock.writeLock().lock();
         try {
             List<EpochEntry> removedEntries = truncateFromStart(epochs, startOffset);
@@ -400,7 +390,8 @@ public class LeaderEpochFileCache {
     }
 
     private static List<EpochEntry> truncateFromStart(TreeMap<Integer, EpochEntry> epochs, long startOffset) {
-        List<EpochEntry> removedEntries = removeFromStart(epochs, entry -> entry.startOffset <= startOffset);
+        List<EpochEntry> removedEntries = removeWhileMatching(
+                epochs.entrySet().iterator(), entry -> entry.startOffset <= startOffset);
 
         if (!removedEntries.isEmpty()) {
             EpochEntry firstBeforeStartOffset = removedEntries.get(removedEntries.size() - 1);
@@ -414,7 +405,7 @@ public class LeaderEpochFileCache {
     private static List<EpochEntry> truncateFromEnd(TreeMap<Integer, EpochEntry> epochs, long endOffset) {
         Optional<EpochEntry> epochEntry = Optional.ofNullable(epochs.lastEntry()).map(Entry::getValue);
         if (endOffset >= 0 && epochEntry.isPresent() && epochEntry.get().startOffset >= endOffset) {
-            return removeFromEnd(epochs, x -> x.startOffset >= endOffset);
+            return removeWhileMatching(epochs.descendingMap().entrySet().iterator(), x -> x.startOffset >= endOffset);
         }
         return Collections.emptyList();
     }
@@ -461,9 +452,9 @@ public class LeaderEpochFileCache {
     }
 
     /**
-     * Returns the leader epoch entries within the range of the given start[exclusive] and end[inclusive] offset
-     * @param startOffset The start offset of the epoch entries (exclusive).
-     * @param endOffset   The end offset of the epoch entries (inclusive)
+     * Returns the leader epoch entries within the range of the given start and end offset
+     * @param startOffset The start offset of the epoch entries (inclusive).
+     * @param endOffset   The end offset of the epoch entries (exclusive)
      * @return the leader epoch entries
      */
     public List<EpochEntry> epochEntriesInRange(long startOffset, long endOffset) {
