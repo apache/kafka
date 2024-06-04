@@ -71,6 +71,7 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -105,12 +106,12 @@ class DescribeTopicPartitionsRequestHandlerTest {
     UpdateMetadataBroker broker = new UpdateMetadataBroker()
         .setId(0)
         .setRack("rack")
-        .setEndpoints(Arrays.asList(
-            new UpdateMetadataRequestData.UpdateMetadataEndpoint()
-                .setHost("broker0")
-                .setPort(9092)
-                .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
-                .setListener(plaintextListener.value())
+        .setEndpoints(Collections.singletonList(
+                new UpdateMetadataRequestData.UpdateMetadataEndpoint()
+                        .setHost("broker0")
+                        .setPort(9092)
+                        .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+                        .setListener(plaintextListener.value())
         ));
 
     @Test
@@ -168,9 +169,9 @@ class DescribeTopicPartitionsRequestHandlerTest {
                 .setPartitionId(1)
                 .setReplicas(Arrays.asList(0, 1, 2))
                 .setLeader(0)
-                .setIsr(Arrays.asList(0))
-                .setEligibleLeaderReplicas(Arrays.asList(1))
-                .setLastKnownElr(Arrays.asList(2))
+                .setIsr(Collections.singletonList(0))
+                .setEligibleLeaderReplicas(Collections.singletonList(1))
+                .setLastKnownElr(Collections.singletonList(2))
                 .setLeaderEpoch(0)
                 .setPartitionEpoch(1)
                 .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()),
@@ -179,9 +180,9 @@ class DescribeTopicPartitionsRequestHandlerTest {
                 .setPartitionId(0)
                 .setReplicas(Arrays.asList(0, 1, 2))
                 .setLeader(0)
-                .setIsr(Arrays.asList(0))
-                .setEligibleLeaderReplicas(Arrays.asList(1))
-                .setLastKnownElr(Arrays.asList(2))
+                .setIsr(Collections.singletonList(0))
+                .setEligibleLeaderReplicas(Collections.singletonList(1))
+                .setLastKnownElr(Collections.singletonList(2))
                 .setLeaderEpoch(0)
                 .setPartitionEpoch(1)
                 .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()),
@@ -190,9 +191,9 @@ class DescribeTopicPartitionsRequestHandlerTest {
                 .setPartitionId(0)
                 .setReplicas(Arrays.asList(0, 1, 3))
                 .setLeader(0)
-                .setIsr(Arrays.asList(0))
-                .setEligibleLeaderReplicas(Arrays.asList(1))
-                .setLastKnownElr(Arrays.asList(3))
+                .setIsr(Collections.singletonList(0))
+                .setEligibleLeaderReplicas(Collections.singletonList(1))
+                .setLastKnownElr(Collections.singletonList(3))
                 .setLeaderEpoch(0)
                 .setPartitionEpoch(2)
                 .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value())
@@ -371,9 +372,9 @@ class DescribeTopicPartitionsRequestHandlerTest {
                 .setPartitionId(0)
                 .setReplicas(Arrays.asList(0, 1, 2))
                 .setLeader(0)
-                .setIsr(Arrays.asList(0))
-                .setEligibleLeaderReplicas(Arrays.asList(1))
-                .setLastKnownElr(Arrays.asList(2))
+                .setIsr(Collections.singletonList(0))
+                .setEligibleLeaderReplicas(Collections.singletonList(1))
+                .setLastKnownElr(Collections.singletonList(2))
                 .setLeaderEpoch(0)
                 .setPartitionEpoch(1)
                 .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()),
@@ -382,9 +383,9 @@ class DescribeTopicPartitionsRequestHandlerTest {
                 .setPartitionId(1)
                 .setReplicas(Arrays.asList(0, 1, 2))
                 .setLeader(0)
-                .setIsr(Arrays.asList(0))
-                .setEligibleLeaderReplicas(Arrays.asList(1))
-                .setLastKnownElr(Arrays.asList(2))
+                .setIsr(Collections.singletonList(0))
+                .setEligibleLeaderReplicas(Collections.singletonList(1))
+                .setLastKnownElr(Collections.singletonList(2))
                 .setLeaderEpoch(0)
                 .setPartitionEpoch(1)
                 .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()),
@@ -393,9 +394,9 @@ class DescribeTopicPartitionsRequestHandlerTest {
                 .setPartitionId(0)
                 .setReplicas(Arrays.asList(0, 1, 3))
                 .setLeader(0)
-                .setIsr(Arrays.asList(0))
-                .setEligibleLeaderReplicas(Arrays.asList(1))
-                .setLastKnownElr(Arrays.asList(3))
+                .setIsr(Collections.singletonList(0))
+                .setEligibleLeaderReplicas(Collections.singletonList(1))
+                .setLastKnownElr(Collections.singletonList(3))
                 .setLeaderEpoch(0)
                 .setPartitionEpoch(2)
                 .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value())

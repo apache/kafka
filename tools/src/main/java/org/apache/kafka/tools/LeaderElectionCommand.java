@@ -160,28 +160,26 @@ public class LeaderElectionCommand {
             String partitionsAsString = succeeded.stream()
                 .map(TopicPartition::toString)
                 .collect(Collectors.joining(", "));
-            System.out.println(String.format("Successfully completed leader election (%s) for partitions %s",
-                electionType, partitionsAsString));
+            System.out.printf("Successfully completed leader election (%s) for partitions %s%n",
+                electionType, partitionsAsString);
         }
 
         if (!noop.isEmpty()) {
             String partitionsAsString = noop.stream()
                 .map(TopicPartition::toString)
                 .collect(Collectors.joining(", "));
-            System.out.println(String.format("Valid replica already elected for partitions %s", partitionsAsString));
+            System.out.printf("Valid replica already elected for partitions %s%n", partitionsAsString);
         }
 
         if (!failed.isEmpty()) {
             AdminCommandFailedException rootException =
                 new AdminCommandFailedException(String.format("%s replica(s) could not be elected", failed.size()));
             failed.forEach((key, value) -> {
-                System.out.println(
-                        String.format(
-                                "Error completing leader election (%s) for partition: %s: %s",
-                                electionType,
-                                key,
-                                value
-                        )
+                System.out.printf(
+                        "Error completing leader election (%s) for partition: %s: %s%n",
+                        electionType,
+                        key,
+                        value
                 );
                 rootException.addSuppressed(value);
             });

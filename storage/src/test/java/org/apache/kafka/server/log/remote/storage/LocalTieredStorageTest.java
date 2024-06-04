@@ -304,7 +304,7 @@ public final class LocalTieredStorageTest {
 
         final LocalTieredStorageSnapshot snapshot = takeSnapshot(tieredStorage);
 
-        assertEquals(asList(topicPartition), snapshot.getTopicPartitions());
+        assertEquals(Collections.singletonList(topicPartition), snapshot.getTopicPartitions());
         assertEquals(asList(wrap(record1), wrap(record2)), extractRecordsValue(snapshot, id));
     }
 
@@ -331,7 +331,7 @@ public final class LocalTieredStorageTest {
         actual.put(idA, extractRecordsValue(snapshot, idA));
         actual.put(idB, extractRecordsValue(snapshot, idB));
 
-        assertEquals(asList(topicPartition), snapshot.getTopicPartitions());
+        assertEquals(Collections.singletonList(topicPartition), snapshot.getTopicPartitions());
         assertEquals(expected, actual);
     }
 

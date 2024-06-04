@@ -355,11 +355,11 @@ public class ConsumerGroupMemberTest {
     @Test
     public void testClassicProtocolListFromJoinRequestProtocolCollection() {
         JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestData.JoinGroupRequestProtocolCollection();
-        protocols.addAll(Arrays.asList(
-            new JoinGroupRequestData.JoinGroupRequestProtocol()
-                .setName("range")
-                .setMetadata(new byte[]{1, 2, 3})
-        ));
+        protocols.add(
+                new JoinGroupRequestData.JoinGroupRequestProtocol()
+                        .setName("range")
+                        .setMetadata(new byte[]{1, 2, 3})
+        );
 
         assertEquals(
             toClassicProtocolCollection("range"),

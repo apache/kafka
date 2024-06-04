@@ -101,9 +101,7 @@ public interface LogHistory<T> {
             Entry<?> that = (Entry<?>) o;
 
             if (offset != that.offset) return false;
-            if (!Objects.equals(value, that.value)) return false;
-
-            return true;
+            return Objects.equals(value, that.value);
         }
 
         @Override

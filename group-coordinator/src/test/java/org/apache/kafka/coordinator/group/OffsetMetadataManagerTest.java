@@ -101,7 +101,7 @@ public class OffsetMetadataManagerTest {
             private GroupMetadataManager groupMetadataManager = null;
             private MetadataImage metadataImage = null;
             private GroupCoordinatorConfig config = null;
-            private GroupCoordinatorMetricsShard metrics = mock(GroupCoordinatorMetricsShard.class);
+            private final GroupCoordinatorMetricsShard metrics = mock(GroupCoordinatorMetricsShard.class);
 
             Builder withOffsetMetadataMaxSize(int offsetMetadataMaxSize) {
                 config = GroupCoordinatorConfigTest.createGroupCoordinatorConfig(offsetMetadataMaxSize, 60000L, 24 * 60 * 1000);
@@ -2039,30 +2039,30 @@ public class OffsetMetadataManagerTest {
         assertEquals(Collections.emptyList(), context.fetchAllOffsets("group", 0L));
 
         // Fetching with 1 should return data up to offset 1.
-        assertEquals(Arrays.asList(
-            new OffsetFetchResponseData.OffsetFetchResponseTopics()
-                .setName("foo")
-                .setPartitions(Arrays.asList(
-                    mkOffsetPartitionResponse(0, 100L, 1, "metadata")
-                ))
+        assertEquals(Collections.singletonList(
+                new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                        .setName("foo")
+                        .setPartitions(Collections.singletonList(
+                                mkOffsetPartitionResponse(0, 100L, 1, "metadata")
+                        ))
         ), context.fetchAllOffsets("group", 1L));
 
         // Fetching with 2 should return data up to offset 2.
-        assertEquals(Arrays.asList(
-            new OffsetFetchResponseData.OffsetFetchResponseTopics()
-                .setName("foo")
-                .setPartitions(Arrays.asList(
-                    mkOffsetPartitionResponse(0, 100L, 1, "metadata"),
-                    mkOffsetPartitionResponse(1, 110L, 1, "metadata")
-                ))
+        assertEquals(Collections.singletonList(
+                new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                        .setName("foo")
+                        .setPartitions(Arrays.asList(
+                                mkOffsetPartitionResponse(0, 100L, 1, "metadata"),
+                                mkOffsetPartitionResponse(1, 110L, 1, "metadata")
+                        ))
         ), context.fetchAllOffsets("group", 2L));
 
         // Fetching with 3 should return data up to offset 3.
         assertEquals(Arrays.asList(
             new OffsetFetchResponseData.OffsetFetchResponseTopics()
                 .setName("bar")
-                .setPartitions(Arrays.asList(
-                    mkOffsetPartitionResponse(0, 200L, 1, "metadata")
+                .setPartitions(Collections.singletonList(
+                        mkOffsetPartitionResponse(0, 200L, 1, "metadata")
                 )),
             new OffsetFetchResponseData.OffsetFetchResponseTopics()
                 .setName("foo")
@@ -2076,8 +2076,8 @@ public class OffsetMetadataManagerTest {
         assertEquals(Arrays.asList(
             new OffsetFetchResponseData.OffsetFetchResponseTopics()
                 .setName("bar")
-                .setPartitions(Arrays.asList(
-                    mkOffsetPartitionResponse(0, 200L, 1, "metadata")
+                .setPartitions(Collections.singletonList(
+                        mkOffsetPartitionResponse(0, 200L, 1, "metadata")
                 )),
             new OffsetFetchResponseData.OffsetFetchResponseTopics()
                 .setName("foo")
@@ -2130,8 +2130,8 @@ public class OffsetMetadataManagerTest {
         assertEquals(Arrays.asList(
             new OffsetFetchResponseData.OffsetFetchResponseTopics()
                 .setName("bar")
-                .setPartitions(Arrays.asList(
-                    mkOffsetPartitionResponse(0, Errors.UNSTABLE_OFFSET_COMMIT)
+                .setPartitions(Collections.singletonList(
+                        mkOffsetPartitionResponse(0, Errors.UNSTABLE_OFFSET_COMMIT)
                 )),
             new OffsetFetchResponseData.OffsetFetchResponseTopics()
                 .setName("foo")
@@ -2146,8 +2146,8 @@ public class OffsetMetadataManagerTest {
         assertEquals(Arrays.asList(
             new OffsetFetchResponseData.OffsetFetchResponseTopics()
                 .setName("bar")
-                .setPartitions(Arrays.asList(
-                    mkOffsetPartitionResponse(0, 200L, 1, "metadata")
+                .setPartitions(Collections.singletonList(
+                        mkOffsetPartitionResponse(0, 200L, 1, "metadata")
                 )),
             new OffsetFetchResponseData.OffsetFetchResponseTopics()
                 .setName("foo")

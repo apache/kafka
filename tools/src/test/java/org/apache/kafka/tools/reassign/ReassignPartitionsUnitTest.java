@@ -144,10 +144,10 @@ public class ReassignPartitionsUnitTest {
                 asList(b.get(1), b.get(2), b.get(3)),
                 asList(b.get(1), b.get(2), b.get(3)))
         ), Collections.emptyMap());
-        adminClient.addTopic(false, "bar", asList(
-            new TopicPartitionInfo(0, b.get(2),
-                asList(b.get(2), b.get(3), b.get(0)),
-                asList(b.get(2), b.get(3), b.get(0)))
+        adminClient.addTopic(false, "bar", Collections.singletonList(
+                new TopicPartitionInfo(0, b.get(2),
+                        asList(b.get(2), b.get(3), b.get(0)),
+                        asList(b.get(2), b.get(3), b.get(0)))
         ), Collections.emptyMap());
     }
 
@@ -219,10 +219,10 @@ public class ReassignPartitionsUnitTest {
 
             addTopics(adminClient);
             List<Node> b = adminClient.brokers();
-            adminClient.addTopic(false, "quux", asList(
-                    new TopicPartitionInfo(0, b.get(2),
-                        asList(b.get(1), b.get(2), b.get(3)),
-                        asList(b.get(1), b.get(2), b.get(3)))),
+            adminClient.addTopic(false, "quux", Collections.singletonList(
+                            new TopicPartitionInfo(0, b.get(2),
+                                    asList(b.get(1), b.get(2), b.get(3)),
+                                    asList(b.get(1), b.get(2), b.get(3)))),
                 Collections.emptyMap());
 
             Map<TopicPartitionReplica, String> replicaAssignment = new HashMap<>();
@@ -289,7 +289,7 @@ public class ReassignPartitionsUnitTest {
             assignments.put(new TopicPartition("foo", 0), asList(0, 1, 2));
             assignments.put(new TopicPartition("foo", 1), asList(1, 2, 3));
 
-            assertEquals(assignments, getReplicaAssignmentForTopics(adminClient, asList("foo")));
+            assertEquals(assignments, getReplicaAssignmentForTopics(adminClient, Collections.singletonList("foo")));
 
             assignments.clear();
 
@@ -344,7 +344,7 @@ public class ReassignPartitionsUnitTest {
             assertThrows(AdminCommandFailedException.class, () -> parseGenerateAssignmentArgs(
                 "{\"topics\": [{\"topic\": \"foo\"}], \"version\":1}", "5,2,3,4,5"),
                 "Expected to detect duplicate broker list entries").getMessage());
-        assertEquals(new SimpleImmutableEntry<>(asList(5, 2, 3, 4), asList("foo")),
+        assertEquals(new SimpleImmutableEntry<>(asList(5, 2, 3, 4), Collections.singletonList("foo")),
             parseGenerateAssignmentArgs("{\"topics\": [{\"topic\": \"foo\"}], \"version\":1}", "5,2,3,4"));
         assertStartsWith("List of topics to reassign contains duplicate entries",
             assertThrows(AdminCommandFailedException.class, () -> parseGenerateAssignmentArgs(
@@ -473,7 +473,7 @@ public class ReassignPartitionsUnitTest {
         Map<TopicPartition, PartitionReassignment> currentReassignments = new HashMap<>();
 
         currentReassignments.put(new TopicPartition("foo", 0), new PartitionReassignment(
-            asList(1, 2, 3, 4), asList(4), asList(3)));
+            asList(1, 2, 3, 4), Collections.singletonList(4), Collections.singletonList(3)));
         currentReassignments.put(new TopicPartition("foo", 1), new PartitionReassignment(
             asList(4, 5, 6, 7, 8), asList(7, 8), asList(4, 5)));
         currentReassignments.put(new TopicPartition("foo", 2), new PartitionReassignment(
@@ -490,7 +490,7 @@ public class ReassignPartitionsUnitTest {
         proposedParts.put(new TopicPartition("foo", 0), asList(1, 2, 5));
         proposedParts.put(new TopicPartition("foo", 2), asList(3, 4));
         proposedParts.put(new TopicPartition("foo", 3), asList(5, 6));
-        proposedParts.put(new TopicPartition("foo", 4), asList(3));
+        proposedParts.put(new TopicPartition("foo", 4), Collections.singletonList(3));
         proposedParts.put(new TopicPartition("foo", 5), asList(3, 4, 5, 6));
         proposedParts.put(new TopicPartition("bar", 0), asList(1, 2, 3));
 
@@ -509,16 +509,16 @@ public class ReassignPartitionsUnitTest {
 
         Map<Integer, PartitionMove> fooMoves = new HashMap<>();
 
-        fooMoves.put(0, new PartitionMove(new HashSet<>(asList(1, 2, 3)), new HashSet<>(asList(5))));
+        fooMoves.put(0, new PartitionMove(new HashSet<>(asList(1, 2, 3)), new HashSet<>(Collections.singletonList(5))));
         fooMoves.put(1, new PartitionMove(new HashSet<>(asList(4, 5, 6)), new HashSet<>(asList(7, 8))));
         fooMoves.put(2, new PartitionMove(new HashSet<>(asList(1, 2)), new HashSet<>(asList(3, 4))));
         fooMoves.put(3, new PartitionMove(new HashSet<>(asList(1, 2)), new HashSet<>(asList(5, 6))));
-        fooMoves.put(4, new PartitionMove(new HashSet<>(asList(1, 2)), new HashSet<>(asList(3))));
+        fooMoves.put(4, new PartitionMove(new HashSet<>(asList(1, 2)), new HashSet<>(Collections.singletonList(3))));
         fooMoves.put(5, new PartitionMove(new HashSet<>(asList(1, 2)), new HashSet<>(asList(3, 4, 5, 6))));
 
         Map<Integer, PartitionMove> barMoves = new HashMap<>();
 
-        barMoves.put(0, new PartitionMove(new HashSet<>(asList(2, 3, 4)), new HashSet<>(asList(1))));
+        barMoves.put(0, new PartitionMove(new HashSet<>(asList(2, 3, 4)), new HashSet<>(Collections.singletonList(1))));
 
         assertEquals(fooMoves, moveMap.get("foo"));
         assertEquals(barMoves, moveMap.get("bar"));
@@ -747,7 +747,7 @@ public class ReassignPartitionsUnitTest {
             assignment.put(new TopicPartitionReplica("quux", 1, 0), "/tmp/kafka-logs1");
 
             assertEquals(
-                new HashSet<>(asList(new TopicPartitionReplica("foo", 0, 0))),
+                new HashSet<>(Collections.singletonList(new TopicPartitionReplica("foo", 0, 0))),
                 alterReplicaLogDirs(adminClient, assignment)
             );
         }

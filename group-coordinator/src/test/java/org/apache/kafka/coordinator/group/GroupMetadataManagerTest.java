@@ -9696,9 +9696,9 @@ public class GroupMetadataManagerTest {
             .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
                 Arrays.asList(fooTopicName, barTopicName),
                 null,
-                Arrays.asList(
-                    new TopicPartition(barTopicName, 0)
-                )
+                    Collections.singletonList(
+                            new TopicPartition(barTopicName, 0)
+                    )
             ))))
         );
 
@@ -9713,8 +9713,8 @@ public class GroupMetadataManagerTest {
                 );
                 put(
                     memberId2,
-                    Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(Arrays.asList(
-                        new TopicPartition(barTopicName, 0)
+                    Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(Collections.singletonList(
+                            new TopicPartition(barTopicName, 0)
                     ))))
                 );
             }
@@ -9943,9 +9943,9 @@ public class GroupMetadataManagerTest {
             .setMetadata(Utils.toArray(ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
                 Arrays.asList(fooTopicName, barTopicName),
                 null,
-                Arrays.asList(
-                    new TopicPartition(barTopicName, 0)
-                )
+                    Collections.singletonList(
+                            new TopicPartition(barTopicName, 0)
+                    )
             ))))
         );
 
@@ -9960,8 +9960,8 @@ public class GroupMetadataManagerTest {
                 );
                 put(
                     memberId2,
-                    Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(Arrays.asList(
-                        new TopicPartition(barTopicName, 0)
+                    Utils.toArray(ConsumerProtocol.serializeAssignment(new ConsumerPartitionAssignor.Assignment(Collections.singletonList(
+                            new TopicPartition(barTopicName, 0)
                     ))))
                 );
             }
@@ -10755,7 +10755,7 @@ public class GroupMetadataManagerTest {
                         .setPartitions(Arrays.asList(3, 4, 5)),
                     new ConsumerGroupHeartbeatRequestData.TopicPartitions()
                         .setTopicId(barTopicId)
-                        .setPartitions(Arrays.asList(2))
+                        .setPartitions(Collections.singletonList(2))
                 ))
         );
 

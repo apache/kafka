@@ -27,7 +27,7 @@ import org.apache.kafka.image.MetadataProvenance;
 import java.util.Arrays;
 
 public class MetadataImageBuilder {
-    private MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
+    private final MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
 
     public MetadataImageBuilder addTopic(
         Uuid topicId,

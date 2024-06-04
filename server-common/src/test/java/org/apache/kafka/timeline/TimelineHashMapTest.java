@@ -18,7 +18,6 @@
 package org.apache.kafka.timeline;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -96,7 +95,7 @@ public class TimelineHashMapTest {
         assertNull(map.putIfAbsent(1, "xyz"));
         assertEquals("xyz", map.putIfAbsent(1, "123"));
         assertEquals("xyz", map.putIfAbsent(1, "ghi"));
-        map.putAll(Collections.singletonMap(2, "b"));
+        map.put(2, "b");
         assertTrue(map.containsKey(2));
         assertEquals("xyz", map.remove(1));
         assertEquals("b", map.remove(2));

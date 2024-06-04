@@ -22,6 +22,7 @@ import joptsimple.OptionSpec;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
@@ -33,14 +34,14 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class CommandLineUtilsTest {
     @Test
     public void testParseEmptyArg() {
-        List<String> argArray = Arrays.asList("my.empty.property=");
+        List<String> argArray = Collections.singletonList("my.empty.property=");
 
         assertThrows(IllegalArgumentException.class, () -> CommandLineUtils.parseKeyValueArgs(argArray, false));
     }
 
     @Test
     public void testParseEmptyArgWithNoDelimiter() {
-        List<String> argArray = Arrays.asList("my.empty.property");
+        List<String> argArray = Collections.singletonList("my.empty.property");
 
         assertThrows(IllegalArgumentException.class, () -> CommandLineUtils.parseKeyValueArgs(argArray, false));
     }
@@ -56,7 +57,7 @@ public class CommandLineUtilsTest {
 
     @Test
     public void testParseSingleArg() {
-        List<String> argArray = Arrays.asList("my.property=value");
+        List<String> argArray = Collections.singletonList("my.property=value");
         Properties props = CommandLineUtils.parseKeyValueArgs(argArray);
 
         assertEquals(props.getProperty("my.property"), "value", "Value of a single property should be 'value'");

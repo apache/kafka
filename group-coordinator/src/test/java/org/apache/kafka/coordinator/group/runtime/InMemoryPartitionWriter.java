@@ -38,9 +38,9 @@ import java.util.stream.StreamSupport;
 public class InMemoryPartitionWriter implements PartitionWriter {
 
     private class PartitionState {
-        private ReentrantLock lock = new ReentrantLock();
-        private List<Listener> listeners = new ArrayList<>();
-        private List<MemoryRecords> entries = new ArrayList<>();
+        private final ReentrantLock lock = new ReentrantLock();
+        private final List<Listener> listeners = new ArrayList<>();
+        private final List<MemoryRecords> entries = new ArrayList<>();
         private long endOffset = 0L;
         private long committedOffset = 0L;
     }

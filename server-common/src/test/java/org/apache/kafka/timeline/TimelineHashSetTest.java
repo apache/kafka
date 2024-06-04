@@ -18,6 +18,7 @@
 package org.apache.kafka.timeline;
 
 import java.util.Arrays;
+import java.util.Collections;
 
 import org.apache.kafka.common.utils.LogContext;
 import org.junit.jupiter.api.Test;
@@ -61,9 +62,9 @@ public class TimelineHashSetTest {
         set.add("d");
         assertTrue(set.retainAll(Arrays.asList("a", "b", "c")));
         assertFalse(set.retainAll(Arrays.asList("a", "b", "c")));
-        assertFalse(set.removeAll(Arrays.asList("d")));
+        assertFalse(set.removeAll(Collections.singletonList("d")));
         registry.getOrCreateSnapshot(2);
-        assertTrue(set.removeAll(Arrays.asList("c")));
+        assertTrue(set.removeAll(Collections.singletonList("c")));
         assertThat(TimelineHashMapTest.iteratorToList(set.iterator(2)),
             containsInAnyOrder("a", "b", "c"));
         assertThat(TimelineHashMapTest.iteratorToList(set.iterator()),

@@ -133,10 +133,6 @@ public class TasksRequest extends Message {
             return false;
         }
 
-        if (this.state.isPresent() && !this.state.get().equals(state)) {
-            return false;
-        }
-
-        return true;
+        return !this.state.isPresent() || this.state.get().equals(state);
     }
 }

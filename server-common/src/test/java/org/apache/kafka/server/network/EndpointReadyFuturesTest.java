@@ -18,6 +18,7 @@
 package org.apache.kafka.server.network;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -43,11 +44,11 @@ final public class EndpointReadyFuturesTest {
             new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "127.0.0.1", 9093);
 
     private static final KafkaAuthorizerServerInfo INFO = new KafkaAuthorizerServerInfo(
-        new ClusterResource("S6-01LPiQOCBhhFIunQUcQ"),
-        1,
-        Arrays.asList(EXTERNAL, INTERNAL),
-        INTERNAL,
-        Arrays.asList("INTERNAL"));
+            new ClusterResource("S6-01LPiQOCBhhFIunQUcQ"),
+            1,
+            Arrays.asList(EXTERNAL, INTERNAL),
+            INTERNAL,
+            Collections.singletonList("INTERNAL"));
 
     static void assertComplete(
             EndpointReadyFutures readyFutures,
