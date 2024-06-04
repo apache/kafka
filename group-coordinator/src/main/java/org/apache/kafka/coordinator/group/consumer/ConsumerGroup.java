@@ -30,8 +30,8 @@ import org.apache.kafka.coordinator.group.Utils;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
-import org.apache.kafka.coordinator.group.modern.AbstractModernGroup;
 import org.apache.kafka.coordinator.group.modern.MemberState;
+import org.apache.kafka.coordinator.group.modern.ModernGroup;
 import org.apache.kafka.coordinator.group.modern.ModernGroupMember;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
@@ -60,7 +60,7 @@ import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.Consumer
  * A Consumer Group. All the metadata in this class are backed by
  * records in the __consumer_offsets partitions.
  */
-public class ConsumerGroup extends AbstractModernGroup<ConsumerGroupMember> {
+public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
 
     public enum ConsumerGroupState {
         EMPTY("Empty"),
@@ -138,6 +138,14 @@ public class ConsumerGroup extends AbstractModernGroup<ConsumerGroupMember> {
     @Override
     public GroupType type() {
         return GroupType.CONSUMER;
+    }
+
+    /**
+     * @return The group protocol type (consumer).
+     */
+    @Override
+    public String protocolType() {
+        return ConsumerProtocol.PROTOCOL_TYPE;
     }
 
     /**

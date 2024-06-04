@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.coordinator.group.modern;
 
-import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
@@ -50,7 +49,7 @@ import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOG
 /**
  * The abstract group provides definitions for the consumer and share group.
  */
-public abstract class AbstractModernGroup<T extends ModernGroupMember> implements Group {
+public abstract class ModernGroup<T extends ModernGroupMember> implements Group {
 
     public static class DeadlineAndEpoch {
         static final DeadlineAndEpoch EMPTY = new DeadlineAndEpoch(0L, 0);
@@ -139,7 +138,7 @@ public abstract class AbstractModernGroup<T extends ModernGroupMember> implement
      */
     protected DeadlineAndEpoch metadataRefreshDeadline = DeadlineAndEpoch.EMPTY;
 
-    protected AbstractModernGroup(
+    protected ModernGroup(
         SnapshotRegistry snapshotRegistry,
         String groupId
     ) {
@@ -162,7 +161,7 @@ public abstract class AbstractModernGroup<T extends ModernGroupMember> implement
     public ListGroupsResponseData.ListedGroup asListedGroup(long committedOffset) {
         return new ListGroupsResponseData.ListedGroup()
             .setGroupId(groupId)
-            .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+            .setProtocolType(protocolType())
             .setGroupState(stateAsString(committedOffset))
             .setGroupType(type().toString());
     }
@@ -680,6 +679,13 @@ public abstract class AbstractModernGroup<T extends ModernGroupMember> implement
         }
         return HOMOGENEOUS;
     }
+
+    /**
+     * Gets the protocol type for the group.
+     *
+     * @return The group protocol type.
+     */
+    public abstract String protocolType();
 
     /**
      * Gets or creates a member.
