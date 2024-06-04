@@ -48,6 +48,7 @@ plugins {
   // artifacts - see https://github.com/johnrengelman/shadow/issues/901
   id 'com.github.johnrengelman.shadow' version '8.1.0' apply false
   //  the spotless before 6.14.0 support JDK8, after 6.23.3 support JDK21
+  //  we have to give in support JDK 8
   //  refer:https://github.com/diffplug/spotless/tree/main/plugin-gradle#requirements
   //  https://github.com/diffplug/spotless/pull/1920
   id 'com.diffplug.spotless' version "6.25.0" apply false
@@ -201,7 +202,60 @@ def determineCommitId() {
   }
 }
 
-def spotlessApplyModules = ['']
+def excludedSpotlessModules = ['clients','connect',
+                            'api',
+                            'basic-auth-extension',
+                            'file',
+                            'json',
+                            'mirror',
+                            'mirror-client',
+                            'runtime',
+                            'test-plugins',
+                            'transforms',
+                            'core',
+                            'examples',
+                            'generator',
+                            'group-coordinator',
+                            'jmh-benchmarks',
+                            'log4j-appender',
+                            'metadata',
+                            'raft',
+                            'server',
+                            'server-common',
+                            'shell',
+                            'storage',
+                            'storage-api', //  in settings.gradle rename 
+                            'streams',
+                            'examples',
+                            'streams-scala',
+                            'test-utils',
+                            'upgrade-system-tests-0100',
+                            'upgrade-system-tests-0101',
+                            'upgrade-system-tests-0102',
+                            'upgrade-system-tests-0110',
+                            'upgrade-system-tests-10',
+                            'upgrade-system-tests-11',
+                            'upgrade-system-tests-20',
+                            'upgrade-system-tests-21',
+                            'upgrade-system-tests-22',
+                            'upgrade-system-tests-23',
+                            'upgrade-system-tests-24',
+                            'upgrade-system-tests-25',
+                            'upgrade-system-tests-26',
+                            'upgrade-system-tests-27',
+                            'upgrade-system-tests-28',
+                            'upgrade-system-tests-30',
+                            'upgrade-system-tests-31',
+                            'upgrade-system-tests-32',
+                            'upgrade-system-tests-33',
+                            'upgrade-system-tests-34',
+                            'upgrade-system-tests-35',
+                            'upgrade-system-tests-36',
+                            'upgrade-system-tests-37',
+                            'tools',
+                            'tools-api',
+                            'transaction-coordinator',
+                            'trogdor']
 
 
 apply from: file('wrapper.gradle')
@@ -800,7 +854,7 @@ subprojects {
     skipConfigurations = [ "zinc" ]
   }
 
-  if (JavaVersion.current().isJava11Compatible() && (project.name in spotlessApplyModules)) {
+  if(JavaVersion.current().isJava11Compatible() && project.name !in excludedSpotlessModules) {
     apply plugin: 'com.diffplug.spotless'
     spotless {
       java {
