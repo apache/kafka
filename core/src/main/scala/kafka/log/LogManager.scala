@@ -1604,11 +1604,16 @@ object LogManager {
    newTopicsImage: TopicsImage,
    log: UnifiedLog
   ): Boolean = {
-    val topicId = log.topicId.getOrElse {
-      throw new RuntimeException(s"The log dir $log does not have a topic ID, " +
-        "which is not allowed when running in KRaft mode.")
+    if (log.topicId.isEmpty) {
+      // Missing topic ID could result from storage failure or unclean shutdown after topic creation but before flushing
+      // data to the `partition.metadata` file. And before appending data to the log, the `partition.metadata` is always
+      // flushed to disk. So if the topic ID is missing, it mostly means no data was appended, and we can treat this as
+      // a stray log.
+      info(s"The topicId does not exist in $log, treat it as a stray log")
+      return true
     }
 
+    val topicId = log.topicId.get
     val partitionId = log.topicPartition.partition()
     Option(newTopicsImage.getPartition(topicId, partitionId)) match {
       case Some(partition) =>
