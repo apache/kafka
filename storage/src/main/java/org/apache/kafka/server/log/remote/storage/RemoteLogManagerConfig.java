@@ -186,14 +186,8 @@ public final class RemoteLogManagerConfig extends AbstractConfig {
     public static final String REMOTE_FETCH_MAX_WAIT_MS_DOC = "The maximum amount of time the server will wait before answering the remote fetch request";
     public static final int DEFAULT_REMOTE_FETCH_MAX_WAIT_MS = 500;
 
-    public static final ConfigDef CONFIG_DEF;
-
     public static ConfigDef configDef() {
-        return new ConfigDef(CONFIG_DEF);
-    }
-
-    static {
-        CONFIG_DEF = configDef()
+        return new ConfigDef()
                 .define(REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP,
                         BOOLEAN,
                         DEFAULT_REMOTE_LOG_STORAGE_SYSTEM_ENABLE,
@@ -361,7 +355,7 @@ public final class RemoteLogManagerConfig extends AbstractConfig {
     }
 
     public RemoteLogManagerConfig(Map<?, ?> props) {
-        super(CONFIG_DEF, props);
+        super(configDef(), props);
     }
 
     public boolean enableRemoteStorageSystem() {
@@ -481,6 +475,6 @@ public final class RemoteLogManagerConfig extends AbstractConfig {
     }
 
     public static void main(String[] args) {
-        System.out.println(CONFIG_DEF.toHtml(4, config -> "remote_log_manager_" + config));
+        System.out.println(configDef().toHtml(4, config -> "remote_log_manager_" + config));
     }
 }
