@@ -101,7 +101,8 @@ public class FenceProducersHandler extends AdminApiHandler.Unbatched<Coordinator
         InitProducerIdResponse response = (InitProducerIdResponse) abstractResponse;
 
         Errors error = Errors.forCode(response.data().errorCode());
-        if (error != Errors.NONE) {
+        // Concurrent Transaction is still a success for fencing old producers
+        if (error != Errors.NONE && error != Errors.CONCURRENT_TRANSACTIONS) {
             return handleError(key, error);
         }
 

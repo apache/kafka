@@ -27,6 +27,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.junit.jupiter.api.Test;
 
+import java.util.Arrays;
 import java.util.Set;
 
 import static java.util.Collections.emptyList;
@@ -66,19 +67,23 @@ public class FenceProducersHandlerTest {
 
         short epoch = 57;
         long producerId = 7;
-        InitProducerIdResponse response = new InitProducerIdResponse(new InitProducerIdResponseData()
-            .setProducerEpoch(epoch)
-            .setProducerId(producerId));
 
-        ApiResult<CoordinatorKey, ProducerIdAndEpoch> result = handler.handleSingleResponse(
-            node, key, response);
+        for (Errors successErr : Arrays.asList(Errors.NONE, Errors.CONCURRENT_TRANSACTIONS)) {
+            InitProducerIdResponse response = new InitProducerIdResponse(new InitProducerIdResponseData()
+                    .setErrorCode(successErr.code())
+                    .setProducerEpoch(epoch)
+                    .setProducerId(producerId));
 
-        assertEquals(emptyList(), result.unmappedKeys);
-        assertEquals(emptyMap(), result.failedKeys);
-        assertEquals(singleton(key), result.completedKeys.keySet());
+            ApiResult<CoordinatorKey, ProducerIdAndEpoch> result = handler.handleSingleResponse(
+                    node, key, response);
 
-        ProducerIdAndEpoch expected = new ProducerIdAndEpoch(producerId, epoch);
-        assertEquals(expected, result.completedKeys.get(key));
+            assertEquals(emptyList(), result.unmappedKeys);
+            assertEquals(emptyMap(), result.failedKeys);
+            assertEquals(singleton(key), result.completedKeys.keySet());
+
+            ProducerIdAndEpoch expected = new ProducerIdAndEpoch(producerId, epoch);
+            assertEquals(expected, result.completedKeys.get(key));
+        }
     }
 
     @Test
