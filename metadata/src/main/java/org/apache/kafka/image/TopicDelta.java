@@ -132,7 +132,7 @@ public final class TopicDelta {
      * Leader epoch bumps are a strict subset of all partition epoch bumps, so all partitions in electedLeaders will be in leaders.
      *
      * @param brokerId the broker id
-     * @return the list of partitions which the broker should remove, become leader, become/update leader, or become/update follower.
+     * @return the LocalReplicaChanges that cover changes in the broker
      */
     @SuppressWarnings("checkstyle:cyclomaticComplexity")
     public LocalReplicaChanges localChanges(int brokerId) {
