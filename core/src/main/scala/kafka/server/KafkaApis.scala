@@ -258,6 +258,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.LIST_CLIENT_METRICS_RESOURCES => handleListClientMetricsResources(request)
         case ApiKeys.ADD_RAFT_VOTER => forwardToControllerOrFail(request)
         case ApiKeys.REMOVE_RAFT_VOTER => forwardToControllerOrFail(request)
+        case ApiKeys.SHARE_GROUP_HEARTBEAT => handleShareGroupHeartbeatRequest(request).exceptionally(handleError)
+        case ApiKeys.SHARE_GROUP_DESCRIBE => handleShareGroupDescribeRequest(request).exceptionally(handleError)
         case ApiKeys.SHARE_FETCH => handleShareFetchRequest(request)
         case ApiKeys.SHARE_ACKNOWLEDGE => handleShareAcknowledgeRequest(request)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
@@ -3873,7 +3875,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
       }
     }
-
   }
 
   def handleGetTelemetrySubscriptionsRequest(request: RequestChannel.Request): Unit = {
@@ -3931,18 +3932,59 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
+  private def isShareGroupProtocolEnabled(): Boolean = {
+    val version = metadataCache.features().finalizedFeatures().getOrDefault(GroupVersion.FEATURE_NAME, 0.toShort)
+    config.groupCoordinatorRebalanceProtocols.contains(Group.GroupType.SHARE) && version >= GroupVersion.GV_2.featureLevel
+  }
+
+  def handleShareGroupHeartbeatRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    val shareGroupHeartbeatRequest = request.body[ShareGroupHeartbeatRequest]
+
+    if (!isShareGroupProtocolEnabled()) {
+      requestHelper.sendMaybeThrottle(request, shareGroupHeartbeatRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      CompletableFuture.completedFuture[Unit](())
+    } else {
+      // TODO: Implement the ShareGroupHeartbeatRequest handling
+      requestHelper.sendMaybeThrottle(request, shareGroupHeartbeatRequest.getErrorResponse(Errors.INVALID_REQUEST.exception))
+      CompletableFuture.completedFuture[Unit](())
+    }
+  }
+
+  def handleShareGroupDescribeRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    val shareGroupDescribeRequest = request.body[ShareGroupDescribeRequest]
+
+    if (!isShareGroupProtocolEnabled()) {
+      // The API is not supported by the "old" group coordinator (the default). If the
+      // new one is not enabled, we fail directly here.
+      requestHelper.sendMaybeThrottle(request, request.body[ConsumerGroupDescribeRequest].getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      CompletableFuture.completedFuture[Unit](())
+    } else {
+      // TODO: Implement the ShareGroupDescribeRequest handling
+      requestHelper.sendMaybeThrottle(request, shareGroupDescribeRequest.getErrorResponse(Errors.INVALID_REQUEST.exception))
+      CompletableFuture.completedFuture[Unit](())
+    }
+  }
+
   def handleShareFetchRequest(request: RequestChannel.Request): Unit = {
     val shareFetchRequest = request.body[ShareFetchRequest]
-    // TODO: Implement the ShareFetchRequest handling
-    requestHelper.sendMaybeThrottle(request, shareFetchRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-    CompletableFuture.completedFuture[Unit](())
+
+    if (!isShareGroupProtocolEnabled()) {
+      requestHelper.sendMaybeThrottle(request, shareFetchRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+    } else {
+      // TODO: Implement the ShareFetchRequest handling
+      requestHelper.sendMaybeThrottle(request, shareFetchRequest.getErrorResponse(Errors.INVALID_REQUEST.exception))
+    }
   }
 
   def handleShareAcknowledgeRequest(request: RequestChannel.Request): Unit = {
     val shareAcknowledgeRequest = request.body[ShareAcknowledgeRequest]
-    // TODO: Implement the ShareAcknowledgeRequest handling
-    requestHelper.sendMaybeThrottle(request, shareAcknowledgeRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-    CompletableFuture.completedFuture[Unit](())
+
+    if (!isShareGroupProtocolEnabled()) {
+      requestHelper.sendMaybeThrottle(request, shareAcknowledgeRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+    } else {
+      // TODO: Implement the ShareAcknowledgeRequest handling
+      requestHelper.sendMaybeThrottle(request, shareAcknowledgeRequest.getErrorResponse(Errors.INVALID_REQUEST.exception))
+    }
   }
 
   private def updateRecordConversionStats(request: RequestChannel.Request,
