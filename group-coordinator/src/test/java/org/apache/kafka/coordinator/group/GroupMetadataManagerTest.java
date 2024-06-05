@@ -12992,8 +12992,7 @@ public class GroupMetadataManagerTest {
         assertEquals(
             new StreamsInitializeResponseData()
                 .setErrorCode(Errors.STREAMS_INVALID_TOPOLOGY.code())
-                .setErrorMessage("Internal topics changelog do not exist.")
-            ,
+                .setErrorMessage("Internal topics changelog do not exist."),
             result.response()
         );
 

@@ -30,7 +30,6 @@ import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.InconsistentGroupProtocolException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
-import org.apache.kafka.common.errors.StreamsInvalidTopologyException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedAssignorException;
@@ -1610,11 +1609,11 @@ public class GroupMetadataManager {
         // TODO: For the POC, only check if internal topics exist
         Set<String> missingTopics = new HashSet<>();
         for (StreamsInitializeRequestData.Subtopology subtopology : subtopologies) {
-             for (StreamsInitializeRequestData.TopicInfo topic : subtopology.stateChangelogTopics()) {
-                 if (metadataImage.topics().getTopic(topic.name()) == null) {
-                     missingTopics.add(topic.name());
-                 }
-             }
+            for (StreamsInitializeRequestData.TopicInfo topic : subtopology.stateChangelogTopics()) {
+                if (metadataImage.topics().getTopic(topic.name()) == null) {
+                    missingTopics.add(topic.name());
+                }
+            }
             for (StreamsInitializeRequestData.TopicInfo topic : subtopology.repartitionSourceTopics()) {
                 if (metadataImage.topics().getTopic(topic.name()) == null) {
                     missingTopics.add(topic.name());

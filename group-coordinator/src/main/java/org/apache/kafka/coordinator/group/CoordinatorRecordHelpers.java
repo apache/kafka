@@ -55,6 +55,7 @@ import java.util.stream.Collectors;
  * This class contains helper methods to create records stored in
  * the __consumer_offsets topic.
  */
+@SuppressWarnings("ClassDataAbstractionCoupling")
 public class CoordinatorRecordHelpers {
     private CoordinatorRecordHelpers() {}
 
