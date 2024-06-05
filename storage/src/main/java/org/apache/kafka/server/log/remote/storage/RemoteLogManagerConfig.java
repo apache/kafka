@@ -435,15 +435,19 @@ public final class RemoteLogManagerConfig extends AbstractConfig {
     }
 
     public Map<String, Object> remoteStorageManagerProps() {
-        return Collections.unmodifiableMap(getString(REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP) != null
-                ? originalsWithPrefix(getString(REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP))
-                : Collections.emptyMap());
+        return getConfigProps(REMOTE_STORAGE_MANAGER_CONFIG_PREFIX_PROP);
     }
 
     public Map<String, Object> remoteLogMetadataManagerProps() {
-        return Collections.unmodifiableMap(getString(REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP) != null
-                ? originalsWithPrefix(getString(REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP))
-                : Collections.emptyMap());
+        return getConfigProps(REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX_PROP);
+    }
+
+    public Map<String, Object> getConfigProps(String configPrefixProp) {
+        String prefixProp = getString(configPrefixProp);
+        Map<String, Object> configProps = (prefixProp != null)
+                ? originalsWithPrefix(prefixProp)
+                : Collections.emptyMap();
+        return configProps.isEmpty() ? configProps : Collections.unmodifiableMap(configProps);
     }
 
     public long remoteLogManagerCopyMaxBytesPerSecond() {
