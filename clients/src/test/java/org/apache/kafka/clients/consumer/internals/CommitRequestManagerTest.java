@@ -593,7 +593,7 @@ public class CommitRequestManagerTest {
 
     @ParameterizedTest
     @MethodSource("offsetFetchExceptionSupplier")
-    public void testOffsetFetchRequestErroredRequests(final Errors error, final boolean isRetriable) {
+    public void testOffsetFetchRequestErroredRequests(final Errors error) {
         CommitRequestManager commitRequestManager = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
 
@@ -605,7 +605,7 @@ public class CommitRequestManagerTest {
             1,
             error);
         // we only want to make sure to purge the outbound buffer for non-retriables, so retriable will be re-queued.
-        if (isRetriable)
+        if (isRetriableOnOffsetFetch(error))
             testRetriable(commitRequestManager, futures);
         else {
             testNonRetriable(futures);
@@ -615,8 +615,7 @@ public class CommitRequestManagerTest {
 
     @ParameterizedTest
     @MethodSource("offsetFetchExceptionSupplier")
-    public void testOffsetFetchRequestTimeoutRequests(final Errors error,
-                                                      final boolean isRetriable) {
+    public void testOffsetFetchRequestTimeoutRequests(final Errors error) {
         CommitRequestManager commitRequestManager = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
 
@@ -628,7 +627,7 @@ public class CommitRequestManagerTest {
                 1,
                 error);
 
-        if (isRetriable) {
+        if (isRetriableOnOffsetFetch(error)) {
             futures.forEach(f -> assertFalse(f.isDone()));
 
             // Insert a long enough sleep to force a timeout of the operation. Invoke poll() again so that each
@@ -642,6 +641,10 @@ public class CommitRequestManagerTest {
             futures.forEach(f -> assertFutureThrows(f, KafkaException.class));
             assertEmptyPendingRequests(commitRequestManager);
         }
+    }
+
+    private boolean isRetriableOnOffsetFetch(Errors error) {
+        return error == Errors.NOT_COORDINATOR || error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.COORDINATOR_NOT_AVAILABLE;
     }
 
     @Test
@@ -1152,21 +1155,21 @@ public class CommitRequestManagerTest {
     private static Stream<Arguments> offsetFetchExceptionSupplier() {
         // fetchCommit is only retrying on a subset of RetriableErrors
         return Stream.of(
-            Arguments.of(Errors.NOT_COORDINATOR, true),
-            Arguments.of(Errors.COORDINATOR_LOAD_IN_PROGRESS, true),
-            Arguments.of(Errors.UNKNOWN_SERVER_ERROR, false),
-            Arguments.of(Errors.GROUP_AUTHORIZATION_FAILED, false),
-            Arguments.of(Errors.OFFSET_METADATA_TOO_LARGE, false),
-            Arguments.of(Errors.INVALID_COMMIT_OFFSET_SIZE, false),
-            Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION, false),
-            Arguments.of(Errors.COORDINATOR_NOT_AVAILABLE, true),
-            Arguments.of(Errors.REQUEST_TIMED_OUT, false),
-            Arguments.of(Errors.FENCED_INSTANCE_ID, false),
-            Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED, false),
-            Arguments.of(Errors.UNKNOWN_MEMBER_ID, false),
+            Arguments.of(Errors.NOT_COORDINATOR),
+            Arguments.of(Errors.COORDINATOR_LOAD_IN_PROGRESS),
+            Arguments.of(Errors.UNKNOWN_SERVER_ERROR),
+            Arguments.of(Errors.GROUP_AUTHORIZATION_FAILED),
+            Arguments.of(Errors.OFFSET_METADATA_TOO_LARGE),
+            Arguments.of(Errors.INVALID_COMMIT_OFFSET_SIZE),
+            Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION),
+            Arguments.of(Errors.COORDINATOR_NOT_AVAILABLE),
+            Arguments.of(Errors.REQUEST_TIMED_OUT),
+            Arguments.of(Errors.FENCED_INSTANCE_ID),
+            Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED),
+            Arguments.of(Errors.UNKNOWN_MEMBER_ID),
             // Adding STALE_MEMBER_EPOCH as non-retriable here because it is only retried if a new
             // member epoch is received. Tested separately.
-            Arguments.of(Errors.STALE_MEMBER_EPOCH, false));
+            Arguments.of(Errors.STALE_MEMBER_EPOCH));
     }
 
     /**
