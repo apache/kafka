@@ -38,7 +38,7 @@ import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemo
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TopicBasedRemoteLogMetadataManagerConfigTest {
-    private final String bootstrapServers = "localhost:2222";
+    private static final String BOOTSTRAP_SERVERS = "localhost:2222";
 
     @Test
     public void testValidConfig() {
@@ -60,9 +60,9 @@ public class TopicBasedRemoteLogMetadataManagerConfigTest {
         assertEquals(props.get(REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP), rlmmConfig.metadataTopicPartitionsCount());
 
         // Check for common client configs.
-        assertEquals(bootstrapServers, rlmmConfig.commonProperties().get(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG));
-        assertEquals(bootstrapServers, rlmmConfig.producerProperties().get(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG));
-        assertEquals(bootstrapServers, rlmmConfig.consumerProperties().get(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG));
+        assertEquals(BOOTSTRAP_SERVERS, rlmmConfig.commonProperties().get(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG));
+        assertEquals(BOOTSTRAP_SERVERS, rlmmConfig.producerProperties().get(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG));
+        assertEquals(BOOTSTRAP_SERVERS, rlmmConfig.consumerProperties().get(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG));
 
         for (Map.Entry<String, Object> entry : commonClientConfig.entrySet()) {
             assertEquals(entry.getValue(), rlmmConfig.commonProperties().get(entry.getKey()));
@@ -111,7 +111,7 @@ public class TopicBasedRemoteLogMetadataManagerConfigTest {
                                                        Map<String, Object> producerConfig,
                                                        Map<String, Object> consumerConfig) {
         Map<String, Object> props = new HashMap<>();
-        props.put(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        props.put(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, BOOTSTRAP_SERVERS);
         props.put(BROKER_ID, 1);
         props.put(LOG_DIR, TestUtils.tempDirectory().getAbsolutePath());
         props.put(REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP, (short) 3);

@@ -42,8 +42,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class RemoteLogMetadataSerdeTest {
 
-    public final String topic = "foo";
-    private final TopicIdPartition tpId0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition(topic, 0));
+    public static final String TOPIC = "foo";
+    private static final TopicIdPartition TP0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition(TOPIC, 0));
     private final Time time = new SystemTime();
 
     @Test
@@ -69,20 +69,20 @@ public class RemoteLogMetadataSerdeTest {
         segLeaderEpochs.put(0, 0L);
         segLeaderEpochs.put(1, 20L);
         segLeaderEpochs.put(2, 80L);
-        RemoteLogSegmentId remoteLogSegmentId = new RemoteLogSegmentId(tpId0, Uuid.randomUuid());
+        RemoteLogSegmentId remoteLogSegmentId = new RemoteLogSegmentId(TP0, Uuid.randomUuid());
         return new RemoteLogSegmentMetadata(remoteLogSegmentId, 0L, 100L, -1L, 1, 
                 time.milliseconds(), 1024, Optional.of(new CustomMetadata(new byte[] {0, 1, 2, 3})),
                 COPY_SEGMENT_STARTED, segLeaderEpochs);
     }
 
     private RemoteLogSegmentMetadataUpdate createRemoteLogSegmentMetadataUpdate() {
-        RemoteLogSegmentId remoteLogSegmentId = new RemoteLogSegmentId(tpId0, Uuid.randomUuid());
+        RemoteLogSegmentId remoteLogSegmentId = new RemoteLogSegmentId(TP0, Uuid.randomUuid());
         return new RemoteLogSegmentMetadataUpdate(remoteLogSegmentId, time.milliseconds(),
                 Optional.of(new CustomMetadata(new byte[] {0, 1, 2, 3})), COPY_SEGMENT_FINISHED, 2);
     }
 
     private RemotePartitionDeleteMetadata createRemotePartitionDeleteMetadata() {
-        return new RemotePartitionDeleteMetadata(tpId0, DELETE_PARTITION_MARKED, time.milliseconds(), 0);
+        return new RemotePartitionDeleteMetadata(TP0, DELETE_PARTITION_MARKED, time.milliseconds(), 0);
     }
 
     private void doTestRemoteLogMetadataSerde(RemoteLogMetadata remoteLogMetadata) {

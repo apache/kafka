@@ -37,10 +37,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState.COPY_SEGMENT_STARTED;
 
 public class RemoteLogMetadataFormatterTest {
-    private final Uuid topicId = Uuid.randomUuid();
-    private final String topic = "foo";
-    private final TopicIdPartition tpId0 = new TopicIdPartition(topicId, new TopicPartition(topic, 0));
-    private final Uuid segmentId = Uuid.randomUuid();
+    private static final Uuid TOPIC_ID = Uuid.randomUuid();
+    private static final String TOPIC = "foo";
+    private static final TopicIdPartition TP0 = new TopicIdPartition(TOPIC_ID, new TopicPartition(TOPIC, 0));
+    private static final Uuid SEGMENT_ID = Uuid.randomUuid();
 
     @Test
     public void testFormat() throws IOException {
@@ -48,7 +48,7 @@ public class RemoteLogMetadataFormatterTest {
         segLeaderEpochs.put(0, 0L);
         segLeaderEpochs.put(1, 20L);
         segLeaderEpochs.put(2, 80L);
-        RemoteLogSegmentId remoteLogSegmentId = new RemoteLogSegmentId(tpId0, segmentId);
+        RemoteLogSegmentId remoteLogSegmentId = new RemoteLogSegmentId(TP0, SEGMENT_ID);
         Optional<CustomMetadata> customMetadata = Optional.of(new CustomMetadata(new byte[10]));
         RemoteLogSegmentMetadata remoteLogMetadata = new RemoteLogSegmentMetadata(
                 remoteLogSegmentId, 0L, 100L, -1L, 1, 123L, 1024, customMetadata, COPY_SEGMENT_STARTED,
@@ -65,7 +65,7 @@ public class RemoteLogMetadataFormatterTest {
                         "eventTimestampMs=123, segmentLeaderEpochs={0=0, 1=20, 2=80}, segmentSizeInBytes=1024, " +
                         "customMetadata=Optional[CustomMetadata{10 bytes}], " +
                         "state=COPY_SEGMENT_STARTED}\n",
-                topicId, segmentId);
+                TOPIC_ID, SEGMENT_ID);
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
              PrintStream ps = new PrintStream(baos)) {
             try (RemoteLogMetadataSerde.RemoteLogMetadataFormatter formatter =

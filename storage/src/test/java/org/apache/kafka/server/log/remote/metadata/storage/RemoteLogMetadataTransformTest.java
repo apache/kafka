@@ -40,7 +40,7 @@ import static org.apache.kafka.server.log.remote.storage.RemotePartitionDeleteSt
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class RemoteLogMetadataTransformTest {
-    private final TopicIdPartition tpId0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
+    private static final TopicIdPartition TP0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
     private final Time time = new SystemTime();
 
     @Test
@@ -57,7 +57,7 @@ public class RemoteLogMetadataTransformTest {
     public void testRemoteLogSegmentMetadataUpdateTransform() {
         RemoteLogSegmentMetadataUpdateTransform metadataUpdateTransform = new RemoteLogSegmentMetadataUpdateTransform();
         RemoteLogSegmentMetadataUpdate metadataUpdate = new RemoteLogSegmentMetadataUpdate(
-                new RemoteLogSegmentId(tpId0, Uuid.randomUuid()), time.milliseconds(),
+                new RemoteLogSegmentId(TP0, Uuid.randomUuid()), time.milliseconds(),
                 Optional.of(new CustomMetadata(new byte[]{0, 1, 2, 3})), COPY_SEGMENT_FINISHED, 1);
         ApiMessageAndVersion apiMessageAndVersion = metadataUpdateTransform.toApiMessageAndVersion(metadataUpdate);
         RemoteLogSegmentMetadataUpdate metadataUpdateFromRecord =
@@ -66,7 +66,7 @@ public class RemoteLogMetadataTransformTest {
     }
 
     private RemoteLogSegmentMetadata createRemoteLogSegmentMetadata() {
-        RemoteLogSegmentId remoteLogSegmentId = new RemoteLogSegmentId(tpId0, Uuid.randomUuid());
+        RemoteLogSegmentId remoteLogSegmentId = new RemoteLogSegmentId(TP0, Uuid.randomUuid());
         return new RemoteLogSegmentMetadata(remoteLogSegmentId, 0L, 100L, -1L, 1,
                 time.milliseconds(), 1024, Collections.singletonMap(0, 0L));
     }
@@ -75,7 +75,7 @@ public class RemoteLogMetadataTransformTest {
     public void testRemoteLogPartitionMetadataTransform() {
         RemotePartitionDeleteMetadataTransform transform = new RemotePartitionDeleteMetadataTransform();
         RemotePartitionDeleteMetadata partitionDeleteMetadata
-                = new RemotePartitionDeleteMetadata(tpId0, DELETE_PARTITION_STARTED, time.milliseconds(), 1);
+                = new RemotePartitionDeleteMetadata(TP0, DELETE_PARTITION_STARTED, time.milliseconds(), 1);
         ApiMessageAndVersion apiMessageAndVersion = transform.toApiMessageAndVersion(partitionDeleteMetadata);
         RemotePartitionDeleteMetadata partitionDeleteMetadataFromRecord =
                 transform.fromApiMessageAndVersion(apiMessageAndVersion);

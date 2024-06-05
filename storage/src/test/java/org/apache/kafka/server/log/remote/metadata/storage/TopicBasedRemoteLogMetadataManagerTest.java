@@ -53,7 +53,7 @@ import static org.mockito.Mockito.verify;
 @ExtendWith(ClusterTestExtensions.class)
 @ClusterTestDefaults(brokers = 3)
 public class TopicBasedRemoteLogMetadataManagerTest {
-    private final int segSize = 1048576;
+    private static final int SEG_SIZE = 1048576;
     private final ClusterInstance clusterInstance;
     private final RemotePartitionMetadataStore spyRemotePartitionMetadataEventHandler = spy(new RemotePartitionMetadataStore());
     private final Time time = new SystemTime();
@@ -140,12 +140,12 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         // has not yet been subscribing as they are not yet registered.
         RemoteLogSegmentMetadata leaderSegmentMetadata = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(newLeaderTopicIdPartition, Uuid.randomUuid()),
                                                                                 0, 100, -1L, 0,
-                                                                                time.milliseconds(), segSize, Collections.singletonMap(0, 0L));
+                                                                                time.milliseconds(), SEG_SIZE, Collections.singletonMap(0, 0L));
         assertThrows(Exception.class, () -> topicBasedRlmm().addRemoteLogSegmentMetadata(leaderSegmentMetadata).get());
 
         RemoteLogSegmentMetadata followerSegmentMetadata = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(newFollowerTopicIdPartition, Uuid.randomUuid()),
                                                                                 0, 100, -1L, 0,
-                                                                                time.milliseconds(), segSize, Collections.singletonMap(0, 0L));
+                                                                                time.milliseconds(), SEG_SIZE, Collections.singletonMap(0, 0L));
         assertThrows(Exception.class, () -> topicBasedRlmm().addRemoteLogSegmentMetadata(followerSegmentMetadata).get());
 
         // `listRemoteLogSegments` will receive an exception as these topic partitions are not yet registered.
@@ -194,11 +194,11 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         }).when(spyRemotePartitionMetadataEventHandler).handleRemoteLogSegmentMetadata(any());
 
         RemoteLogSegmentMetadata firstSegmentMetadata = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid()),
-                0, 100, -1L, 0, time.milliseconds(), segSize, Collections.singletonMap(0, 0L));
+                0, 100, -1L, 0, time.milliseconds(), SEG_SIZE, Collections.singletonMap(0, 0L));
         RemoteLogSegmentMetadata secondSegmentMetadata = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid()),
-                100, 200, -1L, 0, time.milliseconds(), segSize * 2, Collections.singletonMap(0, 0L));
+                100, 200, -1L, 0, time.milliseconds(), SEG_SIZE * 2, Collections.singletonMap(0, 0L));
         RemoteLogSegmentMetadata thirdSegmentMetadata = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid()),
-                200, 300, -1L, 0, time.milliseconds(), segSize * 3, Collections.singletonMap(0, 0L));
+                200, 300, -1L, 0, time.milliseconds(), SEG_SIZE * 3, Collections.singletonMap(0, 0L));
 
         topicBasedRemoteLogMetadataManager.addRemoteLogSegmentMetadata(firstSegmentMetadata);
         topicBasedRemoteLogMetadataManager.addRemoteLogSegmentMetadata(secondSegmentMetadata);
@@ -217,7 +217,7 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         verify(spyRemotePartitionMetadataEventHandler).handleRemoteLogSegmentMetadata(thirdSegmentMetadata);
         Long remoteLogSize = topicBasedRemoteLogMetadataManager.remoteLogSize(topicIdPartition, 0);
 
-        assertEquals(segSize * 6, remoteLogSize);
+        assertEquals(SEG_SIZE * 6, remoteLogSize);
     }
 
     @ClusterTest
@@ -239,11 +239,11 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         }).when(spyRemotePartitionMetadataEventHandler).handleRemoteLogSegmentMetadata(any());
 
         RemoteLogSegmentMetadata firstSegmentMetadata = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid()),
-                0, 100, -1L, 0, time.milliseconds(), segSize, Collections.singletonMap(0, 0L));
+                0, 100, -1L, 0, time.milliseconds(), SEG_SIZE, Collections.singletonMap(0, 0L));
         RemoteLogSegmentMetadata secondSegmentMetadata = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid()),
-                100, 200, -1L, 0, time.milliseconds(), segSize * 2, Collections.singletonMap(1, 100L));
+                100, 200, -1L, 0, time.milliseconds(), SEG_SIZE * 2, Collections.singletonMap(1, 100L));
         RemoteLogSegmentMetadata thirdSegmentMetadata = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid()),
-                200, 300, -1L, 0, time.milliseconds(), segSize * 3, Collections.singletonMap(2, 200L));
+                200, 300, -1L, 0, time.milliseconds(), SEG_SIZE * 3, Collections.singletonMap(2, 200L));
 
         topicBasedRemoteLogMetadataManager.addRemoteLogSegmentMetadata(firstSegmentMetadata);
         topicBasedRemoteLogMetadataManager.addRemoteLogSegmentMetadata(secondSegmentMetadata);
@@ -260,9 +260,9 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         verify(spyRemotePartitionMetadataEventHandler).handleRemoteLogSegmentMetadata(firstSegmentMetadata);
         verify(spyRemotePartitionMetadataEventHandler).handleRemoteLogSegmentMetadata(secondSegmentMetadata);
         verify(spyRemotePartitionMetadataEventHandler).handleRemoteLogSegmentMetadata(thirdSegmentMetadata);
-        assertEquals(segSize, topicBasedRemoteLogMetadataManager.remoteLogSize(topicIdPartition, 0));
-        assertEquals(segSize * 2, topicBasedRemoteLogMetadataManager.remoteLogSize(topicIdPartition, 1));
-        assertEquals(segSize * 3, topicBasedRemoteLogMetadataManager.remoteLogSize(topicIdPartition, 2));
+        assertEquals(SEG_SIZE, topicBasedRemoteLogMetadataManager.remoteLogSize(topicIdPartition, 0));
+        assertEquals(SEG_SIZE * 2, topicBasedRemoteLogMetadataManager.remoteLogSize(topicIdPartition, 1));
+        assertEquals(SEG_SIZE * 3, topicBasedRemoteLogMetadataManager.remoteLogSize(topicIdPartition, 2));
     }
 
     @ClusterTest
@@ -284,9 +284,9 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         }).when(spyRemotePartitionMetadataEventHandler).handleRemoteLogSegmentMetadata(any());
 
         RemoteLogSegmentMetadata firstSegmentMetadata = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid()),
-                0, 100, -1L, 0, time.milliseconds(), segSize, Collections.singletonMap(0, 0L));
+                0, 100, -1L, 0, time.milliseconds(), SEG_SIZE, Collections.singletonMap(0, 0L));
         RemoteLogSegmentMetadata secondSegmentMetadata = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid()),
-                100, 200, -1L, 0, time.milliseconds(), segSize * 2, Collections.singletonMap(1, 100L));
+                100, 200, -1L, 0, time.milliseconds(), SEG_SIZE * 2, Collections.singletonMap(1, 100L));
 
         topicBasedRemoteLogMetadataManager.addRemoteLogSegmentMetadata(firstSegmentMetadata);
         topicBasedRemoteLogMetadataManager.addRemoteLogSegmentMetadata(secondSegmentMetadata);
