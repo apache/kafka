@@ -73,6 +73,7 @@ import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
+import org.apache.kafka.connect.storage.AppliedConnectorConfig;
 import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.ConnectorOffsetBackingStore;
@@ -634,7 +635,7 @@ public class WorkerTest {
                 Collections.singletonMap(TASK_ID, origProps),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
-                Collections.singletonMap(CONNECTOR_ID, connectorConfigs),
+                Collections.singletonMap(CONNECTOR_ID, new AppliedConnectorConfig(connectorConfigs)),
                 Collections.emptySet(),
                 Collections.emptySet()
         );
@@ -690,7 +691,7 @@ public class WorkerTest {
                 Collections.singletonMap(TASK_ID, origProps),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
-                Collections.singletonMap(CONNECTOR_ID, connectorConfigs),
+                Collections.singletonMap(CONNECTOR_ID, new AppliedConnectorConfig(connectorConfigs)),
                 Collections.emptySet(),
                 Collections.emptySet()
         );
@@ -761,7 +762,7 @@ public class WorkerTest {
                 Collections.singletonMap(TASK_ID, origProps),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
-                Collections.singletonMap(CONNECTOR_ID, connectorConfigs),
+                Collections.singletonMap(CONNECTOR_ID, new AppliedConnectorConfig(connectorConfigs)),
                 Collections.emptySet(),
                 Collections.emptySet()
         );
@@ -2731,7 +2732,7 @@ public class WorkerTest {
                 Collections.singletonMap(TASK_ID, origProps),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
-                Collections.singletonMap(connName, connectorConfigs),
+                Collections.singletonMap(connName, new AppliedConnectorConfig(connectorConfigs)),
                 Collections.emptySet(),
                 Collections.emptySet()
         );

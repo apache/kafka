@@ -47,6 +47,7 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
+import org.apache.kafka.connect.storage.AppliedConnectorConfig;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
@@ -149,7 +150,7 @@ public class AbstractHerderTest {
             TASK_CONFIGS_MAP,
             Collections.emptyMap(),
             Collections.emptyMap(),
-            Collections.singletonMap(CONN1, CONN1_CONFIG),
+            Collections.singletonMap(CONN1, new AppliedConnectorConfig(CONN1_CONFIG)),
             Collections.emptySet(),
             Collections.emptySet());
     private static final ClusterConfigState SNAPSHOT_NO_TASKS = new ClusterConfigState(
@@ -161,7 +162,7 @@ public class AbstractHerderTest {
             Collections.emptyMap(),
             Collections.emptyMap(),
             Collections.emptyMap(),
-            Collections.singletonMap(CONN1, CONN1_CONFIG),
+            Collections.singletonMap(CONN1, new AppliedConnectorConfig(CONN1_CONFIG)),
             Collections.emptySet(),
             Collections.emptySet());
 
@@ -1176,7 +1177,7 @@ public class AbstractHerderTest {
                 TASK_CONFIGS_MAP,
                 Collections.emptyMap(),
                 Collections.emptyMap(),
-                Collections.singletonMap(CONN1, appliedConfig),
+                Collections.singletonMap(CONN1, new AppliedConnectorConfig(appliedConfig)),
                 Collections.emptySet(),
                 Collections.emptySet()
         );

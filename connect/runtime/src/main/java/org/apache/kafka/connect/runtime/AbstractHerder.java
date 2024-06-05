@@ -1056,9 +1056,9 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             }
         }
         if (!result) {
-            Map<String, String> currentConnectorConfig = configState.rawConnectorConfig(connName);
             Map<String, String> appliedConnectorConfig = configState.appliedConnectorConfig(connName);
-            if (!Objects.equals(currentConnectorConfig, appliedConnectorConfig)) {
+            Map<String, String> currentConnectorConfig = configState.connectorConfig(connName);
+            if (!Objects.equals(appliedConnectorConfig, currentConnectorConfig)) {
                 log.debug("Forcing task restart for connector {} as its configuration appears to be updated", connName);
                 result = true;
             }

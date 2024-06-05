@@ -42,6 +42,7 @@ import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.runtime.distributed.SampleConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
 import org.apache.kafka.connect.runtime.rest.entities.Message;
+import org.apache.kafka.connect.storage.AppliedConnectorConfig;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
@@ -387,7 +388,7 @@ public class StandaloneHerderTest {
                 Collections.singletonMap(taskId, taskConfig(SourceSink.SOURCE)),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
-                Collections.singletonMap(CONNECTOR_NAME, connectorConfig),
+                Collections.singletonMap(CONNECTOR_NAME, new AppliedConnectorConfig(connectorConfig)),
                 new HashSet<>(),
                 new HashSet<>(),
                 transformer);
@@ -421,7 +422,7 @@ public class StandaloneHerderTest {
                 Collections.singletonMap(new ConnectorTaskId(CONNECTOR_NAME, 0), taskConfig(SourceSink.SOURCE)),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
-                Collections.singletonMap(CONNECTOR_NAME, connectorConfig),
+                Collections.singletonMap(CONNECTOR_NAME, new AppliedConnectorConfig(connectorConfig)),
                 new HashSet<>(),
                 new HashSet<>(),
                 transformer);
@@ -557,7 +558,7 @@ public class StandaloneHerderTest {
                 Collections.singletonMap(taskId, taskConfig(SourceSink.SINK)),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
-                Collections.singletonMap(CONNECTOR_NAME, connectorConfig),
+                Collections.singletonMap(CONNECTOR_NAME, new AppliedConnectorConfig(connectorConfig)),
                 new HashSet<>(),
                 new HashSet<>(),
                 transformer);
@@ -612,7 +613,7 @@ public class StandaloneHerderTest {
                 Collections.singletonMap(taskId, taskConfig(SourceSink.SINK)),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
-                Collections.singletonMap(CONNECTOR_NAME, connectorConfig),
+                Collections.singletonMap(CONNECTOR_NAME, new AppliedConnectorConfig(connectorConfig)),
                 new HashSet<>(),
                 new HashSet<>(),
                 transformer);
@@ -947,7 +948,7 @@ public class StandaloneHerderTest {
                 Collections.emptyMap(),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
-                Collections.singletonMap(CONNECTOR_NAME, connectorConfig),
+                Collections.singletonMap(CONNECTOR_NAME, new AppliedConnectorConfig(connectorConfig)),
                 Collections.emptySet(),
                 Collections.emptySet()
         );
@@ -985,7 +986,7 @@ public class StandaloneHerderTest {
                 Collections.emptyMap(),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
-                Collections.singletonMap(CONNECTOR_NAME, connectorConfig),
+                Collections.singletonMap(CONNECTOR_NAME, new AppliedConnectorConfig(connectorConfig)),
                 Collections.emptySet(),
                 Collections.emptySet()
         );
@@ -1017,7 +1018,7 @@ public class StandaloneHerderTest {
                 Collections.emptyMap(),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
-                Collections.singletonMap(CONNECTOR_NAME, connectorConfig),
+                Collections.singletonMap(CONNECTOR_NAME, new AppliedConnectorConfig(connectorConfig)),
                 Collections.emptySet(),
                 Collections.emptySet()
         );
@@ -1103,7 +1104,7 @@ public class StandaloneHerderTest {
                 Collections.singletonMap(new ConnectorTaskId(CONNECTOR_NAME, 0), generatedTaskProps),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
-                Collections.singletonMap(CONNECTOR_NAME, connectorConfig),
+                Collections.singletonMap(CONNECTOR_NAME, new AppliedConnectorConfig(connectorConfig)),
                 new HashSet<>(),
                 new HashSet<>(),
                 transformer);

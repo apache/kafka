@@ -65,7 +65,7 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
         Map<String, Map<String, String>> connectorConfigs = new HashMap<>();
         Map<String, TargetState> connectorTargetStates = new HashMap<>();
         Map<ConnectorTaskId, Map<String, String>> taskConfigs = new HashMap<>();
-        Map<String, Map<String, String>> appliedConnectorConfigs = new HashMap<>();
+        Map<String, AppliedConnectorConfig> appliedConnectorConfigs = new HashMap<>();
 
         for (Map.Entry<String, ConnectorState> connectorStateEntry : connectors.entrySet()) {
             String connector = connectorStateEntry.getKey();
@@ -147,23 +147,7 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
         Map<ConnectorTaskId, Map<String, String>> taskConfigsMap = taskConfigListAsMap(connector, configs);
         state.taskConfigs = taskConfigsMap;
 
-        Map<String, String> rawConnectorConfig = state.connConfig;
-        Map<String, String> appliedConnectorConfig;
-        if (configTransformer != null) {
-            try {
-                appliedConnectorConfig = configTransformer.transform(rawConnectorConfig);
-            } catch (Throwable t) {
-                log.warn("Will not track applied config for connector {} due to error in transformation", connector, t);
-                appliedConnectorConfig = null;
-            }
-        } else {
-            appliedConnectorConfig = rawConnectorConfig;
-        }
-        if (appliedConnectorConfig != null) {
-            state.appliedConnConfig = appliedConnectorConfig;
-        } else {
-            state.appliedConnConfig = null;
-        }
+        state.applyConfig();
 
         if (updateListener != null)
             updateListener.onTaskConfigUpdate(taskConfigsMap.keySet());
@@ -215,7 +199,7 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
         private TargetState targetState;
         private Map<String, String> connConfig;
         private Map<ConnectorTaskId, Map<String, String>> taskConfigs;
-        private Map<String, String> appliedConnConfig;
+        private AppliedConnectorConfig appliedConnConfig;
 
         /**
          * @param connConfig the connector's configuration
@@ -227,6 +211,10 @@ public class MemoryConfigBackingStore implements ConfigBackingStore {
             this.connConfig = connConfig;
             this.taskConfigs = new HashMap<>();
             this.appliedConnConfig = null;
+        }
+
+        public void applyConfig() {
+            this.appliedConnConfig = new AppliedConnectorConfig(connConfig);
         }
     }
 

@@ -318,7 +318,7 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
 
     final Map<String, Integer> connectorTaskCountRecords = new HashMap<>();
     final Map<String, Integer> connectorTaskConfigGenerations = new HashMap<>();
-    final Map<String, Map<String, String>> appliedConnectorConfigs = new HashMap<>();
+    final Map<String, AppliedConnectorConfig> appliedConnectorConfigs = new HashMap<>();
     final Set<String> connectorsPendingFencing = new HashSet<>();
 
     private final WorkerConfigTransformer configTransformer;
@@ -1067,7 +1067,8 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
             // but compaction took place and both the original connector config and the
             // tombstone message for it have been removed from the config topic
             // We should ignore these task configs
-            if (!connectorConfigs.containsKey(connectorName)) {
+            Map<String, String> appliedConnectorConfig = connectorConfigs.get(connectorName);
+            if (appliedConnectorConfig == null) {
                 processConnectorRemoval(connectorName);
                 log.debug(
                         "Ignoring task configs for connector {}; it appears that the connector was deleted previously "
@@ -1126,23 +1127,10 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
                 }
                 inconsistent.remove(connectorName);
 
-                Map<String, String> rawConnectorConfig = connectorConfigs.get(connectorName);
-                Map<String, String> appliedConnectorConfig;
-                if (configTransformer != null) {
-                    try {
-                        appliedConnectorConfig = configTransformer.transform(rawConnectorConfig);
-                    } catch (Throwable t) {
-                        log.warn("Will not track applied config for connector {} due to error in transformation", connectorName, t);
-                        appliedConnectorConfig = null;
-                    }
-                } else {
-                    appliedConnectorConfig = rawConnectorConfig;
-                }
-                if (appliedConnectorConfig != null) {
-                    appliedConnectorConfigs.put(connectorName, appliedConnectorConfig);
-                } else {
-                    appliedConnectorConfigs.remove(connectorName);
-                }
+                appliedConnectorConfigs.put(
+                        connectorName,
+                        new AppliedConnectorConfig(appliedConnectorConfig)
+                );
             }
             // Always clear the deferred entries, even if we didn't apply them. If they represented an inconsistent
             // update, then we need to see a completely fresh set of configs after this commit message, so we don't
@@ -1354,5 +1342,6 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
         else
             throw new ConnectException("Expected integer value to be either Integer or Long");
     }
+
 }
 
