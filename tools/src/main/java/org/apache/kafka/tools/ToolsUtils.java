@@ -56,7 +56,7 @@ public class ToolsUtils {
                     outputFormat = doubleOutputFormat;
                 else
                     outputFormat = defaultOutputFormat;
-                System.out.printf((outputFormat) + "%n", entry.getKey(), entry.getValue());
+                System.out.printf(outputFormat + "%n", entry.getKey(), entry.getValue());
             }
         }
     }

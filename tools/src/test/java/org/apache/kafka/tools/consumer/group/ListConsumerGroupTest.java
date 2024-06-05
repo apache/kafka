@@ -17,7 +17,6 @@
 package org.apache.kafka.tools.consumer.group;
 
 import joptsimple.OptionException;
-import kafka.test.ClusterConfig;
 import kafka.test.ClusterInstance;
 import kafka.test.annotation.ClusterTemplate;
 import kafka.test.junit.ClusterTestExtensions;
