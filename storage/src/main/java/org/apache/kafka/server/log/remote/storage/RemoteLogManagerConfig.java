@@ -189,11 +189,11 @@ public final class RemoteLogManagerConfig extends AbstractConfig {
     public static final ConfigDef CONFIG_DEF;
 
     public static ConfigDef configDef() {
-        return CONFIG_DEF;
+        return new ConfigDef(CONFIG_DEF);
     }
 
     static {
-        CONFIG_DEF = new ConfigDef()
+        CONFIG_DEF = configDef()
                 .define(REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP,
                         BOOLEAN,
                         DEFAULT_REMOTE_LOG_STORAGE_SYSTEM_ENABLE,
