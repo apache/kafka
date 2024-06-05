@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.api.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
 import java.util.Map;
@@ -25,6 +26,7 @@ import java.util.Set;
 /**
  * The group metadata specifications required to compute the target assignment.
  */
+@InterfaceStability.Unstable
 public interface GroupSpec {
     /**
      * @return All the member Ids of the consumer group.

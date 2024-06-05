@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.api.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Optional;
 import java.util.Set;
@@ -24,6 +25,7 @@ import java.util.Set;
 /**
  * Interface representing the subscription metadata for a group member.
  */
+@InterfaceStability.Unstable
 public interface MemberSubscriptionSpec {
     /**
      * Gets the rack Id if present.

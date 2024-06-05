@@ -21,8 +21,8 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 /**
  * Server-side partition assignor for consumer groups used by the GroupCoordinator.
  *
- * The interface is kept in an internal module until KIP-848 is fully
- * implemented and ready to be released.
+ * The new consumer group protocol is in preview so this interface is considered
+ * unstable until Apache Kafka 4.0.
  */
 @InterfaceStability.Unstable
 public interface ConsumerGroupPartitionAssignor extends PartitionAssignor {

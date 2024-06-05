@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.api.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Map;
 import java.util.Objects;
@@ -25,6 +26,7 @@ import java.util.Set;
 /**
  * The partition assignment for a consumer group member.
  */
+@InterfaceStability.Unstable
 public class MemberAssignment {
     /**
      * The target partitions assigned to this member keyed by topicId.
