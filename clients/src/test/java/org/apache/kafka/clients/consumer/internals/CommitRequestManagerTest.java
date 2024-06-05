@@ -800,7 +800,7 @@ public class CommitRequestManagerTest {
      */
     @ParameterizedTest
     @MethodSource("offsetCommitExceptionSupplier")
-    public void testOffsetCommitSyncFailedWithRetriableThrowsTimeoutWhenRetryTimeExpires(final Errors error, final boolean isRetriable) {
+    public void testOffsetCommitSyncFailedWithRetriableThrowsTimeoutWhenRetryTimeExpires(final Errors error) {
         CommitRequestManager commitRequestManager = create(false, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
 
@@ -820,7 +820,7 @@ public class CommitRequestManagerTest {
         assertEquals(0, res.unsentRequests.size());
         assertTrue(commitResult.isDone());
 
-        if (isRetriable)
+        if (error.exception() instanceof RetriableException)
             assertFutureThrows(commitResult, TimeoutException.class);
         else
             assertFutureThrows(commitResult, KafkaException.class);
@@ -1131,18 +1131,19 @@ public class CommitRequestManagerTest {
      */
     private static Stream<Arguments> offsetCommitExceptionSupplier() {
         return Stream.of(
-            Arguments.of(Errors.NOT_COORDINATOR, true),
-            Arguments.of(Errors.COORDINATOR_LOAD_IN_PROGRESS, true),
-            Arguments.of(Errors.UNKNOWN_SERVER_ERROR, false),
-            Arguments.of(Errors.GROUP_AUTHORIZATION_FAILED, false),
-            Arguments.of(Errors.OFFSET_METADATA_TOO_LARGE, false),
-            Arguments.of(Errors.INVALID_COMMIT_OFFSET_SIZE, false),
-            Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION, false),
-            Arguments.of(Errors.COORDINATOR_NOT_AVAILABLE, true),
-            Arguments.of(Errors.REQUEST_TIMED_OUT, false),
-            Arguments.of(Errors.FENCED_INSTANCE_ID, false),
-            Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED, false),
-            Arguments.of(Errors.UNKNOWN_MEMBER_ID, false));
+            Arguments.of(Errors.NOT_COORDINATOR),
+            Arguments.of(Errors.COORDINATOR_LOAD_IN_PROGRESS),
+            Arguments.of(Errors.UNKNOWN_SERVER_ERROR),
+            Arguments.of(Errors.GROUP_AUTHORIZATION_FAILED),
+            Arguments.of(Errors.OFFSET_METADATA_TOO_LARGE),
+            Arguments.of(Errors.INVALID_COMMIT_OFFSET_SIZE),
+            Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION),
+            Arguments.of(Errors.COORDINATOR_NOT_AVAILABLE),
+            Arguments.of(Errors.REQUEST_TIMED_OUT),
+            Arguments.of(Errors.FENCED_INSTANCE_ID),
+            Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED),
+            Arguments.of(Errors.STALE_MEMBER_EPOCH),
+            Arguments.of(Errors.UNKNOWN_MEMBER_ID));
     }
 
     // Supplies (error, isRetriable)
