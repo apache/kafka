@@ -16,6 +16,7 @@
  */
 package kafka.log.remote;
 
+import com.yammer.metrics.core.Timer;
 import kafka.log.remote.quota.RLMQuotaManager;
 import kafka.server.BrokerTopicStats;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
@@ -36,12 +37,14 @@ public class RemoteLogReader implements Callable<Void> {
     private final BrokerTopicStats brokerTopicStats;
     private final Consumer<RemoteLogReadResult> callback;
     private final RLMQuotaManager quotaManager;
+    private final Timer remoteReadTimer;
 
     public RemoteLogReader(RemoteStorageFetchInfo fetchInfo,
                            RemoteLogManager rlm,
                            Consumer<RemoteLogReadResult> callback,
                            BrokerTopicStats brokerTopicStats,
-                           RLMQuotaManager quotaManager) {
+                           RLMQuotaManager quotaManager,
+                           Timer remoteReadTimer) {
         this.fetchInfo = fetchInfo;
         this.rlm = rlm;
         this.brokerTopicStats = brokerTopicStats;
@@ -49,6 +52,7 @@ public class RemoteLogReader implements Callable<Void> {
         this.brokerTopicStats.topicStats(fetchInfo.topicPartition.topic()).remoteFetchRequestRate().mark();
         this.brokerTopicStats.allTopicsStats().remoteFetchRequestRate().mark();
         this.quotaManager = quotaManager;
+        this.remoteReadTimer = remoteReadTimer;
         logger = new LogContext() {
             @Override
             public String logPrefix() {
@@ -61,12 +65,13 @@ public class RemoteLogReader implements Callable<Void> {
     public Void call() {
         RemoteLogReadResult result;
         try {
-            logger.debug("Reading records from remote storage for topic partition {}", fetchInfo.topicPartition);
-
-            FetchDataInfo fetchDataInfo = rlm.read(fetchInfo);
-            brokerTopicStats.topicStats(fetchInfo.topicPartition.topic()).remoteFetchBytesRate().mark(fetchDataInfo.records.sizeInBytes());
-            brokerTopicStats.allTopicsStats().remoteFetchBytesRate().mark(fetchDataInfo.records.sizeInBytes());
-            result = new RemoteLogReadResult(Optional.of(fetchDataInfo), Optional.empty());
+            result = remoteReadTimer.time(() -> {
+                logger.debug("Reading records from remote storage for topic partition {}", fetchInfo.topicPartition);
+                FetchDataInfo fetchDataInfo = rlm.read(fetchInfo);
+                brokerTopicStats.topicStats(fetchInfo.topicPartition.topic()).remoteFetchBytesRate().mark(fetchDataInfo.records.sizeInBytes());
+                brokerTopicStats.allTopicsStats().remoteFetchBytesRate().mark(fetchDataInfo.records.sizeInBytes());
+                return new RemoteLogReadResult(Optional.of(fetchDataInfo), Optional.empty());
+            });
         } catch (OffsetOutOfRangeException e) {
             result = new RemoteLogReadResult(Optional.empty(), Optional.of(e));
         } catch (Exception e) {
@@ -75,11 +80,9 @@ public class RemoteLogReader implements Callable<Void> {
             logger.error("Error occurred while reading the remote data for {}", fetchInfo.topicPartition, e);
             result = new RemoteLogReadResult(Optional.empty(), Optional.of(e));
         }
-
         logger.debug("Finished reading records from remote storage for topic partition {}", fetchInfo.topicPartition);
         quotaManager.record(result.fetchDataInfo.map(fetchDataInfo -> fetchDataInfo.records.sizeInBytes()).orElse(0));
         callback.accept(result);
-
         return null;
     }
 }
