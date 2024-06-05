@@ -58,11 +58,19 @@ import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.ApplicationState;
+import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
+import org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
+import org.apache.kafka.streams.processor.assignment.TaskInfo;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
+import org.apache.kafka.streams.processor.internals.assignment.DefaultApplicationState;
+import org.apache.kafka.streams.processor.internals.assignment.DefaultTaskInfo;
+import org.apache.kafka.streams.processor.internals.assignment.DefaultTaskTopicPartition;
 import org.apache.kafka.streams.processor.internals.assignment.FallbackPriorTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
@@ -76,6 +84,7 @@ import org.apache.kafka.test.MockInternalTopicManager;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.mockito.ArgumentCaptor;
@@ -174,6 +183,8 @@ public class StreamsPartitionAssignorTest {
     // We need this rule because we would like to combine Parameterised tests with strict Mockito stubs.
     @Rule
     public MockitoRule rule = MockitoJUnit.rule().strictness(Strictness.STRICT_STUBS);
+    @Rule
+    public Timeout timeout = new Timeout(30_000);
 
     private static final String CONSUMER_1 = "consumer1";
     private static final String CONSUMER_2 = "consumer2";
@@ -233,7 +244,8 @@ public class StreamsPartitionAssignorTest {
     @Captor
     private ArgumentCaptor<Map<TopicPartition, PartitionInfo>> topicPartitionInfoCaptor;
     private final Map<String, Subscription> subscriptions = new HashMap<>();
-    private final Class<? extends TaskAssignor> taskAssignor;
+    private final Class<? extends TaskAssignor> internalTaskAssignor;
+    private final Class<? extends org.apache.kafka.streams.processor.assignment.TaskAssignor> customTaskAssignor;
     private final String rackAwareAssignorStrategy;
     private Map<String, String> clientTags;
 
@@ -253,8 +265,13 @@ public class StreamsPartitionAssignorTest {
         referenceContainer.time = time;
         referenceContainer.clientTags = clientTags != null ? clientTags : EMPTY_CLIENT_TAGS;
         configurationMap.put(InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
-        configurationMap.put(InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, taskAssignor.getName());
         configurationMap.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG, rackAwareAssignorStrategy);
+        if (internalTaskAssignor != null) {
+            configurationMap.put(InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, internalTaskAssignor.getName());
+        }
+        if (customTaskAssignor != null) {
+            configurationMap.put(StreamsConfig.TASK_ASSIGNOR_CLASS_CONFIG, customTaskAssignor.getName());
+        }
         return configurationMap;
     }
 
@@ -329,20 +346,26 @@ public class StreamsPartitionAssignorTest {
         return mockInternalTopicManager;
     }
 
-    @Parameterized.Parameters(name = "task assignor = {0}, rack aware assignor = {1}")
+    @Parameterized.Parameters(name = "internal task assignor = {0}, rack aware assignor = {1}, custom task assignor = {2}")
     public static Collection<Object[]> parameters() {
         return asList(
-            new Object[]{HighAvailabilityTaskAssignor.class, true},
-            new Object[]{HighAvailabilityTaskAssignor.class, false},
-            new Object[]{StickyTaskAssignor.class, true},
-            new Object[]{StickyTaskAssignor.class, false},
-            new Object[]{FallbackPriorTaskAssignor.class, true},
-            new Object[]{FallbackPriorTaskAssignor.class, false}
+            new Object[]{HighAvailabilityTaskAssignor.class, true, null},
+            new Object[]{HighAvailabilityTaskAssignor.class, false, null},
+            new Object[]{StickyTaskAssignor.class, true, null},
+            new Object[]{StickyTaskAssignor.class, false, null},
+            new Object[]{FallbackPriorTaskAssignor.class, true, null},
+            new Object[]{FallbackPriorTaskAssignor.class, false, null},
+            new Object[]{null, false, org.apache.kafka.streams.processor.assignment.assignors.StickyTaskAssignor.class},
+            new Object[]{null, true, org.apache.kafka.streams.processor.assignment.assignors.StickyTaskAssignor.class},
+            new Object[]{HighAvailabilityTaskAssignor.class, false, org.apache.kafka.streams.processor.assignment.assignors.StickyTaskAssignor.class}
         );
     }
 
-    public StreamsPartitionAssignorTest(final Class<? extends TaskAssignor> taskAssignor, final boolean enableRackAwareAssignor) {
-        this.taskAssignor = taskAssignor;
+    public StreamsPartitionAssignorTest(final Class<? extends TaskAssignor> internalTaskAssignor,
+                                        final boolean enableRackAwareAssignor,
+                                        final Class<? extends org.apache.kafka.streams.processor.assignment.TaskAssignor> customTaskAssignor) {
+        this.internalTaskAssignor = internalTaskAssignor;
+        this.customTaskAssignor = customTaskAssignor;
         rackAwareAssignorStrategy = enableRackAwareAssignor ? StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC : StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE;
         adminClient = createMockAdminClientForAssignor(EMPTY_CHANGELOG_END_OFFSETS);
         topologyMetadata = new TopologyMetadata(builder, new StreamsConfig(configProps()));
@@ -623,7 +646,20 @@ public class StreamsPartitionAssignorTest {
             singletonList(APPLICATION_ID + "-store-changelog"),
             singletonList(3))
         );
-        configureDefaultPartitionAssignor();
+
+        final List<Map<String, List<TopicPartitionInfo>>> partitionInfo = singletonList(mkMap(mkEntry(
+                "stream-partition-assignor-test-store-changelog",
+                singletonList(
+                    new TopicPartitionInfo(
+                        0,
+                        new Node(1, "h1", 80),
+                        singletonList(new Node(1, "h1", 80)),
+                        emptyList()
+                    )
+                )
+            )
+        ));
+        configurePartitionAssignorWith(emptyMap(), partitionInfo);
 
         subscriptions.put("consumer10",
                           new Subscription(
@@ -2357,7 +2393,19 @@ public class StreamsPartitionAssignorTest {
                           ));
 
         configureDefault();
-        overwriteInternalTopicManagerWithMock(true);
+        final List<Map<String, List<TopicPartitionInfo>>> partitionInfo = singletonList(mkMap(mkEntry(
+                "stream-partition-assignor-test-store-changelog",
+                singletonList(
+                    new TopicPartitionInfo(
+                        0,
+                        new Node(1, "h1", 80),
+                        singletonList(new Node(1, "h1", 80)),
+                        emptyList()
+                    )
+                )
+            )
+        ));
+        overwriteInternalTopicManagerWithMock(true, partitionInfo);
 
         partitionAssignor.assign(metadata, new GroupSubscription(subscriptions));
     }
@@ -2398,7 +2446,19 @@ public class StreamsPartitionAssignorTest {
             ));
 
         configureDefault();
-        overwriteInternalTopicManagerWithMock(false);
+        final List<Map<String, List<TopicPartitionInfo>>> partitionInfo = singletonList(mkMap(mkEntry(
+                "stream-partition-assignor-test-store-changelog",
+                singletonList(
+                    new TopicPartitionInfo(
+                        0,
+                        new Node(1, "h1", 80),
+                        singletonList(new Node(1, "h1", 80)),
+                        emptyList()
+                    )
+                )
+            )
+        ));
+        overwriteInternalTopicManagerWithMock(false, partitionInfo);
 
         partitionAssignor.assign(metadata, new GroupSubscription(subscriptions));
 
@@ -2551,6 +2611,123 @@ public class StreamsPartitionAssignorTest {
         assertEquals(singletonList("input"), subscription.topics());
         assertEquals(info, SubscriptionInfo.decode(subscription.userData()));
         assertEquals(clientTags, partitionAssignor.clientTags());
+    }
+
+    @Test
+    public void testValidateTaskAssignment() {
+        createDefaultMockTaskManager();
+        configureDefaultPartitionAssignor();
+
+        final StreamsConfig streamsConfig = new StreamsConfig(configProps());
+        final AssignmentConfigs assignmentConfigs = AssignmentConfigs.of(streamsConfig);
+        final Set<TaskInfo> tasks = mkSet(
+            new DefaultTaskInfo(
+                new TaskId(1, 1),
+                false,
+                mkSet(),
+                mkSet(
+                    new DefaultTaskTopicPartition(
+                        new TopicPartition("t1", 1),
+                        true,
+                        false,
+                        () -> { }
+                    )
+                )
+            )
+        );
+
+        final UUID clientUuid1 = UUID.randomUUID();
+        final UUID clientUuid2 = UUID.randomUUID();
+        final Map<UUID, StreamsPartitionAssignor.ClientMetadata> clients = mkMap(
+            mkEntry(clientUuid1, new StreamsPartitionAssignor.ClientMetadata(clientUuid1, "endpoint1:80", mkMap(), Optional.empty())),
+            mkEntry(clientUuid2, new StreamsPartitionAssignor.ClientMetadata(clientUuid1, "endpoint2:80", mkMap(), Optional.empty()))
+        );
+        final ApplicationState applicationState = new DefaultApplicationState(
+            assignmentConfigs,
+            tasks.stream().collect(Collectors.toMap(
+                TaskInfo::id,
+                t -> t
+            )),
+            clients
+        );
+
+        // ****
+        final org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment noError = new org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment(
+            mkSet(
+                KafkaStreamsAssignment.of(new ProcessId(clientUuid1), mkSet(
+                    new KafkaStreamsAssignment.AssignedTask(
+                        new TaskId(1, 1), KafkaStreamsAssignment.AssignedTask.Type.ACTIVE
+                    )
+                )),
+                KafkaStreamsAssignment.of(new ProcessId(clientUuid2), mkSet())
+            )
+        );
+        org.apache.kafka.streams.processor.assignment.TaskAssignor.AssignmentError error = partitionAssignor.validateTaskAssignment(applicationState, noError);
+        assertEquals(org.apache.kafka.streams.processor.assignment.TaskAssignor.AssignmentError.NONE, error);
+
+        // ****
+        final org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment missingProcessId = new org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment(
+            mkSet(
+                KafkaStreamsAssignment.of(new ProcessId(clientUuid1), mkSet(
+                    new KafkaStreamsAssignment.AssignedTask(
+                        new TaskId(1, 1), KafkaStreamsAssignment.AssignedTask.Type.ACTIVE
+                    )
+                ))
+            )
+        );
+        error = partitionAssignor.validateTaskAssignment(applicationState, missingProcessId);
+        assertEquals(org.apache.kafka.streams.processor.assignment.TaskAssignor.AssignmentError.MISSING_PROCESS_ID, error);
+
+        // ****
+        final org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment unknownProcessId = new org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment(
+            mkSet(
+                KafkaStreamsAssignment.of(new ProcessId(clientUuid1), mkSet(
+                    new KafkaStreamsAssignment.AssignedTask(
+                        new TaskId(1, 1), KafkaStreamsAssignment.AssignedTask.Type.ACTIVE
+                    )
+                )),
+                KafkaStreamsAssignment.of(new ProcessId(clientUuid2), mkSet()),
+                KafkaStreamsAssignment.of(new ProcessId(UUID.randomUUID()), mkSet())
+            )
+        );
+        error = partitionAssignor.validateTaskAssignment(applicationState, unknownProcessId);
+        assertEquals(org.apache.kafka.streams.processor.assignment.TaskAssignor.AssignmentError.UNKNOWN_PROCESS_ID, error);
+
+        // ****
+        final org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment unknownTaskId = new org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment(
+            mkSet(
+                KafkaStreamsAssignment.of(new ProcessId(clientUuid1), mkSet(
+                    new KafkaStreamsAssignment.AssignedTask(
+                        new TaskId(1, 1), KafkaStreamsAssignment.AssignedTask.Type.ACTIVE
+                    )
+                )),
+                KafkaStreamsAssignment.of(new ProcessId(clientUuid2), mkSet(
+                    new KafkaStreamsAssignment.AssignedTask(
+                        new TaskId(13, 13), KafkaStreamsAssignment.AssignedTask.Type.ACTIVE
+                    )
+                ))
+            )
+        );
+        error = partitionAssignor.validateTaskAssignment(applicationState, unknownTaskId);
+        assertEquals(org.apache.kafka.streams.processor.assignment.TaskAssignor.AssignmentError.UNKNOWN_TASK_ID, error);
+
+        // ****
+        final org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment activeTaskDuplicated = new org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment(
+            mkSet(
+                KafkaStreamsAssignment.of(new ProcessId(clientUuid1), mkSet(
+                    new KafkaStreamsAssignment.AssignedTask(
+                        new TaskId(1, 1), KafkaStreamsAssignment.AssignedTask.Type.ACTIVE
+                    )
+                )),
+                KafkaStreamsAssignment.of(new ProcessId(clientUuid2), mkSet(
+                    new KafkaStreamsAssignment.AssignedTask(
+                        new TaskId(1, 1), KafkaStreamsAssignment.AssignedTask.Type.ACTIVE
+                    )
+                ))
+            )
+        );
+        error = partitionAssignor.validateTaskAssignment(applicationState, activeTaskDuplicated);
+        assertEquals(org.apache.kafka.streams.processor.assignment.TaskAssignor.AssignmentError.ACTIVE_TASK_ASSIGNED_MULTIPLE_TIMES, error);
     }
 
     private static class CorruptedInternalTopologyBuilder extends InternalTopologyBuilder {
