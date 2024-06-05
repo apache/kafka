@@ -260,9 +260,9 @@ public abstract class InsertField<R extends ConnectRecord<R>> implements Transfo
         return builder.build();
     }
 
-    private void addField(InsertionSpec spec, SchemaBuilder builder, Schema optionalStringSchema, Schema stringSchema) {
+    private void addField(InsertionSpec spec, SchemaBuilder builder, Schema optionalSchema, Schema schema) {
         if (spec != null) {
-            builder.field(spec.name, spec.optional ? optionalStringSchema : stringSchema);
+            builder.field(spec.name, spec.optional ? optionalSchema : schema);
         }
     }
 
