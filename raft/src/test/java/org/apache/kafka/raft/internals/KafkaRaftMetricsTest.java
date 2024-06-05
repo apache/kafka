@@ -22,7 +22,6 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.LogOffsetMetadata;
 import org.apache.kafka.raft.MockQuorumStateStore;
 import org.apache.kafka.raft.OffsetAndEpoch;
@@ -38,7 +37,6 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Random;
-import java.util.Set;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -100,7 +98,6 @@ public class KafkaRaftMetricsTest {
     @ValueSource(shorts = {0, 1})
     public void shouldRecordVoterQuorumState(short kraftVersion) {
         boolean withDirectoryId = kraftVersion > 0;
-        Set<Integer> voterSet = Utils.mkSet(localId, 1, 2);
         Map<Integer, VoterSet.VoterNode> voterMap = VoterSetTest.voterMap(IntStream.of(1, 2), withDirectoryId);
         voterMap.put(
             localId,
@@ -150,7 +147,7 @@ public class KafkaRaftMetricsTest {
         assertEquals((double) 1, getMetric(metrics, "current-epoch").metricValue());
         assertEquals((double) -1L, getMetric(metrics, "high-watermark").metricValue());
 
-        state.leaderStateOrThrow().updateLocalState(new LogOffsetMetadata(5L), voterSet);
+        state.leaderStateOrThrow().updateLocalState(new LogOffsetMetadata(5L), voters.voterIds());
         state.leaderStateOrThrow().updateReplicaState(1, 0, new LogOffsetMetadata(5L));
         assertEquals((double) 5L, getMetric(metrics, "high-watermark").metricValue());
 

@@ -289,18 +289,18 @@ public class LeaderStateTest {
     }
 
     @Test
-    public void testUpdateHighWatermarkAddingFollowerToVoterStates() {
+    public void testHighWatermarkDoesIncreaseFromNewVoter() {
         int node1 = 1;
         int node2 = 2;
         Set<Integer> originalVoterSet = mkSet(localId, node1);
-        LeaderState<?> state = newLeaderState(originalVoterSet, 10L);
+        LeaderState<?> state = newLeaderState(originalVoterSet, 5L);
         assertFalse(state.updateLocalState(new LogOffsetMetadata(15L), originalVoterSet));
-        assertFalse(state.updateReplicaState(node1, 0, new LogOffsetMetadata(10L)));
-        assertEquals(Optional.empty(), state.highWatermark());
+        assertTrue(state.updateReplicaState(node1, 0, new LogOffsetMetadata(10L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(10L)), state.highWatermark());
 
-        // updating replica state of 2 before it joins voterSet should not increase HW to 15L
+        // updating replica state of node2 before it joins voterSet should not increase HW to 15L
         assertFalse(state.updateReplicaState(node2, 0, new LogOffsetMetadata(15L)));
-        assertEquals(Optional.empty(), state.highWatermark());
+        assertEquals(Optional.of(new LogOffsetMetadata(10L)), state.highWatermark());
 
         // adding node2 to voterSet will cause HW to increase to 15L
         Set<Integer> voterSetWithNode2 = mkSet(localId, node1, node2);
@@ -311,6 +311,40 @@ public class LeaderStateTest {
         assertFalse(state.updateLocalState(new LogOffsetMetadata(16L), voterSetWithNode2));
         assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
         assertTrue(state.updateReplicaState(node2, 0, new LogOffsetMetadata(16L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(16L)), state.highWatermark());
+    }
+
+    @Test
+    public void testHighWatermarkDoesNotDecreaseFromNewVoter() {
+        int node1 = 1;
+        int node2 = 2;
+        int node3 = 3;
+        // start with three voters with HW at 15L
+        Set<Integer> originalVoterSet = mkSet(localId, node1, node2);
+        LeaderState<?> state = newLeaderState(originalVoterSet, 5L);
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(15L), originalVoterSet));
+        assertTrue(state.updateReplicaState(node1, 0, new LogOffsetMetadata(15L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+        assertFalse(state.updateReplicaState(node2, 0, new LogOffsetMetadata(10L)));
+
+        // updating replica state of node3 before it joins voterSet
+        assertFalse(state.updateReplicaState(node3, 0, new LogOffsetMetadata(10L)));
+
+        // adding node3 to voterSet should not cause HW to decrease even if majority is < HW
+        Set<Integer> voterSetWithNode3 = mkSet(localId, node1, node2, node3);
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(16L), voterSetWithNode3));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+
+        // HW will not decrease if calculated HW is anything lower than the last HW
+        assertFalse(state.updateReplicaState(node2, 0, new LogOffsetMetadata(13L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+        assertFalse(state.updateReplicaState(node3, 0, new LogOffsetMetadata(13L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+        assertFalse(state.updateReplicaState(node1, 0, new LogOffsetMetadata(16L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+
+        // HW will update to 16L once a majority of the voterSet is at least 16L
+        assertTrue(state.updateReplicaState(node3, 0, new LogOffsetMetadata(16L)));
         assertEquals(Optional.of(new LogOffsetMetadata(16L)), state.highWatermark());
     }
 
