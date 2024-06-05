@@ -24,7 +24,6 @@ import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteL
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
-import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
@@ -35,12 +34,13 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState.COPY_SEGMENT_STARTED;
 
 public class RemoteLogMetadataFormatterTest {
-    private static final Uuid TOPIC_ID = Uuid.randomUuid();
-    private static final String TOPIC = "foo";
-    private static final TopicIdPartition TP0 = new TopicIdPartition(TOPIC_ID, new TopicPartition(TOPIC, 0));
-    private static final Uuid SEGMENT_ID = Uuid.randomUuid();
+    private final Uuid topicId = Uuid.randomUuid();
+    private final String topic = "foo";
+    private final TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition(topic, 0));
+    private final Uuid segmentId = Uuid.randomUuid();
 
     @Test
     public void testFormat() throws IOException {
@@ -48,15 +48,15 @@ public class RemoteLogMetadataFormatterTest {
         segLeaderEpochs.put(0, 0L);
         segLeaderEpochs.put(1, 20L);
         segLeaderEpochs.put(2, 80L);
-        RemoteLogSegmentId remoteLogSegmentId = new RemoteLogSegmentId(TP0, SEGMENT_ID);
+        RemoteLogSegmentId remoteLogSegmentId = new RemoteLogSegmentId(tp0, segmentId);
         Optional<CustomMetadata> customMetadata = Optional.of(new CustomMetadata(new byte[10]));
         RemoteLogSegmentMetadata remoteLogMetadata = new RemoteLogSegmentMetadata(
-                remoteLogSegmentId, 0L, 100L, -1L, 1,
-                123L, 1024, customMetadata,
-                RemoteLogSegmentState.COPY_SEGMENT_STARTED, segLeaderEpochs);
+                remoteLogSegmentId, 0L, 100L, -1L, 1, 123L, 1024, customMetadata, COPY_SEGMENT_STARTED,
+                segLeaderEpochs);
 
         byte[] metadataBytes = new RemoteLogMetadataSerde().serialize(remoteLogMetadata);
-        ConsumerRecord<byte[], byte[]> metadataRecord = new ConsumerRecord<>("__remote_log_metadata", 0, 0, null, metadataBytes);
+        ConsumerRecord<byte[], byte[]> metadataRecord = new ConsumerRecord<>(
+                "__remote_log_metadata", 0, 0, null, metadataBytes);
 
         String expected = String.format(
                 "partition: 0, offset: 0, value: " +
@@ -65,12 +65,14 @@ public class RemoteLogMetadataFormatterTest {
                         "eventTimestampMs=123, segmentLeaderEpochs={0=0, 1=20, 2=80}, segmentSizeInBytes=1024, " +
                         "customMetadata=Optional[CustomMetadata{10 bytes}], " +
                         "state=COPY_SEGMENT_STARTED}\n",
-                TOPIC_ID, SEGMENT_ID);
+                topicId, segmentId);
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
              PrintStream ps = new PrintStream(baos)) {
-            RemoteLogMetadataSerde.RemoteLogMetadataFormatter formatter = new RemoteLogMetadataSerde.RemoteLogMetadataFormatter();
-            formatter.writeTo(metadataRecord, ps);
-            assertEquals(expected, baos.toString());
+            try (RemoteLogMetadataSerde.RemoteLogMetadataFormatter formatter =
+                         new RemoteLogMetadataSerde.RemoteLogMetadataFormatter()) {
+                formatter.writeTo(metadataRecord, ps);
+                assertEquals(expected, baos.toString());
+            }
         }
     }
 }
