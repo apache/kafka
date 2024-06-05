@@ -45,8 +45,8 @@ import static org.apache.kafka.streams.processor.internals.assignment.TaskMoveme
 
 public class HighAvailabilityTaskAssignor implements TaskAssignor {
     private static final Logger log = LoggerFactory.getLogger(HighAvailabilityTaskAssignor.class);
-    private static final int DEFAULT_STATEFUL_TRAFFIC_COST = 10;
-    private static final int DEFAULT_STATEFUL_NON_OVERLAP_COST = 1;
+    public static final int DEFAULT_HIGH_AVAILABILITY_TRAFFIC_COST = 10;
+    public static final int DEFAULT_HIGH_AVAILABILITY_NON_OVERLAP_COST = 1;
 
     @Override
     public boolean assign(final Map<UUID, ClientState> clients,
@@ -135,9 +135,9 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
 
         if (rackAwareTaskAssignor.canEnableRackAwareAssignor()) {
             final int trafficCost = configs.rackAwareAssignmentTrafficCost == null ?
-                DEFAULT_STATEFUL_TRAFFIC_COST : configs.rackAwareAssignmentTrafficCost;
+                DEFAULT_HIGH_AVAILABILITY_TRAFFIC_COST : configs.rackAwareAssignmentTrafficCost;
             final int nonOverlapCost = configs.rackAwareAssignmentNonOverlapCost == null ?
-                DEFAULT_STATEFUL_NON_OVERLAP_COST : configs.rackAwareAssignmentNonOverlapCost;
+                DEFAULT_HIGH_AVAILABILITY_NON_OVERLAP_COST : configs.rackAwareAssignmentNonOverlapCost;
             rackAwareTaskAssignor.optimizeActiveTasks(statefulTasks, clientStates, trafficCost, nonOverlapCost);
         }
     }
@@ -165,9 +165,9 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
 
         if (rackAwareTaskAssignor.canEnableRackAwareAssignor()) {
             final int trafficCost = configs.rackAwareAssignmentTrafficCost == null ?
-                DEFAULT_STATEFUL_TRAFFIC_COST : configs.rackAwareAssignmentTrafficCost;
+                DEFAULT_HIGH_AVAILABILITY_TRAFFIC_COST : configs.rackAwareAssignmentTrafficCost;
             final int nonOverlapCost = configs.rackAwareAssignmentNonOverlapCost == null ?
-                DEFAULT_STATEFUL_NON_OVERLAP_COST : configs.rackAwareAssignmentNonOverlapCost;
+                DEFAULT_HIGH_AVAILABILITY_NON_OVERLAP_COST : configs.rackAwareAssignmentNonOverlapCost;
             rackAwareTaskAssignor.optimizeStandbyTasks(clientStates, trafficCost, nonOverlapCost, standbyTaskAssignor::isAllowedTaskMovement);
         }
     }

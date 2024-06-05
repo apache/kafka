@@ -22,7 +22,6 @@ import org.apache.kafka.coordinator.group.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.assignor.SubscribedTopicDescriber;
 
-import java.util.Map;
 import java.util.stream.Collectors;
 
 public class NoOpPartitionAssignor implements ConsumerGroupPartitionAssignor {
@@ -35,11 +34,11 @@ public class NoOpPartitionAssignor implements ConsumerGroupPartitionAssignor {
 
     @Override
     public GroupAssignment assign(GroupSpec groupSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
-        return new GroupAssignment(groupSpec.members().entrySet()
+        return new GroupAssignment(groupSpec.memberIds()
             .stream()
             .collect(Collectors.toMap(
-                Map.Entry::getKey,
-                entry -> new MemberAssignment(entry.getValue().assignedPartitions())
+                memberId -> memberId,
+                memberId -> new MemberAssignment(groupSpec.memberAssignment(memberId))
             )));
     }
 }
