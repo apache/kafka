@@ -570,8 +570,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             Function.identity(),
             taskId -> {
                 final Set<String> stateStoreNames = topologyMetadata
-                    .stateStoreNameToSourceTopicsForTopology(taskId.topologyName())
-                    .keySet();
+                    .stateStoreNamesForSubtopology(taskId.topologyName(), taskId.subtopology());
                 final Set<TaskTopicPartition> topicPartitions = topicPartitionsForTask.get(taskId);
                 return new DefaultTaskInfo(
                     taskId,
