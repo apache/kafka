@@ -92,7 +92,7 @@ public class UpdateMetadataRequestTest {
                     .setIsr(asList(0, 1))
                     .setZkVersion(10)
                     .setReplicas(asList(0, 1, 2))
-                    .setOfflineReplicas(asList(2)),
+                    .setOfflineReplicas(Collections.singletonList(2)),
                 new UpdateMetadataPartitionState()
                     .setTopicName(topic0)
                     .setPartitionIndex(1)
@@ -143,7 +143,7 @@ public class UpdateMetadataRequestTest {
                     .setEndpoints(broker0Endpoints),
                 new UpdateMetadataBroker()
                     .setId(1)
-                    .setEndpoints(asList(
+                    .setEndpoints(Collections.singletonList(
                         new UpdateMetadataEndpoint()
                             .setHost("host1")
                             .setPort(9090)

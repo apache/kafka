@@ -28,7 +28,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -45,7 +44,7 @@ public class FrequenciesTest {
     public void setup() {
         config = new MetricConfig().eventWindow(50).samples(2);
         time = new MockTime();
-        metrics = new Metrics(config, Arrays.asList(new JmxReporter()), time, true);
+        metrics = new Metrics(config, Collections.singletonList(new JmxReporter()), time, true);
     }
 
     @AfterEach

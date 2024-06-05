@@ -54,7 +54,6 @@ public class TopicBasedRemoteLogMetadataManagerRestartTest {
 
     private TopicBasedRemoteLogMetadataManager createTopicBasedRemoteLogMetadataManager() {
         return RemoteLogMetadataManagerTestUtils.builder()
-                .topicIdPartitions(Collections.emptySet())
                 .bootstrapServers(clusterInstance.bootstrapServers())
                 .startConsumerThread(true)
                 .remoteLogMetadataTopicPartitioner(RemoteLogMetadataTopicPartitioner::new)

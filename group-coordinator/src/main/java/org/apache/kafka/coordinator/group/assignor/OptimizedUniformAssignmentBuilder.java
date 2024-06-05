@@ -101,9 +101,11 @@ public class OptimizedUniformAssignmentBuilder {
     OptimizedUniformAssignmentBuilder(GroupSpec groupSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
         this.groupSpec = groupSpec;
         this.subscribedTopicDescriber = subscribedTopicDescriber;
-        this.subscribedTopicIds = new HashSet<>(groupSpec.members().values().iterator().next().subscribedTopicIds());
+        this.subscribedTopicIds = new HashSet<>(groupSpec.memberSubscription(groupSpec.memberIds().iterator().next())
+            .subscribedTopicIds());
         this.unfilledMembers = new ArrayList<>();
         this.unassignedPartitions = new ArrayList<>();
+
         this.targetAssignment = new HashMap<>();
     }
 
@@ -135,7 +137,7 @@ public class OptimizedUniformAssignmentBuilder {
 
         // Compute the minimum required quota per member and the number of members
         // that should receive an extra partition.
-        int numberOfMembers = groupSpec.members().size();
+        int numberOfMembers = groupSpec.memberIds().size();
         minimumMemberQuota = totalPartitionsCount / numberOfMembers;
         remainingMembersToGetAnExtraPartition = totalPartitionsCount % numberOfMembers;
 
@@ -157,10 +159,8 @@ public class OptimizedUniformAssignmentBuilder {
      * altered.
      */
     private void maybeRevokePartitions() {
-        for (Map.Entry<String, AssignmentMemberSpec> entry : groupSpec.members().entrySet()) {
-            String memberId = entry.getKey();
-            AssignmentMemberSpec assignmentMemberSpec = entry.getValue();
-            Map<Uuid, Set<Integer>> oldAssignment = assignmentMemberSpec.assignedPartitions();
+        for (String memberId : groupSpec.memberIds()) {
+            Map<Uuid, Set<Integer>> oldAssignment = groupSpec.memberAssignment(memberId);
             Map<Uuid, Set<Integer>> newAssignment = null;
 
             // The assignor expects to receive the assignment as an immutable map. It leverages
