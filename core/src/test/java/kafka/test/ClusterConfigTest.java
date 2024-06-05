@@ -101,12 +101,14 @@ public class ClusterConfigTest {
 
     @Test
     public void testDisplayTags() {
-        List<String> tags = Collections.singletonList("tag");
+        List<String> tags = Arrays.asList("tag 1", "tag 2", "tag 3");
         ClusterConfig clusterConfig = ClusterConfig.defaultBuilder().setTags(tags).build();
 
         Set<String> expectedDisplayTags = clusterConfig.displayTags();
 
-        Assertions.assertTrue(expectedDisplayTags.contains("tag"));
+        Assertions.assertTrue(expectedDisplayTags.contains("tag 1"));
+        Assertions.assertTrue(expectedDisplayTags.contains("tag 2"));
+        Assertions.assertTrue(expectedDisplayTags.contains("tag 3"));
         Assertions.assertTrue(expectedDisplayTags.contains("MetadataVersion=" + MetadataVersion.latestTesting()));
         Assertions.assertTrue(expectedDisplayTags.contains("Security=" + SecurityProtocol.PLAINTEXT));
     }
