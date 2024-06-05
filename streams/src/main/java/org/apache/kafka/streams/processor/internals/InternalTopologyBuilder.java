@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -25,7 +23,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyConfig;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.processor.StateStore;
@@ -1513,12 +1510,7 @@ public class InternalTopologyBuilder {
     }
 
     private void initializeSubtopologyIdToStateStoreNamesMap() {
-        if (subtopologyIdToStateStoreNames != null) {
-            log.error("Attempted to initialize subtopologyIdToStateStores map but it was not null");
-            throw new StreamsException("Double initialization of subtopologyIdToStateStores map");
-        }
-
-        final ConcurrentMap<Integer, Set<String>> storeNames = new ConcurrentHashMap<>();
+        final Map<Integer, Set<String>> storeNames = new HashMap<>();
 
         for (final Map.Entry<Integer, Set<String>> nodeGroup : makeNodeGroups().entrySet()) {
             final Set<String> subtopologyNodes = nodeGroup.getValue();
