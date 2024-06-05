@@ -249,6 +249,10 @@ public class RemoteLogManager implements Closeable {
           "Tracking fetch byte-rate for Remote Log Manager", time);
     }
 
+    public boolean isRemoteLogFetchQuotaExceeded() {
+        return rlmFetchQuotaManager.isQuotaExceeded();
+    }
+
     static RLMQuotaManagerConfig copyQuotaManagerConfig(RemoteLogManagerConfig rlmConfig) {
         return new RLMQuotaManagerConfig(rlmConfig.remoteLogManagerCopyMaxBytesPerSecond(),
           rlmConfig.remoteLogManagerCopyNumQuotaSamples(),
@@ -1660,7 +1664,7 @@ public class RemoteLogManager implements Closeable {
      * @throws java.util.concurrent.RejectedExecutionException if the task cannot be accepted for execution (task queue is full)
      */
     public Future<Void> asyncRead(RemoteStorageFetchInfo fetchInfo, Consumer<RemoteLogReadResult> callback) {
-        return remoteStorageReaderThreadPool.submit(new RemoteLogReader(fetchInfo, this, callback, brokerTopicStats));
+        return remoteStorageReaderThreadPool.submit(new RemoteLogReader(fetchInfo, this, callback, brokerTopicStats, rlmFetchQuotaManager));
     }
 
     void doHandleLeaderOrFollowerPartitions(TopicIdPartition topicPartition,
