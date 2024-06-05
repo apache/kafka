@@ -85,7 +85,7 @@ public class MemberSubscriptionAndAssignmentImpl implements MemberSubscription, 
 
     @Override
     public String toString() {
-        return "MemberSubscriptionSpecImpl(rackId=" + rackId.orElse("N/A") +
+        return "MemberSubscriptionAndAssignmentImpl(rackId=" + rackId.orElse("N/A") +
             ", subscribedTopicIds=" + subscribedTopicIds +
             ", memberAssignment=" + memberAssignment +
             ')';
