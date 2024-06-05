@@ -33,6 +33,8 @@ import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
+import org.apache.kafka.common.message.StreamsInitializeRequestData;
+import org.apache.kafka.common.message.StreamsInitializeResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.network.ClientInformation;
@@ -65,6 +67,8 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmen
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.image.MetadataImage;
@@ -568,6 +572,37 @@ public class GroupMetadataManagerTestContext {
         return result;
     }
 
+
+    public CoordinatorResult<StreamsInitializeResponseData, CoordinatorRecord> streamsInitialize(
+        StreamsInitializeRequestData request
+    ) {
+        RequestContext context = new RequestContext(
+            new RequestHeader(
+                ApiKeys.STREAMS_INITIALIZE,
+                ApiKeys.STREAMS_INITIALIZE.latestVersion(),
+                "client",
+                0
+            ),
+            "1",
+            InetAddress.getLoopbackAddress(),
+            KafkaPrincipal.ANONYMOUS,
+            ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
+            SecurityProtocol.PLAINTEXT,
+            ClientInformation.EMPTY,
+            false
+        );
+
+        CoordinatorResult<StreamsInitializeResponseData, CoordinatorRecord> result = groupMetadataManager.streamsInitialize(
+            context,
+            request
+        );
+
+        if (result.replayRecords()) {
+            result.records().forEach(this::replay);
+        }
+        return result;
+    }
+    
     public List<MockCoordinatorTimer.ExpiredTimeout<Void, CoordinatorRecord>> sleep(long ms) {
         time.sleep(ms);
         List<MockCoordinatorTimer.ExpiredTimeout<Void, CoordinatorRecord>> timeouts = timer.poll();
@@ -1412,6 +1447,13 @@ public class GroupMetadataManagerTestContext {
                 groupMetadataManager.replay(
                     (ConsumerGroupCurrentMemberAssignmentKey) key.message(),
                     (ConsumerGroupCurrentMemberAssignmentValue) messageOrNull(value)
+                );
+                break;
+
+            case StreamsGroupTopologyKey.HIGHEST_SUPPORTED_VERSION:
+                groupMetadataManager.replay(
+                    (StreamsGroupTopologyKey) key.message(),
+                    (StreamsGroupTopologyValue) messageOrNull(value)
                 );
                 break;
 

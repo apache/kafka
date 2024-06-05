@@ -30,6 +30,7 @@ import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.InconsistentGroupProtocolException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
+import org.apache.kafka.common.errors.StreamsInvalidTopologyException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedAssignorException;
@@ -87,6 +88,8 @@ import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupMember;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorTimer;
@@ -119,6 +122,7 @@ import java.util.stream.Stream;
 import static org.apache.kafka.common.protocol.Errors.COORDINATOR_NOT_AVAILABLE;
 import static org.apache.kafka.common.protocol.Errors.ILLEGAL_GENERATION;
 import static org.apache.kafka.common.protocol.Errors.NOT_COORDINATOR;
+import static org.apache.kafka.common.protocol.Errors.STREAMS_INVALID_TOPOLOGY;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_SERVER_ERROR;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
@@ -1599,15 +1603,39 @@ public class GroupMetadataManager {
         throws ApiException {
         final List<CoordinatorRecord> records = new ArrayList<>();
 
-        // TODO: Throw if group does not exist or is not a streams group
-        //       similar to  final ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, createIfNotExists, records);
-        //                   throwIfStaticMemberIsUnknown(member, instanceId);
+        // TODO: Throw if group does not exist or is not a streams group. Needs model of
+        //       similar to  final StreamsGroup group = getOrMaybeCreateStreamsGroup(groupId, createIfNotExists, records);
+        //                   throwIfNull(group);
 
-        records.add(newStreamsGroupTopologyRecord(groupId, subtopologies));
+        // TODO: For the POC, only check if internal topics exist
+        Set<String> missingTopics = new HashSet<>();
+        for (StreamsInitializeRequestData.Subtopology subtopology : subtopologies) {
+             for (StreamsInitializeRequestData.TopicInfo topic : subtopology.stateChangelogTopics()) {
+                 if (metadataImage.topics().getTopic(topic.name()) == null) {
+                     missingTopics.add(topic.name());
+                 }
+             }
+            for (StreamsInitializeRequestData.TopicInfo topic : subtopology.repartitionSourceTopics()) {
+                if (metadataImage.topics().getTopic(topic.name()) == null) {
+                    missingTopics.add(topic.name());
+                }
+            }
+        }
+        if (!missingTopics.isEmpty()) {
+            StreamsInitializeResponseData response =
+                new StreamsInitializeResponseData()
+                    .setErrorCode(STREAMS_INVALID_TOPOLOGY.code())
+                    .setErrorMessage("Internal topics " + String.join(", ", missingTopics) + " do not exist.");
 
-        StreamsInitializeResponseData response = new StreamsInitializeResponseData();
+            return new CoordinatorResult<>(records, response);
+        } else {
+            records.add(newStreamsGroupTopologyRecord(groupId, subtopologies));
 
-        return new CoordinatorResult<>(records, response);
+            StreamsInitializeResponseData response = new StreamsInitializeResponseData();
+
+            return new CoordinatorResult<>(records, response);
+        }
+
     }
 
     /**
@@ -2380,6 +2408,25 @@ public class GroupMetadataManager {
             request.groupId(),
             request.topology()
         );
+    }
+
+    /**
+     * Replays StreamsGroupTopologyKey/Value to update the hard state of
+     * the streams group.
+     *
+     * @param key   A StreamsGroupTopologyKey key.
+     * @param value A StreamsGroupTopologyValue record.
+     */
+    public void replay(
+        StreamsGroupTopologyKey key,
+        StreamsGroupTopologyValue value
+    ) {
+
+        // TODO: Insert the topology information to the in-memory representation. Needs the notion
+        //       of a Streams group
+//        String groupId = key.groupId();
+//        StreamsGroup streamsGroup = getOrMaybeCreatePersistedConsumerGroup(groupId, value != null);
+//        streamsGroup.setTopology(value);
     }
 
     /**
