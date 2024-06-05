@@ -356,6 +356,17 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     void testSendUnsentRequest() {
+        ConsumerNetworkThread consumerNetworkThread1 = new ConsumerNetworkThread(
+                new LogContext(),
+                time,
+                applicationEventsQueue,
+                applicationEventReaper,
+                () -> applicationEventProcessor,
+                () -> networkClient,
+                () -> requestManagers
+        );
+        consumerNetworkThread1.initializeResources();
+
         String groupId = "group-id";
         NetworkClientDelegate.UnsentRequest request = new NetworkClientDelegate.UnsentRequest(
             new FindCoordinatorRequest.Builder(
@@ -368,7 +379,7 @@ public class ConsumerNetworkThreadTest {
         assertTrue(networkClient.hasAnyPendingRequests());
         assertFalse(networkClient.unsentRequests().isEmpty());
         assertFalse(client.hasInFlightRequests());
-        consumerNetworkThread.cleanup();
+        consumerNetworkThread1.cleanup();
 
         assertTrue(networkClient.unsentRequests().isEmpty());
         assertFalse(client.hasInFlightRequests());
