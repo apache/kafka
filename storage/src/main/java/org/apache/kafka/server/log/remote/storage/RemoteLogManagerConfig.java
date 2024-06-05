@@ -361,11 +361,7 @@ public final class RemoteLogManagerConfig extends AbstractConfig {
     }
 
     public RemoteLogManagerConfig(Map<?, ?> props) {
-        this(props, false);
-    }
-
-    protected RemoteLogManagerConfig(Map<?, ?> props, boolean doLog) {
-        super(CONFIG_DEF, props, doLog);
+        super(CONFIG_DEF, props);
     }
 
     public boolean enableRemoteStorageSystem() {
