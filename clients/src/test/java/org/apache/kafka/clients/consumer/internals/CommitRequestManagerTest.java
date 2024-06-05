@@ -278,7 +278,7 @@ public class CommitRequestManagerTest {
     // This is the case of the sync commit triggered from an API call to commitSync or when the
     // consumer is being closed. It should be retried until it succeeds, fails, or timer expires.
     @ParameterizedTest
-    @MethodSource("offsetCommitExceptionSupplier")
+    @MethodSource("offsetExceptionSupplier")
     public void testCommitSyncRetriedAfterExpectedRetriableException(Errors error) {
         CommitRequestManager commitRequestManager = create(false, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
@@ -592,7 +592,7 @@ public class CommitRequestManagerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("offsetFetchExceptionSupplier")
+    @MethodSource("offsetExceptionSupplier")
     public void testOffsetFetchRequestErroredRequests(final Errors error) {
         CommitRequestManager commitRequestManager = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
@@ -614,7 +614,7 @@ public class CommitRequestManagerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("offsetFetchExceptionSupplier")
+    @MethodSource("offsetExceptionSupplier")
     public void testOffsetFetchRequestTimeoutRequests(final Errors error) {
         CommitRequestManager commitRequestManager = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
@@ -748,7 +748,7 @@ public class CommitRequestManagerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("offsetCommitExceptionSupplier")
+    @MethodSource("offsetExceptionSupplier")
     public void testOffsetCommitRequestErroredRequestsNotRetriedForAsyncCommit(final Errors error) {
         CommitRequestManager commitRequestManager = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
@@ -804,7 +804,7 @@ public class CommitRequestManagerTest {
      * while there is time. When time expires, they should fail with a TimeoutException.
      */
     @ParameterizedTest
-    @MethodSource("offsetCommitExceptionSupplier")
+    @MethodSource("offsetExceptionSupplier")
     public void testOffsetCommitSyncFailedWithRetriableThrowsTimeoutWhenRetryTimeExpires(final Errors error) {
         CommitRequestManager commitRequestManager = create(false, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
@@ -1011,7 +1011,7 @@ public class CommitRequestManagerTest {
     // member epoch. The expectation is that if the member already has a new epoch, the request
     // should be retried with the new epoch.
     @ParameterizedTest
-    @MethodSource("offsetCommitExceptionSupplier")
+    @MethodSource("offsetExceptionSupplier")
     public void testAutoCommitSyncBeforeRevocationRetriesOnRetriableAndStaleEpoch(Errors error) {
         // Enable auto-commit but with very long interval to avoid triggering auto-commits on the
         // interval and just test the auto-commits triggered before revocation
@@ -1132,9 +1132,10 @@ public class CommitRequestManagerTest {
     }
 
     /**
-     * @return {@link Errors} that could be received in OffsetCommit responses.
+     * @return {@link Errors} that could be received in {@link ApiKeys#OFFSET_COMMIT} or
+     * {@link ApiKeys#OFFSET_FETCH} responses.
      */
-    private static Stream<Arguments> offsetCommitExceptionSupplier() {
+    private static Stream<Arguments> offsetExceptionSupplier() {
         return Stream.of(
             Arguments.of(Errors.NOT_COORDINATOR),
             Arguments.of(Errors.COORDINATOR_LOAD_IN_PROGRESS),
@@ -1149,27 +1150,6 @@ public class CommitRequestManagerTest {
             Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED),
             Arguments.of(Errors.STALE_MEMBER_EPOCH),
             Arguments.of(Errors.UNKNOWN_MEMBER_ID));
-    }
-
-    // Supplies (error, isRetriable)
-    private static Stream<Arguments> offsetFetchExceptionSupplier() {
-        // fetchCommit is only retrying on a subset of RetriableErrors
-        return Stream.of(
-            Arguments.of(Errors.NOT_COORDINATOR),
-            Arguments.of(Errors.COORDINATOR_LOAD_IN_PROGRESS),
-            Arguments.of(Errors.UNKNOWN_SERVER_ERROR),
-            Arguments.of(Errors.GROUP_AUTHORIZATION_FAILED),
-            Arguments.of(Errors.OFFSET_METADATA_TOO_LARGE),
-            Arguments.of(Errors.INVALID_COMMIT_OFFSET_SIZE),
-            Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION),
-            Arguments.of(Errors.COORDINATOR_NOT_AVAILABLE),
-            Arguments.of(Errors.REQUEST_TIMED_OUT),
-            Arguments.of(Errors.FENCED_INSTANCE_ID),
-            Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED),
-            Arguments.of(Errors.UNKNOWN_MEMBER_ID),
-            // Adding STALE_MEMBER_EPOCH as non-retriable here because it is only retried if a new
-            // member epoch is received. Tested separately.
-            Arguments.of(Errors.STALE_MEMBER_EPOCH));
     }
 
     /**
