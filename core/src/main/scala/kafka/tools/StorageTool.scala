@@ -46,6 +46,20 @@ import scala.collection.mutable.ArrayBuffer
 
 object StorageTool extends Logging {
 
+  def main(args: Array[String]): Unit = {
+    var exitCode: Integer = 0
+    var message: Option[String] = None
+    try {
+      exitCode = runMain(args)
+    } catch {
+      case e: TerseFailure =>
+        exitCode = 1
+        message = Some(e.getMessage)
+    }
+    message.foreach(System.err.println)
+    Exit.exit(exitCode, message)
+  }
+
   /**
    * Executes the command according to the given arguments and returns the appropriate exit code.
    * @param args The command line arguments
@@ -71,20 +85,6 @@ object StorageTool extends Logging {
       case _ =>
         throw new RuntimeException(s"Unknown command $command")
     }
-  }
-
-  def main(args: Array[String]): Unit = {
-    var exitCode: Integer = 0
-    var message: Option[String] = None
-    try {
-      exitCode = runMain(args)
-    } catch {
-      case e: TerseFailure =>
-        exitCode = 1
-        message = Some(e.getMessage)
-    }
-    message.foreach(System.err.println)
-    Exit.exit(exitCode, message)
   }
 
   /**
