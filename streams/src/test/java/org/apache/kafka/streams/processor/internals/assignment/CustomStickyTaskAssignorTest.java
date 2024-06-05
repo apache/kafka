@@ -59,12 +59,16 @@ import java.util.OptionalInt;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment.AssignedTask;
 import org.apache.kafka.streams.processor.assignment.KafkaStreamsState;
+import org.apache.kafka.streams.processor.assignment.TaskAssignmentUtils;
+import org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment;
+import org.apache.kafka.streams.processor.assignment.TaskTopicPartition;
 import org.apache.kafka.streams.processor.assignment.assignors.StickyTaskAssignor;
 import org.apache.kafka.streams.processor.assignment.TaskAssignor;
 import org.apache.kafka.streams.processor.assignment.ApplicationState;
@@ -73,12 +77,17 @@ import org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment;
 import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.assignment.TaskInfo;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
 @RunWith(Parameterized.class)
 public class CustomStickyTaskAssignorTest {
+
+    @Rule
+    public Timeout timeout = new Timeout(30, TimeUnit.SECONDS);
 
     private TaskAssignor assignor;
 
@@ -451,7 +460,7 @@ public class CustomStickyTaskAssignorTest {
         );
 
         final Map<ProcessId, KafkaStreamsAssignment> assignments = assign(streamStates, tasks, 1);
-        final Set<AssignedTask> allTasks = allTasks(assignments);
+        final List<AssignedTask> allTasks = allTasks(assignments);
         assertThat(allTasks.stream().filter(t -> t.type() == ACTIVE).map(AssignedTask::id).collect(
             Collectors.toSet()), equalTo(mkSet(TASK_0_0, TASK_0_1, TASK_0_2)));
         assertThat(allTasks.stream().filter(t -> t.type() == STANDBY).map(AssignedTask::id).collect(
@@ -496,7 +505,7 @@ public class CustomStickyTaskAssignorTest {
         );
 
         final Map<ProcessId, KafkaStreamsAssignment> assignments = assign(streamStates, tasks);
-        final Set<AssignedTask> allTasks = allTasks(assignments);
+        final List<AssignedTask> allTasks = allTasks(assignments);
         assertThat(allTasks.stream().filter(t -> t.type() == ACTIVE).map(AssignedTask::id).collect(
             Collectors.toSet()), equalTo(mkSet(TASK_0_0, TASK_0_1, TASK_0_2)));
         assertThat(allTasks.stream().filter(t -> t.type() == STANDBY).map(AssignedTask::id).collect(
@@ -591,6 +600,111 @@ public class CustomStickyTaskAssignorTest {
         }
     }
 
+    @Test
+    public void shouldNotHaveSameAssignmentOnAnyTwoHostsWhenThereArePreviousActiveTasks() {
+        final Map<TaskId, TaskInfo> tasks = mkMap(
+            mkTaskInfo(TASK_0_0, true),
+            mkTaskInfo(TASK_0_1, true),
+            mkTaskInfo(TASK_0_2, true),
+            mkTaskInfo(TASK_0_3, true)
+        );
+
+        final Map<ProcessId, KafkaStreamsState> streamStates = mkMap(
+            mkStreamState(1, 1, Optional.empty(), mkSet(TASK_0_1, TASK_0_2), mkSet()),
+            mkStreamState(2, 1, Optional.empty(), mkSet(TASK_0_3), mkSet()),
+            mkStreamState(3, 1, Optional.empty(), mkSet(TASK_0_0), mkSet()),
+            mkStreamState(4, 1, Optional.empty())
+        );
+
+        final Map<ProcessId, KafkaStreamsAssignment> assignments = assign(streamStates, tasks, 1);
+
+        for (final KafkaStreamsState client1: streamStates.values()) {
+            for (final KafkaStreamsState client2: streamStates.values()) {
+                if (!client1.processId().equals(client2.processId())) {
+                    final Set<TaskId> assignedTasks1 = assignments.get(client1.processId()).tasks().keySet();
+                    final Set<TaskId> assignedTasks2 = assignments.get(client2.processId()).tasks().keySet();
+                    assertThat("clients shouldn't have same task assignment", assignedTasks1,
+                        not(equalTo(assignedTasks2)));
+                }
+            }
+        }
+    }
+
+    @Test
+    public void shouldAssignMultipleStandbys() {
+        final Map<TaskId, TaskInfo> tasks = mkMap(
+            mkTaskInfo(TASK_0_0, true),
+            mkTaskInfo(TASK_0_1, false),
+            mkTaskInfo(TASK_0_2, false)
+        );
+
+        final Map<ProcessId, KafkaStreamsState> streamStates = mkMap(
+            mkStreamState(1, 1, Optional.empty()),
+            mkStreamState(2, 1, Optional.empty()),
+            mkStreamState(3, 1, Optional.empty()),
+            mkStreamState(4, 1, Optional.empty())
+        );
+
+        final Map<ProcessId, KafkaStreamsAssignment> assignments = assign(streamStates, tasks, 3);
+        assertThat(standbyTasks(assignments, 1), equalTo(mkSet()));
+        assertThat(standbyTasks(assignments, 2), equalTo(mkSet(TASK_0_0)));
+        assertThat(standbyTasks(assignments, 3), equalTo(mkSet(TASK_0_0)));
+        assertThat(standbyTasks(assignments, 4), equalTo(mkSet(TASK_0_0)));
+    }
+
+    @Test(timeout = 5 * 60 * 1000)
+    public void largeAssignmentShouldTerminateWithinAcceptableTime() {
+        final int topicCount = 10;
+        final int taskPerTopic = 100;
+        final int numStandbys = 2;
+        final int clientCount = 100;
+        final int clientCapacity = 50;
+
+        final Map<TaskId, TaskInfo> tasks = mkMap();
+        for (int i = 0; i < topicCount; i++) {
+            for (int j = 0; j < taskPerTopic; j++) {
+                final TaskId newTaskId = new TaskId(i, j);
+                final Set<String> partitionRacks = mkSet(
+                    String.format("rack-%d", (i * j) % 31)
+                );
+                final Map.Entry<TaskId, TaskInfo> newTask = mkTaskInfo(newTaskId, true, partitionRacks);
+                tasks.put(newTask.getKey(), newTask.getValue());
+            }
+        }
+
+        final Map<ProcessId, KafkaStreamsState> streamStates = mkMap();
+        for (int i = 0; i < clientCount; i++) {
+            final Map.Entry<ProcessId, KafkaStreamsState> newClient = mkStreamState(
+                i + 1,
+                clientCapacity,
+                Optional.of(String.format("rack-%d", i % 31)),
+                mkSet(),
+                mkSet()
+            );
+            streamStates.put(newClient.getKey(), newClient.getValue());
+        }
+
+        final AssignmentConfigs assignmentConfigs = new AssignmentConfigs(
+            0L,
+            1,
+            numStandbys,
+            60_000L,
+            Collections.emptyList(),
+            OptionalInt.of(1),
+            OptionalInt.of(2),
+            rackAwareStrategy
+        );
+        final Map<ProcessId, KafkaStreamsAssignment> assignments = assign(streamStates, tasks, assignmentConfigs);
+        final List<TaskId> allActiveTasks = allTasks(assignments).stream().filter(t -> t.type() == ACTIVE)
+            .map(AssignedTask::id)
+            .collect(Collectors.toList());
+        assertThat(allActiveTasks.size(), equalTo(topicCount * taskPerTopic));
+        final List<TaskId> allStandbyTasks = allTasks(assignments).stream().filter(t -> t.type() == STANDBY)
+            .map(AssignedTask::id)
+            .collect(Collectors.toList());
+        assertThat(allStandbyTasks.size(), equalTo(topicCount * taskPerTopic * numStandbys));
+    }
+
     // **************************
     private Map.Entry<ProcessId, KafkaStreamsState> mkStreamState(final int id,
                                                                   final int numProcessingThreads,
@@ -618,26 +732,37 @@ public class CustomStickyTaskAssignorTest {
     }
 
     private Map.Entry<TaskId, TaskInfo> mkTaskInfo(final TaskId taskId, final boolean isStateful) {
+        return mkTaskInfo(taskId, isStateful, null);
+    }
+
+    private Map.Entry<TaskId, TaskInfo> mkTaskInfo(final TaskId taskId, final boolean isStateful, final Set<String> rackIds) {
         if (!isStateful) {
             return mkEntry(
                 taskId,
                 new DefaultTaskInfo(taskId, false, mkSet(), mkSet())
             );
         }
+
+        final Set<DefaultTaskTopicPartition> partitions = new HashSet<>();
+        partitions.add(new DefaultTaskTopicPartition(
+            new TopicPartition(String.format("test-topic-%d", taskId.subtopology()), taskId.partition()),
+            true,
+            true,
+            () -> {
+                partitions.forEach(partition -> {
+                    if (partition != null && rackIds != null) {
+                        partition.annotateWithRackIds(rackIds);
+                    }
+                });
+            }
+        ));
         return mkEntry(
             taskId,
             new DefaultTaskInfo(
                 taskId,
                 true,
-                mkSet("test-statestore-1"),
-                mkSet(
-                    new DefaultTaskTopicPartition(
-                        new TopicPartition("test-topic-1", taskId.partition()),
-                        true,
-                        true,
-                        () -> { }
-                    )
-                )
+                mkSet(String.format("test-statestore-%d", taskId.subtopology())),
+                partitions.stream().map(p -> (TaskTopicPartition) p).collect(Collectors.toSet())
             )
         );
     }
@@ -661,14 +786,23 @@ public class CustomStickyTaskAssignorTest {
     }
 
     private Map<ProcessId, KafkaStreamsAssignment> assign(final Map<ProcessId, KafkaStreamsState> streamStates,
-                                                      final Map<TaskId, TaskInfo> tasks,
-                                                      final int numStandbys) {
+                                                          final Map<TaskId, TaskInfo> tasks,
+                                                          final int numStandbys) {
+        return assign(streamStates, tasks, defaultAssignmentConfigs(numStandbys));
+    }
+
+    private Map<ProcessId, KafkaStreamsAssignment> assign(final Map<ProcessId, KafkaStreamsState> streamStates,
+                                                          final Map<TaskId, TaskInfo> tasks,
+                                                          final AssignmentConfigs assignmentConfigs) {
         final ApplicationState applicationState = new TestApplicationState(
-            defaultAssignmentConfigs(numStandbys),
+            assignmentConfigs,
             streamStates,
             tasks
         );
-        return indexAssignment(assignor.assign(applicationState).assignment());
+        final TaskAssignment taskAssignment = assignor.assign(applicationState);
+        final TaskAssignor.AssignmentError assignmentError = TaskAssignmentUtils.validateTaskAssignment(applicationState, taskAssignment);
+        assertThat(assignmentError, equalTo(TaskAssignor.AssignmentError.NONE));
+        return indexAssignment(taskAssignment.assignment());
     }
 
     private ProcessId processId(final int id) {
@@ -701,8 +835,8 @@ public class CustomStickyTaskAssignorTest {
             .collect(Collectors.toSet());
     }
 
-    private Set<AssignedTask> allTasks(final Map<ProcessId, KafkaStreamsAssignment> assignments) {
-        final Set<AssignedTask> allTasks = new HashSet<>();
+    private List<AssignedTask> allTasks(final Map<ProcessId, KafkaStreamsAssignment> assignments) {
+        final List<AssignedTask> allTasks = new ArrayList<>();
         assignments.values().forEach(assignment -> allTasks.addAll(assignment.tasks().values()));
         return allTasks;
     }
