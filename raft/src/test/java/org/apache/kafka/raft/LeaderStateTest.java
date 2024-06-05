@@ -730,6 +730,38 @@ public class LeaderStateTest {
     }
 
     @Test
+    public void testCheckQuorumWithoutLeader() {
+        int node1 = 1;
+        int node2 = 2;
+        Set<Integer> originalVoterSet = mkSet(localId, node1, node2);
+        LeaderState<?> state = newLeaderState(originalVoterSet, 0L);
+        assertEquals(checkQuorumTimeoutMs, state.timeUntilCheckQuorumExpires(time.milliseconds()));
+        int resignLeadershipTimeout = checkQuorumTimeoutMs;
+
+        // checkQuorum timeout not exceeded, should not expire the timer
+        time.sleep(resignLeadershipTimeout / 2);
+        assertTrue(state.timeUntilCheckQuorumExpires(time.milliseconds()) > 0);
+
+        // received fetch request from 1 voter node, the timer should be reset
+        state.updateCheckQuorumForFollowingVoter(node1, time.milliseconds());
+        assertEquals(checkQuorumTimeoutMs, state.timeUntilCheckQuorumExpires(time.milliseconds()));
+
+        // removing leader from the voter set
+        Set<Integer> voterSetWithoutLeader = mkSet(node1, node2);
+        state.updateLocalState(new LogOffsetMetadata(1L), voterSetWithoutLeader);
+
+        // received fetch request from 1 voter node1, the timer should not be reset
+        state.updateCheckQuorumForFollowingVoter(node2, time.milliseconds());
+        // Since the timer was reset, it won't expire this time.
+        time.sleep(resignLeadershipTimeout);
+        assertEquals(0, state.timeUntilCheckQuorumExpires(time.milliseconds()));
+
+        // received fetch request from another voter, the timer should not be reset.
+        state.updateCheckQuorumForFollowingVoter(node1, time.milliseconds());
+        assertEquals(checkQuorumTimeoutMs, state.timeUntilCheckQuorumExpires(time.milliseconds()));
+    }
+
+    @Test
     public void testCheckQuorumWithOneVoter() {
         int observer = 1;
         // Only 1 voter quorum

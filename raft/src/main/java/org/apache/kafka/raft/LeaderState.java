@@ -126,8 +126,13 @@ public class LeaderState<T> implements EpochState {
      */
     public void updateCheckQuorumForFollowingVoter(int id, long currentTimeMs) {
         updateFetchedVoters(id);
-        // The majority number of the voters excluding the leader. Ex: 3 voters, the value will be 1
-        int majority = voterStates.size() / 2;
+        // The majority number of the voters. Ex: 3 voters, the value will be 2
+        int majority = (int) ((double) (voterStates.size() + 1) / 2);
+        // Check if the leader is removed from the voter set
+        if (voterStates.containsKey(localId)) {
+            majority = majority - 1;
+        }
+
         if (fetchedVoters.size() >= majority) {
             fetchedVoters.clear();
             checkQuorumTimer.update(currentTimeMs);
