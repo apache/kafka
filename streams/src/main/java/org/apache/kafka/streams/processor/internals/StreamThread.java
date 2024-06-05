@@ -352,7 +352,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     private volatile KafkaFutureImpl<Map<String, KafkaFuture<Uuid>>> producerInstanceIdFuture = new KafkaFutureImpl<>();
     private volatile KafkaFutureImpl<Uuid> threadProducerInstanceIdFuture = new KafkaFutureImpl<>();
 
-    private final PunctuateRatioSlidingWindow punctuateRatioSlidingWindow = new PunctuateRatioSlidingWindow(30000, new SystemTime()); // window size of 30 seconds
+    private final PunctuateRatioSlidingWindow punctuateRatioSlidingWindow; // window size of 30 seconds
     public static StreamThread create(final TopologyMetadata topologyMetadata,
                                       final StreamsConfig config,
                                       final KafkaClientSupplier clientSupplier,
@@ -644,6 +644,8 @@ public class StreamThread extends Thread implements ProcessingThread {
         this.processingMode = processingMode(config);
         this.stateUpdaterEnabled = InternalConfig.getStateUpdaterEnabled(config.originals());
         this.processingThreadsEnabled = InternalConfig.getProcessingThreadsEnabled(config.originals());
+
+        this.punctuateRatioSlidingWindow = new PunctuateRatioSlidingWindow(30000, time);
     }
 
     private static final class InternalConsumerConfig extends ConsumerConfig {
