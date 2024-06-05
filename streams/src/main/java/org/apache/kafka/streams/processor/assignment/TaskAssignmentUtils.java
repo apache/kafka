@@ -164,7 +164,7 @@ public final class TaskAssignmentUtils {
      */
     public static Map<ProcessId, KafkaStreamsAssignment> defaultStandbyTaskAssignment(final ApplicationState applicationState,
                                                                                       final Map<ProcessId, KafkaStreamsAssignment> kafkaStreamsAssignments) {
-        if (applicationState.assignmentConfigs().rackAwareAssignmentTags().isEmpty()) {
+        if (!applicationState.assignmentConfigs().rackAwareAssignmentTags().isEmpty()) {
             return tagBasedStandbyTaskAssignment(applicationState, kafkaStreamsAssignments);
         } else {
             return loadBasedStandbyTaskAssignment(applicationState, kafkaStreamsAssignments);
@@ -890,7 +890,7 @@ public final class TaskAssignmentUtils {
     private static ConstrainedPrioritySet standbyTaskPriorityListByLoad(final Map<ProcessId, KafkaStreamsState> streamStates,
                                                                         final Map<ProcessId, KafkaStreamsAssignment> kafkaStreamsAssignments) {
         return new ConstrainedPrioritySet(
-            (processId, taskId) -> kafkaStreamsAssignments.get(new ProcessId(processId)).tasks().containsKey(taskId),
+            (processId, taskId) -> !kafkaStreamsAssignments.get(new ProcessId(processId)).tasks().containsKey(taskId),
             processId -> {
                 final double capacity = streamStates.get(new ProcessId(processId)).numProcessingThreads();
                 final double numTasks = kafkaStreamsAssignments.get(new ProcessId(processId)).tasks().size();
