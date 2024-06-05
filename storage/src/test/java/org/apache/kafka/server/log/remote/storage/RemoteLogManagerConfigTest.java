@@ -23,6 +23,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_NUM;
 import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_MANAGER_THREAD_POOL_SIZE;
 import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_METADATA_MANAGER_CLASS_NAME;
 import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP;
@@ -63,6 +64,7 @@ public class RemoteLogManagerConfigTest {
         Map<String, Object> emptyProps = new HashMap<>();
         RemoteLogManagerConfig remoteLogManagerConfigEmptyConfig = new RemoteLogManagerConfig(emptyProps);
         assertEquals(remoteLogManagerConfigEmptyConfig.remoteLogManagerThreadPoolSize(), DEFAULT_REMOTE_LOG_MANAGER_THREAD_POOL_SIZE);
+        assertEquals(remoteLogManagerConfigEmptyConfig.remoteLogManagerCopyNumQuotaSamples(), DEFAULT_REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_NUM);
     }
 
     @Test
