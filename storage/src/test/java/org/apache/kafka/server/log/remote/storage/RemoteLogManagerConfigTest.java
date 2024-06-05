@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.server.log.remote.storage;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
@@ -28,6 +29,7 @@ import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.
 import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP;
 import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_PATH_PROP;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class RemoteLogManagerConfigTest {
 
@@ -52,6 +54,17 @@ public class RemoteLogManagerConfigTest {
 
         assertEquals(rsmProps, remoteLogManagerConfig.remoteStorageManagerProps());
         assertEquals(rlmmProps, remoteLogManagerConfig.remoteLogMetadataManagerProps());
+
+        // Even with empty properties, RemoteLogManagerConfig has default values
+        Map<String, Object> emptyProps = new HashMap<>();
+        RemoteLogManagerConfig remoteLogManagerConfigEmptyConfig = new RemoteLogManagerConfig(emptyProps);
+        assertEquals(remoteLogManagerConfigEmptyConfig.values().size(), 28);
+
+        // Test with a empty string props should throw ConfigException
+        Map<String, Object> emptyStringProps = new HashMap<>();
+        emptyStringProps.put(REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP, "");
+        assertThrows(ConfigException.class, () ->
+                 new RemoteLogManagerConfig(emptyStringProps));
     }
 
     private Map<String, Object> getRLMProps(String rsmPrefix, String rlmmPrefix) {
