@@ -47,9 +47,10 @@ plugins {
   // Updating the shadow plugin version to 8.1.1 causes issue with signing and publishing the shadowed
   // artifacts - see https://github.com/johnrengelman/shadow/issues/901
   id 'com.github.johnrengelman.shadow' version '8.1.0' apply false
-  //  the minimum required JRE of 6.14.0+ is 11
-  //  refer:https://github.com/diffplug/spotless/tree/main/plugin-gradle#requirements
-  id 'com.diffplug.spotless' version "6.13.0" apply false
+  //  Spotless 6.13.0 has issue with Java 21 (see https://github.com/diffplug/spotless/pull/1920), and Spotless 6.14.0+ requires JRE 11
+  //  We are going to drop JDK8 support. Hence, the spotless is upgrade to newest version and be applied only if the build env is compatible with JDK 11.
+  //  spotless 6.15.0+ has issue in runtime with JDK8 even through we define it with `apply:false`. see https://github.com/diffplug/spotless/issues/2156 for more details
+  id 'com.diffplug.spotless' version "6.14.0" apply false
 }
 
 ext {
@@ -200,7 +201,61 @@ def determineCommitId() {
   }
 }
 
-def spotlessApplyModules = ['']
+def excludedSpotlessModules = [':clients',
+                               ':connect:api',
+                               ':connect:basic-auth-extension',
+                               ':connect:file',
+                               ':connect:json',
+                               ':connect:mirror',
+                               ':connect:mirror-client',
+                               ':connect:runtime',
+                               ':connect:test-plugins',
+                               ':connect:transforms',
+                               ':core',
+                               ':examples',
+                               ':generator',
+                               ':group-coordinator:group-coordinator-api', // https://github.com/apache/kafka/pull/16198
+                               ':group-coordinator',
+                               ':jmh-benchmarks',
+                               ':log4j-appender',
+                               ':metadata',
+                               ':raft',
+                               ':server',
+                               ':server-common',
+                               ':shell',
+                               ':storage',
+                               ':storage:storage-api', //  rename in settings.gradle
+                               ':streams',
+                               ':streams:examples',
+                               ':streams:streams-scala',
+                               ':streams:test-utils',
+                               ':streams:upgrade-system-tests-0100',
+                               ':streams:upgrade-system-tests-0101',
+                               ':streams:upgrade-system-tests-0102',
+                               ':streams:upgrade-system-tests-0110',
+                               ':streams:upgrade-system-tests-10',
+                               ':streams:upgrade-system-tests-11',
+                               ':streams:upgrade-system-tests-20',
+                               ':streams:upgrade-system-tests-21',
+                               ':streams:upgrade-system-tests-22',
+                               ':streams:upgrade-system-tests-23',
+                               ':streams:upgrade-system-tests-24',
+                               ':streams:upgrade-system-tests-25',
+                               ':streams:upgrade-system-tests-26',
+                               ':streams:upgrade-system-tests-27',
+                               ':streams:upgrade-system-tests-28',
+                               ':streams:upgrade-system-tests-30',
+                               ':streams:upgrade-system-tests-31',
+                               ':streams:upgrade-system-tests-32',
+                               ':streams:upgrade-system-tests-33',
+                               ':streams:upgrade-system-tests-34',
+                               ':streams:upgrade-system-tests-35',
+                               ':streams:upgrade-system-tests-36',
+                               ':streams:upgrade-system-tests-37',
+                               ':tools',
+                               ':tools:tools-api',
+                               ':transaction-coordinator',
+                               ':trogdor']
 
 
 apply from: file('wrapper.gradle')
@@ -798,8 +853,8 @@ subprojects {
     skipProjects = [ ":jmh-benchmarks", ":trogdor" ]
     skipConfigurations = [ "zinc" ]
   }
-
-  if (project.path in spotlessApplyModules) {
+  
+  if(JavaVersion.current().isJava11Compatible() && project.path !in excludedSpotlessModules) {
     apply plugin: 'com.diffplug.spotless'
     spotless {
       java {
