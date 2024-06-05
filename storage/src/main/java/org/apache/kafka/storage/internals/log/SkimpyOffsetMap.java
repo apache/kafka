@@ -109,7 +109,7 @@ public class SkimpyOffsetMap implements OffsetMap {
         hashInto(key, hash1);
         // search for the hash of this key by repeated probing until we find the hash we are looking for or we find an empty slot
         int attempt = 0;
-        int pos = 0;
+        int pos;
         //we need to guard against attempt integer overflow if the map is full
         //limit attempt to number of slots once positionOf(..) enters linear search mode
         int maxAttempts = slots + hashSize - 4;

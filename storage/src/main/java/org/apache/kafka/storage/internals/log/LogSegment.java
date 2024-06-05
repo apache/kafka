@@ -461,9 +461,7 @@ public class LogSegment implements Closeable {
 
     public OptionalLong fetchUpperBoundOffset(OffsetPosition startOffsetPosition, int fetchSize) throws IOException {
         Optional<OffsetPosition> position = offsetIndex().fetchUpperBoundOffset(startOffsetPosition, fetchSize);
-        if (position.isPresent())
-            return OptionalLong.of(position.get().offset);
-        return OptionalLong.empty();
+        return position.map(offsetPosition -> OptionalLong.of(offsetPosition.offset)).orElseGet(OptionalLong::empty);
     }
 
     /**
