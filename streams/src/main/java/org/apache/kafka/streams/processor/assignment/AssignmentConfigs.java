@@ -100,6 +100,27 @@ public class AssignmentConfigs {
         );
     }
 
+    public AssignmentConfigs(final long acceptableRecoveryLag,
+                             final int maxWarmupReplicas,
+                             final int numStandbyReplicas,
+                             final long probingRebalanceIntervalMs,
+                             final List<String> rackAwareAssignmentTags,
+                             final int rackAwareTrafficCost,
+                             final int rackAwareNonOverlapCost,
+                             final String rackAwareAssignmentStrategy) {
+        this(acceptableRecoveryLag, maxWarmupReplicas, numStandbyReplicas, probingRebalanceIntervalMs, rackAwareAssignmentTags,
+            OptionalInt.of(rackAwareTrafficCost), OptionalInt.of(rackAwareNonOverlapCost), rackAwareAssignmentStrategy);
+    }
+
+    public AssignmentConfigs(final Long acceptableRecoveryLag,
+                             final Integer maxWarmupReplicas,
+                             final Integer numStandbyReplicas,
+                             final Long probingRebalanceIntervalMs,
+                             final List<String> rackAwareAssignmentTags) {
+        this(acceptableRecoveryLag, maxWarmupReplicas, numStandbyReplicas, probingRebalanceIntervalMs, rackAwareAssignmentTags,
+             OptionalInt.empty(), OptionalInt.empty(), StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE);
+    }
+
 
     /**
      * The configured acceptable recovery lag according to

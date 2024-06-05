@@ -21,7 +21,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
+import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 
 public interface TaskAssignor {
     /**
