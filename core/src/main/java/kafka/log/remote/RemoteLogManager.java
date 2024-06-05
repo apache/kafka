@@ -64,6 +64,7 @@ import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.storage.internals.checkpoint.InMemoryLeaderEpochCheckpoint;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
 import org.apache.kafka.storage.internals.log.AbortedTxn;
+import org.apache.kafka.storage.internals.log.CorruptIndexException;
 import org.apache.kafka.storage.internals.log.EpochEntry;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.FetchIsolation;
@@ -763,6 +764,10 @@ public class RemoteLogManager implements Closeable {
                 this.cancel();
             } catch (InterruptedException | RetriableException ex) {
                 throw ex;
+            } catch (CorruptIndexException ex) {
+                logger.error("Error occurred while copying log segments. Index appeared to be corrupted for partition: {}  ", topicIdPartition, ex);
+                brokerTopicStats.topicStats(log.topicPartition().topic()).failedRemoteCopyRequestRate().mark();
+                brokerTopicStats.allTopicsStats().failedRemoteCopyRequestRate().mark();
             } catch (Exception ex) {
                 if (!isCancelled()) {
                     brokerTopicStats.topicStats(log.topicPartition().topic()).failedRemoteCopyRequestRate().mark();
@@ -777,6 +782,13 @@ public class RemoteLogManager implements Closeable {
                 CustomMetadataSizeLimitExceededException {
             File logFile = segment.log().file();
             String logFileName = logFile.getName();
+
+            // Corrupted indexes should not be uploaded to remote storage
+            // Example case: Local storage was filled, what caused index corruption
+            // We should avoid uploading such segments
+            segment.timeIndex().sanityCheck();
+            segment.offsetIndex().sanityCheck();
+            segment.txnIndex().sanityCheck();
 
             logger.info("Copying {} to remote storage.", logFileName);
             RemoteLogSegmentId id = RemoteLogSegmentId.generateNew(topicIdPartition);
