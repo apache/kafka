@@ -841,8 +841,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             );
             request.whenComplete(
                 (response, throwable) -> {
-                    long currentTimeMs = request.handler().completionTimeMs();
-                    handleClientResponse(response, throwable, currentTimeMs);
+                    long completionTimeMs = request.handler().completionTimeMs();
+                    handleClientResponse(response, throwable, completionTimeMs);
                 });
             return request;
         }
