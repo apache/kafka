@@ -63,6 +63,42 @@ public class ConnectorUtilsTest {
     @Test
     public void testGroupPartitionsInvalidCount() {
         assertThrows(IllegalArgumentException.class,
-            () -> ConnectorUtils.groupPartitions(FIVE_ELEMENTS, 0));
+                () -> ConnectorUtils.groupPartitions(FIVE_ELEMENTS, 0));
+    }
+
+    @Test
+    public void testGroupElementsRoundRobin() {
+        List<List<Integer>> grouped = ConnectorUtils.groupElementsRoundRobin(FIVE_ELEMENTS, 1);
+        assertEquals(Collections.singletonList(FIVE_ELEMENTS), grouped);
+
+        grouped = ConnectorUtils.groupElementsRoundRobin(FIVE_ELEMENTS, 2);
+        assertEquals(Arrays.asList(Arrays.asList(1, 3, 5), Arrays.asList(2, 4)), grouped);
+
+        grouped = ConnectorUtils.groupElementsRoundRobin(FIVE_ELEMENTS, 3);
+        assertEquals(Arrays.asList(Arrays.asList(1, 4), Arrays.asList(2, 5), Collections.singletonList(3)), grouped);
+
+        grouped = ConnectorUtils.groupElementsRoundRobin(FIVE_ELEMENTS, 5);
+        assertEquals(Arrays.asList(Collections.singletonList(1),
+                Collections.singletonList(2),
+                Collections.singletonList(3),
+                Collections.singletonList(4),
+                Collections.singletonList(5)), grouped);
+
+        grouped = ConnectorUtils.groupElementsRoundRobin(FIVE_ELEMENTS, 7);
+        assertEquals(Arrays.asList(Collections.singletonList(1),
+                Collections.singletonList(2),
+                Collections.singletonList(3),
+                Collections.singletonList(4),
+                Collections.singletonList(5),
+                Collections.emptyList(),
+                Collections.emptyList()), grouped);
+    }
+
+    @Test
+    public void testGroupElementsRoundRobinInvalidArgument() {
+        assertThrows(IllegalArgumentException.class,
+                () -> ConnectorUtils.groupElementsRoundRobin(FIVE_ELEMENTS, 0));
+        assertThrows(IllegalArgumentException.class,
+                () -> ConnectorUtils.groupElementsRoundRobin(null, 1));
     }
 }
