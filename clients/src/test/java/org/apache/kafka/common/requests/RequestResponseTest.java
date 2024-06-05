@@ -44,6 +44,8 @@ import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitio
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopicCollection;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTransaction;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTransactionCollection;
+import org.apache.kafka.common.message.AddRaftVoterRequestData;
+import org.apache.kafka.common.message.AddRaftVoterResponseData;
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData;
 import org.apache.kafka.common.message.AllocateProducerIdsResponseData;
 import org.apache.kafka.common.message.AlterClientQuotasResponseData;
@@ -205,6 +207,8 @@ import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.message.PushTelemetryRequestData;
 import org.apache.kafka.common.message.PushTelemetryResponseData;
+import org.apache.kafka.common.message.RemoveRaftVoterRequestData;
+import org.apache.kafka.common.message.RemoveRaftVoterResponseData;
 import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
 import org.apache.kafka.common.message.RenewDelegationTokenResponseData;
 import org.apache.kafka.common.message.SaslAuthenticateRequestData;
@@ -233,6 +237,8 @@ import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataB
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataEndpoint;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState;
 import org.apache.kafka.common.message.UpdateMetadataResponseData;
+import org.apache.kafka.common.message.UpdateRaftVoterRequestData;
+import org.apache.kafka.common.message.UpdateRaftVoterResponseData;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.network.ListenerName;
@@ -1098,6 +1104,9 @@ public class RequestResponseTest {
             case SHARE_GROUP_DESCRIBE: return createShareGroupDescribeRequest(version);
             case SHARE_FETCH: return createShareFetchRequest(version);
             case SHARE_ACKNOWLEDGE: return createShareAcknowledgeRequest(version);
+            case ADD_RAFT_VOTER: return createAddRaftVoterRequest(version);
+            case REMOVE_RAFT_VOTER: return createRemoveRaftVoterRequest(version);
+            case UPDATE_RAFT_VOTER: return createUpdateRaftVoterRequest(version);
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1184,6 +1193,9 @@ public class RequestResponseTest {
             case SHARE_GROUP_DESCRIBE: return createShareGroupDescribeResponse();
             case SHARE_FETCH: return createShareFetchResponse();
             case SHARE_ACKNOWLEDGE: return createShareAcknowledgeResponse();
+            case ADD_RAFT_VOTER: return createAddRaftVoterResponse();
+            case REMOVE_RAFT_VOTER: return createRemoveRaftVoterResponse();
+            case UPDATE_RAFT_VOTER: return createUpdateRaftVoterResponse();
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1282,6 +1294,58 @@ public class RequestResponseTest {
                 .setTopics(singletonList(new DescribeTopicPartitionsRequestData.TopicRequest().setName("foo")))
                 .setCursor(new DescribeTopicPartitionsRequestData.Cursor().setTopicName("foo").setPartitionIndex(1));
         return new DescribeTopicPartitionsRequest.Builder(data).build(version);
+    }
+
+    private AddRaftVoterRequest createAddRaftVoterRequest(short version) {
+        return new AddRaftVoterRequest(new AddRaftVoterRequestData().
+            setClusterId("FmRMoH-iTCSFNnzgpkWT2A").
+            setTimeoutMs(60_000).
+            setVoterId(1).
+            setVoterDirectoryId(Uuid.fromString("DZG26STKRxaelDpg2wqsXw")).
+            setListeners(new AddRaftVoterRequestData.ListenerCollection(
+                Collections.singletonList(new AddRaftVoterRequestData.Listener().
+                    setName("CONTROLLER").
+                    setHost("localhost").
+                    setPort(8080)).iterator())
+            ), version);
+    }
+
+    private AddRaftVoterResponse createAddRaftVoterResponse() {
+        return new AddRaftVoterResponse(new AddRaftVoterResponseData().
+            setErrorCode((short) 0).
+            setErrorMessage(null));
+    }
+
+    private RemoveRaftVoterRequest createRemoveRaftVoterRequest(short version) {
+        return new RemoveRaftVoterRequest(new RemoveRaftVoterRequestData().
+                setClusterId("FmRMoH-iTCSFNnzgpkWT2A").
+                setVoterId(1).
+                setVoterDirectoryId(Uuid.fromString("DZG26STKRxaelDpg2wqsXw")),
+                version);
+    }
+
+    private RemoveRaftVoterResponse createRemoveRaftVoterResponse() {
+        return new RemoveRaftVoterResponse(new RemoveRaftVoterResponseData().
+            setErrorCode((short) 0).
+            setErrorMessage(null));
+    }
+
+    private UpdateRaftVoterRequest createUpdateRaftVoterRequest(short version) {
+        return new UpdateRaftVoterRequest(new UpdateRaftVoterRequestData().
+                setClusterId("FmRMoH-iTCSFNnzgpkWT2A").
+                setVoterId(1).
+                setVoterDirectoryId(Uuid.fromString("DZG26STKRxaelDpg2wqsXw")).
+                setListeners(new UpdateRaftVoterRequestData.ListenerCollection(
+                    Collections.singletonList(new UpdateRaftVoterRequestData.Listener().
+                        setName("CONTROLLER").
+                        setHost("localhost").
+                        setPort(8080)).iterator())),
+                version);
+    }
+
+    private UpdateRaftVoterResponse createUpdateRaftVoterResponse() {
+        return new UpdateRaftVoterResponse(new UpdateRaftVoterResponseData().
+            setErrorCode((short) 0));
     }
 
     private DescribeTopicPartitionsResponse createDescribeTopicPartitionsResponse() {
