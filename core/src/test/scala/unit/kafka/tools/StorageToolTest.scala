@@ -691,7 +691,7 @@ Found problem:
     def formatWith(logDirCount: Int, metadataVersion: MetadataVersion): Integer = {
       val properties = TestUtils.createBrokerConfig(10, null, logDirCount = logDirCount)
       properties.remove(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG)
-      StorageTool.runMain(Array("format",
+      StorageTool.execute(Array("format",
         "-c", createPropsFile(properties),
         "-t", "XcZZOzUqS4yHOjhMQB6JLQ",
         "--release-version", metadataVersion.toString))

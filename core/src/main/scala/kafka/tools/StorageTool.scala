@@ -50,7 +50,7 @@ object StorageTool extends Logging {
     var exitCode: Integer = 0
     var message: Option[String] = None
     try {
-      exitCode = runMain(args)
+      exitCode = execute(args)
     } catch {
       case e: TerseFailure =>
         exitCode = 1
@@ -65,7 +65,7 @@ object StorageTool extends Logging {
    * @param args The command line arguments
    * @return     The exit code
    */
-  def runMain(args: Array[String]): Int = {
+  def execute(args: Array[String]): Int = {
     val namespace = parseArguments(args)
     val command = namespace.getString("command")
     val config = Option(namespace.getString("config")).flatMap(
