@@ -68,7 +68,7 @@ public class TaskAssignmentUtilsTest {
         StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
         StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY,
     })
-    public void shouldOptimizeActiveTaskSimple(String strategy) {
+    public void shouldOptimizeActiveTaskSimple(final String strategy) {
         final AssignmentConfigs assignmentConfigs = defaultAssignmentConfigs(
             strategy, 100, 1, 1, Collections.emptyList());
         final Map<TaskId, TaskInfo> tasks = mkMap(
@@ -105,7 +105,7 @@ public class TaskAssignmentUtilsTest {
         StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
         StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY,
     })
-    public void shouldOptimizeStandbyTasksBasic(String strategy) {
+    public void shouldOptimizeStandbyTasksBasic(final String strategy) {
         final AssignmentConfigs assignmentConfigs = defaultAssignmentConfigs(
             strategy, 100, 1, 1, Collections.emptyList());
         final Map<TaskId, TaskInfo> tasks = mkMap(
@@ -276,7 +276,7 @@ public class TaskAssignmentUtilsTest {
 
     public static Map.Entry<ProcessId, KafkaStreamsAssignment> mkAssignment(final AssignedTask.Type taskType,
                                                                             final int client,
-                                                                            final TaskId ...taskIds) {
+                                                                            final TaskId... taskIds) {
         final ProcessId processId = processId(client);
         final Set<AssignedTask> assignedTasks = mkSet();
         for (final TaskId taskId : taskIds) {
