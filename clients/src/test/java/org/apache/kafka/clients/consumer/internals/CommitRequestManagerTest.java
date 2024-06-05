@@ -634,8 +634,10 @@ public class CommitRequestManagerTest {
             // Insert a long enough sleep to force a timeout of the operation. Invoke poll() again so that each
             // OffsetFetchRequestState is evaluated via isExpired().
             time.sleep(defaultApiTimeoutMs);
+            assertFalse(commitRequestManager.pendingRequests.unsentOffsetFetches.isEmpty());
             commitRequestManager.poll(time.milliseconds());
             futures.forEach(f -> assertFutureThrows(f, TimeoutException.class));
+            assertTrue(commitRequestManager.pendingRequests.unsentOffsetFetches.isEmpty());
         } else {
             futures.forEach(f -> assertFutureThrows(f, KafkaException.class));
             assertEmptyPendingRequests(commitRequestManager);
