@@ -120,12 +120,14 @@ public final class TopicDelta {
      * Find the partitions that have change based on the replica given.
      * <p>
      * The changes identified are:
-     *   <ul>1. deletes: partitions for which the broker is not a replica anymore</ul>
-     *   <ul>2. electedLeaders: partitions for which the broker is now a leader (leader epoch bump on the leader)</ul>
-     *   <ul>3. leaders: partitions for which the isr or replicas change if the broker is a leader (partition epoch bump on the leader)</ul>
-     *   <ul>4. followers: partitions for which the broker is now a follower or follower with isr or replica updates (partition epoch bump on follower)</ul>
-     *   <ul>5. topicIds: a map of topic names to topic IDs in leaders and followers changes</ul>
-     *   <ul>6. directoryIds: partitions for which directory id changes or newly added to the broker</ul>
+     * <ul>
+     *   <li>deletes: partitions for which the broker is not a replica anymore</li>
+     *   <li>electedLeaders: partitions for which the broker is now a leader (leader epoch bump on the leader)</li>
+     *   <li>leaders: partitions for which the isr or replicas change if the broker is a leader (partition epoch bump on the leader)</li>
+     *   <li>followers: partitions for which the broker is now a follower or follower with isr or replica updates (partition epoch bump on follower)</li>
+     *   <li>topicIds: a map of topic names to topic IDs in leaders and followers changes</li>
+     *   <li>directoryIds: partitions for which directory id changes or newly added to the broker</li>
+     * </ul>
      * <p>
      * Leader epoch bumps are a strict subset of all partition epoch bumps, so all partitions in electedLeaders will be in leaders.
      *
