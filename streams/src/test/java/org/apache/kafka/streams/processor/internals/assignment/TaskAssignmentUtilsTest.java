@@ -122,7 +122,7 @@ public class TaskAssignmentUtilsTest {
         assertThat(assignments.get(processId(2)).tasks().keySet(), equalTo(mkSet(TASK_0_0)));
     }
 
-    // @Test
+    @Test
     public void shouldNotOptimizeStandbyTasks() {
         final AssignmentConfigs assignmentConfigs = defaultAssignmentConfigs(
             StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC, 100, 1, 1);

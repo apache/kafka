@@ -310,12 +310,21 @@ public final class TaskAssignmentUtils {
         final int crossRackTrafficCost = applicationState.assignmentConfigs().rackAwareTrafficCost().getAsInt();
         final int nonOverlapCost = applicationState.assignmentConfigs().rackAwareNonOverlapCost().getAsInt();
 
+        final Set<TaskId> standbyTasksToOptimize = new HashSet<>();
+        kafkaStreamsAssignments.values().forEach(assignment -> {
+            final Set<TaskId> standbyTasksForAssignment = assignment.tasks().values().stream()
+                .filter(task -> task.type() == AssignedTask.Type.STANDBY)
+                .map(AssignedTask::id)
+                .collect(Collectors.toSet());
+            standbyTasksToOptimize.addAll(standbyTasksForAssignment);
+        });
+
         final Map<TaskId, Set<TaskTopicPartition>> topicPartitionsByTaskId =
             applicationState.allTasks().values().stream().collect(Collectors.toMap(
                 TaskInfo::id,
                 t -> t.topicPartitions().stream().filter(TaskTopicPartition::isChangelog).collect(Collectors.toSet()))
             );
-        final List<TaskId> taskIds = new ArrayList<>(topicPartitionsByTaskId.keySet());
+        final List<TaskId> taskIds = new ArrayList<>(standbyTasksToOptimize);
 
         final Map<ProcessId, KafkaStreamsState> kafkaStreamsStates = applicationState.kafkaStreamsStates(false);
 
@@ -483,13 +492,14 @@ public final class TaskAssignmentUtils {
         final Map<TaskId, UUID> clientByTask = new HashMap<>();
         final Map<UUID, Integer> taskCountByClient = new HashMap<>();
 
+        final AssignedTask.Type taskType = isStandby ? AssignedTask.Type.STANDBY : AssignedTask.Type.ACTIVE;
         final Graph<Integer> graph = graphConstructor.constructTaskGraph(
             clientList,
             taskIds,
             assignmentsByUuid,
             clientByTask,
             taskCountByClient,
-            (assignment, taskId) -> assignment.tasks().containsKey(taskId),
+            (assignment, taskId) -> assignment.tasks().containsKey(taskId) && assignment.tasks().get(taskId).type() == taskType,
             (taskId, processId, inCurrentAssignment, unused0, unused1, unused2) -> {
                 final String clientRack = clientRacks.get(processId).get();
                 final int assignmentChangeCost = !inCurrentAssignment ? nonOverlapCost : 0;
