@@ -820,8 +820,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         abstract CompletableFuture<?> future();
 
         /**
-         * Complete the request future with a TimeoutException if the request timeout has been
-         * reached, based on the provided current time.
+         * Complete the request future with a TimeoutException if the request has been sent out
+         * at least once and the timeout has been reached.
          */
         void maybeExpire() {
             if (numAttempts > 0 && isExpired()) {
