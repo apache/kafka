@@ -675,24 +675,14 @@ Found problem:
     assertEquals(0, exitCode)
   }
 
-  private def createPropsFile(properties: Properties): String = {
-    val propsFile = TestUtils.tempFile()
-    val propsStream = Files.newOutputStream(propsFile.toPath)
-    try {
-      properties.store(propsStream, "config.props")
-    } finally {
-      propsStream.close()
-    }
-    propsFile.toPath.toString
-  }
-
   @Test
   def testJbodSupportValidation(): Unit = {
     def formatWith(logDirCount: Int, metadataVersion: MetadataVersion): Integer = {
       val properties = TestUtils.createBrokerConfig(10, null, logDirCount = logDirCount)
       properties.remove(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG)
+      val configFile = TestUtils.tempPropertiesFile(properties.asScala.toMap).toPath.toString
       StorageTool.execute(Array("format",
-        "-c", createPropsFile(properties),
+        "-c", configFile,
         "-t", "XcZZOzUqS4yHOjhMQB6JLQ",
         "--release-version", metadataVersion.toString))
     }
