@@ -962,6 +962,7 @@ project(':core') {
     api libs.scalaLibrary
 
     implementation project(':server-common')
+    implementation project(':group-coordinator:group-coordinator-api')
     implementation project(':group-coordinator')
     implementation project(':transaction-coordinator')
     implementation project(':metadata')
