@@ -339,6 +339,27 @@ public class ConsumerNetworkThreadTest {
         verify(applicationEventReaper).reap(any(Long.class));
     }
 
+    @Test
+    void testSendUnsentRequest() {
+        String groupId = "group-id";
+        NetworkClientDelegate.UnsentRequest request = new NetworkClientDelegate.UnsentRequest(
+            new FindCoordinatorRequest.Builder(
+                new FindCoordinatorRequestData()
+                    .setKeyType(FindCoordinatorRequest.CoordinatorType.TRANSACTION.id())
+                    .setKey(groupId)),
+            Optional.empty());
+
+        networkClient.add(request);
+        assertTrue(networkClient.hasAnyPendingRequests());
+        assertFalse(networkClient.unsentRequests().isEmpty());
+        assertFalse(client.hasInFlightRequests());
+        consumerNetworkThread.cleanup();
+
+        assertTrue(networkClient.unsentRequests().isEmpty());
+        assertFalse(client.hasInFlightRequests());
+        assertFalse(networkClient.hasAnyPendingRequests());
+    }
+
     private void prepareOffsetCommitRequest(final Map<TopicPartition, Long> expectedOffsets,
                                             final Errors error,
                                             final boolean disconnected) {

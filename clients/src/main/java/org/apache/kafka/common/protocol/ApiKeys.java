@@ -122,7 +122,10 @@ public enum ApiKeys {
     SHARE_GROUP_HEARTBEAT(ApiMessageType.SHARE_GROUP_HEARTBEAT),
     SHARE_GROUP_DESCRIBE(ApiMessageType.SHARE_GROUP_DESCRIBE),
     SHARE_FETCH(ApiMessageType.SHARE_FETCH),
-    SHARE_ACKNOWLEDGE(ApiMessageType.SHARE_ACKNOWLEDGE);
+    SHARE_ACKNOWLEDGE(ApiMessageType.SHARE_ACKNOWLEDGE),
+    ADD_RAFT_VOTER(ApiMessageType.ADD_RAFT_VOTER),
+    REMOVE_RAFT_VOTER(ApiMessageType.REMOVE_RAFT_VOTER),
+    UPDATE_RAFT_VOTER(ApiMessageType.UPDATE_RAFT_VOTER);
 
     private static final Map<ApiMessageType.ListenerType, EnumSet<ApiKeys>> APIS_BY_LISTENER =
         new EnumMap<>(ApiMessageType.ListenerType.class);
