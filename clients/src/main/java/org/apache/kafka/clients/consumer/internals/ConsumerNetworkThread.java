@@ -292,8 +292,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     /**
      * Check the unsent queue one last time and poll until all requests are sent or the timer runs out.
      */
-    // Visible for testing
-    protected void sendUnsentRequests(final Timer timer) {
+    private void sendUnsentRequests(final Timer timer) {
         if (networkClientDelegate.unsentRequests().isEmpty())
             return;
         do {
