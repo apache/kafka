@@ -379,7 +379,7 @@ public final class TaskAssignmentUtils {
                 final UUID clientId1 = clientIds.get(i);
                 final KafkaStreamsAssignment clientState1 = kafkaStreamsAssignments.get(new ProcessId(clientId1));
                 for (int j = i + 1; j < kafkaStreamsAssignments.size(); j++) {
-                    final UUID clientId2 = clientIds.get(i);
+                    final UUID clientId2 = clientIds.get(j);
                     final KafkaStreamsAssignment clientState2 = kafkaStreamsAssignments.get(new ProcessId(clientId2));
 
                     final String rack1 = clientRacks.get(clientState1.processId().id()).get();
@@ -419,8 +419,8 @@ public final class TaskAssignmentUtils {
 
                     taskMoved |= graphConstructor.assignTaskFromMinCostFlow(
                         assignmentGraph.graph,
-                        clientIds,
-                        taskIds,
+                        clients,
+                        taskIdList,
                         assignmentsByUuid,
                         assignmentGraph.taskCountByClient,
                         assignmentGraph.clientByTask,

@@ -123,7 +123,7 @@ public class TaskAssignmentUtilsTest {
     }
 
     @Test
-    public void shouldNotOptimizeStandbyTasks() {
+    public void shouldNotOptimizeStandbyTasksWhileOptimizingActiveTasks() {
         final AssignmentConfigs assignmentConfigs = defaultAssignmentConfigs(
             StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC, 100, 1, 1);
         final Map<TaskId, TaskInfo> tasks = mkMap(
@@ -147,6 +147,41 @@ public class TaskAssignmentUtilsTest {
         assertThat(assignments.size(), equalTo(2));
         assertThat(assignments.get(processId(1)).tasks().keySet(), equalTo(mkSet(TASK_0_0, TASK_0_1)));
         assertThat(assignments.get(processId(2)).tasks().keySet(), equalTo(mkSet(TASK_0_0, TASK_0_1)));
+
+        TaskAssignmentUtils.optimizeRackAwareActiveTasks(
+            applicationState, assignments, new TreeSet<>(tasks.keySet()));
+        assertThat(assignments.size(), equalTo(2));
+        assertThat(assignments.get(processId(1)).tasks().keySet(), equalTo(mkSet(TASK_0_0, TASK_0_1)));
+        assertThat(assignments.get(processId(2)).tasks().keySet(), equalTo(mkSet(TASK_0_0, TASK_0_1)));
+    }
+
+    @Test
+    public void shouldOptimizeStandbyTasksMinTrafficBasic() {
+        final AssignmentConfigs assignmentConfigs = defaultAssignmentConfigs(
+            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC, 100, 1, 1);
+        final Map<TaskId, TaskInfo> tasks = mkMap(
+            mkTaskInfo(TASK_0_0, true, mkSet("rack-2")),
+            mkTaskInfo(TASK_0_1, true, mkSet("rack-3"))
+        );
+        final Map<ProcessId, KafkaStreamsState> kafkaStreamsStates = mkMap(
+            mkStreamState(1, 2, Optional.of("rack-1")),
+            mkStreamState(2, 2, Optional.of("rack-2")),
+            mkStreamState(3, 2, Optional.of("rack-3"))
+        );
+        final ApplicationState applicationState = new TestApplicationState(
+            assignmentConfigs, kafkaStreamsStates, tasks);
+
+        final Map<ProcessId, KafkaStreamsAssignment> assignments = mkMap(
+            mkAssignment(AssignedTask.Type.ACTIVE, 1, TASK_0_0, TASK_0_1),
+            mkAssignment(AssignedTask.Type.STANDBY, 2, TASK_0_1),
+            mkAssignment(AssignedTask.Type.STANDBY, 3, TASK_0_0)
+        );
+
+        TaskAssignmentUtils.optimizeRackAwareStandbyTasks(applicationState, assignments);
+        assertThat(assignments.size(), equalTo(3));
+        assertThat(assignments.get(processId(1)).tasks().keySet(), equalTo(mkSet(TASK_0_0, TASK_0_1)));
+        assertThat(assignments.get(processId(2)).tasks().keySet(), equalTo(mkSet(TASK_0_0)));
+        assertThat(assignments.get(processId(3)).tasks().keySet(), equalTo(mkSet(TASK_0_1)));
     }
 
     public static class TestApplicationState implements ApplicationState {
