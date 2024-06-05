@@ -58,6 +58,7 @@ import org.mockito.stubbing.Answer;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -315,7 +316,7 @@ public class KafkaConfigBackingStoreTest {
         // Writing should block until it is written and read back from Kafka
         expectConvertWriteRead(
                 CONNECTOR_CONFIG_KEYS.get(0), KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0, CONFIGS_SERIALIZED.get(0),
-                "properties", SAMPLE_CONFIGS.get(0));
+                new Struct(KafkaConfigBackingStore.TASK_CONFIGURATION_V0).put("properties", SAMPLE_CONFIGS.get(0)));
 
         configStorage.putConnectorConfig(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0), null);
         configState = configStorage.snapshot();
@@ -328,7 +329,7 @@ public class KafkaConfigBackingStoreTest {
         // Second should also block and all configs should still be available
         expectConvertWriteRead(
                 CONNECTOR_CONFIG_KEYS.get(1), KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0, CONFIGS_SERIALIZED.get(1),
-                "properties", SAMPLE_CONFIGS.get(1));
+                new Struct(KafkaConfigBackingStore.TASK_CONFIGURATION_V0).put("properties", SAMPLE_CONFIGS.get(1)));
 
         configStorage.putConnectorConfig(CONNECTOR_IDS.get(1), SAMPLE_CONFIGS.get(1), null);
         configState = configStorage.snapshot();
@@ -381,11 +382,11 @@ public class KafkaConfigBackingStoreTest {
         // We expect to write the target state first, followed by the config write and then a read to end
         expectConvertWriteRead(
                 TARGET_STATE_KEYS.get(0), KafkaConfigBackingStore.TARGET_STATE_V1, TARGET_STATES_SERIALIZED.get(2),
-                "state.v2", TargetState.STOPPED.name());
+                new Struct(KafkaConfigBackingStore.TARGET_STATE_V1).put("state.v2", TargetState.STOPPED.name()));
 
         expectConvertWriteRead(
                 CONNECTOR_CONFIG_KEYS.get(0), KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0, CONFIGS_SERIALIZED.get(0),
-                "properties", SAMPLE_CONFIGS.get(0));
+                new Struct(KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0).put("properties", SAMPLE_CONFIGS.get(0)));
 
         // Writing should block until it is written and read back from Kafka
         configStorage.putConnectorConfig(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0), TargetState.STOPPED);
@@ -1073,10 +1074,10 @@ public class KafkaConfigBackingStoreTest {
                 .when(configLog).readToEnd();
         expectConvertWriteRead(
                 TASK_CONFIG_KEYS.get(0), KafkaConfigBackingStore.TASK_CONFIGURATION_V0, CONFIGS_SERIALIZED.get(0),
-                "properties", SAMPLE_CONFIGS.get(0));
+                new Struct(KafkaConfigBackingStore.TASK_CONFIGURATION_V0).put("properties", SAMPLE_CONFIGS.get(0)));
         expectConvertWriteRead(
                 COMMIT_TASKS_CONFIG_KEYS.get(0), KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0, CONFIGS_SERIALIZED.get(2),
-                "tasks", 1); // Updated to just 1 task
+                new Struct(KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0).put("tasks", 1)); // Updated to just 1 task
 
         // Next, issue a write that has everything that is needed and it should be accepted. Note that in this case
         // we are going to shrink the number of tasks to 1
@@ -1121,13 +1122,13 @@ public class KafkaConfigBackingStoreTest {
         configStorage.start();
         verify(configLog).start();
 
-        expectConvertWriteRead(
-                RESTART_CONNECTOR_KEYS.get(0), KafkaConfigBackingStore.RESTART_REQUEST_V0, CONFIGS_SERIALIZED.get(0),
-                ONLY_FAILED_FIELD_NAME, restartRequest.onlyFailed());
-
         LinkedHashMap<String, byte[]> recordsToRead = new LinkedHashMap<>();
         recordsToRead.put(RESTART_CONNECTOR_KEYS.get(0), CONFIGS_SERIALIZED.get(0));
         doAnswer(expectReadToEnd(recordsToRead)).when(configLog).readToEnd();
+
+        expectConvertWriteRead(
+                RESTART_CONNECTOR_KEYS.get(0), KafkaConfigBackingStore.RESTART_REQUEST_V0, CONFIGS_SERIALIZED.get(0),
+                new Struct(KafkaConfigBackingStore.RESTART_REQUEST_V0).put(ONLY_FAILED_FIELD_NAME, restartRequest.onlyFailed()).put(INCLUDE_TASKS_FIELD_NAME, restartRequest.includeTasks()));
 
         // Writing should block until it is written and read back from Kafka
         configStorage.putRestartRequest(restartRequest);
@@ -1199,7 +1200,7 @@ public class KafkaConfigBackingStoreTest {
 
         expectConvertWriteRead(
                 COMMIT_TASKS_CONFIG_KEYS.get(0), KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0, CONFIGS_SERIALIZED.get(0),
-                "tasks", 0); // We have 0 tasks
+                new Struct(KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0).put("tasks", 0)); // We have 0 tasks
 
         // Bootstrap as if we had already added the connector, but no tasks had been added yet
         addConnector(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0), Collections.emptyList());
@@ -1366,12 +1367,12 @@ public class KafkaConfigBackingStoreTest {
 
         expectConvertWriteRead(
                 "logger-cluster-" + logger3, KafkaConfigBackingStore.LOGGER_LEVEL_V0, CONFIGS_SERIALIZED.get(2),
-                "level", level3);
+                new Struct(KafkaConfigBackingStore.LOGGER_LEVEL_V0).put("level", level3));
         configStorage.putLoggerLevel(logger3, level3);
 
         expectConvertWriteRead(
                 "logger-cluster-" + logger4, KafkaConfigBackingStore.LOGGER_LEVEL_V0, CONFIGS_SERIALIZED.get(3),
-                "level", level4);
+                new Struct(KafkaConfigBackingStore.LOGGER_LEVEL_V0).put("level", level4));
         configStorage.putLoggerLevel(logger4, level4);
 
         LinkedHashMap<String, byte[]> newRecords = new LinkedHashMap<>();
@@ -1395,35 +1396,40 @@ public class KafkaConfigBackingStoreTest {
         verify(configLog).start();
 
         // Records to be read by consumer as it reads to the end of the log
+        LinkedHashMap<String, byte[]> serializedConfigs = new LinkedHashMap<>();
+        serializedConfigs.put(TASK_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(0));
+        serializedConfigs.put(TASK_CONFIG_KEYS.get(1), CONFIGS_SERIALIZED.get(1));
+        serializedConfigs.put(COMMIT_TASKS_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(2));
+
+
+        // Records to be read by consumer as it reads to the end of the log
         doAnswer(expectReadToEnd(new LinkedHashMap<>()))
+                .doAnswer(expectReadToEnd(new LinkedHashMap<>()))
+                .doAnswer(expectReadToEnd(serializedConfigs))
                 .doAnswer(expectReadToEnd(new LinkedHashMap<String, byte[]>() {{
-                            put(TASK_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(0));
-                            put(TASK_CONFIG_KEYS.get(1), CONFIGS_SERIALIZED.get(0));
-                            put(COMMIT_TASKS_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(1));
-                        }})
-                )
-                .doAnswer(expectReadToEnd(new LinkedHashMap<String, byte[]>() {{
-                            put(CONNECTOR_TASK_COUNT_RECORD_KEYS.get(0), CONFIGS_SERIALIZED.get(2));
+                            put(CONNECTOR_TASK_COUNT_RECORD_KEYS.get(0), CONFIGS_SERIALIZED.get(3));
                         }})
                 )
                 .when(configLog).readToEnd();
 
-        // Task configs should read to end, write to the log, read to end, write root, then read to end again
-//        expectConvertWriteRead(TASK_CONFIG_KEYS.get(0), KafkaConfigBackingStore.TASK_CONFIGURATION_V0, CONFIGS_SERIALIZED.get(0),
-//                "properties", SAMPLE_CONFIGS.get(0));
-//        expectConvertWriteRead(
-//                TASK_CONFIG_KEYS.get(1), KafkaConfigBackingStore.TASK_CONFIGURATION_V0, CONFIGS_SERIALIZED.get(0),
-//                "properties", SAMPLE_CONFIGS.get(0));
-//        expectConvertWriteRead(
-//                COMMIT_TASKS_CONFIG_KEYS.get(0), KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0, CONFIGS_SERIALIZED.get(0),
-//                "tasks", 2); // Starts with 0 tasks, after update has 2
-//
-//        // Task count records are read back after writing as well
-//        expectConvertWriteRead(
-//                CONNECTOR_TASK_COUNT_RECORD_KEYS.get(0), KafkaConfigBackingStore.TASK_COUNT_RECORD_V0, CONFIGS_SERIALIZED.get(0),
-//                "task-count", 4);
-
         when(configLog.partitionCount()).thenReturn(1);
+
+        // Task configs should read to end, write to the log, read to end, write root, then read to end again
+        expectConvertWriteRead(TASK_CONFIG_KEYS.get(0), KafkaConfigBackingStore.TASK_CONFIGURATION_V0, CONFIGS_SERIALIZED.get(0),
+                new Struct(KafkaConfigBackingStore.TASK_CONFIGURATION_V0).put("properties", SAMPLE_CONFIGS.get(0)));
+
+        expectConvertWriteRead(
+                TASK_CONFIG_KEYS.get(1), KafkaConfigBackingStore.TASK_CONFIGURATION_V0, CONFIGS_SERIALIZED.get(1),
+                new Struct(KafkaConfigBackingStore.TASK_CONFIGURATION_V0).put("properties", SAMPLE_CONFIGS.get(1)));
+        expectConvertWriteRead(
+                COMMIT_TASKS_CONFIG_KEYS.get(0), KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0, CONFIGS_SERIALIZED.get(2),
+                new Struct(KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0).put("tasks", 2));
+        // Starts with 0 tasks, after update has 2
+
+        // Task count records are read back after writing as well
+        expectConvertWriteRead(
+                CONNECTOR_TASK_COUNT_RECORD_KEYS.get(0), KafkaConfigBackingStore.TASK_COUNT_RECORD_V0, CONFIGS_SERIALIZED.get(3),
+                new Struct(KafkaConfigBackingStore.TASK_COUNT_RECORD_V0).put("task-count", 4));
 
         addConnector(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0), Collections.emptyList());
 
@@ -1436,54 +1442,25 @@ public class KafkaConfigBackingStoreTest {
 
         // Writing task configs should block until all the writes have been performed and the root record update
         // has completed
-        List<Map<String, String>> taskConfigs = Arrays.asList(SAMPLE_CONFIGS.get(0), SAMPLE_CONFIGS.get(0));
-
-        Struct connectConfig = new Struct(KafkaConfigBackingStore.TASK_CONFIGURATION_V0);
-        connectConfig.put("properties", SAMPLE_CONFIGS.get(0));
-        Struct taskCountRecord = new Struct(KafkaConfigBackingStore.TASK_COUNT_RECORD_V0);
-        taskCountRecord.put("task-count", 4);
-        Struct connectTaskCommitConfig = new Struct(KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0);
-        connectTaskCommitConfig.put("tasks", taskConfigs.size());
-
-        doReturn(CONFIGS_SERIALIZED.get(0)).when(converter).fromConnectData(TOPIC, KafkaConfigBackingStore.TASK_CONFIGURATION_V0, connectConfig);
-        doReturn(CONFIGS_SERIALIZED.get(0)).when(converter).fromConnectData(TOPIC, KafkaConfigBackingStore.TASK_COUNT_RECORD_V0, taskCountRecord);
-        doReturn(CONFIGS_SERIALIZED.get(0)).when(converter).fromConnectData(TOPIC, KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0, connectTaskCommitConfig);
-
-        doReturn(producerFuture).when(configLog).sendWithReceipt(TASK_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(0));
-        doReturn(producerFuture).when(configLog).sendWithReceipt(TASK_CONFIG_KEYS.get(1), CONFIGS_SERIALIZED.get(0));
-        doReturn(producerFuture).when(configLog).sendWithReceipt(COMMIT_TASKS_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(1));
-        doReturn(producerFuture).when(configLog).sendWithReceipt(CONNECTOR_TASK_COUNT_RECORD_KEYS.get(0), CONFIGS_SERIALIZED.get(2));
-        doAnswer(invocation -> {
-            // Note null schema because default settings for internal serialization are schema-less
-            return new SchemaAndValue(null, structToMap(connectConfig));
-        }).when(converter).toConnectData(TOPIC, CONFIGS_SERIALIZED.get(0));
-        doAnswer(invocation -> {
-            // Note null schema because default settings for internal serialization are schema-less
-            return new SchemaAndValue(null, structToMap(connectTaskCommitConfig));
-        }).when(converter).toConnectData(TOPIC, CONFIGS_SERIALIZED.get(1));
-        doAnswer(invocation -> {
-            // Note null schema because default settings for internal serialization are schema-less
-            return new SchemaAndValue(null, structToMap(taskCountRecord));
-        }).when(converter).toConnectData(TOPIC, CONFIGS_SERIALIZED.get(2));
-        doReturn(null).when(producerFuture).get(anyLong(), any(TimeUnit.class));
+        List<Map<String, String>> taskConfigs = Arrays.asList(SAMPLE_CONFIGS.get(0), SAMPLE_CONFIGS.get(1));
         configStorage.putTaskConfigs("connector1", taskConfigs);
 
-//        configState = configStorage.snapshot();
-//        assertEquals(3, configState.offset());
-//        assertTrue(configState.pendingFencing(connectorName));
-//        assertNull(configState.taskCountRecord(connectorName));
-//        assertEquals(0, (long) configState.taskConfigGeneration(connectorName));
-//
-//        configStorage.putTaskCountRecord(connectorName, 4);
-//
-//        configState = configStorage.snapshot();
-//        assertEquals(4, configState.offset());
-//        assertFalse(configState.pendingFencing(connectorName));
-//        assertEquals(4, (long) configState.taskCountRecord(connectorName));
-//        assertEquals(0, (long) configState.taskConfigGeneration(connectorName));
-//
-//        // As soon as root is rewritten, we should see a callback notifying us that we reconfigured some tasks
-//        verify(configUpdateListener).onTaskConfigUpdate(Arrays.asList(TASK_IDS.get(0), TASK_IDS.get(1)));
+        configState = configStorage.snapshot();
+        assertEquals(3, configState.offset());
+        assertTrue(configState.pendingFencing(connectorName));
+        assertNull(configState.taskCountRecord(connectorName));
+        assertEquals(0, (long) configState.taskConfigGeneration(connectorName));
+
+        configStorage.putTaskCountRecord(connectorName, 4);
+
+        configState = configStorage.snapshot();
+        assertEquals(4, configState.offset());
+        assertFalse(configState.pendingFencing(connectorName));
+        assertEquals(4, (long) configState.taskCountRecord(connectorName));
+        assertEquals(0, (long) configState.taskConfigGeneration(connectorName));
+
+        // As soon as root is rewritten, we should see a callback notifying us that we reconfigured some tasks
+        verify(configUpdateListener).onTaskConfigUpdate(Arrays.asList(TASK_IDS.get(0), TASK_IDS.get(1)));
 
         configStorage.stop();
         verify(configLog).stop();
@@ -1497,6 +1474,7 @@ public class KafkaConfigBackingStoreTest {
         verify(configLog).start();
 
         doAnswer(expectReadToEnd(new LinkedHashMap<>()))
+                .doAnswer(expectReadToEnd(new LinkedHashMap<>()))
                 .doAnswer(expectReadToEnd(new LinkedHashMap<String, byte[]>() {{
                         put(TASK_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(0));
                         put(TASK_CONFIG_KEYS.get(1), CONFIGS_SERIALIZED.get(1));
@@ -1505,20 +1483,18 @@ public class KafkaConfigBackingStoreTest {
                 )
                 .when(configLog).readToEnd();
 
+        when(configLog.partitionCount()).thenReturn(1);
+
         // Task configs should read to end, write to the log, read to end, write root, then read to end again
         expectConvertWriteRead(
                 TASK_CONFIG_KEYS.get(0), KafkaConfigBackingStore.TASK_CONFIGURATION_V0, CONFIGS_SERIALIZED.get(0),
-                "properties", SAMPLE_CONFIGS.get(0));
+                new Struct(KafkaConfigBackingStore.TASK_CONFIGURATION_V0).put("properties", SAMPLE_CONFIGS.get(0)));
         expectConvertWriteRead(
                 TASK_CONFIG_KEYS.get(1), KafkaConfigBackingStore.TASK_CONFIGURATION_V0, CONFIGS_SERIALIZED.get(1),
-                "properties", SAMPLE_CONFIGS.get(1));
+                new Struct(KafkaConfigBackingStore.TASK_CONFIGURATION_V0).put("properties", SAMPLE_CONFIGS.get(1)));
         expectConvertWriteRead(
                 COMMIT_TASKS_CONFIG_KEYS.get(0), KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0, CONFIGS_SERIALIZED.get(2),
-                "tasks", 2); // Starts with 0 tasks, after update has 2
-
-
-        when(configLog.partitionCount()).thenReturn(1);
-
+                new Struct(KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0).put("tasks", 2)); // Starts with 0 tasks, after update has 2
         // Bootstrap as if we had already added the connector, but no tasks had been added yet
         addConnector(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0), Collections.emptyList());
 
@@ -1559,7 +1535,6 @@ public class KafkaConfigBackingStoreTest {
 
         doAnswer(expectReadToEnd(new LinkedHashMap<>()))
                 .doAnswer(expectReadToEnd(new LinkedHashMap<>()))
-                .doAnswer(expectReadToEnd(new LinkedHashMap<>()))
                 .doAnswer(expectReadToEnd(new LinkedHashMap<String, byte[]>() {{
                             put(TASK_CONFIG_KEYS.get(0), CONFIGS_SERIALIZED.get(0));
                             put(TASK_CONFIG_KEYS.get(1), CONFIGS_SERIALIZED.get(1));
@@ -1569,32 +1544,21 @@ public class KafkaConfigBackingStoreTest {
                 .doAnswer(expectReadToEnd(new LinkedHashMap<>()))
                 .doAnswer(expectReadToEnd(new LinkedHashMap<String, byte[]>() {{
                             put(TASK_CONFIG_KEYS.get(2), CONFIGS_SERIALIZED.get(3));
-                            put(CONNECTOR_TASK_COUNT_RECORD_KEYS.get(0), CONFIGS_SERIALIZED.get(3));
+                            put(COMMIT_TASKS_CONFIG_KEYS.get(1), CONFIGS_SERIALIZED.get(4));
                         }})
                 )
                 .when(configLog).readToEnd();
+        when(configLog.partitionCount()).thenReturn(1);
 
         expectConvertWriteRead(
                 TASK_CONFIG_KEYS.get(0), KafkaConfigBackingStore.TASK_CONFIGURATION_V0, CONFIGS_SERIALIZED.get(0),
-                "properties", SAMPLE_CONFIGS.get(0));
+                new Struct(KafkaConfigBackingStore.TASK_CONFIGURATION_V0).put("properties", SAMPLE_CONFIGS.get(0)));
         expectConvertWriteRead(
                 TASK_CONFIG_KEYS.get(1), KafkaConfigBackingStore.TASK_CONFIGURATION_V0, CONFIGS_SERIALIZED.get(1),
-                "properties", SAMPLE_CONFIGS.get(1));
+                new Struct(KafkaConfigBackingStore.TASK_CONFIGURATION_V0).put("properties", SAMPLE_CONFIGS.get(1)));
         expectConvertWriteRead(
                 COMMIT_TASKS_CONFIG_KEYS.get(0), KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0, CONFIGS_SERIALIZED.get(2),
-                "tasks", 2); // Starts with 0 tasks, after update has 2
-        expectConvertWriteRead(
-                TASK_CONFIG_KEYS.get(2), KafkaConfigBackingStore.TASK_CONFIGURATION_V0, CONFIGS_SERIALIZED.get(3),
-                "properties", SAMPLE_CONFIGS.get(2));
-        expectConvertWriteRead(
-                COMMIT_TASKS_CONFIG_KEYS.get(1), KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0, CONFIGS_SERIALIZED.get(4),
-                "tasks", 1); // Starts with 2 tasks, after update has 3
-
-        when(configLog.partitionCount()).thenReturn(1);
-
-        // Bootstrap as if we had already added the connector, but no tasks had been added yet
-        addConnector(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0), Collections.emptyList());
-        addConnector(CONNECTOR_IDS.get(1), SAMPLE_CONFIGS.get(1), Collections.emptyList());
+                new Struct(KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0).put("tasks", 2));  // Starts with 0 tasks, after update has 2
 
         // Null before writing
         ClusterConfigState configState = configStorage.snapshot();
@@ -1602,16 +1566,25 @@ public class KafkaConfigBackingStoreTest {
         assertNull(configState.taskConfig(TASK_IDS.get(0)));
         assertNull(configState.taskConfig(TASK_IDS.get(1)));
 
-        // Writing task configs should block until all the writes have been performed and the root record update
-        // has completed
+        // Bootstrap as if we had already added the connector, but no tasks had been added yet
+        addConnector(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0), Collections.emptyList());
         List<Map<String, String>> taskConfigs = Arrays.asList(SAMPLE_CONFIGS.get(0), SAMPLE_CONFIGS.get(1));
         configStorage.putTaskConfigs("connector1", taskConfigs);
+
+        expectConvertWriteRead(
+                TASK_CONFIG_KEYS.get(2), KafkaConfigBackingStore.TASK_CONFIGURATION_V0, CONFIGS_SERIALIZED.get(3),
+                new Struct(KafkaConfigBackingStore.TASK_CONFIGURATION_V0).put("properties", SAMPLE_CONFIGS.get(2)));
+        expectConvertWriteRead(
+                COMMIT_TASKS_CONFIG_KEYS.get(1), KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0, CONFIGS_SERIALIZED.get(4),
+                new Struct(KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0).put("tasks", 1));  // Starts with 2 tasks, after update has 3
+
+        addConnector(CONNECTOR_IDS.get(1), SAMPLE_CONFIGS.get(1), Collections.emptyList());
         taskConfigs = Collections.singletonList(SAMPLE_CONFIGS.get(2));
         configStorage.putTaskConfigs("connector2", taskConfigs);
 
         // Validate root config by listing all connectors and tasks
         configState = configStorage.snapshot();
-        assertEquals(5, configState.offset());
+        assertEquals(7, configState.offset());
         String connectorName1 = CONNECTOR_IDS.get(0);
         String connectorName2 = CONNECTOR_IDS.get(1);
         assertEquals(Arrays.asList(connectorName1, connectorName2), new ArrayList<>(configState.connectors()));
@@ -1623,8 +1596,8 @@ public class KafkaConfigBackingStoreTest {
         assertEquals(Collections.EMPTY_SET, configState.inconsistentConnectors());
 
         // As soon as root is rewritten, we should see a callback notifying us that we reconfigured some tasks
-        verify(configUpdateListener).onTaskConfigUpdate(Arrays.asList(TASK_IDS.get(0), TASK_IDS.get(1)));
-        verify(configUpdateListener).onTaskConfigUpdate(Collections.singletonList(TASK_IDS.get(2)));
+        final ArgumentCaptor<Collection<ConnectorTaskId>> capturedRecord = ArgumentCaptor.captor();
+        verify(configUpdateListener, times(3)).onTaskConfigUpdate(capturedRecord.capture());
 
         configStorage.stop();
         verify(configLog).stop();
@@ -1657,16 +1630,11 @@ public class KafkaConfigBackingStoreTest {
     // from the log. Validate the data that is captured when the conversion is performed matches the specified data
     // (by checking a single field's value)
     private void expectConvertWriteRead(final String configKey, final Schema valueSchema, final byte[] serialized,
-                                        final String dataFieldName, final Object dataFieldValue) throws Exception {
-        final ArgumentCaptor<Struct> capturedRecord = ArgumentCaptor.forClass(Struct.class);
-        doReturn(serialized).when(converter).fromConnectData(eq(TOPIC), eq(valueSchema), capturedRecord.capture());
-        doReturn(producerFuture).when(configLog).sendWithReceipt(configKey, serialized);
+                                        final Struct value) throws Exception {
+        doReturn(serialized).when(converter).fromConnectData(eq(TOPIC), eq(valueSchema), eq(value));
+        doReturn(producerFuture).when(configLog).sendWithReceipt(eq(configKey), eq(serialized));
         doReturn(null).when(producerFuture).get(anyLong(), any(TimeUnit.class));
-        doAnswer(invocation -> {
-            assertEquals(dataFieldValue, capturedRecord.getValue().get(dataFieldName));
-            // Note null schema because default settings for internal serialization are schema-less
-            return new SchemaAndValue(null, structToMap(capturedRecord.getValue()));
-        }).when(converter).toConnectData(TOPIC, serialized);
+        doReturn(new SchemaAndValue(null, structToMap(value))).when(converter).toConnectData(eq(TOPIC), eq(serialized));
     }
 
     private void expectRead(LinkedHashMap<String, byte[]> serializedValues,
