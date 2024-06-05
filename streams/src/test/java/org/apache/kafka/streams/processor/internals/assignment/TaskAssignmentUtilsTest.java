@@ -49,6 +49,8 @@ import org.apache.kafka.streams.processor.assignment.TaskInfo;
 import org.apache.kafka.streams.processor.assignment.TaskTopicPartition;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.rules.Timeout;
 
 public class TaskAssignmentUtilsTest {
@@ -56,10 +58,14 @@ public class TaskAssignmentUtilsTest {
     @Rule
     public Timeout timeout = new Timeout(30, TimeUnit.SECONDS);
 
-    @Test
-    public void shouldOptimizeActiveTaskForMinTrafficSimple() {
+    @ParameterizedTest
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY,
+    })
+    public void shouldOptimizeActiveTaskSimple(String strategy) {
         final AssignmentConfigs assignmentConfigs = defaultAssignmentConfigs(
-            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC, 100, 1, 0);
+            strategy, 100, 1, 0);
         final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_0_0, true, mkSet("rack-2")),
             mkTaskInfo(TASK_0_1, true, mkSet("rack-1"))
@@ -89,76 +95,14 @@ public class TaskAssignmentUtilsTest {
         assertThat(assignments.get(processId(2)).tasks().keySet(), equalTo(mkSet(TASK_0_0)));
     }
 
-    @Test
-    public void shouldOptimizeActiveTaskForSubtopologyBalanceSimple() {
+    @ParameterizedTest
+    @ValueSource(strings = {
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC,
+        StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY,
+    })
+    public void shouldOptimizeStandbyTasksBasic(String strategy) {
         final AssignmentConfigs assignmentConfigs = defaultAssignmentConfigs(
-            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY, 100, 1, 0);
-        final Map<TaskId, TaskInfo> tasks = mkMap(
-            mkTaskInfo(TASK_0_0, true, mkSet("rack-2")),
-            mkTaskInfo(TASK_0_1, true, mkSet("rack-1"))
-        );
-        final Map<ProcessId, KafkaStreamsState> kafkaStreamsStates = mkMap(
-            mkStreamState(1, 1, Optional.of("rack-1")),
-            mkStreamState(2, 1, Optional.of("rack-2"))
-        );
-        final ApplicationState applicationState = new TestApplicationState(
-            assignmentConfigs, kafkaStreamsStates, tasks);
-
-        final Map<ProcessId, KafkaStreamsAssignment> assignments = mkMap(
-            mkAssignment(AssignedTask.Type.ACTIVE, 1, TASK_0_0),
-            mkAssignment(AssignedTask.Type.ACTIVE, 2, TASK_0_1)
-        );
-
-        TaskAssignmentUtils.optimizeRackAwareActiveTasks(
-            applicationState, assignments, new TreeSet<>(tasks.keySet()));
-        assertThat(assignments.size(), equalTo(2));
-        assertThat(assignments.get(processId(1)).tasks().keySet(), equalTo(mkSet(TASK_0_1)));
-        assertThat(assignments.get(processId(2)).tasks().keySet(), equalTo(mkSet(TASK_0_0)));
-
-        TaskAssignmentUtils.optimizeRackAwareActiveTasks(
-            applicationState, assignments, new TreeSet<>(tasks.keySet()));
-        assertThat(assignments.size(), equalTo(2));
-        assertThat(assignments.get(processId(1)).tasks().keySet(), equalTo(mkSet(TASK_0_1)));
-        assertThat(assignments.get(processId(2)).tasks().keySet(), equalTo(mkSet(TASK_0_0)));
-    }
-
-    @Test
-    public void shouldNotOptimizeStandbyTasksWhileOptimizingActiveTasks() {
-        final AssignmentConfigs assignmentConfigs = defaultAssignmentConfigs(
-            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC, 100, 1, 1);
-        final Map<TaskId, TaskInfo> tasks = mkMap(
-            mkTaskInfo(TASK_0_0, true, mkSet("rack-2")),
-            mkTaskInfo(TASK_0_1, true, mkSet("rack-1"))
-        );
-        final Map<ProcessId, KafkaStreamsState> kafkaStreamsStates = mkMap(
-            mkStreamState(1, 2, Optional.of("rack-1")),
-            mkStreamState(2, 2, Optional.of("rack-2"))
-        );
-        final ApplicationState applicationState = new TestApplicationState(
-            assignmentConfigs, kafkaStreamsStates, tasks);
-
-        final Map<ProcessId, KafkaStreamsAssignment> assignments = mkMap(
-            mkAssignment(AssignedTask.Type.ACTIVE, 1, TASK_0_0, TASK_0_1),
-            mkAssignment(AssignedTask.Type.STANDBY, 2, TASK_0_0, TASK_0_1)
-        );
-
-        TaskAssignmentUtils.optimizeRackAwareActiveTasks(
-            applicationState, assignments, new TreeSet<>(tasks.keySet()));
-        assertThat(assignments.size(), equalTo(2));
-        assertThat(assignments.get(processId(1)).tasks().keySet(), equalTo(mkSet(TASK_0_0, TASK_0_1)));
-        assertThat(assignments.get(processId(2)).tasks().keySet(), equalTo(mkSet(TASK_0_0, TASK_0_1)));
-
-        TaskAssignmentUtils.optimizeRackAwareActiveTasks(
-            applicationState, assignments, new TreeSet<>(tasks.keySet()));
-        assertThat(assignments.size(), equalTo(2));
-        assertThat(assignments.get(processId(1)).tasks().keySet(), equalTo(mkSet(TASK_0_0, TASK_0_1)));
-        assertThat(assignments.get(processId(2)).tasks().keySet(), equalTo(mkSet(TASK_0_0, TASK_0_1)));
-    }
-
-    @Test
-    public void shouldOptimizeStandbyTasksMinTrafficBasic() {
-        final AssignmentConfigs assignmentConfigs = defaultAssignmentConfigs(
-            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC, 100, 1, 1);
+            strategy, 100, 1, 1);
         final Map<TaskId, TaskInfo> tasks = mkMap(
             mkTaskInfo(TASK_0_0, true, mkSet("rack-2")),
             mkTaskInfo(TASK_0_1, true, mkSet("rack-3"))
