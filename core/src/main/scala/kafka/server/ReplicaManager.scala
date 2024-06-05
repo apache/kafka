@@ -1755,12 +1755,10 @@ class ReplicaManager(val config: KafkaConfig,
           new OffsetMovedToTieredStorageException("Given offset" + offset + " is moved to tiered storage"))
       } else {
         val fetchDataInfo = if (remoteLogManager.get.isRemoteLogFetchQuotaExceeded) {
-          // We do not want to send an exception in LogReadResult response (like we do in other cases when we send
-          // UnknownOffsetMetadata), because then it is classified as error in reading data, and a response is
-          // immediately sent back to the client. Instead, we want that we should be able to serve data for the
-          // other topic partitions via delayed fetch if required (when sending immediate response, we skip
-          // delayed fetch). Also, immediately sending response would make the consumer retry again immediately,
-          // which may run into quota exceeded situation again and thus get it into a loop.
+          // We do not want to send an exception in a LogReadResult response (like we do in other cases when we send
+          // UnknownOffsetMetadata), because it is classified as an error in reading the data, and a response is
+          // immediately sent back to the client. Instead, we want to serve data for the other topic partitions of the
+          // fetch request via delayed fetch if required (when sending immediate response, we skip delayed fetch).
           new FetchDataInfo(
             LogOffsetMetadata.UNKNOWN_OFFSET_METADATA,
             MemoryRecords.EMPTY,
