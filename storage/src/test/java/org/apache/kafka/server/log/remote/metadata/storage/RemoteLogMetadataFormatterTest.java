@@ -39,7 +39,7 @@ import static org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState.C
 public class RemoteLogMetadataFormatterTest {
     private final Uuid topicId = Uuid.randomUuid();
     private final String topic = "foo";
-    private final TopicIdPartition tp0 = new TopicIdPartition(topicId, new TopicPartition(topic, 0));
+    private final TopicIdPartition tpId0 = new TopicIdPartition(topicId, new TopicPartition(topic, 0));
     private final Uuid segmentId = Uuid.randomUuid();
 
     @Test
@@ -48,7 +48,7 @@ public class RemoteLogMetadataFormatterTest {
         segLeaderEpochs.put(0, 0L);
         segLeaderEpochs.put(1, 20L);
         segLeaderEpochs.put(2, 80L);
-        RemoteLogSegmentId remoteLogSegmentId = new RemoteLogSegmentId(tp0, segmentId);
+        RemoteLogSegmentId remoteLogSegmentId = new RemoteLogSegmentId(tpId0, segmentId);
         Optional<CustomMetadata> customMetadata = Optional.of(new CustomMetadata(new byte[10]));
         RemoteLogSegmentMetadata remoteLogMetadata = new RemoteLogSegmentMetadata(
                 remoteLogSegmentId, 0L, 100L, -1L, 1, 123L, 1024, customMetadata, COPY_SEGMENT_STARTED,
