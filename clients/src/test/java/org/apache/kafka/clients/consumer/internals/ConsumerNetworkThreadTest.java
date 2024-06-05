@@ -226,8 +226,6 @@ public class ConsumerNetworkThreadTest {
 
     private static Stream<Arguments> appEvents() {
         Time time1 = new MockTime();
-        Map<TopicPartition, OffsetAndMetadata> offset = mockTopicPartitionOffset();
-        final long currentTimeMs = time1.milliseconds();
 
         return Stream.of(
                 Arguments.of(new PollEvent(100)),
@@ -236,8 +234,7 @@ public class ConsumerNetworkThreadTest {
                 Arguments.of(new SyncCommitEvent(new HashMap<>(), calculateDeadlineMs(time1, 100))),
                 Arguments.of(new ResetPositionsEvent(calculateDeadlineMs(time1, 100))),
                 Arguments.of(new ValidatePositionsEvent(calculateDeadlineMs(time1, 100))),
-                Arguments.of(new TopicMetadataEvent("topic", Long.MAX_VALUE)),
-                Arguments.of(new AssignmentChangeEvent(offset, currentTimeMs)));
+                Arguments.of(new TopicMetadataEvent("topic", Long.MAX_VALUE)));
     }
 
     @ParameterizedTest
@@ -260,6 +257,19 @@ public class ConsumerNetworkThreadTest {
         assertDoesNotThrow(() -> consumerNetworkThread.runOnce());
 
         verify(applicationEventProcessor).process(any(ResetPositionsEvent.class));
+    }
+
+    @Test
+    public void testAssignmentChangeEvent() {
+        Map<TopicPartition, OffsetAndMetadata> offset = mockTopicPartitionOffset();
+
+        final long currentTimeMs = time.milliseconds();
+        ApplicationEvent e = new AssignmentChangeEvent(offset, currentTimeMs);
+        applicationEventsQueue.add(e);
+
+        consumerNetworkThread.runOnce();
+        verify(applicationEventProcessor).process(any(AssignmentChangeEvent.class));
+        verify(networkClientDelegate).poll(anyLong(), anyLong());
     }
 
     @Test
@@ -354,7 +364,7 @@ public class ConsumerNetworkThreadTest {
         verify(applicationEventReaper).reap(any(Long.class));
     }
 
-    static private Map<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {
+    private Map<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {
         final TopicPartition t0 = new TopicPartition("t0", 2);
         final TopicPartition t1 = new TopicPartition("t0", 3);
         final Map<TopicPartition, OffsetAndMetadata> topicPartitionOffsets = new HashMap<>();
