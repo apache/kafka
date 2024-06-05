@@ -27,6 +27,7 @@ import org.apache.kafka.clients.consumer.internals.events.CompletableApplication
 import org.apache.kafka.clients.consumer.internals.events.CompletableEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
+import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetPositionsEvent;
 import org.apache.kafka.clients.consumer.internals.events.SyncCommitEvent;
@@ -51,6 +52,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
@@ -66,6 +69,7 @@ import java.util.LinkedList;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.clients.consumer.internals.events.CompletableEvent.calculateDeadlineMs;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
@@ -211,28 +215,29 @@ public class ConsumerNetworkThreadTest {
         verify(networkClientDelegate).poll(anyLong(), anyLong());
     }
 
-    @Test
-    public void testPollEvent() {
-        ApplicationEvent e = new PollEvent(100);
+    @ParameterizedTest
+    @MethodSource("appEvents")
+    public void testEventIsProcessed(ApplicationEvent e) {
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
-        verify(applicationEventProcessor).process(e);
+        verify(applicationEventProcessor).process(any(e.getClass()));
+        assertTrue(applicationEventsQueue.isEmpty());
     }
 
-    @Test
-    public void testAsyncCommitEvent() {
-        ApplicationEvent e = new AsyncCommitEvent(new HashMap<>());
-        applicationEventsQueue.add(e);
-        consumerNetworkThread.runOnce();
-        verify(applicationEventProcessor).process(any(AsyncCommitEvent.class));
-    }
+    private static Stream<Arguments> appEvents() {
+        Time time1 = new MockTime();
+        Map<TopicPartition, OffsetAndMetadata> offset = mockTopicPartitionOffset();
+        final long currentTimeMs = time1.milliseconds();
 
-    @Test
-    public void testSyncCommitEvent() {
-        ApplicationEvent e = new SyncCommitEvent(new HashMap<>(), calculateDeadlineMs(time, 100));
-        applicationEventsQueue.add(e);
-        consumerNetworkThread.runOnce();
-        verify(applicationEventProcessor).process(any(SyncCommitEvent.class));
+        return Stream.of(
+                Arguments.of(new PollEvent(100)),
+                Arguments.of(new NewTopicsMetadataUpdateRequestEvent()),
+                Arguments.of(new AsyncCommitEvent(new HashMap<>())),
+                Arguments.of(new SyncCommitEvent(new HashMap<>(), calculateDeadlineMs(time1, 100))),
+                Arguments.of(new ResetPositionsEvent(calculateDeadlineMs(time1, 100))),
+                Arguments.of(new ValidatePositionsEvent(calculateDeadlineMs(time1, 100))),
+                Arguments.of(new TopicMetadataEvent("topic", Long.MAX_VALUE)),
+                Arguments.of(new AssignmentChangeEvent(offset, currentTimeMs)));
     }
 
     @ParameterizedTest
@@ -247,15 +252,6 @@ public class ConsumerNetworkThreadTest {
     }
 
     @Test
-    public void testResetPositionsEventIsProcessed() {
-        ResetPositionsEvent e = new ResetPositionsEvent(calculateDeadlineMs(time, 100));
-        applicationEventsQueue.add(e);
-        consumerNetworkThread.runOnce();
-        verify(applicationEventProcessor).process(any(ResetPositionsEvent.class));
-        assertTrue(applicationEventsQueue.isEmpty());
-    }
-
-    @Test
     public void testResetPositionsProcessFailureIsIgnored() {
         doThrow(new NullPointerException()).when(offsetsRequestManager).resetPositionsIfNeeded();
 
@@ -264,35 +260,6 @@ public class ConsumerNetworkThreadTest {
         assertDoesNotThrow(() -> consumerNetworkThread.runOnce());
 
         verify(applicationEventProcessor).process(any(ResetPositionsEvent.class));
-    }
-
-    @Test
-    public void testValidatePositionsEventIsProcessed() {
-        ValidatePositionsEvent e = new ValidatePositionsEvent(calculateDeadlineMs(time, 100));
-        applicationEventsQueue.add(e);
-        consumerNetworkThread.runOnce();
-        verify(applicationEventProcessor).process(any(ValidatePositionsEvent.class));
-        assertTrue(applicationEventsQueue.isEmpty());
-    }
-
-    @Test
-    public void testAssignmentChangeEvent() {
-        Map<TopicPartition, OffsetAndMetadata> offset = mockTopicPartitionOffset();
-
-        final long currentTimeMs = time.milliseconds();
-        ApplicationEvent e = new AssignmentChangeEvent(offset, currentTimeMs);
-        applicationEventsQueue.add(e);
-
-        consumerNetworkThread.runOnce();
-        verify(applicationEventProcessor).process(any(AssignmentChangeEvent.class));
-        verify(networkClientDelegate).poll(anyLong(), anyLong());
-    }
-
-    @Test
-    void testFetchTopicMetadata() {
-        applicationEventsQueue.add(new TopicMetadataEvent("topic", Long.MAX_VALUE));
-        consumerNetworkThread.runOnce();
-        verify(applicationEventProcessor).process(any(TopicMetadataEvent.class));
     }
 
     @Test
@@ -387,7 +354,7 @@ public class ConsumerNetworkThreadTest {
         verify(applicationEventReaper).reap(any(Long.class));
     }
 
-    private Map<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {
+    static private Map<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {
         final TopicPartition t0 = new TopicPartition("t0", 2);
         final TopicPartition t1 = new TopicPartition("t0", 3);
         final Map<TopicPartition, OffsetAndMetadata> topicPartitionOffsets = new HashMap<>();
