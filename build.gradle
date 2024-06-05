@@ -221,7 +221,6 @@ def excludedSpotlessModules = [':clients',
                                ':metadata',
                                ':raft',
                                ':server',
-                               ':server-common',
                                ':shell',
                                ':storage',
                                ':storage:storage-api', //  rename in settings.gradle
@@ -254,7 +253,6 @@ def excludedSpotlessModules = [':clients',
                                ':streams:upgrade-system-tests-37',
                                ':tools',
                                ':tools:tools-api',
-                               ':transaction-coordinator',
                                ':trogdor']
 
 
