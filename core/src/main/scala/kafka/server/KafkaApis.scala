@@ -256,6 +256,10 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS => handleGetTelemetrySubscriptionsRequest(request)
         case ApiKeys.PUSH_TELEMETRY => handlePushTelemetryRequest(request)
         case ApiKeys.LIST_CLIENT_METRICS_RESOURCES => handleListClientMetricsResources(request)
+        case ApiKeys.ADD_RAFT_VOTER => forwardToControllerOrFail(request)
+        case ApiKeys.REMOVE_RAFT_VOTER => forwardToControllerOrFail(request)
+        case ApiKeys.SHARE_FETCH => handleShareFetchRequest(request)
+        case ApiKeys.SHARE_ACKNOWLEDGE => handleShareAcknowledgeRequest(request)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {
@@ -3925,6 +3929,20 @@ class KafkaApis(val requestChannel: RequestChannel,
           requestHelper.sendMaybeThrottle(request, listClientMetricsResourcesRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
       }
     }
+  }
+
+  def handleShareFetchRequest(request: RequestChannel.Request): Unit = {
+    val shareFetchRequest = request.body[ShareFetchRequest]
+    // TODO: Implement the ShareFetchRequest handling
+    requestHelper.sendMaybeThrottle(request, shareFetchRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+    CompletableFuture.completedFuture[Unit](())
+  }
+
+  def handleShareAcknowledgeRequest(request: RequestChannel.Request): Unit = {
+    val shareAcknowledgeRequest = request.body[ShareAcknowledgeRequest]
+    // TODO: Implement the ShareAcknowledgeRequest handling
+    requestHelper.sendMaybeThrottle(request, shareAcknowledgeRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+    CompletableFuture.completedFuture[Unit](())
   }
 
   private def updateRecordConversionStats(request: RequestChannel.Request,

@@ -17,7 +17,6 @@
 
 package org.apache.kafka.image.publisher;
 
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
@@ -25,8 +24,6 @@ import org.apache.kafka.image.loader.LoaderManifest;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.slf4j.Logger;
-
-import java.util.List;
 
 /**
  * Tracks the registration of a specific broker, and executes a callback if it should be refreshed.
@@ -49,12 +46,10 @@ public class BrokerRegistrationTracker implements MetadataPublisher {
      * Create the tracker.
      *
      * @param id                            The ID of this broker.
-     * @param targetDirectories             The directories managed by this broker.
      * @param refreshRegistrationCallback   Callback to run if we need to refresh the registration.
      */
     public BrokerRegistrationTracker(
         int id,
-        List<Uuid> targetDirectories,
         Runnable refreshRegistrationCallback
     ) {
         this.log = new LogContext("[BrokerRegistrationTracker id=" + id + "] ").

@@ -131,6 +131,13 @@ public class NetworkClientDelegate implements AutoCloseable {
     }
 
     /**
+     * Return true if there is at least one in-flight request or unsent request.
+     */
+    public boolean hasAnyPendingRequests() {
+        return client.hasInFlightRequests() || !unsentRequests.isEmpty();
+    }
+
+    /**
      * Tries to send the requests in the unsentRequest queue. If the request doesn't have an assigned node, it will
      * find the leastLoadedOne, and will be retried in the next {@code poll()}. If the request is expired, a
      * {@link TimeoutException} will be thrown.
