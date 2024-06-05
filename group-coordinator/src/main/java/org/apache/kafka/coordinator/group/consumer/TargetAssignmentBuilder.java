@@ -18,8 +18,6 @@ package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.CoordinatorRecord;
-import org.apache.kafka.coordinator.group.assignor.GroupSpecImpl;
-import org.apache.kafka.coordinator.group.assignor.MemberSubscriptionSpecImpl;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
@@ -293,7 +291,7 @@ public class TargetAssignmentBuilder {
      * @throws PartitionAssignorException if the target assignment cannot be computed.
      */
     public TargetAssignmentResult build() throws PartitionAssignorException {
-        Map<String, MemberSubscriptionSpecImpl> memberSpecs = new HashMap<>();
+        Map<String, MemberSubscriptionAndAssignmentImpl> memberSpecs = new HashMap<>();
 
         // Prepare the member spec for all members.
         members.forEach((memberId, member) ->
@@ -343,7 +341,7 @@ public class TargetAssignmentBuilder {
                 subscriptionType,
                 invertedTargetAssignment
             ),
-            new SubscribedTopicMetadata(topicMetadataMap)
+            new SubscribedTopicDescriberImpl(topicMetadataMap)
         );
 
         // Compute delta from previous to new target assignment and create the
@@ -377,19 +375,19 @@ public class TargetAssignmentBuilder {
     ) {
         MemberAssignment newMemberAssignment = newGroupAssignment.members().get(memberId);
         if (newMemberAssignment != null) {
-            return new Assignment(newMemberAssignment.targetPartitions());
+            return new Assignment(newMemberAssignment.partitions());
         } else {
             return Assignment.EMPTY;
         }
     }
 
     // private for testing
-    static MemberSubscriptionSpecImpl createMemberSubscriptionSpecImpl(
+    static MemberSubscriptionAndAssignmentImpl createMemberSubscriptionSpecImpl(
         ConsumerGroupMember member,
         Assignment memberAssignment,
         TopicsImage topicsImage
     ) {
-        return new MemberSubscriptionSpecImpl(
+        return new MemberSubscriptionAndAssignmentImpl(
             Optional.ofNullable(member.rackId()),
             new TopicIds(member.subscribedTopicNames(), topicsImage),
             memberAssignment

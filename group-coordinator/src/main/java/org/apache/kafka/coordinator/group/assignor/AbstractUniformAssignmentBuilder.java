@@ -45,7 +45,7 @@ public abstract class AbstractUniformAssignmentBuilder {
         int partition
     ) {
         memberAssignments.get(memberId)
-            .targetPartitions()
+            .partitions()
             .computeIfAbsent(topicId, __ -> new HashSet<>())
             .add(partition);
     }

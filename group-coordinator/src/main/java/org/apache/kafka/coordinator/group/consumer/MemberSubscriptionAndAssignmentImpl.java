@@ -14,11 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.assignor;
+package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.group.api.assignor.MemberSubscriptionSpec;
-import org.apache.kafka.coordinator.group.consumer.Assignment;
+import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.MemberSubscription;
 
 import java.util.Map;
 import java.util.Objects;
@@ -26,9 +26,9 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Implementation of the {@link MemberSubscriptionSpec} interface.
+ * Implementation of the {@link MemberSubscription} and the {@link MemberAssignment} interfaces.
  */
-public class MemberSubscriptionSpecImpl implements MemberSubscriptionSpec {
+public class MemberSubscriptionAndAssignmentImpl implements MemberSubscription, MemberAssignment {
     private final Optional<String> rackId;
     private final Set<Uuid> subscribedTopicIds;
     private final Assignment memberAssignment;
@@ -40,7 +40,7 @@ public class MemberSubscriptionSpecImpl implements MemberSubscriptionSpec {
      * @param subscribedTopicIds    The set of subscribed topic Ids.
      * @param memberAssignment      The current member assignment.
      */
-    public MemberSubscriptionSpecImpl(
+    public MemberSubscriptionAndAssignmentImpl(
         Optional<String> rackId,
         Set<Uuid> subscribedTopicIds,
         Assignment memberAssignment
@@ -60,7 +60,8 @@ public class MemberSubscriptionSpecImpl implements MemberSubscriptionSpec {
         return subscribedTopicIds;
     }
 
-    public Map<Uuid, Set<Integer>> memberAssignment() {
+    @Override
+    public Map<Uuid, Set<Integer>> partitions() {
         return memberAssignment.partitions();
     }
 
@@ -68,7 +69,7 @@ public class MemberSubscriptionSpecImpl implements MemberSubscriptionSpec {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        MemberSubscriptionSpecImpl that = (MemberSubscriptionSpecImpl) o;
+        MemberSubscriptionAndAssignmentImpl that = (MemberSubscriptionAndAssignmentImpl) o;
         return rackId.equals(that.rackId) &&
             subscribedTopicIds.equals(that.subscribedTopicIds) &&
             memberAssignment.equals(that.memberAssignment);
@@ -89,4 +90,5 @@ public class MemberSubscriptionSpecImpl implements MemberSubscriptionSpec {
             ", memberAssignment=" + memberAssignment +
             ')';
     }
+
 }

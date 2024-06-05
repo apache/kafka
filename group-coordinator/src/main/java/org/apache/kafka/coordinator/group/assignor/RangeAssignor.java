@@ -23,6 +23,7 @@ import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
 import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
+import org.apache.kafka.coordinator.group.consumer.MemberAssignmentImpl;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -168,7 +169,9 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
             List<MemberWithRemainingAssignments> potentiallyUnfilledMembers = new ArrayList<>();
 
             for (String memberId : membersForTopic) {
-                Set<Integer> assignedPartitionsForTopic = groupSpec.memberAssignment(memberId)
+                Set<Integer> assignedPartitionsForTopic = groupSpec
+                    .memberAssignment(memberId)
+                    .partitions()
                     .getOrDefault(topicId, Collections.emptySet());
 
                 int currentAssignmentSize = assignedPartitionsForTopic.size();
@@ -183,8 +186,8 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
                     for (int i = 0; i < retainedPartitionsCount; i++) {
                         assignedStickyPartitionsForTopic
                             .add(currentAssignmentListForTopic.get(i));
-                        newTargetAssignment.computeIfAbsent(memberId, k -> new MemberAssignment(new HashMap<>()))
-                            .targetPartitions()
+                        newTargetAssignment.computeIfAbsent(memberId, k -> new MemberAssignmentImpl(new HashMap<>()))
+                            .partitions()
                             .computeIfAbsent(topicId, k -> new HashSet<>())
                             .add(currentAssignmentListForTopic.get(i));
                     }
@@ -204,8 +207,8 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
                     // add the extra partition that will be present at the index right after min quota was satisfied.
                     assignedStickyPartitionsForTopic
                         .add(currentAssignmentListForTopic.get(minRequiredQuota));
-                    newTargetAssignment.computeIfAbsent(memberId, k -> new MemberAssignment(new HashMap<>()))
-                        .targetPartitions()
+                    newTargetAssignment.computeIfAbsent(memberId, k -> new MemberAssignmentImpl(new HashMap<>()))
+                        .partitions()
                         .computeIfAbsent(topicId, k -> new HashSet<>())
                         .add(currentAssignmentListForTopic.get(minRequiredQuota));
                 } else {
@@ -239,8 +242,8 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
                     List<Integer> partitionsToAssign = unassignedPartitionsForTopic
                         .subList(unassignedPartitionsListStartPointer, unassignedPartitionsListStartPointer + remaining);
                     unassignedPartitionsListStartPointer += remaining;
-                    newTargetAssignment.computeIfAbsent(memberId, k -> new MemberAssignment(new HashMap<>()))
-                        .targetPartitions()
+                    newTargetAssignment.computeIfAbsent(memberId, k -> new MemberAssignmentImpl(new HashMap<>()))
+                        .partitions()
                         .computeIfAbsent(topicId, k -> new HashSet<>())
                         .addAll(partitionsToAssign);
                 }

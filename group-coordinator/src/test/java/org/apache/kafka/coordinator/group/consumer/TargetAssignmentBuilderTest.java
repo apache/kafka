@@ -19,9 +19,7 @@ package org.apache.kafka.coordinator.group.consumer;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.AssignmentTestUtil;
 import org.apache.kafka.coordinator.group.MetadataImageBuilder;
-import org.apache.kafka.coordinator.group.assignor.GroupSpecImpl;
-import org.apache.kafka.coordinator.group.api.assignor.MemberSubscriptionSpec;
-import org.apache.kafka.coordinator.group.assignor.MemberSubscriptionSpecImpl;
+import org.apache.kafka.coordinator.group.api.assignor.MemberSubscription;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
@@ -159,13 +157,13 @@ public class TargetAssignmentBuilderTest {
             String memberId,
             Map<Uuid, Set<Integer>> assignment
         ) {
-            memberAssignments.put(memberId, new MemberAssignment(assignment));
+            memberAssignments.put(memberId, new MemberAssignmentImpl(assignment));
         }
 
         public TargetAssignmentBuilder.TargetAssignmentResult build() {
             TopicsImage topicsImage = topicsImageBuilder.build().topics();
             // Prepare expected member specs.
-            Map<String, MemberSubscriptionSpecImpl> memberSubscriptions = new HashMap<>();
+            Map<String, MemberSubscriptionAndAssignmentImpl> memberSubscriptions = new HashMap<>();
 
             // All the existing members are prepared.
             members.forEach((memberId, member) ->
@@ -206,7 +204,7 @@ public class TargetAssignmentBuilderTest {
                 topicMetadataMap.put(topicMetadata.id(), topicMetadata));
 
             // Prepare the expected subscription topic metadata.
-            SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadataMap);
+            SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadataMap);
             SubscriptionType subscriptionType = HOMOGENEOUS;
 
             // Prepare the member assignments per topic partition.
@@ -277,13 +275,13 @@ public class TargetAssignmentBuilderTest {
             mkTopicAssignment(barTopicId, 1, 2, 3)
         ));
 
-        MemberSubscriptionSpec subscriptionSpec = createMemberSubscriptionSpecImpl(
+        MemberSubscription subscriptionSpec = createMemberSubscriptionSpecImpl(
             member,
             assignment,
             topicsImage
         );
 
-        assertEquals(new MemberSubscriptionSpecImpl(
+        assertEquals(new MemberSubscriptionAndAssignmentImpl(
             Optional.of("rackId"),
             new TopicIds(mkSet("bar", "foo", "zar"), topicsImage),
             assignment
@@ -343,11 +341,11 @@ public class TargetAssignmentBuilderTest {
         )), result.records());
 
         Map<String, MemberAssignment> expectedAssignment = new HashMap<>();
-        expectedAssignment.put("member-1", new MemberAssignment(mkAssignment(
+        expectedAssignment.put("member-1", new MemberAssignmentImpl(mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2, 3),
             mkTopicAssignment(barTopicId, 1, 2, 3)
         )));
-        expectedAssignment.put("member-2", new MemberAssignment(mkAssignment(
+        expectedAssignment.put("member-2", new MemberAssignmentImpl(mkAssignment(
             mkTopicAssignment(fooTopicId, 4, 5, 6),
             mkTopicAssignment(barTopicId, 4, 5, 6)
         )));
@@ -406,11 +404,11 @@ public class TargetAssignmentBuilderTest {
         ), result.records().get(2));
 
         Map<String, MemberAssignment> expectedAssignment = new HashMap<>();
-        expectedAssignment.put("member-2", new MemberAssignment(mkAssignment(
+        expectedAssignment.put("member-2", new MemberAssignmentImpl(mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2, 3),
             mkTopicAssignment(barTopicId, 1, 2, 3)
         )));
-        expectedAssignment.put("member-1", new MemberAssignment(mkAssignment(
+        expectedAssignment.put("member-1", new MemberAssignmentImpl(mkAssignment(
             mkTopicAssignment(fooTopicId, 4, 5, 6),
             mkTopicAssignment(barTopicId, 4, 5, 6)
         )));
@@ -480,15 +478,15 @@ public class TargetAssignmentBuilderTest {
         ), result.records().get(3));
 
         Map<String, MemberAssignment> expectedAssignment = new HashMap<>();
-        expectedAssignment.put("member-1", new MemberAssignment(mkAssignment(
+        expectedAssignment.put("member-1", new MemberAssignmentImpl(mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2),
             mkTopicAssignment(barTopicId, 1, 2)
         )));
-        expectedAssignment.put("member-2", new MemberAssignment(mkAssignment(
+        expectedAssignment.put("member-2", new MemberAssignmentImpl(mkAssignment(
             mkTopicAssignment(fooTopicId, 3, 4),
             mkTopicAssignment(barTopicId, 3, 4)
         )));
-        expectedAssignment.put("member-3", new MemberAssignment(mkAssignment(
+        expectedAssignment.put("member-3", new MemberAssignmentImpl(mkAssignment(
             mkTopicAssignment(fooTopicId, 5, 6),
             mkTopicAssignment(barTopicId, 5, 6)
         )));
@@ -567,15 +565,15 @@ public class TargetAssignmentBuilderTest {
         ), result.records().get(3));
 
         Map<String, MemberAssignment> expectedAssignment = new HashMap<>();
-        expectedAssignment.put("member-1", new MemberAssignment(mkAssignment(
+        expectedAssignment.put("member-1", new MemberAssignmentImpl(mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2),
             mkTopicAssignment(barTopicId, 1, 2)
         )));
-        expectedAssignment.put("member-2", new MemberAssignment(mkAssignment(
+        expectedAssignment.put("member-2", new MemberAssignmentImpl(mkAssignment(
             mkTopicAssignment(fooTopicId, 3, 4),
             mkTopicAssignment(barTopicId, 3, 4)
         )));
-        expectedAssignment.put("member-3", new MemberAssignment(mkAssignment(
+        expectedAssignment.put("member-3", new MemberAssignmentImpl(mkAssignment(
             mkTopicAssignment(fooTopicId, 5, 6),
             mkTopicAssignment(barTopicId, 5, 6)
         )));
@@ -645,15 +643,15 @@ public class TargetAssignmentBuilderTest {
         ), result.records().get(2));
 
         Map<String, MemberAssignment> expectedAssignment = new HashMap<>();
-        expectedAssignment.put("member-1", new MemberAssignment(mkAssignment(
+        expectedAssignment.put("member-1", new MemberAssignmentImpl(mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2),
             mkTopicAssignment(barTopicId, 1, 2)
         )));
-        expectedAssignment.put("member-2", new MemberAssignment(mkAssignment(
+        expectedAssignment.put("member-2", new MemberAssignmentImpl(mkAssignment(
             mkTopicAssignment(fooTopicId, 3, 4, 5),
             mkTopicAssignment(barTopicId, 3, 4, 5)
         )));
-        expectedAssignment.put("member-3", new MemberAssignment(mkAssignment(
+        expectedAssignment.put("member-3", new MemberAssignmentImpl(mkAssignment(
             mkTopicAssignment(fooTopicId, 6),
             mkTopicAssignment(barTopicId, 6)
         )));
@@ -719,11 +717,11 @@ public class TargetAssignmentBuilderTest {
         ), result.records().get(2));
 
         Map<String, MemberAssignment> expectedAssignment = new HashMap<>();
-        expectedAssignment.put("member-1", new MemberAssignment(mkAssignment(
+        expectedAssignment.put("member-1", new MemberAssignmentImpl(mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2, 3),
             mkTopicAssignment(barTopicId, 1, 2, 3)
         )));
-        expectedAssignment.put("member-2", new MemberAssignment(mkAssignment(
+        expectedAssignment.put("member-2", new MemberAssignmentImpl(mkAssignment(
             mkTopicAssignment(fooTopicId, 4, 5, 6),
             mkTopicAssignment(barTopicId, 4, 5, 6)
         )));
@@ -794,16 +792,16 @@ public class TargetAssignmentBuilderTest {
         ), result.records().get(1));
 
         Map<String, MemberAssignment> expectedAssignment = new HashMap<>();
-        expectedAssignment.put("member-1", new MemberAssignment(mkAssignment(
+        expectedAssignment.put("member-1", new MemberAssignmentImpl(mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2),
             mkTopicAssignment(barTopicId, 1, 2)
         )));
-        expectedAssignment.put("member-2", new MemberAssignment(mkAssignment(
+        expectedAssignment.put("member-2", new MemberAssignmentImpl(mkAssignment(
             mkTopicAssignment(fooTopicId, 3, 4),
             mkTopicAssignment(barTopicId, 3, 4)
         )));
 
-        expectedAssignment.put("member-3-a", new MemberAssignment(mkAssignment(
+        expectedAssignment.put("member-3-a", new MemberAssignmentImpl(mkAssignment(
             mkTopicAssignment(fooTopicId, 5, 6),
             mkTopicAssignment(barTopicId, 5, 6)
         )));

@@ -1926,7 +1926,7 @@ public class GroupMetadataManager {
 
             MemberAssignment newMemberAssignment = assignmentResult.targetAssignment().get(updatedMember.memberId());
             if (newMemberAssignment != null) {
-                return new Assignment(newMemberAssignment.targetPartitions());
+                return new Assignment(newMemberAssignment.partitions());
             } else {
                 return Assignment.EMPTY;
             }

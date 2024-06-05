@@ -41,7 +41,7 @@ public class AssignorBenchmarkUtils {
         Map<Uuid, Map<Integer, String>> invertedTargetAssignment = new HashMap<>();
         for (Map.Entry<String, MemberAssignment> memberEntry : groupAssignment.members().entrySet()) {
             String memberId = memberEntry.getKey();
-            Map<Uuid, Set<Integer>> topicsAndPartitions = memberEntry.getValue().targetPartitions();
+            Map<Uuid, Set<Integer>> topicsAndPartitions = memberEntry.getValue().partitions();
 
             for (Map.Entry<Uuid, Set<Integer>> topicEntry : topicsAndPartitions.entrySet()) {
                 Uuid topicId = topicEntry.getKey();

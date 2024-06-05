@@ -14,51 +14,51 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.api.assignor;
+package org.apache.kafka.coordinator.group.consumer;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
 
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
- * The partition assignment for a consumer group.
+ * The partition assignment for a consumer group member.
  */
-@InterfaceStability.Unstable
-public class GroupAssignment {
+public class MemberAssignmentImpl implements MemberAssignment {
     /**
-     * The member assignments keyed by member id.
+     * The target partitions assigned to this member keyed by topicId.
      */
-    private final Map<String, MemberAssignment> members;
+    private final Map<Uuid, Set<Integer>> assignment;
 
-    public GroupAssignment(
-        Map<String, MemberAssignment> members
-    ) {
-        this.members = Objects.requireNonNull(members);
+    public MemberAssignmentImpl(Map<Uuid, Set<Integer>> assignment) {
+        this.assignment = Objects.requireNonNull(assignment);
     }
 
     /**
-     * @return Member assignments keyed by member Ids.
+     * @return Target partitions keyed by topic Ids.
      */
-    public Map<String, MemberAssignment> members() {
-        return members;
+    @Override
+    public Map<Uuid, Set<Integer>> partitions() {
+        return this.assignment;
     }
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        GroupAssignment that = (GroupAssignment) o;
-        return members.equals(that.members);
+        MemberAssignmentImpl that = (MemberAssignmentImpl) o;
+        return assignment.equals(that.assignment);
     }
 
     @Override
     public int hashCode() {
-        return members.hashCode();
+        return assignment.hashCode();
     }
 
     @Override
     public String toString() {
-        return "GroupAssignment(members=" + members + ')';
+        return "MemberAssignment(assignment=" + assignment + ')';
     }
 }

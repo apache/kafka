@@ -21,7 +21,9 @@ import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
 import org.apache.kafka.coordinator.group.consumer.Assignment;
-import org.apache.kafka.coordinator.group.consumer.SubscribedTopicMetadata;
+import org.apache.kafka.coordinator.group.consumer.GroupSpecImpl;
+import org.apache.kafka.coordinator.group.consumer.MemberSubscriptionAndAssignmentImpl;
+import org.apache.kafka.coordinator.group.consumer.SubscribedTopicDescriberImpl;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
 import org.junit.jupiter.api.Test;
 
@@ -56,7 +58,7 @@ public class RangeAssignorTest {
 
     @Test
     public void testOneConsumerNoTopic() {
-        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
             Collections.singletonMap(
                 topic1Uuid,
                 new TopicMetadata(
@@ -68,9 +70,9 @@ public class RangeAssignorTest {
             )
         );
 
-        Map<String, MemberSubscriptionSpecImpl> members = Collections.singletonMap(
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = Collections.singletonMap(
             memberA,
-            new MemberSubscriptionSpecImpl(
+            new MemberSubscriptionAndAssignmentImpl(
                 Optional.empty(),
                 Collections.emptySet(),
                 Assignment.EMPTY
@@ -93,7 +95,7 @@ public class RangeAssignorTest {
 
     @Test
     public void testOneConsumerSubscribedToNonExistentTopic() {
-        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
             Collections.singletonMap(
                 topic1Uuid,
                 new TopicMetadata(
@@ -105,9 +107,9 @@ public class RangeAssignorTest {
             )
         );
 
-        Map<String, MemberSubscriptionSpecImpl> members = Collections.singletonMap(
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = Collections.singletonMap(
             memberA,
-            new MemberSubscriptionSpecImpl(
+            new MemberSubscriptionAndAssignmentImpl(
                 Optional.empty(),
                 mkSet(topic2Uuid),
                 Assignment.EMPTY
@@ -140,15 +142,15 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        Map<String, MemberSubscriptionSpecImpl> members = new TreeMap<>();
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
 
-        members.put(memberA, new MemberSubscriptionSpecImpl(
+        members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic3Uuid),
             Assignment.EMPTY
         ));
 
-        members.put(memberB, new MemberSubscriptionSpecImpl(
+        members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic3Uuid),
             Assignment.EMPTY
@@ -159,7 +161,7 @@ public class RangeAssignorTest {
             HOMOGENEOUS,
             invertedTargetAssignment(members)
         );
-        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(
             groupSpec,
@@ -201,21 +203,21 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        Map<String, MemberSubscriptionSpecImpl> members = new TreeMap<>();
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
 
-        members.put(memberA, new MemberSubscriptionSpecImpl(
+        members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
             Assignment.EMPTY
         ));
 
-        members.put(memberB, new MemberSubscriptionSpecImpl(
+        members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             mkSet(topic3Uuid),
             Assignment.EMPTY
         ));
 
-        members.put(memberC, new MemberSubscriptionSpecImpl(
+        members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             mkSet(topic2Uuid, topic3Uuid),
             Assignment.EMPTY
@@ -226,7 +228,7 @@ public class RangeAssignorTest {
             HETEROGENEOUS,
             invertedTargetAssignment(members)
         );
-        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(
             groupSpec,
@@ -265,21 +267,21 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        Map<String, MemberSubscriptionSpecImpl> members = new TreeMap<>();
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
 
-        members.put(memberA, new MemberSubscriptionSpecImpl(
+        members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic3Uuid),
             Assignment.EMPTY
         ));
 
-        members.put(memberB, new MemberSubscriptionSpecImpl(
+        members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic3Uuid),
             Assignment.EMPTY
         ));
 
-        members.put(memberC, new MemberSubscriptionSpecImpl(
+        members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic3Uuid),
             Assignment.EMPTY
@@ -290,7 +292,7 @@ public class RangeAssignorTest {
             HOMOGENEOUS,
             invertedTargetAssignment(members)
         );
-        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(
             groupSpec,
@@ -330,9 +332,9 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        Map<String, MemberSubscriptionSpecImpl> members = new TreeMap<>();
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
 
-        members.put(memberA, new MemberSubscriptionSpecImpl(
+        members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
             new Assignment(mkAssignment(
@@ -341,7 +343,7 @@ public class RangeAssignorTest {
             ))
         ));
 
-        members.put(memberB, new MemberSubscriptionSpecImpl(
+        members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
             new Assignment(mkAssignment(
@@ -351,7 +353,7 @@ public class RangeAssignorTest {
         ));
 
         // Add a new consumer to trigger a re-assignment
-        members.put(memberC, new MemberSubscriptionSpecImpl(
+        members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
             Assignment.EMPTY
@@ -362,7 +364,7 @@ public class RangeAssignorTest {
             HOMOGENEOUS,
             invertedTargetAssignment(members)
         );
-        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(
             groupSpec,
@@ -401,9 +403,9 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        Map<String, MemberSubscriptionSpecImpl> members = new TreeMap<>();
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
 
-        members.put(memberA, new MemberSubscriptionSpecImpl(
+        members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
             new Assignment(mkAssignment(
@@ -412,7 +414,7 @@ public class RangeAssignorTest {
             ))
         ));
 
-        members.put(memberB, new MemberSubscriptionSpecImpl(
+        members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
             new Assignment(mkAssignment(
@@ -426,7 +428,7 @@ public class RangeAssignorTest {
             HOMOGENEOUS,
             invertedTargetAssignment(members)
         );
-        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(
             groupSpec,
@@ -462,9 +464,9 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        Map<String, MemberSubscriptionSpecImpl> members = new TreeMap<>();
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
 
-        members.put(memberA, new MemberSubscriptionSpecImpl(
+        members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
             new Assignment(mkAssignment(
@@ -473,7 +475,7 @@ public class RangeAssignorTest {
             ))
         ));
 
-        members.put(memberB, new MemberSubscriptionSpecImpl(
+        members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
             new Assignment(mkAssignment(
@@ -483,7 +485,7 @@ public class RangeAssignorTest {
         ));
 
         // Add a new consumer to trigger a re-assignment
-        members.put(memberC, new MemberSubscriptionSpecImpl(
+        members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
             Assignment.EMPTY
@@ -494,7 +496,7 @@ public class RangeAssignorTest {
             HOMOGENEOUS,
             invertedTargetAssignment(members)
         );
-        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(
             groupSpec,
@@ -535,9 +537,9 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        Map<String, MemberSubscriptionSpecImpl> members = new TreeMap<>();
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
 
-        members.put(memberA, new MemberSubscriptionSpecImpl(
+        members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
             new Assignment(mkAssignment(
@@ -546,7 +548,7 @@ public class RangeAssignorTest {
             ))
         ));
 
-        members.put(memberB, new MemberSubscriptionSpecImpl(
+        members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
             new Assignment(mkAssignment(
@@ -556,7 +558,7 @@ public class RangeAssignorTest {
         ));
 
         // Add a new consumer to trigger a re-assignment
-        members.put(memberC, new MemberSubscriptionSpecImpl(
+        members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             mkSet(topic1Uuid),
             Assignment.EMPTY
@@ -567,7 +569,7 @@ public class RangeAssignorTest {
             HETEROGENEOUS,
             invertedTargetAssignment(members)
         );
-        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(
             groupSpec,
@@ -606,11 +608,11 @@ public class RangeAssignorTest {
             Collections.emptyMap()
         ));
 
-        Map<String, MemberSubscriptionSpecImpl> members = new TreeMap<>();
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
 
         // Consumer A was removed
 
-        members.put(memberB, new MemberSubscriptionSpecImpl(
+        members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid),
             new Assignment(mkAssignment(
@@ -624,7 +626,7 @@ public class RangeAssignorTest {
             HOMOGENEOUS,
             invertedTargetAssignment(members)
         );
-        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(
             groupSpec,
@@ -664,9 +666,9 @@ public class RangeAssignorTest {
 
         // Let initial subscriptions be A -> T1, T2 // B -> T2 // C -> T2, T3
         // Change the subscriptions to A -> T1 // B -> T1, T2, T3 // C -> T2
-        Map<String, MemberSubscriptionSpecImpl> members = new TreeMap<>();
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
 
-        members.put(memberA, new MemberSubscriptionSpecImpl(
+        members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             mkSet(topic1Uuid),
             new Assignment(mkAssignment(
@@ -675,7 +677,7 @@ public class RangeAssignorTest {
             ))
         ));
 
-        members.put(memberB, new MemberSubscriptionSpecImpl(
+        members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             mkSet(topic1Uuid, topic2Uuid, topic3Uuid),
             new Assignment(mkAssignment(
@@ -683,7 +685,7 @@ public class RangeAssignorTest {
             ))
         ));
 
-        members.put(memberC, new MemberSubscriptionSpecImpl(
+        members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             mkSet(topic2Uuid),
             new Assignment(mkAssignment(
@@ -697,7 +699,7 @@ public class RangeAssignorTest {
             HETEROGENEOUS,
             invertedTargetAssignment(members)
         );
-        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
 
         GroupAssignment computedAssignment = assignor.assign(
             groupSpec,
@@ -726,7 +728,7 @@ public class RangeAssignorTest {
     ) {
         assertEquals(expectedAssignment.size(), computedGroupAssignment.members().size());
         for (String memberId : computedGroupAssignment.members().keySet()) {
-            Map<Uuid, Set<Integer>> computedAssignmentForMember = computedGroupAssignment.members().get(memberId).targetPartitions();
+            Map<Uuid, Set<Integer>> computedAssignmentForMember = computedGroupAssignment.members().get(memberId).partitions();
             assertEquals(expectedAssignment.get(memberId), computedAssignmentForMember);
         }
     }
