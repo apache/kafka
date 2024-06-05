@@ -212,7 +212,7 @@ public class ConsumerNetworkThreadTest {
     }
 
     @Test
-    public void testApplicationEvent() {
+    public void testPollEvent() {
         ApplicationEvent e = new PollEvent(100);
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
