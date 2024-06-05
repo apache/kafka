@@ -36,6 +36,7 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaClientSupplier;
@@ -351,7 +352,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     private volatile KafkaFutureImpl<Map<String, KafkaFuture<Uuid>>> producerInstanceIdFuture = new KafkaFutureImpl<>();
     private volatile KafkaFutureImpl<Uuid> threadProducerInstanceIdFuture = new KafkaFutureImpl<>();
 
-    private final PunctuateRatioSlidingWindow punctuateRatioSlidingWindow = new PunctuateRatioSlidingWindow(30000); // window size of 30 seconds
+    private final PunctuateRatioSlidingWindow punctuateRatioSlidingWindow = new PunctuateRatioSlidingWindow(30000, new SystemTime()); // window size of 30 seconds
     public static StreamThread create(final TopologyMetadata topologyMetadata,
                                       final StreamsConfig config,
                                       final KafkaClientSupplier clientSupplier,
