@@ -54,7 +54,6 @@ public final class RemoteLogManagerConfig {
             "implementation. For example this value can be `rlmm.config.`.";
     public static final String DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX = "rlmm.config.";
 
-
     public static final String REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP = "remote.log.storage.system.enable";
     public static final String REMOTE_LOG_STORAGE_SYSTEM_ENABLE_DOC = "Whether to enable tiered storage functionality in a broker or not. Valid values " +
             "are `true` or `false` and the default value is false. When it is true broker starts all the services required for the tiered storage functionality.";
@@ -174,6 +173,10 @@ public final class RemoteLogManagerConfig {
     public static final String REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_SIZE_SECONDS_DOC = "The time span of each sample for remote fetch quota management. " +
             "The default value is 1 second.";
     public static final int DEFAULT_REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_SIZE_SECONDS = 1;
+
+    public static final String REMOTE_FETCH_MAX_WAIT_MS_PROP = "remote.fetch.max.wait.ms";
+    public static final String REMOTE_FETCH_MAX_WAIT_MS_DOC = "The maximum amount of time the server will wait before answering the remote fetch request";
+    public static final int DEFAULT_REMOTE_FETCH_MAX_WAIT_MS = 500;
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef();
 
@@ -323,7 +326,13 @@ public final class RemoteLogManagerConfig {
                                  DEFAULT_REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_SIZE_SECONDS,
                                  atLeast(1),
                                  MEDIUM,
-                                 REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_SIZE_SECONDS_DOC);
+                                 REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_SIZE_SECONDS_DOC)
+                  .define(REMOTE_FETCH_MAX_WAIT_MS_PROP,
+                                 INT,
+                                 DEFAULT_REMOTE_FETCH_MAX_WAIT_MS,
+                                 atLeast(1),
+                                 MEDIUM,
+                                 REMOTE_FETCH_MAX_WAIT_MS_DOC);
     }
 
     private final boolean enableRemoteStorageSystem;
@@ -351,6 +360,7 @@ public final class RemoteLogManagerConfig {
     private final long remoteLogManagerFetchMaxBytesPerSecond;
     private final int remoteLogManagerFetchNumQuotaSamples;
     private final int remoteLogManagerFetchQuotaWindowSizeSeconds;
+    private final int remoteFetchMaxWaitMs;
 
     public RemoteLogManagerConfig(AbstractConfig config) {
         this(config.getBoolean(REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP),
@@ -381,7 +391,8 @@ public final class RemoteLogManagerConfig {
             config.getInt(REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_SIZE_SECONDS_PROP),
             config.getLong(REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP),
             config.getInt(REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_NUM_PROP),
-            config.getInt(REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_SIZE_SECONDS_PROP));
+            config.getInt(REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_SIZE_SECONDS_PROP),
+            config.getInt(REMOTE_FETCH_MAX_WAIT_MS_PROP));
     }
 
     // Visible for testing
@@ -409,8 +420,8 @@ public final class RemoteLogManagerConfig {
                                   int remoteLogManagerCopyQuotaWindowSizeSeconds,
                                   long remoteLogManagerFetchMaxBytesPerSecond,
                                   int remoteLogManagerFetchNumQuotaSamples,
-                                  int remoteLogManagerFetchQuotaWindowSizeSeconds
-    ) {
+                                  int remoteLogManagerFetchQuotaWindowSizeSeconds,
+                                  int remoteFetchMaxWaitMs) {
         this.enableRemoteStorageSystem = enableRemoteStorageSystem;
         this.remoteStorageManagerClassName = remoteStorageManagerClassName;
         this.remoteStorageManagerClassPath = remoteStorageManagerClassPath;
@@ -436,6 +447,7 @@ public final class RemoteLogManagerConfig {
         this.remoteLogManagerFetchMaxBytesPerSecond = remoteLogManagerFetchMaxBytesPerSecond;
         this.remoteLogManagerFetchNumQuotaSamples = remoteLogManagerFetchNumQuotaSamples;
         this.remoteLogManagerFetchQuotaWindowSizeSeconds = remoteLogManagerFetchQuotaWindowSizeSeconds;
+        this.remoteFetchMaxWaitMs = remoteFetchMaxWaitMs;
     }
 
     public boolean enableRemoteStorageSystem() {
@@ -538,6 +550,9 @@ public final class RemoteLogManagerConfig {
         return remoteLogManagerFetchQuotaWindowSizeSeconds;
     }
 
+    public int remoteFetchMaxWaitMs() {
+        return remoteFetchMaxWaitMs;
+    }
 
     @Override
     public boolean equals(Object o) {
@@ -568,7 +583,8 @@ public final class RemoteLogManagerConfig {
                 && remoteLogManagerCopyQuotaWindowSizeSeconds == that.remoteLogManagerCopyQuotaWindowSizeSeconds
                 && remoteLogManagerFetchMaxBytesPerSecond == that.remoteLogManagerFetchMaxBytesPerSecond
                 && remoteLogManagerFetchNumQuotaSamples == that.remoteLogManagerFetchNumQuotaSamples
-                && remoteLogManagerFetchQuotaWindowSizeSeconds == that.remoteLogManagerFetchQuotaWindowSizeSeconds;
+                && remoteLogManagerFetchQuotaWindowSizeSeconds == that.remoteLogManagerFetchQuotaWindowSizeSeconds
+                && remoteFetchMaxWaitMs == that.remoteFetchMaxWaitMs;
     }
 
     @Override
@@ -580,7 +596,7 @@ public final class RemoteLogManagerConfig {
                             remoteLogReaderThreads, remoteLogReaderMaxPendingTasks, remoteStorageManagerProps, remoteLogMetadataManagerProps,
                             remoteStorageManagerPrefix, remoteLogMetadataManagerPrefix, remoteLogManagerCopyMaxBytesPerSecond,
                             remoteLogManagerCopyNumQuotaSamples, remoteLogManagerCopyQuotaWindowSizeSeconds, remoteLogManagerFetchMaxBytesPerSecond,
-                            remoteLogManagerFetchNumQuotaSamples, remoteLogManagerFetchQuotaWindowSizeSeconds);
+                            remoteLogManagerFetchNumQuotaSamples, remoteLogManagerFetchQuotaWindowSizeSeconds, remoteFetchMaxWaitMs);
     }
 
     public static void main(String[] args) {
