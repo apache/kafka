@@ -444,10 +444,7 @@ public final class RemoteLogManagerConfig extends AbstractConfig {
 
     public Map<String, Object> getConfigProps(String configPrefixProp) {
         String prefixProp = getString(configPrefixProp);
-        Map<String, Object> configProps = (prefixProp != null)
-                ? originalsWithPrefix(prefixProp)
-                : Collections.emptyMap();
-        return configProps.isEmpty() ? configProps : Collections.unmodifiableMap(configProps);
+        return prefixProp == null ? Collections.emptyMap() : Collections.unmodifiableMap(originalsWithPrefix(prefixProp));
     }
 
     public long remoteLogManagerCopyMaxBytesPerSecond() {
