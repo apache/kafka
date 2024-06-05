@@ -332,11 +332,15 @@ public final class TaskAssignmentUtils {
         final List<UUID> clientIds = new ArrayList<>();
         final Map<UUID, KafkaStreamsAssignment> assignmentsByUuid = new HashMap<>();
 
-        for (final Map.Entry<ProcessId, KafkaStreamsAssignment> entry : kafkaStreamsAssignments.entrySet()) {
-            final UUID uuid = entry.getKey().id();
-            clientIds.add(uuid);
-            clientRacks.put(uuid, kafkaStreamsStates.get(entry.getKey()).rackId());
-            assignmentsByUuid.put(uuid, entry.getValue());
+        for (final Map.Entry<ProcessId, KafkaStreamsState> entry : kafkaStreamsStates.entrySet()) {
+            final ProcessId processId = entry.getKey();
+            clientIds.add(processId.id());
+            clientRacks.put(processId.id(), entry.getValue().rackId());
+            if (!kafkaStreamsAssignments.containsKey(processId)) {
+                final KafkaStreamsAssignment newAssignment = KafkaStreamsAssignment.of(processId, new HashSet<>());
+                kafkaStreamsAssignments.put(processId, newAssignment);
+            }
+            assignmentsByUuid.put(processId.id(), kafkaStreamsAssignments.get(entry.getKey()));
         }
 
         final long initialCost = computeTotalAssignmentCost(
@@ -649,9 +653,17 @@ public final class TaskAssignmentUtils {
             .collect(Collectors.toSet());
         final Map<TaskId, Integer> tasksToRemainingStandbys = statefulTaskIds.stream()
             .collect(Collectors.toMap(Function.identity(), t -> numStandbyReplicas));
-        final Map<UUID, KafkaStreamsAssignment> clientsByUuid = kafkaStreamsAssignments.entrySet().stream().collect(Collectors.toMap(
+        final Map<UUID, KafkaStreamsAssignment> clientsByUuid = streamStates.entrySet().stream().collect(Collectors.toMap(
             entry -> entry.getKey().id(),
-            Map.Entry::getValue
+            entry -> {
+                final KafkaStreamsState state = entry.getValue();
+                if (kafkaStreamsAssignments.containsKey(state.processId())) {
+                    return kafkaStreamsAssignments.get(state.processId());
+                }
+                final KafkaStreamsAssignment newAssignment = KafkaStreamsAssignment.of(state.processId(), new HashSet<>());
+                kafkaStreamsAssignments.put(state.processId(), newAssignment);
+                return newAssignment;
+            }
         ));
 
         final Map<TaskId, ProcessId> pendingStandbyTasksToClientId = new HashMap<>();
@@ -696,9 +708,17 @@ public final class TaskAssignmentUtils {
             .collect(Collectors.toSet());
         final Map<TaskId, Integer> tasksToRemainingStandbys = statefulTaskIds.stream()
             .collect(Collectors.toMap(Function.identity(), t -> numStandbyReplicas));
-        final Map<UUID, KafkaStreamsAssignment> clients = kafkaStreamsAssignments.entrySet().stream().collect(Collectors.toMap(
+        final Map<UUID, KafkaStreamsAssignment> clients = streamStates.entrySet().stream().collect(Collectors.toMap(
             entry -> entry.getKey().id(),
-            Map.Entry::getValue
+            entry -> {
+                final KafkaStreamsState state = entry.getValue();
+                if (kafkaStreamsAssignments.containsKey(state.processId())) {
+                    return kafkaStreamsAssignments.get(state.processId());
+                }
+                final KafkaStreamsAssignment newAssignment = KafkaStreamsAssignment.of(state.processId(), new HashSet<>());
+                kafkaStreamsAssignments.put(state.processId(), newAssignment);
+                return newAssignment;
+            }
         ));
 
         final ConstrainedPrioritySet standbyTaskClientsByTaskLoad = standbyTaskPriorityListByLoad(streamStates, kafkaStreamsAssignments);
