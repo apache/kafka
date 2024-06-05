@@ -23,6 +23,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_MANAGER_THREAD_POOL_SIZE;
 import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_METADATA_MANAGER_CLASS_NAME;
 import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP;
 import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP;
@@ -54,17 +55,22 @@ public class RemoteLogManagerConfigTest {
 
         assertEquals(rsmProps, remoteLogManagerConfig.remoteStorageManagerProps());
         assertEquals(rlmmProps, remoteLogManagerConfig.remoteLogMetadataManagerProps());
+    }
 
+    @Test
+    public void testDefaultConfigs() {
         // Even with empty properties, RemoteLogManagerConfig has default values
         Map<String, Object> emptyProps = new HashMap<>();
         RemoteLogManagerConfig remoteLogManagerConfigEmptyConfig = new RemoteLogManagerConfig(emptyProps);
-        assertEquals(remoteLogManagerConfigEmptyConfig.values().size(), 28);
+        assertEquals(remoteLogManagerConfigEmptyConfig.remoteLogManagerThreadPoolSize(), DEFAULT_REMOTE_LOG_MANAGER_THREAD_POOL_SIZE);
+    }
 
+    @Test
+    public void testValidateEmptyStringConfig() {
         // Test with a empty string props should throw ConfigException
-        Map<String, Object> emptyStringProps = new HashMap<>();
-        emptyStringProps.put(REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP, "");
+        Map<String, Object> emptyStringProps = Collections.singletonMap(REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP, "");
         assertThrows(ConfigException.class, () ->
-                 new RemoteLogManagerConfig(emptyStringProps));
+                new RemoteLogManagerConfig(emptyStringProps));
     }
 
     private Map<String, Object> getRLMProps(String rsmPrefix, String rlmmPrefix) {
