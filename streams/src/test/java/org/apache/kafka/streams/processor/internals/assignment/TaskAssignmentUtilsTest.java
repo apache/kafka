@@ -16,10 +16,265 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_0;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_1;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.uuidForInt;
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
 
-@RunWith(Parameterized.class)
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Optional;
+import java.util.OptionalInt;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.ApplicationState;
+import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
+import org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment;
+import org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment.AssignedTask;
+import org.apache.kafka.streams.processor.assignment.KafkaStreamsState;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
+import org.apache.kafka.streams.processor.assignment.TaskAssignmentUtils;
+import org.apache.kafka.streams.processor.assignment.TaskInfo;
+import org.apache.kafka.streams.processor.assignment.TaskTopicPartition;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.Timeout;
+
 public class TaskAssignmentUtilsTest {
+
+    @Rule
+    public Timeout timeout = new Timeout(30, TimeUnit.SECONDS);
+
+    @Test
+    public void shouldOptimizeActiveTaskForMinTrafficSimple() {
+        final AssignmentConfigs assignmentConfigs = defaultAssignmentConfigs(
+            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC, 100, 1, 0);
+        final Map<TaskId, TaskInfo> tasks = mkMap(
+            mkTaskInfo(TASK_0_0, true, mkSet("rack-2")),
+            mkTaskInfo(TASK_0_1, true, mkSet("rack-1"))
+        );
+        final Map<ProcessId, KafkaStreamsState> kafkaStreamsStates = mkMap(
+            mkStreamState(1, 1, Optional.of("rack-1")),
+            mkStreamState(2, 1, Optional.of("rack-2"))
+        );
+        final ApplicationState applicationState = new TestApplicationState(
+            assignmentConfigs, kafkaStreamsStates, tasks);
+
+        final Map<ProcessId, KafkaStreamsAssignment> assignments = mkMap(
+            mkAssignment(AssignedTask.Type.ACTIVE, 1, TASK_0_0),
+            mkAssignment(AssignedTask.Type.ACTIVE, 2, TASK_0_1)
+        );
+
+        TaskAssignmentUtils.optimizeRackAwareActiveTasks(
+            applicationState, assignments, new TreeSet<>(tasks.keySet()));
+        assertThat(assignments.size(), equalTo(2));
+        assertThat(assignments.get(processId(1)).tasks().keySet(), equalTo(mkSet(TASK_0_1)));
+        assertThat(assignments.get(processId(2)).tasks().keySet(), equalTo(mkSet(TASK_0_0)));
+
+        TaskAssignmentUtils.optimizeRackAwareActiveTasks(
+            applicationState, assignments, new TreeSet<>(tasks.keySet()));
+        assertThat(assignments.size(), equalTo(2));
+        assertThat(assignments.get(processId(1)).tasks().keySet(), equalTo(mkSet(TASK_0_1)));
+        assertThat(assignments.get(processId(2)).tasks().keySet(), equalTo(mkSet(TASK_0_0)));
+    }
+
+    @Test
+    public void shouldOptimizeActiveTaskForSubtopologyBalanceSimple() {
+        final AssignmentConfigs assignmentConfigs = defaultAssignmentConfigs(
+            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY, 100, 1, 0);
+        final Map<TaskId, TaskInfo> tasks = mkMap(
+            mkTaskInfo(TASK_0_0, true, mkSet("rack-2")),
+            mkTaskInfo(TASK_0_1, true, mkSet("rack-1"))
+        );
+        final Map<ProcessId, KafkaStreamsState> kafkaStreamsStates = mkMap(
+            mkStreamState(1, 1, Optional.of("rack-1")),
+            mkStreamState(2, 1, Optional.of("rack-2"))
+        );
+        final ApplicationState applicationState = new TestApplicationState(
+            assignmentConfigs, kafkaStreamsStates, tasks);
+
+        final Map<ProcessId, KafkaStreamsAssignment> assignments = mkMap(
+            mkAssignment(AssignedTask.Type.ACTIVE, 1, TASK_0_0),
+            mkAssignment(AssignedTask.Type.ACTIVE, 2, TASK_0_1)
+        );
+
+        TaskAssignmentUtils.optimizeRackAwareActiveTasks(
+            applicationState, assignments, new TreeSet<>(tasks.keySet()));
+        assertThat(assignments.size(), equalTo(2));
+        assertThat(assignments.get(processId(1)).tasks().keySet(), equalTo(mkSet(TASK_0_1)));
+        assertThat(assignments.get(processId(2)).tasks().keySet(), equalTo(mkSet(TASK_0_0)));
+
+        TaskAssignmentUtils.optimizeRackAwareActiveTasks(
+            applicationState, assignments, new TreeSet<>(tasks.keySet()));
+        assertThat(assignments.size(), equalTo(2));
+        assertThat(assignments.get(processId(1)).tasks().keySet(), equalTo(mkSet(TASK_0_1)));
+        assertThat(assignments.get(processId(2)).tasks().keySet(), equalTo(mkSet(TASK_0_0)));
+    }
+
+    // @Test
+    public void shouldNotOptimizeStandbyTasks() {
+        final AssignmentConfigs assignmentConfigs = defaultAssignmentConfigs(
+            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC, 100, 1, 1);
+        final Map<TaskId, TaskInfo> tasks = mkMap(
+            mkTaskInfo(TASK_0_0, true, mkSet("rack-2")),
+            mkTaskInfo(TASK_0_1, true, mkSet("rack-1"))
+        );
+        final Map<ProcessId, KafkaStreamsState> kafkaStreamsStates = mkMap(
+            mkStreamState(1, 2, Optional.of("rack-1")),
+            mkStreamState(2, 2, Optional.of("rack-2"))
+        );
+        final ApplicationState applicationState = new TestApplicationState(
+            assignmentConfigs, kafkaStreamsStates, tasks);
+
+        final Map<ProcessId, KafkaStreamsAssignment> assignments = mkMap(
+            mkAssignment(AssignedTask.Type.ACTIVE, 1, TASK_0_0, TASK_0_1),
+            mkAssignment(AssignedTask.Type.STANDBY, 2, TASK_0_0, TASK_0_1)
+        );
+
+        TaskAssignmentUtils.optimizeRackAwareActiveTasks(
+            applicationState, assignments, new TreeSet<>(tasks.keySet()));
+        assertThat(assignments.size(), equalTo(2));
+        assertThat(assignments.get(processId(1)).tasks().keySet(), equalTo(mkSet(TASK_0_0, TASK_0_1)));
+        assertThat(assignments.get(processId(2)).tasks().keySet(), equalTo(mkSet(TASK_0_0, TASK_0_1)));
+    }
+
+    public static class TestApplicationState implements ApplicationState {
+
+        private final AssignmentConfigs assignmentConfigs;
+        private final Map<ProcessId, KafkaStreamsState> kafkaStreamsStates;
+        private final Map<TaskId, TaskInfo> tasks;
+
+        TestApplicationState(final AssignmentConfigs assignmentConfigs,
+                             final Map<ProcessId, KafkaStreamsState> kafkaStreamsStates,
+                             final Map<TaskId, TaskInfo> tasks) {
+            this.kafkaStreamsStates = kafkaStreamsStates;
+            this.assignmentConfigs = assignmentConfigs;
+            this.tasks = tasks;
+        }
+
+        @Override
+        public Map<ProcessId, KafkaStreamsState> kafkaStreamsStates(final boolean computeTaskLags) {
+            return kafkaStreamsStates;
+        }
+
+        @Override
+        public AssignmentConfigs assignmentConfigs() {
+            return assignmentConfigs;
+        }
+
+        @Override
+        public Map<TaskId, TaskInfo> allTasks() {
+            return tasks;
+        }
+    }
+
+    public static Map.Entry<ProcessId, KafkaStreamsState> mkStreamState(final int id,
+                                                                        final int numProcessingThreads,
+                                                                        final Optional<String> rackId) {
+        return mkStreamState(id, numProcessingThreads, rackId, new HashSet<>(), new HashSet<>());
+    }
+
+    public static Map.Entry<ProcessId, KafkaStreamsState> mkStreamState(final int id,
+                                                                        final int numProcessingThreads,
+                                                                        final Optional<String> rackId,
+                                                                        final Set<TaskId> previousActiveTasks,
+                                                                        final Set<TaskId> previousStandbyTasks) {
+        final ProcessId processId = new ProcessId(uuidForInt(id));
+        return mkEntry(processId, new DefaultKafkaStreamsState(
+            processId,
+            numProcessingThreads,
+            mkMap(),
+            new TreeSet<>(previousActiveTasks),
+            new TreeSet<>(previousStandbyTasks),
+            new TreeMap<>(),
+            Optional.empty(),
+            Optional.empty(),
+            rackId
+        ));
+    }
+
+    public static ProcessId processId(final int id) {
+        return new ProcessId(uuidForInt(id));
+    }
+
+    public static Map.Entry<ProcessId, KafkaStreamsAssignment> mkAssignment(final AssignedTask.Type taskType,
+                                                                            final int client,
+                                                                            final TaskId ...taskIds) {
+        final ProcessId processId = processId(client);
+        final Set<AssignedTask> assignedTasks = mkSet();
+        for (final TaskId taskId : taskIds) {
+            assignedTasks.add(new AssignedTask(taskId, taskType));
+        }
+        return mkEntry(
+            processId,
+            KafkaStreamsAssignment.of(
+                processId,
+                assignedTasks
+            )
+        );
+    }
+
+    public static Map.Entry<TaskId, TaskInfo> mkTaskInfo(final TaskId taskId, final boolean isStateful) {
+        return mkTaskInfo(taskId, isStateful, null);
+    }
+
+    public static Map.Entry<TaskId, TaskInfo> mkTaskInfo(final TaskId taskId, final boolean isStateful, final Set<String> rackIds) {
+        if (!isStateful) {
+            return mkEntry(
+                taskId,
+                new DefaultTaskInfo(taskId, false, mkSet(), mkSet())
+            );
+        }
+
+        final Set<DefaultTaskTopicPartition> partitions = new HashSet<>();
+        partitions.add(new DefaultTaskTopicPartition(
+            new TopicPartition(String.format("test-topic-%d", taskId.subtopology()), taskId.partition()),
+            true,
+            true,
+            () -> {
+                partitions.forEach(partition -> {
+                    if (partition != null && rackIds != null) {
+                        partition.annotateWithRackIds(rackIds);
+                    }
+                });
+            }
+        ));
+        return mkEntry(
+            taskId,
+            new DefaultTaskInfo(
+                taskId,
+                true,
+                mkSet(String.format("test-statestore-%d", taskId.subtopology())),
+                partitions.stream().map(p -> (TaskTopicPartition) p).collect(Collectors.toSet())
+            )
+        );
+    }
+
+    public AssignmentConfigs defaultAssignmentConfigs(final String rackAwareStrategy,
+                                                      final int trafficCost,
+                                                      final int nonOverlapCost,
+                                                      final int numStandbys) {
+        return new AssignmentConfigs(
+            0L,
+            1,
+            numStandbys,
+            60_000L,
+            Collections.emptyList(),
+            OptionalInt.of(trafficCost),
+            OptionalInt.of(nonOverlapCost),
+            rackAwareStrategy
+        );
+    }
 
 }

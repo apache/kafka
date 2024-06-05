@@ -270,7 +270,7 @@ public final class TaskAssignmentUtils {
             assignmentGraph.clientByTask,
             (assignment, taskId) -> assignment.assignTask(new AssignedTask(taskId, AssignedTask.Type.ACTIVE)),
             (assignment, taskId) -> assignment.removeTask(new AssignedTask(taskId, AssignedTask.Type.ACTIVE)),
-            (assignment, taskId) -> assignment.tasks().containsKey(taskId)
+            (assignment, taskId) -> assignment.tasks().containsKey(taskId) && assignment.tasks().get(taskId).type() == AssignedTask.Type.ACTIVE
         );
 
         return kafkaStreamsAssignments;
@@ -493,7 +493,8 @@ public final class TaskAssignmentUtils {
             (taskId, processId, inCurrentAssignment, unused0, unused1, unused2) -> {
                 final String clientRack = clientRacks.get(processId).get();
                 final int assignmentChangeCost = !inCurrentAssignment ? nonOverlapCost : 0;
-                return assignmentChangeCost + getCrossRackTrafficCost(topicPartitionsByTaskId.get(taskId), clientRack, crossRackTrafficCost);
+                final int trafficCost = getCrossRackTrafficCost(topicPartitionsByTaskId.get(taskId), clientRack, crossRackTrafficCost);
+                return assignmentChangeCost + trafficCost;
             },
             crossRackTrafficCost,
             nonOverlapCost,

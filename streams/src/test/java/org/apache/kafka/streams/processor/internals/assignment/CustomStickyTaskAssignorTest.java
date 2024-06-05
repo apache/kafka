@@ -38,6 +38,9 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_3_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_3_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.uuidForInt;
+import static org.apache.kafka.streams.processor.internals.assignment.TaskAssignmentUtilsTest.mkStreamState;
+import static org.apache.kafka.streams.processor.internals.assignment.TaskAssignmentUtilsTest.mkTaskInfo;
+import static org.apache.kafka.streams.processor.internals.assignment.TaskAssignmentUtilsTest.processId;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
@@ -705,81 +708,6 @@ public class CustomStickyTaskAssignorTest {
         assertThat(allStandbyTasks.size(), equalTo(topicCount * taskPerTopic * numStandbys));
     }
 
-    // **************************
-    private Map.Entry<ProcessId, KafkaStreamsState> mkStreamState(final int id,
-                                                                  final int numProcessingThreads,
-                                                                  final Optional<String> rackId) {
-        return mkStreamState(id, numProcessingThreads, rackId, new HashSet<>(), new HashSet<>());
-    }
-
-    private Map.Entry<ProcessId, KafkaStreamsState> mkStreamState(final int id,
-                                                                  final int numProcessingThreads,
-                                                                  final Optional<String> rackId,
-                                                                  final Set<TaskId> previousActiveTasks,
-                                                                  final Set<TaskId> previousStandbyTasks) {
-        final ProcessId processId = new ProcessId(uuidForInt(id));
-        return mkEntry(processId, new KafkaStreamsStateImpl(
-            processId,
-            numProcessingThreads,
-            mkMap(),
-            new TreeSet<>(previousActiveTasks),
-            new TreeSet<>(previousStandbyTasks),
-            new TreeMap<>(),
-            Optional.empty(),
-            Optional.empty(),
-            rackId
-        ));
-    }
-
-    private Map.Entry<TaskId, TaskInfo> mkTaskInfo(final TaskId taskId, final boolean isStateful) {
-        return mkTaskInfo(taskId, isStateful, null);
-    }
-
-    private Map.Entry<TaskId, TaskInfo> mkTaskInfo(final TaskId taskId, final boolean isStateful, final Set<String> rackIds) {
-        if (!isStateful) {
-            return mkEntry(
-                taskId,
-                new DefaultTaskInfo(taskId, false, mkSet(), mkSet())
-            );
-        }
-
-        final Set<DefaultTaskTopicPartition> partitions = new HashSet<>();
-        partitions.add(new DefaultTaskTopicPartition(
-            new TopicPartition(String.format("test-topic-%d", taskId.subtopology()), taskId.partition()),
-            true,
-            true,
-            () -> {
-                partitions.forEach(partition -> {
-                    if (partition != null && rackIds != null) {
-                        partition.annotateWithRackIds(rackIds);
-                    }
-                });
-            }
-        ));
-        return mkEntry(
-            taskId,
-            new DefaultTaskInfo(
-                taskId,
-                true,
-                mkSet(String.format("test-statestore-%d", taskId.subtopology())),
-                partitions.stream().map(p -> (TaskTopicPartition) p).collect(Collectors.toSet())
-            )
-        );
-    }
-
-    private AssignmentConfigs defaultAssignmentConfigs(final int numStandbys) {
-        return new AssignmentConfigs(
-            0L,
-            1,
-            numStandbys,
-            60_000L,
-            Collections.emptyList(),
-            OptionalInt.empty(),
-            OptionalInt.empty(),
-            rackAwareStrategy
-        );
-    }
-
     private Map<ProcessId, KafkaStreamsAssignment> assign(final Map<ProcessId, KafkaStreamsState> streamStates,
                                                       final Map<TaskId, TaskInfo> tasks) {
         return assign(streamStates, tasks, 0);
@@ -794,7 +722,7 @@ public class CustomStickyTaskAssignorTest {
     private Map<ProcessId, KafkaStreamsAssignment> assign(final Map<ProcessId, KafkaStreamsState> streamStates,
                                                           final Map<TaskId, TaskInfo> tasks,
                                                           final AssignmentConfigs assignmentConfigs) {
-        final ApplicationState applicationState = new TestApplicationState(
+        final ApplicationState applicationState = new TaskAssignmentUtilsTest.TestApplicationState(
             assignmentConfigs,
             streamStates,
             tasks
@@ -805,8 +733,17 @@ public class CustomStickyTaskAssignorTest {
         return indexAssignment(taskAssignment.assignment());
     }
 
-    private ProcessId processId(final int id) {
-        return new ProcessId(uuidForInt(id));
+    public AssignmentConfigs defaultAssignmentConfigs(final int numStandbys) {
+        return new AssignmentConfigs(
+            0L,
+            1,
+            numStandbys,
+            60_000L,
+            Collections.emptyList(),
+            OptionalInt.empty(),
+            OptionalInt.empty(),
+            rackAwareStrategy
+        );
     }
 
     private Map<ProcessId, KafkaStreamsAssignment> indexAssignment(final Collection<KafkaStreamsAssignment> assignments) {
@@ -864,36 +801,6 @@ public class CustomStickyTaskAssignorTest {
             }
             Collections.sort(topicGroupIds);
             assertThat(topicGroupIds, equalTo(asList(1, 2)));
-        }
-    }
-
-    private static class TestApplicationState implements ApplicationState {
-
-        private final Map<ProcessId, KafkaStreamsState> kafkaStreamsStates;
-        private final AssignmentConfigs assignmentConfigs;
-        private final Map<TaskId, TaskInfo> tasks;
-
-        private TestApplicationState(final AssignmentConfigs assignmentConfigs,
-                                     final Map<ProcessId, KafkaStreamsState> kafkaStreamsStates,
-                                     final Map<TaskId, TaskInfo> tasks) {
-            this.kafkaStreamsStates = kafkaStreamsStates;
-            this.assignmentConfigs = assignmentConfigs;
-            this.tasks = tasks;
-        }
-
-        @Override
-        public Map<ProcessId, KafkaStreamsState> kafkaStreamsStates(final boolean computeTaskLags) {
-            return kafkaStreamsStates;
-        }
-
-        @Override
-        public AssignmentConfigs assignmentConfigs() {
-            return assignmentConfigs;
-        }
-
-        @Override
-        public Map<TaskId, TaskInfo> allTasks() {
-            return tasks;
         }
     }
 }
