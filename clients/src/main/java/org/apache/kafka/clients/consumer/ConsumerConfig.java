@@ -198,7 +198,10 @@ public class ConsumerConfig extends AbstractConfig {
      * <code>fetch.max.wait.ms</code>
      */
     public static final String FETCH_MAX_WAIT_MS_CONFIG = "fetch.max.wait.ms";
-    private static final String FETCH_MAX_WAIT_MS_DOC = "The maximum amount of time the server will block before answering the fetch request if there isn't sufficient data to immediately satisfy the requirement given by fetch.min.bytes.";
+    private static final String FETCH_MAX_WAIT_MS_DOC = "The maximum amount of time the server will block before " +
+            "answering the fetch request there isn't sufficient data to immediately satisfy the requirement given by " +
+            "fetch.min.bytes. This config is used only for local log fetch. To tune the remote fetch maximum wait " +
+            "time, please refer to 'remote.fetch.max.wait.ms' broker config";
     public static final int DEFAULT_FETCH_MAX_WAIT_MS = 500;
 
     /** <code>metadata.max.age.ms</code> */
