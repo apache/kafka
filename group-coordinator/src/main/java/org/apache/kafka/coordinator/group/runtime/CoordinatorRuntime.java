@@ -723,8 +723,10 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     // Free up the current batch.
                     freeCurrentBatch();
                 } catch (Throwable t) {
-                    log.warn("Writing to {} failed due to: {}.", tp, t.getMessage());
+                    log.error("Writing records to {} failed due to: {}.", tp, t.getMessage());
                     failCurrentBatch(t);
+                    // We rethrow the exception for the caller to handle it too.
+                    throw t;
                 }
             }
         }
@@ -797,6 +799,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                             });
                         }
                     });
+                    CoordinatorRuntime.this.timer.add(lingerTimeoutTask.get());
                 }
 
                 currentBatch = new CoordinatorBatch(
@@ -857,6 +860,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 // If the current write operation is transactional, the current batch
                 // is written before proceeding with it.
                 if (producerId != RecordBatch.NO_PRODUCER_ID) {
+                    // If flushing fails, we don't catch the exception in order to let
+                    // the caller fail the current operation.
                     flushCurrentBatch();
                 }
 
@@ -897,6 +902,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 if (!currentBatch.builder.hasRoomFor(estimatedSize)) {
                     // Otherwise, we write the current batch, allocate a new one and re-verify
                     // whether the records fit in it.
+                    // If flushing fails, we don't catch the exception in order to let
+                    // the caller fail the current operation.
                     flushCurrentBatch();
                     maybeAllocateNewBatch(
                         producerId,
@@ -930,17 +937,19 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         currentBatch.builder.append(record);
                         currentBatch.nextOffset++;
                     }
-
-                    // Write the current batch if it is transactional or if the linger timeout
-                    // has expired.
-                    maybeFlushCurrentBatch(currentTimeMs);
                 } catch (Throwable t) {
-                    log.warn("Writing to {} failed due to: {}.", tp, t.getMessage());
+                    log.error("Replaying records to {} failed due to: {}.", tp, t.getMessage());
                     // If an exception is thrown, we fail the entire batch. Exceptions should be
                     // really exceptional in this code path and they would usually be the results
                     // of bugs preventing records to be replayed.
                     failCurrentBatch(t);
                 }
+
+                // Write the current batch if it is transactional or if the linger timeout
+                // has expired.
+                // If flushing fails, we don't catch the exception in order to let
+                // the caller fail the current operation.
+                maybeFlushCurrentBatch(currentTimeMs);
             }
         }
 
