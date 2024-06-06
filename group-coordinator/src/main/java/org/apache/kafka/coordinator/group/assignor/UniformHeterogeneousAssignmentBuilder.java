@@ -39,7 +39,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 /**
  * The Heterogeneous uniform assignment builder is used to generate the target assignment for a consumer group with
@@ -134,7 +133,7 @@ public class UniformHeterogeneousAssignmentBuilder {
                 targetAssignment.put(memberId, new MemberAssignmentImpl(new HashMap<>()));
             })
         );
-        this.unassignedPartitions = new HashSet<>(topicIdPartitions(subscribedTopicIds, subscribedTopicDescriber));
+        this.unassignedPartitions = topicIdPartitions(subscribedTopicIds, subscribedTopicDescriber);
         this.assignedStickyPartitions = new HashSet<>();
         this.assignmentManager = new AssignmentManager(this.subscribedTopicDescriber);
         this.sortedMembersByAssignmentSize = assignmentManager.sortMembersByAssignmentSize(groupSpec.memberIds());
@@ -489,11 +488,14 @@ public class UniformHeterogeneousAssignmentBuilder {
         Collection<Uuid> topicIds,
         SubscribedTopicDescriber subscribedTopicDescriber
     ) {
-        return topicIds.stream()
-            .flatMap(topic -> IntStream
-                .range(0, subscribedTopicDescriber.numPartitions(topic))
-                .mapToObj(i -> new TopicIdPartition(topic, i))
-            ).collect(Collectors.toSet());
+        Set<TopicIdPartition> topicIdPartitions = new HashSet<>();
+        for (Uuid topicId : topicIds) {
+            int numPartitions = subscribedTopicDescriber.numPartitions(topicId);
+            for (int partitionId = 0; partitionId < numPartitions; partitionId++) {
+                topicIdPartitions.add(new TopicIdPartition(topicId, partitionId));
+            }
+        }
+        return topicIdPartitions;
     }
 
     /**
