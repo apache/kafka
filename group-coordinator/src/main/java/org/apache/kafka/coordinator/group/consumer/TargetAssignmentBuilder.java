@@ -295,7 +295,7 @@ public class TargetAssignmentBuilder {
 
         // Prepare the member spec for all members.
         members.forEach((memberId, member) ->
-            memberSpecs.put(memberId, createMemberSubscriptionSpecImpl(
+            memberSpecs.put(memberId, createMemberSubscriptionAndAssignment(
                 member,
                 targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
                 topicsImage
@@ -317,7 +317,7 @@ public class TargetAssignmentBuilder {
                     }
                 }
 
-                memberSpecs.put(memberId, createMemberSubscriptionSpecImpl(
+                memberSpecs.put(memberId, createMemberSubscriptionAndAssignment(
                     updatedMemberOrNull,
                     assignment,
                     topicsImage
@@ -382,7 +382,7 @@ public class TargetAssignmentBuilder {
     }
 
     // private for testing
-    static MemberSubscriptionAndAssignmentImpl createMemberSubscriptionSpecImpl(
+    static MemberSubscriptionAndAssignmentImpl createMemberSubscriptionAndAssignment(
         ConsumerGroupMember member,
         Assignment memberAssignment,
         TopicsImage topicsImage

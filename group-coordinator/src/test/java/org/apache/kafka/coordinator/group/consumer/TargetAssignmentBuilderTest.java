@@ -43,7 +43,7 @@ import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTar
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTargetAssignmentRecord;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpersTest.mkMapOfPartitionRacks;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
-import static org.apache.kafka.coordinator.group.consumer.TargetAssignmentBuilder.createMemberSubscriptionSpecImpl;
+import static org.apache.kafka.coordinator.group.consumer.TargetAssignmentBuilder.createMemberSubscriptionAndAssignment;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -167,7 +167,7 @@ public class TargetAssignmentBuilderTest {
 
             // All the existing members are prepared.
             members.forEach((memberId, member) ->
-                memberSubscriptions.put(memberId, createMemberSubscriptionSpecImpl(
+                memberSubscriptions.put(memberId, createMemberSubscriptionAndAssignment(
                     member,
                     targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
                     topicsImage
@@ -190,7 +190,7 @@ public class TargetAssignmentBuilderTest {
                         }
                     }
 
-                    memberSubscriptions.put(memberId, createMemberSubscriptionSpecImpl(
+                    memberSubscriptions.put(memberId, createMemberSubscriptionAndAssignment(
                         updatedMemberOrNull,
                         assignment,
                         topicsImage
@@ -275,7 +275,7 @@ public class TargetAssignmentBuilderTest {
             mkTopicAssignment(barTopicId, 1, 2, 3)
         ));
 
-        MemberSubscription subscriptionSpec = createMemberSubscriptionSpecImpl(
+        MemberSubscription subscriptionSpec = createMemberSubscriptionAndAssignment(
             member,
             assignment,
             topicsImage
