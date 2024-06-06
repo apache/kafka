@@ -472,7 +472,7 @@ subprojects {
   if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_16)) {
     testsToExclude.addAll([
       // connect tests
-      "**/KafkaConfigBackingStoreTest.*"
+      //"**/KafkaConfigBackingStoreTest.*"
     ])
   }
 

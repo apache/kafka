@@ -1539,6 +1539,7 @@ public class KafkaConfigBackingStoreTest {
                         }})
                 )
                 .doAnswer(expectReadToEnd(new LinkedHashMap<>()))
+                .doAnswer(expectReadToEnd(new LinkedHashMap<>()))
                 .doAnswer(expectReadToEnd(new LinkedHashMap<String, byte[]>() {{
                             put(TASK_CONFIG_KEYS.get(2), CONFIGS_SERIALIZED.get(3));
                             put(COMMIT_TASKS_CONFIG_KEYS.get(1), CONFIGS_SERIALIZED.get(4));
@@ -1580,7 +1581,7 @@ public class KafkaConfigBackingStoreTest {
 
         // Validate root config by listing all connectors and tasks
         configState = configStorage.snapshot();
-        assertEquals(7, configState.offset());
+        assertEquals(5, configState.offset());
         String connectorName1 = CONNECTOR_IDS.get(0);
         String connectorName2 = CONNECTOR_IDS.get(1);
         assertEquals(Arrays.asList(connectorName1, connectorName2), new ArrayList<>(configState.connectors()));
@@ -1593,7 +1594,7 @@ public class KafkaConfigBackingStoreTest {
 
         // As soon as root is rewritten, we should see a callback notifying us that we reconfigured some tasks
         final ArgumentCaptor<Collection<ConnectorTaskId>> capturedRecord = ArgumentCaptor.captor();
-        verify(configUpdateListener, times(3)).onTaskConfigUpdate(capturedRecord.capture());
+        verify(configUpdateListener, times(2)).onTaskConfigUpdate(capturedRecord.capture());
 
         configStorage.stop();
         verify(configLog).stop();
