@@ -210,6 +210,7 @@ public enum MetadataVersion {
     IBP_3_8_IV1(21, "3.8", "IV1", false),
 
     // Introduce version 1 of the GroupVersion feature (KIP-848).
+    // ELR support (KIP-966) is also guarded by this IBP for now.
     IBP_4_0_IV0(22, "4.0", "IV0", false);
 
     // NOTES when adding a new version:
