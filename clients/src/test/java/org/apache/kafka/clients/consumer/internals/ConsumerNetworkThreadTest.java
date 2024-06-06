@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.AsyncCommitEvent;
+import org.apache.kafka.clients.consumer.internals.events.CompletableEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
@@ -203,6 +204,10 @@ public class ConsumerNetworkThreadTest {
     public void testApplicationEventIsProcessed(ApplicationEvent e) {
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
+
+        if (e instanceof CompletableEvent)
+            verify(applicationEventReaper).add((CompletableEvent<?>) e);
+
         verify(applicationEventProcessor).process(any(e.getClass()));
         assertTrue(applicationEventsQueue.isEmpty());
     }
