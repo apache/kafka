@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.clients.admin;
 
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.OptionalLong;
-import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.Uuid;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.OptionalLong;
 
 /**
  * This class is used to describe the state of the quorum received in DescribeQuorumResponse.
@@ -32,7 +32,7 @@ public class QuorumInfo {
     private final long highWatermark;
     private final List<ReplicaState> voters;
     private final List<ReplicaState> observers;
-    private final List<Node> nodes;
+    private final Map<Integer, Node> nodes;
 
     QuorumInfo(
         int leaderId,
@@ -40,7 +40,7 @@ public class QuorumInfo {
         long highWatermark,
         List<ReplicaState> voters,
         List<ReplicaState> observers,
-        List<Node> nodes
+        Map<Integer, Node> nodes
     ) {
         this.leaderId = leaderId;
         this.leaderEpoch = leaderEpoch;
@@ -70,7 +70,7 @@ public class QuorumInfo {
         return observers;
     }
 
-    public List<Node> nodes() {
+    public Map<Integer, Node> nodes() {
         return nodes;
     }
 
@@ -83,12 +83,13 @@ public class QuorumInfo {
             && leaderEpoch == that.leaderEpoch
             && highWatermark == that.highWatermark
             && Objects.equals(voters, that.voters)
-            && Objects.equals(observers, that.observers);
+            && Objects.equals(observers, that.observers)
+            && Objects.equals(nodes, that.nodes);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(leaderId, leaderEpoch, highWatermark, voters, observers);
+        return Objects.hash(leaderId, leaderEpoch, highWatermark, voters, observers, nodes);
     }
 
     @Override
@@ -99,23 +100,24 @@ public class QuorumInfo {
             ", highWatermark=" + highWatermark +
             ", voters=" + voters +
             ", observers=" + observers +
+            ", nodes=" + nodes +
             ')';
     }
 
     public static class ReplicaState {
         private final int replicaId;
-        private final Optional<Uuid> replicaDirectoryId;
+        private final Uuid replicaDirectoryId;
         private final long logEndOffset;
         private final OptionalLong lastFetchTimestamp;
         private final OptionalLong lastCaughtUpTimestamp;
 
         ReplicaState() {
-            this(0, Optional.empty(), 0, OptionalLong.empty(), OptionalLong.empty());
+            this(0, Uuid.ZERO_UUID, 0, OptionalLong.empty(), OptionalLong.empty());
         }
 
         ReplicaState(
             int replicaId,
-            Optional<Uuid> replicaDirectoryId,
+            Uuid replicaDirectoryId,
             long logEndOffset,
             OptionalLong lastFetchTimestamp,
             OptionalLong lastCaughtUpTimestamp
@@ -138,7 +140,7 @@ public class QuorumInfo {
         /**
          * Return the directory id of the replica if configured.
          */
-        public Optional<Uuid> replicaDirectoryId() {
+        public Uuid replicaDirectoryId() {
             return replicaDirectoryId;
         }
 
@@ -174,6 +176,7 @@ public class QuorumInfo {
             if (o == null || getClass() != o.getClass()) return false;
             ReplicaState that = (ReplicaState) o;
             return replicaId == that.replicaId
+                && Objects.equals(replicaDirectoryId, that.replicaDirectoryId)
                 && logEndOffset == that.logEndOffset
                 && lastFetchTimestamp.equals(that.lastFetchTimestamp)
                 && lastCaughtUpTimestamp.equals(that.lastCaughtUpTimestamp);
@@ -181,13 +184,14 @@ public class QuorumInfo {
 
         @Override
         public int hashCode() {
-            return Objects.hash(replicaId, logEndOffset, lastFetchTimestamp, lastCaughtUpTimestamp);
+            return Objects.hash(replicaId, replicaDirectoryId, logEndOffset, lastFetchTimestamp, lastCaughtUpTimestamp);
         }
 
         @Override
         public String toString() {
             return "ReplicaState(" +
                 "replicaId=" + replicaId +
+                ", replicaDirectoryId=" + replicaDirectoryId +
                 ", logEndOffset=" + logEndOffset +
                 ", lastFetchTimestamp=" + lastFetchTimestamp +
                 ", lastCaughtUpTimestamp=" + lastCaughtUpTimestamp +
@@ -196,10 +200,10 @@ public class QuorumInfo {
     }
 
     public static class Node {
-        private int nodeId;
-        private List<Endpoint> endpoints;
+        private final int nodeId;
+        private final List<RaftVoterEndpoint> endpoints;
 
-        Node(int nodeId, List<Endpoint> endpoints) {
+        Node(int nodeId, List<RaftVoterEndpoint> endpoints) {
             this.nodeId = nodeId;
             this.endpoints = endpoints;
         }
@@ -208,7 +212,7 @@ public class QuorumInfo {
             return nodeId;
         }
 
-        public List<Endpoint> endpoints() {
+        public List<RaftVoterEndpoint> endpoints() {
             return endpoints;
         }
     }

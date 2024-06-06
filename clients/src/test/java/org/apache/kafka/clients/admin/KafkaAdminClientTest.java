@@ -271,6 +271,7 @@ import static java.util.Collections.emptyList;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
+import static java.util.Collections.singletonMap;
 import static org.apache.kafka.clients.admin.KafkaAdminClient.DEFAULT_LEAVE_GROUP_REASON;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
@@ -735,17 +736,17 @@ public class KafkaAdminClientTest {
     private static QuorumInfo defaultQuorumInfo(boolean emptyOptionals) {
         return new QuorumInfo(1, 1, 1L,
                 singletonList(new QuorumInfo.ReplicaState(1,
-                        Optional.of(emptyOptionals ? Uuid.ZERO_UUID : Uuid.randomUuid()),
+                        emptyOptionals ? Uuid.ZERO_UUID : Uuid.randomUuid(),
                         100,
                         emptyOptionals ? OptionalLong.empty() : OptionalLong.of(1000),
                         emptyOptionals ? OptionalLong.empty() : OptionalLong.of(1000))),
                 singletonList(new QuorumInfo.ReplicaState(1,
-                        Optional.of(emptyOptionals ? Uuid.ZERO_UUID : Uuid.randomUuid()),
+                        emptyOptionals ? Uuid.ZERO_UUID : Uuid.randomUuid(),
                         100,
                         emptyOptionals ? OptionalLong.empty() : OptionalLong.of(1000),
                         emptyOptionals ? OptionalLong.empty() : OptionalLong.of(1000))),
-                singletonList(new QuorumInfo.Node(1,
-                        singletonList(new Endpoint("test", SecurityProtocol.PLAINTEXT, "localhost", 1)))));
+                singletonMap(1, new QuorumInfo.Node(1,
+                        singletonList(new RaftVoterEndpoint("test", "localhost", 1)))));
     }
 
     private static DescribeQuorumResponse prepareDescribeQuorumResponse(

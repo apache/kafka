@@ -4417,7 +4417,7 @@ public class KafkaAdminClient extends AdminClient {
             private QuorumInfo.ReplicaState translateReplicaState(DescribeQuorumResponseData.ReplicaState replica) {
                 return new QuorumInfo.ReplicaState(
                         replica.replicaId(),
-                        Optional.of(replica.replicaDirectoryId()),
+                        replica.replicaDirectoryId() == null ? Uuid.ZERO_UUID : replica.replicaDirectoryId(),
                         replica.logEndOffset(),
                         replica.lastFetchTimestamp() == -1 ? OptionalLong.empty() : OptionalLong.of(replica.lastFetchTimestamp()),
                         replica.lastCaughtUpTimestamp() == -1 ? OptionalLong.empty() : OptionalLong.of(replica.lastCaughtUpTimestamp()));
@@ -4432,13 +4432,13 @@ public class KafkaAdminClient extends AdminClient {
                     .map(this::translateReplicaState)
                     .collect(Collectors.toList());
 
-                List<QuorumInfo.Node> nodes = nodeCollection.stream().map(n -> {
-                    List<Endpoint> endpoints = n.listeners().stream()
-                        .map(l -> new Endpoint(l.name(), SecurityProtocol.forId(l.securityProtocol()), l.host(), l.port()))
+                Map<Integer, QuorumInfo.Node> nodes = nodeCollection.stream().map(n -> {
+                    List<RaftVoterEndpoint> endpoints = n.listeners().stream()
+                        .map(l -> new RaftVoterEndpoint(l.name(), l.host(), l.port()))
                         .collect(Collectors.toList());
 
                     return new QuorumInfo.Node(n.nodeId(), endpoints);
-                }).collect(Collectors.toList());
+                }).collect(Collectors.toMap(QuorumInfo.Node::nodeId, Function.identity()));
 
                 return new QuorumInfo(
                     partition.leaderId(),
