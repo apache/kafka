@@ -245,28 +245,6 @@ public class ConsumerNetworkThreadTest {
     }
 
     @Test
-    void testPollResultTimer() {
-        NetworkClientDelegate.UnsentRequest req = new NetworkClientDelegate.UnsentRequest(
-                new FindCoordinatorRequest.Builder(
-                        new FindCoordinatorRequestData()
-                                .setKeyType(FindCoordinatorRequest.CoordinatorType.TRANSACTION.id())
-                                .setKey("foobar")),
-                Optional.empty());
-        req.setTimer(time, DEFAULT_REQUEST_TIMEOUT_MS);
-
-        // purposely setting a non-MAX time to ensure it is returning Long.MAX_VALUE upon success
-        NetworkClientDelegate.PollResult success = new NetworkClientDelegate.PollResult(
-                10,
-                Collections.singletonList(req));
-        assertEquals(10, networkClient.addAll(success));
-
-        NetworkClientDelegate.PollResult failure = new NetworkClientDelegate.PollResult(
-                10,
-                new ArrayList<>());
-        assertEquals(10, networkClient.addAll(failure));
-    }
-
-    @Test
     void testMaximumTimeToWait() {
         // Initial value before runOnce has been called
         assertEquals(ConsumerNetworkThread.MAX_POLL_TIMEOUT_MS, consumerNetworkThread.maximumTimeToWait());
