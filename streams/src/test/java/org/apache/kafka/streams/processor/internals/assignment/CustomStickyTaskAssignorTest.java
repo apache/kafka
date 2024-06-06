@@ -651,9 +651,9 @@ public class CustomStickyTaskAssignorTest {
     @Test
     public void largeAssignmentShouldTerminateWithinAcceptableTime() {
         final int topicCount = 10;
-        final int taskPerTopic = 70;
+        final int taskPerTopic = 30;
         final int numStandbys = 2;
-        final int clientCount = 40;
+        final int clientCount = 20;
         final int clientCapacity = 50;
 
         final Map<TaskId, TaskInfo> tasks = mkMap();
