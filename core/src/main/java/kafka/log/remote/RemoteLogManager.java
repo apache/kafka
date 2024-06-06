@@ -46,6 +46,7 @@ import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.common.CheckpointFile;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.log.remote.metadata.storage.ClassLoaderAwareRemoteLogMetadataManager;
@@ -61,7 +62,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
-import org.apache.kafka.storage.internals.checkpoint.InMemoryLeaderEpochCheckpoint;
+import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
 import org.apache.kafka.storage.internals.log.AbortedTxn;
 import org.apache.kafka.storage.internals.log.EpochEntry;
@@ -83,12 +84,16 @@ import org.slf4j.LoggerFactory;
 import scala.Option;
 import scala.collection.JavaConverters;
 
+import java.io.BufferedWriter;
+import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStreamWriter;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.security.PrivilegedAction;
 import java.util.ArrayList;
@@ -612,25 +617,23 @@ public class RemoteLogManager implements Closeable {
     }
 
     /**
-     * Returns the leader epoch checkpoint by truncating with the given start[exclusive] and end[inclusive] offset
+     * Returns the leader epoch entries within the range of the given start[exclusive] and end[inclusive] offset.
+     * <p>
+     * Visible for testing.
      *
      * @param log         The actual log from where to take the leader-epoch checkpoint
-     * @param startOffset The start offset of the checkpoint file (exclusive in the truncation).
+     * @param startOffset The start offset of the epoch entries (inclusive).
      *                    If start offset is 6, then it will retain an entry at offset 6.
-     * @param endOffset   The end offset of the checkpoint file (inclusive in the truncation)
+     * @param endOffset   The end offset of the epoch entries (exclusive)
      *                    If end offset is 100, then it will remove the entries greater than or equal to 100.
-     * @return the truncated leader epoch checkpoint
+     * @return the leader epoch entries
      */
-    InMemoryLeaderEpochCheckpoint getLeaderEpochCheckpoint(UnifiedLog log, long startOffset, long endOffset) {
-        InMemoryLeaderEpochCheckpoint checkpoint = new InMemoryLeaderEpochCheckpoint();
+    List<EpochEntry> getLeaderEpochEntries(UnifiedLog log, long startOffset, long endOffset) {
         if (log.leaderEpochCache().isDefined()) {
-            LeaderEpochFileCache cache = log.leaderEpochCache().get().writeTo(checkpoint);
-            if (startOffset >= 0) {
-                cache.truncateFromStart(startOffset);
-            }
-            cache.truncateFromEnd(endOffset);
+            return log.leaderEpochCache().get().epochEntriesInRange(startOffset, endOffset);
+        } else {
+            return Collections.emptyList();
         }
-        return checkpoint;
     }
 
     class RLMTask extends CancellableRunnable {
@@ -788,7 +791,7 @@ public class RemoteLogManager implements Closeable {
             long endOffset = nextSegmentBaseOffset - 1;
             File producerStateSnapshotFile = log.producerStateManager().fetchSnapshot(nextSegmentBaseOffset).orElse(null);
 
-            List<EpochEntry> epochEntries = getLeaderEpochCheckpoint(log, segment.baseOffset(), nextSegmentBaseOffset).read();
+            List<EpochEntry> epochEntries = getLeaderEpochEntries(log, segment.baseOffset(), nextSegmentBaseOffset);
             Map<Integer, Long> segmentLeaderEpochs = new HashMap<>(epochEntries.size());
             epochEntries.forEach(entry -> segmentLeaderEpochs.put(entry.epoch, entry.startOffset));
 
@@ -798,7 +801,7 @@ public class RemoteLogManager implements Closeable {
 
             remoteLogMetadataManager.addRemoteLogSegmentMetadata(copySegmentStartedRlsm).get();
 
-            ByteBuffer leaderEpochsIndex = getLeaderEpochCheckpoint(log, -1, nextSegmentBaseOffset).readAsByteBuffer();
+            ByteBuffer leaderEpochsIndex = epochEntriesAsByteBuffer(getLeaderEpochEntries(log, -1, nextSegmentBaseOffset));
             LogSegmentData segmentData = new LogSegmentData(logFile.toPath(), toPathIfExists(segment.offsetIndex().file()),
                     toPathIfExists(segment.timeIndex().file()), Optional.ofNullable(toPathIfExists(segment.txnIndex().file())),
                     producerStateSnapshotFile.toPath(), leaderEpochsIndex);
@@ -1749,6 +1752,19 @@ public class RemoteLogManager implements Closeable {
         }
 
         LOGGER.info("Shutting down of thread pool {} is completed", poolName);
+    }
+
+    //Visible for testing
+    static ByteBuffer epochEntriesAsByteBuffer(List<EpochEntry> epochEntries) throws IOException {
+        ByteArrayOutputStream stream = new ByteArrayOutputStream();
+        try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(stream, StandardCharsets.UTF_8))) {
+            CheckpointFile.CheckpointWriteBuffer<EpochEntry> writeBuffer =
+                    new CheckpointFile.CheckpointWriteBuffer<>(writer, 0, LeaderEpochCheckpointFile.FORMATTER);
+            writeBuffer.write(epochEntries);
+            writer.flush();
+        }
+
+        return ByteBuffer.wrap(stream.toByteArray());
     }
 
     private void removeRemoteTopicPartitionMetrics(TopicIdPartition topicIdPartition) {
