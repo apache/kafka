@@ -34,7 +34,7 @@ public class MemberSubscriptionAndAssignmentImpl implements MemberSubscription, 
     private final Assignment memberAssignment;
 
     /**
-     * Constructs a new {@code MemberSubscriptionSpecImpl}.
+     * Constructs a new {@code MemberSubscriptionAndAssignmentImpl}.
      *
      * @param rackId                The rack Id.
      * @param subscribedTopicIds    The set of subscribed topic Ids.
@@ -90,5 +90,4 @@ public class MemberSubscriptionAndAssignmentImpl implements MemberSubscription, 
             ", memberAssignment=" + memberAssignment +
             ')';
     }
-
 }

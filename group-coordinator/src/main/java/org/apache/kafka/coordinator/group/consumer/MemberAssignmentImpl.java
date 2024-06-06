@@ -28,20 +28,20 @@ import java.util.Set;
  */
 public class MemberAssignmentImpl implements MemberAssignment {
     /**
-     * The target partitions assigned to this member keyed by topicId.
+     * The partitions assigned to this member keyed by topicId.
      */
-    private final Map<Uuid, Set<Integer>> assignment;
+    private final Map<Uuid, Set<Integer>> partitions;
 
-    public MemberAssignmentImpl(Map<Uuid, Set<Integer>> assignment) {
-        this.assignment = Objects.requireNonNull(assignment);
+    public MemberAssignmentImpl(Map<Uuid, Set<Integer>> partitions) {
+        this.partitions = Objects.requireNonNull(partitions);
     }
 
     /**
-     * @return Target partitions keyed by topic Ids.
+     * @return The assigned partitions keyed by topic Ids.
      */
     @Override
     public Map<Uuid, Set<Integer>> partitions() {
-        return this.assignment;
+        return this.partitions;
     }
 
     @Override
@@ -49,16 +49,16 @@ public class MemberAssignmentImpl implements MemberAssignment {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         MemberAssignmentImpl that = (MemberAssignmentImpl) o;
-        return assignment.equals(that.assignment);
+        return partitions.equals(that.partitions);
     }
 
     @Override
     public int hashCode() {
-        return assignment.hashCode();
+        return partitions.hashCode();
     }
 
     @Override
     public String toString() {
-        return "MemberAssignment(assignment=" + assignment + ')';
+        return "MemberAssignment(partitions=" + partitions + ')';
     }
 }

@@ -56,7 +56,7 @@ public interface GroupSpec {
      *
      * @param memberId The member Id.
      * @return The member's assignment or an empty assignment if the
-     * member does not have one.
+     *         member does not have one.
      */
     MemberAssignment memberAssignment(String memberId);
 }

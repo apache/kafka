@@ -28,7 +28,7 @@ import java.util.Set;
 @InterfaceStability.Unstable
 public interface MemberAssignment {
     /**
-     * @return Target partitions keyed by topic Ids.
+     * @return The assigned partitions keyed by topic Ids.
      */
     Map<Uuid, Set<Integer>> partitions();
 }
