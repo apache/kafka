@@ -33,6 +33,7 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.SimpleRate;
 import org.apache.kafka.common.metrics.stats.WindowedCount;
 import org.apache.kafka.common.telemetry.internals.LastValueTracker.InstantAndValue;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -130,7 +131,7 @@ public class KafkaMetricsCollector implements MetricsCollector {
     private final Set<String> excludeLabels;
 
     public KafkaMetricsCollector(MetricNamingStrategy<MetricName> metricNamingStrategy, Set<String> excludeLabels) {
-        this(metricNamingStrategy, Time.SYSTEM, excludeLabels);
+        this(metricNamingStrategy, SystemTime.getSystemTime(), excludeLabels);
     }
 
     // Visible for testing

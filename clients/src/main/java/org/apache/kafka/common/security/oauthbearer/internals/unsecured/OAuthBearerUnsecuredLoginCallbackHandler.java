@@ -44,6 +44,7 @@ import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -113,7 +114,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
     private static final String LIST_CLAIM_PREFIX = OPTION_PREFIX + "ListClaim_";
     private static final String EXTENSION_PREFIX = OPTION_PREFIX + "Extension_";
     private static final String QUOTE = "\"";
-    private Time time = Time.SYSTEM;
+    private Time time = SystemTime.getSystemTime();
     private Map<String, String> moduleOptions = null;
     private boolean configured = false;
 

@@ -20,6 +20,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.metrics.internals.MetricsUtils;
 import org.apache.kafka.common.utils.KafkaThread;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -108,7 +109,7 @@ public class Metrics implements Closeable {
      * @param defaultConfig The default config to use for all metrics that don't override their config
      */
     public Metrics(MetricConfig defaultConfig) {
-        this(defaultConfig, new ArrayList<>(0), Time.SYSTEM);
+        this(defaultConfig, new ArrayList<>(0), SystemTime.getSystemTime());
     }
 
     /**

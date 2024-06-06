@@ -21,10 +21,18 @@ import org.apache.kafka.common.errors.TimeoutException;
 import java.util.function.Supplier;
 
 /**
- * A time implementation that uses the system clock and sleep call. Use `Time.SYSTEM` instead of creating an instance
- * of this class.
+ * A time implementation that uses the system clock and sleep call.
+ * Every kafka process has a single instance of class <code>SystemTime</code> that allows the process to interface
+ * with the system clock. The current SystemTime can be obtained from the #{@link SystemTime#getSystemTime()} method.
+ * An process cannot create its own instance of this class
  */
 public class SystemTime implements Time {
+
+    private final static SystemTime SYSTEM_TIME = new SystemTime();
+
+    public static SystemTime getSystemTime() {
+        return SYSTEM_TIME;
+    }
 
     @Override
     public long milliseconds() {
@@ -57,4 +65,6 @@ public class SystemTime implements Time {
         }
     }
 
+    private SystemTime() {
+    }
 }

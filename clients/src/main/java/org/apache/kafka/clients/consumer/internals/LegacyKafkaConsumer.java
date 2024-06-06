@@ -56,6 +56,7 @@ import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Timer;
 import org.slf4j.Logger;
 import org.slf4j.event.Level;
@@ -164,7 +165,7 @@ public class LegacyKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             log.debug("Initializing the Kafka consumer");
             this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
             this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
-            this.time = Time.SYSTEM;
+            this.time = SystemTime.getSystemTime();
             List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
             this.clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
             this.clientTelemetryReporter.ifPresent(reporters::add);
@@ -1116,7 +1117,7 @@ public class LegacyKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     private Timer createTimerForRequest(final Duration timeout) {
         // this.time could be null if an exception occurs in constructor prior to setting the this.time field
-        final Time localTime = (time == null) ? Time.SYSTEM : time;
+        final Time localTime = (time == null) ? SystemTime.getSystemTime() : time;
         return localTime.timer(Math.min(timeout.toMillis(), requestTimeoutMs));
     }
 

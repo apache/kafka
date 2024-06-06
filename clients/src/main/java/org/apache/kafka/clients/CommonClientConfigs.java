@@ -23,7 +23,7 @@ import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -302,7 +302,7 @@ public class CommonClientConfigs {
             return Optional.empty();
         }
 
-        ClientTelemetryReporter telemetryReporter = new ClientTelemetryReporter(Time.SYSTEM);
+        ClientTelemetryReporter telemetryReporter = new ClientTelemetryReporter(SystemTime.getSystemTime());
         telemetryReporter.configure(config.originals(Collections.singletonMap(CommonClientConfigs.CLIENT_ID_CONFIG, clientId)));
         return Optional.of(telemetryReporter);
     }

@@ -33,7 +33,7 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -152,7 +152,7 @@ public final class ProducerBatch {
                                                                    timestamp,
                                                                    key == null ? -1 : key.length,
                                                                    value == null ? -1 : value.length,
-                                                                   Time.SYSTEM);
+                                                                   SystemTime.getSystemTime());
             // we have to keep every future returned to the users in case the batch needs to be
             // split to several new batches and resent.
             thunks.add(new Thunk(callback, future));
@@ -177,7 +177,7 @@ public final class ProducerBatch {
                                                                    timestamp,
                                                                    key == null ? -1 : key.remaining(),
                                                                    value == null ? -1 : value.remaining(),
-                                                                   Time.SYSTEM);
+                                                                   SystemTime.getSystemTime());
             // Chain the future to the original thunk.
             thunk.future.chain(future);
             this.thunks.add(thunk);

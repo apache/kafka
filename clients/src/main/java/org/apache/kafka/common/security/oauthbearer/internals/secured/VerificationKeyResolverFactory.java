@@ -27,7 +27,7 @@ import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Map;
 import javax.net.ssl.SSLSocketFactory;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.jose4j.http.Get;
 import org.jose4j.jwk.HttpsJwks;
 
@@ -77,7 +77,7 @@ public class VerificationKeyResolverFactory {
                 httpsJwks.setSimpleHttpGet(get);
             }
 
-            RefreshingHttpsJwks refreshingHttpsJwks = new RefreshingHttpsJwks(Time.SYSTEM,
+            RefreshingHttpsJwks refreshingHttpsJwks = new RefreshingHttpsJwks(SystemTime.getSystemTime(),
                 httpsJwks,
                 refreshIntervalMs,
                 cu.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS),

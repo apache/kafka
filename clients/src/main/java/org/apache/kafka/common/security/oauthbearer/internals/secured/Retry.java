@@ -18,6 +18,7 @@
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import java.util.concurrent.ExecutionException;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,7 +41,7 @@ public class Retry<R> {
     private final long retryBackoffMaxMs;
 
     public Retry(long retryBackoffMs, long retryBackoffMaxMs) {
-        this(Time.SYSTEM, retryBackoffMs, retryBackoffMaxMs);
+        this(SystemTime.getSystemTime(), retryBackoffMs, retryBackoffMaxMs);
     }
 
     public Retry(Time time, long retryBackoffMs, long retryBackoffMaxMs) {

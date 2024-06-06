@@ -73,6 +73,7 @@ import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -293,7 +294,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     public KafkaProducer(Map<String, Object> configs, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
         this(new ProducerConfig(ProducerConfig.appendSerializerToConfig(configs, keySerializer, valueSerializer)),
-                keySerializer, valueSerializer, null, null, null, Time.SYSTEM);
+                keySerializer, valueSerializer, null, null, null, SystemTime.getSystemTime());
     }
 
     /**
@@ -456,7 +457,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                         config.getLong(ProducerConfig.METADATA_MAX_IDLE_CONFIG),
                         logContext,
                         clusterResourceListeners,
-                        Time.SYSTEM);
+                        SystemTime.getSystemTime());
                 this.metadata.bootstrap(addresses);
             }
             this.errors = this.metrics.sensor("errors");

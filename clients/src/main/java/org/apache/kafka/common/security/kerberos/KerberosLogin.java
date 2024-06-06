@@ -31,6 +31,7 @@ import org.apache.kafka.common.security.authenticator.AbstractLogin;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.Shell;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,7 +52,7 @@ public class KerberosLogin extends AbstractLogin {
 
     private static final Random RNG = new Random();
 
-    private final Time time = Time.SYSTEM;
+    private final Time time = SystemTime.getSystemTime();
     private Thread t;
     private boolean isKrbTicket;
     private boolean isUsingTicketCache;

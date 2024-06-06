@@ -28,6 +28,7 @@ import javax.security.auth.login.LoginException;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.Login;
 import org.apache.kafka.common.utils.KafkaThread;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -153,7 +154,7 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
             ExpiringCredentialRefreshConfig expiringCredentialRefreshConfig,
             AuthenticateCallbackHandler callbackHandler, Class<?> mandatoryClassToSynchronizeOnPriorToRefresh) {
         this(contextName, configuration, expiringCredentialRefreshConfig, callbackHandler,
-                mandatoryClassToSynchronizeOnPriorToRefresh, new LoginContextFactory(), Time.SYSTEM);
+                mandatoryClassToSynchronizeOnPriorToRefresh, new LoginContextFactory(), SystemTime.getSystemTime());
     }
 
     public ExpiringCredentialRefreshingLogin(String contextName, Configuration configuration,

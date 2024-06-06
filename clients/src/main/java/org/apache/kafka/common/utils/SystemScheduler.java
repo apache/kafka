@@ -32,7 +32,7 @@ public class SystemScheduler implements Scheduler {
 
     @Override
     public Time time() {
-        return Time.SYSTEM;
+        return SystemTime.getSystemTime();
     }
 
     @Override

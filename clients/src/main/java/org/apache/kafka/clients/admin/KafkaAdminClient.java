@@ -248,6 +248,7 @@ import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
@@ -510,7 +511,7 @@ public class KafkaAdminClient extends AdminClient {
     ) {
         Metrics metrics = null;
         NetworkClient networkClient = null;
-        Time time = Time.SYSTEM;
+        Time time = SystemTime.getSystemTime();
         String clientId = generateClientId(config);
         ApiVersions apiVersions = new ApiVersions();
         LogContext logContext = createLogContext(clientId);

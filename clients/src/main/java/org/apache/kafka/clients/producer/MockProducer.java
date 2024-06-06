@@ -31,7 +31,7 @@ import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 
 import java.time.Duration;
 import java.util.ArrayDeque;
@@ -338,7 +338,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
         TopicPartition topicPartition = new TopicPartition(record.topic(), partition);
         ProduceRequestResult result = new ProduceRequestResult(topicPartition);
         FutureRecordMetadata future = new FutureRecordMetadata(result, 0, RecordBatch.NO_TIMESTAMP,
-                0, 0, Time.SYSTEM);
+                0, 0, SystemTime.getSystemTime());
         long offset = nextOffset(topicPartition);
         long baseOffset = Math.max(0, offset - Integer.MAX_VALUE);
         int batchIndex = (int) Math.min(Integer.MAX_VALUE, offset);

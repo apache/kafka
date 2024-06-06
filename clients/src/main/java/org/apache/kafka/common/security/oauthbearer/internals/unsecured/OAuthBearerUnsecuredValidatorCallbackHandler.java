@@ -29,6 +29,7 @@ import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerExtensionsValidatorCallback;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallback;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -85,7 +86,7 @@ public class OAuthBearerUnsecuredValidatorCallbackHandler implements Authenticat
     private static final String SCOPE_CLAIM_NAME_OPTION = OPTION_PREFIX + "ScopeClaimName";
     private static final String REQUIRED_SCOPE_OPTION = OPTION_PREFIX + "RequiredScope";
     private static final String ALLOWABLE_CLOCK_SKEW_MILLIS_OPTION = OPTION_PREFIX + "AllowableClockSkewMs";
-    private Time time = Time.SYSTEM;
+    private Time time = SystemTime.getSystemTime();
     private Map<String, String> moduleOptions = null;
     private boolean configured = false;
 
