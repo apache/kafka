@@ -59,7 +59,7 @@ public class GroupCoordinatorConfig {
     public static final List<String> GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DEFAULT = Collections.singletonList(Group.GroupType.CLASSIC.toString());
     public final static String GROUP_COORDINATOR_APPEND_LINGER_MS_CONFIG = "group.coordinator.append.linger.ms";
     public final static String GROUP_COORDINATOR_APPEND_LINGER_MS_DOC = "The duration in milliseconds that the coordinator will " +
-        "wait for writes to accumulate before flushing them to disk.";
+        "wait for writes to accumulate before flushing them to disk. Transactional writes are not accumulated.";
     public final static int GROUP_COORDINATOR_APPEND_LINGER_MS_DEFAULT = 10;
 
     public final static String GROUP_COORDINATOR_NUM_THREADS_CONFIG = "group.coordinator.threads";

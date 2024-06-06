@@ -489,9 +489,9 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         final Optional<TimerTask> lingerTimeoutTask;
 
         /**
-         * The list of events associated with the batch.
+         * The list of deferred events associated with the batch.
          */
-        final List<DeferredEvent> events;
+        final List<DeferredEvent> deferredEvents;
 
         /**
          * The next offset. This is updated when records
@@ -516,7 +516,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             this.buffer = buffer;
             this.builder = builder;
             this.lingerTimeoutTask = lingerTimeoutTask;
-            this.events = new ArrayList<>();
+            this.deferredEvents = new ArrayList<>();
         }
     }
 
@@ -695,11 +695,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         }
 
         /**
-         * Writes the current (or pending) batch to the log. When the batch is written
+         * Flushes the current (or pending) batch to the log. When the batch is written
          * locally, a new snapshot is created in the snapshot registry and the events
          * associated with the batch are added to the deferred event queue.
          */
-        private void writeCurrentBatch() {
+        private void flushCurrentBatch() {
             if (currentBatch != null) {
                 try {
                     // Write the records to the log and update the last written offset.
@@ -711,7 +711,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     coordinator.updateLastWrittenOffset(offset);
 
                     // Add all the pending deferred events to the deferred event queue.
-                    for (DeferredEvent event : currentBatch.events) {
+                    for (DeferredEvent event : currentBatch.deferredEvents) {
                         deferredEventQueue.add(offset, event);
                     }
 
@@ -724,12 +724,12 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         }
 
         /**
-         * Writes the current batch if it is transactional or if it has past the append linger time.
+         * Flushes the current batch if it is transactional or if it has passed the append linger time.
          */
-        private void maybeWriteCurrentBatch(long currentTimeMs) {
+        private void maybeFlushCurrentBatch(long currentTimeMs) {
             if (currentBatch != null) {
                 if (currentBatch.builder.isTransactional() || (currentBatch.appendTimeMs - currentTimeMs) >= appendLingerMs) {
-                    writeCurrentBatch();
+                    flushCurrentBatch();
                 }
             }
         }
@@ -741,7 +741,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         private void failCurrentBatch(Throwable t) {
             if (currentBatch != null) {
                 coordinator.revertLastWrittenOffset(currentBatch.baseOffset);
-                for (DeferredEvent event : currentBatch.events) {
+                for (DeferredEvent event : currentBatch.deferredEvents) {
                     event.complete(t);
                 }
                 freeCurrentBatch();
@@ -787,7 +787,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         public void run() {
                             scheduleInternalOperation("FlushBatch", tp, () -> {
                                 if (this.isCancelled()) return;
-                                withActiveContextOrThrow(tp, CoordinatorContext::writeCurrentBatch);
+                                withActiveContextOrThrow(tp, CoordinatorContext::flushCurrentBatch);
                             });
                         }
                     });
@@ -834,7 +834,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 // the response can be returned directly iff there are no pending write operations;
                 // otherwise, the read needs to wait on the last write operation to be completed.
                 if (currentBatch != null) {
-                    currentBatch.events.add(event);
+                    currentBatch.deferredEvents.add(event);
                 } else {
                     OptionalLong pendingOffset = deferredEventQueue.highestPendingOffset();
                     if (pendingOffset.isPresent()) {
@@ -845,13 +845,13 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 }
             } else {
                 // If the records are not empty, first, they are applied to the state machine,
-                // second, then are appended to the opened batch.
+                // second, they are appended to the opened batch.
                 long currentTimeMs = time.milliseconds();
 
                 // If the current write operation is transactional, the current batch
                 // is written before proceeding with it.
                 if (producerId != RecordBatch.NO_PRODUCER_ID) {
-                    writeCurrentBatch();
+                    flushCurrentBatch();
                 }
 
                 // Allocate a new batch if none exists.
@@ -892,7 +892,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     } else {
                         // Otherwise, we write the current batch, allocate a new one and re-verify
                         // whether the records fit in it.
-                        writeCurrentBatch();
+                        flushCurrentBatch();
                         maybeAllocateNewBatch(
                             producerId,
                             producerEpoch,
@@ -908,7 +908,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 }
 
                 // Add the event to the list of pending events associated with the batch.
-                currentBatch.events.add(event);
+                currentBatch.deferredEvents.add(event);
 
                 try {
                     // Apply record to the state machine.
@@ -934,10 +934,10 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
 
                     // Write the current batch if it is transactional or if the linger timeout
                     // has expired.
-                    maybeWriteCurrentBatch(currentTimeMs);
+                    maybeFlushCurrentBatch(currentTimeMs);
                 } catch (Throwable t) {
                     // If an exception is thrown, we fail the entire batch. Exceptions should be
-                    // really exceptional in this code patch and they would usually be the results
+                    // really exceptional in this code path and they would usually be the results
                     // of bugs preventing records to be replayed.
                     failCurrentBatch(t);
                 }
@@ -967,7 +967,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
 
             // The current batch must be written before the transaction marker is written
             // in order to respect the order.
-            writeCurrentBatch();
+            flushCurrentBatch();
 
             long prevLastWrittenOffset = coordinator.lastWrittenOffset();
             try {
