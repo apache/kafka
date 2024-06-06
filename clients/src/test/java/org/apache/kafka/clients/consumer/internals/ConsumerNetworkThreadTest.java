@@ -34,10 +34,7 @@ import org.apache.kafka.clients.consumer.internals.events.TopicMetadataEvent;
 import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsEvent;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
-import org.apache.kafka.common.requests.OffsetCommitRequest;
-import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -53,7 +50,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -213,22 +209,6 @@ public class ConsumerNetworkThreadTest {
         assertTrue(applicationEventsQueue.isEmpty());
     }
 
-    private static Stream<Arguments> applicationEvents() {
-        Time time1 = new MockTime();
-        Map<TopicPartition, OffsetAndMetadata> offset = mockTopicPartitionOffset();
-        final long currentTimeMs = time1.milliseconds();
-
-        return Stream.of(
-                Arguments.of(new PollEvent(100)),
-                Arguments.of(new NewTopicsMetadataUpdateRequestEvent()),
-                Arguments.of(new AsyncCommitEvent(new HashMap<>())),
-                Arguments.of(new SyncCommitEvent(new HashMap<>(), 500)),
-                Arguments.of(new ResetPositionsEvent(500)),
-                Arguments.of(new ValidatePositionsEvent(500)),
-                Arguments.of(new TopicMetadataEvent("topic", Long.MAX_VALUE)),
-                Arguments.of(new AssignmentChangeEvent(offset, currentTimeMs)));
-    }
-
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testListOffsetsEventIsProcessed(boolean requireTimestamp) {
@@ -320,53 +300,18 @@ public class ConsumerNetworkThreadTest {
         assertFalse(networkClientDelegate.hasAnyPendingRequests());
     }
 
-    static private Map<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {
-        final TopicPartition t0 = new TopicPartition("t0", 2);
-        final TopicPartition t1 = new TopicPartition("t0", 3);
-        final Map<TopicPartition, OffsetAndMetadata> topicPartitionOffsets = new HashMap<>();
-        topicPartitionOffsets.put(t0, new OffsetAndMetadata(10L));
-        topicPartitionOffsets.put(t1, new OffsetAndMetadata(20L));
-        return topicPartitionOffsets;
-    }
-
-    private void prepareOffsetCommitRequest(final Map<TopicPartition, Long> expectedOffsets,
-                                            final Errors error,
-                                            final boolean disconnected) {
-        Map<TopicPartition, Errors> errors = partitionErrors(expectedOffsets.keySet(), error);
-        client.prepareResponse(offsetCommitRequestMatcher(expectedOffsets), offsetCommitResponse(errors), disconnected);
-    }
-
-    private Map<TopicPartition, Errors> partitionErrors(final Collection<TopicPartition> partitions,
-                                                        final Errors error) {
-        final Map<TopicPartition, Errors> errors = new HashMap<>();
-        for (TopicPartition partition : partitions) {
-            errors.put(partition, error);
-        }
-        return errors;
-    }
-
-    private OffsetCommitResponse offsetCommitResponse(final Map<TopicPartition, Errors> responseData) {
-        return new OffsetCommitResponse(responseData);
-    }
-
-    private MockClient.RequestMatcher offsetCommitRequestMatcher(final Map<TopicPartition, Long> expectedOffsets) {
-        return body -> {
-            OffsetCommitRequest req = (OffsetCommitRequest) body;
-            Map<TopicPartition, Long> offsets = req.offsets();
-            if (offsets.size() != expectedOffsets.size())
-                return false;
-
-            for (Map.Entry<TopicPartition, Long> expectedOffset : expectedOffsets.entrySet()) {
-                if (!offsets.containsKey(expectedOffset.getKey())) {
-                    return false;
-                } else {
-                    Long actualOffset = offsets.get(expectedOffset.getKey());
-                    if (!actualOffset.equals(expectedOffset.getValue())) {
-                        return false;
-                    }
-                }
-            }
-            return true;
-        };
+    private static Stream<Arguments> applicationEvents() {
+        Time time1 = new MockTime();
+        Map<TopicPartition, OffsetAndMetadata> offset = new HashMap<>();
+        final long currentTimeMs = time1.milliseconds();
+        return Stream.of(
+                Arguments.of(new PollEvent(100)),
+                Arguments.of(new NewTopicsMetadataUpdateRequestEvent()),
+                Arguments.of(new AsyncCommitEvent(new HashMap<>())),
+                Arguments.of(new SyncCommitEvent(new HashMap<>(), 500)),
+                Arguments.of(new ResetPositionsEvent(500)),
+                Arguments.of(new ValidatePositionsEvent(500)),
+                Arguments.of(new TopicMetadataEvent("topic", Long.MAX_VALUE)),
+                Arguments.of(new AssignmentChangeEvent(offset, currentTimeMs)));
     }
 }
