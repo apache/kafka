@@ -173,4 +173,11 @@ public class TopicIds implements Set<Uuid> {
         result = 31 * result + image.hashCode();
         return result;
     }
+
+    @Override
+    public String toString() {
+        return "TopicIds(topicNames=" + topicNames +
+            ", image=" + image +
+            ')';
+    }
 }

@@ -93,13 +93,11 @@ public class DescribeLogDirsResponse extends AbstractResponse {
 
         @Override
         public String toString() {
-            StringBuilder builder = new StringBuilder();
-            builder.append("(error=")
-                    .append(error)
-                    .append(", replicas=")
-                    .append(replicaInfos)
-                    .append(")");
-            return builder.toString();
+            return "(error=" +
+                    error +
+                    ", replicas=" +
+                    replicaInfos +
+                    ")";
         }
     }
 
@@ -126,15 +124,13 @@ public class DescribeLogDirsResponse extends AbstractResponse {
 
         @Override
         public String toString() {
-            StringBuilder builder = new StringBuilder();
-            builder.append("(size=")
-                .append(size)
-                .append(", offsetLag=")
-                .append(offsetLag)
-                .append(", isFuture=")
-                .append(isFuture)
-                .append(")");
-            return builder.toString();
+            return "(size=" +
+                    size +
+                    ", offsetLag=" +
+                    offsetLag +
+                    ", isFuture=" +
+                    isFuture +
+                    ")";
         }
     }
 

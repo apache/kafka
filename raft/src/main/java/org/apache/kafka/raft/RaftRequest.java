@@ -17,13 +17,14 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.common.Node;
 
 import java.util.concurrent.CompletableFuture;
 
 public abstract class RaftRequest implements RaftMessage {
-    protected final int correlationId;
-    protected final ApiMessage data;
-    protected final long createdTimeMs;
+    private final int correlationId;
+    private final ApiMessage data;
+    private final long createdTimeMs;
 
     public RaftRequest(int correlationId, ApiMessage data, long createdTimeMs) {
         this.correlationId = correlationId;
@@ -45,7 +46,7 @@ public abstract class RaftRequest implements RaftMessage {
         return createdTimeMs;
     }
 
-    public static class Inbound extends RaftRequest {
+    public final static class Inbound extends RaftRequest {
         public final CompletableFuture<RaftResponse.Outbound> completion = new CompletableFuture<>();
 
         public Inbound(int correlationId, ApiMessage data, long createdTimeMs) {
@@ -54,35 +55,37 @@ public abstract class RaftRequest implements RaftMessage {
 
         @Override
         public String toString() {
-            return "InboundRequest(" +
-                    "correlationId=" + correlationId +
-                    ", data=" + data +
-                    ", createdTimeMs=" + createdTimeMs +
-                    ')';
+            return String.format(
+                "InboundRequest(correlationId=%d, data=%s, createdTimeMs=%d)",
+                correlationId(),
+                data(),
+                createdTimeMs()
+            );
         }
     }
 
-    public static class Outbound extends RaftRequest {
-        private final int destinationId;
+    public final static class Outbound extends RaftRequest {
+        private final Node destination;
         public final CompletableFuture<RaftResponse.Inbound> completion = new CompletableFuture<>();
 
-        public Outbound(int correlationId, ApiMessage data, int destinationId, long createdTimeMs) {
+        public Outbound(int correlationId, ApiMessage data, Node destination, long createdTimeMs) {
             super(correlationId, data, createdTimeMs);
-            this.destinationId = destinationId;
+            this.destination = destination;
         }
 
-        public int destinationId() {
-            return destinationId;
+        public Node destination() {
+            return destination;
         }
 
         @Override
         public String toString() {
-            return "OutboundRequest(" +
-                    "correlationId=" + correlationId +
-                    ", data=" + data +
-                    ", createdTimeMs=" + createdTimeMs +
-                    ", destinationId=" + destinationId +
-                    ')';
+            return String.format(
+                "OutboundRequest(correlationId=%d, data=%s, createdTimeMs=%d, destination=%s)",
+                correlationId(),
+                data(),
+                createdTimeMs(),
+                destination
+            );
         }
     }
 }

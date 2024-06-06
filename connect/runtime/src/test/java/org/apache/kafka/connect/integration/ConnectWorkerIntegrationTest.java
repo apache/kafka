@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.integration;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.provider.FileConfigProvider;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -39,11 +40,14 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.TemporaryFolder;
 import org.junit.rules.TestRule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.event.Level;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -56,6 +60,9 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static javax.ws.rs.core.Response.Status.INTERNAL_SERVER_ERROR;
 import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
+import static org.apache.kafka.common.config.AbstractConfig.CONFIG_PROVIDERS_CONFIG;
+import static org.apache.kafka.common.config.TopicConfig.DELETE_RETENTION_MS_CONFIG;
+import static org.apache.kafka.common.config.TopicConfig.SEGMENT_MS_CONFIG;
 import static org.apache.kafka.connect.integration.BlockingConnectorTest.TASK_STOP;
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
@@ -71,6 +78,7 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_F
 import static org.apache.kafka.connect.runtime.WorkerConfig.CONNECTOR_CLIENT_POLICY_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONFIG_STORAGE_PREFIX;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONFIG_TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.REBALANCE_TIMEOUT_MS_CONFIG;
@@ -107,6 +115,9 @@ public class ConnectWorkerIntegrationTest {
 
     @Rule
     public TestRule watcher = ConnectIntegrationTestUtils.newTestWatcher(log);
+
+    @Rule
+    public TemporaryFolder tmp = new TemporaryFolder();
 
     @Before
     public void setup() {
@@ -1120,6 +1131,194 @@ public class ConnectWorkerIntegrationTest {
                 CONNECTOR_NAME,
                 maxTasks,
                 "connector did not fail in time, or tasks were incorrectly failed"
+        );
+    }
+
+    /**
+     * Task configs are not removed from the config topic after a connector is deleted.
+     * When topic compaction takes place, this can cause the tombstone message for the
+     * connector config to be deleted, leaving the task configs in the config topic with no
+     * explicit record of the connector's deletion.
+     * <p>
+     * This test guarantees that those older task configs are never used, even when the
+     * connector is recreated later.
+     */
+    @Test
+    public void testCompactedDeletedOlderConnectorConfig() throws Exception {
+        brokerProps.put("log.cleaner.backoff.ms", "100");
+        brokerProps.put("log.cleaner.delete.retention.ms", "1");
+        brokerProps.put("log.cleaner.max.compaction.lag.ms", "1");
+        brokerProps.put("log.cleaner.min.cleanable.ratio", "0");
+        brokerProps.put("log.cleaner.min.compaction.lag.ms", "1");
+        brokerProps.put("log.cleaner.threads", "1");
+
+        final String configTopic = "kafka-16838-configs";
+        final int offsetCommitIntervalMs = 100;
+        workerProps.put(CONFIG_TOPIC_CONFIG, configTopic);
+        workerProps.put(CONFIG_STORAGE_PREFIX + SEGMENT_MS_CONFIG, "100");
+        workerProps.put(CONFIG_STORAGE_PREFIX + DELETE_RETENTION_MS_CONFIG, "1");
+        workerProps.put(OFFSET_COMMIT_INTERVAL_MS_CONFIG, Integer.toString(offsetCommitIntervalMs));
+
+        final int numWorkers = 1;
+        connect = connectBuilder
+                .numWorkers(numWorkers)
+                .build();
+        // start the clusters
+        connect.start();
+
+        connect.assertions().assertAtLeastNumWorkersAreUp(
+                numWorkers,
+                "Initial group of workers did not start in time."
+        );
+
+        final String connectorTopic = "connector-topic";
+        connect.kafka().createTopic(connectorTopic, 1);
+
+        ConnectorHandle connectorHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME);
+        connectorHandle.expectedCommits(NUM_TASKS * 2);
+
+        Map<String, String> connectorConfig = defaultSourceConnectorProps(connectorTopic);
+        connect.configureConnector(CONNECTOR_NAME, connectorConfig);
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+                CONNECTOR_NAME,
+                NUM_TASKS,
+                "Connector or its tasks did not start in time"
+        );
+        connectorHandle.awaitCommits(offsetCommitIntervalMs * 3);
+
+        connect.deleteConnector(CONNECTOR_NAME);
+
+        // Roll the entire cluster
+        connect.activeWorkers().forEach(connect::removeWorker);
+
+        // Miserable hack: produce directly to the config topic and then wait a little bit
+        // in order to trigger segment rollover and allow compaction to take place
+        connect.kafka().produce(configTopic, "garbage-key-1", null);
+        Thread.sleep(1_000);
+        connect.kafka().produce(configTopic, "garbage-key-2", null);
+        Thread.sleep(1_000);
+
+        for (int i = 0; i < numWorkers; i++)
+            connect.addWorker();
+
+        connect.assertions().assertAtLeastNumWorkersAreUp(
+                numWorkers,
+                "Initial group of workers did not start in time."
+        );
+
+        final TopicPartition connectorTopicPartition = new TopicPartition(connectorTopic, 0);
+        final long initialEndOffset = connect.kafka().endOffset(connectorTopicPartition);
+        assertTrue(
+                "Source connector should have published at least one record to Kafka",
+                initialEndOffset > 0
+        );
+
+        connectorHandle.expectedCommits(NUM_TASKS * 2);
+
+        // Re-create the connector with a different config (targets a different topic)
+        final String otherConnectorTopic = "other-topic";
+        connect.kafka().createTopic(otherConnectorTopic, 1);
+        connectorConfig.put(TOPIC_CONFIG, otherConnectorTopic);
+        connect.configureConnector(CONNECTOR_NAME, connectorConfig);
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+                CONNECTOR_NAME,
+                NUM_TASKS,
+                "Connector or its tasks did not start in time"
+        );
+        connectorHandle.awaitCommits(offsetCommitIntervalMs * 3);
+
+        // See if any new records got written to the old topic
+        final long nextEndOffset = connect.kafka().endOffset(connectorTopicPartition);
+        assertEquals(
+                "No new records should have been written to the older topic",
+                initialEndOffset,
+                nextEndOffset
+        );
+    }
+
+    /**
+     * If a connector has existing tasks, and then generates new task configs, workers compare the
+     * new and existing configs before publishing them to the config topic. If there is no difference,
+     * workers do not publish task configs (this is a workaround to prevent infinite loops with eager
+     * rebalancing).
+     * <p>
+     * This test tries to guarantee that, if the old task configs become invalid because of
+     * an invalid config provider reference, it will still be possible to reconfigure the connector.
+     */
+    @Test
+    public void testReconfigureConnectorWithFailingTaskConfigs() throws Exception {
+        final int offsetCommitIntervalMs = 100;
+        workerProps.put(CONFIG_PROVIDERS_CONFIG, "file");
+        workerProps.put(CONFIG_PROVIDERS_CONFIG + ".file.class", FileConfigProvider.class.getName());
+        workerProps.put(OFFSET_COMMIT_INTERVAL_MS_CONFIG, Integer.toString(offsetCommitIntervalMs));
+
+        final int numWorkers = 1;
+        connect = connectBuilder
+                .numWorkers(numWorkers)
+                .build();
+        // start the clusters
+        connect.start();
+
+        connect.assertions().assertAtLeastNumWorkersAreUp(
+                numWorkers,
+                "Initial group of workers did not start in time."
+        );
+
+        final String firstConnectorTopic = "connector-topic-1";
+        connect.kafka().createTopic(firstConnectorTopic);
+
+        final File secretsFile = tmp.newFile("test-secrets");
+        final Properties secrets = new Properties();
+        final String throughputSecretKey = "secret-throughput";
+        secrets.put(throughputSecretKey, "10");
+        try (FileOutputStream secretsOutputStream = new FileOutputStream(secretsFile)) {
+            secrets.store(secretsOutputStream, null);
+        }
+
+        ConnectorHandle connectorHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME);
+        connectorHandle.expectedCommits(NUM_TASKS * 2);
+
+        Map<String, String> connectorConfig = defaultSourceConnectorProps(firstConnectorTopic);
+        connectorConfig.put(
+                "throughput",
+                "${file:" + secretsFile.getAbsolutePath() + ":" + throughputSecretKey + "}"
+        );
+        connect.configureConnector(CONNECTOR_NAME, connectorConfig);
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+                CONNECTOR_NAME,
+                NUM_TASKS,
+                "Connector or its tasks did not start in time"
+        );
+        connectorHandle.awaitCommits(offsetCommitIntervalMs * 3);
+
+        // Delete the secrets file, which should render the old task configs invalid
+        assertTrue("Failed to delete secrets file", secretsFile.delete());
+
+        // Use a start latch here instead of assertConnectorAndExactlyNumTasksAreRunning
+        // since failure to reconfigure the tasks (which may occur if the bug this test was written
+        // to help catch resurfaces) will not cause existing tasks to fail or stop running
+        StartAndStopLatch restarts = connectorHandle.expectedStarts(1);
+        connectorHandle.expectedCommits(NUM_TASKS * 2);
+
+        final String secondConnectorTopic = "connector-topic-2";
+        connect.kafka().createTopic(secondConnectorTopic, 1);
+
+        // Stop using the config provider for this connector, and instruct it to start writing to the
+        // old topic again
+        connectorConfig.put("throughput", "10");
+        connectorConfig.put(TOPIC_CONFIG, secondConnectorTopic);
+        connect.configureConnector(CONNECTOR_NAME, connectorConfig);
+        assertTrue(
+                "Connector tasks were not restarted in time",
+                restarts.await(10, TimeUnit.SECONDS)
+        );
+        connectorHandle.awaitCommits(offsetCommitIntervalMs * 3);
+
+        final long endOffset = connect.kafka().endOffset(new TopicPartition(secondConnectorTopic, 0));
+        assertTrue(
+                "Source connector should have published at least one record to new Kafka topic "
+                    + "after being reconfigured",
+                endOffset > 0
         );
     }
 

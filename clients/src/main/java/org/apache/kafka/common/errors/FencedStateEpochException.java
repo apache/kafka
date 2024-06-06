@@ -14,21 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.storage.internals.checkpoint;
+package org.apache.kafka.common.errors;
 
-import org.apache.kafka.storage.internals.log.EpochEntry;
+/**
+ * Thrown when the share coordinator rejected the request because the share-group state epoch did not match.
+ */
+public class FencedStateEpochException extends ApiException {
+    private static final long serialVersionUID = 1L;
 
-import java.util.Collection;
-import java.util.List;
-
-public interface LeaderEpochCheckpoint {
-    // in file-backed checkpoint implementation, the content should be
-    // synced to the device if `sync` is true
-    void write(Collection<EpochEntry> epochs, boolean sync);
-
-    default void write(Collection<EpochEntry> epochs) {
-        write(epochs, true);
+    public FencedStateEpochException(String message) {
+        super(message);
     }
-
-    List<EpochEntry> read();
 }

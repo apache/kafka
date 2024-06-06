@@ -182,7 +182,7 @@ Found problem:
       val bootstrapMetadata = StorageTool.buildBootstrapMetadata(MetadataVersion.latestTesting(), None, "test format command")
       assertEquals(0, StorageTool.
         formatCommand(new PrintStream(stream), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = false))
-      assertTrue(stream.toString().startsWith("Formatting %s".format(tempDir)))
+      assertTrue(stringAfterFirstLine(stream.toString()).startsWith("Formatting %s".format(tempDir)))
 
       try assertEquals(1, StorageTool.
         formatCommand(new PrintStream(new ByteArrayOutputStream()), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = false)) catch {
@@ -194,8 +194,13 @@ Found problem:
       val stream2 = new ByteArrayOutputStream()
       assertEquals(0, StorageTool.
         formatCommand(new PrintStream(stream2), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = true))
-      assertEquals("All of the log directories are already formatted.%n".format(), stream2.toString())
+      assertEquals("All of the log directories are already formatted.%n".format(), stringAfterFirstLine(stream2.toString()))
     } finally Utils.delete(tempDir)
+  }
+
+  def stringAfterFirstLine(input: String): String = {
+    val firstNewline = input.indexOf("\n")
+    input.substring(firstNewline + 1)
   }
 
   private def runFormatCommand(stream: ByteArrayOutputStream, directories: Seq[String], ignoreFormatted: Boolean = false): Int = {
@@ -215,7 +220,7 @@ Found problem:
     assertEquals(0, runFormatCommand(stream, availableDirs))
     val actual = stream.toString().split("\\r?\\n")
     val expect = availableDirs.map("Formatting %s".format(_))
-    assertEquals(availableDirs.size, actual.size)
+    assertEquals(availableDirs.size + 1, actual.size)
     expect.foreach(dir => {
       assertEquals(1, actual.count(_.startsWith(dir)))
     })
@@ -354,6 +359,7 @@ Found problem:
         MetadataVersion.LATEST_PRODUCTION,
         Map(TestFeatureVersion.FEATURE_NAME -> featureLevel),
         allFeatures,
+        false,
         false
       )
       if (featureLevel > 0) {
@@ -371,13 +377,22 @@ Found problem:
       metadataVersion,
       Map.empty,
       allFeatures,
+      true,
       true
     )
 
-    val featureLevel = Features.TEST_VERSION.defaultValue(metadataVersion)
-    if (featureLevel > 0) {
-      assertEquals(List(generateRecord(TestFeatureVersion.FEATURE_NAME, featureLevel)), records)
+    val expectedRecords = new ArrayBuffer[ApiMessageAndVersion]()
+
+    def maybeAddRecordFor(features: Features): Unit = {
+      val featureLevel = features.defaultValue(metadataVersion)
+      if (featureLevel > 0) {
+        expectedRecords += generateRecord(features.featureName, featureLevel)
+      }
     }
+
+    Features.FEATURES.foreach(maybeAddRecordFor)
+
+    assertEquals(expectedRecords, records)
   }
   @Test
   def testVersionDefaultNoArgs(): Unit = {
@@ -387,6 +402,7 @@ Found problem:
       MetadataVersion.LATEST_PRODUCTION,
       Map.empty,
       allFeatures,
+      false,
       false
     )
 
@@ -402,6 +418,7 @@ Found problem:
       MetadataVersion.IBP_2_8_IV1,
       Map(TestFeatureVersion.FEATURE_NAME -> featureLevel),
       allFeatures,
+      false,
       false
     ))
   }
@@ -414,6 +431,7 @@ Found problem:
       MetadataVersion.IBP_3_3_IV0,
       Map.empty,
       allFeatures,
+      false,
       false
     )
 
@@ -428,6 +446,19 @@ Found problem:
       MetadataVersion.LATEST_PRODUCTION,
       Map(TestFeatureVersion.FEATURE_NAME -> featureLevel),
       allFeatures,
+      false,
+      false
+    ))
+  }
+
+  @Test
+  def testUnstableFeatureThrowsError(): Unit = {
+    assertThrows(classOf[IllegalArgumentException], () => StorageTool.generateFeatureRecords(
+      new ArrayBuffer[ApiMessageAndVersion](),
+      MetadataVersion.LATEST_PRODUCTION,
+      Map(TestFeatureVersion.FEATURE_NAME -> Features.TEST_VERSION.latestTesting),
+      allFeatures,
+      false,
       false
     ))
   }
@@ -606,7 +637,7 @@ Found problem:
     val propsStream = Files.newOutputStream(propsFile.toPath)
     try {
       properties.setProperty(ServerLogConfigs.LOG_DIRS_CONFIG, TestUtils.tempDir().toString)
-      properties.setProperty(ServerConfigs.UNSTABLE_METADATA_VERSIONS_ENABLE_CONFIG, enableUnstable.toString)
+      properties.setProperty(ServerConfigs.UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG, enableUnstable.toString)
       properties.store(propsStream, "config.props")
     } finally {
       propsStream.close()

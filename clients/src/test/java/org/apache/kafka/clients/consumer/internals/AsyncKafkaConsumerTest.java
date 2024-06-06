@@ -19,7 +19,6 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.Metadata.LeaderAndEpoch;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
-import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -30,7 +29,6 @@ import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
-import org.apache.kafka.clients.consumer.RoundRobinAssignor;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeEvent;
@@ -205,7 +203,6 @@ public class AsyncKafkaConsumerTest {
         ConsumerInterceptors<String, String> interceptors,
         ConsumerRebalanceListenerInvoker rebalanceListenerInvoker,
         SubscriptionState subscriptions,
-        List<ConsumerPartitionAssignor> assignors,
         String groupId,
         String clientId) {
         long retryBackoffMs = 100L;
@@ -228,7 +225,6 @@ public class AsyncKafkaConsumerTest {
             metadata,
             retryBackoffMs,
             defaultApiTimeoutMs,
-            assignors,
             groupId,
             autoCommitEnabled);
     }
@@ -564,7 +560,6 @@ public class AsyncKafkaConsumerTest {
             new ConsumerInterceptors<>(Collections.emptyList()),
             mock(ConsumerRebalanceListenerInvoker.class),
             subscriptions,
-            singletonList(new RoundRobinAssignor()),
             "group-id",
             "client-id");
         completeCommitSyncApplicationEventSuccessfully();
@@ -784,7 +779,6 @@ public class AsyncKafkaConsumerTest {
             mock(ConsumerInterceptors.class),
             mock(ConsumerRebalanceListenerInvoker.class),
             subscriptions,
-            singletonList(new RoundRobinAssignor()),
             "group-id",
             "client-id");
 
@@ -806,7 +800,6 @@ public class AsyncKafkaConsumerTest {
             new ConsumerInterceptors<>(Collections.emptyList()),
             mock(ConsumerRebalanceListenerInvoker.class),
             subscriptions,
-            singletonList(new RoundRobinAssignor()),
             "group-id",
             "client-id");
         subscriptions.subscribe(singleton("topic"), Optional.of(listener));
@@ -844,7 +837,6 @@ public class AsyncKafkaConsumerTest {
             mock(ConsumerInterceptors.class),
             mock(ConsumerRebalanceListenerInvoker.class),
             subscriptions,
-            singletonList(new RoundRobinAssignor()),
             "group-id",
             "client-id");
         consumer.subscribe(singleton("topic"), mock(ConsumerRebalanceListener.class));
@@ -862,7 +854,6 @@ public class AsyncKafkaConsumerTest {
             mock(ConsumerInterceptors.class),
             mock(ConsumerRebalanceListenerInvoker.class),
             subscriptions,
-            singletonList(new RoundRobinAssignor()),
             "group-id",
             "client-id");
         consumer.subscribe(singleton("topic"), mock(ConsumerRebalanceListener.class));
@@ -1030,6 +1021,47 @@ public class AsyncKafkaConsumerTest {
             assertEquals(expected, result.get(key));
         });
         verify(applicationEventHandler).addAndGet(ArgumentMatchers.isA(ListOffsetsEvent.class));
+    }
+
+    @Test
+    public void testOffsetsForTimesTimeoutException() {
+        consumer = newConsumer();
+        long timeout = 100;
+        doThrow(new TimeoutException("Event did not complete in time and was expired by the reaper"))
+            .when(applicationEventHandler).addAndGet(any());
+
+        Throwable t = assertThrows(
+            TimeoutException.class,
+            () -> consumer.offsetsForTimes(mockTimestampToSearch(), Duration.ofMillis(timeout)));
+        assertEquals("Failed to get offsets by times in " + timeout + "ms", t.getMessage());
+    }
+
+    @Test
+    public void testBeginningOffsetsTimeoutException() {
+        consumer = newConsumer();
+        long timeout = 100;
+        doThrow(new TimeoutException("Event did not complete in time and was expired by the reaper"))
+            .when(applicationEventHandler).addAndGet(any());
+
+        Throwable t = assertThrows(
+            TimeoutException.class,
+            () -> consumer.beginningOffsets(Collections.singleton(new TopicPartition("topic", 5)),
+                Duration.ofMillis(timeout)));
+        assertEquals("Failed to get offsets by times in " + timeout + "ms", t.getMessage());
+    }
+
+    @Test
+    public void testEndOffsetsTimeoutException() {
+        consumer = newConsumer();
+        long timeout = 100;
+        doThrow(new TimeoutException("Event did not complete in time and was expired by the reaper"))
+            .when(applicationEventHandler).addAndGet(any());
+
+        Throwable t = assertThrows(
+            TimeoutException.class,
+            () -> consumer.endOffsets(Collections.singleton(new TopicPartition("topic", 5)),
+                Duration.ofMillis(timeout)));
+        assertEquals("Failed to get offsets by times in " + timeout + "ms", t.getMessage());
     }
 
     // This test ensures same behaviour as the current consumer when offsetsForTimes is called
@@ -1584,6 +1616,18 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
+    public void testPartitionAssignmentStrategyUnusedInAsyncConsumer() {
+        final Properties props = requiredConsumerConfig();
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "consumerGroup1");
+        props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT));
+        props.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, "CooperativeStickyAssignor");
+        final ConsumerConfig config = new ConsumerConfig(props);
+        consumer = newConsumer(config);
+
+        assertTrue(config.unused().contains(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG));
+    }
+
+    @Test
     public void testGroupIdNull() {
         final Properties props = requiredConsumerConfig();
         props.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, 10000);
@@ -1625,7 +1669,6 @@ public class AsyncKafkaConsumerTest {
                 new ConsumerInterceptors<>(Collections.emptyList()),
                 mock(ConsumerRebalanceListenerInvoker.class),
                 subscriptions,
-                singletonList(new RoundRobinAssignor()),
                 "group-id",
                 "client-id");
         final TopicPartition tp = new TopicPartition("topic", 0);

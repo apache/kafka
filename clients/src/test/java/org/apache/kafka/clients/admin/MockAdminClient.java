@@ -105,7 +105,7 @@ public class MockAdminClient extends AdminClient {
 
     private KafkaException listConsumerGroupOffsetsException;
 
-    private Map<MetricName, Metric> mockMetrics = new HashMap<>();
+    private final Map<MetricName, Metric> mockMetrics = new HashMap<>();
 
     private final List<DelegationToken> allTokens = new ArrayList<>();
 
@@ -1318,6 +1318,16 @@ public class MockAdminClient extends AdminClient {
         KafkaFutureImpl<Collection<ClientMetricsResourceListing>> future = new KafkaFutureImpl<>();
         future.complete(clientMetricsConfigs.keySet().stream().map(ClientMetricsResourceListing::new).collect(Collectors.toList()));
         return new ListClientMetricsResourcesResult(future);
+    }
+
+    @Override
+    public AddRaftVoterResult addRaftVoter(int voterId, Uuid voterDirectoryId, Set<RaftVoterEndpoint> endpoints, AddRaftVoterOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public RemoveRaftVoterResult removeRaftVoter(int voterId, Uuid voterDirectoryId, RemoveRaftVoterOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
