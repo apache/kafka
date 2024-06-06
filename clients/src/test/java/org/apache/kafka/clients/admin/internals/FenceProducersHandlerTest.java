@@ -27,7 +27,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.Set;
 
 import static java.util.Collections.emptyList;
@@ -67,23 +66,19 @@ public class FenceProducersHandlerTest {
 
         short epoch = 57;
         long producerId = 7;
+        InitProducerIdResponse response = new InitProducerIdResponse(new InitProducerIdResponseData()
+            .setProducerEpoch(epoch)
+            .setProducerId(producerId));
 
-        for (Errors successErr : Arrays.asList(Errors.NONE, Errors.CONCURRENT_TRANSACTIONS)) {
-            InitProducerIdResponse response = new InitProducerIdResponse(new InitProducerIdResponseData()
-                    .setErrorCode(successErr.code())
-                    .setProducerEpoch(epoch)
-                    .setProducerId(producerId));
+        ApiResult<CoordinatorKey, ProducerIdAndEpoch> result = handler.handleSingleResponse(
+            node, key, response);
 
-            ApiResult<CoordinatorKey, ProducerIdAndEpoch> result = handler.handleSingleResponse(
-                    node, key, response);
+        assertEquals(emptyList(), result.unmappedKeys);
+        assertEquals(emptyMap(), result.failedKeys);
+        assertEquals(singleton(key), result.completedKeys.keySet());
 
-            assertEquals(emptyList(), result.unmappedKeys);
-            assertEquals(emptyMap(), result.failedKeys);
-            assertEquals(singleton(key), result.completedKeys.keySet());
-
-            ProducerIdAndEpoch expected = new ProducerIdAndEpoch(producerId, epoch);
-            assertEquals(expected, result.completedKeys.get(key));
-        }
+        ProducerIdAndEpoch expected = new ProducerIdAndEpoch(producerId, epoch);
+        assertEquals(expected, result.completedKeys.get(key));
     }
 
     @Test
@@ -99,6 +94,7 @@ public class FenceProducersHandlerTest {
         assertRetriableError(handler, transactionalId, Errors.COORDINATOR_LOAD_IN_PROGRESS);
         assertUnmappedKey(handler, transactionalId, Errors.NOT_COORDINATOR);
         assertUnmappedKey(handler, transactionalId, Errors.COORDINATOR_NOT_AVAILABLE);
+        assertRetriableError(handler, transactionalId, Errors.CONCURRENT_TRANSACTIONS);
     }
 
     private void assertFatalError(

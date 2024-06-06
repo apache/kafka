@@ -20,11 +20,11 @@ package integration.kafka.admin
 import kafka.api.IntegrationTestHarness
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
-import org.apache.kafka.common.errors.ProducerFencedException
+import org.apache.kafka.common.errors.{InvalidProducerEpochException, ProducerFencedException}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfigs, TransactionStateManagerConfigs}
 import org.apache.kafka.server.config.ServerLogConfigs
-import org.junit.jupiter.api.Assertions.{assertInstanceOf, assertThrows, fail}
+import org.junit.jupiter.api.Assertions.{assertInstanceOf, assertThrows, assertTrue, fail}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -49,7 +49,7 @@ class AdminFenceProducersIntegrationTest extends IntegrationTestHarness {
 
     val producerProps = new Properties
     producerProps.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, txnId)
-    producerProps.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, 200)
+    producerProps.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, 2000)
     producer = createProducer(configOverrides = producerProps)
     adminClient = createAdminClient()
     createTopic(topicName)
@@ -58,11 +58,11 @@ class AdminFenceProducersIntegrationTest extends IntegrationTestHarness {
   def overridingProps(): Properties = {
     val props = new Properties()
     props.put(ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, false.toString)
-    // Set a smaller value for the number of partitions for
+    // Set a smaller value for the number of partitions for speed
     props.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, 1.toString)
     props.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, 1.toString)
     props.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_MIN_ISR_CONFIG, 1.toString)
-    props.put(TransactionStateManagerConfigs.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_CONFIG, "200")
+    props.put(TransactionStateManagerConfigs.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_CONFIG, "2000")
     props
   }
 
@@ -83,7 +83,7 @@ class AdminFenceProducersIntegrationTest extends IntegrationTestHarness {
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
-  def testFenceProducerAfterCommit(quorum: String): Unit = {
+  def testFenceAfterProducerCommit(quorum: String): Unit = {
     producer.initTransactions()
     producer.beginTransaction()
     producer.send(record).get()
@@ -91,67 +91,48 @@ class AdminFenceProducersIntegrationTest extends IntegrationTestHarness {
 
     adminClient.fenceProducers(Collections.singletonList(txnId)).all().get()
 
-    var retry : Int = 0
+    producer.beginTransaction()
     try {
-      while(retry < 100) {
-        producer.beginTransaction()
         producer.send(record).get()
-        producer.commitTransaction()
-        retry += 1
-      }
-      fail("expected ProducerFencedException")
+        fail("expected ProducerFencedException")
     } catch {
       case _: ProducerFencedException => //ok
       case ee: ExecutionException =>
         assertInstanceOf(classOf[ProducerFencedException], ee.getCause) //ok
-        println("ProducerFencedException on retry " + retry)
       case e: Exception =>
         throw e
     }
-  }
-
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testFenceProducerWhenTxnInProgress(quorum: String): Unit = {
-    producer.initTransactions()
-    producer.beginTransaction()
-    producer.send(record).get()
-    adminClient.fenceProducers(Collections.singletonList(txnId)).all().get()
 
     assertThrows(classOf[ProducerFencedException], () => producer.commitTransaction())
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft","zk"))
-  def testInitAfterFencing(quorum: String): Unit = {
-    adminClient.fenceProducers(Collections.singletonList(txnId)).all().get()
-
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testFenceBeforeProducerCommit(quorum: String): Unit = {
     producer.initTransactions()
     producer.beginTransaction()
     producer.send(record).get()
-    producer.commitTransaction();
 
     adminClient.fenceProducers(Collections.singletonList(txnId)).all().get()
 
     try {
-      for (retry <- 0 to 100) {
-        try {
-          producer.beginTransaction()
-          val record2 = new ProducerRecord[Array[Byte], Array[Byte]](topicName, null, "2".getBytes)
-          producer.send(record2).get()
-          producer.commitTransaction();
-        } catch {
-          case pfe: ProducerFencedException => {
-            println("OK PFE on retry " + retry)
-            throw pfe
-          }
-        }
-      }
-      fail("expected ProducerFencedException")
+      producer.send(record).get()
+      fail("expected Exception")
     } catch {
-      case _: ProducerFencedException => //ok
       case ee: ExecutionException =>
-        assertInstanceOf(classOf[ProducerFencedException], ee.getCause) //ok
+        assertTrue(ee.getCause.isInstanceOf[ProducerFencedException] ||
+                   ee.getCause.isInstanceOf[InvalidProducerEpochException],
+                   "Unexpected ExecutionException cause " + ee.getCause.getCause)
+      case e: Exception =>
+        throw e
+    }
+
+    try {
+      producer.commitTransaction()
+      fail("expected Exception")
+    } catch {
+      case _: ProducerFencedException =>
+      case _: InvalidProducerEpochException =>
       case e: Exception =>
         throw e
     }
