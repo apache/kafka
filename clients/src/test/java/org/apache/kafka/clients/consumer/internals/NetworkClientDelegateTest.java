@@ -65,7 +65,7 @@ public class NetworkClientDelegateTest {
     }
 
     @Test
-    void testPollResultTimer() throws Exception{
+    void testPollResultTimer() throws Exception {
         try (NetworkClientDelegate ncd = newNetworkClientDelegate()) {
             NetworkClientDelegate.UnsentRequest req = new NetworkClientDelegate.UnsentRequest(
                     new FindCoordinatorRequest.Builder(
