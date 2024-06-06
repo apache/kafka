@@ -31,12 +31,13 @@ libDir="${base_dir}/build/libs"
 
 echo "running gradlew :jmh-benchmarks:clean :jmh-benchmarks:shadowJar"
 
-$gradleCmd  :jmh-benchmarks:clean :jmh-benchmarks:shadowJar
+$gradleCmd :jmh-benchmarks:clean :jmh-benchmarks:shadowJar
 
 echo "gradle build done"
 
+output_file="jmh-results-range-assignor-client.csv"
 echo "running JMH with args: $@"
 
-java -jar ${libDir}/kafka-jmh-benchmarks-*.jar "$@"
+java -jar ${libDir}/kafka-jmh-benchmarks-*.jar "$@" -rf csv -rff ${output_file}
 
-echo "JMH benchmarks done"
+echo "JMH benchmarks done, results are saved in ${output_file}"

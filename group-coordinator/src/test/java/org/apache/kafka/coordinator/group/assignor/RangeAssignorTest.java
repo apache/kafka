@@ -36,16 +36,15 @@ import static org.apache.kafka.coordinator.group.AssignmentTestUtil.invertedTarg
 import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HETEROGENEOUS;
 import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOGENEOUS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class RangeAssignorTest {
     private final RangeAssignor assignor = new RangeAssignor();
-    private final Uuid topic1Uuid = Uuid.randomUuid();
+    private final Uuid topic1Uuid = Uuid.fromString("T1-1qE4Svv9SSykvMapXQ0");
     private final String topic1Name = "topic1";
-    private final Uuid topic2Uuid = Uuid.randomUuid();
+    private final Uuid topic2Uuid = Uuid.fromString("T2-QEox99NxRFWfYGL3eQx");
     private final String topic2Name = "topic2";
-    private final Uuid topic3Uuid = Uuid.randomUuid();
+    private final Uuid topic3Uuid = Uuid.fromString("T3-pgqvlXp3SF2KnKtJ0bD");
     private final String topic3Name = "topic3";
     private final String memberA = "A";
     private final String memberB = "B";
@@ -375,9 +374,9 @@ public class RangeAssignorTest {
             mkTopicAssignment(topic1Uuid, 1),
             mkTopicAssignment(topic2Uuid, 1)
         ));
+        expectedAssignment.put(memberC, Collections.emptyMap());
 
         // Consumer C shouldn't get any assignment, due to stickiness A, B retain their assignments
-        assertNull(computedAssignment.members().get(memberC));
         assertAssignment(expectedAssignment, computedAssignment);
     }
 
