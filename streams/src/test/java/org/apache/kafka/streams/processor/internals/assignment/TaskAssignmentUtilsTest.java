@@ -93,6 +93,7 @@ public class TaskAssignmentUtilsTest {
         assertThat(assignments.get(processId(1)).tasks().keySet(), equalTo(mkSet(TASK_0_1)));
         assertThat(assignments.get(processId(2)).tasks().keySet(), equalTo(mkSet(TASK_0_0)));
 
+        // Repeated to make sure nothing gets shifted around after the first round of optimization.
         TaskAssignmentUtils.optimizeRackAwareActiveTasks(
             applicationState, assignments, new TreeSet<>(tasks.keySet()));
         assertThat(assignments.size(), equalTo(2));

@@ -204,6 +204,8 @@ public final class TaskAssignmentUtils {
             return kafkaStreamsAssignments;
         }
 
+        initializeAssignmentsForAllClients(applicationState, kafkaStreamsAssignments);
+
         final int crossRackTrafficCost = applicationState.assignmentConfigs().rackAwareTrafficCost().getAsInt();
         final int nonOverlapCost = applicationState.assignmentConfigs().rackAwareNonOverlapCost().getAsInt();
 
@@ -303,26 +305,25 @@ public final class TaskAssignmentUtils {
             return kafkaStreamsAssignments;
         }
 
+        initializeAssignmentsForAllClients(applicationState, kafkaStreamsAssignments);
+
         final int crossRackTrafficCost = applicationState.assignmentConfigs().rackAwareTrafficCost().getAsInt();
         final int nonOverlapCost = applicationState.assignmentConfigs().rackAwareNonOverlapCost().getAsInt();
 
-        final Set<TaskId> standbyTasksToOptimize = new HashSet<>();
-        kafkaStreamsAssignments.values().forEach(assignment -> {
-            final Set<TaskId> standbyTasksForAssignment = assignment.tasks().values().stream()
-                .filter(task -> task.type() == AssignedTask.Type.STANDBY)
-                .map(AssignedTask::id)
-                .collect(Collectors.toSet());
-            standbyTasksToOptimize.addAll(standbyTasksForAssignment);
-        });
+        final Map<ProcessId, KafkaStreamsState> kafkaStreamsStates = applicationState.kafkaStreamsStates(false);
+
+        final List<TaskId> standbyTasksToOptimize = kafkaStreamsAssignments.values().stream()
+            .flatMap(r -> r.tasks().values().stream())
+            .filter(task -> task.type() == AssignedTask.Type.STANDBY)
+            .map(AssignedTask::id)
+            .distinct()
+            .collect(Collectors.toList());
 
         final Map<TaskId, Set<TaskTopicPartition>> topicPartitionsByTaskId =
             applicationState.allTasks().values().stream().collect(Collectors.toMap(
                 TaskInfo::id,
                 t -> t.topicPartitions().stream().filter(TaskTopicPartition::isChangelog).collect(Collectors.toSet()))
             );
-        final List<TaskId> taskIds = new ArrayList<>(standbyTasksToOptimize);
-
-        final Map<ProcessId, KafkaStreamsState> kafkaStreamsStates = applicationState.kafkaStreamsStates(false);
 
         final Map<UUID, Optional<String>> clientRacks = new HashMap<>();
         final List<UUID> clientIds = new ArrayList<>();
@@ -332,16 +333,12 @@ public final class TaskAssignmentUtils {
             final ProcessId processId = entry.getKey();
             clientIds.add(processId.id());
             clientRacks.put(processId.id(), entry.getValue().rackId());
-            if (!kafkaStreamsAssignments.containsKey(processId)) {
-                final KafkaStreamsAssignment newAssignment = KafkaStreamsAssignment.of(processId, new HashSet<>());
-                kafkaStreamsAssignments.put(processId, newAssignment);
-            }
             assignmentsByUuid.put(processId.id(), kafkaStreamsAssignments.get(entry.getKey()));
         }
 
         final long initialCost = computeTotalAssignmentCost(
             topicPartitionsByTaskId,
-            taskIds,
+            standbyTasksToOptimize,
             clientIds,
             assignmentsByUuid,
             clientRacks,
@@ -371,7 +368,7 @@ public final class TaskAssignmentUtils {
         boolean taskMoved = true;
         int round = 0;
         final RackAwareGraphConstructor<KafkaStreamsAssignment> graphConstructor = RackAwareGraphConstructorFactory.create(
-            applicationState.assignmentConfigs().rackAwareAssignmentStrategy(), taskIds);
+            applicationState.assignmentConfigs().rackAwareAssignmentStrategy(), standbyTasksToOptimize);
         while (taskMoved && round < STANDBY_OPTIMIZER_MAX_ITERATION) {
             taskMoved = false;
             round++;
@@ -398,16 +395,18 @@ public final class TaskAssignmentUtils {
                         continue;
                     }
 
-                    final List<TaskId> taskIdList = Stream.concat(movable1.stream(), movable2.stream())
+                    final List<TaskId> moveableTaskIds = Stream.concat(movable1.stream(), movable2.stream())
                         .sorted()
                         .collect(Collectors.toList());
-                    final List<UUID> clients = Stream.of(clientId1, clientId2).sorted().collect(Collectors.toList());
+                    final List<UUID> clientsInTaskRedistributionAttempt = Stream.of(clientId1, clientId2)
+                        .sorted()
+                        .collect(Collectors.toList());
 
                     final AssignmentGraph assignmentGraph = buildTaskGraph(
                         assignmentsByUuid,
                         clientRacks,
-                        taskIdList,
-                        clients,
+                        moveableTaskIds,
+                        clientsInTaskRedistributionAttempt,
                         topicPartitionsByTaskId,
                         crossRackTrafficCost,
                         nonOverlapCost,
@@ -419,8 +418,8 @@ public final class TaskAssignmentUtils {
 
                     taskMoved |= graphConstructor.assignTaskFromMinCostFlow(
                         assignmentGraph.graph,
-                        clients,
-                        taskIdList,
+                        clientsInTaskRedistributionAttempt,
+                        moveableTaskIds,
                         assignmentsByUuid,
                         assignmentGraph.taskCountByClient,
                         assignmentGraph.clientByTask,
@@ -433,7 +432,7 @@ public final class TaskAssignmentUtils {
         }
         final long finalCost = computeTotalAssignmentCost(
             topicPartitionsByTaskId,
-            taskIds,
+            standbyTasksToOptimize,
             clientIds,
             assignmentsByUuid,
             clientRacks,
@@ -635,6 +634,8 @@ public final class TaskAssignmentUtils {
 
     private static Map<ProcessId, KafkaStreamsAssignment> tagBasedStandbyTaskAssignment(final ApplicationState applicationState,
                                                                                         final Map<ProcessId, KafkaStreamsAssignment> kafkaStreamsAssignments) {
+        initializeAssignmentsForAllClients(applicationState, kafkaStreamsAssignments);
+
         final int numStandbyReplicas = applicationState.assignmentConfigs().numStandbyReplicas();
         final Map<ProcessId, KafkaStreamsState> streamStates = applicationState.kafkaStreamsStates(false);
 
@@ -649,17 +650,9 @@ public final class TaskAssignmentUtils {
             .collect(Collectors.toSet());
         final Map<TaskId, Integer> tasksToRemainingStandbys = statefulTaskIds.stream()
             .collect(Collectors.toMap(Function.identity(), t -> numStandbyReplicas));
-        final Map<UUID, KafkaStreamsAssignment> clientsByUuid = streamStates.entrySet().stream().collect(Collectors.toMap(
+        final Map<UUID, KafkaStreamsAssignment> clientsByUuid = kafkaStreamsAssignments.entrySet().stream().collect(Collectors.toMap(
             entry -> entry.getKey().id(),
-            entry -> {
-                final KafkaStreamsState state = entry.getValue();
-                if (kafkaStreamsAssignments.containsKey(state.processId())) {
-                    return kafkaStreamsAssignments.get(state.processId());
-                }
-                final KafkaStreamsAssignment newAssignment = KafkaStreamsAssignment.of(state.processId(), new HashSet<>());
-                kafkaStreamsAssignments.put(state.processId(), newAssignment);
-                return newAssignment;
-            }
+            Map.Entry::getValue
         ));
 
         final Map<TaskId, ProcessId> pendingStandbyTasksToClientId = new HashMap<>();
@@ -695,6 +688,8 @@ public final class TaskAssignmentUtils {
 
     private static Map<ProcessId, KafkaStreamsAssignment> loadBasedStandbyTaskAssignment(final ApplicationState applicationState,
                                                                                          final Map<ProcessId, KafkaStreamsAssignment> kafkaStreamsAssignments) {
+        initializeAssignmentsForAllClients(applicationState, kafkaStreamsAssignments);
+
         final int numStandbyReplicas = applicationState.assignmentConfigs().numStandbyReplicas();
         final Map<ProcessId, KafkaStreamsState> streamStates = applicationState.kafkaStreamsStates(false);
 
@@ -704,17 +699,9 @@ public final class TaskAssignmentUtils {
             .collect(Collectors.toSet());
         final Map<TaskId, Integer> tasksToRemainingStandbys = statefulTaskIds.stream()
             .collect(Collectors.toMap(Function.identity(), t -> numStandbyReplicas));
-        final Map<UUID, KafkaStreamsAssignment> clients = streamStates.entrySet().stream().collect(Collectors.toMap(
+        final Map<UUID, KafkaStreamsAssignment> clients = kafkaStreamsAssignments.entrySet().stream().collect(Collectors.toMap(
             entry -> entry.getKey().id(),
-            entry -> {
-                final KafkaStreamsState state = entry.getValue();
-                if (kafkaStreamsAssignments.containsKey(state.processId())) {
-                    return kafkaStreamsAssignments.get(state.processId());
-                }
-                final KafkaStreamsAssignment newAssignment = KafkaStreamsAssignment.of(state.processId(), new HashSet<>());
-                kafkaStreamsAssignments.put(state.processId(), newAssignment);
-                return newAssignment;
-            }
+            Map.Entry::getValue
         ));
 
         final ConstrainedPrioritySet standbyTaskClientsByTaskLoad = standbyTaskPriorityListByLoad(streamStates, kafkaStreamsAssignments);
@@ -932,6 +919,15 @@ public final class TaskAssignmentUtils {
                 standbyTaskClientsByTaskLoad,
                 activeTaskId
             );
+        }
+    }
+
+    private static void initializeAssignmentsForAllClients(final ApplicationState applicationState,
+                                                           final Map<ProcessId, KafkaStreamsAssignment> assignments) {
+        for (final ProcessId processId : applicationState.kafkaStreamsStates(false).keySet()) {
+            if (!assignments.containsKey(processId)) {
+                assignments.put(processId, KafkaStreamsAssignment.of(processId, new HashSet<>()));
+            }
         }
     }
 
