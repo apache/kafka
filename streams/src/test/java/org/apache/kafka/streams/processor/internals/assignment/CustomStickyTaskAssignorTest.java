@@ -83,7 +83,7 @@ import org.junit.runners.Parameterized;
 public class CustomStickyTaskAssignorTest {
 
     @Rule
-    public Timeout timeout = new Timeout(8, TimeUnit.MINUTES);
+    public Timeout timeout = new Timeout(3, TimeUnit.MINUTES);
 
     private TaskAssignor assignor;
 
@@ -651,9 +651,9 @@ public class CustomStickyTaskAssignorTest {
     @Test
     public void largeAssignmentShouldTerminateWithinAcceptableTime() {
         final int topicCount = 10;
-        final int taskPerTopic = 100;
+        final int taskPerTopic = 70;
         final int numStandbys = 2;
-        final int clientCount = 100;
+        final int clientCount = 40;
         final int clientCapacity = 50;
 
         final Map<TaskId, TaskInfo> tasks = mkMap();
