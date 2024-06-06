@@ -17,6 +17,7 @@
 package kafka.log.remote;
 
 import com.yammer.metrics.core.Gauge;
+import com.yammer.metrics.core.MetricName;
 import kafka.cluster.EndPoint;
 import kafka.cluster.Partition;
 import kafka.log.UnifiedLog;
@@ -1541,8 +1542,8 @@ public class RemoteLogManagerTest {
                     REMOTE_LOG_READER_FETCH_RATE_AND_TIME_METRIC.getName());
             Set<String> remoteStorageThreadPoolMetricNames = REMOTE_STORAGE_THREAD_POOL_METRICS;
 
-            verify(mockRlmMetricsGroup, times(1)).newGauge(anyString(), any());
-            verify(mockRlmMetricsGroup, times(1)).newTimer(anyString(), any(), any());
+            verify(mockRlmMetricsGroup, times(1)).newGauge(any(MetricName.class), any());
+            verify(mockRlmMetricsGroup, times(1)).newTimer(any(MetricName.class), any(), any());
             // Verify that the RemoteLogManager metrics are removed
             remoteLogManagerMetricNames.forEach(metricName -> verify(mockRlmMetricsGroup).removeMetric(metricName));
 

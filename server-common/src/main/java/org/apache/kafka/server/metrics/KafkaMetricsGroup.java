@@ -77,6 +77,10 @@ public class KafkaMetricsGroup {
         return newGauge(name, metric, Collections.emptyMap());
     }
 
+    public final <T> Gauge<T> newGauge(MetricName metricName, Gauge<T> metric) {
+        return KafkaYammerMetrics.defaultRegistry().newGauge(metricName, metric);
+    }
+
     public final Meter newMeter(String name, String eventType,
                                 TimeUnit timeUnit, Map<String, String> tags) {
         return KafkaYammerMetrics.defaultRegistry().newMeter(metricName(name, tags), eventType, timeUnit);
@@ -105,6 +109,10 @@ public class KafkaMetricsGroup {
 
     public final Timer newTimer(String name, TimeUnit durationUnit, TimeUnit rateUnit) {
         return newTimer(name, durationUnit, rateUnit, Collections.emptyMap());
+    }
+
+    public final Timer newTimer(MetricName metricName, TimeUnit durationUnit, TimeUnit rateUnit) {
+        return KafkaYammerMetrics.defaultRegistry().newTimer(metricName, durationUnit, rateUnit);
     }
 
     public final void removeMetric(String name, Map<String, String> tags) {
