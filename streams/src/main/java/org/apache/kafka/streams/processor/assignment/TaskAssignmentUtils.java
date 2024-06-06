@@ -66,11 +66,18 @@ public final class TaskAssignmentUtils {
      */
     public static AssignmentError validateTaskAssignment(final ApplicationState applicationState,
                                                          final TaskAssignment taskAssignment) {
+        final Set<TaskId> taskIdsInInput = applicationState.allTasks().keySet();
         final Collection<KafkaStreamsAssignment> assignments = taskAssignment.assignment();
         final Map<TaskId, ProcessId> activeTasksInOutput = new HashMap<>();
         final Map<TaskId, ProcessId> standbyTasksInOutput = new HashMap<>();
         for (final KafkaStreamsAssignment assignment : assignments) {
             for (final KafkaStreamsAssignment.AssignedTask task : assignment.tasks().values()) {
+                if (!taskIdsInInput.contains(task.id())) {
+                    LOG.error("Assignment is invalid: task {} assigned to KafkaStreams client {} was unknown",
+                        task.id(), assignment.processId().id());
+                    return AssignmentError.UNKNOWN_TASK_ID;
+                }
+
                 if (activeTasksInOutput.containsKey(task.id()) && task.type() == KafkaStreamsAssignment.AssignedTask.Type.ACTIVE) {
                     LOG.error("Assignment is invalid: active task {} was assigned to multiple KafkaStreams clients: {} and {}",
                         task.id(), assignment.processId().id(), activeTasksInOutput.get(task.id()).id());
@@ -108,17 +115,6 @@ public final class TaskAssignmentUtils {
             if (!clientStates.containsKey(processIdInOutput)) {
                 LOG.error("Assignment is invalid: the KafkaStreams client {} is unknown", processIdInOutput.id());
                 return AssignmentError.UNKNOWN_PROCESS_ID;
-            }
-        }
-
-        final Set<TaskId> taskIdsInInput = applicationState.allTasks().keySet();
-        for (final KafkaStreamsAssignment assignment : assignments) {
-            for (final KafkaStreamsAssignment.AssignedTask task : assignment.tasks().values()) {
-                if (!taskIdsInInput.contains(task.id())) {
-                    LOG.error("Assignment is invalid: task {} assigned to KafkaStreams client {} was unknown",
-                        task.id(), assignment.processId().id());
-                    return AssignmentError.UNKNOWN_TASK_ID;
-                }
             }
         }
 

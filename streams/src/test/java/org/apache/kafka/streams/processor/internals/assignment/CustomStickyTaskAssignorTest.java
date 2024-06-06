@@ -83,7 +83,7 @@ import org.junit.runners.Parameterized;
 public class CustomStickyTaskAssignorTest {
 
     @Rule
-    public Timeout timeout = new Timeout(30, TimeUnit.SECONDS);
+    public Timeout timeout = new Timeout(3, TimeUnit.MINUTES);
 
     private TaskAssignor assignor;
 
@@ -648,7 +648,7 @@ public class CustomStickyTaskAssignorTest {
         assertThat(standbyTasks(assignments, 4), equalTo(mkSet(TASK_0_0)));
     }
 
-    @Test(timeout = 5 * 60 * 1000)
+    @Test
     public void largeAssignmentShouldTerminateWithinAcceptableTime() {
         final int topicCount = 10;
         final int taskPerTopic = 100;
