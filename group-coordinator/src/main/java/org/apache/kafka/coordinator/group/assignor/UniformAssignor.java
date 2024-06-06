@@ -46,8 +46,8 @@ import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.H
  *
  * The appropriate strategy is automatically chosen based on the current members' topic subscriptions.
  *
- * @see OptimizedUniformAssignmentBuilder
- * @see GeneralUniformAssignmentBuilder
+ * @see UniformHomogenousAssignmentBuilder
+ * @see UniformHeterogeneousAssignmentBuilder
  */
 public class UniformAssignor implements ConsumerGroupPartitionAssignor {
     private static final Logger LOG = LoggerFactory.getLogger(UniformAssignor.class);
@@ -77,13 +77,13 @@ public class UniformAssignor implements ConsumerGroupPartitionAssignor {
         if (groupSpec.subscriptionType().equals(HOMOGENEOUS)) {
             LOG.debug("Detected that all members are subscribed to the same set of topics, invoking the "
                 + "optimized assignment algorithm");
-            return new OptimizedUniformAssignmentBuilder(groupSpec, subscribedTopicDescriber)
+            return new UniformHomogenousAssignmentBuilder(groupSpec, subscribedTopicDescriber)
                 .build();
         } else {
             LOG.debug("Detected that the members are subscribed to different sets of topics, invoking the "
                 + "general assignment algorithm");
-            return new GeneralUniformAssignmentBuilder(groupSpec, subscribedTopicDescriber)
-                .buildAssignment();
+            return new UniformHeterogeneousAssignmentBuilder(groupSpec, subscribedTopicDescriber)
+                .build();
         }
     }
 }
