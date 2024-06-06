@@ -20,7 +20,6 @@ import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDir
 import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.ElectionType;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -102,8 +101,6 @@ public class MockAdminClient extends AdminClient {
     private int injectTimeoutExceptionCounter;
     private Time mockTime;
     private long blockingTimeMs;
-
-    private KafkaException listConsumerGroupOffsetsException;
 
     private final Map<MetricName, Metric> mockMetrics = new HashMap<>();
 
@@ -728,20 +725,14 @@ public class MockAdminClient extends AdminClient {
         String group = groupSpecs.keySet().iterator().next();
         Collection<TopicPartition> topicPartitions = groupSpecs.get(group).topicPartitions();
         final KafkaFutureImpl<Map<TopicPartition, OffsetAndMetadata>> future = new KafkaFutureImpl<>();
-
-        if (listConsumerGroupOffsetsException != null) {
-            future.completeExceptionally(listConsumerGroupOffsetsException);
+        if (topicPartitions.isEmpty()) {
+            future.complete(committedOffsets.entrySet().stream()
+                    .collect(Collectors.toMap(Map.Entry::getKey, entry -> new OffsetAndMetadata(entry.getValue()))));
         } else {
-            if (topicPartitions.isEmpty()) {
-                future.complete(committedOffsets.entrySet().stream()
-                        .collect(Collectors.toMap(Map.Entry::getKey, entry -> new OffsetAndMetadata(entry.getValue()))));
-            } else {
-                future.complete(committedOffsets.entrySet().stream()
-                        .filter(entry -> topicPartitions.contains(entry.getKey()))
-                        .collect(Collectors.toMap(Map.Entry::getKey, entry -> new OffsetAndMetadata(entry.getValue()))));
-            }
+            future.complete(committedOffsets.entrySet().stream()
+                    .filter(entry -> topicPartitions.contains(entry.getKey()))
+                    .collect(Collectors.toMap(Map.Entry::getKey, entry -> new OffsetAndMetadata(entry.getValue()))));
         }
-
         return new ListConsumerGroupOffsetsResult(Collections.singletonMap(CoordinatorKey.byGroupId(group), future));
     }
 
