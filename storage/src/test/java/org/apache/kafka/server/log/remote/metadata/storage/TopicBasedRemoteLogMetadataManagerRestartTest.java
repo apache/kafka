@@ -24,12 +24,11 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.test.TestUtils;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -37,14 +36,13 @@ import java.util.Arrays;
 import java.util.Collections;
 
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.LOG_DIR;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith(value = ClusterTestExtensions.class)
 @Tag("integration")
 public class TopicBasedRemoteLogMetadataManagerRestartTest {
 
-    private static final int SEG_SIZE = 1024 * 1024;
-
-    private final Time time = new MockTime(1);
+    private final Time time = new SystemTime();
     private final String logDir = TestUtils.tempDirectory("_rlmm_segs_").getAbsolutePath();
     private final ClusterInstance clusterInstance;
 
@@ -76,16 +74,17 @@ public class TopicBasedRemoteLogMetadataManagerRestartTest {
         clusterInstance.waitForTopic(leaderTopic, 1);
         clusterInstance.waitForTopic(followerTopic, 1);
 
-        final TopicIdPartition leaderTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition(leaderTopic, 0));
-        final TopicIdPartition followerTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition(followerTopic, 0));
+        TopicIdPartition leaderTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition(leaderTopic, 0));
+        TopicIdPartition followerTopicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition(followerTopic, 0));
+        int segSize = 1048576;
         RemoteLogSegmentMetadata leaderSegmentMetadata = new RemoteLogSegmentMetadata(
                 new RemoteLogSegmentId(leaderTopicIdPartition, Uuid.randomUuid()),
                 0, 100, -1L, 0,
-                time.milliseconds(), SEG_SIZE, Collections.singletonMap(0, 0L));
+                time.milliseconds(), segSize, Collections.singletonMap(0, 0L));
         RemoteLogSegmentMetadata followerSegmentMetadata = new RemoteLogSegmentMetadata(
                 new RemoteLogSegmentId(followerTopicIdPartition, Uuid.randomUuid()),
                 0, 100, -1L, 0,
-                time.milliseconds(), SEG_SIZE, Collections.singletonMap(0, 0L));
+                time.milliseconds(), segSize, Collections.singletonMap(0, 0L));
 
         try (TopicBasedRemoteLogMetadataManager topicBasedRemoteLogMetadataManager = createTopicBasedRemoteLogMetadataManager()) {
             // Register these partitions to RemoteLogMetadataManager.
@@ -115,12 +114,14 @@ public class TopicBasedRemoteLogMetadataManagerRestartTest {
             RemoteLogSegmentMetadata leaderSegmentMetadata2 = new RemoteLogSegmentMetadata(
                     new RemoteLogSegmentId(leaderTopicIdPartition, Uuid.randomUuid()),
                     101, 200, -1L, 0,
-                    time.milliseconds(), SEG_SIZE, Collections.singletonMap(0, 101L));
+                    time.milliseconds(), segSize, Collections.singletonMap(0, 101L));
             topicBasedRemoteLogMetadataManager.addRemoteLogSegmentMetadata(leaderSegmentMetadata2).get();
 
             // Check that both the stored segment and recently added segment are available.
-            Assertions.assertTrue(TestUtils.sameElementsWithoutOrder(Arrays.asList(leaderSegmentMetadata, leaderSegmentMetadata2).iterator(),
-                    topicBasedRemoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition)));
+            assertTrue(TestUtils.sameElementsWithoutOrder(
+                    Arrays.asList(leaderSegmentMetadata, leaderSegmentMetadata2).iterator(),
+                    topicBasedRemoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition))
+            );
         }
     }
 }
