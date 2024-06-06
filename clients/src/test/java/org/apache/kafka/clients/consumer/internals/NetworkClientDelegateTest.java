@@ -17,15 +17,24 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
+import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
+import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -34,6 +43,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
+import java.util.LinkedList;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
@@ -55,10 +65,14 @@ public class NetworkClientDelegateTest {
     private static final String GROUP_ID = "group";
     private MockTime time;
     private MockClient client;
+    private Metadata metadata;
+    private BackgroundEventHandler backgroundEventHandler;
 
     @BeforeEach
     public void setup() {
         this.time = new MockTime(0);
+        this.metadata = mock(Metadata.class);
+        this.backgroundEventHandler = mock(BackgroundEventHandler.class);
         this.client = new MockClient(time, Collections.singletonList(mockNode()));
     }
 
@@ -169,6 +183,51 @@ public class NetworkClientDelegateTest {
         }
     }
 
+    @Test
+    public void testPropagateMetadataError() {
+        LinkedList<BackgroundEvent> backgroundEventQueue = new LinkedList<>();
+        Metadata metadata = new Metadata(100, 100, 50000,
+                new LogContext(), new ClusterResourceListeners());
+        NetworkClientDelegate networkClientDelegate = newNetworkClientDelegate(metadata,
+                new BackgroundEventHandler(backgroundEventQueue));
+
+        String exMsg = "Test Auth Exception";
+        metadata.fatalError(new AuthenticationException(exMsg));
+        assertEquals(0, backgroundEventQueue.size());
+
+        networkClientDelegate.poll(0, time.milliseconds());
+        assertEquals(1, backgroundEventQueue.size());
+
+        ErrorEvent event = (ErrorEvent) backgroundEventQueue.poll();
+        assertNotNull(event);
+        assertEquals(AuthenticationException.class, event.error().getClass());
+        assertEquals(exMsg, event.error().getMessage());
+    }
+
+    @Test
+    public void testPropagateInvalidTopicMetadataError() {
+        LinkedList<BackgroundEvent> backgroundEventQueue = new LinkedList<>();
+        Metadata metadata = new Metadata(100, 100, 50000,
+                new LogContext(), new ClusterResourceListeners());
+        NetworkClientDelegate networkClientDelegate = newNetworkClientDelegate(metadata,
+                new BackgroundEventHandler(backgroundEventQueue));
+
+        String invalidTopic = "invalid topic";
+        MetadataResponse invalidTopicResponse = RequestTestUtils.metadataUpdateWith("clusterId", 1,
+                Collections.singletonMap(invalidTopic, Errors.INVALID_TOPIC_EXCEPTION), Collections.emptyMap());
+        metadata.updateWithCurrentRequestVersion(invalidTopicResponse, false, time.milliseconds());
+        assertEquals(0, backgroundEventQueue.size());
+
+        networkClientDelegate.poll(0, time.milliseconds());
+        assertEquals(1, backgroundEventQueue.size());
+
+        ErrorEvent event = (ErrorEvent) backgroundEventQueue.poll();
+        assertNotNull(event);
+        assertEquals(InvalidTopicException.class, event.error().getClass());
+        assertEquals(String.format("Invalid topics: [%s]", invalidTopic),
+                event.error().getMessage());
+    }
+
     public NetworkClientDelegate newNetworkClientDelegate() {
         LogContext logContext = new LogContext();
         Properties properties = new Properties();
@@ -176,7 +235,28 @@ public class NetworkClientDelegateTest {
         properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         properties.put(GROUP_ID_CONFIG, GROUP_ID);
         properties.put(REQUEST_TIMEOUT_MS_CONFIG, REQUEST_TIMEOUT_MS);
-        return new NetworkClientDelegate(this.time, new ConsumerConfig(properties), logContext, this.client);
+        return new NetworkClientDelegate(this.time,
+                new ConsumerConfig(properties),
+                logContext,
+                this.client,
+                this.metadata,
+                this.backgroundEventHandler);
+    }
+
+    public NetworkClientDelegate newNetworkClientDelegate(Metadata metadata,
+                                                          BackgroundEventHandler backgroundEventHandler) {
+        LogContext logContext = new LogContext();
+        Properties properties = new Properties();
+        properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        properties.put(GROUP_ID_CONFIG, GROUP_ID);
+        properties.put(REQUEST_TIMEOUT_MS_CONFIG, REQUEST_TIMEOUT_MS);
+        return new NetworkClientDelegate(this.time,
+                new ConsumerConfig(properties),
+                logContext,
+                new MockClient(time, metadata),
+                metadata,
+                backgroundEventHandler);
     }
 
     public NetworkClientDelegate.UnsentRequest newUnsentFindCoordinatorRequest() {

@@ -162,7 +162,9 @@ public class ConsumerTestBuilder implements Closeable {
         this.networkClientDelegate = spy(new NetworkClientDelegate(time,
                 config,
                 logContext,
-                client));
+                client,
+                metadata,
+                backgroundEventHandler));
         this.offsetsRequestManager = spy(new OffsetsRequestManager(subscriptions,
                 metadata,
                 fetchConfig.isolationLevel,
