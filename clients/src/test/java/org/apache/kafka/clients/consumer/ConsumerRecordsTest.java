@@ -31,7 +31,6 @@ import java.util.Optional;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 public class ConsumerRecordsTest {
@@ -58,7 +57,7 @@ public class ConsumerRecordsTest {
         Map<TopicPartition, List<ConsumerRecord<Integer, String>>> records = new LinkedHashMap<>();
         ConsumerRecords<Integer, String> consumerRecords = new ConsumerRecords<>(records);
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> consumerRecords.records(nullTopic));
-        Assertions.assertEquals("Topic must be non-null.", exception.getMessage());
+        assertEquals("Topic must be non-null.", exception.getMessage());
     }
 
     @Test
