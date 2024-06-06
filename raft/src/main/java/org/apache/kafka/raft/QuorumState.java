@@ -33,6 +33,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.raft.internals.VoterSet;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.slf4j.Logger;
 
 /**
@@ -85,7 +86,7 @@ public class QuorumState {
     private final QuorumStateStore store;
     private final ListenerName listenerName;
     private final Supplier<VoterSet> latestVoterSet;
-    private final Supplier<Short> latestKraftVersion;
+    private final Supplier<KRaftVersion> latestKraftVersion;
     private final Random random;
     private final int electionTimeoutMs;
     private final int fetchTimeoutMs;
@@ -98,7 +99,7 @@ public class QuorumState {
         Uuid localDirectoryId,
         ListenerName listenerName,
         Supplier<VoterSet> latestVoterSet,
-        Supplier<Short> latestKraftVersion,
+        Supplier<KRaftVersion> latestKraftVersion,
         int electionTimeoutMs,
         int fetchTimeoutMs,
         QuorumStateStore store,

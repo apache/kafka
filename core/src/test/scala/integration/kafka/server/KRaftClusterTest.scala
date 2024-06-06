@@ -45,7 +45,7 @@ import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.authorizer._
-import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, KRaftVersion, MetadataVersion}
 import org.apache.kafka.server.config.KRaftConfigs
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.quota
@@ -1018,12 +1018,12 @@ class KRaftClusterTest {
     }
   }
 
-
   @Test
   def testUpdateMetadataVersion(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setBootstrapMetadataVersion(MetadataVersion.MINIMUM_BOOTSTRAP_VERSION).
+        setKRaftVersion(KRaftVersion.KRAFT_VERSION_1).
         setNumBrokerNodes(4).
         setNumControllerNodes(3).build()).build()
     try {
@@ -1036,11 +1036,13 @@ class KRaftClusterTest {
           Map(MetadataVersion.FEATURE_NAME ->
             new FeatureUpdate(MetadataVersion.latestTesting().featureLevel(), FeatureUpdate.UpgradeType.UPGRADE)).asJava, new UpdateFeaturesOptions
         )
+        assertEquals(new FinalizedVersionRange(1, 1), admin.describeFeatures().featureMetadata().get().
+          finalizedFeatures().get(KRaftVersion.FEATURE_NAME))
       } finally {
         admin.close()
       }
-      TestUtils.waitUntilTrue(() => cluster.brokers().get(1).metadataCache.currentImage().features().metadataVersion().equals(MetadataVersion.latestTesting()),
-        "Timed out waiting for metadata.version update.")
+      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).metadataCache.currentImage().features().metadataVersion().equals(MetadataVersion.latestTesting()),
+        "Timed out waiting for metadata.version update")
     } finally {
       cluster.close()
     }

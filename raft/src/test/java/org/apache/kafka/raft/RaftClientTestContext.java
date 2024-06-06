@@ -57,6 +57,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.internals.BatchBuilder;
 import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.raft.internals.StringSerde;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotReader;
@@ -143,7 +144,7 @@ public final class RaftClientTestContext {
         private final Set<Integer> voters;
         private final OptionalInt localId;
         private final Uuid localDirectoryId = Uuid.randomUuid();
-        private final short kraftVersion = 0;
+        private final KRaftVersion kraftVersion = KRaftVersion.KRAFT_VERSION_0;
 
         private int requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS;
         private int electionTimeoutMs = DEFAULT_ELECTION_TIMEOUT_MS;

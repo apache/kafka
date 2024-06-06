@@ -33,6 +33,7 @@ import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.internals.StringSerde;
 import org.apache.kafka.raft.internals.VoterSet;
 import org.apache.kafka.raft.internals.VoterSetTest;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -48,7 +49,7 @@ final class RecordsSnapshotWriterTest {
         int maxBatchSize = 1024;
         AtomicReference<ByteBuffer> buffer = new AtomicReference<>(null);
         RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder()
-            .setKraftVersion((short) 0)
+            .setKraftVersion(KRaftVersion.KRAFT_VERSION_0)
             .setVoterSet(Optional.empty())
             .setTime(new MockTime())
             .setMaxBatchSize(maxBatchSize)
@@ -100,7 +101,7 @@ final class RecordsSnapshotWriterTest {
         );
         AtomicReference<ByteBuffer> buffer = new AtomicReference<>(null);
         RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder()
-            .setKraftVersion((short) 0)
+            .setKraftVersion(KRaftVersion.KRAFT_VERSION_0)
             .setVoterSet(Optional.of(voterSet))
             .setTime(new MockTime())
             .setMaxBatchSize(maxBatchSize)
@@ -120,7 +121,7 @@ final class RecordsSnapshotWriterTest {
         );
         AtomicReference<ByteBuffer> buffer = new AtomicReference<>(null);
         RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder()
-            .setKraftVersion((short) 1)
+            .setKraftVersion(KRaftVersion.KRAFT_VERSION_1)
             .setVoterSet(Optional.of(voterSet))
             .setTime(new MockTime())
             .setMaxBatchSize(maxBatchSize)
@@ -177,7 +178,7 @@ final class RecordsSnapshotWriterTest {
         int maxBatchSize = 1024;
         AtomicReference<ByteBuffer> buffer = new AtomicReference<>(null);
         RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder()
-            .setKraftVersion((short) 1)
+            .setKraftVersion(KRaftVersion.KRAFT_VERSION_1)
             .setVoterSet(Optional.empty())
             .setTime(new MockTime())
             .setMaxBatchSize(maxBatchSize)

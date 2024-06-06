@@ -23,6 +23,7 @@ import com.fasterxml.jackson.databind.node.ShortNode;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.generated.QuorumStateData;
 import org.apache.kafka.raft.generated.QuorumStateDataJsonConverter;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -136,8 +137,8 @@ public class FileQuorumStateStore implements QuorumStateStore {
     }
 
     @Override
-    public void writeElectionState(ElectionState latest, short kraftVersion) {
-        short quorumStateVersion = quorumStateVersionFromKRaftVersion(kraftVersion);
+    public void writeElectionState(ElectionState latest, KRaftVersion kraftVersion) {
+        short quorumStateVersion = kraftVersion.quorumStateVersion();
 
         writeElectionStateToFile(
             stateFile,
@@ -149,18 +150,6 @@ public class FileQuorumStateStore implements QuorumStateStore {
     @Override
     public Path path() {
         return stateFile.toPath();
-    }
-
-    private short quorumStateVersionFromKRaftVersion(short kraftVersion) {
-        if (kraftVersion == 0) {
-            return 0;
-        } else if (kraftVersion == 1) {
-            return 1;
-        } else {
-            throw new IllegalArgumentException(
-                String.format("Unknown kraft.version %d", kraftVersion)
-            );
-        }
     }
 
     private void writeElectionStateToFile(final File stateFile, QuorumStateData state, short version) {
