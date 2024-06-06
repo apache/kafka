@@ -14,28 +14,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.assignor;
+package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.Uuid;
-
-import java.util.Optional;
-import java.util.Set;
+import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * Interface representing the subscription metadata for a group member.
+ * The result of {@link org.apache.kafka.clients.admin.Admin#removeRaftVoter(int, org.apache.kafka.common.Uuid, org.apache.kafka.clients.admin.RemoveRaftVoterOptions)}.
+ *
+ * The API of this class is evolving, see {@link Admin} for details.
  */
-public interface MemberSubscriptionSpec {
-    /**
-     * Gets the rack Id if present.
-     *
-     * @return An Optional containing the rack Id, or an empty Optional if not present.
-     */
-    Optional<String> rackId();
+@InterfaceStability.Stable
+public class RemoveRaftVoterResult {
+    private final KafkaFuture<Void> result;
+
+    RemoveRaftVoterResult(KafkaFuture<Void> result) {
+        this.result = result;
+    }
 
     /**
-     * Gets the set of subscribed topic Ids.
-     *
-     * @return The set of subscribed topic Ids.
+     * Returns a future that completes when the voter has been removed.
      */
-    Set<Uuid> subscribedTopicIds();
+    public KafkaFuture<Void> all() {
+        return result;
+    }
+
 }

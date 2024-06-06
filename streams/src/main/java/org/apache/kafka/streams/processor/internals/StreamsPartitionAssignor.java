@@ -42,6 +42,9 @@ import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.ApplicationState;
 import org.apache.kafka.streams.processor.assignment.TaskAssignmentUtils;
+import org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment;
+import org.apache.kafka.streams.processor.assignment.KafkaStreamsState;
+import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 import org.apache.kafka.streams.processor.assignment.TaskAssignor.AssignmentError;
 import org.apache.kafka.streams.processor.assignment.TaskInfo;
 import org.apache.kafka.streams.processor.assignment.ProcessId;
@@ -52,7 +55,6 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.Topi
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration;
-import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentListener;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
@@ -205,7 +207,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     private String userEndPoint;
     private AssignmentConfigs assignmentConfigs;
-    private org.apache.kafka.streams.processor.assignment.AssignmentConfigs publicAssignmentConfigs;
 
     // for the main consumer, we need to use a supplier to break a cyclic setup dependency
     private Supplier<Consumer<byte[], byte[]>> mainConsumerSupplier;
@@ -256,7 +257,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         nonFatalExceptionsToHandle = referenceContainer.nonFatalExceptionsToHandle;
         time = Objects.requireNonNull(referenceContainer.time, "Time was not specified");
         assignmentConfigs = assignorConfiguration.assignmentConfigs();
-        publicAssignmentConfigs = assignorConfiguration.publicAssignmentConfigs();
         partitionGrouper = new PartitionGrouper();
         userEndPoint = assignorConfiguration.userEndPoint();
         internalTopicManager = assignorConfiguration.internalTopicManager();
@@ -569,8 +569,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             Function.identity(),
             taskId -> {
                 final Set<String> stateStoreNames = topologyMetadata
-                    .stateStoreNameToSourceTopicsForTopology(taskId.topologyName())
-                    .keySet();
+                    .stateStoreNamesForSubtopology(taskId.topologyName(), taskId.subtopology());
                 final Set<TaskTopicPartition> topicPartitions = topicPartitionsForTask.get(taskId);
                 return new DefaultTaskInfo(
                     taskId,
@@ -582,7 +581,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         ));
 
         return new DefaultApplicationState(
-            publicAssignmentConfigs,
+            assignmentConfigs,
             logicalTasks,
             clientMetadataMap
         );
@@ -1698,19 +1697,19 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     }
 
     long acceptableRecoveryLag() {
-        return assignmentConfigs.acceptableRecoveryLag;
+        return assignmentConfigs.acceptableRecoveryLag();
     }
 
     int maxWarmupReplicas() {
-        return assignmentConfigs.maxWarmupReplicas;
+        return assignmentConfigs.maxWarmupReplicas();
     }
 
     int numStandbyReplicas() {
-        return assignmentConfigs.numStandbyReplicas;
+        return assignmentConfigs.numStandbyReplicas();
     }
 
     long probingRebalanceIntervalMs() {
-        return assignmentConfigs.probingRebalanceIntervalMs;
+        return assignmentConfigs.probingRebalanceIntervalMs();
     }
 
 }

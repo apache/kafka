@@ -17,8 +17,8 @@
 package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
-import org.apache.kafka.coordinator.group.assignor.SubscribedTopicDescriber;
+import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignor;
+import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 
 import java.util.Collections;
 import java.util.Map;
@@ -29,14 +29,14 @@ import java.util.Set;
  * The subscribed topic metadata class is used by the {@link PartitionAssignor} to obtain
  * topic and partition metadata for the topics that the consumer group is subscribed to.
  */
-public class SubscribedTopicMetadata implements SubscribedTopicDescriber {
+public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
     /**
      * The topic Ids mapped to their corresponding {@link TopicMetadata}
      * object, which contains topic and partition metadata.
      */
     private final Map<Uuid, TopicMetadata> topicMetadata;
 
-    public SubscribedTopicMetadata(Map<Uuid, TopicMetadata> topicMetadata) {
+    public SubscribedTopicDescriberImpl(Map<Uuid, TopicMetadata> topicMetadata) {
         this.topicMetadata = Objects.requireNonNull(topicMetadata);
     }
 
@@ -80,7 +80,7 @@ public class SubscribedTopicMetadata implements SubscribedTopicDescriber {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        SubscribedTopicMetadata that = (SubscribedTopicMetadata) o;
+        SubscribedTopicDescriberImpl that = (SubscribedTopicDescriberImpl) o;
         return topicMetadata.equals(that.topicMetadata);
     }
 

@@ -14,21 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.assignor;
+package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * Exception thrown by {@link PartitionAssignor#assign(GroupSpec, SubscribedTopicDescriber)}}. The exception
- * is only used internally.
+ * Options for {@link Admin#removeRaftVoter}.
  */
-public class PartitionAssignorException extends ApiException {
-
-    public PartitionAssignorException(String message) {
-        super(message);
-    }
-
-    public PartitionAssignorException(String message, Throwable cause) {
-        super(message, cause);
-    }
+@InterfaceStability.Stable
+public class RemoveRaftVoterOptions extends AbstractOptions<RemoveRaftVoterOptions> {
 }
