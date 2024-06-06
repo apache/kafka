@@ -19,11 +19,10 @@ package kafka.common
 import java.nio.charset.StandardCharsets.UTF_8
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.atomic.AtomicBoolean
-
 import kafka.utils.Logging
 import kafka.zk.{KafkaZkClient, StateChangeHandlers}
 import kafka.zookeeper.{StateChangeHandler, ZNodeChildChangeHandler}
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{SystemTime, Time}
 import org.apache.kafka.server.util.ShutdownableThread
 
 import scala.collection.Seq
@@ -55,7 +54,7 @@ class ZkNodeChangeNotificationListener(private val zkClient: KafkaZkClient,
                                        private val seqNodePrefix: String,
                                        private val notificationHandler: NotificationHandler,
                                        private val changeExpirationMs: Long = 15 * 60 * 1000,
-                                       private val time: Time = Time.SYSTEM) extends Logging {
+                                       private val time: Time = SystemTime.getSystemTime) extends Logging {
   private var lastExecutedChange = -1L
   private val queue = new LinkedBlockingQueue[ChangeNotification]
   private val thread = new ChangeEventProcessThread(s"$seqNodeRoot-event-process-thread")

@@ -22,7 +22,7 @@ import com.fasterxml.jackson.databind.DatabindException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -166,7 +166,7 @@ public class ConnectStandalone extends AbstractConnectCli<StandaloneConfig> {
                 true, JsonConverter.class.getName(), Collections.singletonMap(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false")));
         offsetBackingStore.configure(config);
 
-        Worker worker = new Worker(workerId, Time.SYSTEM, plugins, config, offsetBackingStore,
+        Worker worker = new Worker(workerId, SystemTime.getSystemTime(), plugins, config, offsetBackingStore,
                 connectorClientConfigOverridePolicy);
 
         return new StandaloneHerder(worker, config.kafkaClusterId(), connectorClientConfigOverridePolicy);

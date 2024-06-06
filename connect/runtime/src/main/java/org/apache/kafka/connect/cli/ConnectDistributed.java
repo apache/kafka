@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.connect.cli;
 
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.json.JsonConverterConfig;
@@ -81,11 +81,11 @@ public class ConnectDistributed extends AbstractConnectCli<DistributedConfig> {
                         Collections.singletonMap(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false")));
         offsetBackingStore.configure(config);
 
-        Worker worker = new Worker(workerId, Time.SYSTEM, plugins, config, offsetBackingStore, connectorClientConfigOverridePolicy);
+        Worker worker = new Worker(workerId, SystemTime.getSystemTime(), plugins, config, offsetBackingStore, connectorClientConfigOverridePolicy);
         WorkerConfigTransformer configTransformer = worker.configTransformer();
 
         Converter internalValueConverter = worker.getInternalValueConverter();
-        StatusBackingStore statusBackingStore = new KafkaStatusBackingStore(Time.SYSTEM, internalValueConverter, sharedAdmin, clientIdBase);
+        StatusBackingStore statusBackingStore = new KafkaStatusBackingStore(SystemTime.getSystemTime(), internalValueConverter, sharedAdmin, clientIdBase);
         statusBackingStore.configure(config);
 
         ConfigBackingStore configBackingStore = new KafkaConfigBackingStore(
@@ -97,7 +97,7 @@ public class ConnectDistributed extends AbstractConnectCli<DistributedConfig> {
 
         // Pass the shared admin to the distributed herder as an additional AutoCloseable object that should be closed when the
         // herder is stopped. This is easier than having to track and own the lifecycle ourselves.
-        return new DistributedHerder(config, Time.SYSTEM, worker,
+        return new DistributedHerder(config, SystemTime.getSystemTime(), worker,
                 kafkaClusterId, statusBackingStore, configBackingStore,
                 restServer.advertisedUrl().toString(), restClient, connectorClientConfigOverridePolicy,
                 Collections.emptyList(), sharedAdmin);

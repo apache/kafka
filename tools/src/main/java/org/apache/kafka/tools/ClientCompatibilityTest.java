@@ -49,7 +49,7 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -229,7 +229,7 @@ public class ClientCompatibilityTest {
 
     ClientCompatibilityTest(TestConfig testConfig) {
         this.testConfig = testConfig;
-        long curTime = Time.SYSTEM.milliseconds();
+        long curTime = SystemTime.getSystemTime().milliseconds();
 
         ByteBuffer buf = ByteBuffer.allocate(8);
         buf.putLong(curTime);
@@ -243,7 +243,7 @@ public class ClientCompatibilityTest {
     }
 
     void run() throws Throwable {
-        long prodTimeMs = Time.SYSTEM.milliseconds();
+        long prodTimeMs = SystemTime.getSystemTime().milliseconds();
         testAdminClient();
         testProduce();
         testConsume(prodTimeMs);
@@ -442,7 +442,7 @@ public class ClientCompatibilityTest {
 
                 private byte[] fetchNext() {
                     while (true) {
-                        long curTime = Time.SYSTEM.milliseconds();
+                        long curTime = SystemTime.getSystemTime().milliseconds();
                         if (curTime - prodTimeMs > TIMEOUT_MS)
                             throw new RuntimeException("Timed out after " + TIMEOUT_MS + " ms.");
                         if (recordIter == null) {

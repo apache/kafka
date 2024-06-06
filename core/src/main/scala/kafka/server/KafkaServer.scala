@@ -43,7 +43,7 @@ import org.apache.kafka.common.requests.{ControlledShutdownRequest, ControlledSh
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.security.{JaasContext, JaasUtils}
-import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
+import org.apache.kafka.common.utils.{AppInfoParser, LogContext, SystemTime, Time, Utils}
 import org.apache.kafka.common.{Endpoint, Node, TopicPartition}
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.image.loader.metrics.MetadataLoaderMetrics
@@ -110,7 +110,7 @@ object KafkaServer {
  */
 class KafkaServer(
   val config: KafkaConfig,
-  time: Time = Time.SYSTEM,
+  time: Time = SystemTime.getSystemTime,
   threadNamePrefix: Option[String] = None,
   enableForwarding: Boolean = false
 ) extends KafkaBroker with Server {
@@ -490,11 +490,11 @@ class KafkaServer(
         adminManager = new ZkAdminManager(config, metrics, metadataCache, zkClient)
 
         /* start group coordinator */
-        // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good to fix the underlying issue
+        // Hardcode SystemTime.getSystemTime for now as some Streams tests fail otherwise, it would be good to fix the underlying issue
         groupCoordinator = GroupCoordinatorAdapter(
           config,
           replicaManager,
-          Time.SYSTEM,
+          SystemTime.getSystemTime,
           metrics
         )
         groupCoordinator.startup(() => zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicPartitions))
@@ -511,9 +511,9 @@ class KafkaServer(
           ProducerIdManager.zk(config.brokerId, zkClient)
         }
         /* start transaction coordinator, with a separate background thread scheduler for transaction expiration and log loading */
-        // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good to fix the underlying issue
+        // Hardcode SystemTime.getSystemTime for now as some Streams tests fail otherwise, it would be good to fix the underlying issue
         transactionCoordinator = TransactionCoordinator(config, replicaManager, new KafkaScheduler(1, true, "transaction-log-manager-"),
-          () => producerIdManager, metrics, metadataCache, Time.SYSTEM)
+          () => producerIdManager, metrics, metadataCache, SystemTime.getSystemTime)
         transactionCoordinator.startup(
           () => zkClient.getTopicPartitionCount(Topic.TRANSACTION_STATE_TOPIC_NAME).getOrElse(config.transactionTopicPartitions))
 
@@ -551,7 +551,7 @@ class KafkaServer(
             sessionIdRange,
             shardNum
           ))
-        val fetchManager = new FetchManager(Time.SYSTEM, new FetchSessionCache(fetchSessionCacheShards))
+        val fetchManager = new FetchManager(SystemTime.getSystemTime, new FetchSessionCache(fetchSessionCacheShards))
 
         // Start RemoteLogManager before broker start serving the requests.
         remoteLogManagerOpt.foreach { rlm =>

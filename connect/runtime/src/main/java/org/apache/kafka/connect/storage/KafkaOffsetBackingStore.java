@@ -29,7 +29,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
@@ -96,8 +96,8 @@ public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore impleme
                         producer,
                         topicAdmin,
                         consumedCallback,
-                        Time.SYSTEM,
-                        topicInitializer(topic, newTopicDescription(topic, config), config, Time.SYSTEM),
+                        SystemTime.getSystemTime(),
+                        topicInitializer(topic, newTopicDescription(topic, config), config, SystemTime.getSystemTime()),
                         ignored -> true
                 );
             }
@@ -129,8 +129,8 @@ public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore impleme
                         null,
                         topicAdmin,
                         consumedCallback,
-                        Time.SYSTEM,
-                        topicInitializer(topic, newTopicDescription(topic, config), config, Time.SYSTEM),
+                        SystemTime.getSystemTime(),
+                        topicInitializer(topic, newTopicDescription(topic, config), config, SystemTime.getSystemTime()),
                         ignored -> true
                 );
             }
@@ -211,7 +211,7 @@ public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore impleme
         ConnectUtils.addMetricsContextProperties(adminProps, config, clusterId);
         NewTopic topicDescription = newTopicDescription(topic, config);
 
-        this.offsetLog = createKafkaBasedLog(topic, producerProps, consumerProps, consumedCallback, topicDescription, topicAdminSupplier, config, Time.SYSTEM);
+        this.offsetLog = createKafkaBasedLog(topic, producerProps, consumerProps, consumedCallback, topicDescription, topicAdminSupplier, config, SystemTime.getSystemTime());
     }
 
     protected NewTopic newTopicDescription(final String topic, final WorkerConfig config) {

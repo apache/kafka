@@ -19,7 +19,7 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.util.KafkaBasedLog;
 import org.apache.kafka.connect.util.TopicAdmin;
@@ -93,7 +93,7 @@ public class OffsetSyncStore implements AutoCloseable {
                 null,
                 admin,
                 (error, record) -> this.handleRecord(record),
-                Time.SYSTEM,
+                SystemTime.getSystemTime(),
                 ignored -> { },
                 topicPartition -> topicPartition.partition() == 0
         );

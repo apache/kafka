@@ -32,6 +32,7 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
@@ -333,7 +334,7 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
     }
 
     public KafkaConfigBackingStore(Converter converter, DistributedConfig config, WorkerConfigTransformer configTransformer, Supplier<TopicAdmin> adminSupplier, String clientIdBase) {
-        this(converter, config, configTransformer, adminSupplier, clientIdBase, Time.SYSTEM);
+        this(converter, config, configTransformer, adminSupplier, clientIdBase, SystemTime.getSystemTime());
     }
 
     @SuppressWarnings("this-escape")

@@ -31,7 +31,7 @@ import org.slf4j.LoggerFactory;
  */
 public class ErrorHandlingMetrics implements AutoCloseable {
 
-    private final Time time = new SystemTime();
+    private final Time time = SystemTime.getSystemTime();
 
     private final ConnectMetrics.MetricGroup metricGroup;
 

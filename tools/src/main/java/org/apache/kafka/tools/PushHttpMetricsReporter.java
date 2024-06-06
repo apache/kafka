@@ -95,7 +95,7 @@ public class PushHttpMetricsReporter implements MetricsReporter {
                             "producer/consumer/streams/connect instance");
 
     public PushHttpMetricsReporter() {
-        time = new SystemTime();
+        time = SystemTime.getSystemTime();
         executor = Executors.newSingleThreadScheduledExecutor();
     }
 

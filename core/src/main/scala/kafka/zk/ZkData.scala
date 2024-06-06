@@ -36,7 +36,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.token.delegation.TokenInformation
-import org.apache.kafka.common.utils.{SecurityUtils, Time}
+import org.apache.kafka.common.utils.{SecurityUtils, SystemTime, Time}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
@@ -158,7 +158,7 @@ object BrokerIdZNode {
       PortKey -> port,
       EndpointsKey -> advertisedEndpoints.map(_.connectionString).toBuffer.asJava,
       JmxPortKey -> jmxPort,
-      TimestampKey -> Time.SYSTEM.milliseconds().toString
+      TimestampKey -> SystemTime.getSystemTime.milliseconds().toString
     )
     rack.foreach(rack => if (version >= 3) jsonMap += (RackKey -> rack))
 

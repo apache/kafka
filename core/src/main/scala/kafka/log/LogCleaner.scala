@@ -31,7 +31,7 @@ import org.apache.kafka.common.errors.{CorruptRecordException, KafkaStorageExcep
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.utils.{BufferSupplier, Time}
+import org.apache.kafka.common.utils.{BufferSupplier, SystemTime, Time}
 import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.ShutdownableThread
@@ -100,7 +100,7 @@ class LogCleaner(initialConfig: CleanerConfig,
                  val logDirs: Seq[File],
                  val logs: Pool[TopicPartition, UnifiedLog],
                  val logDirFailureChannel: LogDirFailureChannel,
-                 time: Time = Time.SYSTEM) extends Logging with BrokerReconfigurable {
+                 time: Time = SystemTime.getSystemTime) extends Logging with BrokerReconfigurable {
   // Visible for test.
   private[log] val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
@@ -1162,7 +1162,7 @@ private class PreCleanStats {
 /**
  * A simple struct for collecting stats about log cleaning
  */
-private class CleanerStats(time: Time = Time.SYSTEM) {
+private class CleanerStats(time: Time = SystemTime.getSystemTime) {
   val startTime = time.milliseconds
   var mapCompleteTime: Long = -1L
   var endTime: Long = -1L

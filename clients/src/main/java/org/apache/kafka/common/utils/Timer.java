@@ -38,7 +38,7 @@ package org.apache.kafka.common.utils;
  * A typical usage might look something like this:
  *
  * <pre>
- *     Time time = Time.SYSTEM;
+ *     Time time = SystemTime.getSystemTime;
  *     Timer timer = time.timer(500);
  *
  *     while (!conditionSatisfied() && timer.notExpired()) {

@@ -26,7 +26,7 @@ import kafka.utils.CoreUtils._
 import kafka.utils.{Logging, Pool}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.KafkaStorageException
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{SystemTime, Time}
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
@@ -110,7 +110,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
         uncleanablePartitions.get(dir.getAbsolutePath) match {
           case Some(partitions) =>
             val lastClean = allCleanerCheckpoints
-            val now = Time.SYSTEM.milliseconds
+            val now = SystemTime.getSystemTime.milliseconds
             partitions.iterator.map { tp =>
               Option(logs.get(tp)).map {
                 log =>
@@ -134,8 +134,8 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   metricsGroup.newGauge(MaxDirtyPercentMetricName, () => (100 * dirtiestLogCleanableRatio).toInt)
 
   /* a gauge for tracking the time since the last log cleaner run, in milli seconds */
-  @volatile private var timeOfLastRun: Long = Time.SYSTEM.milliseconds
-  metricsGroup.newGauge(TimeSinceLastRunMsMetricName, () => Time.SYSTEM.milliseconds - timeOfLastRun)
+  @volatile private var timeOfLastRun: Long = SystemTime.getSystemTime.milliseconds
+  metricsGroup.newGauge(TimeSinceLastRunMsMetricName, () => SystemTime.getSystemTime.milliseconds - timeOfLastRun)
 
   /**
    * @return the position processed for all logs.

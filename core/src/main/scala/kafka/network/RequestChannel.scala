@@ -33,7 +33,7 @@ import org.apache.kafka.common.message.EnvelopeResponseData
 import org.apache.kafka.common.network.{ClientInformation, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{SystemTime, Time}
 import org.apache.kafka.network.Session
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
@@ -209,12 +209,12 @@ object RequestChannel extends Logging {
     trace(s"Processor $processor received request: ${requestDesc(true)}")
 
     def requestThreadTimeNanos: Long = {
-      if (apiLocalCompleteTimeNanos == -1L) apiLocalCompleteTimeNanos = Time.SYSTEM.nanoseconds
+      if (apiLocalCompleteTimeNanos == -1L) apiLocalCompleteTimeNanos = SystemTime.getSystemTime.nanoseconds
       math.max(apiLocalCompleteTimeNanos - requestDequeueTimeNanos, 0L)
     }
 
     def updateRequestMetrics(networkThreadTimeNanos: Long, response: Response): Unit = {
-      val endTimeNanos = Time.SYSTEM.nanoseconds
+      val endTimeNanos = SystemTime.getSystemTime.nanoseconds
 
       /**
        * Converts nanos to millis with micros precision as additional decimal places in the request log have low

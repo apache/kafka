@@ -22,7 +22,7 @@ import joptsimple.OptionParser
 import kafka.server.{KafkaConfig, KafkaRaftServer, KafkaServer, Server}
 import kafka.utils.Implicits._
 import kafka.utils.{Exit, Logging}
-import org.apache.kafka.common.utils.{Java, LoggingSignalHandler, OperatingSystem, Time, Utils}
+import org.apache.kafka.common.utils.{Java, LoggingSignalHandler, OperatingSystem, SystemTime, Utils}
 import org.apache.kafka.server.util.CommandLineUtils
 
 object Kafka extends Logging {
@@ -72,14 +72,14 @@ object Kafka extends Logging {
     if (config.requiresZookeeper) {
       new KafkaServer(
         config,
-        Time.SYSTEM,
+        SystemTime.getSystemTime,
         threadNamePrefix = None,
         enableForwarding = enableApiForwarding(config)
       )
     } else {
       new KafkaRaftServer(
         config,
-        Time.SYSTEM,
+        SystemTime.getSystemTime,
       )
     }
   }

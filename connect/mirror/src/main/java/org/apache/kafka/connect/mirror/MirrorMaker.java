@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.Exit;
@@ -170,7 +171,7 @@ public class MirrorMaker {
     }
 
     public MirrorMaker(Map<String, String> props, List<String> clusters) {
-        this(props, clusters, Time.SYSTEM);
+        this(props, clusters, SystemTime.getSystemTime());
     }
 
     public MirrorMaker(Map<String, String> props) {

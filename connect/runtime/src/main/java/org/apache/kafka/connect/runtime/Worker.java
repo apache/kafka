@@ -45,6 +45,7 @@ import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.GroupSubscribedToTopicException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.utils.ThreadUtils;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
@@ -1788,7 +1789,7 @@ public class Worker {
                     connectorConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG));
 
             RetryWithToleranceOperator<T> retryWithToleranceOperator = new RetryWithToleranceOperator<>(connectorConfig.errorRetryTimeout(),
-                    connectorConfig.errorMaxDelayInMillis(), connectorConfig.errorToleranceType(), Time.SYSTEM, errorHandlingMetrics);
+                    connectorConfig.errorMaxDelayInMillis(), connectorConfig.errorToleranceType(), SystemTime.getSystemTime(), errorHandlingMetrics);
 
             TransformationChain<T, R> transformationChain = new TransformationChain<>(connectorConfig.<R>transformationStages(), retryWithToleranceOperator);
             log.info("Initializing: {}", transformationChain);

@@ -18,6 +18,7 @@ package org.apache.kafka.connect.util;
 
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.slf4j.Logger;
@@ -53,7 +54,7 @@ public class RetryUtil {
      * @throws ConnectException If the task exhausted all the retries
      */
     public static <T> T retryUntilTimeout(Callable<T> callable, Supplier<String> description, Duration timeoutDuration, long retryBackoffMs) throws Exception {
-        return retryUntilTimeout(callable, description, timeoutDuration, retryBackoffMs, Time.SYSTEM);
+        return retryUntilTimeout(callable, description, timeoutDuration, retryBackoffMs, SystemTime.getSystemTime());
     }
 
     // visible for testing

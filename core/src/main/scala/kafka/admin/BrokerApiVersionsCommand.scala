@@ -25,7 +25,7 @@ import java.util.concurrent.{ConcurrentLinkedQueue, TimeUnit}
 import joptsimple.OptionSpec
 import kafka.utils.Implicits._
 import kafka.utils.Logging
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{KafkaThread, LogContext, SystemTime, Time, Utils}
 import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ClientResponse, ClientUtils, CommonClientConfigs, Metadata, NetworkClient, NodeApiVersions}
 import org.apache.kafka.clients.consumer.internals.{ConsumerNetworkClient, RequestFuture}
 import org.apache.kafka.common.config.ConfigDef.ValidString._
@@ -36,8 +36,6 @@ import org.apache.kafka.common.internals.ClusterResourceListeners
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.Selector
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.utils.LogContext
-import org.apache.kafka.common.utils.{KafkaThread, Time}
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ApiVersionsRequest, ApiVersionsResponse, MetadataRequest, MetadataResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -270,7 +268,7 @@ object BrokerApiVersionsCommand {
     def create(config: AdminConfig): AdminClient = {
       val clientId = "admin-" + AdminClientIdSequence.getAndIncrement()
       val logContext = new LogContext(s"[LegacyAdminClient clientId=$clientId] ")
-      val time = Time.SYSTEM
+      val time = SystemTime.getSystemTime
       val metrics = new Metrics(time)
       val metadata = new Metadata(CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,
         CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MAX_MS,

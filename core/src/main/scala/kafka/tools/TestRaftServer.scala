@@ -32,10 +32,10 @@ import org.apache.kafka.common.metrics.stats.{Meter, Percentile, Percentiles}
 import org.apache.kafka.common.protocol.{ObjectSerializationCache, Writable}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{SystemTime, Time, Utils}
 import org.apache.kafka.common.{TopicPartition, Uuid, protocol}
 import org.apache.kafka.raft.errors.NotLeaderException
-import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient, QuorumConfig}
+import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, QuorumConfig, RaftClient}
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
 import org.apache.kafka.server.common.serialization.RecordSerde
@@ -61,7 +61,7 @@ class TestRaftServer(
   private val partition = new TopicPartition("__raft_performance_test", 0)
   // The topic ID must be constant. This value was chosen as to not conflict with the topic ID used for __cluster_metadata.
   private val topicId = new Uuid(0L, 2L)
-  private val time = Time.SYSTEM
+  private val time = SystemTime.getSystemTime
   private val metrics = new Metrics(time)
   private val shutdownLatch = new CountDownLatch(1)
   private val threadNamePrefix = "test-raft"
