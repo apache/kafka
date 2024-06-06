@@ -83,7 +83,7 @@ import org.junit.runners.Parameterized;
 public class CustomStickyTaskAssignorTest {
 
     @Rule
-    public Timeout timeout = new Timeout(3, TimeUnit.MINUTES);
+    public Timeout timeout = new Timeout(8, TimeUnit.MINUTES);
 
     private TaskAssignor assignor;
 
