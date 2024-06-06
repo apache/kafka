@@ -99,7 +99,7 @@ public class FetchResponse extends AbstractResponse {
     }
 
     public LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData(Map<Uuid, String> topicNames, short version) {
-        final LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseDataTmp =
+        final LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData =
                 new LinkedHashMap<>();
         data.responses().forEach(topicResponse -> {
             String name;
@@ -110,10 +110,10 @@ public class FetchResponse extends AbstractResponse {
             }
             if (name != null) {
                 topicResponse.partitions().forEach(partition ->
-                    responseDataTmp.put(new TopicPartition(name, partition.partitionIndex()), partition));
+                    responseData.put(new TopicPartition(name, partition.partitionIndex()), partition));
             }
         });
-        return responseDataTmp;
+        return responseData;
     }
 
     @Override
