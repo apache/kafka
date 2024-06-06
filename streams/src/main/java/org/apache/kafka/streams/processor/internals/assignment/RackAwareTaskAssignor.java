@@ -43,9 +43,9 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
-import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -118,14 +118,14 @@ public class RackAwareTaskAssignor {
     }
 
     public synchronized boolean canEnableRackAwareAssignor() {
-        if (StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE.equals(assignmentConfigs.rackAwareAssignmentStrategy)) {
+        if (StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE.equals(assignmentConfigs.rackAwareAssignmentStrategy())) {
             return false;
         }
         if (canEnable != null) {
             return canEnable;
         }
         canEnable = validClientRack && validateTopicPartitionRack(false);
-        if (assignmentConfigs.numStandbyReplicas == 0 || !canEnable) {
+        if (assignmentConfigs.numStandbyReplicas() == 0 || !canEnable) {
             return canEnable;
         }
 
@@ -240,7 +240,7 @@ public class RackAwareTaskAssignor {
             KeyValue<String, String> previousRackInfo = null;
             for (final Map.Entry<String, Optional<String>> rackEntry : entry.getValue().entrySet()) {
                 if (!rackEntry.getValue().isPresent()) {
-                    if (!StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE.equals(assignmentConfigs.rackAwareAssignmentStrategy)) {
+                    if (!StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE.equals(assignmentConfigs.rackAwareAssignmentStrategy())) {
                         log.error(
                             String.format("RackId doesn't exist for process %s and consumer %s",
                                 processId, rackEntry.getKey()));
@@ -263,7 +263,7 @@ public class RackAwareTaskAssignor {
                 }
             }
             if (previousRackInfo == null) {
-                if (!StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE.equals(assignmentConfigs.rackAwareAssignmentStrategy)) {
+                if (!StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE.equals(assignmentConfigs.rackAwareAssignmentStrategy())) {
                     log.error(String.format("RackId doesn't exist for process %s", processId));
                 }
                 return false;
