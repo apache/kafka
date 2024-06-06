@@ -95,11 +95,6 @@ public class ConsumerNetworkThreadTest {
     private final ConsumerConfig config;
 
     ConsumerNetworkThreadTest() {
-        this.time = new MockTime();
-        this.client = new MockClient(time);
-        this.applicationEventsQueue = new LinkedBlockingQueue<>();
-        this.logContext = new LogContext();
-
         this.config = mock(ConsumerConfig.class);
         this.networkClientDelegate = mock(NetworkClientDelegate.class);
         this.requestManagers = mock(RequestManagers.class);
@@ -108,6 +103,10 @@ public class ConsumerNetworkThreadTest {
         this.coordinatorRequestManager = mock(CoordinatorRequestManager.class);
         this.applicationEventProcessor = mock(ApplicationEventProcessor.class);
         this.applicationEventReaper = mock(CompletableEventReaper.class);
+        this.time = new MockTime();
+        this.client = new MockClient(time);
+        this.applicationEventsQueue = new LinkedBlockingQueue<>();
+        this.logContext = new LogContext();
 
         this.consumerNetworkThread = new ConsumerNetworkThread(
                 logContext,
