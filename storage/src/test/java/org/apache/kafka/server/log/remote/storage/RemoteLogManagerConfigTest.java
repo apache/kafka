@@ -23,13 +23,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_NUM;
-import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_MANAGER_THREAD_POOL_SIZE;
-import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_METADATA_MANAGER_CLASS_NAME;
-import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP;
-import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP;
-import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP;
-import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_PATH_PROP;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -49,7 +42,7 @@ public class RemoteLogManagerConfigTest {
         RemoteLogManagerConfig expectedRemoteLogManagerConfig = new RemoteLogManagerConfig(props);
 
         // Removing remote.log.metadata.manager.class.name so that the default value gets picked up.
-        props.remove(REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP);
+        props.remove(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP);
 
         RemoteLogManagerConfig remoteLogManagerConfig = new RemoteLogManagerConfig(props);
         assertEquals(expectedRemoteLogManagerConfig.values(), remoteLogManagerConfig.values());
@@ -63,14 +56,14 @@ public class RemoteLogManagerConfigTest {
         // Even with empty properties, RemoteLogManagerConfig has default values
         Map<String, Object> emptyProps = new HashMap<>();
         RemoteLogManagerConfig remoteLogManagerConfigEmptyConfig = new RemoteLogManagerConfig(emptyProps);
-        assertEquals(remoteLogManagerConfigEmptyConfig.remoteLogManagerThreadPoolSize(), DEFAULT_REMOTE_LOG_MANAGER_THREAD_POOL_SIZE);
-        assertEquals(remoteLogManagerConfigEmptyConfig.remoteLogManagerCopyNumQuotaSamples(), DEFAULT_REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_NUM);
+        assertEquals(RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_MANAGER_THREAD_POOL_SIZE, remoteLogManagerConfigEmptyConfig.remoteLogManagerThreadPoolSize());
+        assertEquals(RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_NUM, remoteLogManagerConfigEmptyConfig.remoteLogManagerCopyNumQuotaSamples());
     }
 
     @Test
     public void testValidateEmptyStringConfig() {
         // Test with a empty string props should throw ConfigException
-        Map<String, Object> emptyStringProps = Collections.singletonMap(REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP, "");
+        Map<String, Object> emptyStringProps = Collections.singletonMap(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP, "");
         assertThrows(ConfigException.class, () ->
                 new RemoteLogManagerConfig(emptyStringProps));
     }
@@ -78,16 +71,16 @@ public class RemoteLogManagerConfigTest {
     private Map<String, Object> getRLMProps(String rsmPrefix, String rlmmPrefix) {
 
         Map<String, Object> props = new HashMap<>();
-        props.put(REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true);
+        props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true);
         props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP,
                 "dummy.remote.storage.class");
-        props.put(REMOTE_STORAGE_MANAGER_CLASS_PATH_PROP,
+        props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_PATH_PROP,
                 "dummy.remote.storage.class.path");
         props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP,
-                DEFAULT_REMOTE_LOG_METADATA_MANAGER_CLASS_NAME);
+                RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_METADATA_MANAGER_CLASS_NAME);
         props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_PATH_PROP,
                 "dummy.remote.log.metadata.class.path");
-        props.put(REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP,
+        props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP,
                 "listener.name");
         props.put(RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP,
                 1024 * 1024L);
