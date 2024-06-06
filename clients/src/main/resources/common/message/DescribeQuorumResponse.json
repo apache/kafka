@@ -56,9 +56,7 @@
         { "name": "Host", "type": "string", "versions": "2+",
           "about": "The hostname" },
         { "name": "Port", "type": "uint16", "versions": "2+",
-          "about": "The port" },
-        { "name": "SecurityProtocol", "type": "int16", "versions": "2+",
-          "about": "The security protocol" }
+          "about": "The port" }
       ]}
     ]}
   ],

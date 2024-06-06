@@ -215,5 +215,26 @@ public class QuorumInfo {
         public List<RaftVoterEndpoint> endpoints() {
             return endpoints;
         }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            Node node = (Node) o;
+            return nodeId == node.nodeId && Objects.equals(endpoints, node.endpoints);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(nodeId, endpoints);
+        }
+
+        @Override
+        public String toString() {
+            return "Node{" +
+                "nodeId=" + nodeId +
+                ", endpoints=" + endpoints +
+                '}';
+        }
     }
 }

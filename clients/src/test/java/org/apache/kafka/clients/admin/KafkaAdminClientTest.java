@@ -30,7 +30,6 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.ElectionType;
-import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
@@ -223,7 +222,6 @@ import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
-import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -297,6 +295,7 @@ public class KafkaAdminClientTest {
     private static final Logger log = LoggerFactory.getLogger(KafkaAdminClientTest.class);
     private static final String GROUP_ID = "group-0";
     private static final int THROTTLE = 10;
+    public static final Uuid REPLICA_DIRECTORY_ID = Uuid.randomUuid();
 
     @Test
     public void testDefaultApiTimeoutAndRequestTimeoutConflicts() {
@@ -736,17 +735,17 @@ public class KafkaAdminClientTest {
     private static QuorumInfo defaultQuorumInfo(boolean emptyOptionals) {
         return new QuorumInfo(1, 1, 1L,
                 singletonList(new QuorumInfo.ReplicaState(1,
-                        emptyOptionals ? Uuid.ZERO_UUID : Uuid.randomUuid(),
+                        emptyOptionals ? Uuid.ZERO_UUID : REPLICA_DIRECTORY_ID,
                         100,
                         emptyOptionals ? OptionalLong.empty() : OptionalLong.of(1000),
                         emptyOptionals ? OptionalLong.empty() : OptionalLong.of(1000))),
                 singletonList(new QuorumInfo.ReplicaState(1,
-                        emptyOptionals ? Uuid.ZERO_UUID : Uuid.randomUuid(),
+                        emptyOptionals ? Uuid.ZERO_UUID : REPLICA_DIRECTORY_ID,
                         100,
                         emptyOptionals ? OptionalLong.empty() : OptionalLong.of(1000),
                         emptyOptionals ? OptionalLong.empty() : OptionalLong.of(1000))),
                 singletonMap(1, new QuorumInfo.Node(1,
-                        singletonList(new RaftVoterEndpoint("test", "localhost", 1)))));
+                        singletonList(new RaftVoterEndpoint("TEST", "localhost", 1)))));
     }
 
     private static DescribeQuorumResponse prepareDescribeQuorumResponse(
@@ -764,7 +763,7 @@ public class KafkaAdminClientTest {
         for (int i = 0; i < (partitionCountError ? 2 : 1); i++) {
             DescribeQuorumResponseData.ReplicaState replica = new DescribeQuorumResponseData.ReplicaState()
                     .setReplicaId(1)
-                    .setReplicaDirectoryId(Uuid.randomUuid())
+                    .setReplicaDirectoryId(emptyOptionals ? Uuid.ZERO_UUID : REPLICA_DIRECTORY_ID)
                     .setLogEndOffset(100);
             replica.setLastFetchTimestamp(emptyOptionals ? -1 : 1000);
             replica.setLastCaughtUpTimestamp(emptyOptionals ? -1 : 1000);
