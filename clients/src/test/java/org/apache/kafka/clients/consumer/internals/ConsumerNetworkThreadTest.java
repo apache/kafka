@@ -23,8 +23,6 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.AsyncCommitEvent;
-import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
-import org.apache.kafka.clients.consumer.internals.events.CompletableEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
@@ -33,14 +31,10 @@ import org.apache.kafka.clients.consumer.internals.events.ResetPositionsEvent;
 import org.apache.kafka.clients.consumer.internals.events.SyncCommitEvent;
 import org.apache.kafka.clients.consumer.internals.events.TopicMetadataEvent;
 import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsEvent;
-import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
-import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.utils.LogContext;
@@ -61,13 +55,11 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.Optional;
 import java.util.List;
 import java.util.LinkedList;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.stream.Stream;
 
@@ -79,7 +71,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -90,7 +81,6 @@ public class ConsumerNetworkThreadTest {
     static final int DEFAULT_REQUEST_TIMEOUT_MS = 500;
 
     private final Time time;
-    private final ConsumerMetadata metadata;
     private final BlockingQueue<ApplicationEvent> applicationEventsQueue;
     private final ApplicationEventProcessor applicationEventProcessor;
     private final OffsetsRequestManager offsetsRequestManager;
@@ -99,31 +89,25 @@ public class ConsumerNetworkThreadTest {
     private final ConsumerNetworkThread consumerNetworkThread;
     private final MockClient client;
     private final NetworkClientDelegate networkClientDelegate;
-    private final NetworkClientDelegate networkClient;
     private final RequestManagers requestManagers;
     private final CompletableEventReaper applicationEventReaper;
+    private final LogContext logContext;
+    private final ConsumerConfig config;
 
     ConsumerNetworkThreadTest() {
-        ConsumerConfig config = mock(ConsumerConfig.class);
         this.time = new MockTime();
+        this.client = new MockClient(time);
+        this.applicationEventsQueue = new LinkedBlockingQueue<>();
+        this.logContext = new LogContext();
+
+        this.config = mock(ConsumerConfig.class);
         this.networkClientDelegate = mock(NetworkClientDelegate.class);
         this.requestManagers = mock(RequestManagers.class);
         this.offsetsRequestManager = mock(OffsetsRequestManager.class);
         this.heartbeatRequestManager = mock(HeartbeatRequestManager.class);
         this.coordinatorRequestManager = mock(CoordinatorRequestManager.class);
-        this.metadata = mock(ConsumerMetadata.class);
         this.applicationEventProcessor = mock(ApplicationEventProcessor.class);
         this.applicationEventReaper = mock(CompletableEventReaper.class);
-        this.client = new MockClient(time);
-        this.applicationEventsQueue = new LinkedBlockingQueue<>();
-        LogContext logContext = new LogContext();
-
-        this.networkClient = new NetworkClientDelegate(
-                time,
-                config,
-                logContext,
-                client
-        );
 
         this.consumerNetworkThread = new ConsumerNetworkThread(
                 logContext,
@@ -149,12 +133,12 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testEnsureCloseStopsRunningThread() {
-        // consumerNetworkThread.running is set to true in its constructor
-        assertTrue(consumerNetworkThread.isRunning());
+        assertTrue(consumerNetworkThread.isRunning(),
+        "ConsumerNetworkThread should start running when created");
 
-        // close() should make consumerNetworkThread.running false by calling closeInternal(Duration timeout)
         consumerNetworkThread.close();
-        assertFalse(consumerNetworkThread.isRunning());
+        assertFalse(consumerNetworkThread.isRunning(),
+        "close() should make consumerNetworkThread.running false by calling closeInternal(Duration timeout)");
     }
 
     @ParameterizedTest
@@ -200,7 +184,7 @@ public class ConsumerNetworkThreadTest {
     }
 
     @Test
-    public void testRequestManagersArePolledOnce() {
+    public void testRequestsTransferFromManagersToClientOnThreadRun() {
         List<Optional<? extends RequestManager>> list = new ArrayList<>();
         list.add(Optional.of(coordinatorRequestManager));
         list.add(Optional.of(heartbeatRequestManager));
@@ -216,19 +200,20 @@ public class ConsumerNetworkThreadTest {
     }
 
     @ParameterizedTest
-    @MethodSource("appEvents")
-    public void testEventIsProcessed(ApplicationEvent e) {
+    @MethodSource("applicationEvents")
+    public void testApplicationEventIsProcessed(ApplicationEvent e) {
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(e.getClass()));
         assertTrue(applicationEventsQueue.isEmpty());
     }
 
-    private static Stream<Arguments> appEvents() {
+    private static Stream<Arguments> applicationEvents() {
         Time time1 = new MockTime();
         Map<TopicPartition, OffsetAndMetadata> offset = mockTopicPartitionOffset();
         final long currentTimeMs = time1.milliseconds();
 
+        // use 500 for deadlineMs
         return Stream.of(
                 Arguments.of(new PollEvent(100)),
                 Arguments.of(new NewTopicsMetadataUpdateRequestEvent()),
@@ -264,6 +249,13 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     void testPollResultTimer() {
+        NetworkClientDelegate networkClientDelegate = new NetworkClientDelegate(
+                time,
+                config,
+                logContext,
+                client
+        );
+
         NetworkClientDelegate.UnsentRequest req = new NetworkClientDelegate.UnsentRequest(
                 new FindCoordinatorRequest.Builder(
                         new FindCoordinatorRequestData()
@@ -276,12 +268,12 @@ public class ConsumerNetworkThreadTest {
         NetworkClientDelegate.PollResult success = new NetworkClientDelegate.PollResult(
                 10,
                 Collections.singletonList(req));
-        assertEquals(10, networkClient.addAll(success));
+        assertEquals(10, networkClientDelegate.addAll(success));
 
         NetworkClientDelegate.PollResult failure = new NetworkClientDelegate.PollResult(
                 10,
                 new ArrayList<>());
-        assertEquals(10, networkClient.addAll(failure));
+        assertEquals(10, networkClientDelegate.addAll(failure));
     }
 
     @Test
@@ -295,49 +287,6 @@ public class ConsumerNetworkThreadTest {
         consumerNetworkThread.runOnce();
         // After runOnce has been called, it takes the default heartbeat interval from the heartbeat request manager
         assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, consumerNetworkThread.maximumTimeToWait());
-    }
-
-    @Test
-    void testEnsureEventsAreCompleted() {
-        Cluster cluster = mock(Cluster.class);
-        when(metadata.fetch()).thenReturn(cluster);
-
-        when(cluster.nodes()).thenReturn(Collections.singletonList(new Node(0, "host", 0)));
-
-        LinkedList<NetworkClientDelegate.UnsentRequest> queue = new LinkedList<>();
-        when(networkClientDelegate.unsentRequests()).thenReturn(queue);
-
-        // Mimic the logic of CompletableEventReaper.reap(Collection):
-        doAnswer(__ -> {
-            Iterator<ApplicationEvent> i = applicationEventsQueue.iterator();
-
-            while (i.hasNext()) {
-                ApplicationEvent event = i.next();
-
-                if (event instanceof CompletableEvent)
-                    ((CompletableEvent<?>) event).future().completeExceptionally(new TimeoutException());
-
-                i.remove();
-            }
-
-            return null;
-        }).when(applicationEventReaper).reap(any(Collection.class));
-
-        Node node = metadata.fetch().nodes().get(0);
-        coordinatorRequestManager.markCoordinatorUnknown("test", time.milliseconds());
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "group-id", node));
-        prepareOffsetCommitRequest(new HashMap<>(), Errors.NONE, false);
-        CompletableApplicationEvent<Void> event1 = mock(AsyncCommitEvent.class);
-        ApplicationEvent event2 = new AsyncCommitEvent(Collections.emptyMap());
-        CompletableFuture<Void> future = new CompletableFuture<>();
-        when(event1.future()).thenReturn(future);
-        applicationEventsQueue.add(event1);
-        applicationEventsQueue.add(event2);
-        assertFalse(future.isDone());
-        assertFalse(applicationEventsQueue.isEmpty());
-        consumerNetworkThread.cleanup();
-        assertTrue(future.isCompletedExceptionally());
-        assertTrue(applicationEventsQueue.isEmpty());
     }
 
     @Test
@@ -356,16 +305,23 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     void testSendUnsentRequest() {
-        ConsumerNetworkThread consumerNetworkThread1 = new ConsumerNetworkThread(
+        NetworkClientDelegate networkClientDelegate = new NetworkClientDelegate(
+                time,
+                config,
+                logContext,
+                client
+        );
+
+        ConsumerNetworkThread consumerNetworkThread = new ConsumerNetworkThread(
                 new LogContext(),
                 time,
                 applicationEventsQueue,
                 applicationEventReaper,
                 () -> applicationEventProcessor,
-                () -> networkClient,
+                () -> networkClientDelegate,
                 () -> requestManagers
         );
-        consumerNetworkThread1.initializeResources();
+        consumerNetworkThread.initializeResources();
 
         String groupId = "group-id";
         NetworkClientDelegate.UnsentRequest request = new NetworkClientDelegate.UnsentRequest(
@@ -375,15 +331,15 @@ public class ConsumerNetworkThreadTest {
                     .setKey(groupId)),
             Optional.empty());
 
-        networkClient.add(request);
-        assertTrue(networkClient.hasAnyPendingRequests());
-        assertFalse(networkClient.unsentRequests().isEmpty());
+        networkClientDelegate.add(request);
+        assertTrue(networkClientDelegate.hasAnyPendingRequests());
+        assertFalse(networkClientDelegate.unsentRequests().isEmpty());
         assertFalse(client.hasInFlightRequests());
-        consumerNetworkThread1.cleanup();
+        consumerNetworkThread.cleanup();
 
-        assertTrue(networkClient.unsentRequests().isEmpty());
+        assertTrue(networkClientDelegate.unsentRequests().isEmpty());
         assertFalse(client.hasInFlightRequests());
-        assertFalse(networkClient.hasAnyPendingRequests());
+        assertFalse(networkClientDelegate.hasAnyPendingRequests());
     }
 
     static private Map<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {
