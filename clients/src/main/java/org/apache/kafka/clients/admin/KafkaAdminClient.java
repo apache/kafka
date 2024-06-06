@@ -273,7 +273,6 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -2134,7 +2133,7 @@ public class KafkaAdminClient extends AdminClient {
             throw new IllegalArgumentException("The TopicCollection: " + topics + " provided did not match any supported classes for describeTopics.");
     }
 
-    Call generateDescribeTopicsCallWithMetadataApi(
+    private Call generateDescribeTopicsCallWithMetadataApi(
         List<String> topicNamesList,
         Map<String, KafkaFutureImpl<TopicDescription>> topicFutures,
         DescribeTopicsOptions options,
@@ -2197,7 +2196,7 @@ public class KafkaAdminClient extends AdminClient {
         };
     }
 
-    Call generateDescribeTopicsCallWithDescribeTopicPartitionsApi(
+    private Call generateDescribeTopicsCallWithDescribeTopicPartitionsApi(
         List<String> topicNamesList,
         Map<String, KafkaFutureImpl<TopicDescription>> topicFutures,
         Map<Integer, Node> nodes,
@@ -2324,27 +2323,27 @@ public class KafkaAdminClient extends AdminClient {
         }
 
         if (topicNamesList.isEmpty()) {
-            return new HashMap<>(topicFutures);
+            return Collections.unmodifiableMap(topicFutures);
         }
 
         // First, we need to retrieve the node info.
         DescribeClusterResult clusterResult = describeCluster();
-        Map<Integer, Node> nodes;
-        try {
-            nodes = clusterResult.nodes().get().stream().collect(Collectors.toMap(Node::id, node -> node));
-        } catch (InterruptedException | ExecutionException e) {
-            completeAllExceptionally(topicFutures.values(), e.getCause());
-            return new HashMap<>(topicFutures);
-        }
+        clusterResult.nodes().whenComplete(
+            (nodes, exception) -> {
+                if (exception != null) {
+                    completeAllExceptionally(topicFutures.values(), exception.getCause());
+                    return;
+                }
 
-        final long now = time.milliseconds();
+                final long now = time.milliseconds();
+                Map<Integer, Node> nodeIdMap = nodes.stream().collect(Collectors.toMap(Node::id, node -> node));
+                runnable.call(
+                    generateDescribeTopicsCallWithDescribeTopicPartitionsApi(topicNamesList, topicFutures, nodeIdMap, options, now),
+                    now
+                );
+            });
 
-        runnable.call(
-            generateDescribeTopicsCallWithDescribeTopicPartitionsApi(topicNamesList, topicFutures, nodes, options, now),
-            now
-        );
-
-        return new HashMap<>(topicFutures);
+        return Collections.unmodifiableMap(topicFutures);
     }
 
     private Map<Uuid, KafkaFuture<TopicDescription>> handleDescribeTopicsByIds(Collection<Uuid> topicIds, DescribeTopicsOptions options) {
