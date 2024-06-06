@@ -217,14 +217,13 @@ public class ConsumerNetworkThreadTest {
         Map<TopicPartition, OffsetAndMetadata> offset = mockTopicPartitionOffset();
         final long currentTimeMs = time1.milliseconds();
 
-        // use 500 for deadlineMs
         return Stream.of(
                 Arguments.of(new PollEvent(100)),
                 Arguments.of(new NewTopicsMetadataUpdateRequestEvent()),
                 Arguments.of(new AsyncCommitEvent(new HashMap<>())),
-                Arguments.of(new SyncCommitEvent(new HashMap<>(), calculateDeadlineMs(time1, 100))),
-                Arguments.of(new ResetPositionsEvent(calculateDeadlineMs(time1, 100))),
-                Arguments.of(new ValidatePositionsEvent(calculateDeadlineMs(time1, 100))),
+                Arguments.of(new SyncCommitEvent(new HashMap<>(), 500)),
+                Arguments.of(new ResetPositionsEvent(500)),
+                Arguments.of(new ValidatePositionsEvent(500)),
                 Arguments.of(new TopicMetadataEvent("topic", Long.MAX_VALUE)),
                 Arguments.of(new AssignmentChangeEvent(offset, currentTimeMs)));
     }
