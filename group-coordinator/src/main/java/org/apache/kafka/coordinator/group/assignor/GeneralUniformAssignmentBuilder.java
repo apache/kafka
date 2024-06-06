@@ -17,6 +17,12 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
+import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
+import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
+import org.apache.kafka.coordinator.group.consumer.MemberAssignmentImpl;
 import org.apache.kafka.server.common.TopicIdPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -124,7 +130,7 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
                 }
                 subscribedTopicIds.add(topicId);
                 membersPerTopic.computeIfAbsent(topicId, k -> new ArrayList<>()).add(memberId);
-                targetAssignment.put(memberId, new MemberAssignment(new HashMap<>()));
+                targetAssignment.put(memberId, new MemberAssignmentImpl(new HashMap<>()));
             })
         );
         this.unassignedPartitions = new HashSet<>(topicIdPartitions(subscribedTopicIds, subscribedTopicDescriber));
@@ -191,7 +197,7 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
      */
     private void assignStickyPartitions() {
         groupSpec.memberIds().forEach(memberId ->
-            groupSpec.memberAssignment(memberId).forEach((topicId, currentAssignment) -> {
+            groupSpec.memberAssignment(memberId).partitions().forEach((topicId, currentAssignment) -> {
                 if (groupSpec.memberSubscription(memberId).subscribedTopicIds().contains(topicId)) {
                     currentAssignment.forEach(partition -> {
                         TopicIdPartition topicIdPartition = new TopicIdPartition(topicId, partition);
@@ -244,7 +250,7 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
      * @return true if the member can participate in reassignment, false otherwise.
      */
     private boolean canMemberParticipateInReassignment(String memberId) {
-        Set<Uuid> assignedTopicIds = targetAssignment.get(memberId).targetPartitions().keySet();
+        Set<Uuid> assignedTopicIds = targetAssignment.get(memberId).partitions().keySet();
 
         int currentAssignmentSize = assignmentManager.targetAssignmentSize(memberId);
         int maxAssignmentSize = assignmentManager.maxAssignmentSize(memberId);
@@ -292,7 +298,7 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
 
             // Otherwise make sure it cannot get any more partitions.
             for (Uuid topicId : groupSpec.memberSubscription(member).subscribedTopicIds()) {
-                Set<Integer> assignedPartitions = targetAssignment.get(member).targetPartitions().get(topicId);
+                Set<Integer> assignedPartitions = targetAssignment.get(member).partitions().get(topicId);
                 for (int i = 0; i < subscribedTopicDescriber.numPartitions(topicId); i++) {
                     TopicIdPartition topicIdPartition = new TopicIdPartition(topicId, i);
                     if (assignedPartitions == null || !assignedPartitions.contains(i)) {
@@ -784,7 +790,7 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
          * @param memberId              Member that the partition needs to be revoked from.
          */
         private void removePartitionFromTargetAssignment(TopicIdPartition topicIdPartition, String memberId) {
-            Map<Uuid, Set<Integer>> targetPartitionsMap = targetAssignment.get(memberId).targetPartitions();
+            Map<Uuid, Set<Integer>> targetPartitionsMap = targetAssignment.get(memberId).partitions();
             Set<Integer> partitionsSet = targetPartitionsMap.get(topicIdPartition.topicId());
             // Remove the partition from the assignment, if there are no more partitions from a particular topic,
             // remove the topic from the assignment as well.

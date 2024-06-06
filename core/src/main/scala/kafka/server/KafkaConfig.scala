@@ -37,7 +37,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.group.ConsumerGroupMigrationPolicy
 import org.apache.kafka.coordinator.group.Group.GroupType
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
-import org.apache.kafka.coordinator.group.assignor.ConsumerGroupPartitionAssignor
+import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfigs, TransactionStateManagerConfigs}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
