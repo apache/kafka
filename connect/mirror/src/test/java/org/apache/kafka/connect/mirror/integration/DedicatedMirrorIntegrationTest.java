@@ -17,10 +17,12 @@
 package org.apache.kafka.connect.mirror.integration;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.NotFoundException;
+import org.apache.kafka.connect.mirror.MirrorCheckpointConnector;
 import org.apache.kafka.connect.mirror.MirrorHeartbeatConnector;
 import org.apache.kafka.connect.mirror.MirrorMaker;
 import org.apache.kafka.connect.mirror.MirrorSourceConfig;
@@ -47,16 +49,20 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
 import static org.apache.kafka.connect.mirror.MirrorMaker.CONNECTOR_CLASSES;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Tag("integration")
 public class DedicatedMirrorIntegrationTest {
@@ -183,6 +189,82 @@ public class DedicatedMirrorIntegrationTest {
             writeToTopic(clusterA, topic, numMessages);
             // and wait for MirrorMaker to copy it to cluster B
             awaitTopicContent(clusterB, b, a + "." + topic, numMessages);
+        }
+    }
+
+    @Test
+    public void testClusterWithEmitOffsetDisabled() throws Exception {
+        Properties brokerProps = new Properties();
+        EmbeddedKafkaCluster clusterA = startKafkaCluster("A", 1, brokerProps);
+        EmbeddedKafkaCluster clusterB = startKafkaCluster("B", 1, brokerProps);
+
+        try (Admin adminB = clusterB.createAdminClient()) {
+
+            // Cluster aliases
+            final String a = "A";
+            final String b = "B";
+            final String ab = a + "->" + b;
+            final String ba = b + "->" + a;
+            final String testTopicPrefix = "test-topic-";
+
+            Map<String, String> mmProps = new HashMap<String, String>() {{
+                    put("dedicated.mode.enable.internal.rest", "false");
+                    put("listeners", "http://localhost:0");
+                    // Refresh topics very frequently to quickly pick up on topics that are created
+                    // after the MM2 nodes are brought up during testing
+                    put("refresh.topics.interval.seconds", "1");
+                    put("clusters", String.join(", ", a, b));
+                    put(a + ".bootstrap.servers", clusterA.bootstrapServers());
+                    put(b + ".bootstrap.servers", clusterB.bootstrapServers());
+                    put(ab + ".enabled", "true");
+                    put(ab + ".topics", "^" + testTopicPrefix + ".*");
+                    put(ba + ".enabled", "false");
+                    put(ba + ".emit.heartbeats.enabled", "false");
+                    put("replication.factor", "1");
+                    put("checkpoints.topic.replication.factor", "1");
+                    put("heartbeats.topic.replication.factor", "1");
+                    put("emit.offset-syncs.enabled", "false");
+                    put("status.storage.replication.factor", "1");
+                    put("offset.storage.replication.factor", "1");
+                    put("config.storage.replication.factor", "1");
+                    put("replication.factor", "1");
+                    put("checkpoints.topic.replication.factor", "1");
+                    put("heartbeats.topic.replication.factor", "1");
+                }};
+
+            // Bring up a single-node cluster
+            final MirrorMaker mm = startMirrorMaker("no-offset-syncing", mmProps);
+            final SourceAndTarget sourceAndTarget = new SourceAndTarget(a, b);
+            awaitMirrorMakerStart(mm, sourceAndTarget);
+
+            // wait for heartbeat connector to start a task
+            awaitConnectorTasksStart(mm, MirrorHeartbeatConnector.class, sourceAndTarget);
+
+            final int numMessages = 10;
+            String topic = testTopicPrefix + "1";
+
+            // Create the topic on cluster A
+            clusterA.createTopic(topic, 1);
+            // and wait for MirrorMaker to create it on cluster B
+            awaitTopicCreation(b, adminB, a + "." + topic);
+
+            // wait for source connector to start a task
+            awaitConnectorTasksStart(mm, MirrorSourceConnector.class, sourceAndTarget);
+
+
+            // Write data to the topic on cluster A
+            writeToTopic(clusterA, topic, numMessages);
+            // and wait for MirrorMaker to copy it to cluster B
+            awaitTopicContent(clusterB, b, a + "." + topic, numMessages);
+
+            List<TopicDescription> offsetSyncTopic = clusterA.describeTopics("mm2-offset-syncs.B.internal").values()
+                    .stream()
+                    .filter(Optional::isPresent)
+                    .map(obj -> obj.get())
+                    .collect(Collectors.toList());
+
+            assertTrue(offsetSyncTopic.isEmpty());
+            assertFalse(isTaskRunningForMirrorMakerConnector(MirrorCheckpointConnector.class, mm, sourceAndTarget));
         }
     }
 

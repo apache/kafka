@@ -24,6 +24,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 public class MirrorCheckpointConfig extends MirrorConnectorConfig {
 
@@ -169,20 +170,28 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
     }
 
     public List<ConfigValue> validate() {
-        Boolean emitCheckpointsValue = this.getBoolean(MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED);
-        Boolean syncGroupOffsetsValue = this.getBoolean(MirrorCheckpointConfig.SYNC_GROUP_OFFSETS_ENABLED);
+        Boolean emitCheckpointsValue = this.getBoolean(EMIT_CHECKPOINTS_ENABLED);
+        Boolean syncGroupOffsetsValue = this.getBoolean(SYNC_GROUP_OFFSETS_ENABLED);
 
         List<ConfigValue> invalidConfigs = new ArrayList<>();
         if (!emitCheckpointsValue && !syncGroupOffsetsValue) {
-            ConfigValue syncGroupOffsets = new ConfigValue(MirrorCheckpointConfig.SYNC_GROUP_OFFSETS_ENABLED);
-            ConfigValue emitCheckpoints = new ConfigValue(MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED);
+            ConfigValue syncGroupOffsets = new ConfigValue(SYNC_GROUP_OFFSETS_ENABLED);
+            ConfigValue emitCheckpoints = new ConfigValue(EMIT_CHECKPOINTS_ENABLED);
 
-            String errorMessage = "MirrorCheckpointConnector can't run with both" +
-                    MirrorCheckpointConfig.SYNC_GROUP_OFFSETS_ENABLED + ", " + MirrorCheckpointConfig.EMIT_CHECKPOINTS_ENABLED + "set to false";
+            String errorMessage = "MirrorCheckpointConnector can't run without both" + SYNC_GROUP_OFFSETS_ENABLED + ", " +
+                    EMIT_CHECKPOINTS_ENABLED + "set to false";
             syncGroupOffsets.addErrorMessage(errorMessage);
             emitCheckpoints.addErrorMessage(errorMessage);
             invalidConfigs.add(syncGroupOffsets);
             invalidConfigs.add(emitCheckpoints);
+        }
+
+        boolean configuredWithDependincesOnOffsetSyncs = emitCheckpointsValue || syncGroupOffsetsValue;
+        if (!"true".equals(Optional.ofNullable(this.originals().get(EMIT_OFFSET_SYNCS_ENABLED)).orElse("true")) & configuredWithDependincesOnOffsetSyncs) {
+            ConfigValue emitOffsetSync = new ConfigValue(EMIT_OFFSET_SYNCS_ENABLED);
+            emitOffsetSync.addErrorMessage("MirrorCheckpointConnector can't run with " + EMIT_OFFSET_SYNCS_ENABLED + " set to false while, " +
+                    EMIT_CHECKPOINTS_ENABLED  + "and/or" + SYNC_GROUP_OFFSETS_ENABLED + "set to true");
+            invalidConfigs.add(emitOffsetSync);
         }
 
         return invalidConfigs;
