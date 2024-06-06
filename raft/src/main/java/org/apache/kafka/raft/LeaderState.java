@@ -307,12 +307,12 @@ public class LeaderState<T> implements EpochState {
      * Update the local replica state.
      *
      * @param endOffsetMetadata updated log end offset of local replica
-     * @param lastVoterSet the up-to-date voter set
+     * @param lastVoters the up-to-date voter set
      * @return true if the high watermark is updated as a result of this call
      */
     public boolean updateLocalState(
         LogOffsetMetadata endOffsetMetadata,
-        Set<Integer> lastVoterSet
+        Map<Integer, VoterSet.VoterNode> lastVoters
     ) {
         ReplicaState state = getOrCreateReplicaState(localId, localDirectoryId);
         state.endOffset.ifPresent(currentEndOffset -> {
@@ -322,7 +322,7 @@ public class LeaderState<T> implements EpochState {
             }
         });
         state.updateLeaderEndOffset(endOffsetMetadata);
-        updateVoterAndObserverStates(lastVoterSet);
+        updateVoterAndObserverStates(lastVoters);
         return maybeUpdateHighWatermark();
     }
 
@@ -357,7 +357,7 @@ public class LeaderState<T> implements EpochState {
                     state.nodeId, currentEndOffset.offset, fetchOffsetMetadata.offset);
             }
         });
-        Optional<LogOffsetMetadata> leaderEndOffsetOpt = getOrCreateReplicaState(localId).endOffset;
+        Optional<LogOffsetMetadata> leaderEndOffsetOpt = getOrCreateReplicaState(localId, localDirectoryId).endOffset;
 
         state.updateFollowerState(
             currentTimeMs,
@@ -464,11 +464,11 @@ public class LeaderState<T> implements EpochState {
         return voterStates.containsKey(remoteNodeId);
     }
 
-    private void updateVoterAndObserverStates(Set<Integer> lastVoterSet) {
+    private void updateVoterAndObserverStates(Map<Integer, VoterSet.VoterNode> lastVoters) {
         // Move any replica that is not in the last voter set from voterStates to observerStates
         for (Iterator<Map.Entry<Integer, ReplicaState>> iter = voterStates.entrySet().iterator(); iter.hasNext(); ) {
             Map.Entry<Integer, ReplicaState> replica = iter.next();
-            if (!lastVoterSet.contains(replica.getKey())) {
+            if (!lastVoters.containsKey(replica.getKey())) {
                 observerStates.put(replica.getKey(), replica.getValue());
                 iter.remove();
             }
@@ -476,10 +476,10 @@ public class LeaderState<T> implements EpochState {
 
         // Add replicas that are in the last voter set and not in voterStates to voterStates (from observerStates
         // if they exist)
-        for (int voterId : lastVoterSet) {
-            if (!voterStates.containsKey(voterId)) {
-                Optional<ReplicaState> existingObserverState = Optional.ofNullable(observerStates.remove(voterId));
-                voterStates.put(voterId, existingObserverState.orElse(new ReplicaState(voterId, false)));
+        for (Map.Entry<Integer, VoterSet.VoterNode> voter : lastVoters.entrySet()) {
+            if (!voterStates.containsKey(voter.getKey())) {
+                Optional<ReplicaState> existingObserverState = Optional.ofNullable(observerStates.remove(voter.getKey()));
+                voterStates.put(voter.getKey(), existingObserverState.orElse(new ReplicaState(voter.getKey(), voter.getValue().voterKey().directoryId(), false)));
             }
         }
     }

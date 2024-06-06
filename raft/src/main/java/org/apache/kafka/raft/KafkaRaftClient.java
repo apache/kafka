@@ -314,7 +314,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
     ) {
         final LogOffsetMetadata endOffsetMetadata = log.endOffset();
 
-        if (state.updateLocalState(endOffsetMetadata, partitionState.lastVoterSet().voterIds())) {
+        if (state.updateLocalState(endOffsetMetadata, partitionState.lastVoterSet().voters())) {
             onUpdateLeaderHighWatermark(state, currentTimeMs);
         }
 
