@@ -480,7 +480,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
-    public void testCheckForNewTopicOnlyWhenMetadataChange() {
+    public void testSubscriptionRegexEvalOnPollOnlyIfMetadataChanges() {
         SubscriptionState subscriptions = mock(SubscriptionState.class);
         Cluster cluster = mock(Cluster.class);
 
@@ -489,7 +489,6 @@ public class AsyncKafkaConsumerTest {
                 mock(ConsumerInterceptors.class),
                 mock(ConsumerRebalanceListenerInvoker.class),
                 subscriptions,
-                singletonList(new RoundRobinAssignor()),
                 "group-id",
                 "client-id");
 
@@ -508,6 +507,7 @@ public class AsyncKafkaConsumerTest {
         verify(subscriptions).matchesSubscribedPattern(topicName);
         clearInvocations(subscriptions);
 
+        when(subscriptions.hasPatternSubscription()).thenReturn(true);
         consumer.poll(Duration.ZERO);
         verify(subscriptions, never()).matchesSubscribedPattern(topicName);
 

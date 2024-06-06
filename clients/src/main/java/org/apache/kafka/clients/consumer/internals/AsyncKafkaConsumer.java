@@ -1474,8 +1474,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     /**
      * <p>
      *
-     * This function evaluate the regex that the consumer subscribed to
-     * against the list of topic names from metadata and update
+     * This function evaluates the regex that the consumer subscribed to
+     * against the list of topic names from metadata, and updates
      * the list of topics in subscription state accordingly
      *
      * @param cluster Cluster from which we get the topics
