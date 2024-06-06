@@ -17,8 +17,10 @@
 package org.apache.kafka.coordinator.group.modern;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
@@ -523,7 +525,7 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
         // the member should be using the OffsetCommit API version >= 9.
         if (!isTransactional && !member.useClassicProtocol() && apiVersion < 9) {
             throw new UnsupportedVersionException("OffsetCommit version 9 or above must be used " +
-                "by members using the consumer group protocol");
+                "by members using the modern group protocol");
         }
 
         validateMemberEpoch(memberEpoch, member.memberEpoch(), member.useClassicProtocol());
@@ -552,7 +554,7 @@ public abstract class ModernGroup<T extends ModernGroupMember> implements Group 
         // the fetch request is accepted.
         if (memberId == null && memberEpoch < 0) return;
 
-        final ModernGroupMember member = members.get(memberId, lastCommittedOffset);
+        final T member = members.get(memberId, lastCommittedOffset);
         if (member == null) {
             throw new UnknownMemberIdException(String.format("Member %s is not a member of group %s.",
                 memberId, groupId));

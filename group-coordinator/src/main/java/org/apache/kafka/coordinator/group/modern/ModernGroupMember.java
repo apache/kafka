@@ -197,6 +197,13 @@ public abstract class ModernGroupMember {
     }
 
     /**
+     * @return A boolean indicating whether the member uses the classic protocol, default is false.
+     */
+    public boolean useClassicProtocol() {
+        return false;
+    }
+
+    /**
      * @return True of the two provided members have different assigned partitions.
      */
     public static boolean hasAssignedPartitionsChanged(
