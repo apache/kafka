@@ -58,10 +58,10 @@ import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.coordinator.group.assignor.ConsumerGroupPartitionAssignor;
-import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
-import org.apache.kafka.coordinator.group.assignor.PartitionAssignorException;
-import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
+import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
+import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
+import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.consumer.Assignment;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
@@ -1926,7 +1926,7 @@ public class GroupMetadataManager {
 
             MemberAssignment newMemberAssignment = assignmentResult.targetAssignment().get(updatedMember.memberId());
             if (newMemberAssignment != null) {
-                return new Assignment(newMemberAssignment.targetPartitions());
+                return new Assignment(newMemberAssignment.partitions());
             } else {
                 return Assignment.EMPTY;
             }

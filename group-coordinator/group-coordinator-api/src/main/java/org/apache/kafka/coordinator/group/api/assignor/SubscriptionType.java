@@ -14,21 +14,34 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.assignor;
+package org.apache.kafka.coordinator.group.api.assignor;
 
-import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * Exception thrown by {@link PartitionAssignor#assign(GroupSpec, SubscribedTopicDescriber)}}. The exception
- * is only used internally.
+ * The subscription type followed by a consumer group.
  */
-public class PartitionAssignorException extends ApiException {
+@InterfaceStability.Unstable
+public enum SubscriptionType {
+    /**
+     * A homogeneous subscription type means that all the members
+     * of the group are subscribed to the same set of topics.
+     */
+    HOMOGENEOUS("Homogeneous"),
+    /**
+     * A heterogeneous subscription type means that not all the members
+     * of the group are subscribed to the same set of topics.
+     */
+    HETEROGENEOUS("Heterogeneous");
 
-    public PartitionAssignorException(String message) {
-        super(message);
+    private final String name;
+
+    SubscriptionType(String name) {
+        this.name = name;
     }
 
-    public PartitionAssignorException(String message, Throwable cause) {
-        super(message, cause);
+    @Override
+    public String toString() {
+        return name;
     }
 }

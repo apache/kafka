@@ -17,7 +17,10 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.consumer.Assignment;
+import org.apache.kafka.coordinator.group.consumer.GroupSpecImpl;
+import org.apache.kafka.coordinator.group.consumer.MemberSubscriptionAndAssignmentImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -36,7 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class GroupSpecImplTest {
     private static final String TEST_MEMBER = "test-member";
-    private Map<String, MemberSubscriptionSpecImpl> members;
+    private Map<String, MemberSubscriptionAndAssignmentImpl> members;
     private SubscriptionType subscriptionType;
     private Map<Uuid, Map<Integer, String>> invertedTargetAssignment;
     private GroupSpecImpl groupSpec;
@@ -49,7 +52,7 @@ public class GroupSpecImplTest {
         invertedTargetAssignment = new HashMap<>();
         topicId = Uuid.randomUuid();
 
-        members.put(TEST_MEMBER,  new MemberSubscriptionSpecImpl(
+        members.put(TEST_MEMBER,  new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             mkSet(topicId),
             Assignment.EMPTY
@@ -96,13 +99,13 @@ public class GroupSpecImplTest {
             topicId,
             mkSet(0, 1)
         );
-        members.put(TEST_MEMBER, new MemberSubscriptionSpecImpl(
+        members.put(TEST_MEMBER, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             mkSet(topicId),
             new Assignment(topicPartitions)
         ));
 
-        assertEquals(topicPartitions, groupSpec.memberAssignment(TEST_MEMBER));
-        assertEquals(Collections.emptyMap(), groupSpec.memberAssignment("unknown-member"));
+        assertEquals(topicPartitions, groupSpec.memberAssignment(TEST_MEMBER).partitions());
+        assertEquals(Collections.emptyMap(), groupSpec.memberAssignment("unknown-member").partitions());
     }
 }
