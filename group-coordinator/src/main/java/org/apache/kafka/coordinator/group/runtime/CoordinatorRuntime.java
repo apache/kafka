@@ -710,6 +710,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     );
                     coordinator.updateLastWrittenOffset(offset);
 
+                    if (offset != currentBatch.nextOffset) {
+                        throw new IllegalStateException("The state machine of coordinator " + tp + " is out of sync with the " +
+                            "underlying log. The last write returned " + offset + " while " + currentBatch.nextOffset + " was expected");
+                    }
+
                     // Add all the pending deferred events to the deferred event queue.
                     for (DeferredEvent event : currentBatch.deferredEvents) {
                         deferredEventQueue.add(offset, event);
@@ -718,6 +723,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     // Free up the current batch.
                     freeCurrentBatch();
                 } catch (Throwable t) {
+                    log.warn("Writing to {} failed due to: {}.", tp, t.getMessage());
                     failCurrentBatch(t);
                 }
             }
@@ -936,6 +942,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     // has expired.
                     maybeFlushCurrentBatch(currentTimeMs);
                 } catch (Throwable t) {
+                    log.warn("Writing to {} failed due to: {}.", tp, t.getMessage());
                     // If an exception is thrown, we fail the entire batch. Exceptions should be
                     // really exceptional in this code path and they would usually be the results
                     // of bugs preventing records to be replayed.
