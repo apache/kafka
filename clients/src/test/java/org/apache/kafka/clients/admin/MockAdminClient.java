@@ -725,14 +725,9 @@ public class MockAdminClient extends AdminClient {
         String group = groupSpecs.keySet().iterator().next();
         Collection<TopicPartition> topicPartitions = groupSpecs.get(group).topicPartitions();
         final KafkaFutureImpl<Map<TopicPartition, OffsetAndMetadata>> future = new KafkaFutureImpl<>();
-        if (topicPartitions.isEmpty()) {
-            future.complete(committedOffsets.entrySet().stream()
-                    .collect(Collectors.toMap(Map.Entry::getKey, entry -> new OffsetAndMetadata(entry.getValue()))));
-        } else {
-            future.complete(committedOffsets.entrySet().stream()
-                    .filter(entry -> topicPartitions.contains(entry.getKey()))
-                    .collect(Collectors.toMap(Map.Entry::getKey, entry -> new OffsetAndMetadata(entry.getValue()))));
-        }
+        future.complete(committedOffsets.entrySet().stream()
+                .filter(entry -> topicPartitions.isEmpty() || topicPartitions.contains(entry.getKey()))
+                .collect(Collectors.toMap(Map.Entry::getKey, entry -> new OffsetAndMetadata(entry.getValue()))));
         return new ListConsumerGroupOffsetsResult(Collections.singletonMap(CoordinatorKey.byGroupId(group), future));
     }
 
