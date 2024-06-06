@@ -96,7 +96,7 @@ public final class RemoteTopicPartitionDirectory {
 
     void traverse(final LocalTieredStorageTraverser traverser) {
         traverser.visitTopicIdPartition(topicIdPartition);
-        listFilesets().forEach(fileset -> traverser.visitSegment(fileset));
+        listFilesets().forEach(traverser::visitSegment);
     }
 
     private List<RemoteLogSegmentFileset> listFilesets() {
