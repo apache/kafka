@@ -36,7 +36,6 @@ import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.requests.DescribeQuorumRequest;
-import org.apache.kafka.common.requests.EndQuorumEpochResponse;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
@@ -137,7 +136,7 @@ public class KafkaRaftClientTest {
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
-            .withVotedCandidate(epoch, ReplicaKey.of(localId, Optional.empty()))
+            .withVotedCandidate(epoch, ReplicaKey.of(localId, ReplicaKey.NO_DIRECTORY_ID))
             .build();
 
         assertEquals(0L, context.log.endOffset().offset);
@@ -188,7 +187,7 @@ public class KafkaRaftClientTest {
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
-            .withVotedCandidate(epoch, ReplicaKey.of(localId, Optional.empty()))
+            .withVotedCandidate(epoch, ReplicaKey.of(localId, ReplicaKey.NO_DIRECTORY_ID))
             .build();
 
         // Resign from candidate, will restart in candidate state
@@ -584,12 +583,9 @@ public class KafkaRaftClientTest {
         context.pollUntilRequest();
         RaftRequest.Outbound request = context.assertSentEndQuorumEpochRequest(resignedEpoch, otherNodeId);
 
-        EndQuorumEpochResponseData response = EndQuorumEpochResponse.singletonResponse(
-            Errors.NONE,
-            context.metadataPartition,
-            Errors.NONE,
+        EndQuorumEpochResponseData response = context.endEpochResponse(
             resignedEpoch,
-            localId
+            OptionalInt.of(localId)
         );
 
         context.deliverResponse(request.correlationId(), request.destination(), response);
@@ -674,7 +670,7 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Utils.mkSet(localId, 1, 2);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withVotedCandidate(2, ReplicaKey.of(localId, Optional.empty()))
+            .withVotedCandidate(2, ReplicaKey.of(localId, ReplicaKey.NO_DIRECTORY_ID))
             .build();
         context.assertVotedCandidate(2, localId);
         assertEquals(0L, context.log.endOffset().offset);
@@ -780,7 +776,7 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withVotedCandidate(votedCandidateEpoch, ReplicaKey.of(otherNodeId, Optional.empty()))
+            .withVotedCandidate(votedCandidateEpoch, ReplicaKey.of(otherNodeId, ReplicaKey.NO_DIRECTORY_ID))
             .build();
 
         context.deliverRequest(context.beginEpochRequest(votedCandidateEpoch, otherNodeId));
@@ -1195,7 +1191,7 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId, votedCandidateId);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withVotedCandidate(epoch, ReplicaKey.of(votedCandidateId, Optional.empty()))
+            .withVotedCandidate(epoch, ReplicaKey.of(votedCandidateId, ReplicaKey.NO_DIRECTORY_ID))
             .build();
 
         context.deliverRequest(context.voteRequest(epoch, otherNodeId, epoch - 1, 1));
@@ -1336,7 +1332,7 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withVotedCandidate(leaderEpoch, ReplicaKey.of(localId, Optional.empty()))
+            .withVotedCandidate(leaderEpoch, ReplicaKey.of(localId, ReplicaKey.NO_DIRECTORY_ID))
             .build();
 
         context.pollUntilRequest();

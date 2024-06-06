@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -30,6 +29,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 
 import java.io.UncheckedIOException;
+import java.net.InetSocketAddress;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
@@ -47,10 +47,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class QuorumStateTest {
     private final int localId = 0;
     private final Uuid localDirectoryId = Uuid.randomUuid();
-    private final ReplicaKey localVoterKey = ReplicaKey.of(
-        localId,
-        Optional.of(localDirectoryId)
-    );
+    private final ReplicaKey localVoterKey = ReplicaKey.of(localId, localDirectoryId);
     private final int logEndEpoch = 0;
     private final MockQuorumStateStore store = new MockQuorumStateStore();
     private final MockTime time = new MockTime();
@@ -67,9 +64,9 @@ public class QuorumStateTest {
         return new QuorumState(
             localId,
             localDirectoryId,
-            VoterSetTest.DEFAULT_LISTENER_NAME,
             () -> voterSet,
             () -> kraftVersion,
+            localId.isPresent() ? voterSet.listeners(localId.getAsInt()) : Endpoints.empty(),
             electionTimeoutMs,
             fetchTimeoutMs,
             store,
@@ -99,7 +96,7 @@ public class QuorumStateTest {
             return replicaKey;
         }
 
-        return ReplicaKey.of(replicaKey.id(), Optional.empty());
+        return ReplicaKey.of(replicaKey.id(), ReplicaKey.NO_DIRECTORY_ID);
     }
 
     private VoterSet localStandaloneVoterSet() {
@@ -111,7 +108,11 @@ public class QuorumStateTest {
     private VoterSet localWithRemoteVoterSet(IntStream remoteIds, short kraftVersion) {
         boolean withDirectoryId = kraftVersion > 0;
         Map<Integer, VoterSet.VoterNode> voters = VoterSetTest.voterMap(remoteIds, withDirectoryId);
-        voters.put(localId, VoterSetTest.voterNode(localVoterKey));
+        if (withDirectoryId) {
+            voters.put(localId, VoterSetTest.voterNode(localVoterKey));
+        } else {
+            voters.put(localId, VoterSetTest.voterNode(ReplicaKey.of(localId, ReplicaKey.NO_DIRECTORY_ID)));
+        }
 
         return VoterSetTest.voterSet(voters);
     }
@@ -169,15 +170,15 @@ public class QuorumStateTest {
 
         FollowerState followerState = state.followerStateOrThrow();
         assertEquals(epoch, followerState.epoch());
-        assertEquals(node1, followerState.leader().id());
+        assertEquals(node1, followerState.leaderId());
         assertEquals(fetchTimeoutMs, followerState.remainingFetchTimeMs(time.milliseconds()));
     }
 
     @ParameterizedTest
     @ValueSource(shorts = {0, 1})
     public void testInitializeAsVoted(short kraftVersion) {
-        ReplicaKey nodeKey1 = ReplicaKey.of(1, Optional.of(Uuid.randomUuid()));
-        ReplicaKey nodeKey2 = ReplicaKey.of(2, Optional.of(Uuid.randomUuid()));
+        ReplicaKey nodeKey1 = ReplicaKey.of(1, Uuid.randomUuid());
+        ReplicaKey nodeKey2 = ReplicaKey.of(2, Uuid.randomUuid());
 
         int epoch = 5;
         VoterSet voters = VoterSetTest.voterSet(Stream.of(localVoterKey, nodeKey1, nodeKey2));
@@ -378,7 +379,7 @@ public class QuorumStateTest {
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
         state.transitionToCandidate();
 
-        state.transitionToFollower(5, voters.voterNode(otherNodeId, VoterSetTest.DEFAULT_LISTENER_NAME).get());
+        state.transitionToFollower(5, otherNodeId, voters.listeners(otherNodeId));
         assertEquals(5, state.epoch());
         assertEquals(OptionalInt.of(otherNodeId), state.leaderId());
         assertEquals(
@@ -419,7 +420,7 @@ public class QuorumStateTest {
     @ParameterizedTest
     @ValueSource(shorts = {0, 1})
     public void testCandidateToVoted(short kraftVersion) {
-        ReplicaKey otherNodeKey = ReplicaKey.of(1, Optional.of(Uuid.randomUuid()));
+        ReplicaKey otherNodeKey = ReplicaKey.of(1, Uuid.randomUuid());
         VoterSet voters = VoterSetTest.voterSet(Stream.of(localVoterKey, otherNodeKey));
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
@@ -446,7 +447,7 @@ public class QuorumStateTest {
     @ParameterizedTest
     @ValueSource(shorts = {0, 1})
     public void testCandidateToAnyStateLowerEpoch(short kraftVersion) {
-        ReplicaKey otherNodeKey = ReplicaKey.of(1, Optional.of(Uuid.randomUuid()));
+        ReplicaKey otherNodeKey = ReplicaKey.of(1, Uuid.randomUuid());
         VoterSet voters = VoterSetTest.voterSet(Stream.of(localVoterKey, otherNodeKey));
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
@@ -458,7 +459,8 @@ public class QuorumStateTest {
             IllegalStateException.class,
             () -> state.transitionToFollower(
                 4,
-                voters.voterNode(otherNodeKey.id(), VoterSetTest.DEFAULT_LISTENER_NAME).get()
+                otherNodeKey.id(),
+                voters.listeners(otherNodeKey.id())
             )
         );
         assertEquals(6, state.epoch());
@@ -545,7 +547,7 @@ public class QuorumStateTest {
         state.transitionToCandidate();
         state.candidateStateOrThrow().recordGrantedVote(otherNodeId);
         state.transitionToLeader(0L, accumulator);
-        state.transitionToFollower(5, voters.voterNode(otherNodeId, VoterSetTest.DEFAULT_LISTENER_NAME).get());
+        state.transitionToFollower(5, otherNodeId, voters.listeners(otherNodeId));
 
         assertEquals(5, state.epoch());
         assertEquals(OptionalInt.of(otherNodeId), state.leaderId());
@@ -588,7 +590,7 @@ public class QuorumStateTest {
     @ParameterizedTest
     @ValueSource(shorts = {0, 1})
     public void testLeaderToVoted(short kraftVersion) {
-        ReplicaKey otherNodeKey = ReplicaKey.of(1, Optional.of(Uuid.randomUuid()));
+        ReplicaKey otherNodeKey = ReplicaKey.of(1, Uuid.randomUuid());
         VoterSet voters = VoterSetTest.voterSet(Stream.of(localVoterKey, otherNodeKey));
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
@@ -618,7 +620,7 @@ public class QuorumStateTest {
     @ParameterizedTest
     @ValueSource(shorts = {0, 1})
     public void testLeaderToAnyStateLowerEpoch(short kraftVersion) {
-        ReplicaKey otherNodeKey = ReplicaKey.of(1, Optional.of(Uuid.randomUuid()));
+        ReplicaKey otherNodeKey = ReplicaKey.of(1, Uuid.randomUuid());
         VoterSet voters = VoterSetTest.voterSet(Stream.of(localVoterKey, otherNodeKey));
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
@@ -632,7 +634,8 @@ public class QuorumStateTest {
             IllegalStateException.class,
             () -> state.transitionToFollower(
                 4,
-                voters.voterNode(otherNodeKey.id(), VoterSetTest.DEFAULT_LISTENER_NAME).get()
+                otherNodeKey.id(),
+                voters.listeners(otherNodeKey.id())
             )
         );
         assertEquals(6, state.epoch());
@@ -659,7 +662,8 @@ public class QuorumStateTest {
             IllegalStateException.class,
             () -> state.transitionToFollower(
                 0,
-                voters.voterNode(localId, VoterSetTest.DEFAULT_LISTENER_NAME).get()
+                localId,
+                voters.listeners(localId)
             )
         );
         assertThrows(IllegalStateException.class, () -> state.transitionToVoted(0, localVoterKey));
@@ -668,7 +672,7 @@ public class QuorumStateTest {
     @ParameterizedTest
     @ValueSource(shorts = {0, 1})
     public void testUnattachedToLeaderOrResigned(short kraftVersion) {
-        ReplicaKey leaderKey = ReplicaKey.of(1, Optional.of(Uuid.randomUuid()));
+        ReplicaKey leaderKey = ReplicaKey.of(1, Uuid.randomUuid());
         int epoch = 5;
         VoterSet voters = VoterSetTest.voterSet(Stream.of(localVoterKey, leaderKey));
         store.writeElectionState(
@@ -685,7 +689,7 @@ public class QuorumStateTest {
     @ParameterizedTest
     @ValueSource(shorts = {0, 1})
     public void testUnattachedToVotedSameEpoch(short kraftVersion) {
-        ReplicaKey otherNodeKey = ReplicaKey.of(1, Optional.of(Uuid.randomUuid()));
+        ReplicaKey otherNodeKey = ReplicaKey.of(1, Uuid.randomUuid());
         VoterSet voters = VoterSetTest.voterSet(Stream.of(localVoterKey, otherNodeKey));
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
@@ -718,7 +722,7 @@ public class QuorumStateTest {
     @ParameterizedTest
     @ValueSource(shorts = {0, 1})
     public void testUnattachedToVotedHigherEpoch(short kraftVersion) {
-        ReplicaKey otherNodeKey = ReplicaKey.of(1, Optional.of(Uuid.randomUuid()));
+        ReplicaKey otherNodeKey = ReplicaKey.of(1, Uuid.randomUuid());
         VoterSet voters = VoterSetTest.voterSet(Stream.of(localVoterKey, otherNodeKey));
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
@@ -744,7 +748,7 @@ public class QuorumStateTest {
     @ParameterizedTest
     @ValueSource(shorts = {0, 1})
     public void testUnattachedToCandidate(short kraftVersion) {
-        ReplicaKey otherNodeKey = ReplicaKey.of(1, Optional.of(Uuid.randomUuid()));
+        ReplicaKey otherNodeKey = ReplicaKey.of(1, Uuid.randomUuid());
         VoterSet voters = VoterSetTest.voterSet(Stream.of(localVoterKey, otherNodeKey));
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
@@ -764,7 +768,7 @@ public class QuorumStateTest {
     @ParameterizedTest
     @ValueSource(shorts = {0, 1})
     public void testUnattachedToUnattached(short kraftVersion) {
-        ReplicaKey otherNodeKey = ReplicaKey.of(1, Optional.of(Uuid.randomUuid()));
+        ReplicaKey otherNodeKey = ReplicaKey.of(1, Uuid.randomUuid());
         VoterSet voters = VoterSetTest.voterSet(Stream.of(localVoterKey, otherNodeKey));
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
@@ -785,7 +789,7 @@ public class QuorumStateTest {
     @ParameterizedTest
     @ValueSource(shorts = {0, 1})
     public void testUnattachedToFollowerSameEpoch(short kraftVersion) {
-        ReplicaKey otherNodeKey = ReplicaKey.of(1, Optional.of(Uuid.randomUuid()));
+        ReplicaKey otherNodeKey = ReplicaKey.of(1, Uuid.randomUuid());
         VoterSet voters = VoterSetTest.voterSet(Stream.of(localVoterKey, otherNodeKey));
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
@@ -793,14 +797,15 @@ public class QuorumStateTest {
 
         state.transitionToFollower(
             5,
-            voters.voterNode(otherNodeKey.id(), VoterSetTest.DEFAULT_LISTENER_NAME).get()
+            otherNodeKey.id(),
+            voters.listeners(otherNodeKey.id())
         );
         assertTrue(state.isFollower());
         FollowerState followerState = state.followerStateOrThrow();
         assertEquals(5, followerState.epoch());
         assertEquals(
-            voters.voterNode(otherNodeKey.id(), VoterSetTest.DEFAULT_LISTENER_NAME),
-            Optional.of(followerState.leader())
+            voters.listeners(otherNodeKey.id()),
+            followerState.leaderEndpoints()
         );
         assertEquals(fetchTimeoutMs, followerState.remainingFetchTimeMs(time.milliseconds()));
     }
@@ -808,7 +813,7 @@ public class QuorumStateTest {
     @ParameterizedTest
     @ValueSource(shorts = {0, 1})
     public void testUnattachedToFollowerHigherEpoch(short kraftVersion) {
-        ReplicaKey otherNodeKey = ReplicaKey.of(1, Optional.of(Uuid.randomUuid()));
+        ReplicaKey otherNodeKey = ReplicaKey.of(1, Uuid.randomUuid());
         VoterSet voters = VoterSetTest.voterSet(Stream.of(localVoterKey, otherNodeKey));
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
@@ -816,14 +821,15 @@ public class QuorumStateTest {
 
         state.transitionToFollower(
             8,
-            voters.voterNode(otherNodeKey.id(), VoterSetTest.DEFAULT_LISTENER_NAME).get()
+            otherNodeKey.id(),
+            voters.listeners(otherNodeKey.id())
         );
         assertTrue(state.isFollower());
         FollowerState followerState = state.followerStateOrThrow();
         assertEquals(8, followerState.epoch());
         assertEquals(
-            voters.voterNode(otherNodeKey.id(), VoterSetTest.DEFAULT_LISTENER_NAME),
-            Optional.of(followerState.leader())
+            voters.listeners(otherNodeKey.id()),
+            followerState.leaderEndpoints()
         );
         assertEquals(fetchTimeoutMs, followerState.remainingFetchTimeMs(time.milliseconds()));
     }
@@ -831,7 +837,7 @@ public class QuorumStateTest {
     @ParameterizedTest
     @ValueSource(shorts = {0, 1})
     public void testUnattachedToAnyStateLowerEpoch(short kraftVersion) {
-        ReplicaKey otherNodeKey = ReplicaKey.of(1, Optional.of(Uuid.randomUuid()));
+        ReplicaKey otherNodeKey = ReplicaKey.of(1, Uuid.randomUuid());
         VoterSet voters = VoterSetTest.voterSet(Stream.of(localVoterKey, otherNodeKey));
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
@@ -842,7 +848,8 @@ public class QuorumStateTest {
             IllegalStateException.class,
             () -> state.transitionToFollower(
                 4,
-                voters.voterNode(otherNodeKey.id(), VoterSetTest.DEFAULT_LISTENER_NAME).get()
+                otherNodeKey.id(),
+                voters.listeners(otherNodeKey.id())
             )
         );
         assertEquals(5, state.epoch());
@@ -865,7 +872,7 @@ public class QuorumStateTest {
         VoterSet voters = localWithRemoteVoterSet(IntStream.of(node1, node2), kraftVersion);
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
-        state.transitionToVoted(5, ReplicaKey.of(node1, Optional.empty()));
+        state.transitionToVoted(5, ReplicaKey.of(node1, ReplicaKey.NO_DIRECTORY_ID));
         assertThrows(IllegalStateException.class, () -> state.transitionToLeader(0, accumulator));
         assertThrows(IllegalStateException.class, () -> state.transitionToResigned(Collections.emptyList()));
     }
@@ -878,7 +885,7 @@ public class QuorumStateTest {
         VoterSet voters = localWithRemoteVoterSet(IntStream.of(node1, node2), kraftVersion);
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
-        state.transitionToVoted(5, ReplicaKey.of(node1, Optional.empty()));
+        state.transitionToVoted(5, ReplicaKey.of(node1, ReplicaKey.NO_DIRECTORY_ID));
 
         int jitterMs = 2500;
         random.mockNextInt(electionTimeoutMs, jitterMs);
@@ -899,14 +906,14 @@ public class QuorumStateTest {
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
         state.transitionToUnattached(5);
-        state.transitionToVoted(8, ReplicaKey.of(node1, Optional.of(Uuid.randomUuid())));
+        state.transitionToVoted(8, ReplicaKey.of(node1, Uuid.randomUuid()));
         assertThrows(
             IllegalStateException.class,
-            () -> state.transitionToVoted(8, ReplicaKey.of(node1, Optional.empty()))
+            () -> state.transitionToVoted(8, ReplicaKey.of(node1, ReplicaKey.NO_DIRECTORY_ID))
         );
         assertThrows(
             IllegalStateException.class,
-            () -> state.transitionToVoted(8, ReplicaKey.of(node2, Optional.empty()))
+            () -> state.transitionToVoted(8, ReplicaKey.of(node2, ReplicaKey.NO_DIRECTORY_ID))
         );
     }
 
@@ -918,17 +925,18 @@ public class QuorumStateTest {
         VoterSet voters = localWithRemoteVoterSet(IntStream.of(node1, node2), kraftVersion);
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
-        state.transitionToVoted(5, ReplicaKey.of(node1, Optional.empty()));
+        state.transitionToVoted(5, ReplicaKey.of(node1, ReplicaKey.NO_DIRECTORY_ID));
         state.transitionToFollower(
             5,
-            voters.voterNode(node2, VoterSetTest.DEFAULT_LISTENER_NAME).get()
+            node2,
+            voters.listeners(node2)
         );
 
         FollowerState followerState = state.followerStateOrThrow();
         assertEquals(5, followerState.epoch());
         assertEquals(
-            voters.voterNode(node2, VoterSetTest.DEFAULT_LISTENER_NAME),
-            Optional.of(followerState.leader())
+            voters.listeners(node2),
+            followerState.leaderEndpoints()
         );
         assertEquals(
             Optional.of(
@@ -950,17 +958,18 @@ public class QuorumStateTest {
         VoterSet voters = localWithRemoteVoterSet(IntStream.of(node1, node2), kraftVersion);
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
-        state.transitionToVoted(5, ReplicaKey.of(node1, Optional.empty()));
+        state.transitionToVoted(5, ReplicaKey.of(node1, ReplicaKey.NO_DIRECTORY_ID));
         state.transitionToFollower(
             8,
-            voters.voterNode(node2, VoterSetTest.DEFAULT_LISTENER_NAME).get()
+            node2,
+            voters.listeners(node2)
         );
 
         FollowerState followerState = state.followerStateOrThrow();
         assertEquals(8, followerState.epoch());
         assertEquals(
-            voters.voterNode(node2, VoterSetTest.DEFAULT_LISTENER_NAME).get(),
-            followerState.leader()
+            voters.listeners(node2),
+            followerState.leaderEndpoints()
         );
         assertEquals(
             Optional.of(
@@ -982,7 +991,7 @@ public class QuorumStateTest {
         VoterSet voters = localWithRemoteVoterSet(IntStream.of(node1, node2), kraftVersion);
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
-        state.transitionToVoted(5, ReplicaKey.of(node1, Optional.empty()));
+        state.transitionToVoted(5, ReplicaKey.of(node1, ReplicaKey.NO_DIRECTORY_ID));
         assertThrows(IllegalStateException.class, () -> state.transitionToUnattached(5));
     }
 
@@ -993,7 +1002,7 @@ public class QuorumStateTest {
         VoterSet voters = localWithRemoteVoterSet(IntStream.of(otherNodeId), kraftVersion);
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
-        state.transitionToVoted(5, ReplicaKey.of(otherNodeId, Optional.empty()));
+        state.transitionToVoted(5, ReplicaKey.of(otherNodeId, ReplicaKey.NO_DIRECTORY_ID));
 
         long remainingElectionTimeMs = state.votedStateOrThrow().remainingElectionTimeMs(time.milliseconds());
         time.sleep(1000);
@@ -1010,7 +1019,7 @@ public class QuorumStateTest {
     @ParameterizedTest
     @ValueSource(shorts = {0, 1})
     public void testVotedToAnyStateLowerEpoch(short kraftVersion) {
-        ReplicaKey otherNodeKey = ReplicaKey.of(1, Optional.of(Uuid.randomUuid()));
+        ReplicaKey otherNodeKey = ReplicaKey.of(1, Uuid.randomUuid());
         VoterSet voters = VoterSetTest.voterSet(Stream.of(localVoterKey, otherNodeKey));
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
@@ -1021,7 +1030,8 @@ public class QuorumStateTest {
             IllegalStateException.class,
             () -> state.transitionToFollower(
                 4,
-                voters.voterNode(otherNodeKey.id(), VoterSetTest.DEFAULT_LISTENER_NAME).get()
+                otherNodeKey.id(),
+                voters.listeners(otherNodeKey.id())
             )
         );
         assertEquals(5, state.epoch());
@@ -1047,28 +1057,31 @@ public class QuorumStateTest {
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
         state.transitionToFollower(
             8,
-            voters.voterNode(node2, VoterSetTest.DEFAULT_LISTENER_NAME).get()
+            node2,
+            voters.listeners(node2)
         );
         assertThrows(
             IllegalStateException.class,
             () -> state.transitionToFollower(
                 8,
-                voters.voterNode(node1, VoterSetTest.DEFAULT_LISTENER_NAME).get()
+                node1,
+                voters.listeners(node1)
             )
         );
         assertThrows(
             IllegalStateException.class,
             () -> state.transitionToFollower(
                 8,
-                voters.voterNode(node2, VoterSetTest.DEFAULT_LISTENER_NAME).get()
+                node2,
+                voters.listeners(node2)
             )
         );
 
         FollowerState followerState = state.followerStateOrThrow();
         assertEquals(8, followerState.epoch());
         assertEquals(
-            voters.voterNode(node2, VoterSetTest.DEFAULT_LISTENER_NAME),
-            Optional.of(followerState.leader())
+            voters.listeners(node2),
+            followerState.leaderEndpoints()
         );
         assertEquals(
             Optional.of(
@@ -1092,18 +1105,20 @@ public class QuorumStateTest {
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
         state.transitionToFollower(
             8,
-            voters.voterNode(node2, VoterSetTest.DEFAULT_LISTENER_NAME).get()
+            node2,
+            voters.listeners(node2)
         );
         state.transitionToFollower(
             9,
-            voters.voterNode(node1, VoterSetTest.DEFAULT_LISTENER_NAME).get()
+            node1,
+            voters.listeners(node1)
         );
 
         FollowerState followerState = state.followerStateOrThrow();
         assertEquals(9, followerState.epoch());
         assertEquals(
-            voters.voterNode(node1, VoterSetTest.DEFAULT_LISTENER_NAME),
-            Optional.of(followerState.leader())
+            voters.listeners(node1),
+            followerState.leaderEndpoints()
         );
         assertEquals(
             Optional.of(
@@ -1127,7 +1142,8 @@ public class QuorumStateTest {
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
         state.transitionToFollower(
             8,
-            voters.voterNode(node2, VoterSetTest.DEFAULT_LISTENER_NAME).get()
+            node2,
+            voters.listeners(node2)
         );
         assertThrows(IllegalStateException.class, () -> state.transitionToLeader(0, accumulator));
         assertThrows(IllegalStateException.class, () -> state.transitionToResigned(Collections.emptyList()));
@@ -1143,7 +1159,8 @@ public class QuorumStateTest {
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
         state.transitionToFollower(
             8,
-            voters.voterNode(node2, VoterSetTest.DEFAULT_LISTENER_NAME).get()
+            node2,
+            voters.listeners(node2)
         );
 
         int jitterMs = 2500;
@@ -1166,7 +1183,8 @@ public class QuorumStateTest {
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
         state.transitionToFollower(
             8,
-            voters.voterNode(node2, VoterSetTest.DEFAULT_LISTENER_NAME).get()
+            node2,
+            voters.listeners(node2)
         );
         assertThrows(IllegalStateException.class, () -> state.transitionToUnattached(8));
     }
@@ -1181,7 +1199,8 @@ public class QuorumStateTest {
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
         state.transitionToFollower(
             8,
-            voters.voterNode(node2, VoterSetTest.DEFAULT_LISTENER_NAME).get()
+            node2,
+            voters.listeners(node2)
         );
 
         int jitterMs = 2500;
@@ -1204,35 +1223,37 @@ public class QuorumStateTest {
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
         state.transitionToFollower(
             8,
-            voters.voterNode(node2, VoterSetTest.DEFAULT_LISTENER_NAME).get()
+            node2,
+            voters.listeners(node2)
         );
 
         assertThrows(
             IllegalStateException.class,
-            () -> state.transitionToVoted(8, ReplicaKey.of(node1, Optional.empty()))
+            () -> state.transitionToVoted(8, ReplicaKey.of(node1, ReplicaKey.NO_DIRECTORY_ID))
         );
         assertThrows(
             IllegalStateException.class,
-            () -> state.transitionToVoted(8, ReplicaKey.of(localId, Optional.empty()))
+            () -> state.transitionToVoted(8, ReplicaKey.of(localId, ReplicaKey.NO_DIRECTORY_ID))
         );
         assertThrows(
             IllegalStateException.class,
-            () -> state.transitionToVoted(8, ReplicaKey.of(node2, Optional.empty()))
+            () -> state.transitionToVoted(8, ReplicaKey.of(node2, ReplicaKey.NO_DIRECTORY_ID))
         );
     }
 
     @ParameterizedTest
     @ValueSource(shorts = {0, 1})
     public void testFollowerToVotedHigherEpoch(short kraftVersion) {
-        ReplicaKey nodeKey1 = ReplicaKey.of(1, Optional.of(Uuid.randomUuid()));
-        ReplicaKey nodeKey2 = ReplicaKey.of(2, Optional.of(Uuid.randomUuid()));
+        ReplicaKey nodeKey1 = ReplicaKey.of(1, Uuid.randomUuid());
+        ReplicaKey nodeKey2 = ReplicaKey.of(2, Uuid.randomUuid());
 
         VoterSet voters = VoterSetTest.voterSet(Stream.of(localVoterKey, nodeKey1, nodeKey2));
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
         state.transitionToFollower(
             8,
-            voters.voterNode(nodeKey2.id(), VoterSetTest.DEFAULT_LISTENER_NAME).get()
+            nodeKey2.id(),
+            voters.listeners(nodeKey2.id())
         );
 
         int jitterMs = 2500;
@@ -1258,18 +1279,20 @@ public class QuorumStateTest {
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
         state.transitionToFollower(
             5,
-            voters.voterNode(otherNodeId, VoterSetTest.DEFAULT_LISTENER_NAME).get()
+            otherNodeId,
+            voters.listeners(otherNodeId)
         );
         assertThrows(IllegalStateException.class, () -> state.transitionToUnattached(4));
         assertThrows(
             IllegalStateException.class,
-            () -> state.transitionToVoted(4, ReplicaKey.of(otherNodeId, Optional.empty()))
+            () -> state.transitionToVoted(4, ReplicaKey.of(otherNodeId, ReplicaKey.NO_DIRECTORY_ID))
         );
         assertThrows(
             IllegalStateException.class,
             () -> state.transitionToFollower(
                 4,
-                voters.voterNode(otherNodeId, VoterSetTest.DEFAULT_LISTENER_NAME).get()
+                otherNodeId,
+                voters.listeners(otherNodeId)
             )
         );
         assertEquals(5, state.epoch());
@@ -1289,7 +1312,7 @@ public class QuorumStateTest {
     @ValueSource(shorts = {0, 1})
     public void testCanBecomeFollowerOfNonVoter(short kraftVersion) {
         int otherNodeId = 1;
-        ReplicaKey nonVoterKey = ReplicaKey.of(2, Optional.of(Uuid.randomUuid()));
+        ReplicaKey nonVoterKey = ReplicaKey.of(2, Uuid.randomUuid());
         VoterSet voters = localWithRemoteVoterSet(IntStream.of(otherNodeId), kraftVersion);
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.initialize(new OffsetAndEpoch(0L, logEndEpoch));
@@ -1303,8 +1326,16 @@ public class QuorumStateTest {
         assertEquals(nonVoterKey, votedState.votedKey());
 
         // Transition to follower
-        Node nonVoterNode = new Node(nonVoterKey.id(), "non-voter-host", 1234);
-        state.transitionToFollower(4, nonVoterNode);
+        state.transitionToFollower(
+            4,
+            nonVoterKey.id(),
+            Endpoints.fromInetSocketAddresses(
+                Collections.singletonMap(
+                    VoterSetTest.DEFAULT_LISTENER_NAME,
+                    InetSocketAddress.createUnresolved("non-voter-host", 1234)
+                )
+            )
+        );
         assertEquals(
             new LeaderAndEpoch(OptionalInt.of(nonVoterKey.id()), 4),
             state.leaderAndEpoch()
@@ -1329,7 +1360,7 @@ public class QuorumStateTest {
     @ParameterizedTest
     @ValueSource(shorts = {0, 1})
     public void testObserverWithIdCanVote(short kraftVersion) {
-        ReplicaKey otherNodeKey = ReplicaKey.of(1, Optional.of(Uuid.randomUuid()));
+        ReplicaKey otherNodeKey = ReplicaKey.of(1, Uuid.randomUuid());
         VoterSet voters = VoterSetTest.voterSet(Stream.of(otherNodeKey));
 
         QuorumState state = initializeEmptyState(voters, kraftVersion);
@@ -1359,7 +1390,8 @@ public class QuorumStateTest {
 
         state.transitionToFollower(
             2,
-            voters.voterNode(node1, VoterSetTest.DEFAULT_LISTENER_NAME).get()
+            node1,
+            voters.listeners(node1)
         );
         state.transitionToUnattached(3);
         assertTrue(state.isUnattached());
@@ -1384,13 +1416,13 @@ public class QuorumStateTest {
         assertTrue(state.isObserver());
 
         state.transitionToUnattached(2);
-        state.transitionToFollower(3, voters.voterNode(node1, VoterSetTest.DEFAULT_LISTENER_NAME).get());
+        state.transitionToFollower(3, node1, voters.listeners(node1));
         assertTrue(state.isFollower());
         FollowerState followerState = state.followerStateOrThrow();
         assertEquals(3, followerState.epoch());
         assertEquals(
-            voters.voterNode(node1, VoterSetTest.DEFAULT_LISTENER_NAME),
-            Optional.of(followerState.leader())
+            voters.listeners(node1),
+            followerState.leaderEndpoints()
         );
         assertEquals(fetchTimeoutMs, followerState.remainingFetchTimeMs(time.milliseconds()));
     }
@@ -1417,7 +1449,7 @@ public class QuorumStateTest {
     @ParameterizedTest
     @ValueSource(shorts = {0, 1})
     public void testHasRemoteLeader(short kraftVersion) {
-        ReplicaKey otherNodeKey = ReplicaKey.of(1, Optional.of(Uuid.randomUuid()));
+        ReplicaKey otherNodeKey = ReplicaKey.of(1, Uuid.randomUuid());
         VoterSet voters = VoterSetTest.voterSet(Stream.of(localVoterKey, otherNodeKey));
 
         QuorumState state = initializeEmptyState(voters, kraftVersion);
@@ -1438,7 +1470,8 @@ public class QuorumStateTest {
 
         state.transitionToFollower(
             state.epoch() + 1,
-            voters.voterNode(otherNodeKey.id(), VoterSetTest.DEFAULT_LISTENER_NAME).get()
+            otherNodeKey.id(),
+            voters.listeners(otherNodeKey.id())
         );
         assertTrue(state.hasRemoteLeader());
     }
@@ -1446,13 +1479,14 @@ public class QuorumStateTest {
     @ParameterizedTest
     @ValueSource(shorts = {0, 1})
     public void testHighWatermarkRetained(short kraftVersion) {
-        ReplicaKey otherNodeKey = ReplicaKey.of(1, Optional.of(Uuid.randomUuid()));
+        ReplicaKey otherNodeKey = ReplicaKey.of(1, Uuid.randomUuid());
         VoterSet voters = VoterSetTest.voterSet(Stream.of(localVoterKey, otherNodeKey));
 
         QuorumState state = initializeEmptyState(voters, kraftVersion);
         state.transitionToFollower(
             5,
-            voters.voterNode(otherNodeKey.id(), VoterSetTest.DEFAULT_LISTENER_NAME).get()
+            otherNodeKey.id(),
+            voters.listeners(otherNodeKey.id())
         );
 
         FollowerState followerState = state.followerStateOrThrow();
@@ -1494,11 +1528,11 @@ public class QuorumStateTest {
         assertThrows(IllegalStateException.class, state::transitionToCandidate);
         assertThrows(
             IllegalStateException.class,
-            () -> state.transitionToVoted(1, ReplicaKey.of(1, Optional.empty()))
+            () -> state.transitionToVoted(1, ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID))
         );
         assertThrows(IllegalStateException.class, () -> state.transitionToLeader(0L, accumulator));
 
-        state.transitionToFollower(1, voters.voterNode(1, VoterSetTest.DEFAULT_LISTENER_NAME).get());
+        state.transitionToFollower(1, 1, voters.listeners(1));
         assertTrue(state.isFollower());
 
         state.transitionToUnattached(2);
@@ -1518,7 +1552,7 @@ public class QuorumStateTest {
         store.writeElectionState(
             ElectionState.withVotedCandidate(
                 epoch,
-                ReplicaKey.of(votedId, Optional.empty()),
+                ReplicaKey.of(votedId, ReplicaKey.NO_DIRECTORY_ID),
                 voters.voterIds()
             ),
             kraftVersion

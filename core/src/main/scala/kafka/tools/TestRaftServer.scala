@@ -17,6 +17,7 @@
 
 package kafka.tools
 
+import java.net.InetSocketAddress
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 import java.util.concurrent.{CompletableFuture, CountDownLatch, LinkedBlockingDeque, TimeUnit}
 import joptsimple.{OptionException, OptionSpec}
@@ -35,7 +36,7 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{TopicPartition, Uuid, protocol}
 import org.apache.kafka.raft.errors.NotLeaderException
-import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient, QuorumConfig}
+import org.apache.kafka.raft.{Batch, BatchReader, Endpoints, LeaderAndEpoch, RaftClient, QuorumConfig}
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
 import org.apache.kafka.server.common.serialization.RecordSerde
@@ -84,6 +85,15 @@ class TestRaftServer(
       () => FinalizedFeatures.fromKRaftVersion(MetadataVersion.MINIMUM_KRAFT_VERSION))
     socketServer = new SocketServer(config, metrics, time, credentialProvider, apiVersionManager)
 
+    val endpoints = Endpoints.fromInetSocketAddresses(
+      config.effectiveAdvertisedControllerListeners
+        .map { endpoint =>
+          (endpoint.listenerName, InetSocketAddress.createUnresolved(endpoint.host, endpoint.port))
+        }
+        .toMap
+        .asJava
+    )
+
     raftManager = new KafkaRaftManager[Array[Byte]](
       Uuid.ZERO_UUID.toString,
       config,
@@ -96,6 +106,7 @@ class TestRaftServer(
       Some(threadNamePrefix),
       CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumVoters)),
       QuorumConfig.parseBootstrapServers(config.quorumBootstrapServers),
+      endpoints,
       new ProcessTerminatingFaultHandler.Builder().build()
     )
 

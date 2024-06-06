@@ -320,7 +320,24 @@ public class KafkaNetworkChannelTest {
             case END_QUORUM_EPOCH:
                 return new EndQuorumEpochResponseData().setErrorCode(error.code());
             case VOTE:
-                return VoteResponse.singletonResponse(error, topicPartition, Errors.NONE, 1, 5, false);
+                // TODO: can this be simplified to just the error?
+                return new VoteResponseData()
+                    .setErrorCode(error.code())
+                    .setTopics(
+                        Collections.singletonList(
+                            new VoteResponseData.TopicData()
+                                .setTopicName(topicPartition.topic())
+                                .setPartitions(
+                                    Collections.singletonList(
+                                        new VoteResponseData.PartitionData()
+                                            .setErrorCode(Errors.NONE.code())
+                                            .setLeaderId(1)
+                                            .setLeaderEpoch(5)
+                                            .setVoteGranted(false)
+                                    )
+                                )
+                        )
+                    );
             case FETCH:
                 return new FetchResponseData().setErrorCode(error.code());
             case FETCH_SNAPSHOT:

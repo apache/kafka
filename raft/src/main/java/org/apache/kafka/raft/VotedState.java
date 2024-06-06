@@ -73,6 +73,11 @@ public class VotedState implements EpochState {
     }
 
     @Override
+    public Endpoints leaderEndpoints() {
+        return Endpoints.empty();
+    }
+
+    @Override
     public String name() {
         return "Voted";
     }

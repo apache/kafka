@@ -1130,13 +1130,24 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     }
   }
 
-  // Use advertised listeners if defined, fallback to listeners otherwise
+  def effectiveAdvertisedControllerListeners: Seq[EndPoint] = {
+    // Only expose controller listeners
+    advertisedListeners.filter(l => controllerListenerNames.contains(l.listenerName.value()))
+  }
+
   def effectiveAdvertisedListeners: Seq[EndPoint] = {
+    // Only expose broker listeners
+    advertisedListeners.filterNot(l => controllerListenerNames.contains(l.listenerName.value()))
+  }
+
+  // Use advertised listeners if defined, fallback to listeners otherwise
+  private def advertisedListeners: Seq[EndPoint] = {
     val advertisedListenersProp = getString(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG)
-    if (advertisedListenersProp != null)
+    if (advertisedListenersProp != null) {
       CoreUtils.listenerListToEndPoints(advertisedListenersProp, effectiveListenerSecurityProtocolMap, requireDistinctPorts=false)
-    else
-      listeners.filterNot(l => controllerListenerNames.contains(l.listenerName.value()))
+    } else {
+      listeners
+    }
   }
 
   private def getInterBrokerListenerNameAndSecurityProtocol: (ListenerName, SecurityProtocol) = {

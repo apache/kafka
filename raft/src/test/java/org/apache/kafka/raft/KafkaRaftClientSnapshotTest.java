@@ -17,7 +17,6 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.FetchSnapshotRequestData;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
@@ -25,7 +24,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.UnalignedMemoryRecords;
 import org.apache.kafka.common.requests.FetchSnapshotRequest;
-import org.apache.kafka.common.requests.FetchSnapshotResponse;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.internals.StringSerde;
 import org.apache.kafka.snapshot.RawSnapshotReader;
@@ -1035,7 +1033,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.deliverResponse(
             fetchRequest.correlationId(),
             fetchRequest.destination(),
-            snapshotFetchResponse(context.metadataPartition, context.metadataTopicId, epoch, leaderId, invalidEpoch, 200L)
+            context.snapshotFetchResponse(epoch, leaderId, invalidEpoch, 200L)
         );
 
         // Handle the invalid response
@@ -1052,7 +1050,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.deliverResponse(
             fetchRequest.correlationId(),
             fetchRequest.destination(),
-            snapshotFetchResponse(context.metadataPartition, context.metadataTopicId, epoch, leaderId, invalidEndOffset, 200L)
+            context.snapshotFetchResponse(epoch, leaderId, invalidEndOffset, 200L)
         );
 
         // Handle the invalid response
@@ -1094,7 +1092,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.deliverResponse(
             fetchRequest.correlationId(),
             fetchRequest.destination(),
-            snapshotFetchResponse(context.metadataPartition, context.metadataTopicId, epoch, leaderId, snapshotId, 200L)
+            context.snapshotFetchResponse(epoch, leaderId, snapshotId, 200L)
         );
 
         context.pollUntilRequest();
@@ -1120,7 +1118,7 @@ final public class KafkaRaftClientSnapshotTest {
             snapshotRequest.correlationId(),
             snapshotRequest.destination(),
             fetchSnapshotResponse(
-                context.metadataPartition,
+                context,
                 epoch,
                 leaderId,
                 snapshotId,
@@ -1165,7 +1163,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.deliverResponse(
             fetchRequest.correlationId(),
             fetchRequest.destination(),
-            snapshotFetchResponse(context.metadataPartition, context.metadataTopicId, epoch, leaderId, snapshotId, 200L)
+            context.snapshotFetchResponse(epoch, leaderId, snapshotId, 200L)
         );
 
         context.pollUntilRequest();
@@ -1194,7 +1192,7 @@ final public class KafkaRaftClientSnapshotTest {
             snapshotRequest.correlationId(),
             snapshotRequest.destination(),
             fetchSnapshotResponse(
-                context.metadataPartition,
+                context,
                 epoch,
                 leaderId,
                 snapshotId,
@@ -1223,7 +1221,7 @@ final public class KafkaRaftClientSnapshotTest {
             snapshotRequest.correlationId(),
             snapshotRequest.destination(),
             fetchSnapshotResponse(
-                context.metadataPartition,
+                context,
                 epoch,
                 leaderId,
                 snapshotId,
@@ -1268,7 +1266,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.deliverResponse(
             fetchRequest.correlationId(),
             fetchRequest.destination(),
-            snapshotFetchResponse(context.metadataPartition, context.metadataTopicId, epoch, leaderId, snapshotId, 200L)
+            context.snapshotFetchResponse(epoch, leaderId, snapshotId, 200L)
         );
 
         context.pollUntilRequest();
@@ -1287,8 +1285,8 @@ final public class KafkaRaftClientSnapshotTest {
         context.deliverResponse(
             snapshotRequest.correlationId(),
             snapshotRequest.destination(),
-            FetchSnapshotResponse.singleton(
-                context.metadataPartition,
+            context.fetchSnapshotResponse(
+                leaderId,
                 responsePartitionSnapshot -> {
                     responsePartitionSnapshot
                         .currentLeader()
@@ -1326,7 +1324,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.deliverResponse(
             fetchRequest.correlationId(),
             fetchRequest.destination(),
-            snapshotFetchResponse(context.metadataPartition, context.metadataTopicId, epoch, firstLeaderId, snapshotId, 200L)
+            context.snapshotFetchResponse(epoch, firstLeaderId, snapshotId, 200L)
         );
 
         context.pollUntilRequest();
@@ -1345,8 +1343,8 @@ final public class KafkaRaftClientSnapshotTest {
         context.deliverResponse(
             snapshotRequest.correlationId(),
             snapshotRequest.destination(),
-            FetchSnapshotResponse.singleton(
-                context.metadataPartition,
+            context.fetchSnapshotResponse(
+                secondLeaderId,
                 responsePartitionSnapshot -> {
                     responsePartitionSnapshot
                         .currentLeader()
@@ -1383,7 +1381,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.deliverResponse(
             fetchRequest.correlationId(),
             fetchRequest.destination(),
-            snapshotFetchResponse(context.metadataPartition, context.metadataTopicId, epoch, leaderId, snapshotId, 200L)
+            context.snapshotFetchResponse(epoch, leaderId, snapshotId, 200L)
         );
 
         context.pollUntilRequest();
@@ -1402,8 +1400,8 @@ final public class KafkaRaftClientSnapshotTest {
         context.deliverResponse(
             snapshotRequest.correlationId(),
             snapshotRequest.destination(),
-            FetchSnapshotResponse.singleton(
-                context.metadataPartition,
+            context.fetchSnapshotResponse(
+                leaderId,
                 responsePartitionSnapshot -> {
                     responsePartitionSnapshot
                         .currentLeader()
@@ -1440,7 +1438,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.deliverResponse(
             fetchRequest.correlationId(),
             fetchRequest.destination(),
-            snapshotFetchResponse(context.metadataPartition, context.metadataTopicId, epoch, leaderId, snapshotId, 200L)
+            context.snapshotFetchResponse(epoch, leaderId, snapshotId, 200L)
         );
 
         context.pollUntilRequest();
@@ -1459,8 +1457,8 @@ final public class KafkaRaftClientSnapshotTest {
         context.deliverResponse(
             snapshotRequest.correlationId(),
             snapshotRequest.destination(),
-            FetchSnapshotResponse.singleton(
-                context.metadataPartition,
+            context.fetchSnapshotResponse(
+                leaderId + 1,
                 responsePartitionSnapshot -> {
                     responsePartitionSnapshot
                         .currentLeader()
@@ -1507,7 +1505,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.deliverResponse(
             fetchRequest.correlationId(),
             fetchRequest.destination(),
-            snapshotFetchResponse(context.metadataPartition, context.metadataTopicId, epoch, leaderId, snapshotId, 200L)
+            context.snapshotFetchResponse(epoch, leaderId, snapshotId, 200L)
         );
 
         context.pollUntilRequest();
@@ -1526,8 +1524,8 @@ final public class KafkaRaftClientSnapshotTest {
         context.deliverResponse(
             snapshotRequest.correlationId(),
             snapshotRequest.destination(),
-            FetchSnapshotResponse.singleton(
-                context.metadataPartition,
+            context.fetchSnapshotResponse(
+                leaderId,
                 responsePartitionSnapshot -> {
                     responsePartitionSnapshot
                         .currentLeader()
@@ -1553,7 +1551,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.deliverResponse(
             fetchRequest.correlationId(),
             fetchRequest.destination(),
-            snapshotFetchResponse(context.metadataPartition, context.metadataTopicId, epoch, leaderId, snapshotId, 200L)
+            context.snapshotFetchResponse(epoch, leaderId, snapshotId, 200L)
         );
 
         context.pollUntilRequest();
@@ -1573,8 +1571,8 @@ final public class KafkaRaftClientSnapshotTest {
         context.deliverResponse(
             snapshotRequest.correlationId(),
             snapshotRequest.destination(),
-            FetchSnapshotResponse.singleton(
-                context.metadataPartition,
+            context.fetchSnapshotResponse(
+                leaderId,
                 responsePartitionSnapshot -> {
                     responsePartitionSnapshot
                         .currentLeader()
@@ -1617,7 +1615,7 @@ final public class KafkaRaftClientSnapshotTest {
         context.deliverResponse(
             fetchRequest.correlationId(),
             fetchRequest.destination(),
-            snapshotFetchResponse(context.metadataPartition, context.metadataTopicId, epoch, leaderId, snapshotId, 200L)
+            context.snapshotFetchResponse(epoch, leaderId, snapshotId, 200L)
         );
 
         context.pollUntilRequest();
@@ -1645,8 +1643,8 @@ final public class KafkaRaftClientSnapshotTest {
         context.deliverResponse(
             snapshotRequest.correlationId(),
             snapshotRequest.destination(),
-            FetchSnapshotResponse.singleton(
-                context.metadataPartition,
+            context.fetchSnapshotResponse(
+                leaderId,
                 responsePartitionSnapshot -> {
                     responsePartitionSnapshot
                         .currentLeader()
@@ -1888,7 +1886,7 @@ final public class KafkaRaftClientSnapshotTest {
     }
 
     private static FetchSnapshotResponseData fetchSnapshotResponse(
-        TopicPartition topicPartition,
+        RaftClientTestContext context,
         int leaderEpoch,
         int leaderId,
         OffsetAndEpoch snapshotId,
@@ -1896,8 +1894,8 @@ final public class KafkaRaftClientSnapshotTest {
         long position,
         ByteBuffer buffer
     ) {
-        return FetchSnapshotResponse.singleton(
-            topicPartition,
+        return context.fetchSnapshotResponse(
+            leaderId,
             partitionSnapshot -> {
                 partitionSnapshot.currentLeader()
                     .setLeaderEpoch(leaderEpoch)
@@ -1913,27 +1911,6 @@ final public class KafkaRaftClientSnapshotTest {
                     .setUnalignedRecords(MemoryRecords.readableRecords(buffer.slice()));
             }
         );
-    }
-
-    private static FetchResponseData snapshotFetchResponse(
-        TopicPartition topicPartition,
-        Uuid topicId,
-        int epoch,
-        int leaderId,
-        OffsetAndEpoch snapshotId,
-        long highWatermark
-    ) {
-        return RaftUtil.singletonFetchResponse(topicPartition, topicId, Errors.NONE, partitionData -> {
-            partitionData.setHighWatermark(highWatermark);
-
-            partitionData.currentLeader()
-                .setLeaderEpoch(epoch)
-                .setLeaderId(leaderId);
-
-            partitionData.snapshotId()
-                .setEpoch(snapshotId.epoch())
-                .setEndOffset(snapshotId.offset());
-        });
     }
 
     private static Optional<FetchSnapshotRequestData.PartitionSnapshot> assertFetchSnapshotRequest(

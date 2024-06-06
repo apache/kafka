@@ -18,6 +18,7 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.message.DescribeQuorumRequestData;
@@ -32,11 +33,15 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
 
+import java.net.InetSocketAddress;
 import java.util.Collections;
+import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.function.UnaryOperator;
 
 import static java.util.Collections.singletonList;
 
+@SuppressWarnings("ClassDataAbstractionCoupling")
 public class RaftUtil {
 
     public static ApiMessage errorResponse(ApiKeys apiKey, Errors error) {
@@ -77,9 +82,13 @@ public class RaftUtil {
     }
 
     public static FetchResponseData singletonFetchResponse(
+        ListenerName listenerName,
+        short apiVersion,
         TopicPartition topicPartition,
         Uuid topicId,
         Errors topLevelError,
+        int leaderId,
+        Endpoints endpoints,
         Consumer<FetchResponseData.PartitionData> partitionConsumer
     ) {
         FetchResponseData.PartitionData fetchablePartition =
@@ -95,9 +104,204 @@ public class RaftUtil {
                 .setTopicId(topicId)
                 .setPartitions(Collections.singletonList(fetchablePartition));
 
-        return new FetchResponseData()
+        FetchResponseData response = new FetchResponseData();
+
+        if (apiVersion >= 17) {
+            Optional<InetSocketAddress> address = endpoints.address(listenerName);
+            if (address.isPresent() && leaderId >= 0) {
+                // Populate the node endpoints
+                FetchResponseData.NodeEndpointCollection nodeEndpoints = new FetchResponseData.NodeEndpointCollection(1);
+                nodeEndpoints.add(
+                    new FetchResponseData.NodeEndpoint()
+                        .setNodeId(leaderId)
+                        .setHost(address.get().getHostString())
+                        .setPort(address.get().getPort())
+                );
+                response.setNodeEndpoints(nodeEndpoints);
+            }
+        }
+
+        return response
             .setErrorCode(topLevelError.code())
             .setResponses(Collections.singletonList(fetchableTopic));
+    }
+
+    public static VoteResponseData singletonVoteResponse(
+        ListenerName listenerName,
+        short apiVersion,
+        Errors topLevelError,
+        TopicPartition topicPartition,
+        Errors partitionLevelError,
+        int leaderEpoch,
+        int leaderId,
+        boolean voteGranted,
+        Endpoints endpoints
+    ) {
+        VoteResponseData response = new VoteResponseData()
+            .setErrorCode(topLevelError.code())
+            .setTopics(Collections.singletonList(
+                new VoteResponseData.TopicData()
+                    .setTopicName(topicPartition.topic())
+                    .setPartitions(Collections.singletonList(
+                        new VoteResponseData.PartitionData()
+                            .setErrorCode(partitionLevelError.code())
+                            .setLeaderId(leaderId)
+                            .setLeaderEpoch(leaderEpoch)
+                            .setVoteGranted(voteGranted)))));
+
+        if (apiVersion >= 1) {
+            Optional<InetSocketAddress> address = endpoints.address(listenerName);
+            if (address.isPresent() && leaderId >= 0) {
+                // Populate the node endpoints
+                VoteResponseData.NodeEndpointCollection nodeEndpoints = new VoteResponseData.NodeEndpointCollection(1);
+                nodeEndpoints.add(
+                    new VoteResponseData.NodeEndpoint()
+                        .setNodeId(leaderId)
+                        .setHost(address.get().getHostString())
+                        .setPort(address.get().getPort())
+                );
+                response.setNodeEndpoints(nodeEndpoints);
+            }
+        }
+
+        return response;
+    }
+
+    /**
+     * Creates a FetchSnapshotResponseData with a single PartitionSnapshot for the topic partition.
+     *
+     * The partition index will already be populated when calling operator.
+     *
+     * @param topicPartition the topic partition to include
+     * @param operator unary operator responsible for populating all of the appropriate fields
+     * @return the created fetch snapshot response data
+     */
+    public static FetchSnapshotResponseData singletonFetchSnapshotResponse(
+        ListenerName listenerName,
+        short apiVersion,
+        TopicPartition topicPartition,
+        int leaderId,
+        Endpoints endpoints,
+        UnaryOperator<FetchSnapshotResponseData.PartitionSnapshot> operator
+    ) {
+        FetchSnapshotResponseData.PartitionSnapshot partitionSnapshot = operator.apply(
+            new FetchSnapshotResponseData.PartitionSnapshot().setIndex(topicPartition.partition())
+        );
+
+        FetchSnapshotResponseData response = new FetchSnapshotResponseData()
+            .setTopics(
+                Collections.singletonList(
+                    new FetchSnapshotResponseData.TopicSnapshot()
+                        .setName(topicPartition.topic())
+                        .setPartitions(Collections.singletonList(partitionSnapshot))
+                )
+            );
+
+        if (apiVersion >= 1) {
+            Optional<InetSocketAddress> address = endpoints.address(listenerName);
+            if (address.isPresent() && leaderId >= 0) {
+                // Populate the node endpoints
+                FetchSnapshotResponseData.NodeEndpointCollection nodeEndpoints =
+                    new FetchSnapshotResponseData.NodeEndpointCollection(1);
+                nodeEndpoints.add(
+                    new FetchSnapshotResponseData.NodeEndpoint()
+                        .setNodeId(leaderId)
+                        .setHost(address.get().getHostString())
+                        .setPort(address.get().getPort())
+                );
+                response.setNodeEndpoints(nodeEndpoints);
+            }
+        }
+
+        return response;
+    }
+
+    public static BeginQuorumEpochResponseData singletonBeginQuorumEpochResponse(
+        ListenerName listenerName,
+        short apiVersion,
+        Errors topLevelError,
+        TopicPartition topicPartition,
+        Errors partitionLevelError,
+        int leaderEpoch,
+        int leaderId,
+        Endpoints endpoints
+    ) {
+        BeginQuorumEpochResponseData response = new BeginQuorumEpochResponseData()
+            .setErrorCode(topLevelError.code())
+            .setTopics(
+                Collections.singletonList(
+                    new BeginQuorumEpochResponseData.TopicData()
+                        .setTopicName(topicPartition.topic())
+                        .setPartitions(
+                            Collections.singletonList(
+                                new BeginQuorumEpochResponseData.PartitionData()
+                                    .setErrorCode(partitionLevelError.code())
+                                    .setLeaderId(leaderId)
+                                    .setLeaderEpoch(leaderEpoch)
+                            )
+                        )
+                )
+            );
+
+        if (apiVersion >= 1) {
+            Optional<InetSocketAddress> address = endpoints.address(listenerName);
+            if (address.isPresent() && leaderId >= 0) {
+                // Populate the node endpoints
+                BeginQuorumEpochResponseData.NodeEndpointCollection nodeEndpoints =
+                    new BeginQuorumEpochResponseData.NodeEndpointCollection(1);
+                nodeEndpoints.add(
+                    new BeginQuorumEpochResponseData.NodeEndpoint()
+                        .setNodeId(leaderId)
+                        .setHost(address.get().getHostString())
+                        .setPort(address.get().getPort())
+                );
+                response.setNodeEndpoints(nodeEndpoints);
+            }
+        }
+
+        return response;
+    }
+
+    public static EndQuorumEpochResponseData singletonEndQuorumEpochResponse(
+        ListenerName listenerName,
+        short apiVersion,
+        Errors topLevelError,
+        TopicPartition topicPartition,
+        Errors partitionLevelError,
+        int leaderEpoch,
+        int leaderId,
+        Endpoints endpoints
+    ) {
+        EndQuorumEpochResponseData response = new EndQuorumEpochResponseData()
+                   .setErrorCode(topLevelError.code())
+                   .setTopics(Collections.singletonList(
+                       new EndQuorumEpochResponseData.TopicData()
+                           .setTopicName(topicPartition.topic())
+                           .setPartitions(Collections.singletonList(
+                               new EndQuorumEpochResponseData.PartitionData()
+                                   .setErrorCode(partitionLevelError.code())
+                                   .setLeaderId(leaderId)
+                                   .setLeaderEpoch(leaderEpoch)
+                           )))
+                   );
+
+        if (apiVersion >= 1) {
+            Optional<InetSocketAddress> address = endpoints.address(listenerName);
+            if (address.isPresent() && leaderId >= 0) {
+                // Populate the node endpoints
+                EndQuorumEpochResponseData.NodeEndpointCollection nodeEndpoints =
+                    new EndQuorumEpochResponseData.NodeEndpointCollection(1);
+                nodeEndpoints.add(
+                    new EndQuorumEpochResponseData.NodeEndpoint()
+                        .setNodeId(leaderId)
+                        .setHost(address.get().getHostString())
+                        .setPort(address.get().getPort())
+                );
+                response.setNodeEndpoints(nodeEndpoints);
+            }
+        }
+
+        return response;
     }
 
     static boolean hasValidTopicPartition(FetchRequestData data, TopicPartition topicPartition, Uuid topicId) {

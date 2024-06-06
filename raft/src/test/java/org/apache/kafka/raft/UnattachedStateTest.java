@@ -83,15 +83,15 @@ public class UnattachedStateTest {
 
         assertEquals(
             isLogUpToDate,
-            state.canGrantVote(ReplicaKey.of(1, Optional.empty()), isLogUpToDate)
+            state.canGrantVote(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate)
         );
         assertEquals(
             isLogUpToDate,
-            state.canGrantVote(ReplicaKey.of(2, Optional.empty()), isLogUpToDate)
+            state.canGrantVote(ReplicaKey.of(2, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate)
         );
         assertEquals(
             isLogUpToDate,
-            state.canGrantVote(ReplicaKey.of(3, Optional.empty()), isLogUpToDate)
+            state.canGrantVote(ReplicaKey.of(3, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate)
         );
     }
 }

@@ -32,6 +32,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.raft.Endpoints;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -98,8 +99,8 @@ final public class VoterSetTest {
         Map<Integer, VoterSet.VoterNode> aVoterMap = voterMap(IntStream.of(1, 2, 3), true);
         VoterSet voterSet = new VoterSet(new HashMap<>(aVoterMap));
 
-        assertEquals(Optional.empty(), voterSet.removeVoter(ReplicaKey.of(4, Optional.empty())));
-        assertEquals(Optional.empty(), voterSet.removeVoter(ReplicaKey.of(4, Optional.of(Uuid.randomUuid()))));
+        assertEquals(Optional.empty(), voterSet.removeVoter(ReplicaKey.of(4, ReplicaKey.NO_DIRECTORY_ID)));
+        assertEquals(Optional.empty(), voterSet.removeVoter(ReplicaKey.of(4, Uuid.randomUuid())));
 
         VoterSet.VoterNode voter3 = aVoterMap.remove(3);
         assertEquals(
@@ -114,15 +115,15 @@ final public class VoterSetTest {
         VoterSet voterSet = new VoterSet(new HashMap<>(aVoterMap));
 
         assertTrue(voterSet.isVoter(aVoterMap.get(1).voterKey()));
-        assertFalse(voterSet.isVoter(ReplicaKey.of(1, Optional.of(Uuid.randomUuid()))));
-        assertFalse(voterSet.isVoter(ReplicaKey.of(1, Optional.empty())));
+        assertFalse(voterSet.isVoter(ReplicaKey.of(1, Uuid.randomUuid())));
+        assertFalse(voterSet.isVoter(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID)));
         assertFalse(
-            voterSet.isVoter(ReplicaKey.of(2, aVoterMap.get(1).voterKey().directoryId()))
+            voterSet.isVoter(ReplicaKey.of(2, aVoterMap.get(1).voterKey().directoryId().get()))
         );
         assertFalse(
-            voterSet.isVoter(ReplicaKey.of(4, aVoterMap.get(1).voterKey().directoryId()))
+            voterSet.isVoter(ReplicaKey.of(4, aVoterMap.get(1).voterKey().directoryId().get()))
         );
-        assertFalse(voterSet.isVoter(ReplicaKey.of(4, Optional.empty())));
+        assertFalse(voterSet.isVoter(ReplicaKey.of(4, ReplicaKey.NO_DIRECTORY_ID)));
     }
 
     @Test
@@ -130,10 +131,10 @@ final public class VoterSetTest {
         Map<Integer, VoterSet.VoterNode> aVoterMap = voterMap(IntStream.of(1, 2, 3), false);
         VoterSet voterSet = new VoterSet(new HashMap<>(aVoterMap));
 
-        assertTrue(voterSet.isVoter(ReplicaKey.of(1, Optional.empty())));
-        assertTrue(voterSet.isVoter(ReplicaKey.of(1, Optional.of(Uuid.randomUuid()))));
-        assertFalse(voterSet.isVoter(ReplicaKey.of(4, Optional.of(Uuid.randomUuid()))));
-        assertFalse(voterSet.isVoter(ReplicaKey.of(4, Optional.empty())));
+        assertTrue(voterSet.isVoter(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID)));
+        assertTrue(voterSet.isVoter(ReplicaKey.of(1, Uuid.randomUuid())));
+        assertFalse(voterSet.isVoter(ReplicaKey.of(4, Uuid.randomUuid())));
+        assertFalse(voterSet.isVoter(ReplicaKey.of(4, ReplicaKey.NO_DIRECTORY_ID)));
     }
 
     @Test
@@ -142,12 +143,12 @@ final public class VoterSetTest {
         VoterSet voterSet = new VoterSet(new HashMap<>(aVoterMap));
 
         assertTrue(voterSet.isOnlyVoter(aVoterMap.get(1).voterKey()));
-        assertFalse(voterSet.isOnlyVoter(ReplicaKey.of(1, Optional.of(Uuid.randomUuid()))));
-        assertFalse(voterSet.isOnlyVoter(ReplicaKey.of(1, Optional.empty())));
+        assertFalse(voterSet.isOnlyVoter(ReplicaKey.of(1, Uuid.randomUuid())));
+        assertFalse(voterSet.isOnlyVoter(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID)));
         assertFalse(
-            voterSet.isOnlyVoter(ReplicaKey.of(4, aVoterMap.get(1).voterKey().directoryId()))
+            voterSet.isOnlyVoter(ReplicaKey.of(4, aVoterMap.get(1).voterKey().directoryId().get()))
         );
-        assertFalse(voterSet.isOnlyVoter(ReplicaKey.of(4, Optional.empty())));
+        assertFalse(voterSet.isOnlyVoter(ReplicaKey.of(4, ReplicaKey.NO_DIRECTORY_ID)));
     }
 
     @Test
@@ -156,15 +157,15 @@ final public class VoterSetTest {
         VoterSet voterSet = new VoterSet(new HashMap<>(aVoterMap));
 
         assertFalse(voterSet.isOnlyVoter(aVoterMap.get(1).voterKey()));
-        assertFalse(voterSet.isOnlyVoter(ReplicaKey.of(1, Optional.of(Uuid.randomUuid()))));
-        assertFalse(voterSet.isOnlyVoter(ReplicaKey.of(1, Optional.empty())));
+        assertFalse(voterSet.isOnlyVoter(ReplicaKey.of(1, Uuid.randomUuid())));
+        assertFalse(voterSet.isOnlyVoter(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID)));
         assertFalse(
-            voterSet.isOnlyVoter(ReplicaKey.of(2, aVoterMap.get(1).voterKey().directoryId()))
+            voterSet.isOnlyVoter(ReplicaKey.of(2, aVoterMap.get(1).voterKey().directoryId().get()))
         );
         assertFalse(
-            voterSet.isOnlyVoter(ReplicaKey.of(4, aVoterMap.get(1).voterKey().directoryId()))
+            voterSet.isOnlyVoter(ReplicaKey.of(4, aVoterMap.get(1).voterKey().directoryId().get()))
         );
-        assertFalse(voterSet.isOnlyVoter(ReplicaKey.of(4, Optional.empty())));
+        assertFalse(voterSet.isOnlyVoter(ReplicaKey.of(4, ReplicaKey.NO_DIRECTORY_ID)));
     }
 
     @Test
@@ -269,7 +270,7 @@ final public class VoterSetTest {
         return voterNode(
             ReplicaKey.of(
                 id,
-                withDirectoryId ? Optional.of(Uuid.randomUuid()) : Optional.empty()
+                withDirectoryId ? Uuid.randomUuid() : ReplicaKey.NO_DIRECTORY_ID
             )
         );
     }
@@ -277,11 +278,13 @@ final public class VoterSetTest {
     public static VoterSet.VoterNode voterNode(ReplicaKey replicaKey) {
         return new VoterSet.VoterNode(
             replicaKey,
-            Collections.singletonMap(
-                DEFAULT_LISTENER_NAME,
-                InetSocketAddress.createUnresolved(
-                    String.format("replica-%d", replicaKey.id()),
-                    1234
+            Endpoints.fromInetSocketAddresses(
+                Collections.singletonMap(
+                    DEFAULT_LISTENER_NAME,
+                    InetSocketAddress.createUnresolved(
+                        String.format("replica-%d", replicaKey.id()),
+                        1234
+                    )
                 )
             ),
             new SupportedVersionRange((short) 0, (short) 0)

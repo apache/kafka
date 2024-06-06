@@ -65,6 +65,11 @@ public class UnattachedState implements EpochState {
     }
 
     @Override
+    public Endpoints leaderEndpoints() {
+        return Endpoints.empty();
+    }
+
+    @Override
     public String name() {
         return "Unattached";
     }

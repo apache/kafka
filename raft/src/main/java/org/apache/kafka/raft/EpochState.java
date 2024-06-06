@@ -18,6 +18,7 @@ package org.apache.kafka.raft;
 
 import java.io.Closeable;
 import java.util.Optional;
+
 import org.apache.kafka.raft.internals.ReplicaKey;
 
 public interface EpochState extends Closeable {
@@ -47,6 +48,11 @@ public interface EpochState extends Closeable {
      * Get the current (immutable) epoch.
      */
     int epoch();
+
+    /**
+     * TODO: document this
+     */
+    Endpoints leaderEndpoints();
 
     /**
      * User-friendly description of the state

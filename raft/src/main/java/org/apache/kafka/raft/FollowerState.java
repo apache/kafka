@@ -20,6 +20,7 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -30,7 +31,8 @@ import org.slf4j.Logger;
 public class FollowerState implements EpochState {
     private final int fetchTimeoutMs;
     private final int epoch;
-    private final Node leader;
+    private final int leaderId;
+    private final Endpoints endpoints;
     private final Set<Integer> voters;
     // Used for tracking the expiration of both the Fetch and FetchSnapshot requests
     private final Timer fetchTimer;
@@ -45,7 +47,8 @@ public class FollowerState implements EpochState {
     public FollowerState(
         Time time,
         int epoch,
-        Node leader,
+        int leaderId,
+        Endpoints endpoints,
         Set<Integer> voters,
         Optional<LogOffsetMetadata> highWatermark,
         int fetchTimeoutMs,
@@ -53,7 +56,8 @@ public class FollowerState implements EpochState {
     ) {
         this.fetchTimeoutMs = fetchTimeoutMs;
         this.epoch = epoch;
-        this.leader = leader;
+        this.leaderId = leaderId;
+        this.endpoints = endpoints;
         this.voters = voters;
         this.fetchTimer = time.timer(fetchTimeoutMs);
         this.highWatermark = highWatermark;
@@ -62,12 +66,17 @@ public class FollowerState implements EpochState {
 
     @Override
     public ElectionState election() {
-        return ElectionState.withElectedLeader(epoch, leader.id(), voters);
+        return ElectionState.withElectedLeader(epoch, leaderId, voters);
     }
 
     @Override
     public int epoch() {
         return epoch;
+    }
+
+    @Override
+    public Endpoints leaderEndpoints() {
+        return endpoints;
     }
 
     @Override
@@ -80,8 +89,24 @@ public class FollowerState implements EpochState {
         return fetchTimer.remainingMs();
     }
 
-    public Node leader() {
-        return leader;
+    public int leaderId() {
+        return leaderId;
+    }
+
+    public Node leaderNode(ListenerName listener) {
+        return endpoints
+            .address(listener)
+            .map(address -> new Node(leaderId, address.getHostString(), address.getPort()))
+            .orElseThrow(() ->
+                new IllegalArgumentException(
+                    String.format(
+                        "Unknown endpoint for leader %d and listener %s, known endpoints are %s",
+                        leaderId,
+                        listener,
+                        endpoints
+                    )
+                )
+            );
     }
 
     public boolean hasFetchTimeoutExpired(long currentTimeMs) {
@@ -156,7 +181,7 @@ public class FollowerState implements EpochState {
         log.debug(
             "Rejecting vote request from candidate ({}) since we already have a leader {} in epoch {}",
             candidateKey,
-            leader,
+            leaderId,
             epoch
         );
         return false;
@@ -165,11 +190,12 @@ public class FollowerState implements EpochState {
     @Override
     public String toString() {
         return String.format(
-            "FollowerState(fetchTimeoutMs=%d, epoch=%d, leader=%s voters=%s, highWatermark=%s, " +
+            "FollowerState(fetchTimeoutMs=%d, epoch=%d, leader=%d, endpoints=%s, voters=%s, highWatermark=%s, " +
             "fetchingSnapshot=%s)",
             fetchTimeoutMs,
             epoch,
-            leader,
+            leaderId,
+            endpoints,
             voters,
             highWatermark,
             fetchingSnapshot

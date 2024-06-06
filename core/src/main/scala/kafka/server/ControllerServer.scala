@@ -203,7 +203,7 @@ class ControllerServer(
             config.earlyStartListeners.map(_.value()).asJava))
       }
 
-      sharedServer.startForController()
+      sharedServer.startForController(listenerInfo)
 
       createTopicPolicy = Option(config.
         getConfiguredInstance(CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG, classOf[CreateTopicPolicy]))

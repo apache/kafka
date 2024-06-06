@@ -52,6 +52,7 @@ import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationF
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble}
 import org.apache.kafka.metadata.{BrokerState, MetadataRecordSerde, VersionRange}
 import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.raft.Endpoints
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.NodeToControllerChannelManager
 import org.apache.kafka.server.authorizer.Authorizer
@@ -440,6 +441,8 @@ class KafkaServer(
             threadNamePrefix,
             CompletableFuture.completedFuture(quorumVoters),
             QuorumConfig.parseBootstrapServers(config.quorumBootstrapServers),
+            // Endpoint information is only needed for controllers (voters). ZK brokers can never be controllers
+            Endpoints.empty(),
             fatalFaultHandler = new LoggingFaultHandler("raftManager", () => shutdown())
           )
           quorumControllerNodeProvider = RaftControllerNodeProvider(raftManager, config)

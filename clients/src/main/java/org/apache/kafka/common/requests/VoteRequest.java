@@ -102,5 +102,4 @@ public class VoteRequest extends AbstractRequest {
                                    .setLastOffset(lastEpochEndOffset))
                            )));
     }
-
 }

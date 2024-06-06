@@ -17,14 +17,12 @@
 
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -47,25 +45,6 @@ public class VoteResponse extends AbstractResponse {
     public VoteResponse(VoteResponseData data) {
         super(ApiKeys.VOTE);
         this.data = data;
-    }
-
-    public static VoteResponseData singletonResponse(Errors topLevelError,
-                                                     TopicPartition topicPartition,
-                                                     Errors partitionLevelError,
-                                                     int leaderEpoch,
-                                                     int leaderId,
-                                                     boolean voteGranted) {
-        return new VoteResponseData()
-            .setErrorCode(topLevelError.code())
-            .setTopics(Collections.singletonList(
-                new VoteResponseData.TopicData()
-                    .setTopicName(topicPartition.topic())
-                    .setPartitions(Collections.singletonList(
-                        new VoteResponseData.PartitionData()
-                            .setErrorCode(partitionLevelError.code())
-                            .setLeaderId(leaderId)
-                            .setLeaderEpoch(leaderEpoch)
-                            .setVoteGranted(voteGranted)))));
     }
 
     @Override

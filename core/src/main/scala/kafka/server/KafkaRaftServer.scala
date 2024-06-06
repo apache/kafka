@@ -93,6 +93,8 @@ class KafkaRaftServer(
 
   override def startup(): Unit = {
     Mx4jLoader.maybeLoad()
+    // Controller component must be started before the broker component so that
+    // the controller endpoints are passed to the KRaft manager
     controller.foreach(_.startup())
     broker.foreach(_.startup())
     AppInfoParser.registerAppInfo(Server.MetricsPrefix, config.brokerId.toString, metrics, time.milliseconds())

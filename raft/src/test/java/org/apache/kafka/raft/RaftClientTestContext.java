@@ -23,15 +23,16 @@ import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
-import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
+import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.EndQuorumEpochRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
+import org.apache.kafka.common.message.FetchSnapshotRequestData;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
-import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
+import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.metrics.Metrics;
@@ -44,13 +45,10 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.requests.BeginQuorumEpochRequest;
-import org.apache.kafka.common.requests.BeginQuorumEpochResponse;
 import org.apache.kafka.common.requests.DescribeQuorumResponse;
 import org.apache.kafka.common.requests.EndQuorumEpochRequest;
-import org.apache.kafka.common.requests.EndQuorumEpochResponse;
 import org.apache.kafka.common.requests.FetchSnapshotResponse;
 import org.apache.kafka.common.requests.VoteRequest;
-import org.apache.kafka.common.requests.VoteResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
@@ -79,6 +77,7 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -117,6 +116,9 @@ public final class RaftClientTestContext {
     final MockListener listener;
     final Set<Integer> voters;
     final Set<Integer> bootstrapIds;
+
+    // Used to determine which RPC request and response to construct
+    final boolean kip853Supported = false;
 
     private final List<RaftResponse.Outbound> sentResponses = new ArrayList<>();
 
@@ -279,6 +281,7 @@ public final class RaftClientTestContext {
                 FETCH_MAX_WAIT_MS,
                 clusterId.toString(),
                 bootstrapServers,
+                Endpoints.empty(), // TODO: fix this...
                 logContext,
                 random,
                 quorumConfig
@@ -472,7 +475,7 @@ public final class RaftClientTestContext {
         assertEquals(
             ElectionState.withVotedCandidate(
                 epoch,
-                ReplicaKey.of(candidateId, Optional.empty()),
+                ReplicaKey.of(candidateId, ReplicaKey.NO_DIRECTORY_ID),
                 voters
             ),
             quorumStateStore.readElectionState().get()
@@ -595,7 +598,12 @@ public final class RaftClientTestContext {
 
     void deliverRequest(ApiMessage request) {
         RaftRequest.Inbound inboundRequest = new RaftRequest.Inbound(
-            channel.newCorrelationId(), request, time.milliseconds());
+            channel.listenerName(),
+            channel.newCorrelationId(),
+            raftRequestVersion(request),
+            request,
+            time.milliseconds()
+        );
         inboundRequest.completion.whenComplete((response, exception) -> {
             if (exception != null) {
                 throw new RuntimeException(exception);
@@ -884,12 +892,15 @@ public final class RaftClientTestContext {
         int epoch,
         OptionalInt leaderId
     ) {
-        return EndQuorumEpochResponse.singletonResponse(
+        return RaftUtil.singletonEndQuorumEpochResponse(
+            channel.listenerName(),
+            endQuorumEpochRpcVersion(),
             Errors.NONE,
             metadataPartition,
             Errors.NONE,
             epoch,
-            leaderId.orElse(-1)
+            leaderId.orElse(-1),
+            Endpoints.empty() // TODO: fix this...
         );
     }
 
@@ -939,12 +950,15 @@ public final class RaftClientTestContext {
     }
 
     private BeginQuorumEpochResponseData beginEpochResponse(int epoch, int leaderId) {
-        return BeginQuorumEpochResponse.singletonResponse(
+        return RaftUtil.singletonBeginQuorumEpochResponse(
+            channel.listenerName(),
+            beginQuorumEpochRpcVersion(),
             Errors.NONE,
             metadataPartition,
             Errors.NONE,
             epoch,
-            leaderId
+            leaderId,
+            Endpoints.empty() // TODO: fix this...
         );
     }
 
@@ -977,13 +991,16 @@ public final class RaftClientTestContext {
     }
 
     VoteResponseData voteResponse(boolean voteGranted, Optional<Integer> leaderId, int epoch) {
-        return VoteResponse.singletonResponse(
+        return RaftUtil.singletonVoteResponse(
+            channel.listenerName(),
+            voteRpcVersion(),
             Errors.NONE,
             metadataPartition,
             Errors.NONE,
             epoch,
             leaderId.orElse(-1),
-            voteGranted
+            voteGranted,
+            Endpoints.empty() // TODO: fix this...
         );
     }
 
@@ -1106,16 +1123,25 @@ public final class RaftClientTestContext {
         long highWatermark,
         Errors error
     ) {
-        return RaftUtil.singletonFetchResponse(metadataPartition, metadataTopicId, Errors.NONE, partitionData -> {
-            partitionData
-                .setRecords(records)
-                .setErrorCode(error.code())
-                .setHighWatermark(highWatermark);
+        return RaftUtil.singletonFetchResponse(
+            channel.listenerName(),
+            fetchRpcVersion(),
+            metadataPartition,
+            metadataTopicId,
+            Errors.NONE,
+            leaderId,
+            Endpoints.empty(), // TODO: fix this
+            partitionData -> {
+                partitionData
+                    .setRecords(records)
+                    .setErrorCode(error.code())
+                    .setHighWatermark(highWatermark);
 
-            partitionData.currentLeader()
-                .setLeaderEpoch(epoch)
-                .setLeaderId(leaderId);
-        });
+                partitionData.currentLeader()
+                    .setLeaderEpoch(epoch)
+                    .setLeaderId(leaderId);
+            }
+        );
     }
 
     FetchResponseData divergingFetchResponse(
@@ -1125,17 +1151,124 @@ public final class RaftClientTestContext {
         int divergingEpoch,
         long highWatermark
     ) {
-        return RaftUtil.singletonFetchResponse(metadataPartition, metadataTopicId, Errors.NONE, partitionData -> {
-            partitionData.setHighWatermark(highWatermark);
+        return RaftUtil.singletonFetchResponse(
+            channel.listenerName(),
+            fetchRpcVersion(),
+            metadataPartition,
+            metadataTopicId,
+            Errors.NONE,
+            leaderId,
+            Endpoints.empty(), // TODO: fix this
+            partitionData -> {
+                partitionData.setHighWatermark(highWatermark);
 
-            partitionData.currentLeader()
-                .setLeaderEpoch(epoch)
-                .setLeaderId(leaderId);
+                partitionData.currentLeader()
+                    .setLeaderEpoch(epoch)
+                    .setLeaderId(leaderId);
 
-            partitionData.divergingEpoch()
-                .setEpoch(divergingEpoch)
-                .setEndOffset(divergingEpochEndOffset);
-        });
+                partitionData.divergingEpoch()
+                    .setEpoch(divergingEpoch)
+                    .setEndOffset(divergingEpochEndOffset);
+            }
+        );
+    }
+
+    FetchResponseData snapshotFetchResponse(
+        int epoch,
+        int leaderId,
+        OffsetAndEpoch snapshotId,
+        long highWatermark
+    ) {
+        return RaftUtil.singletonFetchResponse(
+            channel.listenerName(),
+            fetchRpcVersion(),
+            metadataPartition,
+            metadataTopicId,
+            Errors.NONE,
+            leaderId,
+            Endpoints.empty(), // TODO: fix this
+            partitionData -> {
+                partitionData.setHighWatermark(highWatermark);
+
+                partitionData.currentLeader()
+                    .setLeaderEpoch(epoch)
+                    .setLeaderId(leaderId);
+
+                partitionData.snapshotId()
+                    .setEpoch(snapshotId.epoch())
+                    .setEndOffset(snapshotId.offset());
+            }
+        );
+    }
+
+    FetchSnapshotResponseData fetchSnapshotResponse(
+        int leaderId,
+        UnaryOperator<FetchSnapshotResponseData.PartitionSnapshot> operator
+    ) {
+        return RaftUtil.singletonFetchSnapshotResponse(
+            channel.listenerName(),
+            fetchSnapshotRpcVersion(),
+            metadataPartition,
+            leaderId,
+            Endpoints.empty(), // TODO: fix this
+            operator
+        );
+    }
+
+    private short fetchRpcVersion() {
+        if (kip853Supported) {
+            return 17;
+        } else {
+            return 16;
+        }
+    }
+
+    private short fetchSnapshotRpcVersion() {
+        if (kip853Supported) {
+            return 1;
+        } else {
+            return 0;
+        }
+    }
+
+    private short voteRpcVersion() {
+        if (kip853Supported) {
+            return 1;
+        } else {
+            return 0;
+        }
+    }
+
+    private short beginQuorumEpochRpcVersion() {
+        if (kip853Supported) {
+            return 1;
+        } else {
+            return 0;
+        }
+    }
+
+    private short endQuorumEpochRpcVersion() {
+        if (kip853Supported) {
+            return 1;
+        } else {
+            return 0;
+        }
+    }
+
+    private short raftRequestVersion(ApiMessage request) {
+        if (request instanceof FetchRequestData) {
+            return fetchRpcVersion();
+        } else if (request instanceof FetchSnapshotRequestData) {
+            return fetchSnapshotRpcVersion();
+        } else if (request instanceof VoteRequestData) {
+            return voteRpcVersion();
+        } else if (request instanceof BeginQuorumEpochRequestData) {
+            return beginQuorumEpochRpcVersion();
+        } else if (request instanceof EndQuorumEpochRequestData) {
+            return endQuorumEpochRpcVersion();
+        } else {
+            throw new IllegalArgumentException(String.format("Request %s is not a raft request", request));
+        }
     }
 
     public void advanceLocalLeaderHighWatermarkToLogEndOffset() throws InterruptedException {
