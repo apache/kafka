@@ -71,12 +71,6 @@ class TransactionsTest extends IntegrationTestHarness {
     props.put(ReplicationConfigs.AUTO_LEADER_REBALANCE_ENABLE_CONFIG, false.toString)
     props.put(GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, "0")
     props.put(TransactionStateManagerConfigs.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_CONFIG, "200")
-
-    // The new group coordinator does not support verifying transactions yet.
-    if (isNewGroupCoordinatorEnabled()) {
-      props.put(TransactionLogConfigs.TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG, "false")
-    }
-
     props
   }
 

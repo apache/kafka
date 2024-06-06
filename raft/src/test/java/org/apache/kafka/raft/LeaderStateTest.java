@@ -115,23 +115,24 @@ public class LeaderStateTest {
     public void testUpdateHighWatermarkQuorumSizeOne() {
         LeaderState<?> state = newLeaderState(mkMap(localId), 15L);
         assertEquals(Optional.empty(), state.highWatermark());
-        assertFalse(state.updateLocalState(new LogOffsetMetadata(15L)));
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(15L), voterSet));
         assertEquals(emptySet(), state.nonAcknowledgingVoters());
         assertEquals(Optional.empty(), state.highWatermark());
-        assertTrue(state.updateLocalState(new LogOffsetMetadata(16L)));
+        assertTrue(state.updateLocalState(new LogOffsetMetadata(16L), voterSet));
         assertEquals(Optional.of(new LogOffsetMetadata(16L)), state.highWatermark());
-        assertTrue(state.updateLocalState(new LogOffsetMetadata(20)));
+        assertTrue(state.updateLocalState(new LogOffsetMetadata(20), voterSet));
         assertEquals(Optional.of(new LogOffsetMetadata(20L)), state.highWatermark());
     }
 
     @Test
     public void testNonMonotonicLocalEndOffsetUpdate() {
+        Set<Integer> voterSet = singleton(localId.getKey());
         LeaderState<?> state = newLeaderState(mkMap(localId), 15L);
         assertEquals(Optional.empty(), state.highWatermark());
-        assertTrue(state.updateLocalState(new LogOffsetMetadata(16L)));
+        assertTrue(state.updateLocalState(new LogOffsetMetadata(16L), voterSet));
         assertEquals(Optional.of(new LogOffsetMetadata(16L)), state.highWatermark());
         assertThrows(IllegalStateException.class,
-            () -> state.updateLocalState(new LogOffsetMetadata(15L)));
+            () -> state.updateLocalState(new LogOffsetMetadata(15L), voterSet));
     }
 
     @Test
@@ -230,8 +231,8 @@ public class LeaderStateTest {
     public void testIdempotentEndOffsetUpdate() {
         LeaderState<?> state = newLeaderState(mkMap(localId), 15L);
         assertEquals(Optional.empty(), state.highWatermark());
-        assertTrue(state.updateLocalState(new LogOffsetMetadata(16L)));
-        assertFalse(state.updateLocalState(new LogOffsetMetadata(16L)));
+        assertTrue(state.updateLocalState(new LogOffsetMetadata(16L), voterSet));
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(16L), voterSet));
         assertEquals(Optional.of(new LogOffsetMetadata(16L)), state.highWatermark());
     }
 
@@ -241,11 +242,11 @@ public class LeaderStateTest {
         assertEquals(Optional.empty(), state.highWatermark());
 
         LogOffsetMetadata initialHw = new LogOffsetMetadata(16L, Optional.of(new MockOffsetMetadata("bar")));
-        assertTrue(state.updateLocalState(initialHw));
+        assertTrue(state.updateLocalState(initialHw, voterSet));
         assertEquals(Optional.of(initialHw), state.highWatermark());
 
         LogOffsetMetadata updateHw = new LogOffsetMetadata(16L, Optional.of(new MockOffsetMetadata("baz")));
-        assertTrue(state.updateLocalState(updateHw));
+        assertTrue(state.updateLocalState(updateHw, voterSet));
         assertEquals(Optional.of(updateHw), state.highWatermark());
     }
 
@@ -281,12 +282,134 @@ public class LeaderStateTest {
         assertEquals(Optional.empty(), state.highWatermark());
         assertTrue(state.updateReplicaState(node2.getKey(), directoryId(node2), 0, new LogOffsetMetadata(15L)));
         assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
-        assertFalse(state.updateLocalState(new LogOffsetMetadata(20L)));
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(20L), voterSet));
         assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
         assertTrue(state.updateReplicaState(node1.getKey(), directoryId(node1), 0, new LogOffsetMetadata(20L)));
         assertEquals(Optional.of(new LogOffsetMetadata(20L)), state.highWatermark());
         assertFalse(state.updateReplicaState(node2.getKey(), directoryId(node2), 0, new LogOffsetMetadata(20L)));
         assertEquals(Optional.of(new LogOffsetMetadata(20L)), state.highWatermark());
+    }
+
+    @Test
+    public void testHighWatermarkDoesIncreaseFromNewVoter() {
+        int node1 = 1;
+        int node2 = 2;
+        Set<Integer> originalVoterSet = mkSet(localId, node1);
+        LeaderState<?> state = newLeaderState(originalVoterSet, 5L);
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(15L), originalVoterSet));
+        assertTrue(state.updateReplicaState(node1, 0, new LogOffsetMetadata(10L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(10L)), state.highWatermark());
+
+        // updating replica state of node2 before it joins voterSet should not increase HW to 15L
+        assertFalse(state.updateReplicaState(node2, 0, new LogOffsetMetadata(15L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(10L)), state.highWatermark());
+
+        // adding node2 to voterSet will cause HW to increase to 15L
+        Set<Integer> voterSetWithNode2 = mkSet(localId, node1, node2);
+        assertTrue(state.updateLocalState(new LogOffsetMetadata(15L), voterSetWithNode2));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+
+        // HW will not update to 16L until a majority reaches it
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(16L), voterSetWithNode2));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+        assertTrue(state.updateReplicaState(node2, 0, new LogOffsetMetadata(16L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(16L)), state.highWatermark());
+    }
+
+    @Test
+    public void testHighWatermarkDoesNotDecreaseFromNewVoter() {
+        int node1 = 1;
+        int node2 = 2;
+        int node3 = 3;
+        // start with three voters with HW at 15L
+        Set<Integer> originalVoterSet = mkSet(localId, node1, node2);
+        LeaderState<?> state = newLeaderState(originalVoterSet, 5L);
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(15L), originalVoterSet));
+        assertTrue(state.updateReplicaState(node1, 0, new LogOffsetMetadata(15L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+        assertFalse(state.updateReplicaState(node2, 0, new LogOffsetMetadata(10L)));
+
+        // updating replica state of node3 before it joins voterSet
+        assertFalse(state.updateReplicaState(node3, 0, new LogOffsetMetadata(10L)));
+
+        // adding node3 to voterSet should not cause HW to decrease even if majority is < HW
+        Set<Integer> voterSetWithNode3 = mkSet(localId, node1, node2, node3);
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(16L), voterSetWithNode3));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+
+        // HW will not decrease if calculated HW is anything lower than the last HW
+        assertFalse(state.updateReplicaState(node2, 0, new LogOffsetMetadata(13L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+        assertFalse(state.updateReplicaState(node3, 0, new LogOffsetMetadata(13L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+        assertFalse(state.updateReplicaState(node1, 0, new LogOffsetMetadata(16L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+
+        // HW will update to 16L once a majority of the voterSet is at least 16L
+        assertTrue(state.updateReplicaState(node3, 0, new LogOffsetMetadata(16L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(16L)), state.highWatermark());
+    }
+
+    @Test
+    public void testUpdateHighWatermarkRemovingFollowerFromVoterStates() {
+        int node1 = 1;
+        int node2 = 2;
+        Set<Integer> originalVoterSet = mkSet(localId, node1, node2);
+        LeaderState<?> state = newLeaderState(originalVoterSet, 10L);
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(15L), originalVoterSet));
+        assertTrue(state.updateReplicaState(node1, 0, new LogOffsetMetadata(15L)));
+        assertFalse(state.updateReplicaState(node2, 0, new LogOffsetMetadata(10L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+
+        // removing node1 should not decrement HW to 10L
+        Set<Integer> voterSetWithoutNode1 = mkSet(localId, node2);
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(17L), voterSetWithoutNode1));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+
+        // HW cannot change until after node2 catches up to last HW
+        assertFalse(state.updateReplicaState(node2, 0, new LogOffsetMetadata(14L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(18L), voterSetWithoutNode1));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+        assertFalse(state.updateReplicaState(node1, 0, new LogOffsetMetadata(18L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+        assertFalse(state.updateReplicaState(node2, 0, new LogOffsetMetadata(15L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+
+        // HW should update to 16L
+        assertTrue(state.updateReplicaState(node2, 0, new LogOffsetMetadata(16L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(16L)), state.highWatermark());
+    }
+
+    @Test
+    public void testUpdateHighWatermarkQuorumRemovingLeaderFromVoterStates() {
+        int node1 = 1;
+        int node2 = 2;
+        Set<Integer> originalVoterSet = mkSet(localId, node1, node2);
+        LeaderState<?> state = newLeaderState(originalVoterSet, 10L);
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(15L), originalVoterSet));
+        assertTrue(state.updateReplicaState(node1, 0, new LogOffsetMetadata(15L)));
+        assertFalse(state.updateReplicaState(node2, 0, new LogOffsetMetadata(10L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+
+        // removing leader should not decrement HW to 10L
+        Set<Integer> voterSetWithoutLeader = mkSet(node1, node2);
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(17L), voterSetWithoutLeader));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+
+        // HW cannot change until node2 catches up to last HW
+        assertFalse(state.updateReplicaState(node1, 0, new LogOffsetMetadata(16L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(18L), voterSetWithoutLeader));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+        assertFalse(state.updateReplicaState(node2, 0, new LogOffsetMetadata(14L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+        assertFalse(state.updateReplicaState(node2, 0, new LogOffsetMetadata(15L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
+
+        // HW will not update to 16L until majority of remaining voterSet (node1, node2) are at least 16L
+        assertTrue(state.updateReplicaState(node2, 0, new LogOffsetMetadata(16L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(16L)), state.highWatermark());
     }
 
     @Test
@@ -344,7 +467,7 @@ public class LeaderStateTest {
 
 
         // Now update the high watermark and verify the describe output
-        assertTrue(state.updateLocalState(new LogOffsetMetadata(leaderEndOffset)));
+        assertTrue(state.updateLocalState(new LogOffsetMetadata(leaderEndOffset), voterSet));
         assertEquals(Optional.of(new LogOffsetMetadata(leaderEndOffset)), state.highWatermark());
 
         time.sleep(500);
@@ -469,6 +592,110 @@ public class LeaderStateTest {
                 .setLastFetchTimestamp(observerFetchTimeMs)
                 .setLastCaughtUpTimestamp(observerFetchTimeMs),
             observerState);
+    }
+
+    @Test
+    public void testDescribeQuorumWithVotersAndObservers() {
+        MockTime time = new MockTime();
+        int leader = localId;
+        int node1 = 1;
+        int node2 = 2;
+        long epochStartOffset = 10L;
+
+        Set<Integer> voterSet = mkSet(leader, node1, node2);
+        LeaderState<?> state = newLeaderState(voterSet, epochStartOffset);
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(epochStartOffset + 1), voterSet));
+        assertTrue(state.updateReplicaState(node2, 0, new LogOffsetMetadata(epochStartOffset + 1)));
+        assertEquals(Optional.of(new LogOffsetMetadata(epochStartOffset + 1)), state.highWatermark());
+
+        // node1 becomes an observer
+        long fetchTimeMs = time.milliseconds();
+        assertFalse(state.updateReplicaState(node1, fetchTimeMs, new LogOffsetMetadata(epochStartOffset + 1)));
+        Set<Integer> voterSetWithoutNode1 = mkSet(leader, node2);
+        state.updateLocalState(new LogOffsetMetadata(epochStartOffset + 5), voterSetWithoutNode1);
+
+
+        time.sleep(500);
+        DescribeQuorumResponseData.PartitionData partitionData = state.describeQuorum(time.milliseconds());
+        assertEquals(epochStartOffset + 1, partitionData.highWatermark());
+        assertEquals(localId, partitionData.leaderId());
+        assertEquals(epoch, partitionData.leaderEpoch());
+        DescribeQuorumResponseData.ReplicaState observer = partitionData.observers().get(0);
+        assertEquals(node1, observer.replicaId());
+        assertEquals(epochStartOffset + 1, observer.logEndOffset());
+        assertEquals(2, partitionData.currentVoters().size());
+
+        // node1 catches up with leader, HW should not change
+        time.sleep(500);
+        fetchTimeMs = time.milliseconds();
+        assertFalse(state.updateReplicaState(node1, fetchTimeMs, new LogOffsetMetadata(epochStartOffset + 5)));
+        assertEquals(Optional.of(new LogOffsetMetadata(epochStartOffset + 1)), state.highWatermark());
+
+        // node1 becomes a voter again, HW should change
+        assertTrue(state.updateLocalState(new LogOffsetMetadata(epochStartOffset + 10), voterSet));
+
+        time.sleep(500);
+        partitionData = state.describeQuorum(time.milliseconds());
+        assertEquals(epochStartOffset + 5, partitionData.highWatermark());
+        assertEquals(localId, partitionData.leaderId());
+        assertEquals(epoch, partitionData.leaderEpoch());
+        assertEquals(Collections.emptyList(), partitionData.observers());
+        assertEquals(3, partitionData.currentVoters().size());
+        DescribeQuorumResponseData.ReplicaState node1State = partitionData.currentVoters().stream()
+            .filter(replicaState -> replicaState.replicaId() == node1)
+            .findFirst().get();
+        assertEquals(epochStartOffset + 5, node1State.logEndOffset());
+        assertEquals(fetchTimeMs, node1State.lastFetchTimestamp());
+    }
+
+    @Test
+    public void testClearInactiveObserversIgnoresLeader() {
+        MockTime time = new MockTime();
+        int followerId = 1;
+        int observerId = 10;
+        long epochStartOffset = 10L;
+
+        Set<Integer> voterSet = mkSet(localId, followerId);
+        LeaderState<?> state = newLeaderState(voterSet, epochStartOffset);
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(epochStartOffset + 1), voterSet));
+        assertTrue(state.updateReplicaState(followerId, time.milliseconds(), new LogOffsetMetadata(epochStartOffset + 1)));
+
+        // observer is returned since its lastFetchTimestamp is within OBSERVER_SESSION_TIMEOUT_MS
+        time.sleep(500);
+        long observerFetchTimeMs = time.milliseconds();
+        assertFalse(state.updateReplicaState(observerId, observerFetchTimeMs, new LogOffsetMetadata(epochStartOffset + 1)));
+
+        time.sleep(500);
+        DescribeQuorumResponseData.PartitionData partitionData = state.describeQuorum(time.milliseconds());
+        assertEquals(epochStartOffset + 1, partitionData.highWatermark());
+        assertEquals(localId, partitionData.leaderId());
+        assertEquals(2, partitionData.currentVoters().size());
+        assertEquals(1, partitionData.observers().size());
+        assertEquals(observerId, partitionData.observers().get(0).replicaId());
+
+        // observer is not returned once its lastFetchTimestamp surpasses OBSERVER_SESSION_TIMEOUT_MS
+        time.sleep(LeaderState.OBSERVER_SESSION_TIMEOUT_MS);
+        partitionData = state.describeQuorum(time.milliseconds());
+        assertEquals(epochStartOffset + 1, partitionData.highWatermark());
+        assertEquals(localId, partitionData.leaderId());
+        assertEquals(2, partitionData.currentVoters().size());
+        assertEquals(0, partitionData.observers().size());
+
+        // leader becomes observer
+        Set<Integer> voterSetWithoutLeader = singleton(followerId);
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(epochStartOffset + 10), voterSetWithoutLeader));
+
+        // leader should be returned in describe quorum output
+        time.sleep(LeaderState.OBSERVER_SESSION_TIMEOUT_MS);
+        long describeQuorumCalledTime = time.milliseconds();
+        partitionData = state.describeQuorum(describeQuorumCalledTime);
+        assertEquals(epochStartOffset + 1, partitionData.highWatermark());
+        assertEquals(localId, partitionData.leaderId());
+        assertEquals(1, partitionData.currentVoters().size());
+        assertEquals(1, partitionData.observers().size());
+        DescribeQuorumResponseData.ReplicaState observer = partitionData.observers().get(0);
+        assertEquals(localId, observer.replicaId());
+        assertEquals(describeQuorumCalledTime, observer.lastFetchTimestamp());
     }
 
     @Test

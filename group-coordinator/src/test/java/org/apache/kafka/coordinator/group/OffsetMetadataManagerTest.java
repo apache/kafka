@@ -24,7 +24,6 @@ import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
@@ -51,6 +50,7 @@ import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
@@ -1142,14 +1142,8 @@ public class OffsetMetadataManagerTest {
         assertThrows(StaleMemberEpochException.class, () -> context.commitOffset(request));
     }
 
-    @ParameterizedTest
-    @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
-    public void testConsumerGroupOffsetCommitWithVersionSmallerThanVersion9(short version) {
-        // All the newer versions are fine.
-        if (version >= 9) return;
-        // Version 0 does not support MemberId and GenerationIdOrMemberEpoch fields.
-        if (version == 0) return;
-
+    @Test
+    public void testConsumerGroupOffsetCommitWithIllegalGenerationId() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         // Create an empty group.
@@ -1162,27 +1156,30 @@ public class OffsetMetadataManagerTest {
         group.updateMember(new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
             .setPreviousMemberEpoch(10)
+            .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata())
             .build()
         );
 
-        // Verify that the request is rejected with the correct exception.
-        assertThrows(UnsupportedVersionException.class, () -> context.commitOffset(
-            version,
-            new OffsetCommitRequestData()
-                .setGroupId("foo")
-                .setMemberId("member")
-                .setGenerationIdOrMemberEpoch(9)
-                .setTopics(Collections.singletonList(
-                    new OffsetCommitRequestData.OffsetCommitRequestTopic()
-                        .setName("bar")
-                        .setPartitions(Collections.singletonList(
-                            new OffsetCommitRequestData.OffsetCommitRequestPartition()
-                                .setPartitionIndex(0)
-                                .setCommittedOffset(100L)
-                        ))
-                ))
-            )
-        );
+        OffsetCommitRequestData request = new OffsetCommitRequestData()
+            .setGroupId("foo")
+            .setMemberId("member")
+            .setGenerationIdOrMemberEpoch(9)
+            .setTopics(Collections.singletonList(
+                new OffsetCommitRequestData.OffsetCommitRequestTopic()
+                    .setName("bar")
+                    .setPartitions(Collections.singletonList(
+                        new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                            .setPartitionIndex(0)
+                            .setCommittedOffset(100L)
+                    ))
+            ));
+
+        // Verify that a smaller epoch is rejected.
+        assertThrows(IllegalGenerationException.class, () -> context.commitOffset(request));
+
+        // Verify that a larger epoch is rejected.
+        request.setGenerationIdOrMemberEpoch(11);
+        assertThrows(IllegalGenerationException.class, () -> context.commitOffset(request));
     }
 
     @Test
@@ -2291,6 +2288,30 @@ public class OffsetMetadataManagerTest {
 
         // Fetch all offsets case.
         assertThrows(StaleMemberEpochException.class,
+            () -> context.fetchAllOffsets("group", "member", 10, Long.MAX_VALUE));
+    }
+
+    @Test
+    public void testConsumerGroupOffsetFetchWithIllegalGenerationId() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup("group", true);
+        group.updateMember(new ConsumerGroupMember.Builder("member")
+                .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata())
+                .build()
+        );
+
+        List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics = Collections.singletonList(
+            new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName("foo")
+                .setPartitionIndexes(Collections.singletonList(0))
+        );
+
+        // Fetch offsets case.
+        assertThrows(IllegalGenerationException.class,
+            () -> context.fetchOffsets("group", "member", 10, topics, Long.MAX_VALUE));
+
+        // Fetch all offsets case.
+        assertThrows(IllegalGenerationException.class,
             () -> context.fetchAllOffsets("group", "member", 10, Long.MAX_VALUE));
     }
 

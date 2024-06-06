@@ -59,7 +59,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupCoordinator;
-import org.apache.kafka.server.common.Features;
+import org.apache.kafka.server.common.FinalizedFeatures;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ZkConfigs;
@@ -118,7 +118,7 @@ public class MetadataRequestBenchmark {
         clientQuotaManager, clientRequestQuotaManager, controllerMutationQuotaManager, replicaQuotaManager,
         replicaQuotaManager, replicaQuotaManager, Option.empty());
     private final FetchManager fetchManager = Mockito.mock(FetchManager.class);
-    private final BrokerTopicStats brokerTopicStats = new BrokerTopicStats(Optional.empty());
+    private final BrokerTopicStats brokerTopicStats = new BrokerTopicStats(false);
     private final KafkaPrincipal principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test-user");
     @Param({"500", "1000", "5000"})
     private int topicCount;
@@ -204,7 +204,7 @@ public class MetadataRequestBenchmark {
                     ApiMessageType.ListenerType.ZK_BROKER,
                     false,
                     false,
-                    () -> Features.fromKRaftVersion(MetadataVersion.latestTesting()))).
+                    () -> FinalizedFeatures.fromKRaftVersion(MetadataVersion.latestTesting()))).
             build();
     }
 

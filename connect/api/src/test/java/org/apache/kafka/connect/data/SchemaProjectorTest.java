@@ -82,7 +82,7 @@ public class SchemaProjectorTest {
         expectedProjected.put(values[2], Arrays.asList(32767, 32767L, 32767.F, 32767.));
         expectedProjected.put(values[3], Arrays.asList(327890L, 327890.F, 327890.));
         expectedProjected.put(values[4], Arrays.asList(1.2F, 1.2));
-        expectedProjected.put(values[5], Arrays.asList(1.2345));
+        expectedProjected.put(values[5], Collections.singletonList(1.2345));
 
         Object promoted;
         for (int i = 0; i < promotableSchemas.length; ++i) {

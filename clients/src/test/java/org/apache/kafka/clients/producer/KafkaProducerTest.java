@@ -2070,7 +2070,7 @@ public class KafkaProducerTest {
         String invalidTopicName = "topic abc"; // Invalid topic name due to space
 
         ProducerInterceptors<String, String> producerInterceptors =
-                new ProducerInterceptors<>(Arrays.asList(new MockProducerInterceptor()));
+                new ProducerInterceptors<>(Collections.singletonList(new MockProducerInterceptor()));
 
         try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(), new StringSerializer(),
                 producerMetadata, client, producerInterceptors, time)) {

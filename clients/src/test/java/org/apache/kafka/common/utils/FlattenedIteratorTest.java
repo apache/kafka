@@ -19,6 +19,7 @@ package org.apache.kafka.common.utils;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -32,7 +33,7 @@ public class FlattenedIteratorTest {
     public void testNestedLists() {
         List<List<String>> list = asList(
             asList("foo", "a", "bc"),
-            asList("ddddd"),
+            Collections.singletonList("ddddd"),
             asList("", "bar2", "baz45"));
 
         Iterable<String> flattenedIterable = () -> new FlattenedIterator<>(list.iterator(), l -> l.iterator());
@@ -61,7 +62,7 @@ public class FlattenedIteratorTest {
 
     @Test
     public void testNestedSingleEmptyList() {
-        List<List<String>> list = asList(emptyList());
+        List<List<String>> list = Collections.singletonList(emptyList());
 
         Iterable<String> flattenedIterable = () -> new FlattenedIterator<>(list.iterator(), l -> l.iterator());
         List<String> flattened = new ArrayList<>();
@@ -86,7 +87,7 @@ public class FlattenedIteratorTest {
     @Test
     public void testEmptyListInBetweenNonEmpty() {
         List<List<String>> list = asList(
-            asList("aadwdwdw"),
+            Collections.singletonList("aadwdwdw"),
             emptyList(),
             asList("ee", "aa", "dd"));
 
@@ -101,7 +102,7 @@ public class FlattenedIteratorTest {
     public void testEmptyListAtTheEnd() {
         List<List<String>> list = asList(
             asList("ee", "dd"),
-            asList("e"),
+            Collections.singletonList("e"),
             emptyList());
 
         Iterable<String> flattenedIterable = () -> new FlattenedIterator<>(list.iterator(), l -> l.iterator());

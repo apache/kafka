@@ -17,23 +17,26 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.consumer.Assignment;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
+import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 public class GroupSpecImplTest {
-
-    private Map<String, AssignmentMemberSpec> members;
+    private static final String TEST_MEMBER = "test-member";
+    private Map<String, MemberSubscriptionSpecImpl> members;
     private SubscriptionType subscriptionType;
     private Map<Uuid, Map<Integer, String>> invertedTargetAssignment;
     private GroupSpecImpl groupSpec;
@@ -42,17 +45,15 @@ public class GroupSpecImplTest {
     @BeforeEach
     void setUp() {
         members = new HashMap<>();
-
         subscriptionType = SubscriptionType.HOMOGENEOUS;
         invertedTargetAssignment = new HashMap<>();
         topicId = Uuid.randomUuid();
 
-        members.put("test-member",  new AssignmentMemberSpec(
+        members.put(TEST_MEMBER,  new MemberSubscriptionSpecImpl(
             Optional.empty(),
-            Optional.empty(),
-            new HashSet<>(Collections.singletonList(topicId)),
-            Collections.emptyMap())
-        );
+            mkSet(topicId),
+            Assignment.EMPTY
+        ));
 
         groupSpec = new GroupSpecImpl(
             members,
@@ -62,8 +63,8 @@ public class GroupSpecImplTest {
     }
 
     @Test
-    void testMembers() {
-        assertEquals(members, groupSpec.members());
+    void testMemberIds() {
+        assertEquals(members.keySet(), groupSpec.memberIds());
     }
 
     @Test
@@ -80,5 +81,28 @@ public class GroupSpecImplTest {
         assertTrue(groupSpec.isPartitionAssigned(topicId, 1));
         assertFalse(groupSpec.isPartitionAssigned(topicId, 2));
         assertFalse(groupSpec.isPartitionAssigned(Uuid.randomUuid(), 2));
+    }
+
+    @Test
+    void testMemberSubscription() {
+        assertEquals(members.get(TEST_MEMBER), groupSpec.memberSubscription(TEST_MEMBER));
+        assertThrows(IllegalArgumentException.class, () -> groupSpec.memberSubscription("unknown-member"));
+    }
+
+    @Test
+    void testMemberAssignment() {
+        Map<Uuid, Set<Integer>> topicPartitions = new HashMap<>();
+        topicPartitions.put(
+            topicId,
+            mkSet(0, 1)
+        );
+        members.put(TEST_MEMBER, new MemberSubscriptionSpecImpl(
+            Optional.empty(),
+            mkSet(topicId),
+            new Assignment(topicPartitions)
+        ));
+
+        assertEquals(topicPartitions, groupSpec.memberAssignment(TEST_MEMBER));
+        assertEquals(Collections.emptyMap(), groupSpec.memberAssignment("unknown-member"));
     }
 }
