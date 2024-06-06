@@ -41,7 +41,7 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 /**
- * The Heterogeneous uniform assignment builder is used to generate the target assignment for a consumer group with
+ * The heterogeneous uniform assignment builder is used to generate the target assignment for a consumer group with
  * at least one of its members subscribed to a different set of topics.
  *
  * Assignments are done according to the following principles:
