@@ -2200,9 +2200,9 @@ public class KafkaAdminClient extends AdminClient {
         long now
     ) {
         final Map<String, TopicRequest> topicsRequests = new LinkedHashMap<>();
-        topicNamesList.stream().sorted().forEach(topic -> {
-            topicsRequests.put(topic, new TopicRequest().setName(topic));
-        });
+        topicNamesList.stream().sorted().forEach(topic ->
+            topicsRequests.put(topic, new TopicRequest().setName(topic))
+        );
         return new Call("describeTopicPartitions", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
             TopicDescription partiallyFinishedTopicDescription = null;
@@ -3048,7 +3048,7 @@ public class KafkaAdminClient extends AdminClient {
                 public void handleResponse(AbstractResponse abstractResponse) {
                     DescribeLogDirsResponse response = (DescribeLogDirsResponse) abstractResponse;
                     Map<String, LogDirDescription> descriptions = logDirDescriptions(response);
-                    if (descriptions.size() > 0) {
+                    if (!descriptions.isEmpty()) {
                         future.complete(descriptions);
                     } else {
                         // Up to v3 DescribeLogDirsResponse did not have an error code field, hence it defaults to None
@@ -3560,10 +3560,10 @@ public class KafkaAdminClient extends AdminClient {
                             String protocolType = group.protocolType();
                             if (protocolType.equals(ConsumerProtocol.PROTOCOL_TYPE) || protocolType.isEmpty()) {
                                 final String groupId = group.groupId();
-                                final Optional<ConsumerGroupState> state = group.groupState().equals("")
+                                final Optional<ConsumerGroupState> state = group.groupState().isEmpty()
                                         ? Optional.empty()
                                         : Optional.of(ConsumerGroupState.parse(group.groupState()));
-                                final Optional<GroupType> type = group.groupType().equals("")
+                                final Optional<GroupType> type = group.groupType().isEmpty()
                                         ? Optional.empty()
                                         : Optional.of(GroupType.parse(group.groupType()));
                                 final ConsumerGroupListing groupListing = new ConsumerGroupListing(
@@ -4215,9 +4215,9 @@ public class KafkaAdminClient extends AdminClient {
                  * Be sure to do this after the NOT_CONTROLLER error check above
                  * so that all errors are consistent in that case.
                  */
-                userIllegalAlterationExceptions.entrySet().stream().forEach(entry -> {
-                    futures.get(entry.getKey()).completeExceptionally(entry.getValue());
-                });
+                userIllegalAlterationExceptions.entrySet().stream().forEach(entry ->
+                    futures.get(entry.getKey()).completeExceptionally(entry.getValue())
+                );
                 response.data().results().forEach(result -> {
                     KafkaFutureImpl<Void> future = futures.get(result.user());
                     if (future == null) {

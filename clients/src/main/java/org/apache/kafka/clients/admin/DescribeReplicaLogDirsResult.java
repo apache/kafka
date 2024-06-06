@@ -51,21 +51,18 @@ public class DescribeReplicaLogDirsResult {
      * Return a future which succeeds if log directory information of all replicas are available
      */
     public KafkaFuture<Map<TopicPartitionReplica, ReplicaLogDirInfo>> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).
-            thenApply(new KafkaFuture.BaseFunction<Void, Map<TopicPartitionReplica, ReplicaLogDirInfo>>() {
-                @Override
-                public Map<TopicPartitionReplica, ReplicaLogDirInfo> apply(Void v) {
-                    Map<TopicPartitionReplica, ReplicaLogDirInfo> replicaLogDirInfos = new HashMap<>();
-                    for (Map.Entry<TopicPartitionReplica, KafkaFuture<ReplicaLogDirInfo>> entry : futures.entrySet()) {
-                        try {
-                            replicaLogDirInfos.put(entry.getKey(), entry.getValue().get());
-                        } catch (InterruptedException | ExecutionException e) {
-                            // This should be unreachable, because allOf ensured that all the futures completed successfully.
-                            throw new RuntimeException(e);
-                        }
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]))
+            .thenApply(v -> {
+                Map<TopicPartitionReplica, ReplicaLogDirInfo> replicaLogDirInfos = new HashMap<>();
+                for (Map.Entry<TopicPartitionReplica, KafkaFuture<ReplicaLogDirInfo>> entry : futures.entrySet()) {
+                    try {
+                        replicaLogDirInfos.put(entry.getKey(), entry.getValue().get());
+                    } catch (InterruptedException | ExecutionException e) {
+                        // This should be unreachable, because allOf ensured that all the futures completed successfully.
+                        throw new RuntimeException(e);
                     }
-                    return replicaLogDirInfos;
                 }
+                return replicaLogDirInfos;
             });
     }
 

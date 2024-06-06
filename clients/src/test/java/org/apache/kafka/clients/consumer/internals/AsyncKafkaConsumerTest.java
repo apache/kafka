@@ -817,9 +817,7 @@ public class AsyncKafkaConsumerTest {
         AtomicReference<Throwable> exception = new AtomicReference<>();
         CompletableFuture<Object> future = CompletableFuture.completedFuture(null);
         consumer = newConsumer();
-        assertDoesNotThrow(() -> consumer.completeQuietly(() -> {
-            future.get(0, TimeUnit.MILLISECONDS);
-        }, "test", exception));
+        assertDoesNotThrow(() -> consumer.completeQuietly(() -> future.get(0, TimeUnit.MILLISECONDS), "test", exception));
         assertNull(exception.get());
 
         assertDoesNotThrow(() -> consumer.completeQuietly(() -> {
@@ -1766,9 +1764,9 @@ public class AsyncKafkaConsumerTest {
             // Mock the subscription being assigned as the first fetch is collected
             consumer.subscriptions().assignFromSubscribed(Collections.singleton(tp));
             return Fetch.empty();
-        }).doAnswer(invocation -> {
-            return Fetch.forPartition(tp, records, true);
-        }).when(fetchCollector).collectFetch(any(FetchBuffer.class));
+        }).doAnswer(invocation ->
+            Fetch.forPartition(tp, records, true)
+        ).when(fetchCollector).collectFetch(any(FetchBuffer.class));
 
         // And then poll for up to 10000ms, which should return 2 records without timing out
         ConsumerRecords<?, ?> returnedRecords = consumer.poll(Duration.ofMillis(10000));
