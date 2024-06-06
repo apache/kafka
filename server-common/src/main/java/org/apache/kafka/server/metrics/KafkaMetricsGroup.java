@@ -123,6 +123,10 @@ public class KafkaMetricsGroup {
         removeMetric(name, Collections.emptyMap());
     }
 
+    public final void removeMetric(MetricName metricName) {
+        KafkaYammerMetrics.defaultRegistry().removeMetric(metricName);
+    }
+
     private static Optional<String> toMBeanName(Map<String, String> tags) {
         List<Map.Entry<String, String>> filteredTags = tags.entrySet().stream()
                 .filter(entry -> !entry.getValue().isEmpty())

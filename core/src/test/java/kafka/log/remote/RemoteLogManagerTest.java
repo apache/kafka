@@ -1537,9 +1537,9 @@ public class RemoteLogManagerTest {
             KafkaMetricsGroup mockRlmMetricsGroup = mockMetricsGroupCtor.constructed().get(0);
             KafkaMetricsGroup mockThreadPoolMetricsGroup = mockMetricsGroupCtor.constructed().get(1);
 
-            List<String> remoteLogManagerMetricNames = Arrays.asList(
-                    REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC.getName(),
-                    REMOTE_LOG_READER_FETCH_RATE_AND_TIME_METRIC.getName());
+            List<MetricName> remoteLogManagerMetricNames = Arrays.asList(
+                    REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC,
+                    REMOTE_LOG_READER_FETCH_RATE_AND_TIME_METRIC);
             Set<String> remoteStorageThreadPoolMetricNames = REMOTE_STORAGE_THREAD_POOL_METRICS;
 
             verify(mockRlmMetricsGroup, times(1)).newGauge(any(MetricName.class), any());

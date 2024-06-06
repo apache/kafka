@@ -245,8 +245,8 @@ public class RemoteLogManager implements Closeable {
     }
 
     private void removeMetrics() {
-        metricsGroup.removeMetric(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC.getName());
-        metricsGroup.removeMetric(REMOTE_LOG_READER_FETCH_RATE_AND_TIME_METRIC.getName());
+        metricsGroup.removeMetric(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC);
+        metricsGroup.removeMetric(REMOTE_LOG_READER_FETCH_RATE_AND_TIME_METRIC);
         remoteStorageReaderThreadPool.removeMetrics();
     }
 
