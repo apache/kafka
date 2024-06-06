@@ -187,7 +187,8 @@ public class ServerLogConfigs {
             "does not apply to any message format conversion that might be required for replication to followers.";
 
     public static final String LOG_INITIAL_TASK_DELAY_MS_CONFIG = LOG_PREFIX + "initial.task.delay.ms";
-    public static final long LOG_INITIAL_TASK_DELAY_MS_DEFAULT = 500L;
+    public static final long LOG_INITIAL_TASK_DELAY_MS_DEFAULT = 30 * 1000L;
+    public static final long LOG_INITIAL_TASK_DELAY_MS_DEFAULT_INTEGRATION_TEST = 500L;
     public static final String LOG_INITIAL_TASK_DELAY_MS_DOC = "The initial task delay in millisecond when initializing " +
             "tasks in LogManager. This should be used for testing only.";
 

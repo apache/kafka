@@ -1181,7 +1181,7 @@ object TestUtils extends Logging {
                        transactionVerificationEnabled: Boolean = false,
                        log: Option[UnifiedLog] = None,
                        remoteStorageSystemEnable: Boolean = false,
-                       initialTaskDelayMs: Long = ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT): LogManager = {
+                       initialTaskDelayMs: Long = ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT_INTEGRATION_TEST): LogManager = {
     val logManager = new LogManager(logDirs = logDirs.map(_.getAbsoluteFile),
                    initialOfflineDirs = Array.empty[File],
                    configRepository = configRepository,
