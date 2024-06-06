@@ -888,29 +888,22 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 // Check if the current batch has enough space. We check is before
                 // replaying the records in order to avoid having to revert back
                 // changes if the records do not fit within a batch.
+                if (estimatedSize > currentBatch.builder.maxAllowedBytes()) {
+                    throw new RecordTooLargeException("Message batch size is " + estimatedSize +
+                        " bytes in append to partition " + tp + " which exceeds the maximum " +
+                        "configured size of " + currentBatch.maxBatchSize + ".");
+                }
+
                 if (!currentBatch.builder.hasRoomFor(estimatedSize)) {
-                    if (currentBatch.builder.numRecords() == 0) {
-                        // If the number of records in the current batch is zero, it means that
-                        // the records are larger than the max batch size.
-                        throw new RecordTooLargeException("Message batch size is " + estimatedSize +
-                            " bytes in append to partition " + tp + " which exceeds the maximum " +
-                            "configured size of " + currentBatch.maxBatchSize + ".");
-                    } else {
-                        // Otherwise, we write the current batch, allocate a new one and re-verify
-                        // whether the records fit in it.
-                        flushCurrentBatch();
-                        maybeAllocateNewBatch(
-                            producerId,
-                            producerEpoch,
-                            verificationGuard,
-                            currentTimeMs
-                        );
-                        if (!currentBatch.builder.hasRoomFor(estimatedSize)) {
-                            throw new RecordTooLargeException("Message batch size is " + estimatedSize +
-                                " bytes in append to partition " + tp + " which exceeds the maximum " +
-                                "configured size of " + currentBatch.maxBatchSize + ".");
-                        }
-                    }
+                    // Otherwise, we write the current batch, allocate a new one and re-verify
+                    // whether the records fit in it.
+                    flushCurrentBatch();
+                    maybeAllocateNewBatch(
+                        producerId,
+                        producerEpoch,
+                        verificationGuard,
+                        currentTimeMs
+                    );
                 }
 
                 // Add the event to the list of pending events associated with the batch.
