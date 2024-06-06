@@ -73,8 +73,6 @@ public class FetchResponse extends AbstractResponse {
     public static final int INVALID_PREFERRED_REPLICA_ID = -1;
 
     private final FetchResponseData data;
-    // we build responseData when needed.
-    private volatile LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData = null;
 
     @Override
     public FetchResponseData data() {
