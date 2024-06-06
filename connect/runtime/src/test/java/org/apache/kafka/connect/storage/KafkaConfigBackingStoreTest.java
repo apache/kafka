@@ -58,7 +58,6 @@ import org.mockito.stubbing.Answer;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -1593,8 +1592,8 @@ public class KafkaConfigBackingStoreTest {
         assertEquals(Collections.EMPTY_SET, configState.inconsistentConnectors());
 
         // As soon as root is rewritten, we should see a callback notifying us that we reconfigured some tasks
-        final ArgumentCaptor<Collection<ConnectorTaskId>> capturedRecord = ArgumentCaptor.captor();
-        verify(configUpdateListener, times(2)).onTaskConfigUpdate(capturedRecord.capture());
+        verify(configUpdateListener).onTaskConfigUpdate(Arrays.asList(TASK_IDS.get(0), TASK_IDS.get(1)));
+        verify(configUpdateListener).onTaskConfigUpdate(Collections.singletonList(TASK_IDS.get(2)));
 
         configStorage.stop();
         verify(configLog).stop();
