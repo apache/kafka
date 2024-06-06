@@ -47,7 +47,10 @@ plugins {
   // Updating the shadow plugin version to 8.1.1 causes issue with signing and publishing the shadowed
   // artifacts - see https://github.com/johnrengelman/shadow/issues/901
   id 'com.github.johnrengelman.shadow' version '8.1.0' apply false
-  id 'com.diffplug.spotless' version '6.14.0' apply false // 6.14.1 and newer require Java 11 at compile time, so we can't upgrade until AK 4.0
+  //  Spotless 6.13.0 has issue with Java 21 (see https://github.com/diffplug/spotless/pull/1920), and Spotless 6.14.0+ requires JRE 11
+  //  We are going to drop JDK8 support. Hence, the spotless is upgrade to newest version and be applied only if the build env is compatible with JDK 11.
+  //  spotless 6.15.0+ has issue in runtime with JDK8 even through we define it with `apply:false`. see https://github.com/diffplug/spotless/issues/2156 for more details
+  id 'com.diffplug.spotless' version "6.14.0" apply false
 }
 
 ext {
@@ -168,6 +171,23 @@ allprojects {
     }
   }
   task printAllDependencies(type: DependencyReportTask) {}
+
+  tasks.withType(Javadoc) {
+    options.charSet = 'UTF-8'
+    options.docEncoding = 'UTF-8'
+    options.encoding = 'UTF-8'
+    options.memberLevel = JavadocMemberLevel.PUBLIC  // Document only public members/API
+    // Turn off doclint for now, see https://blog.joda.org/2014/02/turning-off-doclint-in-jdk-8-javadoc.html for rationale
+    options.addStringOption('Xdoclint:none', '-quiet')
+    // Javadoc warnings should fail the build in JDK 15+ https://bugs.openjdk.org/browse/JDK-8200363
+    options.addBooleanOption('Werror', JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_15))
+
+    // The URL structure was changed to include the locale after Java 8
+    if (JavaVersion.current().isJava11Compatible())
+      options.links "https://docs.oracle.com/en/java/javase/${JavaVersion.current().majorVersion}/docs/api/"
+    else
+      options.links "https://docs.oracle.com/javase/8/docs/api/"
+  }
 }
 
 def determineCommitId() {
@@ -180,6 +200,63 @@ def determineCommitId() {
     "unknown"
   }
 }
+
+def excludedSpotlessModules = [':clients',
+                               ':connect:api',
+                               ':connect:basic-auth-extension',
+                               ':connect:file',
+                               ':connect:json',
+                               ':connect:mirror',
+                               ':connect:mirror-client',
+                               ':connect:runtime',
+                               ':connect:test-plugins',
+                               ':connect:transforms',
+                               ':core',
+                               ':examples',
+                               ':generator',
+                               ':group-coordinator:group-coordinator-api', // https://github.com/apache/kafka/pull/16198
+                               ':group-coordinator',
+                               ':jmh-benchmarks',
+                               ':log4j-appender',
+                               ':metadata',
+                               ':raft',
+                               ':server',
+                               ':server-common',
+                               ':shell',
+                               ':storage',
+                               ':storage:storage-api', //  rename in settings.gradle
+                               ':streams',
+                               ':streams:examples',
+                               ':streams:streams-scala',
+                               ':streams:test-utils',
+                               ':streams:upgrade-system-tests-0100',
+                               ':streams:upgrade-system-tests-0101',
+                               ':streams:upgrade-system-tests-0102',
+                               ':streams:upgrade-system-tests-0110',
+                               ':streams:upgrade-system-tests-10',
+                               ':streams:upgrade-system-tests-11',
+                               ':streams:upgrade-system-tests-20',
+                               ':streams:upgrade-system-tests-21',
+                               ':streams:upgrade-system-tests-22',
+                               ':streams:upgrade-system-tests-23',
+                               ':streams:upgrade-system-tests-24',
+                               ':streams:upgrade-system-tests-25',
+                               ':streams:upgrade-system-tests-26',
+                               ':streams:upgrade-system-tests-27',
+                               ':streams:upgrade-system-tests-28',
+                               ':streams:upgrade-system-tests-30',
+                               ':streams:upgrade-system-tests-31',
+                               ':streams:upgrade-system-tests-32',
+                               ':streams:upgrade-system-tests-33',
+                               ':streams:upgrade-system-tests-34',
+                               ':streams:upgrade-system-tests-35',
+                               ':streams:upgrade-system-tests-36',
+                               ':streams:upgrade-system-tests-37',
+                               ':tools',
+                               ':tools:tools-api',
+                               ':transaction-coordinator',
+                               ':trogdor']
+
 
 apply from: file('wrapper.gradle')
 
@@ -218,7 +295,8 @@ if (repo != null) {
         '**/generated/**',
         'clients/src/test/resources/serializedData/*',
         'docker/test/fixtures/secrets/*',
-        'docker/examples/fixtures/secrets/*'
+        'docker/examples/fixtures/secrets/*',
+        'docker/docker_official_images/.gitkeep'
     ])
   }
 } else {
@@ -272,7 +350,7 @@ subprojects {
     options.encoding = 'UTF-8'
     options.compilerArgs << "-Xlint:all"
     // temporary exclusions until all the warnings are fixed
-    if (!project.path.startsWith(":connect"))
+    if (!project.path.startsWith(":connect") && !project.path.startsWith(":storage"))
       options.compilerArgs << "-Xlint:-rawtypes"
     options.compilerArgs << "-Xlint:-serial"
     options.compilerArgs << "-Xlint:-try"
@@ -289,10 +367,12 @@ subprojects {
     addParametersForTests(name, options)
   }
 
-  // We should only set this if Java version is < 9 (--release is recommended for >= 9), but the Scala plugin for IntelliJ sets
-  // `-target` incorrectly if this is unset
-  sourceCompatibility = minJavaVersion
-  targetCompatibility = minJavaVersion
+  java {
+    // We should only set this if Java version is < 9 (--release is recommended for >= 9), but the Scala plugin for IntelliJ sets
+    // `-target` incorrectly if this is unset
+    sourceCompatibility = minJavaVersion
+    targetCompatibility = minJavaVersion
+  }
 
   if (shouldPublish) {
 
@@ -341,7 +421,7 @@ subprojects {
                 artifact task
             }
 
-            artifactId = archivesBaseName
+            artifactId = base.archivesName.get()
             pom {
               name = 'Apache Kafka'
               url = 'https://kafka.apache.org'
@@ -594,20 +674,7 @@ subprojects {
 
   task docsJar(dependsOn: javadocJar)
 
-  javadoc {
-    options.charSet = 'UTF-8'
-    options.docEncoding = 'UTF-8'
-    options.encoding = 'UTF-8'
-    options.memberLevel = JavadocMemberLevel.PUBLIC  // Document only public members/API
-    // Turn off doclint for now, see https://blog.joda.org/2014/02/turning-off-doclint-in-jdk-8-javadoc.html for rationale
-    options.addStringOption('Xdoclint:none', '-quiet')
-
-    // The URL structure was changed to include the locale after Java 8
-    if (JavaVersion.current().isJava11Compatible())
-      options.links "https://docs.oracle.com/en/java/javase/${JavaVersion.current().majorVersion}/docs/api/"
-    else
-      options.links "https://docs.oracle.com/javase/8/docs/api/"
-  }
+  test.dependsOn('javadoc')
 
   task systemTestLibs(dependsOn: jar)
 
@@ -651,7 +718,7 @@ subprojects {
     scalaCompileOptions.keepAliveMode = userKeepAliveMode
 
     scalaCompileOptions.additionalParameters = [
-      "-deprecation",
+      "-deprecation:false",
       "-unchecked",
       "-encoding", "utf8",
       "-Xlog-reflective-calls",
@@ -741,8 +808,8 @@ subprojects {
   }
   test.dependsOn('spotbugsMain')
 
-  tasks.withType(com.github.spotbugs.snom.SpotBugsTask) {
-    reports {
+  tasks.withType(com.github.spotbugs.snom.SpotBugsTask).configureEach {
+    reports.configure {
       // Continue supporting `xmlFindBugsReport` for compatibility
       xml.enabled(project.hasProperty('xmlSpotBugsReport') || project.hasProperty('xmlFindBugsReport'))
       html.enabled(!project.hasProperty('xmlSpotBugsReport') && !project.hasProperty('xmlFindBugsReport'))
@@ -784,6 +851,17 @@ subprojects {
   dependencyCheck {
     suppressionFile = "$rootDir/gradle/resources/dependencycheck-suppressions.xml"
     skipProjects = [ ":jmh-benchmarks", ":trogdor" ]
+    skipConfigurations = [ "zinc" ]
+  }
+  
+  if(JavaVersion.current().isJava11Compatible() && project.path !in excludedSpotlessModules) {
+    apply plugin: 'com.diffplug.spotless'
+    spotless {
+      java {
+        importOrder('kafka', 'org.apache.kafka', 'com', 'net', 'org', 'java', 'javax', '', '\\#')
+        removeUnusedImports()
+      }
+    }
   }
 }
 
@@ -849,7 +927,9 @@ tasks.create(name: "jarConnect", dependsOn: connectPkgs.collect { it + ":jar" })
 tasks.create(name: "testConnect", dependsOn: connectPkgs.collect { it + ":test" }) {}
 
 project(':server') {
-  archivesBaseName = "kafka-server"
+  base {
+    archivesName = "kafka-server"
+  }
 
   dependencies {
     implementation project(':clients')
@@ -921,7 +1001,10 @@ project(':core') {
   }
   if (userEnableTestCoverage)
     apply plugin: "org.scoverage"
-  archivesBaseName = "kafka_${versions.baseScala}"
+
+  base {
+    archivesName = "kafka_${versions.baseScala}"
+  }
 
   configurations {
     generator
@@ -1249,7 +1332,9 @@ project(':core') {
 }
 
 project(':metadata') {
-  archivesBaseName = "kafka-metadata"
+  base {
+    archivesName = "kafka-metadata"
+  }
 
   configurations {
     generator
@@ -1316,7 +1401,9 @@ project(':metadata') {
 }
 
 project(':group-coordinator') {
-  archivesBaseName = "kafka-group-coordinator"
+  base {
+    archivesName = "kafka-group-coordinator"
+  }
 
   configurations {
     generator
@@ -1327,6 +1414,8 @@ project(':group-coordinator') {
     implementation project(':clients')
     implementation project(':metadata')
     implementation project(':storage')
+    implementation libs.jacksonDatabind
+    implementation libs.jacksonJDK8Datatypes
     implementation libs.slf4jApi
     implementation libs.metrics
 
@@ -1357,13 +1446,17 @@ project(':group-coordinator') {
     enabled = false
   }
 
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-group-coordinator.xml")
+  }
+
   task processMessages(type:JavaExec) {
     mainClass = "org.apache.kafka.message.MessageGenerator"
     classpath = configurations.generator
     args = [ "-p", "org.apache.kafka.coordinator.group.generated",
              "-o", "src/generated/java/org/apache/kafka/coordinator/group/generated",
              "-i", "src/main/resources/common/message",
-             "-m", "MessageDataGenerator"
+             "-m", "MessageDataGenerator", "JsonConverterGenerator"
     ]
     inputs.dir("src/main/resources/common/message")
         .withPropertyName("messages")
@@ -1377,7 +1470,9 @@ project(':group-coordinator') {
 }
 
 project(':transaction-coordinator') {
-  archivesBaseName = "kafka-transaction-coordinator"
+  base {
+    archivesName = "kafka-transaction-coordinator"
+  }
 
   sourceSets {
     main {
@@ -1398,7 +1493,9 @@ project(':transaction-coordinator') {
 }
 
 project(':examples') {
-  archivesBaseName = "kafka-examples"
+  base {
+    archivesName = "kafka-examples"
+  }
 
   dependencies {
     implementation project(':clients')
@@ -1428,7 +1525,9 @@ project(':generator') {
 }
 
 project(':clients') {
-  archivesBaseName = "kafka-clients"
+  base {
+    archivesName = "kafka-clients"
+  }
 
   configurations {
     generator
@@ -1500,7 +1599,7 @@ project(':clients') {
     // dependencies excluded from the final jar, since they are declared as runtime dependencies
     dependencies {
       project.configurations.shadowed.allDependencies.each {
-        exclude(dependency(it.group + ':' + it.name + ':' + it.version))
+        exclude(dependency(it.group + ':' + it.name))
       }
       // exclude proto files from the jar
       exclude "**/opentelemetry/proto/**/*.proto"
@@ -1603,7 +1702,9 @@ project(':clients') {
 }
 
 project(':raft') {
-  archivesBaseName = "kafka-raft"
+  base {
+    archivesName = "kafka-raft"
+  }
 
   configurations {
     generator
@@ -1699,7 +1800,9 @@ project(':raft') {
 }
 
 project(':server-common') {
-  archivesBaseName = "kafka-server-common"
+  base {
+    archivesName = "kafka-server-common"
+  }
 
   dependencies {
     api project(':clients')
@@ -1757,7 +1860,9 @@ project(':server-common') {
 }
 
 project(':storage:storage-api') {
-  archivesBaseName = "kafka-storage-api"
+  base {
+    archivesName = "kafka-storage-api"
+  }
 
   dependencies {
     implementation project(':clients')
@@ -1825,7 +1930,9 @@ project(':storage:storage-api') {
 }
 
 project(':storage') {
-  archivesBaseName = "kafka-storage"
+  base {
+    archivesName = "kafka-storage"
+  }
 
   configurations {
     generator
@@ -1947,7 +2054,9 @@ project(':storage') {
 }
 
 project(':tools:tools-api') {
-  archivesBaseName = "kafka-tools-api"
+  base {
+    archivesName = "kafka-tools-api"
+  }
 
   dependencies {
     implementation project(':clients')
@@ -2002,7 +2111,10 @@ project(':tools:tools-api') {
 }
 
 project(':tools') {
-  archivesBaseName = "kafka-tools"
+  base {
+    archivesName = "kafka-tools"
+  }
+
   dependencies {
     implementation project(':clients')
     implementation project(':storage')
@@ -2066,7 +2178,9 @@ project(':tools') {
 }
 
 project(':trogdor') {
-  archivesBaseName = "trogdor"
+  base {
+    archivesName = "trogdor"
+  }
 
   dependencies {
     implementation project(':clients')
@@ -2116,7 +2230,9 @@ project(':trogdor') {
 }
 
 project(':shell') {
-  archivesBaseName = "kafka-shell"
+  base {
+    archivesName = "kafka-shell"
+  }
 
   dependencies {
     implementation libs.argparse4j
@@ -2166,7 +2282,10 @@ project(':shell') {
 }
 
 project(':streams') {
-  archivesBaseName = "kafka-streams"
+  base {
+    archivesName = "kafka-streams"
+  }
+
   ext.buildStreamsVersionFileName = "kafka-streams-version.properties"
 
   configurations {
@@ -2328,7 +2447,11 @@ project(':streams') {
 
 project(':streams:streams-scala') {
   apply plugin: 'scala'
-  archivesBaseName = "kafka-streams-scala_${versions.baseScala}"
+
+  base {
+    archivesName = "kafka-streams-scala_${versions.baseScala}"
+  }
+
   dependencies {
     api project(':streams')
 
@@ -2390,7 +2513,9 @@ project(':streams:streams-scala') {
 }
 
 project(':streams:test-utils') {
-  archivesBaseName = "kafka-streams-test-utils"
+  base {
+    archivesName = "kafka-streams-test-utils"
+  }
 
   dependencies {
     api project(':streams')
@@ -2425,7 +2550,9 @@ project(':streams:test-utils') {
 }
 
 project(':streams:examples') {
-  archivesBaseName = "kafka-streams-examples"
+  base {
+    archivesName = "kafka-streams-examples"
+  }
 
   dependencies {
     // this dependency should be removed after we unify data API
@@ -2462,7 +2589,9 @@ project(':streams:examples') {
 }
 
 project(':streams:upgrade-system-tests-0100') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-0100"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-0100"
+  }
 
   dependencies {
     testImplementation(libs.kafkaStreams_0100) {
@@ -2478,7 +2607,9 @@ project(':streams:upgrade-system-tests-0100') {
 }
 
 project(':streams:upgrade-system-tests-0101') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-0101"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-0101"
+  }
 
   dependencies {
     testImplementation(libs.kafkaStreams_0101) {
@@ -2494,7 +2625,9 @@ project(':streams:upgrade-system-tests-0101') {
 }
 
 project(':streams:upgrade-system-tests-0102') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-0102"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-0102"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_0102
@@ -2507,7 +2640,9 @@ project(':streams:upgrade-system-tests-0102') {
 }
 
 project(':streams:upgrade-system-tests-0110') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-0110"
+  base{
+    archivesName = "kafka-streams-upgrade-system-tests-0110"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_0110
@@ -2520,7 +2655,9 @@ project(':streams:upgrade-system-tests-0110') {
 }
 
 project(':streams:upgrade-system-tests-10') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-10"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-10"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_10
@@ -2533,7 +2670,9 @@ project(':streams:upgrade-system-tests-10') {
 }
 
 project(':streams:upgrade-system-tests-11') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-11"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-11"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_11
@@ -2546,7 +2685,9 @@ project(':streams:upgrade-system-tests-11') {
 }
 
 project(':streams:upgrade-system-tests-20') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-20"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-20"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_20
@@ -2559,7 +2700,9 @@ project(':streams:upgrade-system-tests-20') {
 }
 
 project(':streams:upgrade-system-tests-21') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-21"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-21"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_21
@@ -2572,7 +2715,9 @@ project(':streams:upgrade-system-tests-21') {
 }
 
 project(':streams:upgrade-system-tests-22') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-22"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-22"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_22
@@ -2585,7 +2730,9 @@ project(':streams:upgrade-system-tests-22') {
 }
 
 project(':streams:upgrade-system-tests-23') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-23"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-23"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_23
@@ -2598,7 +2745,9 @@ project(':streams:upgrade-system-tests-23') {
 }
 
 project(':streams:upgrade-system-tests-24') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-24"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-24"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_24
@@ -2611,7 +2760,9 @@ project(':streams:upgrade-system-tests-24') {
 }
 
 project(':streams:upgrade-system-tests-25') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-25"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-25"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_25
@@ -2624,7 +2775,9 @@ project(':streams:upgrade-system-tests-25') {
 }
 
 project(':streams:upgrade-system-tests-26') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-26"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-26"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_26
@@ -2637,7 +2790,9 @@ project(':streams:upgrade-system-tests-26') {
 }
 
 project(':streams:upgrade-system-tests-27') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-27"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-27"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_27
@@ -2650,7 +2805,9 @@ project(':streams:upgrade-system-tests-27') {
 }
 
 project(':streams:upgrade-system-tests-28') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-28"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-28"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_28
@@ -2663,7 +2820,9 @@ project(':streams:upgrade-system-tests-28') {
 }
 
 project(':streams:upgrade-system-tests-30') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-30"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-30"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_30
@@ -2676,7 +2835,9 @@ project(':streams:upgrade-system-tests-30') {
 }
 
 project(':streams:upgrade-system-tests-31') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-31"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-31"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_31
@@ -2689,7 +2850,9 @@ project(':streams:upgrade-system-tests-31') {
 }
 
 project(':streams:upgrade-system-tests-32') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-32"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-32"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_32
@@ -2702,7 +2865,9 @@ project(':streams:upgrade-system-tests-32') {
 }
 
 project(':streams:upgrade-system-tests-33') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-33"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-33"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_33
@@ -2715,7 +2880,9 @@ project(':streams:upgrade-system-tests-33') {
 }
 
 project(':streams:upgrade-system-tests-34') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-34"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-34"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_34
@@ -2728,7 +2895,9 @@ project(':streams:upgrade-system-tests-34') {
 }
 
 project(':streams:upgrade-system-tests-35') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-35"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-35"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_35
@@ -2741,7 +2910,9 @@ project(':streams:upgrade-system-tests-35') {
 }
 
 project(':streams:upgrade-system-tests-36') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-36"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-36"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_36
@@ -2754,7 +2925,9 @@ project(':streams:upgrade-system-tests-36') {
 }
 
 project(':streams:upgrade-system-tests-37') {
-  archivesBaseName = "kafka-streams-upgrade-system-tests-37"
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-37"
+  }
 
   dependencies {
     testImplementation libs.kafkaStreams_37
@@ -2781,6 +2954,7 @@ project(':jmh-benchmarks') {
     }
     implementation project(':server-common')
     implementation project(':server')
+    implementation project(':raft')
     implementation project(':clients')
     implementation project(':group-coordinator')
     implementation project(':metadata')
@@ -2838,7 +3012,9 @@ project(':jmh-benchmarks') {
 }
 
 project(':log4j-appender') {
-  archivesBaseName = "kafka-log4j-appender"
+  base {
+    archivesName = "kafka-log4j-appender"
+  }
 
   dependencies {
     implementation project(':clients')
@@ -2857,7 +3033,9 @@ project(':log4j-appender') {
 }
 
 project(':connect:api') {
-  archivesBaseName = "connect-api"
+  base {
+    archivesName = "connect-api"
+  }
 
   dependencies {
     api project(':clients')
@@ -2892,7 +3070,9 @@ project(':connect:api') {
 }
 
 project(':connect:transforms') {
-  archivesBaseName = "connect-transforms"
+  base {
+    archivesName = "connect-transforms"
+  }
 
   dependencies {
     api project(':connect:api')
@@ -2928,7 +3108,9 @@ project(':connect:transforms') {
 }
 
 project(':connect:json') {
-  archivesBaseName = "connect-json"
+  base {
+    archivesName = "connect-json"
+  }
 
   dependencies {
     api project(':connect:api')
@@ -2972,7 +3154,9 @@ project(':connect:runtime') {
     swagger
   }
 
-  archivesBaseName = "connect-runtime"
+  base {
+    archivesName = "connect-runtime"
+  }
 
   dependencies {
     // connect-runtime is used in tests, use `api` for modules below for backwards compatibility even though
@@ -3114,7 +3298,9 @@ project(':connect:runtime') {
 }
 
 project(':connect:file') {
-  archivesBaseName = "connect-file"
+  base {
+    archivesName = "connect-file"
+  }
 
   dependencies {
     implementation project(':connect:api')
@@ -3154,7 +3340,9 @@ project(':connect:file') {
 }
 
 project(':connect:basic-auth-extension') {
-  archivesBaseName = "connect-basic-auth-extension"
+  base {
+    archivesName = "connect-basic-auth-extension"
+  }
 
   dependencies {
     implementation project(':connect:api')
@@ -3194,7 +3382,9 @@ project(':connect:basic-auth-extension') {
 }
 
 project(':connect:mirror') {
-  archivesBaseName = "connect-mirror"
+  base {
+    archivesName = "connect-mirror"
+  }
 
   dependencies {
     implementation project(':connect:api')
@@ -3282,7 +3472,9 @@ project(':connect:mirror') {
 }
 
 project(':connect:mirror-client') {
-  archivesBaseName = "connect-mirror-client"
+  base {
+    archivesName = "connect-mirror-client"
+  }
 
   dependencies {
     implementation project(':clients')
@@ -3317,7 +3509,9 @@ project(':connect:mirror-client') {
 }
 
 project(':connect:test-plugins') {
-  archivesBaseName = "connect-test-plugins"
+  base {
+    archivesName = "connect-test-plugins"
+  }
 
   dependencies {
     api project(':connect:api')
@@ -3334,16 +3528,4 @@ task aggregatedJavadoc(type: Javadoc, dependsOn: compileJava) {
   classpath = files(projectsWithJavadoc.collect { it.sourceSets.main.compileClasspath })
   includes = projectsWithJavadoc.collectMany { it.javadoc.getIncludes() }
   excludes = projectsWithJavadoc.collectMany { it.javadoc.getExcludes() }
-
-  options.charSet = 'UTF-8'
-  options.docEncoding = 'UTF-8'
-  options.encoding = 'UTF-8'
-  // Turn off doclint for now, see https://blog.joda.org/2014/02/turning-off-doclint-in-jdk-8-javadoc.html for rationale
-  options.addStringOption('Xdoclint:none', '-quiet')
-
-  // The URL structure was changed to include the locale after Java 8
-  if (JavaVersion.current().isJava11Compatible())
-    options.links "https://docs.oracle.com/en/java/javase/${JavaVersion.current().majorVersion}/docs/api/"
-  else
-    options.links "https://docs.oracle.com/javase/8/docs/api/"
 }

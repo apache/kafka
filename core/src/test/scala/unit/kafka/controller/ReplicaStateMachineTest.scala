@@ -277,7 +277,7 @@ class ReplicaStateMachineTest {
     controllerContext.putReplicaState(replica, OfflineReplica)
     replicaStateMachine.handleStateChanges(replicas, ReplicaDeletionStarted)
     verify(mockControllerBrokerRequestBatch).newBatch()
-    verify(mockControllerBrokerRequestBatch).addStopReplicaRequestForBrokers(Seq(brokerId), partition, true)
+    verify(mockControllerBrokerRequestBatch).addStopReplicaRequestForBrokers(Seq(brokerId), partition, deletePartition = true)
     verify(mockControllerBrokerRequestBatch).sendRequestsToBrokers(controllerEpoch)
     assertEquals(ReplicaDeletionStarted, replicaState(replica))
   }

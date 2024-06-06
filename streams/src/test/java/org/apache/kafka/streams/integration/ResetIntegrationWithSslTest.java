@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.streams.integration;
 
-import kafka.server.KafkaConfig$;
 import org.apache.kafka.common.network.Mode;
+import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestSslUtils;
@@ -49,12 +49,12 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
         // we double the value passed to `time.sleep` in each iteration in one of the map functions, so we disable
         // expiration of connections by the brokers to avoid errors when `AdminClient` sends requests after potentially
         // very long sleep times
-        brokerProps.put(KafkaConfig$.MODULE$.ConnectionsMaxIdleMsProp(), -1L);
+        brokerProps.put(SocketServerConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG, -1L);
 
         try {
             SSL_CONFIG = TestSslUtils.createSslConfig(false, true, Mode.SERVER, TestUtils.tempFile(), "testCert");
 
-            brokerProps.put(KafkaConfig$.MODULE$.ListenersProp(), "SSL://localhost:0");
+            brokerProps.put(SocketServerConfigs.LISTENERS_CONFIG, "SSL://localhost:0");
             brokerProps.put(INTER_BROKER_LISTENER_NAME_CONFIG, "SSL");
             brokerProps.putAll(SSL_CONFIG);
         } catch (final Exception e) {

@@ -19,6 +19,7 @@ package kafka.log
 
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.record.CompressionType
 import org.apache.kafka.server.util.MockTime
 import org.junit.jupiter.api.Assertions._
@@ -45,7 +46,8 @@ class LogCleanerLagIntegrationTest extends AbstractLogCleanerIntegrationTest wit
 
   @ParameterizedTest
   @MethodSource(Array("parameters"))
-  def cleanerTest(codec: CompressionType): Unit = {
+  def cleanerTest(compressionType: CompressionType): Unit = {
+    val codec: Compression = Compression.of(compressionType).build()
     cleaner = makeCleaner(partitions = topicPartitions,
       backoffMs = cleanerBackOffMs,
       minCompactionLagMs = minCompactionLag,
@@ -102,7 +104,7 @@ class LogCleanerLagIntegrationTest extends AbstractLogCleanerIntegrationTest wit
     }
   }
 
-  private def writeDups(numKeys: Int, numDups: Int, log: UnifiedLog, codec: CompressionType, timestamp: Long): Seq[(Int, Int)] = {
+  private def writeDups(numKeys: Int, numDups: Int, log: UnifiedLog, codec: Compression, timestamp: Long): Seq[(Int, Int)] = {
     for (_ <- 0 until numDups; key <- 0 until numKeys) yield {
       val count = counter
       log.appendAsLeader(TestUtils.singletonRecords(value = counter.toString.getBytes, codec = codec,

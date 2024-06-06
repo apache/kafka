@@ -47,11 +47,6 @@ public class SnapshotEmitterTest {
         TreeMap<OffsetAndEpoch, FakeSnapshotWriter> writers = new TreeMap<>();
 
         @Override
-        public void initialize() {
-            // nothing to do
-        }
-
-        @Override
         public void register(Listener<ApiMessageAndVersion> listener) {
             // nothing to do
         }

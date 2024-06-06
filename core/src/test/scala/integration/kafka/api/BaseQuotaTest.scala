@@ -15,17 +15,17 @@
 package kafka.api
 
 import java.time.Duration
+import java.util
 import java.util.concurrent.TimeUnit
-import java.util.{Collections, HashMap, Properties}
+import java.util.{Collections, Properties}
 import com.yammer.metrics.core.{Histogram, Meter}
 import kafka.api.QuotaTestClients._
-import kafka.server.{ClientQuotaManager, KafkaBroker, KafkaConfig, QuotaType}
+import kafka.server.{ClientQuotaManager, KafkaBroker, QuotaType}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.Admin
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
-import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.{Metric, MetricName, TopicPartition}
 import org.apache.kafka.common.metrics.{KafkaMetric, Quota}
 import org.apache.kafka.common.protocol.ApiKeys
@@ -33,8 +33,8 @@ import org.apache.kafka.common.quota.ClientQuotaAlteration
 import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
+import org.apache.kafka.server.config.{ServerConfigs, QuotaConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
-import org.apache.kafka.server.config.ClientQuotaManagerConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -51,7 +51,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
   protected def consumerClientId = "QuotasTestConsumer-1"
   protected def createQuotaTestClients(topic: String, leaderNode: KafkaBroker): QuotaTestClients
 
-  this.serverConfig.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false")
+  this.serverConfig.setProperty(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG, "false")
   this.serverConfig.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "2")
   this.serverConfig.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "1")
   this.serverConfig.setProperty(GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, "100")
@@ -184,7 +184,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
 
     assertTrue(throttled, "Should have been throttled")
     quotaTestClients.verifyConsumerClientThrottleTimeMetric(expectThrottle = true,
-      Some(ClientQuotaManagerConfig.DEFAULT_QUOTA_WINDOW_SIZE_SECONDS * 1000.0))
+      Some(QuotaConfigs.QUOTA_WINDOW_SIZE_SECONDS_DEFAULT * 1000.0))
 
     val exemptMetric = quotaTestClients.exemptRequestMetric
     assertNotNull(exemptMetric, "Exempt requests not recorded")
@@ -323,7 +323,7 @@ abstract class QuotaTestClients(topic: String,
   }
 
   private def verifyProducerClientThrottleTimeMetric(expectThrottle: Boolean): Unit = {
-    val tags = new HashMap[String, String]
+    val tags = new util.HashMap[String, String]
     tags.put("client-id", producerClientId)
     val avgMetric = producer.metrics.get(new MetricName("produce-throttle-time-avg", "producer-metrics", "", tags))
     val maxMetric = producer.metrics.get(new MetricName("produce-throttle-time-max", "producer-metrics", "", tags))
@@ -336,7 +336,7 @@ abstract class QuotaTestClients(topic: String,
   }
 
   def verifyConsumerClientThrottleTimeMetric(expectThrottle: Boolean, maxThrottleTime: Option[Double] = None): Unit = {
-    val tags = new HashMap[String, String]
+    val tags = new util.HashMap[String, String]
     tags.put("client-id", consumerClientId)
     val avgMetric = consumer.metrics.get(new MetricName("fetch-throttle-time-avg", "consumer-fetch-manager-metrics", "", tags))
     val maxMetric = consumer.metrics.get(new MetricName("fetch-throttle-time-max", "consumer-fetch-manager-metrics", "", tags))

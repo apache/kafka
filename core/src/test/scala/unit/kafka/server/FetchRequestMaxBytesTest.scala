@@ -23,6 +23,7 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
+import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -74,7 +75,7 @@ class FetchRequestMaxBytesTest extends BaseRequestTest {
 
   override protected def brokerPropertyOverrides(properties: Properties): Unit = {
     super.brokerPropertyOverrides(properties)
-    properties.put(KafkaConfig.FetchMaxBytes, "1024")
+    properties.put(ServerConfigs.FETCH_MAX_BYTES_CONFIG, "1024")
   }
 
   private def createTopics(): Unit = {
@@ -129,7 +130,7 @@ class FetchRequestMaxBytesTest extends BaseRequestTest {
         val array = new Array[Byte](buffer.remaining())
         buffer.get(array)
         assertArrayEquals(expected(i),
-          array, s"expectNextRecords unexpected element ${i}")
+          array, s"expectNextRecords unexpected element $i")
       }
     }
   }

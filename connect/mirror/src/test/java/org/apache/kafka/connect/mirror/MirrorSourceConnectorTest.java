@@ -104,10 +104,16 @@ public class MirrorSourceConnectorTest {
 
     @Test
     public void testReplicatesHeartbeatsDespiteFilter() {
+        DefaultReplicationPolicy defaultReplicationPolicy = new DefaultReplicationPolicy();
         MirrorSourceConnector connector = new MirrorSourceConnector(new SourceAndTarget("source", "target"),
-            new DefaultReplicationPolicy(), x -> false, new DefaultConfigPropertyFilter());
+            defaultReplicationPolicy, x -> false, new DefaultConfigPropertyFilter());
         assertTrue(connector.shouldReplicateTopic("heartbeats"), "should replicate heartbeats");
         assertTrue(connector.shouldReplicateTopic("us-west.heartbeats"), "should replicate upstream heartbeats");
+
+        Map<String, ?> configs = Collections.singletonMap(DefaultReplicationPolicy.SEPARATOR_CONFIG, "_");
+        defaultReplicationPolicy.configure(configs);
+        assertTrue(connector.shouldReplicateTopic("heartbeats"), "should replicate heartbeats");
+        assertFalse(connector.shouldReplicateTopic("us-west.heartbeats"), "should not consider this topic as a heartbeats topic");
     }
 
     @Test

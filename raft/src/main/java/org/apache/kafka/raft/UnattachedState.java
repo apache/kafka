@@ -19,10 +19,10 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.raft.internals.ReplicaKey;
 import org.slf4j.Logger;
 
 import java.util.Optional;
-import java.util.OptionalInt;
 import java.util.Set;
 
 /**
@@ -56,12 +56,7 @@ public class UnattachedState implements EpochState {
 
     @Override
     public ElectionState election() {
-        return new ElectionState(
-            epoch,
-            OptionalInt.empty(),
-            OptionalInt.empty(),
-            voters
-        );
+        return ElectionState.withUnknownLeader(epoch, voters);
     }
 
     @Override
@@ -94,11 +89,14 @@ public class UnattachedState implements EpochState {
     }
 
     @Override
-    public boolean canGrantVote(int candidateId, boolean isLogUpToDate) {
+    public boolean canGrantVote(ReplicaKey candidateKey, boolean isLogUpToDate) {
         if (!isLogUpToDate) {
-            log.debug("Rejecting vote request from candidate {} since candidate epoch/offset is not up to date with us",
-                candidateId);
+            log.debug(
+                "Rejecting vote request from candidate ({}) since candidate epoch/offset is not up to date with us",
+                candidateKey
+            );
         }
+
         return isLogUpToDate;
     }
 

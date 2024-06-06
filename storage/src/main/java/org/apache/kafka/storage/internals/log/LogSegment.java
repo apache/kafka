@@ -29,6 +29,8 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.Timer;
@@ -63,6 +65,9 @@ import static java.util.Arrays.asList;
 public class LogSegment implements Closeable {
     private static final Logger LOGGER = LoggerFactory.getLogger(LogSegment.class);
     private static final Timer LOG_FLUSH_TIMER;
+    /* a directory that is used for future partition */
+    private static final String FUTURE_DIR_SUFFIX = "-future";
+    private static final Pattern FUTURE_DIR_PATTERN = Pattern.compile("^(\\S+)-(\\S+)\\.(\\S+)" + FUTURE_DIR_SUFFIX);
 
     static {
         KafkaMetricsGroup logFlushStatsMetricsGroup = new KafkaMetricsGroup(LogSegment.class) {
@@ -393,7 +398,7 @@ public class LogSegment implements Closeable {
     /**
      * Equivalent to {@code read(startOffset, maxSize, size())}.
      *
-     * See {@link #read(long, int, long, boolean)} for details.
+     * See {@link #read(long, int, Optional, boolean)} for details.
      */
     public FetchDataInfo read(long startOffset, int maxSize) throws IOException {
         return read(startOffset, maxSize, size());
@@ -402,10 +407,10 @@ public class LogSegment implements Closeable {
     /**
      * Equivalent to {@code read(startOffset, maxSize, maxPosition, false)}.
      *
-     * See {@link #read(long, int, long, boolean)} for details.
+     * See {@link #read(long, int, Optional, boolean)} for details.
      */
     public FetchDataInfo read(long startOffset, int maxSize, long maxPosition) throws IOException {
-        return read(startOffset, maxSize, maxPosition, false);
+        return read(startOffset, maxSize, Optional.of(maxPosition), false);
     }
 
     /**
@@ -416,13 +421,13 @@ public class LogSegment implements Closeable {
      *
      * @param startOffset A lower bound on the first offset to include in the message set we read
      * @param maxSize The maximum number of bytes to include in the message set we read
-     * @param maxPosition The maximum position in the log segment that should be exposed for read
+     * @param maxPositionOpt The maximum position in the log segment that should be exposed for read
      * @param minOneMessage If this is true, the first message will be returned even if it exceeds `maxSize` (if one exists)
      *
      * @return The fetched data and the offset metadata of the first message whose offset is >= startOffset,
      *         or null if the startOffset is larger than the largest offset in this log
      */
-    public FetchDataInfo read(long startOffset, int maxSize, long maxPosition, boolean minOneMessage) throws IOException {
+    public FetchDataInfo read(long startOffset, int maxSize, Optional<Long> maxPositionOpt, boolean minOneMessage) throws IOException {
         if (maxSize < 0)
             throw new IllegalArgumentException("Invalid max size " + maxSize + " for log read from segment " + log);
 
@@ -439,12 +444,14 @@ public class LogSegment implements Closeable {
         if (minOneMessage)
             adjustedMaxSize = Math.max(maxSize, startOffsetAndSize.size);
 
-        // return a log segment but with zero size in the case below
-        if (adjustedMaxSize == 0)
+        // return empty records in the fetch-data-info when:
+        // 1. adjustedMaxSize is 0 (or)
+        // 2. maxPosition to read is unavailable
+        if (adjustedMaxSize == 0 || !maxPositionOpt.isPresent())
             return new FetchDataInfo(offsetMetadata, MemoryRecords.EMPTY);
 
         // calculate the length of the message set to read based on whether or not they gave us a maxOffset
-        int fetchSize = Math.min((int) (maxPosition - startPosition), adjustedMaxSize);
+        int fetchSize = Math.min((int) (maxPositionOpt.get() - startPosition), adjustedMaxSize);
 
         return new FetchDataInfo(offsetMetadata, log.slice(startPosition, fetchSize),
             adjustedMaxSize < startOffsetAndSize.size, Optional.empty());
@@ -712,9 +719,9 @@ public class LogSegment implements Closeable {
     }
 
     /**
-     * @return the first batch timestamp if the timestamp is available. Otherwise return Long.MaxValue
+     * @return the first batch timestamp if the timestamp is available. Otherwise, return Long.MaxValue
      */
-    long getFirstBatchTimestamp() {
+    public long getFirstBatchTimestamp() {
         loadFirstBatchTimestamp();
         OptionalLong timestamp = rollingBasedTimestamp;
         if (timestamp.isPresent() && timestamp.getAsLong() >= 0)
@@ -801,8 +808,22 @@ public class LogSegment implements Closeable {
         try {
             if (delete.execute())
                 LOGGER.info("Deleted {} {}.", fileType, file.getAbsolutePath());
-            else if (logIfMissing)
-                LOGGER.info("Failed to delete {} {} because it does not exist.", fileType, file.getAbsolutePath());
+            else {
+                if (logIfMissing) {
+                    LOGGER.info("Failed to delete {} {} because it does not exist.", fileType, file.getAbsolutePath());
+                }
+
+                // During alter log dir, the log segment may be moved to a new directory, so async delete may fail.
+                // Fallback to delete the file in the new directory to avoid orphan file.
+                Matcher dirMatcher = FUTURE_DIR_PATTERN.matcher(file.getParent());
+                if (dirMatcher.matches()) {
+                    String topicPartitionAbsolutePath = dirMatcher.group(1) + "-" + dirMatcher.group(2);
+                    File fallbackFile = new File(topicPartitionAbsolutePath, file.getName());
+                    if (fallbackFile.exists() && file.getName().endsWith(LogFileUtils.DELETED_FILE_SUFFIX) && fallbackFile.delete()) {
+                        LOGGER.info("Fallback to delete {} {}.", fileType, fallbackFile.getAbsolutePath());
+                    }
+                }
+            }
             return null;
         } catch (IOException e) {
             throw new IOException("Delete of " + fileType + " " + file.getAbsolutePath() + " failed.", e);

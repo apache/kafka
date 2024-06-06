@@ -16,24 +16,24 @@
  */
 package org.apache.kafka.raft;
 
+import java.util.Optional;
+import java.util.Set;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.raft.internals.ReplicaKey;
 import org.slf4j.Logger;
-
-import java.util.Optional;
-import java.util.OptionalInt;
-import java.util.Set;
 
 /**
  * The "voted" state is for voters who have cast their vote for a specific candidate.
+ *
  * Once a vote has been cast, it is not possible for a voter to change its vote until a
  * new election is started. If the election timeout expires before a new leader is elected,
  * then the voter will become a candidate.
  */
 public class VotedState implements EpochState {
     private final int epoch;
-    private final int votedId;
+    private final ReplicaKey votedKey;
     private final Set<Integer> voters;
     private final int electionTimeoutMs;
     private final Timer electionTimer;
@@ -43,14 +43,14 @@ public class VotedState implements EpochState {
     public VotedState(
         Time time,
         int epoch,
-        int votedId,
+        ReplicaKey votedKey,
         Set<Integer> voters,
         Optional<LogOffsetMetadata> highWatermark,
         int electionTimeoutMs,
         LogContext logContext
     ) {
         this.epoch = epoch;
-        this.votedId = votedId;
+        this.votedKey = votedKey;
         this.voters = voters;
         this.highWatermark = highWatermark;
         this.electionTimeoutMs = electionTimeoutMs;
@@ -60,16 +60,11 @@ public class VotedState implements EpochState {
 
     @Override
     public ElectionState election() {
-        return new ElectionState(
-            epoch,
-            OptionalInt.empty(),
-            OptionalInt.of(votedId),
-            voters
-        );
+        return ElectionState.withVotedCandidate(epoch, votedKey, voters);
     }
 
-    public int votedId() {
-        return votedId;
+    public ReplicaKey votedKey() {
+        return votedKey;
     }
 
     @Override
@@ -93,13 +88,19 @@ public class VotedState implements EpochState {
     }
 
     @Override
-    public boolean canGrantVote(int candidateId, boolean isLogUpToDate) {
-        if (votedId() == candidateId) {
-            return true;
+    public boolean canGrantVote(ReplicaKey candidateKey, boolean isLogUpToDate) {
+        if (votedKey.id() == candidateKey.id()) {
+            return !votedKey.directoryId().isPresent() || votedKey.directoryId().equals(candidateKey.directoryId());
         }
 
-        log.debug("Rejecting vote request from candidate {} since we already have voted for " +
-            "another candidate {} in epoch {}", candidateId, votedId(), epoch);
+        log.debug(
+            "Rejecting vote request from candidate ({}), already have voted for another " +
+            "candidate ({}) in epoch {}",
+            candidateKey,
+            votedKey,
+            epoch
+        );
+
         return false;
     }
 
@@ -110,12 +111,14 @@ public class VotedState implements EpochState {
 
     @Override
     public String toString() {
-        return "Voted(" +
-            "epoch=" + epoch +
-            ", votedId=" + votedId +
-            ", voters=" + voters +
-            ", electionTimeoutMs=" + electionTimeoutMs +
-            ')';
+        return String.format(
+            "Voted(epoch=%d, votedKey=%s, voters=%s, electionTimeoutMs=%d, highWatermark=%s)",
+            epoch,
+            votedKey,
+            voters,
+            electionTimeoutMs,
+            highWatermark
+        );
     }
 
     @Override

@@ -43,6 +43,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -140,6 +141,34 @@ public class NetworkClientDelegateTest {
         assertEquals(REQUEST_TIMEOUT_MS, ncd.unsentRequests().poll().timer().timeoutMs());
     }
 
+    @Test
+    public void testHasAnyPendingRequests() throws Exception {
+        try (NetworkClientDelegate networkClientDelegate = newNetworkClientDelegate()) {
+            NetworkClientDelegate.UnsentRequest unsentRequest = newUnsentFindCoordinatorRequest();
+            networkClientDelegate.add(unsentRequest);
+
+            // unsent
+            assertTrue(networkClientDelegate.hasAnyPendingRequests());
+            assertFalse(networkClientDelegate.unsentRequests().isEmpty());
+            assertFalse(client.hasInFlightRequests());
+
+            networkClientDelegate.poll(0, time.milliseconds());
+
+            // in-flight
+            assertTrue(networkClientDelegate.hasAnyPendingRequests());
+            assertTrue(networkClientDelegate.unsentRequests().isEmpty());
+            assertTrue(client.hasInFlightRequests());
+
+            client.respond(FindCoordinatorResponse.prepareResponse(Errors.NONE, GROUP_ID, mockNode()));
+            networkClientDelegate.poll(0, time.milliseconds());
+
+            // get response
+            assertFalse(networkClientDelegate.hasAnyPendingRequests());
+            assertTrue(networkClientDelegate.unsentRequests().isEmpty());
+            assertFalse(client.hasInFlightRequests());
+        }
+    }
+
     public NetworkClientDelegate newNetworkClientDelegate() {
         LogContext logContext = new LogContext();
         Properties properties = new Properties();
@@ -152,14 +181,13 @@ public class NetworkClientDelegateTest {
 
     public NetworkClientDelegate.UnsentRequest newUnsentFindCoordinatorRequest() {
         Objects.requireNonNull(GROUP_ID);
-        NetworkClientDelegate.UnsentRequest req = new NetworkClientDelegate.UnsentRequest(
+        return new NetworkClientDelegate.UnsentRequest(
                 new FindCoordinatorRequest.Builder(new FindCoordinatorRequestData()
                     .setKey(GROUP_ID)
                     .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())
                 ),
             Optional.empty()
         );
-        return req;
     }
 
     public void prepareFindCoordinatorResponse(Errors error) {

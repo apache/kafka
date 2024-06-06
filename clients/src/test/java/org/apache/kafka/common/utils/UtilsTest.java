@@ -108,6 +108,7 @@ public class UtilsTest {
 
     @Test
     public void testGetHost() {
+        // valid
         assertEquals("127.0.0.1", getHost("127.0.0.1:8000"));
         assertEquals("mydomain.com", getHost("PLAINTEXT://mydomain.com:8080"));
         assertEquals("MyDomain.com", getHost("PLAINTEXT://MyDomain.com:8080"));
@@ -116,6 +117,20 @@ public class UtilsTest {
         assertEquals("2001:db8:85a3:8d3:1319:8a2e:370:7348", getHost("PLAINTEXT://[2001:db8:85a3:8d3:1319:8a2e:370:7348]:5678"));
         assertEquals("2001:DB8:85A3:8D3:1319:8A2E:370:7348", getHost("PLAINTEXT://[2001:DB8:85A3:8D3:1319:8A2E:370:7348]:5678"));
         assertEquals("fe80::b1da:69ca:57f7:63d8%3", getHost("PLAINTEXT://[fe80::b1da:69ca:57f7:63d8%3]:5678"));
+
+        // invalid
+        assertNull(getHost("PLAINTEXT://mydo)main.com:8080"));
+        assertNull(getHost("PLAINTEXT://mydo(main.com:8080"));
+        assertNull(getHost("PLAINTEXT://mydo()main.com:8080"));
+        assertNull(getHost("PLAINTEXT://mydo(main).com:8080"));
+        assertNull(getHost("ho)st:9092"));
+        assertNull(getHost("ho(st:9092"));
+        assertNull(getHost("ho()st:9092"));
+        assertNull(getHost("ho(st):9092"));
+        assertNull(getHost("PLAINTEXT://[2001:db)8:85a3:8d3:1319:8a2e:370:7348]:5678"));
+        assertNull(getHost("PLAINTEXT://[2001:db(8:85a3:8d3:1319:8a2e:370:7348]:5678"));
+        assertNull(getHost("PLAINTEXT://[2001:db()8:85a3:8d3:1319:8a2e:370:7348]:5678"));
+        assertNull(getHost("PLAINTEXT://[2001:db(8:85a3:)8d3:1319:8a2e:370:7348]:5678"));
     }
 
     @Test
@@ -130,6 +145,7 @@ public class UtilsTest {
 
     @Test
     public void testGetPort() {
+        // valid
         assertEquals(8000, getPort("127.0.0.1:8000").intValue());
         assertEquals(8080, getPort("mydomain.com:8080").intValue());
         assertEquals(8080, getPort("MyDomain.com:8080").intValue());
@@ -137,6 +153,12 @@ public class UtilsTest {
         assertEquals(5678, getPort("[2001:db8:85a3:8d3:1319:8a2e:370:7348]:5678").intValue());
         assertEquals(5678, getPort("[2001:DB8:85A3:8D3:1319:8A2E:370:7348]:5678").intValue());
         assertEquals(5678, getPort("[fe80::b1da:69ca:57f7:63d8%3]:5678").intValue());
+
+        // invalid
+        assertNull(getPort("host:-92"));
+        assertNull(getPort("host:-9-2"));
+        assertNull(getPort("host:92-"));
+        assertNull(getPort("host:9-2"));
     }
 
     @Test
@@ -156,20 +178,6 @@ public class UtilsTest {
         assertEquals("1 MB", formatBytes(1024 * 1024));
         assertEquals("1.1 MB", formatBytes((long) (1.1 * 1024 * 1024)));
         assertEquals("10 MB", formatBytes(10 * 1024 * 1024));
-    }
-
-    @Test
-    public void testJoin() {
-        assertEquals("", Utils.join(Collections.emptyList(), ","));
-        assertEquals("1", Utils.join(asList("1"), ","));
-        assertEquals("1,2,3", Utils.join(asList(1, 2, 3), ","));
-    }
-
-    @Test
-    public void testMkString() {
-        assertEquals("[]", Utils.mkString(Stream.empty(), "[", "]", ","));
-        assertEquals("(1)", Utils.mkString(Stream.of("1"), "(", ")", ","));
-        assertEquals("{1,2,3}", Utils.mkString(Stream.of(1, 2, 3), "{", "}", ","));
     }
 
     @Test
@@ -1008,7 +1016,7 @@ public class UtilsTest {
         };
     }
 
-    private class TestException extends Exception {
+    private static class TestException extends Exception {
         final String key;
         TestException(String key) {
             this.key = key;

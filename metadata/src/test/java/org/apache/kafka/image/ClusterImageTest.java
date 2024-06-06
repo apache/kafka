@@ -45,7 +45,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -83,7 +82,7 @@ public class ClusterImageTest {
             setId(0).
             setEpoch(1000).
             setIncarnationId(Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q")).
-            setListeners(Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9092))).
+            setListeners(Collections.singletonList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9092))).
             setSupportedFeatures(Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3))).
             setRack(Optional.empty()).
             setFenced(true).
@@ -92,7 +91,7 @@ public class ClusterImageTest {
             setId(1).
             setEpoch(1001).
             setIncarnationId(Uuid.fromString("U52uRe20RsGI0RvpcTx33Q")).
-            setListeners(Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9093))).
+            setListeners(Collections.singletonList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9093))).
             setSupportedFeatures(Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3))).
             setRack(Optional.empty()).
             setFenced(false).
@@ -101,7 +100,7 @@ public class ClusterImageTest {
             setId(2).
             setEpoch(123).
             setIncarnationId(Uuid.fromString("hr4TVh3YQiu3p16Awkka6w")).
-            setListeners(Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9094))).
+            setListeners(Collections.singletonList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9094))).
             setSupportedFeatures(Collections.emptyMap()).
             setRack(Optional.of("arack")).
             setFenced(false).
@@ -154,7 +153,7 @@ public class ClusterImageTest {
             setId(0).
             setEpoch(1000).
             setIncarnationId(Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q")).
-            setListeners(Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9092))).
+            setListeners(Collections.singletonList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9092))).
             setSupportedFeatures(Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3))).
             setRack(Optional.empty()).
             setFenced(false).
@@ -163,7 +162,7 @@ public class ClusterImageTest {
             setId(1).
             setEpoch(1001).
             setIncarnationId(Uuid.fromString("U52uRe20RsGI0RvpcTx33Q")).
-            setListeners(Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9093))).
+            setListeners(Collections.singletonList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9093))).
             setSupportedFeatures(Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3))).
             setRack(Optional.empty()).
             setFenced(true).
@@ -194,7 +193,7 @@ public class ClusterImageTest {
         DELTA2_RECORDS.add(new ApiMessageAndVersion(new RegisterBrokerRecord().
             setBrokerId(2).setIsMigratingZkBroker(true).setIncarnationId(Uuid.fromString("Am5Yse7GQxaw0b2alM74bP")).
             setBrokerEpoch(1002).setEndPoints(new BrokerEndpointCollection(
-                Arrays.asList(new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
+                Collections.singletonList(new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                     setPort(9094).setSecurityProtocol((short) 0)).iterator())).
             setFeatures(new BrokerFeatureCollection(
                 Collections.singleton(new BrokerFeature().
@@ -212,7 +211,7 @@ public class ClusterImageTest {
             setId(0).
             setEpoch(1000).
             setIncarnationId(Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q")).
-            setListeners(Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9092))).
+            setListeners(Collections.singletonList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9092))).
             setSupportedFeatures(Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3))).
             setRack(Optional.empty()).
             setFenced(true).
@@ -221,7 +220,7 @@ public class ClusterImageTest {
             setId(1).
             setEpoch(1001).
             setIncarnationId(Uuid.fromString("U52uRe20RsGI0RvpcTx33Q")).
-            setListeners(Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9093))).
+            setListeners(Collections.singletonList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9093))).
             setSupportedFeatures(Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3))).
             setRack(Optional.empty()).
             setFenced(false).
@@ -230,7 +229,7 @@ public class ClusterImageTest {
             setId(2).
             setEpoch(1002).
             setIncarnationId(Uuid.fromString("Am5Yse7GQxaw0b2alM74bP")).
-            setListeners(Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9094))).
+            setListeners(Collections.singletonList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9094))).
             setSupportedFeatures(Collections.singletonMap("metadata.version",
                 VersionRange.of(MetadataVersion.IBP_3_3_IV3.featureLevel(), MetadataVersion.IBP_3_6_IV0.featureLevel()))).
             setRack(Optional.of("rack3")).

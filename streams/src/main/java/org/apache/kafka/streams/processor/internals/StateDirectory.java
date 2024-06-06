@@ -183,7 +183,9 @@ public class StateDirectory implements AutoCloseable {
 
     public UUID initializeProcessId() {
         if (!hasPersistentStores) {
-            return UUID.randomUUID();
+            final UUID processId = UUID.randomUUID();
+            log.info("Created new process id: {}", processId);
+            return processId;
         }
 
         if (!lockStateDirectory()) {

@@ -27,6 +27,27 @@ import java.lang.annotation.Target;
 @Target({ElementType.ANNOTATION_TYPE})
 @Retention(RetentionPolicy.RUNTIME)
 public @interface ClusterConfigProperty {
+    /**
+     * The config applies to the controller/broker with specified id. Default is -1, indicating the property applied to
+     * all controller/broker servers. Note that the "controller" here refers to the KRaft quorum controller.
+     * The id can vary depending on the different {@link kafka.test.annotation.Type}.
+     * <ul>
+     *  <li> Under {@link kafka.test.annotation.Type#ZK}, the broker id starts from
+     *  {@link kafka.testkit.TestKitNodes#BROKER_ID_OFFSET 0} and increases by 1
+     *  with each additional broker, and there is no controller server under this mode. </li>
+     *  <li> Under {@link kafka.test.annotation.Type#KRAFT}, the broker id starts from
+     *  {@link kafka.testkit.TestKitNodes#BROKER_ID_OFFSET 0}, the controller id
+     *  starts from {@link kafka.testkit.TestKitNodes#CONTROLLER_ID_OFFSET 3000}
+     *  and increases by 1 with each addition broker/controller.</li>
+     *  <li> Under {@link kafka.test.annotation.Type#CO_KRAFT}, the broker id and controller id both start from
+     *  {@link kafka.testkit.TestKitNodes#BROKER_ID_OFFSET 0}
+     *  and increases by 1 with each additional broker/controller.</li>
+     * </ul>
+     *
+     * If the id doesn't correspond to any broker/controller server, throw IllegalArgumentException
+     * @return the controller/broker id
+     */
+    int id() default -1;
     String key();
     String value();
 }

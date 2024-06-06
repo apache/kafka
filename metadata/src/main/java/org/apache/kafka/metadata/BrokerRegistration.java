@@ -43,15 +43,15 @@ import java.util.stream.Collectors;
  */
 public class BrokerRegistration {
     public static class Builder {
-        private int id = 0;
-        private long epoch = -1;
-        private Uuid incarnationId = null;
+        private int id;
+        private long epoch;
+        private Uuid incarnationId;
         private Map<String, Endpoint> listeners;
         private Map<String, VersionRange> supportedFeatures;
-        private Optional<String> rack = Optional.empty();
-        private boolean fenced = false;
-        private boolean inControlledShutdown = false;
-        private boolean isMigratingZkBroker = false;
+        private Optional<String> rack;
+        private boolean fenced;
+        private boolean inControlledShutdown;
+        private boolean isMigratingZkBroker;
         private List<Uuid> directories;
 
         public Builder() {
@@ -366,26 +366,24 @@ public class BrokerRegistration {
 
     @Override
     public String toString() {
-        StringBuilder bld = new StringBuilder();
-        bld.append("BrokerRegistration(id=").append(id);
-        bld.append(", epoch=").append(epoch);
-        bld.append(", incarnationId=").append(incarnationId);
-        bld.append(", listeners=[").append(
-            listeners.keySet().stream().sorted().
-                map(n -> listeners.get(n).toString()).
-                collect(Collectors.joining(", ")));
-        bld.append("], supportedFeatures={").append(
-            supportedFeatures.keySet().stream().sorted().
-                map(k -> k + ": " + supportedFeatures.get(k)).
-                collect(Collectors.joining(", ")));
-        bld.append("}");
-        bld.append(", rack=").append(rack);
-        bld.append(", fenced=").append(fenced);
-        bld.append(", inControlledShutdown=").append(inControlledShutdown);
-        bld.append(", isMigratingZkBroker=").append(isMigratingZkBroker);
-        bld.append(", directories=").append(directories);
-        bld.append(")");
-        return bld.toString();
+        return "BrokerRegistration(id=" + id +
+                ", epoch=" + epoch +
+                ", incarnationId=" + incarnationId +
+                ", listeners=[" +
+                listeners.keySet().stream().sorted().
+                        map(n -> listeners.get(n).toString()).
+                        collect(Collectors.joining(", ")) +
+                "], supportedFeatures={" +
+                supportedFeatures.keySet().stream().sorted().
+                        map(k -> k + ": " + supportedFeatures.get(k)).
+                        collect(Collectors.joining(", ")) +
+                "}" +
+                ", rack=" + rack +
+                ", fenced=" + fenced +
+                ", inControlledShutdown=" + inControlledShutdown +
+                ", isMigratingZkBroker=" + isMigratingZkBroker +
+                ", directories=" + directories +
+                ")";
     }
 
     public BrokerRegistration cloneWith(

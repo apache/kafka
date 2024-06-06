@@ -137,7 +137,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer);
         adminClient = Admin.create(props);
         topicService = new TopicCommand.TopicService(props, Optional.of(bootstrapServer));
-        testTopicName = String.format("%s-%s", info.getTestMethod().get().getName(), TestUtils.randomString(10));
+        testTopicName = String.format("%s-%s", info.getTestMethod().get().getName(), org.apache.kafka.test.TestUtils.randomString(10));
         scalaBrokers = brokers();
         scalaControllers = controllerServers();
     }

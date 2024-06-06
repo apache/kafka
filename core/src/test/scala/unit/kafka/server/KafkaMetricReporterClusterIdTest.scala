@@ -17,11 +17,12 @@
 package kafka.server
 
 import java.util.concurrent.atomic.AtomicReference
-
 import kafka.metrics.KafkaMetricsReporter
 import kafka.utils.{CoreUtils, TestUtils, VerifiableProperties}
 import kafka.server.QuorumTestHarness
 import org.apache.kafka.common.{ClusterResource, ClusterResourceListener}
+import org.apache.kafka.server.config.ServerConfigs
+import org.apache.kafka.server.metrics.MetricConfigs
 import org.apache.kafka.test.MockMetricsReporter
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
@@ -61,7 +62,7 @@ object KafkaMetricReporterClusterIdTest {
       // Because this code is run during the test setUp phase, if we throw an exception here,
       // it just results in the test itself being declared "not found" rather than failing.
       // So we track an error message which we will check later in the test body.
-      val brokerId = configs.get(KafkaConfig.BrokerIdProp)
+      val brokerId = configs.get(ServerConfigs.BROKER_ID_CONFIG)
       if (brokerId == null)
         setupError.compareAndSet("", "No value was set for the broker id.")
       else if (!brokerId.isInstanceOf[String])
@@ -83,10 +84,10 @@ class KafkaMetricReporterClusterIdTest extends QuorumTestHarness {
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
     val props = TestUtils.createBrokerConfig(1, zkConnect)
-    props.setProperty(KafkaConfig.KafkaMetricsReporterClassesProp, "kafka.server.KafkaMetricReporterClusterIdTest$MockKafkaMetricsReporter")
-    props.setProperty(KafkaConfig.MetricReporterClassesProp, "kafka.server.KafkaMetricReporterClusterIdTest$MockBrokerMetricsReporter")
-    props.setProperty(KafkaConfig.BrokerIdGenerationEnableProp, "true")
-    props.setProperty(KafkaConfig.BrokerIdProp, "-1")
+    props.setProperty(MetricConfigs.KAFKA_METRICS_REPORTER_CLASSES_CONFIG, "kafka.server.KafkaMetricReporterClusterIdTest$MockKafkaMetricsReporter")
+    props.setProperty(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG, "kafka.server.KafkaMetricReporterClusterIdTest$MockBrokerMetricsReporter")
+    props.setProperty(ServerConfigs.BROKER_ID_GENERATION_ENABLE_CONFIG, "true")
+    props.setProperty(ServerConfigs.BROKER_ID_CONFIG, "-1")
     config = KafkaConfig.fromProps(props)
     server = new KafkaServer(config, threadNamePrefix = Option(this.getClass.getName))
     server.startup()

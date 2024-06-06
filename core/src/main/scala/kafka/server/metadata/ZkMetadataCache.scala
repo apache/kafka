@@ -40,7 +40,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractControlRequest, ApiVersionsResponse, MetadataResponse, UpdateMetadataRequest}
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.server.common.{Features, MetadataVersion}
+import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
 
 import java.util.concurrent.{ThreadLocalRandom, TimeUnit}
 import scala.concurrent.TimeoutException
@@ -53,7 +53,7 @@ class FeatureCacheUpdateException(message: String) extends RuntimeException(mess
 trait ZkFinalizedFeatureCache {
   def waitUntilFeatureEpochOrThrow(minExpectedEpoch: Long, timeoutMs: Long): Unit
 
-  def getFeatureOption: Option[Features]
+  def getFeatureOption: Option[FinalizedFeatures]
 }
 
 case class MetadataSnapshot(partitionStates: mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataPartitionState]],
@@ -79,10 +79,10 @@ object ZkMetadataCache {
         Option(topicIdToNewState.get(id)) match {
           case None =>
             currentMetadata.partitionStates.get(name) match {
-              case None => handleLogMessage(s"Error: topic ${name} appeared in currentMetadata.topicNames, " +
+              case None => handleLogMessage(s"Error: topic $name appeared in currentMetadata.topicNames, " +
                 "but not in currentMetadata.partitionStates.")
               case Some(curPartitionStates) =>
-                handleLogMessage(s"Removing topic ${name} with ID ${id} from the metadata cache since " +
+                handleLogMessage(s"Removing topic $name with ID $id from the metadata cache since " +
                   "the full UMR did not include it.")
                 newRequestTopicStates.add(createDeletionEntries(name,
                   id,
@@ -93,13 +93,13 @@ object ZkMetadataCache {
             val indexToState = new util.HashMap[Integer, UpdateMetadataPartitionState]
             newTopicState.partitionStates().forEach(part => indexToState.put(part.partitionIndex, part))
             currentMetadata.partitionStates.get(name) match {
-              case None => handleLogMessage(s"Error: topic ${name} appeared in currentMetadata.topicNames, " +
+              case None => handleLogMessage(s"Error: topic $name appeared in currentMetadata.topicNames, " +
                 "but not in currentMetadata.partitionStates.")
               case Some(curPartitionStates) =>
                 curPartitionStates.foreach(state => indexToState.remove(state._1.toInt))
                 if (!indexToState.isEmpty) {
-                  handleLogMessage(s"Removing ${indexToState.size()} partition(s) from topic ${name} with " +
-                    s"ID ${id} from the metadata cache since the full UMR did not include them.")
+                  handleLogMessage(s"Removing ${indexToState.size()} partition(s) from topic $name with " +
+                    s"ID $id from the metadata cache since the full UMR did not include them.")
                   newRequestTopicStates.add(createDeletionEntries(name,
                     id,
                     indexToState.values().asScala,
@@ -108,7 +108,7 @@ object ZkMetadataCache {
             }
         }
       } catch {
-        case e: Exception => handleLogMessage(s"Error: ${e}")
+        case e: Exception => handleLogMessage(s"Error: $e")
       }
     })
     if (newRequestTopicStates.isEmpty) {
@@ -136,7 +136,7 @@ object ZkMetadataCache {
     partitions.foreach(partition => {
       val lisr = LeaderAndIsr.duringDelete(partition.isr().asScala.map(_.intValue()).toList)
       val newPartitionState = new UpdateMetadataPartitionState()
-        .setPartitionIndex(partition.partitionIndex().toInt)
+        .setPartitionIndex(partition.partitionIndex())
         .setTopicName(topicName)
         .setLeader(lisr.leader)
         .setLeaderEpoch(lisr.leaderEpoch)
@@ -158,7 +158,6 @@ class ZkMetadataCache(
   brokerId: Int,
   metadataVersion: MetadataVersion,
   brokerFeatures: BrokerFeatures,
-  kraftControllerNodes: Seq[Node] = Seq.empty,
   zkMigrationEnabled: Boolean = false)
   extends MetadataCache with ZkFinalizedFeatureCache with Logging {
 
@@ -178,11 +177,9 @@ class ZkMetadataCache(
   private val stateChangeLogger = new StateChangeLogger(brokerId, inControllerContext = false, None)
 
   // Features are updated via ZK notification (see FinalizedFeatureChangeListener)
-  @volatile private var _features: Option[Features] = Option.empty
+  @volatile private var _features: Option[FinalizedFeatures] = Option.empty
   private val featureLock = new ReentrantLock()
   private val featureCond = featureLock.newCondition()
-
-  private val kraftControllerNodeMap = kraftControllerNodes.map(node => node.id() -> node).toMap
 
   // This method is the main hotspot when it comes to the performance of metadata requests,
   // we should be careful about adding additional logic here. Relatedly, `brokers` is
@@ -350,11 +347,7 @@ class ZkMetadataCache(
 
   override def getAliveBrokerNode(brokerId: Int, listenerName: ListenerName): Option[Node] = {
     val snapshot = metadataSnapshot
-    brokerId match {
-      case id if snapshot.controllerId.filter(_.isInstanceOf[KRaftCachedControllerId]).exists(_.id == id) =>
-        kraftControllerNodeMap.get(id)
-      case _ => snapshot.aliveBrokers.get(brokerId).flatMap(_.getNode(listenerName))
-    }
+    snapshot.aliveBrokers.get(brokerId).flatMap(_.getNode(listenerName))
   }
 
   override def getAliveBrokerNodes(listenerName: ListenerName): Iterable[Node] = {
@@ -624,9 +617,9 @@ class ZkMetadataCache(
 
   override def metadataVersion(): MetadataVersion = metadataVersion
 
-  override def features(): Features = _features match {
+  override def features(): FinalizedFeatures = _features match {
     case Some(features) => features
-    case None => new Features(metadataVersion,
+    case None => new FinalizedFeatures(metadataVersion,
       Collections.emptyMap(),
       ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
       false)
@@ -646,7 +639,7 @@ class ZkMetadataCache(
    *                         not modified.
    */
   def updateFeaturesOrThrow(latestFeatures: Map[String, Short], latestEpoch: Long): Unit = {
-    val latest = new Features(metadataVersion,
+    val latest = new FinalizedFeatures(metadataVersion,
       latestFeatures.map(kv => (kv._1, kv._2.asInstanceOf[java.lang.Short])).asJava,
       latestEpoch,
       false)
@@ -718,5 +711,5 @@ class ZkMetadataCache(
     }
   }
 
-  override def getFeatureOption: Option[Features] = _features
+  override def getFeatureOption: Option[FinalizedFeatures] = _features
 }

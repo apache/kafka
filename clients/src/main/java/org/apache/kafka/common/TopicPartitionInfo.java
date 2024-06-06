@@ -17,11 +17,10 @@
 
 package org.apache.kafka.common;
 
-import org.apache.kafka.common.utils.Utils;
-
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 /**
  * A class containing leadership, replicas and ISR information for a topic partition.
@@ -116,10 +115,10 @@ public class TopicPartitionInfo {
     }
 
     public String toString() {
-        String elrString = elr != null ? Utils.join(elr, ", ") : "N/A";
-        String lastKnownElrString = lastKnownElr != null ? Utils.join(lastKnownElr, ", ") : "N/A";
+        String elrString = elr != null ? elr.stream().map(Node::toString).collect(Collectors.joining(", ")) : "N/A";
+        String lastKnownElrString = lastKnownElr != null ? lastKnownElr.stream().map(Node::toString).collect(Collectors.joining(", ")) : "N/A";
         return "(partition=" + partition + ", leader=" + leader + ", replicas=" +
-            Utils.join(replicas, ", ") + ", isr=" + Utils.join(isr, ", ") +
+            replicas.stream().map(Node::toString).collect(Collectors.joining(", ")) + ", isr=" + isr.stream().map(Node::toString).collect(Collectors.joining(", ")) +
             ", elr=" + elrString + ", lastKnownElr=" + lastKnownElrString + ")";
     }
 

@@ -52,7 +52,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mockito;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -307,7 +306,7 @@ public class CommitRequestManagerTest {
             new OffsetAndMetadata(0));
 
         // Send sync offset commit that fails and verify it propagates the expected exception.
-        Long expirationTimeMs = time.milliseconds() + retryBackoffMs;
+        long expirationTimeMs = time.milliseconds() + retryBackoffMs;
         CompletableFuture<Void> commitResult = commitRequestManager.commitSync(offsets, expirationTimeMs);
         completeOffsetCommitRequestWithError(commitRequestManager, commitError);
         assertFutureThrows(commitResult, expectedException);
@@ -748,7 +747,7 @@ public class CommitRequestManagerTest {
             new OffsetAndMetadata(0));
 
         // Send sync offset commit request that fails with retriable error.
-        Long expirationTimeMs = time.milliseconds() + retryBackoffMs * 2;
+        long expirationTimeMs = time.milliseconds() + retryBackoffMs * 2;
         CompletableFuture<Void> commitResult = commitRequestManager.commitSync(offsets, expirationTimeMs);
         completeOffsetCommitRequestWithError(commitRequestManager, Errors.REQUEST_TIMED_OUT);
 
@@ -1336,7 +1335,7 @@ public class CommitRequestManagerTest {
                                                    long receivedTimeMs,
                                                    Errors error) {
         OffsetCommitResponseData responseData = new OffsetCommitResponseData()
-            .setTopics(Arrays.asList(
+            .setTopics(Collections.singletonList(
                 new OffsetCommitResponseData.OffsetCommitResponseTopic()
                     .setName(topic)
                     .setPartitions(Collections.singletonList(
@@ -1362,7 +1361,7 @@ public class CommitRequestManagerTest {
                                                                short apiKeyVersion,
                                                                NetworkClientDelegate.UnsentRequest unsentRequest) {
         OffsetCommitResponseData responseData = new OffsetCommitResponseData()
-            .setTopics(Arrays.asList(
+            .setTopics(Collections.singletonList(
                 new OffsetCommitResponseData.OffsetCommitResponseTopic()
                     .setName(topic)
                     .setPartitions(Collections.singletonList(

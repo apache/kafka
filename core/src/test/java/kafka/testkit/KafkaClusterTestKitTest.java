@@ -17,12 +17,16 @@
 
 package kafka.testkit;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -34,13 +38,52 @@ public class KafkaClusterTestKitTest {
     @ParameterizedTest
     @ValueSource(ints = {0, -1})
     public void testCreateClusterWithBadNumDisksThrows(int disks) {
-        RuntimeException e = assertThrowsExactly(RuntimeException.class, () -> new KafkaClusterTestKit.Builder(
+        IllegalArgumentException e = assertThrowsExactly(IllegalArgumentException.class, () -> new KafkaClusterTestKit.Builder(
                 new TestKitNodes.Builder()
-                        .setBrokerNodes(1, disks)
+                        .setNumBrokerNodes(1)
+                        .setNumDisksPerBroker(disks)
                         .setNumControllerNodes(1)
                         .build())
         );
-        assertEquals("Invalid value for disksPerBroker", e.getMessage());
+        assertEquals("Invalid value for numDisksPerBroker", e.getMessage());
+    }
+
+    @Test
+    public void testCreateClusterWithBadNumOfControllers() {
+        IllegalArgumentException e = assertThrowsExactly(IllegalArgumentException.class, () -> new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setNumBrokerNodes(1)
+                .setNumControllerNodes(-1)
+                .build())
+        );
+        assertEquals("Invalid negative value for numControllerNodes", e.getMessage());
+    }
+
+    @Test
+    public void testCreateClusterWithBadNumOfBrokers() {
+        IllegalArgumentException e = assertThrowsExactly(IllegalArgumentException.class, () -> new KafkaClusterTestKit.Builder(
+            new TestKitNodes.Builder()
+                .setNumBrokerNodes(-1)
+                .setNumControllerNodes(1)
+                .build())
+        );
+        assertEquals("Invalid negative value for numBrokerNodes", e.getMessage());
+    }
+
+    @Test
+    public void testCreateClusterWithBadPerServerProperties() {
+        Map<Integer, Map<String, String>> perServerProperties = new HashMap<>();
+        perServerProperties.put(100, Collections.singletonMap("foo", "foo1"));
+        perServerProperties.put(200, Collections.singletonMap("bar", "bar1"));
+
+        IllegalArgumentException e = assertThrowsExactly(IllegalArgumentException.class, () -> new KafkaClusterTestKit.Builder(
+                new TestKitNodes.Builder()
+                        .setNumBrokerNodes(1)
+                        .setNumControllerNodes(1)
+                        .setPerServerProperties(perServerProperties)
+                        .build())
+        );
+        assertEquals("Unknown server id 100, 200 in perServerProperties, the existent server ids are 0, 3000", e.getMessage());
     }
 
     @ParameterizedTest
@@ -48,7 +91,8 @@ public class KafkaClusterTestKitTest {
     public void testCreateClusterAndCloseWithMultipleLogDirs(boolean combined) {
         try (KafkaClusterTestKit cluster = new KafkaClusterTestKit.Builder(
                 new TestKitNodes.Builder().
-                        setBrokerNodes(5, 2).
+                        setNumBrokerNodes(5).
+                        setNumDisksPerBroker(2).
                         setCombined(combined).
                         setNumControllerNodes(3).build()).build()) {
 
