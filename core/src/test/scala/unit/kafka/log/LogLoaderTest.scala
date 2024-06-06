@@ -154,7 +154,8 @@ class LogLoaderTest {
           val logStartOffset = logStartOffsets.getOrElse(topicPartition, 0L)
           val logDirFailureChannel: LogDirFailureChannel = new LogDirFailureChannel(1)
           val segments = new LogSegments(topicPartition)
-          val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, config.recordVersion, "")
+          val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
+            logDir, topicPartition, logDirFailureChannel, config.recordVersion, "", None, time.scheduler)
           val producerStateManager = new ProducerStateManager(topicPartition, logDir,
             this.maxTransactionTimeoutMs, this.producerStateManagerConfig, time)
           val logLoader = new LogLoader(logDir, topicPartition, config, time.scheduler, time,
@@ -367,7 +368,8 @@ class LogLoaderTest {
           super.add(wrapper)
         }
       }
-      val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, logConfig.recordVersion, "")
+      val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
+        logDir, topicPartition, logDirFailureChannel, logConfig.recordVersion, "", None, mockTime.scheduler)
       val producerStateManager = new ProducerStateManager(topicPartition, logDir,
         maxTransactionTimeoutMs, producerStateManagerConfig, mockTime)
       val logLoader = new LogLoader(
@@ -431,7 +433,8 @@ class LogLoaderTest {
     val logDirFailureChannel: LogDirFailureChannel = new LogDirFailureChannel(1)
     val config = new LogConfig(new Properties())
     val segments = new LogSegments(topicPartition)
-    val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, config.recordVersion, "")
+    val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
+      logDir, topicPartition, logDirFailureChannel, config.recordVersion, "", None, mockTime.scheduler)
     val offsets = new LogLoader(
       logDir,
       topicPartition,
@@ -540,7 +543,8 @@ class LogLoaderTest {
     val config = new LogConfig(logProps)
     val logDirFailureChannel = null
     val segments = new LogSegments(topicPartition)
-    val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, config.recordVersion, "")
+    val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
+      logDir, topicPartition, logDirFailureChannel, config.recordVersion, "", None, mockTime.scheduler)
     val offsets = new LogLoader(
       logDir,
       topicPartition,
@@ -594,7 +598,8 @@ class LogLoaderTest {
     val config = new LogConfig(logProps)
     val logDirFailureChannel = null
     val segments = new LogSegments(topicPartition)
-    val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, config.recordVersion, "")
+    val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
+      logDir, topicPartition, logDirFailureChannel, config.recordVersion, "", None, mockTime.scheduler)
     val offsets = new LogLoader(
       logDir,
       topicPartition,
@@ -647,7 +652,8 @@ class LogLoaderTest {
     val config = new LogConfig(logProps)
     val logDirFailureChannel = null
     val segments = new LogSegments(topicPartition)
-    val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, config.recordVersion, "")
+    val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
+      logDir, topicPartition, logDirFailureChannel, config.recordVersion, "", None, mockTime.scheduler)
     val offsets = new LogLoader(
       logDir,
       topicPartition,
@@ -1387,7 +1393,7 @@ class LogLoaderTest {
     assertEquals(java.util.Arrays.asList(new EpochEntry(1, 0), new EpochEntry(2, 1), new EpochEntry(3, 3)), leaderEpochCache.epochEntries)
 
     // deliberately remove some of the epoch entries
-    leaderEpochCache.truncateFromEnd(2)
+    leaderEpochCache.truncateFromEndAsyncFlush(2)
     assertNotEquals(java.util.Arrays.asList(new EpochEntry(1, 0), new EpochEntry(2, 1), new EpochEntry(3, 3)), leaderEpochCache.epochEntries)
     log.close()
 
@@ -1789,7 +1795,8 @@ class LogLoaderTest {
     log.logSegments.forEach(segment => segments.add(segment))
     assertEquals(5, segments.firstSegment.get.baseOffset)
 
-    val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(logDir, topicPartition, logDirFailureChannel, logConfig.recordVersion, "")
+    val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
+      logDir, topicPartition, logDirFailureChannel, logConfig.recordVersion, "", None, mockTime.scheduler)
     val offsets = new LogLoader(
       logDir,
       topicPartition,

@@ -521,6 +521,10 @@ public class TopologyMetadata {
         return lookupBuilderForNamedTopology(topologyName).stateStoreNameToFullSourceTopicNames();
     }
 
+    public Set<String> stateStoreNamesForSubtopology(final String topologyName, final int subtopologyId) {
+        return lookupBuilderForNamedTopology(topologyName).stateStoreNamesForSubtopology(subtopologyId);
+    }
+
     public Map<String, List<String>> stateStoreNameToSourceTopics() {
         final Map<String, List<String>> stateStoreNameToSourceTopics = new HashMap<>();
         applyToEachBuilder(b -> stateStoreNameToSourceTopics.putAll(b.stateStoreNameToFullSourceTopicNames()));

@@ -14,21 +14,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.storage.internals.checkpoint;
+package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.storage.internals.log.EpochEntry;
+import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.util.Collection;
-import java.util.List;
+/**
+ * The result of {@link org.apache.kafka.clients.admin.Admin#removeRaftVoter(int, org.apache.kafka.common.Uuid, org.apache.kafka.clients.admin.RemoveRaftVoterOptions)}.
+ *
+ * The API of this class is evolving, see {@link Admin} for details.
+ */
+@InterfaceStability.Stable
+public class RemoveRaftVoterResult {
+    private final KafkaFuture<Void> result;
 
-public interface LeaderEpochCheckpoint {
-    // in file-backed checkpoint implementation, the content should be
-    // synced to the device if `sync` is true
-    void write(Collection<EpochEntry> epochs, boolean sync);
-
-    default void write(Collection<EpochEntry> epochs) {
-        write(epochs, true);
+    RemoveRaftVoterResult(KafkaFuture<Void> result) {
+        this.result = result;
     }
 
-    List<EpochEntry> read();
+    /**
+     * Returns a future that completes when the voter has been removed.
+     */
+    public KafkaFuture<Void> all() {
+        return result;
+    }
+
 }

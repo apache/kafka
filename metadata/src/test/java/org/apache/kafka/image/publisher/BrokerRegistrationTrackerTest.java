@@ -48,8 +48,7 @@ public class BrokerRegistrationTrackerTest {
 
     static class BrokerRegistrationTrackerTestContext {
         AtomicInteger numCalls = new AtomicInteger(0);
-        BrokerRegistrationTracker tracker = new BrokerRegistrationTracker(1,
-                Arrays.asList(B, A), () -> numCalls.incrementAndGet());
+        BrokerRegistrationTracker tracker = new BrokerRegistrationTracker(1, () -> numCalls.incrementAndGet());
 
         MetadataImage image = MetadataImage.EMPTY;
 
