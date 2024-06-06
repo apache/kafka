@@ -74,6 +74,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -251,7 +252,7 @@ public class ConsumerNetworkThreadTest {
     }
 
     @Test
-    void testPollResultTimer() {
+    public void testPollResultTimer() {
         NetworkClientDelegate networkClientDelegate = new NetworkClientDelegate(
                 time,
                 config,
@@ -280,7 +281,7 @@ public class ConsumerNetworkThreadTest {
     }
 
     @Test
-    void testMaximumTimeToWait() {
+    public void testMaximumTimeToWait() {
         // Initial value before runOnce has been called
         assertEquals(ConsumerNetworkThread.MAX_POLL_TIMEOUT_MS, consumerNetworkThread.maximumTimeToWait());
 
@@ -293,7 +294,7 @@ public class ConsumerNetworkThreadTest {
     }
 
     @Test
-    void testCleanupInvokesReaper() {
+    public void testCleanupInvokesReaper() {
         LinkedList<NetworkClientDelegate.UnsentRequest> queue = new LinkedList<>();
         when(networkClientDelegate.unsentRequests()).thenReturn(queue);
         consumerNetworkThread.cleanup();
@@ -301,45 +302,19 @@ public class ConsumerNetworkThreadTest {
     }
 
     @Test
-    void testRunOnceInvokesReaper() {
+    public void testRunOnceInvokesReaper() {
         consumerNetworkThread.runOnce();
         verify(applicationEventReaper).reap(any(Long.class));
     }
 
     @Test
-    void testSendUnsentRequest() {
-        NetworkClientDelegate networkClientDelegate = new NetworkClientDelegate(
-                time,
-                config,
-                logContext,
-                client
-        );
+    public void testSendUnsentRequests() {
+        when(networkClientDelegate.unsentRequests()).thenReturn(new LinkedList<>());
+        when(networkClientDelegate.hasAnyPendingRequests()).thenReturn(true).thenReturn(true).thenReturn(false);
 
-        ConsumerNetworkThread consumerNetworkThread = new ConsumerNetworkThread(
-                new LogContext(),
-                time,
-                applicationEventsQueue,
-                applicationEventReaper,
-                () -> applicationEventProcessor,
-                () -> networkClientDelegate,
-                () -> requestManagers
-        );
-        consumerNetworkThread.initializeResources();
-
-        String groupId = "group-id";
-        NetworkClientDelegate.UnsentRequest request = new NetworkClientDelegate.UnsentRequest(
-            new FindCoordinatorRequest.Builder(
-                new FindCoordinatorRequestData()
-                    .setKeyType(FindCoordinatorRequest.CoordinatorType.TRANSACTION.id())
-                    .setKey(groupId)),
-            Optional.empty());
-
-        networkClientDelegate.add(request);
-        assertTrue(networkClientDelegate.hasAnyPendingRequests());
-        assertFalse(networkClientDelegate.unsentRequests().isEmpty());
-        assertFalse(client.hasInFlightRequests());
         consumerNetworkThread.cleanup();
 
+        verify(networkClientDelegate, times(2)).poll(anyLong(), anyLong());
         assertTrue(networkClientDelegate.unsentRequests().isEmpty());
         assertFalse(client.hasInFlightRequests());
         assertFalse(networkClientDelegate.hasAnyPendingRequests());
