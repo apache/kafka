@@ -134,11 +134,11 @@ public class ConsumerNetworkThreadTest {
     @Test
     public void testEnsureCloseStopsRunningThread() {
         assertTrue(consumerNetworkThread.isRunning(),
-        "ConsumerNetworkThread should start running when created");
+            "ConsumerNetworkThread should start running when created");
 
         consumerNetworkThread.close();
         assertFalse(consumerNetworkThread.isRunning(),
-        "close() should make consumerNetworkThread.running false by calling closeInternal(Duration timeout)");
+            "close() should make consumerNetworkThread.running false by calling closeInternal(Duration timeout)");
     }
 
     @ParameterizedTest
