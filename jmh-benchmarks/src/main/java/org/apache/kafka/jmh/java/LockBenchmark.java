@@ -38,13 +38,13 @@ import java.util.concurrent.locks.ReentrantLock;
 @Warmup(iterations = 5)
 @Measurement(iterations = 15)
 @BenchmarkMode(Mode.AverageTime)
-@OutputTimeUnit(TimeUnit.MILLISECONDS)
+@OutputTimeUnit(TimeUnit.NANOSECONDS)
 @Threads(2)
-public class LockTest {
+public class LockBenchmark {
 
-    int counter = 0;
-    final Object lock = new Object();
-    final ReentrantLock lock2 = new ReentrantLock();
+    private int counter = 0;
+    private final Object lock = new Object();
+    private final ReentrantLock lock2 = new ReentrantLock();
 
     @Setup(Level.Iteration)
     public void init() {
@@ -52,19 +52,18 @@ public class LockTest {
     }
 
     @Benchmark
-    public int testSyn() {
+    public int testSynchronized() {
         synchronized (lock) {
-            return counter++;
+            counter++;
         }
+        return counter;
     }
 
     @Benchmark
     public int testReentrantLock() {
         lock2.lock();
-        try {
-            return counter++;
-        } finally {
-            lock2.unlock();
-        }
+        counter++;
+        lock2.unlock();
+        return counter;
     }
 }

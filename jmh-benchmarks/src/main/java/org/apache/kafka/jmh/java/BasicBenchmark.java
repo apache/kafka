@@ -38,12 +38,12 @@ import java.util.concurrent.TimeUnit;
 @Warmup(iterations = 5)
 @Measurement(iterations = 15)
 @BenchmarkMode(Mode.AverageTime)
-@OutputTimeUnit(TimeUnit.MILLISECONDS)
-public class BasicTest {
+@OutputTimeUnit(TimeUnit.NANOSECONDS)
+public class BasicBenchmark {
 
-    Random random = new Random();
-    int index = 0;
-    float[] floats = getInOrderArray();
+    private static final Random RANDOM = new Random();
+    private static final float[] FLOATS = getInOrderArray();
+    private int index = 0;
 
     @Setup(Level.Iteration)
     public void init() {
@@ -52,24 +52,28 @@ public class BasicTest {
 
     @Benchmark
     public double testMathSqrt() {
-        return Math.sqrt(0.0 + index++ % 5000);
+        return Math.sqrt(index++ % 5000);
+    }
+
+    @Benchmark
+    public long testSystemMillis() {
+        return System.currentTimeMillis();
     }
 
     @Benchmark
     public float testRandom() {
-        return random.nextInt();
+        return RANDOM.nextInt();
     }
 
     @Benchmark
     public float testBinarySearch() {
-        return Arrays.binarySearch(floats, floats[index++ % floats.length]);
+        return Arrays.binarySearch(FLOATS, FLOATS[index++ % FLOATS.length]);
     }
 
     private static float[] getInOrderArray() {
-        Random random = new Random();
         float[] floats = new float[1024];
         for (int i = 0; i < floats.length; i++)
-            floats[i] = random.nextFloat();
+            floats[i] = RANDOM.nextFloat();
         Arrays.sort(floats);
         return floats;
     }

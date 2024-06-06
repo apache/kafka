@@ -44,34 +44,34 @@ import java.util.stream.IntStream;
 @Warmup(iterations = 5)
 @Measurement(iterations = 15)
 @BenchmarkMode(Mode.AverageTime)
-@OutputTimeUnit(TimeUnit.MILLISECONDS)
+@OutputTimeUnit(TimeUnit.NANOSECONDS)
 @Threads(2)
-public class MapTest {
-    public static final int TIMES = 1_000_000;
-    private static final int MAP_LENGTH = 100;
-    private static final Map<String, Integer> MAP_TEMPLATE = IntStream.range(0, MAP_LENGTH).boxed()
+public class MapBenchmark {
+    private static final int TIMES = 1_000_000;
+    private static final int MAP_SIZE = 100;
+    private static final Map<String, Integer> MAP_TEMPLATE = IntStream.range(0, MAP_SIZE).boxed()
             .collect(Collectors.toMap(i -> Integer.toString(i), i -> i));
     private static final List<String> KEYS = new ArrayList<>(MAP_TEMPLATE.keySet());
 
-    Map<String, Integer> hashMap = new HashMap<>(MAP_TEMPLATE);
-    Map<String, Integer> concurrentHashMap = new ConcurrentHashMap<>(MAP_TEMPLATE);
-    Map<String, Integer> copyOnWriteMap = new CopyOnWriteMap<>(MAP_TEMPLATE);
+    private final Map<String, Integer> hashMap = new HashMap<>(MAP_TEMPLATE);
+    private final Map<String, Integer> concurrentHashMap = new ConcurrentHashMap<>(MAP_TEMPLATE);
+    private final Map<String, Integer> copyOnWriteMap = new CopyOnWriteMap<>(MAP_TEMPLATE);
 
     @Benchmark
     public void testHashMap(Blackhole blackhole) {
         IntStream.range(0, TIMES).forEach(x ->
-                blackhole.consume(hashMap.get(KEYS.get(x % MAP_LENGTH))));
+                blackhole.consume(hashMap.get(KEYS.get(x % MAP_SIZE))));
     }
 
     @Benchmark
     public void testConcurrentHashMap(Blackhole blackhole) {
         IntStream.range(0, TIMES).forEach(x ->
-                blackhole.consume(concurrentHashMap.get(KEYS.get(x % MAP_LENGTH))));
+                blackhole.consume(concurrentHashMap.get(KEYS.get(x % MAP_SIZE))));
     }
 
     @Benchmark
     public void testCopyOnWriteMap(Blackhole blackhole) {
         IntStream.range(0, TIMES).forEach(x ->
-                blackhole.consume(copyOnWriteMap.get(KEYS.get(x % MAP_LENGTH))));
+                blackhole.consume(copyOnWriteMap.get(KEYS.get(x % MAP_SIZE))));
     }
 }
