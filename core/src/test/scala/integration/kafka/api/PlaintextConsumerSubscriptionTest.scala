@@ -231,7 +231,6 @@ class PlaintextConsumerSubscriptionTest extends AbstractConsumerTest {
     // Invalid topic name due to space
     val invalidTopicName = "topic abc"
     val consumer = createConsumer()
-
     // subscribe invalid topic
     consumer.subscribe(List(invalidTopicName).asJava)
 

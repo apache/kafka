@@ -26,15 +26,11 @@ import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
-import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
-import org.apache.kafka.common.requests.MetadataResponse;
-import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -186,46 +182,21 @@ public class NetworkClientDelegateTest {
 
     @Test
     public void testPropagateMetadataError() {
-        String exMsg = "Test Auth Exception";
-        doThrow(new AuthenticationException(exMsg)).when(metadata).maybeThrowAnyException();
+        AuthenticationException authException = new AuthenticationException("Test Auth Exception");
+        doThrow(authException).when(metadata).maybeThrowAnyException();
 
         LinkedList<BackgroundEvent> backgroundEventQueue = new LinkedList<>();
         this.backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
         NetworkClientDelegate networkClientDelegate = newNetworkClientDelegate();
 
-
         assertEquals(0, backgroundEventQueue.size());
         networkClientDelegate.poll(0, time.milliseconds());
         assertEquals(1, backgroundEventQueue.size());
 
-        ErrorEvent event = (ErrorEvent) backgroundEventQueue.poll();
+        BackgroundEvent event = backgroundEventQueue.poll();
         assertNotNull(event);
-        assertEquals(AuthenticationException.class, event.error().getClass());
-        assertEquals(exMsg, event.error().getMessage());
-    }
-
-    @Test
-    public void testPropagateInvalidTopicMetadataError() {
-        LinkedList<BackgroundEvent> backgroundEventQueue = new LinkedList<>();
-        this.backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
-        this.metadata = new Metadata(100, 100, 50000,
-                new LogContext(), new ClusterResourceListeners());
-        NetworkClientDelegate networkClientDelegate = newNetworkClientDelegate();
-
-        String invalidTopic = "invalid topic";
-        MetadataResponse invalidTopicResponse = RequestTestUtils.metadataUpdateWith("clusterId", 1,
-                Collections.singletonMap(invalidTopic, Errors.INVALID_TOPIC_EXCEPTION), Collections.emptyMap());
-        metadata.updateWithCurrentRequestVersion(invalidTopicResponse, false, time.milliseconds());
-        assertEquals(0, backgroundEventQueue.size());
-
-        networkClientDelegate.poll(0, time.milliseconds());
-        assertEquals(1, backgroundEventQueue.size());
-
-        ErrorEvent event = (ErrorEvent) backgroundEventQueue.poll();
-        assertNotNull(event);
-        assertEquals(InvalidTopicException.class, event.error().getClass());
-        assertEquals(String.format("Invalid topics: [%s]", invalidTopic),
-                event.error().getMessage());
+        assertEquals(BackgroundEvent.Type.ERROR, event.type());
+        assertEquals(authException, ((ErrorEvent) event).error());
     }
 
     public NetworkClientDelegate newNetworkClientDelegate() {

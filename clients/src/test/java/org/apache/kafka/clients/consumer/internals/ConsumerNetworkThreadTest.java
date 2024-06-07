@@ -26,7 +26,6 @@ import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
-import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
@@ -36,7 +35,6 @@ import org.apache.kafka.clients.consumer.internals.events.TopicMetadataEvent;
 import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsEvent;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.protocol.Errors;
@@ -74,7 +72,6 @@ import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -365,18 +362,6 @@ public class ConsumerNetworkThreadTest {
         assertTrue(networkClient.unsentRequests().isEmpty());
         assertFalse(client.hasInFlightRequests());
         assertFalse(networkClient.hasAnyPendingRequests());
-    }
-
-    @Test
-    void testMetadataErrorEvent() {
-        metadata.fatalError(new AuthenticationException("Authentication failed"));
-
-        consumerNetworkThread.runOnce();
-        BackgroundEvent event = backgroundEventsQueue.poll();
-        assertNotNull(event);
-        assertEquals(BackgroundEvent.Type.ERROR, event.type());
-        assertEquals(AuthenticationException.class, ((ErrorEvent) event).error().getClass());
-        assertEquals("Authentication failed", ((ErrorEvent) event).error().getMessage());
     }
 
     private void prepareOffsetCommitRequest(final Map<TopicPartition, Long> expectedOffsets,
