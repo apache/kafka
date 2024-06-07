@@ -71,6 +71,7 @@ import static org.mockito.Mockito.when;
 
 public class ConsumerNetworkThreadTest {
     static final int DEFAULT_HEARTBEAT_INTERVAL_MS = 1000;
+    static final long MAX_POLL_TIMEOUT_MS = 5000;
 
     private final Time time;
     private final BlockingQueue<ApplicationEvent> applicationEventsQueue;
@@ -148,7 +149,7 @@ public class ConsumerNetworkThreadTest {
         when(networkClientDelegate.addAll(pollResult1)).thenReturn(pollResult1.timeUntilNextPollMs);
         consumerNetworkThread.runOnce();
 
-        verify(networkClientDelegate).poll(exampleTime < 5001 ? exampleTime : 5000, time.milliseconds());
+        verify(networkClientDelegate).poll(exampleTime < MAX_POLL_TIMEOUT_MS + 1 ? exampleTime : MAX_POLL_TIMEOUT_MS, time.milliseconds());
         assertEquals(consumerNetworkThread.maximumTimeToWait(), exampleTime);
     }
 
