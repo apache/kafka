@@ -378,11 +378,12 @@ public final class VoterSet {
     /**
      * Creates a voter set from a map of socket addresses.
      *
-     * @param listener the listener name for all of the endpoints
-     * @param voters the socket addresses by voter id
+     * @param listener    the listener name for all of the endpoints
+     * @param voters      the socket addresses by voter id
+     * @param optionalUuid
      * @return the voter set
      */
-    public static VoterSet fromInetSocketAddresses(ListenerName listener, Map<Integer, InetSocketAddress> voters) {
+    public static VoterSet fromInetSocketAddresses(ListenerName listener, Map<Integer, InetSocketAddress> voters, Optional<Uuid> optionalUuid) {
         Map<Integer, VoterNode> voterNodes = voters
             .entrySet()
             .stream()
@@ -390,7 +391,7 @@ public final class VoterSet {
                 Collectors.toMap(
                     Map.Entry::getKey,
                     entry -> new VoterNode(
-                        ReplicaKey.of(entry.getKey(), Optional.empty()),
+                        ReplicaKey.of(entry.getKey(), optionalUuid),
                         Collections.singletonMap(listener, entry.getValue()),
                         new SupportedVersionRange((short) 0, (short) 0)
                     )

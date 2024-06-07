@@ -412,7 +412,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         Metrics metrics
     ) {
         partitionState = new KRaftControlRecordStateMachine(
-            Optional.of(VoterSet.fromInetSocketAddresses(channel.listenerName(), voterAddresses)),
+            Optional.of(VoterSet.fromInetSocketAddresses(channel.listenerName(), voterAddresses, Optional.empty())),
             log,
             serde,
             BufferSupplier.create(),
