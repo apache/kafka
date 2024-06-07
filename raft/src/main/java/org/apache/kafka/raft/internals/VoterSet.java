@@ -301,7 +301,10 @@ final public class VoterSet {
         }
 
         // TODO: write documentation
+        // TODO: write test for this
         public boolean isVoter(ReplicaKey replicaKey) {
+            if (voterKey.id() != replicaKey.id()) return false;
+
             if (voterKey.directoryId().isPresent()) {
                 return voterKey.directoryId().equals(replicaKey.directoryId());
             } else {

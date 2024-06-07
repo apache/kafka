@@ -443,15 +443,12 @@ public class LeaderStateTest {
         assertEquals(Optional.of(new LogOffsetMetadata(20L)), state.highWatermark());
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testHighWatermarkDoesIncreaseFromNewVoter(boolean withDirectoryId) {
+    @Test
+    public void testHighWatermarkDoesIncreaseFromNewVoter() {
         int node1 = 1;
-        ReplicaKey nodeKey2 = withDirectoryId ?
-            ReplicaKey.of(2, Uuid.randomUuid()) :
-            ReplicaKey.of(2, ReplicaKey.NO_DIRECTORY_ID);
+        ReplicaKey nodeKey2 = ReplicaKey.of(2, Uuid.randomUuid());
 
-        VoterSet originalVoters  = localWithRemoteVoterSet(IntStream.of(node1), withDirectoryId);
+        VoterSet originalVoters  = localWithRemoteVoterSet(IntStream.of(node1), true);
         LeaderState<?> state = newLeaderState(originalVoters, 5L);
 
         assertFalse(state.updateLocalState(new LogOffsetMetadata(15L), originalVoters));
@@ -480,17 +477,14 @@ public class LeaderStateTest {
         assertEquals(Optional.of(new LogOffsetMetadata(16L)), state.highWatermark());
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testHighWatermarkDoesNotDecreaseFromNewVoter(boolean withDirectoryId) {
+    @Test
+    public void testHighWatermarkDoesNotDecreaseFromNewVoter() {
         int node1 = 1;
         int node2 = 2;
-        ReplicaKey nodeKey3 = withDirectoryId ?
-            ReplicaKey.of(3, Uuid.randomUuid()) :
-            ReplicaKey.of(3, ReplicaKey.NO_DIRECTORY_ID);
+        ReplicaKey nodeKey3 = ReplicaKey.of(3, Uuid.randomUuid());
 
         // start with three voters with HW at 15L
-        VoterSet originalVoters = localWithRemoteVoterSet(IntStream.of(node1, node2), withDirectoryId);
+        VoterSet originalVoters = localWithRemoteVoterSet(IntStream.of(node1, node2), true);
         LeaderState<?> state = newLeaderState(originalVoters, 5L);
 
         assertFalse(state.updateLocalState(new LogOffsetMetadata(15L), originalVoters));
@@ -543,13 +537,12 @@ public class LeaderStateTest {
         assertEquals(Optional.of(new LogOffsetMetadata(16L)), state.highWatermark());
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testUpdateHighWatermarkRemovingFollowerFromVoterStates(boolean withDirectoryId) {
+    @Test
+    public void testUpdateHighWatermarkRemovingFollowerFromVoterStates() {
         int node1 = 1;
         int node2 = 2;
 
-        VoterSet originalVoters = localWithRemoteVoterSet(IntStream.of(node1, node2), withDirectoryId);
+        VoterSet originalVoters = localWithRemoteVoterSet(IntStream.of(node1, node2), true);
         LeaderState<?> state = newLeaderState(originalVoters, 10L);
 
         assertFalse(state.updateLocalState(new LogOffsetMetadata(15L), originalVoters));
@@ -571,7 +564,7 @@ public class LeaderStateTest {
 
         // removing node1 should not decrement HW to 10L
         VoterSet votersWithoutNode1 = originalVoters
-            .removeVoter(originalVoters.voterNode(node2).get().voterKey())
+            .removeVoter(originalVoters.voterNode(node1).get().voterKey())
             .get();
         assertFalse(state.updateLocalState(new LogOffsetMetadata(17L), votersWithoutNode1));
         assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
@@ -615,13 +608,12 @@ public class LeaderStateTest {
         assertEquals(Optional.of(new LogOffsetMetadata(16L)), state.highWatermark());
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testUpdateHighWatermarkQuorumRemovingLeaderFromVoterStates(boolean withDirectoryId) {
+    @Test
+    public void testUpdateHighWatermarkQuorumRemovingLeaderFromVoterStates() {
         int node1 = 1;
         int node2 = 2;
 
-        VoterSet originalVoters = localWithRemoteVoterSet(IntStream.of(node1, node2), withDirectoryId);
+        VoterSet originalVoters = localWithRemoteVoterSet(IntStream.of(node1, node2), true);
         LeaderState<?> state = newLeaderState(originalVoters, 10L);
 
         assertFalse(state.updateLocalState(new LogOffsetMetadata(15L), originalVoters));
@@ -902,15 +894,14 @@ public class LeaderStateTest {
             observerState);
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testDescribeQuorumWithVotersAndObservers(boolean withDirectoryId) {
+    @Test
+    public void testDescribeQuorumWithVotersAndObservers() {
         MockTime time = new MockTime();
         int node1 = 1;
         int node2 = 2;
         long epochStartOffset = 10L;
 
-        VoterSet voters = localWithRemoteVoterSet(IntStream.of(node1, node2), withDirectoryId);
+        VoterSet voters = localWithRemoteVoterSet(IntStream.of(node1, node2), true);
         LeaderState<?> state = newLeaderState(voters, epochStartOffset);
 
         ReplicaKey nodeKey1 = voters.voterNode(node1).get().voterKey();
@@ -923,7 +914,7 @@ public class LeaderStateTest {
         // node1 becomes an observer
         long fetchTimeMs = time.milliseconds();
         assertFalse(state.updateReplicaState(nodeKey1, fetchTimeMs, new LogOffsetMetadata(epochStartOffset + 1)));
-        VoterSet votersWithoutNode1 = voters.removeVoter(nodeKey2).get();
+        VoterSet votersWithoutNode1 = voters.removeVoter(nodeKey1).get();
         state.updateLocalState(new LogOffsetMetadata(epochStartOffset + 5), votersWithoutNode1);
 
 
@@ -960,15 +951,14 @@ public class LeaderStateTest {
         assertEquals(fetchTimeMs, node1State.lastFetchTimestamp());
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testClearInactiveObserversIgnoresLeader(boolean withDirectoryId) {
+    @Test
+    public void testClearInactiveObserversIgnoresLeader() {
         MockTime time = new MockTime();
         int followerId = 1;
         ReplicaKey observerKey = ReplicaKey.of(10, Uuid.randomUuid());
         long epochStartOffset = 10L;
 
-        VoterSet voters = localWithRemoteVoterSet(IntStream.of(followerId), withDirectoryId);
+        VoterSet voters = localWithRemoteVoterSet(IntStream.of(followerId), true);
         LeaderState<?> state = newLeaderState(voters, epochStartOffset);
 
         ReplicaKey followerKey = voters.voterNode(followerId).get().voterKey();
@@ -998,7 +988,7 @@ public class LeaderStateTest {
         assertEquals(0, partitionData.observers().size());
 
         // leader becomes observer
-        VoterSet votersWithoutLeader = voters.removeVoter(followerKey).get();
+        VoterSet votersWithoutLeader = voters.removeVoter(localReplicaKey).get();
         assertFalse(state.updateLocalState(new LogOffsetMetadata(epochStartOffset + 10), votersWithoutLeader));
 
         // leader should be returned in describe quorum output

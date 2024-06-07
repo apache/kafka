@@ -23,6 +23,7 @@ import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
+import org.apache.kafka.common.message.DescribeQuorumRequestData;
 import org.apache.kafka.common.message.DescribeQuorumResponseData.ReplicaState;
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.EndQuorumEpochRequestData;
@@ -1255,6 +1256,15 @@ public final class RaftClientTestContext {
         }
     }
 
+    private short describeQuorumRpcVersion() {
+        if (kip853Supported) {
+            // KAFKA-16520 should change this to the new latest value (2)
+            return 1;
+        } else {
+            return 1;
+        }
+    }
+
     private short raftRequestVersion(ApiMessage request) {
         if (request instanceof FetchRequestData) {
             return fetchRpcVersion();
@@ -1266,6 +1276,8 @@ public final class RaftClientTestContext {
             return beginQuorumEpochRpcVersion();
         } else if (request instanceof EndQuorumEpochRequestData) {
             return endQuorumEpochRpcVersion();
+        } else if (request instanceof DescribeQuorumRequestData) {
+            return describeQuorumRpcVersion();
         } else {
             throw new IllegalArgumentException(String.format("Request %s is not a raft request", request));
         }

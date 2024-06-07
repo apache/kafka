@@ -79,7 +79,7 @@ public class LeaderState<T> implements EpochState {
         int epoch,
         long epochStartOffset,
         VoterSet voters,
-        Set<Integer> grantingVoters,
+        Set<Integer> grantingVoters, // TODO: should this change to Set<ReplicaKey>?
         BatchAccumulator<T> accumulator,
         Endpoints endpoints,
         int fetchTimeoutMs,
@@ -391,11 +391,13 @@ public class LeaderState<T> implements EpochState {
             .sorted();
     }
 
+    // TODO: this should be a ReplicaKey
     public void addAcknowledgementFrom(int remoteNodeId) {
         ReplicaState voterState = ensureValidVoter(remoteNodeId);
         voterState.hasAcknowledgedLeader = true;
     }
 
+    // TODO: this should be a ReplicaKey
     private ReplicaState ensureValidVoter(int remoteNodeId) {
         ReplicaState state = voterStates.get(remoteNodeId);
         if (state == null) {
@@ -524,6 +526,8 @@ public class LeaderState<T> implements EpochState {
         }
 
         boolean matchesKey(ReplicaKey replicaKey) {
+            if (this.replicaKey.id() != replicaKey.id()) return false;
+
             if (this.replicaKey.directoryId().isPresent()) {
                 return this.replicaKey.directoryId().equals(replicaKey.directoryId());
             } else {
