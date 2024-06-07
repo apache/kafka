@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.test.{TestUtils => JTestUtils}
 import kafka.utils.TestUtils
 import kafka.server.BaseRequestTest
 import org.junit.jupiter.api.Assertions._
@@ -90,12 +91,14 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
         s"The current assignment is ${consumer.assignment()}")
   }
 
-  def awaitNonEmptyRecords[K, V](consumer: Consumer[K, V], partition: TopicPartition): ConsumerRecords[K, V] = {
+  def awaitNonEmptyRecords[K, V](consumer: Consumer[K, V],
+                                 partition: TopicPartition,
+                                 pollTimeoutMs: Long = 100): ConsumerRecords[K, V] = {
     TestUtils.pollRecordsUntilTrue(consumer, (polledRecords: ConsumerRecords[K, V]) => {
       if (polledRecords.records(partition).asScala.nonEmpty)
         return polledRecords
       false
-    }, s"Consumer did not consume any messages for partition $partition before timeout.")
+    }, s"Consumer did not consume any messages for partition $partition before timeout.", JTestUtils.DEFAULT_MAX_WAIT_MS, pollTimeoutMs)
     throw new IllegalStateException("Should have timed out before reaching here")
   }
 
