@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
@@ -158,6 +159,19 @@ public class MembershipManagerImplTest {
         return manager;
     }
 
+    private void createCoordinatorRequestManager() {
+        commitRequestManager = new CommitRequestManager(
+            time,
+            logContext,
+            subscriptionState,
+            mock(ConsumerConfig.class),
+            mock(CoordinatorRequestManager.class),
+            mock(OffsetCommitCallbackInvoker.class),
+            "groupId",
+            Optional.of("groupInstanceId"),
+            metrics);
+    }
+
     @Test
     public void testMembershipManagerServerAssignor() {
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
@@ -194,6 +208,7 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testReconcilingWhenReceivingAssignmentFoundInMetadata() {
+        createCoordinatorRequestManager();
         MembershipManager membershipManager = mockJoinAndReceiveAssignment(true);
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
 
@@ -635,6 +650,7 @@ public class MembershipManagerImplTest {
      */
     @Test
     public void testSameAssignmentReconciledAgainWithMissingTopic() {
+        createCoordinatorRequestManager();
         MembershipManagerImpl membershipManager = createMemberInStableState();
         Uuid topic1 = Uuid.randomUuid();
         Uuid topic2 = Uuid.randomUuid();
@@ -691,6 +707,7 @@ public class MembershipManagerImplTest {
      */
     @Test
     public void testDelayedReconciliationResultAppliedWhenTargetChangedWithMetadataUpdate() {
+        createCoordinatorRequestManager();
         // Member receives and reconciles topic1-partition0
         Uuid topicId1 = Uuid.randomUuid();
         String topic1 = "topic1";
@@ -817,7 +834,7 @@ public class MembershipManagerImplTest {
     // but is made available later.
     @Test
     public void testDelayedMetadataUsedToCompleteAssignment() {
-
+        createCoordinatorRequestManager();
         Uuid topicId1 = Uuid.randomUuid();
         String topic1 = "topic1";
         final TopicIdPartition topicId1Partition0 = new TopicIdPartition(topicId1, new TopicPartition(topic1, 0));
@@ -922,6 +939,7 @@ public class MembershipManagerImplTest {
     // TODO
     @Test
     public void testLeaveGroupWhenMemberOwnsAssignment() {
+        createCoordinatorRequestManager();
         Uuid topicId = Uuid.randomUuid();
         String topicName = "topic1";
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
@@ -1134,6 +1152,7 @@ public class MembershipManagerImplTest {
      */
     @Test
     public void testNewAssignmentReplacesPreviousOneWaitingOnMetadata() {
+        createCoordinatorRequestManager();
         MembershipManagerImpl membershipManager = mockJoinAndReceiveAssignment(false);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         assertFalse(membershipManager.topicsAwaitingReconciliation().isEmpty());
@@ -1175,6 +1194,7 @@ public class MembershipManagerImplTest {
      */
     @Test
     public void testNewEmptyAssignmentReplacesPreviousOneWaitingOnMetadata() {
+        createCoordinatorRequestManager();
         MembershipManagerImpl membershipManager = mockJoinAndReceiveAssignment(false);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         assertFalse(membershipManager.topicsAwaitingReconciliation().isEmpty());
@@ -1255,7 +1275,6 @@ public class MembershipManagerImplTest {
         assertTrue(membershipManager.topicsAwaitingReconciliation().isEmpty());
     }
 
-    // TODO
     /**
      * This test should be the case when an assignment is sent to the member, and it cannot find
      * it in metadata (temporarily). If the broker continues to send the assignment to the
@@ -1263,6 +1282,7 @@ public class MembershipManagerImplTest {
      */
     @Test
     public void testMemberKeepsUnresolvedAssignmentWaitingForMetadataUntilResolved() {
+        createCoordinatorRequestManager();
         // Assignment with 2 topics, only 1 found in metadata
         Uuid topic1 = Uuid.randomUuid();
         String topic1Name = "topic1";
@@ -1302,6 +1322,7 @@ public class MembershipManagerImplTest {
     // TODO
     @Test
     public void testReconcileNewPartitionsAssignedWhenNoPartitionOwned() {
+        createCoordinatorRequestManager();
         Uuid topicId = Uuid.randomUuid();
         String topicName = "topic1";
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
@@ -1318,6 +1339,7 @@ public class MembershipManagerImplTest {
     // TODO
     @Test
     public void testReconcileNewPartitionsAssignedWhenOtherPartitionsOwned() {
+        createCoordinatorRequestManager();
         Uuid topicId = Uuid.randomUuid();
         String topicName = "topic1";
         TopicIdPartition ownedPartition = new TopicIdPartition(topicId, new TopicPartition(topicName, 0));
@@ -1339,6 +1361,7 @@ public class MembershipManagerImplTest {
     // TODO
     @Test
     public void testReconciliationSkippedWhenSameAssignmentReceived() {
+        createCoordinatorRequestManager();
         // Member stable, no assignment
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
         Uuid topicId = Uuid.randomUuid();
@@ -1373,6 +1396,7 @@ public class MembershipManagerImplTest {
     // TODO
     @Test
     public void testReconcilePartitionsRevokedNoAutoCommitNoCallbacks() {
+        createCoordinatorRequestManager();
         MembershipManagerImpl membershipManager = createMemberInStableState();
         mockOwnedPartition(membershipManager, Uuid.randomUuid(), "topic1");
 
@@ -1434,6 +1458,7 @@ public class MembershipManagerImplTest {
     // TODO
     @Test
     public void testReconcileNewPartitionsAssignedAndRevoked() {
+        createCoordinatorRequestManager();
         Uuid topicId = Uuid.randomUuid();
         String topicName = "topic1";
         TopicIdPartition ownedPartition = new TopicIdPartition(topicId,
@@ -1459,6 +1484,7 @@ public class MembershipManagerImplTest {
     // TODO
     @Test
     public void testMetadataUpdatesReconcilesUnresolvedAssignments() {
+        createCoordinatorRequestManager();
         Uuid topicId = Uuid.randomUuid();
 
         // Assignment not in metadata
@@ -1515,6 +1541,7 @@ public class MembershipManagerImplTest {
     // TODO
     @Test
     public void testRevokePartitionsUsesTopicNamesLocalCacheWhenMetadataNotAvailable() {
+        createCoordinatorRequestManager();
         Uuid topicId = Uuid.randomUuid();
         String topicName = "topic1";
 
@@ -1861,9 +1888,9 @@ public class MembershipManagerImplTest {
         assertLeaveGroupDueToExpiredPollAndTransitionToStale(membershipManager);
     }
 
-    // TODO
     @Test
     public void testTransitionToLeavingWhileAcknowledgingDueToStaleMember() {
+        createCoordinatorRequestManager();
         MembershipManagerImpl membershipManager = mockJoinAndReceiveAssignment(true);
         doNothing().when(subscriptionState).assignFromSubscribed(any());
         clearInvocations(subscriptionState);
@@ -2113,9 +2140,9 @@ public class MembershipManagerImplTest {
         assertEquals(LEAVE_GROUP_MEMBER_EPOCH, membershipManager.memberEpoch());
     }
 
-    // TODO
     @Test
     public void testMemberJoiningTransitionsToStableWhenReceivingEmptyAssignment() {
+        createCoordinatorRequestManager();
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
         when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty());
