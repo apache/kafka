@@ -27,7 +27,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static java.lang.Math.min;
 import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOGENEOUS;
 
 public class RangeAssignor implements ConsumerGroupPartitionAssignor {
@@ -132,7 +131,7 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
             Set<Integer> assignedStickyPartitionsForTopic = new HashSet<>();
             List<MemberWithRemainingAssignments> potentiallyUnfilledMembers = new ArrayList<>();
 
-            numMembersWithExtraPartition = maybeRevokePartitions(
+            maybeRevokePartitions(
                 topicId,
                 membersForTopic,
                 minRequiredQuota,
@@ -148,7 +147,6 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
             assignRemainingPartitions(
                 topicId,
                 numPartitionsForTopic,
-                numMembersWithExtraPartition,
                 assignedStickyPartitionsForTopic,
                 potentiallyUnfilledMembers,
                 newTargetAssignment
@@ -159,7 +157,7 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
         return new GroupAssignment(newTargetAssignment);
     }
 
-    private int maybeRevokePartitions(
+    private void maybeRevokePartitions(
         Uuid topicId,
         Collection<String> membersForTopic,
         int minRequiredQuota,
@@ -172,6 +170,7 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
         for (String memberId : membersForTopic) {
             Map<Uuid, Set<Integer>> oldAssignment = groupSpec.memberAssignment(memberId);
             MemberAssignment newMemberAssignment = newTargetAssignment.get(memberId);
+            boolean isNewAssignmentCreated = false;
             Map<Uuid, Set<Integer>> newAssignment = newMemberAssignment != null ?
                 newMemberAssignment.targetPartitions() : null;
 
@@ -184,56 +183,79 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
             int currentAssignmentSize = assignedPartitionsForTopic.size();
             int quota = minRequiredQuota;
 
+            System.out.println("Assigned partitions for topic " + topicId + " at member " + memberId + " is " + assignedPartitionsForTopic);
             if (numMembersWithExtraPartition > 0) {
                 quota++;
                 numMembersWithExtraPartition--;
             }
 
-            if (currentAssignmentSize <= minRequiredQuota) {
-                quota -= currentAssignmentSize;
+            if (currentAssignmentSize == quota) {
+                assignedStickyPartitionsForTopic.addAll(assignedPartitionsForTopic);
             } else {
-                // Create a deep copy if newAssignment is still null
                 if (newAssignment == null) {
-                    newAssignment = deepCopy(oldAssignment);
+                    // Create a deep copy if newAssignment is still null
+                    // Remove entries for topics that are no longer part of the member's subscription list.
+                    newAssignment = deepCopyWithRevokation(
+                        oldAssignment,
+                        memberId,
+                        groupSpec
+                    );
+                    isNewAssignmentCreated = true;
+                    System.out.println("Create new assignment for member " + memberId + "at topic " + topicId);
                 }
+                if (currentAssignmentSize > quota) {
+                    // Sort partitions to ensure the same partitions are removed in each iteration
+                    // to facilitate efficient co-partitioning.
+                    List<Integer> assignedPartitionsList = new ArrayList<>(assignedPartitionsForTopic);
+                    Collections.sort(assignedPartitionsList);
 
-            }
-            List<Integer> currentAssignmentListForTopic = new ArrayList<>(assignedPartitionsForTopic);
+                    // Add partitions to sticky partitions list up till the quota.
+                    assignedStickyPartitionsForTopic.addAll(assignedPartitionsList.subList(0, quota));
 
-            System.out.println("Assigned partitions for topic " + topicId + "is " + assignedPartitionsForTopic);
+                    // Get the sublist of partitions past the quota to remove from the assignment.
+                    List<Integer> partitionsToRemove = assignedPartitionsList.subList(quota, assignedPartitionsList.size());
 
-            int remaining = minRequiredQuota - currentAssignmentSize;
+                    // Remove these partitions from the new assignment of the member.
+                    newAssignment.get(topicId).removeAll(partitionsToRemove);
+                } else {
+                    assignedStickyPartitionsForTopic.addAll(assignedPartitionsForTopic);
+                    quota -= currentAssignmentSize;
 
-            // Handle extra partitions assignment
-            if (remaining < 0 && numMembersWithExtraPartition > 0) {
-                numMembersWithExtraPartition--;
-                assignedStickyPartitionsForTopic.add(currentAssignmentListForTopic.get(minRequiredQuota));
-                // Create a deep copy if newAssignment is still null
-                if (newAssignment == null) {
-                    newAssignment = deepCopy(oldAssignment);
+                    // Members that haven't met the quota yet need to be tracked.
+                    MemberWithRemainingAssignments newPair = new MemberWithRemainingAssignments(memberId, quota);
+                    potentiallyUnfilledMembers.add(newPair);
                 }
-                newAssignment.computeIfAbsent(topicId, k -> new HashSet<>()).add(
-                    currentAssignmentListForTopic.get(minRequiredQuota)
-                );
-            } else {
-                MemberWithRemainingAssignments newPair = new MemberWithRemainingAssignments(memberId, remaining);
-                potentiallyUnfilledMembers.add(newPair);
             }
-
+            System.out.println("Assigned sticky partitions for topic " + topicId + "are " + assignedStickyPartitionsForTopic);
             // Use the old assignment if newAssignment is null, otherwise use the new assignment
-            if (newAssignment == null) {
-                newTargetAssignment.put(memberId, new MemberAssignment(oldAssignment));
-            } else {
+            if (newTargetAssignment.get(memberId) == null && newAssignment == null) {
+                for (Map.Entry<Uuid, Set<Integer>> entry : oldAssignment.entrySet()) {
+                    Uuid subscribedTopicId = entry.getKey();
+                    if (!groupSpec.memberSubscription(memberId).subscribedTopicIds().contains(subscribedTopicId)) {
+                        newAssignment = deepCopyWithRevokation(
+                            oldAssignment,
+                            memberId,
+                            groupSpec
+                        );
+                        isNewAssignmentCreated = true;
+                        break;
+                    }
+                }
+                if (!isNewAssignmentCreated) newTargetAssignment.put(memberId, new MemberAssignment(oldAssignment));
+            }
+            if (isNewAssignmentCreated) {
                 newTargetAssignment.put(memberId, new MemberAssignment(newAssignment));
             }
         }
-        return numMembersWithExtraPartition;
+
+        if (numMembersWithExtraPartition > 0) {
+            throw new PartitionAssignorException("There was an error in calculating quotas during the assignment process");
+        }
     }
 
     private void assignRemainingPartitions(
         Uuid topicId,
         int numPartitionsForTopic,
-        int numMembersWithExtraPartition,
         Set<Integer> assignedStickyPartitionsForTopic,
         List<MemberWithRemainingAssignments> potentiallyUnfilledMembers,
         Map<String, MemberAssignment> newTargetAssignment
@@ -252,22 +274,12 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
         for (MemberWithRemainingAssignments pair : potentiallyUnfilledMembers) {
             String memberId = pair.memberId;
             int remaining = pair.remaining;
-            if (numMembersWithExtraPartition > 0) {
-                remaining++;
-                numMembersWithExtraPartition--;
-            }
             if (remaining > 0) {
                 List<Integer> partitionsToAssign = unassignedPartitionsForTopic
                     .subList(unassignedPartitionsListStartPointer, unassignedPartitionsListStartPointer + remaining);
                 unassignedPartitionsListStartPointer += remaining;
-                Map<Uuid, Set<Integer>> newAssignment = newTargetAssignment.get(memberId).targetPartitions();
 
-                if (isImmutableMap(newAssignment)) {
-                    // If the new assignment is immutable, we must create a deep copy of it
-                    // before altering it.
-                    newAssignment = deepCopy(newAssignment);
-                    newTargetAssignment.put(memberId, new MemberAssignment(newAssignment));
-                }
+                Map<Uuid, Set<Integer>> newAssignment = newTargetAssignment.get(memberId).targetPartitions();
                 newAssignment.computeIfAbsent(topicId, k -> new HashSet<>()).addAll(partitionsToAssign);
             }
         }
@@ -287,12 +299,20 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
      * Creates a deep copy of a map.
      *
      * @param map       The map to copy.
-     * @return A deep copy of the map.
+     * @param memberId  The member Id.
+     * @return A deep copy of the map without unsubscribed topicIds.
      */
-    private static Map<Uuid, Set<Integer>> deepCopy(Map<Uuid, Set<Integer>> map) {
+    private static Map<Uuid, Set<Integer>> deepCopyWithRevokation(
+        Map<Uuid, Set<Integer>> map,
+        String memberId,
+        GroupSpec groupSpec
+    ) {
         Map<Uuid, Set<Integer>> copy = new HashMap<>(map.size());
         for (Map.Entry<Uuid, Set<Integer>> entry : map.entrySet()) {
-            copy.put(entry.getKey(), new HashSet<>(entry.getValue()));
+            Uuid topicId = entry.getKey();
+            if (groupSpec.memberSubscription(memberId).subscribedTopicIds().contains(topicId)) {
+                copy.put(entry.getKey(), new HashSet<>(entry.getValue()));
+            }
         }
         return copy;
     }
