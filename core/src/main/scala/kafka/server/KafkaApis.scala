@@ -257,6 +257,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.PUSH_TELEMETRY => handlePushTelemetryRequest(request)
         case ApiKeys.LIST_CLIENT_METRICS_RESOURCES => handleListClientMetricsResources(request)
         case ApiKeys.STREAMS_INITIALIZE => handleStreamsInitialize(request).exceptionally(handleError)
+        case ApiKeys.STREAMS_HEARTBEAT => handleStreamsHeartbeat(request).exceptionally(handleError)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {
@@ -3890,6 +3891,31 @@ class KafkaApis(val requestChannel: RequestChannel,
           requestHelper.sendMaybeThrottle(request, streamsInitializeRequest.getErrorResponse(exception))
         } else {
           requestHelper.sendMaybeThrottle(request, new StreamsInitializeResponse(response))
+        }
+      }
+    }
+  }
+
+  def handleStreamsGroupHeartbeat(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    val streamsHeartbeatRequest = request.body[StreamsHeartbeatRequest]
+
+    if (!config.isNewGroupCoordinatorEnabled) {
+      // The API is not supported by the "old" group coordinator (the default). If the
+      // new one is not enabled, we fail directly here.
+      requestHelper.sendMaybeThrottle(request, streamsHeartbeatRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      CompletableFuture.completedFuture[Unit](())
+    } else if (!authHelper.authorize(request.context, READ, GROUP, streamsHeartbeatRequest.data.groupId)) {
+      requestHelper.sendMaybeThrottle(request, streamsHeartbeatRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
+      CompletableFuture.completedFuture[Unit](())
+    } else {
+      groupCoordinator.streamsHeartbeat(
+        request.context,
+        streamsHeartbeatRequest.data,
+      ).handle[Unit] { (response, exception) =>
+        if (exception != null) {
+          requestHelper.sendMaybeThrottle(request, streamsHeartbeatRequest.getErrorResponse(exception))
+        } else {
+          requestHelper.sendMaybeThrottle(request, new StreamsHeartbeatResponse(response))
         }
       }
     }
