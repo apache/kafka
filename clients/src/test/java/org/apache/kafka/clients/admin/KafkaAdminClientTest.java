@@ -744,8 +744,7 @@ public class KafkaAdminClientTest {
                         100,
                         emptyOptionals ? OptionalLong.empty() : OptionalLong.of(1000),
                         emptyOptionals ? OptionalLong.empty() : OptionalLong.of(1000))),
-                singletonMap(1, new QuorumInfo.Node(1,
-                        singletonList(new RaftVoterEndpoint("TEST", "localhost", 1)))));
+                singletonMap(1, new QuorumInfo.Node(1, Collections.emptyList())));
     }
 
     private static DescribeQuorumResponse prepareDescribeQuorumResponse(
@@ -782,7 +781,8 @@ public class KafkaAdminClientTest {
         return new DescribeQuorumResponse(new DescribeQuorumResponseData()
             .setTopics(topics)
             .setErrorCode(topLevelError.code())
-            .setErrorMessage(topLevelError.message()));
+            .setErrorMessage(topLevelError.message())
+            .setNodes(new DescribeQuorumResponseData.NodeCollection(Collections.singleton(new DescribeQuorumResponseData.Node().setNodeId(1)).iterator())));
     }
 
     /**

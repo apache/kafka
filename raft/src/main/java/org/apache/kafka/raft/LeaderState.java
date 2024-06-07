@@ -31,6 +31,7 @@ import org.apache.kafka.raft.internals.VoterSet;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -417,6 +418,29 @@ public class LeaderState<T> implements EpochState {
             .setHighWatermark(highWatermark.map(offsetMetadata -> offsetMetadata.offset).orElse(-1L))
             .setCurrentVoters(describeReplicaStates(voterStates, currentTimeMs))
             .setObservers(describeReplicaStates(observerStates, currentTimeMs));
+    }
+
+    public DescribeQuorumResponseData.NodeCollection nodes(long currentTimeMs) {
+        clearInactiveObservers(currentTimeMs);
+
+        return nodes(voterStates.values(), observerStates.values());
+    }
+
+    private static DescribeQuorumResponseData.NodeCollection nodes(Collection<ReplicaState> voters, Collection<ReplicaState> observers) {
+        DescribeQuorumResponseData.NodeCollection res = new DescribeQuorumResponseData.NodeCollection();
+
+        voters.forEach(replicaState -> node(res, replicaState));
+        observers.forEach(replicaState -> node(res, replicaState));
+
+        return res;
+    }
+
+    private static void node(DescribeQuorumResponseData.NodeCollection res, ReplicaState replicaState) {
+        if (res.find(replicaState.nodeId) != null) {
+            return;
+        }
+
+        res.add(new DescribeQuorumResponseData.Node().setNodeId(replicaState.nodeId));
     }
 
     private List<DescribeQuorumResponseData.ReplicaState> describeReplicaStates(

@@ -528,9 +528,24 @@ public final class RaftClientTestContext {
             .setHighWatermark(highWatermark)
             .setCurrentVoters(voterStates)
             .setObservers(observerStates);
+
+        DescribeQuorumResponseData.NodeCollection nodes = new DescribeQuorumResponseData.NodeCollection();
+
+        Consumer<DescribeQuorumResponseData.ReplicaState> addToNodes = replicaState -> {
+            if (nodes.find(replicaState.replicaId()) != null)
+                return;
+
+            nodes.add(new DescribeQuorumResponseData.Node()
+                .setNodeId(replicaState.replicaId()));
+        };
+
+        voterStates.forEach(addToNodes);
+        observerStates.forEach(addToNodes);
+
         DescribeQuorumResponseData expectedResponse = DescribeQuorumResponse.singletonResponse(
             metadataPartition,
-            partitionData
+            partitionData,
+            nodes
         );
         assertEquals(expectedResponse, response);
     }

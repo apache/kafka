@@ -1353,7 +1353,8 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         LeaderState<T> leaderState = quorum.leaderStateOrThrow();
         return DescribeQuorumResponse.singletonResponse(
             log.topicPartition(),
-            leaderState.describeQuorum(currentTimeMs)
+            leaderState.describeQuorum(currentTimeMs),
+            leaderState.nodes(currentTimeMs)
         );
     }
 
