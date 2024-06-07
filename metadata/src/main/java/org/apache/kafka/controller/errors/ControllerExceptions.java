@@ -37,8 +37,7 @@ public class ControllerExceptions {
             exception = exception.getCause();
             if (exception == null) return false;
         }
-        if (!(exception instanceof TimeoutException)) return false;
-        return true;
+        return exception instanceof TimeoutException;
     }
 
     /**
@@ -53,8 +52,7 @@ public class ControllerExceptions {
             exception = exception.getCause();
             if (exception == null) return false;
         }
-        if (!(exception instanceof NotControllerException)) return false;
-        return true;
+        return exception instanceof NotControllerException;
     }
 
     /**

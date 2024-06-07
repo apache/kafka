@@ -17,6 +17,12 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
+import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
+import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
+import org.apache.kafka.coordinator.group.consumer.MemberAssignmentImpl;
 import org.apache.kafka.server.common.TopicIdPartition;
 
 import java.util.ArrayList;
@@ -101,9 +107,11 @@ public class OptimizedUniformAssignmentBuilder {
     OptimizedUniformAssignmentBuilder(GroupSpec groupSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
         this.groupSpec = groupSpec;
         this.subscribedTopicDescriber = subscribedTopicDescriber;
-        this.subscribedTopicIds = new HashSet<>(groupSpec.members().values().iterator().next().subscribedTopicIds());
+        this.subscribedTopicIds = new HashSet<>(groupSpec.memberSubscription(groupSpec.memberIds().iterator().next())
+            .subscribedTopicIds());
         this.unfilledMembers = new ArrayList<>();
         this.unassignedPartitions = new ArrayList<>();
+
         this.targetAssignment = new HashMap<>();
     }
 
@@ -135,7 +143,7 @@ public class OptimizedUniformAssignmentBuilder {
 
         // Compute the minimum required quota per member and the number of members
         // that should receive an extra partition.
-        int numberOfMembers = groupSpec.members().size();
+        int numberOfMembers = groupSpec.memberIds().size();
         minimumMemberQuota = totalPartitionsCount / numberOfMembers;
         remainingMembersToGetAnExtraPartition = totalPartitionsCount % numberOfMembers;
 
@@ -157,10 +165,8 @@ public class OptimizedUniformAssignmentBuilder {
      * altered.
      */
     private void maybeRevokePartitions() {
-        for (Map.Entry<String, AssignmentMemberSpec> entry : groupSpec.members().entrySet()) {
-            String memberId = entry.getKey();
-            AssignmentMemberSpec assignmentMemberSpec = entry.getValue();
-            Map<Uuid, Set<Integer>> oldAssignment = assignmentMemberSpec.assignedPartitions();
+        for (String memberId : groupSpec.memberIds()) {
+            Map<Uuid, Set<Integer>> oldAssignment = groupSpec.memberAssignment(memberId).partitions();
             Map<Uuid, Set<Integer>> newAssignment = null;
 
             // The assignor expects to receive the assignment as an immutable map. It leverages
@@ -219,9 +225,9 @@ public class OptimizedUniformAssignmentBuilder {
             }
 
             if (newAssignment == null) {
-                targetAssignment.put(memberId, new MemberAssignment(oldAssignment));
+                targetAssignment.put(memberId, new MemberAssignmentImpl(oldAssignment));
             } else {
-                targetAssignment.put(memberId, new MemberAssignment(newAssignment));
+                targetAssignment.put(memberId, new MemberAssignmentImpl(newAssignment));
             }
         }
     }
@@ -236,12 +242,12 @@ public class OptimizedUniformAssignmentBuilder {
             String memberId = unfilledMember.memberId;
             int remainingQuota = unfilledMember.remainingQuota;
 
-            Map<Uuid, Set<Integer>> newAssignment = targetAssignment.get(memberId).targetPartitions();
+            Map<Uuid, Set<Integer>> newAssignment = targetAssignment.get(memberId).partitions();
             if (isImmutableMap(newAssignment)) {
                 // If the new assignment is immutable, we must create a deep copy of it
                 // before altering it.
                 newAssignment = deepCopy(newAssignment);
-                targetAssignment.put(memberId, new MemberAssignment(newAssignment));
+                targetAssignment.put(memberId, new MemberAssignmentImpl(newAssignment));
             }
 
             for (int i = 0; i < remainingQuota && unassignedPartitionIndex < unassignedPartitions.size(); i++) {

@@ -1140,8 +1140,8 @@ public class MetadataTest {
                 new Metadata.LeaderIdAndEpoch(
                     Optional.of(2),
                     Optional.of(3)
-            )),
-            Arrays.asList(node1)
+                )),
+            Collections.singletonList(node1)
         );
         assertEquals(2, metadata.fetch().partitionsForTopic(topic).size());
         assertEquals(1, metadata.fetch().partition(tp0).leader().id());
@@ -1161,20 +1161,20 @@ public class MetadataTest {
         // topic2 has 1 partition: tp21
         String topic1 = "topic1";
         TopicPartition tp11 = new TopicPartition(topic1, 0);
-        PartitionMetadata part1Metadata = new PartitionMetadata(Errors.NONE, tp11, Optional.of(1), Optional.of(100), Arrays.asList(1, 2), Arrays.asList(1, 2), Arrays.asList(3));
+        PartitionMetadata part1Metadata = new PartitionMetadata(Errors.NONE, tp11, Optional.of(1), Optional.of(100), Arrays.asList(1, 2), Arrays.asList(1, 2), Collections.singletonList(3));
         Uuid topic1Id = Uuid.randomUuid();
         TopicPartition tp12 = new TopicPartition(topic1, 1);
-        PartitionMetadata part12Metadata = new PartitionMetadata(Errors.NONE, tp12, Optional.of(2), Optional.of(200), Arrays.asList(2, 3), Arrays.asList(2, 3), Arrays.asList(1));
+        PartitionMetadata part12Metadata = new PartitionMetadata(Errors.NONE, tp12, Optional.of(2), Optional.of(200), Arrays.asList(2, 3), Arrays.asList(2, 3), Collections.singletonList(1));
 
         String topic2 = "topic2";
         TopicPartition tp21 = new TopicPartition(topic2, 0);
-        PartitionMetadata part2Metadata = new PartitionMetadata(Errors.NONE, tp21, Optional.of(2), Optional.of(200), Arrays.asList(2, 3), Arrays.asList(2, 3), Arrays.asList(1));
+        PartitionMetadata part2Metadata = new PartitionMetadata(Errors.NONE, tp21, Optional.of(2), Optional.of(200), Arrays.asList(2, 3), Arrays.asList(2, 3), Collections.singletonList(1));
         Uuid topic2Id = Uuid.randomUuid();
 
         Set<String> internalTopics = Collections.singleton(Topic.GROUP_METADATA_TOPIC_NAME);
         TopicPartition internalPart = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0);
         Uuid internalTopicId = Uuid.randomUuid();
-        PartitionMetadata internalTopicMetadata = new PartitionMetadata(Errors.NONE, internalPart, Optional.of(2), Optional.of(200), Arrays.asList(2, 3), Arrays.asList(2, 3), Arrays.asList(1));
+        PartitionMetadata internalTopicMetadata = new PartitionMetadata(Errors.NONE, internalPart, Optional.of(2), Optional.of(200), Arrays.asList(2, 3), Arrays.asList(2, 3), Collections.singletonList(1));
 
         Map<String, Uuid> topicIds = new HashMap<>();
         topicIds.put(topic1, topic1Id);
@@ -1359,7 +1359,7 @@ public class MetadataTest {
     }
 
     /**
-     * For testUpdatePartially, validates that updatedMetadata is matching expected part1Metadata, part2Metadata, interalPartMetadata, nodes & more.
+     * For testUpdatePartially, validates that updatedMetadata is matching expected part1Metadata, part2Metadata, internalPartMetadata, nodes & more.
      */
     void validateForUpdatePartitionLeadership(Metadata updatedMetadata,
                                               PartitionMetadata part1Metadata, PartitionMetadata part2Metadata, PartitionMetadata part12Metadata,
@@ -1379,7 +1379,7 @@ public class MetadataTest {
         assertEquals(expectedController, updatedCluster.controller());
         assertEquals(expectedTopicIds, updatedMetadata.topicIds());
 
-        Map<Integer, Node> nodeMap = expectedNodes.stream().collect(Collectors.toMap(e -> e.id(), e -> e));
+        Map<Integer, Node> nodeMap = expectedNodes.stream().collect(Collectors.toMap(Node::id, e -> e));
         for (PartitionMetadata partitionMetadata: Arrays.asList(part1Metadata, part2Metadata, part12Metadata, internalPartMetadata)) {
             TopicPartition tp = new TopicPartition(partitionMetadata.topic(), partitionMetadata.partition());
 

@@ -33,6 +33,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Objects;
 import java.util.Optional;
@@ -43,6 +44,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -52,6 +54,7 @@ import static org.mockito.Mockito.when;
 public class NetworkClientDelegateTest {
     private static final int REQUEST_TIMEOUT_MS = 5000;
     private static final String GROUP_ID = "group";
+    private static final long DEFAULT_REQUEST_TIMEOUT_MS = 500;
     private MockTime time;
     private MockClient client;
 
@@ -59,6 +62,30 @@ public class NetworkClientDelegateTest {
     public void setup() {
         this.time = new MockTime(0);
         this.client = new MockClient(time, Collections.singletonList(mockNode()));
+    }
+
+    @Test
+    void testPollResultTimer() throws Exception {
+        try (NetworkClientDelegate ncd = newNetworkClientDelegate()) {
+            NetworkClientDelegate.UnsentRequest req = new NetworkClientDelegate.UnsentRequest(
+                    new FindCoordinatorRequest.Builder(
+                            new FindCoordinatorRequestData()
+                                    .setKeyType(FindCoordinatorRequest.CoordinatorType.TRANSACTION.id())
+                                    .setKey("foobar")),
+                    Optional.empty());
+            req.setTimer(time, DEFAULT_REQUEST_TIMEOUT_MS);
+
+            // purposely setting a non-MAX time to ensure it is returning Long.MAX_VALUE upon success
+            NetworkClientDelegate.PollResult success = new NetworkClientDelegate.PollResult(
+                    10,
+                    Collections.singletonList(req));
+            assertEquals(10, ncd.addAll(success));
+
+            NetworkClientDelegate.PollResult failure = new NetworkClientDelegate.PollResult(
+                    10,
+                    new ArrayList<>());
+            assertEquals(10, ncd.addAll(failure));
+        }
     }
 
     @Test
@@ -138,6 +165,34 @@ public class NetworkClientDelegateTest {
         ncd.addAll(Collections.singletonList(findCoordRequest));
         assertEquals(1, ncd.unsentRequests().size());
         assertEquals(REQUEST_TIMEOUT_MS, ncd.unsentRequests().poll().timer().timeoutMs());
+    }
+
+    @Test
+    public void testHasAnyPendingRequests() throws Exception {
+        try (NetworkClientDelegate networkClientDelegate = newNetworkClientDelegate()) {
+            NetworkClientDelegate.UnsentRequest unsentRequest = newUnsentFindCoordinatorRequest();
+            networkClientDelegate.add(unsentRequest);
+
+            // unsent
+            assertTrue(networkClientDelegate.hasAnyPendingRequests());
+            assertFalse(networkClientDelegate.unsentRequests().isEmpty());
+            assertFalse(client.hasInFlightRequests());
+
+            networkClientDelegate.poll(0, time.milliseconds());
+
+            // in-flight
+            assertTrue(networkClientDelegate.hasAnyPendingRequests());
+            assertTrue(networkClientDelegate.unsentRequests().isEmpty());
+            assertTrue(client.hasInFlightRequests());
+
+            client.respond(FindCoordinatorResponse.prepareResponse(Errors.NONE, GROUP_ID, mockNode()));
+            networkClientDelegate.poll(0, time.milliseconds());
+
+            // get response
+            assertFalse(networkClientDelegate.hasAnyPendingRequests());
+            assertTrue(networkClientDelegate.unsentRequests().isEmpty());
+            assertFalse(client.hasInFlightRequests());
+        }
     }
 
     public NetworkClientDelegate newNetworkClientDelegate() {

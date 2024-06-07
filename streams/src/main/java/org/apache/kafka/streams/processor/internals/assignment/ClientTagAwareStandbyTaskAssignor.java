@@ -23,7 +23,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
+import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,7 +52,9 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
     private final Function<AssignmentConfigs, List<String>> tagsFunction;
 
     public ClientTagAwareStandbyTaskAssignor() {
-        this((uuid, clientState) -> clientState.clientTags(), assignmentConfigs -> assignmentConfigs.rackAwareAssignmentTags);
+        this((uuid, clientState) -> clientState.clientTags(),
+            AssignmentConfigs::rackAwareAssignmentTags
+        );
     }
 
     public ClientTagAwareStandbyTaskAssignor(final BiFunction<UUID, ClientState, Map<String, String>> clientTagFunction,
@@ -63,8 +65,8 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
 
     /**
      * The algorithm distributes standby tasks for the {@param statefulTaskIds} over different tag dimensions.
-     * For each stateful task, the number of standby tasks will be assigned based on configured {@link AssignmentConfigs#numStandbyReplicas}.
-     * Rack aware standby tasks distribution only takes into account tags specified via {@link AssignmentConfigs#rackAwareAssignmentTags}.
+     * For each stateful task, the number of standby tasks will be assigned based on configured {@link AssignmentConfigs#numStandbyReplicas()}.
+     * Rack aware standby tasks distribution only takes into account tags specified via {@link AssignmentConfigs#rackAwareAssignmentTags()}.
      * Ideally, all standby tasks for any given stateful task will be located on different tag dimensions to have the best possible distribution.
      * However, if the ideal (or partially ideal) distribution is impossible, the algorithm will fall back to the least-loaded clients without taking rack awareness constraints into consideration.
      * The least-loaded clients are determined based on the total number of tasks (active and standby tasks) assigned to the client.
@@ -73,8 +75,8 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
     public boolean assign(final Map<UUID, ClientState> clients,
                           final Set<TaskId> allTaskIds,
                           final Set<TaskId> statefulTaskIds,
-                          final AssignorConfiguration.AssignmentConfigs configs) {
-        final int numStandbyReplicas = configs.numStandbyReplicas;
+                          final AssignmentConfigs configs) {
+        final int numStandbyReplicas = configs.numStandbyReplicas();
         final Set<String> rackAwareAssignmentTags = new HashSet<>(tagsFunction.apply(configs));
 
         final Map<TaskId, Integer> tasksToRemainingStandbys = computeTasksToRemainingStandbys(

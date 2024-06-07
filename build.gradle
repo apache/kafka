@@ -47,7 +47,10 @@ plugins {
   // Updating the shadow plugin version to 8.1.1 causes issue with signing and publishing the shadowed
   // artifacts - see https://github.com/johnrengelman/shadow/issues/901
   id 'com.github.johnrengelman.shadow' version '8.1.0' apply false
-  id 'com.diffplug.spotless' version '6.14.0' apply false // 6.14.1 and newer require Java 11 at compile time, so we can't upgrade until AK 4.0
+  //  Spotless 6.13.0 has issue with Java 21 (see https://github.com/diffplug/spotless/pull/1920), and Spotless 6.14.0+ requires JRE 11
+  //  We are going to drop JDK8 support. Hence, the spotless is upgrade to newest version and be applied only if the build env is compatible with JDK 11.
+  //  spotless 6.15.0+ has issue in runtime with JDK8 even through we define it with `apply:false`. see https://github.com/diffplug/spotless/issues/2156 for more details
+  id 'com.diffplug.spotless' version "6.14.0" apply false
 }
 
 ext {
@@ -197,6 +200,63 @@ def determineCommitId() {
     "unknown"
   }
 }
+
+def excludedSpotlessModules = [':clients',
+                               ':connect:api',
+                               ':connect:basic-auth-extension',
+                               ':connect:file',
+                               ':connect:json',
+                               ':connect:mirror',
+                               ':connect:mirror-client',
+                               ':connect:runtime',
+                               ':connect:test-plugins',
+                               ':connect:transforms',
+                               ':core',
+                               ':examples',
+                               ':generator',
+                               ':group-coordinator:group-coordinator-api', // https://github.com/apache/kafka/pull/16198
+                               ':group-coordinator',
+                               ':jmh-benchmarks',
+                               ':log4j-appender',
+                               ':metadata',
+                               ':raft',
+                               ':server',
+                               ':server-common',
+                               ':shell',
+                               ':storage',
+                               ':storage:storage-api', //  rename in settings.gradle
+                               ':streams',
+                               ':streams:examples',
+                               ':streams:streams-scala',
+                               ':streams:test-utils',
+                               ':streams:upgrade-system-tests-0100',
+                               ':streams:upgrade-system-tests-0101',
+                               ':streams:upgrade-system-tests-0102',
+                               ':streams:upgrade-system-tests-0110',
+                               ':streams:upgrade-system-tests-10',
+                               ':streams:upgrade-system-tests-11',
+                               ':streams:upgrade-system-tests-20',
+                               ':streams:upgrade-system-tests-21',
+                               ':streams:upgrade-system-tests-22',
+                               ':streams:upgrade-system-tests-23',
+                               ':streams:upgrade-system-tests-24',
+                               ':streams:upgrade-system-tests-25',
+                               ':streams:upgrade-system-tests-26',
+                               ':streams:upgrade-system-tests-27',
+                               ':streams:upgrade-system-tests-28',
+                               ':streams:upgrade-system-tests-30',
+                               ':streams:upgrade-system-tests-31',
+                               ':streams:upgrade-system-tests-32',
+                               ':streams:upgrade-system-tests-33',
+                               ':streams:upgrade-system-tests-34',
+                               ':streams:upgrade-system-tests-35',
+                               ':streams:upgrade-system-tests-36',
+                               ':streams:upgrade-system-tests-37',
+                               ':tools',
+                               ':tools:tools-api',
+                               ':transaction-coordinator',
+                               ':trogdor']
+
 
 apply from: file('wrapper.gradle')
 
@@ -467,7 +527,6 @@ subprojects {
   if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_16)) {
     testsToExclude.addAll([
       // connect tests
-      "**/KafkaConfigBackingStoreTest.*"
     ])
   }
 
@@ -793,6 +852,16 @@ subprojects {
     skipProjects = [ ":jmh-benchmarks", ":trogdor" ]
     skipConfigurations = [ "zinc" ]
   }
+  
+  if(JavaVersion.current().isJava11Compatible() && project.path !in excludedSpotlessModules) {
+    apply plugin: 'com.diffplug.spotless'
+    spotless {
+      java {
+        importOrder('kafka', 'org.apache.kafka', 'com', 'net', 'org', 'java', 'javax', '', '\\#')
+        removeUnusedImports()
+      }
+    }
+  }
 }
 
 gradle.taskGraph.whenReady { taskGraph ->
@@ -947,6 +1016,7 @@ project(':core') {
     api libs.scalaLibrary
 
     implementation project(':server-common')
+    implementation project(':group-coordinator:group-coordinator-api')
     implementation project(':group-coordinator')
     implementation project(':transaction-coordinator')
     implementation project(':metadata')
@@ -1330,6 +1400,66 @@ project(':metadata') {
   }
 }
 
+project(':group-coordinator:group-coordinator-api') {
+  base {
+    archivesName = "kafka-group-coordinator-api"
+  }
+
+  dependencies {
+    implementation project(':clients')
+  }
+
+  task createVersionFile() {
+    def receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    inputs.property "commitId", commitId
+    inputs.property "version", version
+    outputs.file receiptFile
+
+    doLast {
+      def data = [
+              commitId: commitId,
+              version: version,
+      ]
+
+      receiptFile.parentFile.mkdirs()
+      def content = data.entrySet().collect { "$it.key=$it.value" }.sort().join("\n")
+      receiptFile.setText(content, "ISO-8859-1")
+    }
+  }
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/main/java"]
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/test/java"]
+      }
+    }
+  }
+
+  jar {
+    dependsOn createVersionFile
+    from("$buildDir") {
+      include "kafka/$buildVersionFileName"
+    }
+  }
+
+  clean.doFirst {
+    delete "$buildDir/kafka/"
+  }
+
+  javadoc {
+    include "**/org/apache/kafka/coordinator/group/api/**"
+  }
+
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-group-coordinator.xml")
+  }
+}
+
 project(':group-coordinator') {
   base {
     archivesName = "kafka-group-coordinator"
@@ -1343,6 +1473,7 @@ project(':group-coordinator') {
     implementation project(':server-common')
     implementation project(':clients')
     implementation project(':metadata')
+    implementation project(':group-coordinator:group-coordinator-api')
     implementation project(':storage')
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
@@ -2046,18 +2177,17 @@ project(':tools') {
   }
 
   dependencies {
+    compileOnly libs.slf4jlog4j
     implementation project(':clients')
     implementation project(':storage')
     implementation project(':server-common')
     implementation project(':connect:runtime')
-    implementation project(':log4j-appender')
     implementation project(':tools:tools-api')
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
     implementation libs.jacksonDataformatCsv
     implementation libs.jacksonJDK8Datatypes
     implementation libs.slf4jApi
-    implementation libs.log4j
     implementation libs.joptSimple
 
     implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
@@ -2083,6 +2213,7 @@ project(':tools') {
     testImplementation(libs.jfreechart) {
       exclude group: 'junit', module: 'junit'
     }
+    testImplementation libs.log4j
     testRuntimeOnly libs.slf4jlog4j
   }
 
@@ -2114,12 +2245,10 @@ project(':trogdor') {
 
   dependencies {
     implementation project(':clients')
-    implementation project(':log4j-appender')
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
     implementation libs.slf4jApi
-    implementation libs.log4j
 
     implementation libs.jacksonJaxrsJsonProvider
     implementation libs.jerseyContainerServlet
@@ -2173,7 +2302,6 @@ project(':shell') {
     implementation project(':server-common')
     implementation project(':clients')
     implementation project(':core')
-    implementation project(':log4j-appender')
     implementation project(':metadata')
     implementation project(':raft')
 
@@ -2887,6 +3015,7 @@ project(':jmh-benchmarks') {
     implementation project(':raft')
     implementation project(':clients')
     implementation project(':group-coordinator')
+    implementation project(':group-coordinator:group-coordinator-api')
     implementation project(':metadata')
     implementation project(':storage')
     implementation project(':streams')
