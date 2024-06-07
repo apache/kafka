@@ -66,6 +66,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -250,7 +251,7 @@ public class ConsumerNetworkThreadTest {
     public void testSendUnsentRequests() {
         when(networkClientDelegate.hasAnyPendingRequests()).thenReturn(true).thenReturn(true).thenReturn(false);
         consumerNetworkThread.cleanup();
-        assertFalse(networkClientDelegate.hasAnyPendingRequests());
+        verify(networkClientDelegate, times(2)).poll(anyLong(), anyLong());
     }
 
     private static Stream<Arguments> applicationEvents() {
