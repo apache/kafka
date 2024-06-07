@@ -624,6 +624,7 @@ public class MembershipManagerImplTest {
         assertEquals(toTopicIdPartitionMap(assignment1), membershipManager.currentAssignment().partitions);
     }
 
+    // TODO
     /**
      * This is the case where we receive a new assignment while reconciling an existing one. The intermediate assignment
      * is not applied, and a new assignment containing the same partitions is received and reconciled. In all assignments,
@@ -681,6 +682,7 @@ public class MembershipManagerImplTest {
         return result;
     }
 
+    // TODO
     /**
      * This is the case where a member is stuck reconciling an assignment A (waiting on metadata, commit or callbacks), and the target
      * assignment changes due to new topics. If the reconciliation of A completes it should be applied (should update the assignment
@@ -810,6 +812,7 @@ public class MembershipManagerImplTest {
         verifyReconciliationTriggeredAndCompleted(membershipManager, Arrays.asList(topicId1Partition0, topicId2Partition0));
     }
 
+    // TODO
     // Tests the case where topic metadata is not available at the time of the assignment,
     // but is made available later.
     @Test
@@ -916,6 +919,7 @@ public class MembershipManagerImplTest {
         testLeaveGroupReleasesAssignmentAndResetsEpochToSendLeaveGroup(membershipManager);
     }
 
+    // TODO
     @Test
     public void testLeaveGroupWhenMemberOwnsAssignment() {
         Uuid topicId = Uuid.randomUuid();
@@ -1120,6 +1124,7 @@ public class MembershipManagerImplTest {
                 () -> membershipManager.onHeartbeatSuccess(unknownMemberResponse.data()));
     }
 
+    // TODO
     /**
      * This test should be the case when an assignment is sent to the member, and it cannot find
      * it in metadata (permanently, ex. topic deleted). The member will keep the assignment as
@@ -1161,6 +1166,7 @@ public class MembershipManagerImplTest {
         assertTrue(membershipManager.topicsAwaitingReconciliation().isEmpty());
     }
 
+    // TODO
     /**
      * This test ensures that member goes back to STABLE when the broker sends assignment that
      * removes the unresolved target the client has, without triggering a reconciliation. In this
@@ -1249,6 +1255,7 @@ public class MembershipManagerImplTest {
         assertTrue(membershipManager.topicsAwaitingReconciliation().isEmpty());
     }
 
+    // TODO
     /**
      * This test should be the case when an assignment is sent to the member, and it cannot find
      * it in metadata (temporarily). If the broker continues to send the assignment to the
@@ -1292,6 +1299,7 @@ public class MembershipManagerImplTest {
         verify(subscriptionState, never()).assignFromSubscribed(anyCollection());
     }
 
+    // TODO
     @Test
     public void testReconcileNewPartitionsAssignedWhenNoPartitionOwned() {
         Uuid topicId = Uuid.randomUuid();
@@ -1307,6 +1315,7 @@ public class MembershipManagerImplTest {
         verifyReconciliationTriggeredAndCompleted(membershipManager, assignedPartitions);
     }
 
+    // TODO
     @Test
     public void testReconcileNewPartitionsAssignedWhenOtherPartitionsOwned() {
         Uuid topicId = Uuid.randomUuid();
@@ -1327,6 +1336,7 @@ public class MembershipManagerImplTest {
         verifyReconciliationTriggeredAndCompleted(membershipManager, assignedPartitions);
     }
 
+    // TODO
     @Test
     public void testReconciliationSkippedWhenSameAssignmentReceived() {
         // Member stable, no assignment
@@ -1360,6 +1370,7 @@ public class MembershipManagerImplTest {
         assertEquals(0.0d, getMetricValue(metrics, rebalanceMetricsManager.failedRebalanceTotal));
     }
 
+    // TODO
     @Test
     public void testReconcilePartitionsRevokedNoAutoCommitNoCallbacks() {
         MembershipManagerImpl membershipManager = createMemberInStableState();
@@ -1420,6 +1431,7 @@ public class MembershipManagerImplTest {
         testRevocationOfAllPartitionsCompleted(membershipManager);
     }
 
+    // TODO
     @Test
     public void testReconcileNewPartitionsAssignedAndRevoked() {
         Uuid topicId = Uuid.randomUuid();
@@ -1444,6 +1456,7 @@ public class MembershipManagerImplTest {
         verify(subscriptionState).assignFromSubscribed(anyCollection());
     }
 
+    // TODO
     @Test
     public void testMetadataUpdatesReconcilesUnresolvedAssignments() {
         Uuid topicId = Uuid.randomUuid();
@@ -1499,6 +1512,7 @@ public class MembershipManagerImplTest {
         verify(metadata, times(2)).requestUpdate(anyBoolean());
     }
 
+    // TODO
     @Test
     public void testRevokePartitionsUsesTopicNamesLocalCacheWhenMetadataNotAvailable() {
         Uuid topicId = Uuid.randomUuid();
@@ -1847,6 +1861,7 @@ public class MembershipManagerImplTest {
         assertLeaveGroupDueToExpiredPollAndTransitionToStale(membershipManager);
     }
 
+    // TODO
     @Test
     public void testTransitionToLeavingWhileAcknowledgingDueToStaleMember() {
         MembershipManagerImpl membershipManager = mockJoinAndReceiveAssignment(true);
@@ -2098,6 +2113,7 @@ public class MembershipManagerImplTest {
         assertEquals(LEAVE_GROUP_MEMBER_EPOCH, membershipManager.memberEpoch());
     }
 
+    // TODO
     @Test
     public void testMemberJoiningTransitionsToStableWhenReceivingEmptyAssignment() {
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
