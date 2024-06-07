@@ -39,11 +39,11 @@
       { "name": "TopologyHash", "type": "bytes", "versions": "0+",
         "about": "The hash of the topology." },
 
-      { "name": "ActiveTasks", "type": "[]TaskId", "versions": "0+",
+      { "name": "ActiveTasks", "type": "[]TaskIds", "versions": "0+",
         "about": "Target active tasks for this consumer." },
-      { "name": "StandbyTasks", "type": "[]TaskId", "versions": "0+",
+      { "name": "StandbyTasks", "type": "[]TaskIds", "versions": "0+",
         "about": "Target standby tasks for this consumer." },
-      { "name": "WarmupTasks", "type": "[]TaskId", "versions": "0+",
+      { "name": "WarmupTasks", "type": "[]TaskIds", "versions": "0+",
         "about": "Target warming up tasks for this consumer. " },
 
       { "name": "ProcessId", "type": "uuid", "versions": "0+",
@@ -55,8 +55,10 @@
       { "name": "TaskOffset", "type": "[]TaskOffset", "versions": "0+", "nullableVersions": "0+", "default": "null",
         "about": "Cumulative offsets for assigned and dormant standby tasks. Only updatable when TaskOffsetUpdateReason is not zero. Null if unchanged since last heartbeat.",
         "fields": [
-          { "name": "TaskId", "type": "TaskId", "versions": "0+",
-            "about": "The task ID" },
+          { "name": "Subtopology", "type": "string", "versions": "0+",
+            "about": "A unique identifier of the subtopology." },
+          { "name": "Partition", "type": "int32", "versions": "0+",
+            "about": "The partition of the input topics." },
           { "name": "Offset", "type": "int64", "versions": "0+",
             "about": "The cumulative offset for the task" }
         ]
@@ -78,7 +80,7 @@
       ]}
   ],
   "commonStructs": [
-    { "name": "TaskId", "versions": "0+", "fields": [
+    { "name": "TaskIds", "versions": "0+", "fields": [
       { "name": "Subtopology", "type": "string", "versions": "0+",
         "about": "subtopology ID" },
       { "name": "Partitions", "type": "[]int32", "versions": "0+",
