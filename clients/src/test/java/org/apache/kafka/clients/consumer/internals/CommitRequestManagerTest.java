@@ -1328,14 +1328,8 @@ public class CommitRequestManagerTest {
 
             // In this case, we aren't able to use the previous request because its set of partitions are different
             // from the current set of requested partitions.
-            assertEquals(
-                0,
-                commitRequestManager.pendingRequests.unsentOffsetFetches.size()
-            );
-            assertEquals(
-                1,
-                commitRequestManager.pendingRequests.inflightOffsetFetches.size()
-            );
+            assertEquals(0, commitRequestManager.pendingRequests.unsentOffsetFetches.size());
+            assertEquals(1, commitRequestManager.pendingRequests.inflightOffsetFetches.size());
             assertEquals(
                 partitions,
                 commitRequestManager.pendingRequests.inflightOffsetFetches.get(0).requestedPartitions,
@@ -1346,7 +1340,8 @@ public class CommitRequestManagerTest {
             res = commitRequestManager.poll(time.milliseconds());
             assertEquals(0, res.unsentRequests.size());
             assertEquals(0, commitRequestManager.pendingRequests.unsentOffsetFetches.size());
-            assertEquals(1,
+            assertEquals(
+                1,
                 commitRequestManager.pendingRequests.inflightOffsetFetches.size(),
                 "The inflight offset fetch response should be cached since this request expired immediately"
             );
