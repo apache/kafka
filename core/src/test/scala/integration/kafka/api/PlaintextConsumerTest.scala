@@ -192,15 +192,22 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testSubscribeInvalidTopic(quorum: String, groupProtocol: String): Unit = {
-    val invalidTopicName = "topic abc"
+    val invalidTopicName = "topic abc"  // Invalid topic name due to space
     val consumer = createConsumer()
 
     // subscribe invalid topic
     consumer.subscribe(List(invalidTopicName).asJava)
 
-    consumer.poll(Duration.ZERO);
-    val exception = assertThrows(classOf[InvalidTopicException], () => consumer.poll(Duration.ofMillis(5000)))
-    assertEquals(String.format("Invalid topics: [%s]", invalidTopicName), exception.getMessage)
+    var exception : Exception = null
+    TestUtils.waitUntilTrue(() => {
+      try consumer.poll(Duration.ofMillis(500)) catch {
+        case e : Exception => exception = e
+      }
+      exception != null
+    }, waitTimeMs = 5000, msg = "An exception should be thrown.")
+
+    assertEquals(classOf[InvalidTopicException], exception.getClass)
+    assertEquals(s"Invalid topics: [${invalidTopicName}]", exception.getMessage)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
