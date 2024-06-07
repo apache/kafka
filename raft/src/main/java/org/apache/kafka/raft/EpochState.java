@@ -50,7 +50,9 @@ public interface EpochState extends Closeable {
     int epoch();
 
     /**
-     * TODO: document this
+     * Returns the known endpoints for the leader.
+     *
+     * If the leader is not known then {@code Endpoints.empty()} is returned.
      */
     Endpoints leaderEndpoints();
 

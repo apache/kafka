@@ -123,7 +123,6 @@ final public class VoterSet {
         return voters.size() == 1 && isVoter(nodeKey);
     }
 
-    // TODO: see if we should just remove this now
     /**
      * Returns all of the voter ids.
      */
@@ -152,13 +151,14 @@ final public class VoterSet {
             .collect(Collectors.toSet());
     }
 
-    /** TODO
+    /**
+     * Returns all of the endpoints for a voter id.
+     *
+     * {@code Endpoints.empty()} is returned if the id is not a voter.
+     *
+     * @param voterId the id of the voter
+     * @return the endpoints for the voter
      */
-    public Optional<VoterNode> voterNode(int voterId) {
-        return Optional.ofNullable(voters.get(voterId));
-    }
-
-    // TODO write documentation
     public Endpoints listeners(int voterId) {
         return Optional.ofNullable(voters.get(voterId))
             .map(VoterNode::listeners)
@@ -300,8 +300,19 @@ final public class VoterSet {
             return voterKey;
         }
 
-        // TODO: write documentation
         // TODO: write test for this
+        /**
+         * Returns if the provided replica key matches this voter node.
+         *
+         * If the voter node includes the directory id, the {@code replicaKey} directory id must
+         * match the directory id specified by the voter set.
+         *
+         * If the voter node doesn't include the directory id ({@code Optional.empty()}), a replica
+         * is the voter as long as the node id matches. The directory id is not checked.
+         *
+         * @param replicaKey the replica key
+         * @return true if the replica key is the voter, otherwise false
+         */
         public boolean isVoter(ReplicaKey replicaKey) {
             if (voterKey.id() != replicaKey.id()) return false;
 
