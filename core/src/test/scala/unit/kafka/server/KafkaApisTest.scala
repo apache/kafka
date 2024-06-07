@@ -7082,11 +7082,12 @@ class KafkaApisTest extends Logging {
     assertEquals(Errors.GROUP_AUTHORIZATION_FAILED.code, response.data.errorCode)
   }
 
-  @Test
-  def testConsumerGroupDescribe(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testConsumerGroupDescribe(includeAuthorizedOperations: Boolean): Unit = {
     val groupIds = List("group-id-0", "group-id-1", "group-id-2").asJava
     val consumerGroupDescribeRequestData = new ConsumerGroupDescribeRequestData()
-      .setIncludeAuthorizedOperations(true)
+      .setIncludeAuthorizedOperations(includeAuthorizedOperations)
     consumerGroupDescribeRequestData.groupIds.addAll(groupIds)
     val requestChannelRequest = buildRequest(new ConsumerGroupDescribeRequest.Builder(consumerGroupDescribeRequestData, true).build())
 
@@ -7107,11 +7108,12 @@ class KafkaApisTest extends Logging {
     ).asJava)
 
     // Can't reuse the above list here because we would not test the implementation in KafkaApis then
+    val authorizedOperationsInt = if (includeAuthorizedOperations) 328 else Int.MinValue;
     val describedGroups = List(
       new DescribedGroup().setGroupId(groupIds.get(0)),
       new DescribedGroup().setGroupId(groupIds.get(1)),
       new DescribedGroup().setGroupId(groupIds.get(2))
-    ).map(group => group.setAuthorizedOperations(328)) // Integer representation of authorized operations for this request
+    ).map(group => group.setAuthorizedOperations(authorizedOperationsInt)) // Integer representation of authorized operations for this request
     val expectedConsumerGroupDescribeResponseData = new ConsumerGroupDescribeResponseData()
       .setGroups(describedGroups.asJava)
 
