@@ -14,28 +14,34 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.assignor;
+package org.apache.kafka.coordinator.group.api.assignor;
 
-import org.apache.kafka.common.Uuid;
-
-import java.util.Optional;
-import java.util.Set;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * Interface representing the subscription metadata for a group member.
+ * The subscription type followed by a consumer group.
  */
-public interface MemberSubscriptionSpec {
+@InterfaceStability.Unstable
+public enum SubscriptionType {
     /**
-     * Gets the rack Id if present.
-     *
-     * @return An Optional containing the rack Id, or an empty Optional if not present.
+     * A homogeneous subscription type means that all the members
+     * of the group are subscribed to the same set of topics.
      */
-    Optional<String> rackId();
+    HOMOGENEOUS("Homogeneous"),
+    /**
+     * A heterogeneous subscription type means that not all the members
+     * of the group are subscribed to the same set of topics.
+     */
+    HETEROGENEOUS("Heterogeneous");
 
-    /**
-     * Gets the set of subscribed topic Ids.
-     *
-     * @return The set of subscribed topic Ids.
-     */
-    Set<Uuid> subscribedTopicIds();
+    private final String name;
+
+    SubscriptionType(String name) {
+        this.name = name;
+    }
+
+    @Override
+    public String toString() {
+        return name;
+    }
 }

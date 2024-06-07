@@ -17,6 +17,9 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.server.common.TopicIdPartition;
 
 import java.util.Collection;
@@ -42,7 +45,7 @@ public abstract class AbstractUniformAssignmentBuilder {
         int partition
     ) {
         memberAssignments.get(memberId)
-            .targetPartitions()
+            .partitions()
             .computeIfAbsent(topicId, __ -> new HashSet<>())
             .add(partition);
     }

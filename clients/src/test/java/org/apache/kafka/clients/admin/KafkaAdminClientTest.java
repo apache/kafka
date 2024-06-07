@@ -749,7 +749,7 @@ public class KafkaAdminClientTest {
             Boolean partitionIndexError,
             Boolean emptyOptionals) {
         String topicName = topicNameError ? "RANDOM" : Topic.CLUSTER_METADATA_TOPIC_NAME;
-        Integer partitionIndex = partitionIndexError ? 1 : Topic.CLUSTER_METADATA_TOPIC_PARTITION.partition();
+        int partitionIndex = partitionIndexError ? 1 : Topic.CLUSTER_METADATA_TOPIC_PARTITION.partition();
         List<DescribeQuorumResponseData.TopicData> topics = new ArrayList<>();
         List<DescribeQuorumResponseData.PartitionData> partitions = new ArrayList<>();
         for (int i = 0; i < (partitionCountError ? 2 : 1); i++) {
@@ -1553,7 +1553,7 @@ public class KafkaAdminClientTest {
         Uuid topicId,
         List<Integer> partitions) {
         List<DescribeTopicPartitionsResponsePartition> addingPartitions = new ArrayList<>();
-        partitions.forEach(partition -> {
+        partitions.forEach(partition ->
             addingPartitions.add(new DescribeTopicPartitionsResponsePartition()
                 .setIsrNodes(singletonList(0))
                 .setErrorCode((short) 0)
@@ -1562,8 +1562,8 @@ public class KafkaAdminClientTest {
                 .setEligibleLeaderReplicas(singletonList(1))
                 .setLastKnownElr(singletonList(2))
                 .setPartitionIndex(partition)
-                .setReplicaNodes(Arrays.asList(0, 1, 2)));
-        });
+                .setReplicaNodes(Arrays.asList(0, 1, 2)))
+        );
         data.topics().add(new DescribeTopicPartitionsResponseTopic()
                 .setErrorCode((short) 0)
                 .setTopicId(topicId)
@@ -4033,7 +4033,7 @@ public class KafkaAdminClientTest {
             ListConsumerGroupOffsetsResult result = env.adminClient().listConsumerGroupOffsets(groupSpecs);
 
             // The request handler attempts both FindCoordinator and OffsetFetch requests. This seems
-            // ok since since we expect this scenario only during upgrades from versions < 3.0.0 where
+            // ok since we expect this scenario only during upgrades from versions < 3.0.0 where
             // some upgraded brokers could handle batched FindCoordinator while non-upgraded coordinators
             // rejected batched OffsetFetch requests.
             sendFindCoordinatorResponse(env.kafkaClient(), env.cluster().controller());
@@ -4890,7 +4890,7 @@ public class KafkaAdminClientTest {
             assertNull(noErrorResult.memberResult(memberTwo).get());
 
             // Test the "removeAll" scenario
-            final List<TopicPartition> topicPartitions = Arrays.asList(1, 2, 3).stream().map(partition -> new TopicPartition("my_topic", partition))
+            final List<TopicPartition> topicPartitions = Stream.of(1, 2, 3).map(partition -> new TopicPartition("my_topic", partition))
                     .collect(Collectors.toList());
             // construct the DescribeGroupsResponse
             DescribeGroupsResponseData data = prepareDescribeGroupsResponseData(GROUP_ID, Arrays.asList(instanceOne, instanceTwo), topicPartitions);
@@ -6794,7 +6794,7 @@ public class KafkaAdminClientTest {
                     new UserScramCredentialUpsertion(user2Name, new ScramCredentialInfo(user2ScramMechanism0, 4096), "password")));
             Map<String, KafkaFuture<Void>> resultData = result.values();
             assertEquals(3, resultData.size());
-            Arrays.asList(user0Name, user1Name).stream().forEach(u -> {
+            Stream.of(user0Name, user1Name).forEach(u -> {
                 assertTrue(resultData.containsKey(u));
                 try {
                     resultData.get(u).get();
@@ -6819,7 +6819,7 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testAlterUserScramCredentials() throws Exception {
+    public void testAlterUserScramCredentials() {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
@@ -6831,7 +6831,7 @@ public class KafkaAdminClientTest {
             final String user2Name = "user2";
             ScramMechanism user2ScramMechanism0 = ScramMechanism.SCRAM_SHA_512;
             AlterUserScramCredentialsResponseData responseData = new AlterUserScramCredentialsResponseData();
-            responseData.setResults(Arrays.asList(user0Name, user1Name, user2Name).stream().map(u ->
+            responseData.setResults(Stream.of(user0Name, user1Name, user2Name).map(u ->
                     new AlterUserScramCredentialsResponseData.AlterUserScramCredentialsResult()
                     .setUser(u).setErrorCode(Errors.NONE.code())).collect(Collectors.toList()));
 
@@ -6844,7 +6844,7 @@ public class KafkaAdminClientTest {
                     new UserScramCredentialDeletion(user2Name, user2ScramMechanism0)));
             Map<String, KafkaFuture<Void>> resultData = result.values();
             assertEquals(3, resultData.size());
-            Arrays.asList(user0Name, user1Name, user2Name).stream().forEach(u -> {
+            Stream.of(user0Name, user1Name, user2Name).forEach(u -> {
                 assertTrue(resultData.containsKey(u));
                 assertFalse(resultData.get(u).isCompletedExceptionally());
             });
@@ -7294,14 +7294,14 @@ public class KafkaAdminClientTest {
             MetadataResponseData.MetadataResponseBrokerCollection brokers =
                 new MetadataResponseData.MetadataResponseBrokerCollection();
 
-            env.cluster().nodes().forEach(node -> {
+            env.cluster().nodes().forEach(node ->
                 brokers.add(new MetadataResponseData.MetadataResponseBroker()
                     .setHost(node.host())
                     .setNodeId(node.id())
                     .setPort(node.port())
                     .setRack(node.rack())
-                );
-            });
+                )
+            );
 
             env.kafkaClient().prepareResponse(
                 request -> request instanceof MetadataRequest,
@@ -7658,7 +7658,7 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testListClientMetricsResourcesNotSupported() throws Exception {
+    public void testListClientMetricsResourcesNotSupported() {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().prepareResponse(
                 request -> request instanceof ListClientMetricsResourcesRequest,

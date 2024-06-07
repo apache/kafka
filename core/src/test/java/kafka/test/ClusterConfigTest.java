@@ -29,6 +29,8 @@ import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
+import java.util.Set;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -95,5 +97,19 @@ public class ClusterConfigTest {
                 .setControllers(1)
                 .setDisksPerBroker(0)
                 .build());
+    }
+
+    @Test
+    public void testDisplayTags() {
+        List<String> tags = Arrays.asList("tag 1", "tag 2", "tag 3");
+        ClusterConfig clusterConfig = ClusterConfig.defaultBuilder().setTags(tags).build();
+
+        Set<String> expectedDisplayTags = clusterConfig.displayTags();
+
+        Assertions.assertTrue(expectedDisplayTags.contains("tag 1"));
+        Assertions.assertTrue(expectedDisplayTags.contains("tag 2"));
+        Assertions.assertTrue(expectedDisplayTags.contains("tag 3"));
+        Assertions.assertTrue(expectedDisplayTags.contains("MetadataVersion=" + MetadataVersion.latestTesting()));
+        Assertions.assertTrue(expectedDisplayTags.contains("Security=" + SecurityProtocol.PLAINTEXT));
     }
 }

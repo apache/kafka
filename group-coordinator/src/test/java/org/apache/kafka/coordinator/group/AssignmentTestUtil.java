@@ -17,8 +17,8 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
-import org.apache.kafka.coordinator.group.assignor.MemberSubscriptionSpecImpl;
+import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.consumer.MemberSubscriptionAndAssignmentImpl;
 
 import java.util.AbstractMap;
 import java.util.Arrays;
@@ -80,7 +80,7 @@ public class AssignmentTestUtil {
     ) {
         assertEquals(expectedAssignment.size(), computedGroupAssignment.members().size());
         computedGroupAssignment.members().forEach((memberId, memberAssignment) -> {
-            Map<Uuid, Set<Integer>> computedAssignmentForMember = memberAssignment.targetPartitions();
+            Map<Uuid, Set<Integer>> computedAssignmentForMember = memberAssignment.partitions();
             assertEquals(expectedAssignment.get(memberId), computedAssignmentForMember);
         });
     }
@@ -92,12 +92,12 @@ public class AssignmentTestUtil {
      * @return Map of topic partition to member assignments.
      */
     public static Map<Uuid, Map<Integer, String>> invertedTargetAssignment(
-        Map<String, MemberSubscriptionSpecImpl> members
+        Map<String, MemberSubscriptionAndAssignmentImpl> members
     ) {
         Map<Uuid, Map<Integer, String>> invertedTargetAssignment = new HashMap<>();
-        for (Map.Entry<String, MemberSubscriptionSpecImpl> memberEntry : members.entrySet()) {
+        for (Map.Entry<String, MemberSubscriptionAndAssignmentImpl> memberEntry : members.entrySet()) {
             String memberId = memberEntry.getKey();
-            Map<Uuid, Set<Integer>> memberAssignment = memberEntry.getValue().memberAssignment();
+            Map<Uuid, Set<Integer>> memberAssignment = memberEntry.getValue().partitions();
 
             for (Map.Entry<Uuid, Set<Integer>> topicEntry : memberAssignment.entrySet()) {
                 Uuid topicId = topicEntry.getKey();

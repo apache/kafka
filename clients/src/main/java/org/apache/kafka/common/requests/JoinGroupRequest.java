@@ -86,7 +86,7 @@ public class JoinGroupRequest extends AbstractRequest {
 
     /**
      * Since JoinGroupRequest version 4, a client that sends a join group request with
-     * {@link UNKNOWN_MEMBER_ID} needs to rejoin with a new member id generated
+     * {@link #UNKNOWN_MEMBER_ID} needs to rejoin with a new member id generated
      * by the server. Once the second join group request is complete, the client is
      * added as a new member of the group.
      *
