@@ -1150,6 +1150,10 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             } else {
                 log.debug("Enqueuing offset fetch request for partitions: {}", request.requestedPartitions);
                 this.unsentOffsetFetches.add(request);
+
+                // The incoming offset fetch request isn't in the unsent or inflight buffers, which means we don't
+                // need to keep track of the entry in the inflight buffer any longer.
+                inflightOffsetFetches.removeIf(r -> request.isExpired());
             }
             return request.future;
         }
