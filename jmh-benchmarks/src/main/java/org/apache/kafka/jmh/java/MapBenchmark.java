@@ -17,6 +17,14 @@
 
 package org.apache.kafka.jmh.java;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import org.apache.kafka.common.utils.CopyOnWriteMap;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -30,15 +38,6 @@ import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-
 @State(Scope.Benchmark)
 @Fork(value = 1)
 @Warmup(iterations = 5)
@@ -47,31 +46,34 @@ import java.util.stream.IntStream;
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 @Threads(2)
 public class MapBenchmark {
-    private static final int TIMES = 1_000_000;
-    private static final int MAP_SIZE = 100;
-    private static final Map<String, Integer> MAP_TEMPLATE = IntStream.range(0, MAP_SIZE).boxed()
+    private final int TIMES = 1_000_000;
+    private final int MAP_SIZE = 100;
+    private final Map<String, Integer> MAP_TEMPLATE = IntStream.range(0, MAP_SIZE).boxed()
             .collect(Collectors.toMap(i -> Integer.toString(i), i -> i));
-    private static final List<String> KEYS = new ArrayList<>(MAP_TEMPLATE.keySet());
-
+    private final List<String> KEYS = new ArrayList<>(MAP_TEMPLATE.keySet());
+    private final String[] KEYS_ARRAY = KEYS.toArray(new String[0]);
     private final Map<String, Integer> hashMap = new HashMap<>(MAP_TEMPLATE);
     private final Map<String, Integer> concurrentHashMap = new ConcurrentHashMap<>(MAP_TEMPLATE);
     private final Map<String, Integer> copyOnWriteMap = new CopyOnWriteMap<>(MAP_TEMPLATE);
 
     @Benchmark
     public void testHashMap(Blackhole blackhole) {
-        IntStream.range(0, TIMES).forEach(x ->
-                blackhole.consume(hashMap.get(KEYS.get(x % MAP_SIZE))));
+        for (int i = 0; i < TIMES; i++) {
+            blackhole.consume(hashMap.get(KEYS_ARRAY[i % MAP_SIZE]));
+        }
     }
 
     @Benchmark
     public void testConcurrentHashMap(Blackhole blackhole) {
-        IntStream.range(0, TIMES).forEach(x ->
-                blackhole.consume(concurrentHashMap.get(KEYS.get(x % MAP_SIZE))));
+        for (int i = 0; i < TIMES; i++) {
+            blackhole.consume(concurrentHashMap.get(KEYS_ARRAY[i % MAP_SIZE]));
+        }
     }
 
     @Benchmark
     public void testCopyOnWriteMap(Blackhole blackhole) {
-        IntStream.range(0, TIMES).forEach(x ->
-                blackhole.consume(copyOnWriteMap.get(KEYS.get(x % MAP_SIZE))));
+        for (int i = 0; i < TIMES; i++) {
+            blackhole.consume(copyOnWriteMap.get(KEYS_ARRAY[i % MAP_SIZE]));
+        }
     }
 }

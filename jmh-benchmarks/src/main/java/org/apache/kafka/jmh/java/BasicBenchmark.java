@@ -40,9 +40,8 @@ import java.util.concurrent.TimeUnit;
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 public class BasicBenchmark {
-
-    private static final Random RANDOM = new Random();
-    private static final float[] FLOATS = getInOrderArray();
+    private final Random random = new Random();
+    private final float[] floats = getInOrderArray();
     private int index = 0;
 
     @Setup(Level.Iteration)
@@ -62,18 +61,18 @@ public class BasicBenchmark {
 
     @Benchmark
     public float testRandom() {
-        return RANDOM.nextInt();
+        return random.nextInt();
     }
 
     @Benchmark
     public float testBinarySearch() {
-        return Arrays.binarySearch(FLOATS, FLOATS[index++ % FLOATS.length]);
+        return Arrays.binarySearch(floats, floats[index++ % floats.length]);
     }
 
-    private static float[] getInOrderArray() {
+    private float[] getInOrderArray() {
         float[] floats = new float[1024];
         for (int i = 0; i < floats.length; i++)
-            floats[i] = RANDOM.nextFloat();
+            floats[i] = random.nextFloat();
         Arrays.sort(floats);
         return floats;
     }
