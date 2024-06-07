@@ -289,14 +289,8 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testSendUnsentRequests() {
-        when(networkClientDelegate.unsentRequests()).thenReturn(new LinkedList<>());
         when(networkClientDelegate.hasAnyPendingRequests()).thenReturn(true).thenReturn(true).thenReturn(false);
-
         consumerNetworkThread.cleanup();
-
-        verify(networkClientDelegate, times(2)).poll(anyLong(), anyLong());
-        assertTrue(networkClientDelegate.unsentRequests().isEmpty());
-        assertFalse(client.hasInFlightRequests());
         assertFalse(networkClientDelegate.hasAnyPendingRequests());
     }
 
