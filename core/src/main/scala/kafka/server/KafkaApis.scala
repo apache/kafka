@@ -3593,11 +3593,13 @@ class KafkaApis(val requestChannel: RequestChannel,
         errors match {
           case Left(topLevelError) =>
             UpdateFeaturesResponse.createWithErrors(
+              request.header.apiVersion(),
               topLevelError,
               Collections.emptyMap(),
               throttleTimeMs)
           case Right(featureUpdateErrors) =>
             UpdateFeaturesResponse.createWithErrors(
+              request.header.apiVersion(),
               ApiError.NONE,
               featureUpdateErrors.asJava,
               throttleTimeMs)

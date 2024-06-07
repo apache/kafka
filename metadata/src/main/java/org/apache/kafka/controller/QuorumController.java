@@ -85,6 +85,7 @@ import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.requests.ApiError;
@@ -2233,11 +2234,23 @@ public final class QuorumController implements Controller {
         }).thenApply(result -> {
             UpdateFeaturesResponseData responseData = new UpdateFeaturesResponseData();
             responseData.setResults(new UpdateFeaturesResponseData.UpdatableFeatureResultCollection(result.size()));
-            result.forEach((featureName, error) -> responseData.results().add(
-                new UpdateFeaturesResponseData.UpdatableFeatureResult()
-                    .setFeature(featureName)
-                    .setErrorCode(error.error().code())
-                    .setErrorMessage(error.message())));
+            List<String> featuresWithErrors = new ArrayList<>();
+            result.forEach((featureName, error) -> {
+                if (!error.equals(Errors.NONE))  {
+                    featuresWithErrors.add(featureName);
+                }
+                responseData.results().add(
+                    new UpdateFeaturesResponseData.UpdatableFeatureResult()
+                        .setFeature(featureName)
+                        .setErrorCode(error.error().code())
+                        .setErrorMessage(error.message()));
+            });
+            // If the request is a newer version, indicate the update failed with a top level error if any update failed.
+            if (context.requestHeader().requestApiVersion() > 1 && featuresWithErrors.size() > 0) {
+                responseData.setErrorCode(Errors.FEATURE_UPDATE_FAILED.code());
+                responseData.setErrorMessage("The update failed for all features since the following features had errors: " +
+                    String.join(", ", featuresWithErrors));
+            }
             return responseData;
         });
     }

@@ -24,7 +24,9 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -82,17 +84,31 @@ public class UpdateFeaturesResponse extends AbstractResponse {
         return new UpdateFeaturesResponse(new UpdateFeaturesResponseData(new ByteBufferAccessor(buffer), version));
     }
 
-    public static UpdateFeaturesResponse createWithErrors(ApiError topLevelError, Map<String, ApiError> updateErrors, int throttleTimeMs) {
+    public static UpdateFeaturesResponse createWithErrors(short version, ApiError topLevelError, Map<String, ApiError> updateErrors, int throttleTimeMs) {
         final UpdatableFeatureResultCollection results = new UpdatableFeatureResultCollection();
+        List<String> featuresWithErrors = new ArrayList<>();
         for (final Map.Entry<String, ApiError> updateError : updateErrors.entrySet()) {
             final String feature = updateError.getKey();
             final ApiError error = updateError.getValue();
+
+            if (!error.equals(Errors.NONE)) {
+                featuresWithErrors.add(feature);
+            }
+
             final UpdatableFeatureResult result = new UpdatableFeatureResult();
             result.setFeature(feature)
                 .setErrorCode(error.error().code())
                 .setErrorMessage(error.message());
             results.add(result);
         }
+        // Here we check the version and if it is high enough override the topLevelError.
+        // If the request is a newer version, indicate the update failed with a top level error if any update failed.
+        if (version > 1 && featuresWithErrors.size() > 0) {
+            topLevelError = new ApiError(Errors.FEATURE_UPDATE_FAILED,
+                "The update failed for all features since the following features had errors: " +
+                String.join(", ", featuresWithErrors));
+        }
+
         final UpdateFeaturesResponseData responseData = new UpdateFeaturesResponseData()
             .setThrottleTimeMs(throttleTimeMs)
             .setErrorCode(topLevelError.error().code())

@@ -38,6 +38,7 @@ import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.metadata.migration.ZkMigrationState;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.mutable.BoundedList;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -173,15 +174,26 @@ public class FeatureControlManager {
         Map<String, FeatureUpdate.UpgradeType> upgradeTypes,
         boolean validateOnly
     ) {
+        boolean updateFailed = false;
         TreeMap<String, ApiError> results = new TreeMap<>();
         List<ApiMessageAndVersion> records =
                 BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+
+        Map<String, Short> proposedUpdatedVersions = new HashMap<>();
+        finalizedVersions.forEach(proposedUpdatedVersions::put);
+        proposedUpdatedVersions.put(MetadataVersion.FEATURE_NAME, metadataVersion.get().featureLevel());
+        updates.forEach(proposedUpdatedVersions::put);
+
         for (Entry<String, Short> entry : updates.entrySet()) {
-            results.put(entry.getKey(), updateFeature(entry.getKey(), entry.getValue(),
-                upgradeTypes.getOrDefault(entry.getKey(), FeatureUpdate.UpgradeType.UPGRADE), records));
+            ApiError error = updateFeature(entry.getKey(), entry.getValue(),
+                upgradeTypes.getOrDefault(entry.getKey(), FeatureUpdate.UpgradeType.UPGRADE), records, proposedUpdatedVersions);
+            if (!error.error().equals(Errors.NONE)) {
+                updateFailed = true;
+            }
+            results.put(entry.getKey(), error);
         }
 
-        if (validateOnly) {
+        if (validateOnly || updateFailed) {
             return ControllerResult.of(Collections.emptyList(), results);
         } else {
             return ControllerResult.atomicOf(records, results);
@@ -200,7 +212,8 @@ public class FeatureControlManager {
         String featureName,
         short newVersion,
         FeatureUpdate.UpgradeType upgradeType,
-        List<ApiMessageAndVersion> records
+        List<ApiMessageAndVersion> records,
+        Map<String, Short> proposedUpdatedVersions
     ) {
         if (upgradeType.equals(FeatureUpdate.UpgradeType.UNKNOWN)) {
             return invalidUpdateVersion(featureName, newVersion,
@@ -240,6 +253,17 @@ public class FeatureControlManager {
             // Perform additional checks if we're updating metadata.version
             return updateMetadataVersion(newVersion, upgradeType.equals(FeatureUpdate.UpgradeType.UNSAFE_DOWNGRADE), records::add);
         } else {
+            // Validate dependencies for features that are not metadata.version
+            try {
+                if (newVersion != 0) {
+                    Features.validateVersion(
+                        Features.featureFromName(featureName).fromFeatureLevel(newVersion, true),
+                        proposedUpdatedVersions,
+                        true);
+                }
+            } catch (IllegalArgumentException e) {
+                return invalidUpdateVersion(featureName, newVersion, e.getMessage());
+            }
             records.add(new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(featureName).
                 setFeatureLevel(newVersion), (short) 0));

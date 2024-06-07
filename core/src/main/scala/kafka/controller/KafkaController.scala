@@ -45,7 +45,7 @@ import org.apache.kafka.common.requests.{AbstractControlRequest, ApiError, Leade
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.migration.ZkMigrationState
-import org.apache.kafka.server.common.{AdminOperationException, ProducerIdsBlock}
+import org.apache.kafka.server.common.{AdminOperationException, Features, MetadataVersion, ProducerIdsBlock}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.zookeeper.KeeperException
@@ -2016,10 +2016,21 @@ class KafkaController(val config: KafkaConfig,
    *                           as described above.
    */
   private def validateFeatureUpdate(update: UpdateFeaturesRequest.FeatureUpdateItem,
-                                    existingVersion: Option[Short]): Either[Option[Short], ApiError] = {
+                                    existingVersion: Option[Short],
+                                    expectedFeatures: Map[String, Short]): Either[Option[Short], ApiError] = {
     def newVersionRangeOrError(update: UpdateFeaturesRequest.FeatureUpdateItem): Either[Option[Short], ApiError] = {
-      newFinalizedVersionOrIncompatibilityError(update)
-        .fold(versionRange => Left(Some(versionRange)), error => Right(error))
+      try {
+        if (!update.feature().equals(MetadataVersion.FEATURE_NAME)) {
+          Features.validateVersion(Features.featureFromName(update.feature()).fromFeatureLevel(
+            update.versionLevel(), true), expectedFeatures.view.mapValues(java.lang.Short.valueOf(_)).toMap.asJava, false)
+        }
+        newFinalizedVersionOrIncompatibilityError(update)
+          .fold(versionRange => Left(Some(versionRange)), error => Right(error))
+      }
+      catch {
+        case e: IllegalArgumentException =>
+          Right(new ApiError(Errors.INVALID_REQUEST, e.getMessage))
+      }
     }
 
     if (update.feature.isEmpty) {
@@ -2091,6 +2102,9 @@ class KafkaController(val config: KafkaConfig,
     // A map with key being feature name and value being finalized version.
     // This contains the target features to be eventually written to FeatureZNode.
     val targetFeatures = scala.collection.mutable.Map[String, Short]() ++ existingFeatures
+    // expectedFeatures are the features we expect to see after the updates are applied
+    val expectedFeatures = scala.collection.mutable.Map[String, Short]() ++ existingFeatures
+    updates.forEach(update => expectedFeatures.put(update.feature(), update.versionLevel()))
     // A map with key being feature name and value being error encountered when the FeatureUpdate
     // was applied.
     val errors = scala.collection.mutable.Map[String, ApiError]()
@@ -2106,7 +2120,7 @@ class KafkaController(val config: KafkaConfig,
     //    - The corresponding entry in errors map would be updated with the appropriate ApiError.
     //    - The entry in targetFeatures map is left untouched.
     updates.asScala.iterator.foreach { update =>
-      validateFeatureUpdate(update, existingFeatures.get(update.feature())) match {
+      validateFeatureUpdate(update, existingFeatures.get(update.feature()), expectedFeatures) match {
         case Left(newVersionRangeOrNone) =>
           newVersionRangeOrNone match {
             case Some(newVersionRange) => targetFeatures += (update.feature() -> newVersionRange)
@@ -2119,11 +2133,12 @@ class KafkaController(val config: KafkaConfig,
     }
 
     // If the existing and target features are the same, then, we skip the update to the
-    // FeatureZNode as no changes to the node are required. Otherwise, we replace the contents
+    // FeatureZNode as no changes to the node are required. For version 2 and above, if one feature encountered an error,
+    // we don't update any of them. Otherwise, we replace the contents
     // of the FeatureZNode with the new features. This may result in partial or full modification
     // of the existing finalized features in ZK.
     try {
-      if (!existingFeatures.equals(targetFeatures)) {
+      if (!existingFeatures.equals(targetFeatures) && (request.version() < 2 || expectedFeatures.equals(targetFeatures))) {
         val newNode = FeatureZNode(config.interBrokerProtocolVersion, FeatureZNodeStatus.Enabled, targetFeatures)
         val newVersion = updateFeatureZNode(newNode)
         featureCache.waitUntilFeatureEpochOrThrow(newVersion, request.data().timeoutMs())

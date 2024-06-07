@@ -60,7 +60,7 @@ public class FeaturesTest {
 
             // Ensure that the feature is valid given the typical metadataVersionMapping and the dependencies.
             // Note: Other metadata versions are valid, but this one should always be valid.
-            Features.validateVersion(featureImpl, deps);
+            Features.validateVersion(featureImpl, deps, true);
         }
     }
 
@@ -70,7 +70,8 @@ public class FeaturesTest {
         assertThrows(IllegalArgumentException.class,
             () -> Features.validateVersion(
                 TestFeatureVersion.TEST_1,
-                Collections.emptyMap()
+                Collections.emptyMap(),
+                true
             )
         );
 
@@ -78,7 +79,8 @@ public class FeaturesTest {
         assertThrows(IllegalArgumentException.class,
             () -> Features.validateVersion(
                 TestFeatureVersion.TEST_1,
-                Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_2_8_IV0.featureLevel())
+                Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_2_8_IV0.featureLevel()),
+                true
             )
         );
 
@@ -86,7 +88,8 @@ public class FeaturesTest {
         assertThrows(IllegalArgumentException.class,
              () -> Features.validateVersion(
                  TestFeatureVersion.TEST_2,
-                 Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_7_IV0.featureLevel())
+                 Collections.singletonMap(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_6_IV0.featureLevel()),
+                 true
              )
         );
     }

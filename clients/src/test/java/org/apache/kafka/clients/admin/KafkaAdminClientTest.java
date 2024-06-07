@@ -5808,7 +5808,7 @@ public class KafkaAdminClientTest {
         try (final AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().prepareResponse(
                 body -> body instanceof UpdateFeaturesRequest,
-                UpdateFeaturesResponse.createWithErrors(topLevelError, featureUpdateErrors, 0));
+                UpdateFeaturesResponse.createWithErrors(ApiKeys.UPDATE_FEATURES.latestVersion(), topLevelError, featureUpdateErrors, 0));
             final Map<String, KafkaFuture<Void>> futures = env.adminClient().updateFeatures(
                 featureUpdates,
                 new UpdateFeaturesOptions().timeoutMs(10000)).values();
@@ -5868,6 +5868,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponseFrom(
                 request -> request instanceof UpdateFeaturesRequest,
                 UpdateFeaturesResponse.createWithErrors(
+                    ApiKeys.UPDATE_FEATURES.latestVersion(),
                     new ApiError(Errors.NOT_CONTROLLER),
                     Utils.mkMap(),
                     0),
@@ -5880,6 +5881,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponseFrom(
                 request -> request instanceof UpdateFeaturesRequest,
                 UpdateFeaturesResponse.createWithErrors(
+                    ApiKeys.UPDATE_FEATURES.latestVersion(),
                     ApiError.NONE,
                     Utils.mkMap(Utils.mkEntry("test_feature_1", ApiError.NONE),
                                 Utils.mkEntry("test_feature_2", ApiError.NONE)),
