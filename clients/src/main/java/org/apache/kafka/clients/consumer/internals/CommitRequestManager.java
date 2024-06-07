@@ -514,11 +514,13 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
         // Retry the same fetch request while it fails with RetriableException and the retry timeout hasn't expired.
         currentResult.whenComplete((res, error) -> {
-            boolean inflightRemoved = pendingRequests.inflightOffsetFetches.remove(fetchRequest);
-            if (!inflightRemoved) {
-                log.warn("A duplicated, inflight, request was identified, but unable to find it in the " +
-                    "outbound buffer:" + fetchRequest);
+            if (!fetchRequest.isExpired()) {
+                boolean inflightRemoved = pendingRequests.inflightOffsetFetches.remove(fetchRequest);
+                if (!inflightRemoved) {
+                    log.warn("The response for the offset fetch request for partitions {} was not found in the inflight buffer", fetchRequest.requestedPartitions);
+                }
             }
+
             if (error == null) {
                 result.complete(res);
             } else {
@@ -1132,9 +1134,19 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             Optional<OffsetFetchRequestState> inflight =
                     inflightOffsetFetches.stream().filter(r -> r.sameRequest(request)).findAny();
 
-            if (dupe.isPresent() || inflight.isPresent()) {
+            if (dupe.isPresent()) {
                 log.debug("Duplicated unsent offset fetch request found for partitions: {}", request.requestedPartitions);
-                dupe.orElseGet(inflight::get).chainFuture(request.future);
+                dupe.get().chainFuture(request.future);
+            } else if (inflight.isPresent()) {
+                log.debug("Duplicated inflight offset fetch request found for partitions: {}", request.requestedPartitions);
+                OffsetFetchRequestState existing = inflight.get();
+                existing.chainFuture(request.future);
+
+                if (existing.future.isDone()) {
+                    boolean inflightRemoved = inflightOffsetFetches.remove(existing);
+                    if (!inflightRemoved)
+                        log.warn("The offset fetch request for partitions {} was not found in the inflight buffer", request.requestedPartitions);
+                }
             } else {
                 log.debug("Enqueuing offset fetch request for partitions: {}", request.requestedPartitions);
                 this.unsentOffsetFetches.add(request);
