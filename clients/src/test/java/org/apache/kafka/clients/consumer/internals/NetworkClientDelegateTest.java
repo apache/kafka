@@ -57,6 +57,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -185,16 +186,15 @@ public class NetworkClientDelegateTest {
 
     @Test
     public void testPropagateMetadataError() {
-        LinkedList<BackgroundEvent> backgroundEventQueue = new LinkedList<>();
-        Metadata metadata = new Metadata(100, 100, 50000,
-                new LogContext(), new ClusterResourceListeners());
-        NetworkClientDelegate networkClientDelegate = newNetworkClientDelegate(metadata,
-                new BackgroundEventHandler(backgroundEventQueue));
-
         String exMsg = "Test Auth Exception";
-        metadata.fatalError(new AuthenticationException(exMsg));
-        assertEquals(0, backgroundEventQueue.size());
+        doThrow(new AuthenticationException(exMsg)).when(metadata).maybeThrowAnyException();
 
+        LinkedList<BackgroundEvent> backgroundEventQueue = new LinkedList<>();
+        this.backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
+        NetworkClientDelegate networkClientDelegate = newNetworkClientDelegate();
+
+
+        assertEquals(0, backgroundEventQueue.size());
         networkClientDelegate.poll(0, time.milliseconds());
         assertEquals(1, backgroundEventQueue.size());
 
@@ -207,10 +207,10 @@ public class NetworkClientDelegateTest {
     @Test
     public void testPropagateInvalidTopicMetadataError() {
         LinkedList<BackgroundEvent> backgroundEventQueue = new LinkedList<>();
-        Metadata metadata = new Metadata(100, 100, 50000,
+        this.backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
+        this.metadata = new Metadata(100, 100, 50000,
                 new LogContext(), new ClusterResourceListeners());
-        NetworkClientDelegate networkClientDelegate = newNetworkClientDelegate(metadata,
-                new BackgroundEventHandler(backgroundEventQueue));
+        NetworkClientDelegate networkClientDelegate = newNetworkClientDelegate();
 
         String invalidTopic = "invalid topic";
         MetadataResponse invalidTopicResponse = RequestTestUtils.metadataUpdateWith("clusterId", 1,
@@ -241,22 +241,6 @@ public class NetworkClientDelegateTest {
                 this.client,
                 this.metadata,
                 this.backgroundEventHandler);
-    }
-
-    public NetworkClientDelegate newNetworkClientDelegate(Metadata metadata,
-                                                          BackgroundEventHandler backgroundEventHandler) {
-        LogContext logContext = new LogContext();
-        Properties properties = new Properties();
-        properties.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        properties.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        properties.put(GROUP_ID_CONFIG, GROUP_ID);
-        properties.put(REQUEST_TIMEOUT_MS_CONFIG, REQUEST_TIMEOUT_MS);
-        return new NetworkClientDelegate(this.time,
-                new ConsumerConfig(properties),
-                logContext,
-                new MockClient(time, metadata),
-                metadata,
-                backgroundEventHandler);
     }
 
     public NetworkClientDelegate.UnsentRequest newUnsentFindCoordinatorRequest() {
