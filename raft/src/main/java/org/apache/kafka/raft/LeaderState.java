@@ -65,7 +65,6 @@ public class LeaderState<T> implements EpochState {
     private final Logger log;
     private final BatchAccumulator<T> accumulator;
     // The set includes all of the followers voters that FETCH or FETCH_SNAPSHOT during the current checkQuorumTimer interval.
-    // TODO probably easier to move this state to ReplicaState
     private final Set<Integer> fetchedVoters = new HashSet<>();
     private final Timer checkQuorumTimer;
     private final int checkQuorumTimeoutMs;
@@ -79,7 +78,7 @@ public class LeaderState<T> implements EpochState {
         int epoch,
         long epochStartOffset,
         VoterSet voters,
-        Set<Integer> grantingVoters, // TODO: should this change to Set<ReplicaKey>?
+        Set<Integer> grantingVoters,
         BatchAccumulator<T> accumulator,
         Endpoints endpoints,
         int fetchTimeoutMs,
@@ -391,13 +390,11 @@ public class LeaderState<T> implements EpochState {
             .sorted();
     }
 
-    // TODO: this should be a ReplicaKey
     public void addAcknowledgementFrom(int remoteNodeId) {
         ReplicaState voterState = ensureValidVoter(remoteNodeId);
         voterState.hasAcknowledgedLeader = true;
     }
 
-    // TODO: this should be a ReplicaKey
     private ReplicaState ensureValidVoter(int remoteNodeId) {
         ReplicaState state = voterStates.get(remoteNodeId);
         if (state == null) {
@@ -488,28 +485,41 @@ public class LeaderState<T> implements EpochState {
             }
         }
 
-        // Add replicas that are in the last voter set and not in voterStates to voterStates (from observerStates
-        // if they exist)
+        // Add any replica that is in the last voter set and not in voterStates to voterStates (move from observerStates
+        // if necessary)
         for (VoterSet.VoterNode voterNode : lastVoterSet.voterNodes()) {
             ReplicaState voterState = voterStates.get(voterNode.voterKey().id());
             if (voterState == null) {
+                // Find the replica in observer state
                 Optional<ReplicaState> existingObserverState = Optional.ofNullable(
                     observerStates.remove(voterNode.voterKey())
                 );
+
+                // Add replica as voter to voter states
                 voterStates.put(
                     voterNode.voterKey().id(),
                     existingObserverState.orElse(new ReplicaState(voterNode.voterKey(), false))
                 );
             } else if (!voterNode.isVoter(voterState.replicaKey)) {
-                // TODO: update the voterState.replicakey to match the voter node
-                // TODO: should log a info message since this is important and rare
-                // TODO: need to figure out how to test this
+                // TODO: figure out how to test this
+                // The ids match but the directory ids do not match. This happens when
+                // upgrading from kraft.version 0 to kraft.version 1 and the directory ids are
+                // recorded
+                log.info(
+                    "Voter {} replica key doesn't match replica key in the leader's replica state " +
+                    "{}; updating tracked replica key",
+                    voterNode,
+                    voterState
+                );
+
+                // This is safe to do for voter state because they are indexed by the replica id.
+                voterState.setReplicaKey(voterNode.voterKey());
             }
         }
     }
 
     private static class ReplicaState implements Comparable<ReplicaState> {
-        final ReplicaKey replicaKey;
+        ReplicaKey replicaKey;
         Optional<LogOffsetMetadata> endOffset;
         long lastFetchTimestamp;
         long lastFetchLeaderLogEndOffset;
@@ -523,6 +533,28 @@ public class LeaderState<T> implements EpochState {
             this.lastFetchLeaderLogEndOffset = -1;
             this.lastCaughtUpTimestamp = -1;
             this.hasAcknowledgedLeader = hasAcknowledgedLeader;
+        }
+
+        void setReplicaKey(ReplicaKey replicaKey) {
+            if (this.replicaKey.id() != replicaKey.id()) {
+                throw new IllegalArgumentException(
+                    String.format(
+                        "Attempting to update the replica key {} with a different replica id {}",
+                        this.replicaKey,
+                        replicaKey
+                    )
+                );
+            } else if (this.replicaKey.directoryId().isPresent()) {
+                throw new IllegalArgumentException(
+                    String.format(
+                        "Attempting to update an already set directory id {} with a different directory id {}",
+                        this.replicaKey,
+                        replicaKey
+                    )
+                );
+            }
+
+            this.replicaKey = replicaKey;
         }
 
         boolean matchesKey(ReplicaKey replicaKey) {

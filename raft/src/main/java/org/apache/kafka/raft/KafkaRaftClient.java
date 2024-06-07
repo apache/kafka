@@ -670,7 +670,24 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         VoteRequestData.PartitionData partitionRequest =
             request.topics().get(0).partitions().get(0);
 
-        // TODO: construct the Voter ReplicaKey and compare it against our id
+        // TODO: test this...
+        // Check that the request was intended for this voter
+        Optional<ReplicaKey> voterKey = RaftUtil.voteRequestVoterId(request, partitionRequest);
+        if (voterKey.isPresent()) {
+            if (!OptionalInt.of(voterKey.get().id()).equals(nodeId) ||
+                (voterKey.get().directoryId().isPresent() &&
+                 !voterKey.get().directoryId().get().equals(nodeDirectoryId)
+                )
+            ) {
+                // The request is not intended to this replica since the replica keys don't match
+                return buildVoteResponse(
+                    requestMetadata.listenerName(),
+                    requestMetadata.apiVersion(),
+                    Errors.INVALID_REQUEST,
+                    false
+                );
+            }
+        }
 
         int candidateId = partitionRequest.candidateId();
         int candidateEpoch = partitionRequest.candidateEpoch();
@@ -1825,14 +1842,12 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
      *    - Optional.of(false) indicates that the response was handled here, but that the request
      *        will need to be retried
      */
-    // TODO: need to fix this signature to include the endpoint in the response
     private Optional<Boolean> maybeHandleCommonResponse(
         Errors error,
         OptionalInt leaderId,
         int epoch,
         long currentTimeMs
     ) {
-        // TODO this should really be passed in
         Endpoints leaderEndpoints = leaderId.isPresent() ?
             leaderEndpoints = partitionState
                 .lastVoterSet()

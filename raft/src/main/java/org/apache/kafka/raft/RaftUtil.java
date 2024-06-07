@@ -18,7 +18,6 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.message.DescribeQuorumRequestData;
@@ -29,9 +28,11 @@ import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.raft.internals.ReplicaKey;
 
 import java.net.InetSocketAddress;
 import java.util.Collections;
@@ -302,6 +303,17 @@ public class RaftUtil {
         }
 
         return response;
+    }
+
+    static Optional<ReplicaKey> voteRequestVoterId(
+        VoteRequestData request,
+        VoteRequestData.PartitionData partition
+    ) {
+        if (request.voterId() < 0) {
+            return Optional.empty();
+        } else {
+            return Optional.of(ReplicaKey.of(request.voterId(), partition.voterDirectoryId()));
+        }
     }
 
     static boolean hasValidTopicPartition(FetchRequestData data, TopicPartition topicPartition, Uuid topicId) {
