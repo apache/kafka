@@ -53,6 +53,7 @@ import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsHeartbeatRequestData;
 import org.apache.kafka.common.message.StreamsInitializeRequestData;
 import org.apache.kafka.common.message.StreamsInitializeRequestData.Subtopology;
 import org.apache.kafka.common.message.StreamsInitializeRequestData.TopicConfig;
@@ -254,6 +255,99 @@ public class GroupMetadataManagerTest {
                 .setTopicPartitions(Collections.emptyList())));
 
         assertEquals("InstanceId can't be null.", ex.getMessage());
+    }
+
+
+    @Test
+    public void testStreamsRequestValidation() {
+//        TODO MockTaskAssignor assignor = new MockTaskAssignor("range");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+//            .withAssignors(Collections.singletonList(assignor))
+            .build();
+        Exception ex;
+
+        // GroupId must be present in all requests.
+        ex = assertThrows(InvalidRequestException.class, () -> context.streamsHeartbeat(
+            new StreamsHeartbeatRequestData()));
+        assertEquals("GroupId can't be empty.", ex.getMessage());
+
+        // GroupId can't be all whitespaces.
+        ex = assertThrows(InvalidRequestException.class, () -> context.streamsHeartbeat(
+            new StreamsHeartbeatRequestData()
+                .setGroupId("   ")));
+        assertEquals("GroupId can't be empty.", ex.getMessage());
+
+        // RebalanceTimeoutMs must be present in the first request (epoch == 0).
+        ex = assertThrows(InvalidRequestException.class, () -> context.streamsHeartbeat(
+            new StreamsHeartbeatRequestData()
+                .setGroupId("foo")
+                .setMemberEpoch(0)));
+        assertEquals("RebalanceTimeoutMs must be provided in first request.", ex.getMessage());
+
+        // ActiveTasks must be present and empty in the first request (epoch == 0).
+        ex = assertThrows(InvalidRequestException.class, () -> context.streamsHeartbeat(
+            new StreamsHeartbeatRequestData()
+                .setGroupId("foo")
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(5000)
+                .setStandbyTasks(Collections.emptyList())
+                .setWarmupTasks(Collections.emptyList())));
+        assertEquals("ActiveTasks must be empty when (re-)joining.", ex.getMessage());
+
+        // StandbyTasks must be present and empty in the first request (epoch == 0).
+        ex = assertThrows(InvalidRequestException.class, () -> context.streamsHeartbeat(
+            new StreamsHeartbeatRequestData()
+                .setGroupId("foo")
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(5000)
+                .setActiveTasks(Collections.emptyList())
+                .setWarmupTasks(Collections.emptyList())));
+        assertEquals("StandbyTasks must be empty when (re-)joining.", ex.getMessage());
+
+        // WarmupTasks must be present and empty in the first request (epoch == 0).
+        ex = assertThrows(InvalidRequestException.class, () -> context.streamsHeartbeat(
+            new StreamsHeartbeatRequestData()
+                .setGroupId("foo")
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(5000)
+                .setActiveTasks(Collections.emptyList())
+                .setStandbyTasks(Collections.emptyList())));
+        assertEquals("WarmupTasks must be empty when (re-)joining.", ex.getMessage());
+
+        // MemberId must be non-empty in all requests except for the first one where it
+        // could be empty (epoch != 0).
+        ex = assertThrows(InvalidRequestException.class, () -> context.streamsHeartbeat(
+            new StreamsHeartbeatRequestData()
+                .setGroupId("foo")
+                .setMemberEpoch(1)));
+        assertEquals("MemberId can't be empty.", ex.getMessage());
+
+        // InstanceId must be non-empty if provided in all requests.
+        ex = assertThrows(InvalidRequestException.class, () -> context.streamsHeartbeat(
+            new StreamsHeartbeatRequestData()
+                .setGroupId("foo")
+                .setMemberId(Uuid.randomUuid().toString())
+                .setMemberEpoch(1)
+                .setInstanceId("")));
+        assertEquals("InstanceId can't be empty.", ex.getMessage());
+
+        // RackId must be non-empty if provided in all requests.
+        ex = assertThrows(InvalidRequestException.class, () -> context.streamsHeartbeat(
+            new StreamsHeartbeatRequestData()
+                .setGroupId("foo")
+                .setMemberId(Uuid.randomUuid().toString())
+                .setMemberEpoch(1)
+                .setRackId("")));
+        assertEquals("RackId can't be empty.", ex.getMessage());
+
+//       TODO: // ServerAssignor must exist if provided in all requests.
+//        ex = assertThrows(UnsupportedAssignorException.class, () -> context.streamsHeartbeat(
+//            new StreamsHeartbeatRequestData()
+//                .setGroupId("foo")
+//                .setMemberId(Uuid.randomUuid().toString())
+//                .setMemberEpoch(1)
+//                .setServerAssignor("bar")));
+//        assertEquals("ServerAssignor bar is not supported. Supported assignors: range.", ex.getMessage());
     }
 
     @Test

@@ -52,6 +52,8 @@ import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsHeartbeatRequestData;
+import org.apache.kafka.common.message.StreamsHeartbeatResponseData;
 import org.apache.kafka.common.message.StreamsInitializeRequestData;
 import org.apache.kafka.common.message.StreamsInitializeResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
@@ -1384,6 +1386,52 @@ public class GroupMetadataManager {
     
 
     /**
+    /**
+     * Validates the request.
+     *
+     * @param request The request to validate.
+     *
+     * @throws InvalidRequestException if the request is not valid.
+     * @throws UnsupportedAssignorException if the assignor is not supported.
+     */
+    private void throwIfStreamsHeartbeatRequestIsInvalid(
+        StreamsHeartbeatRequestData request
+    ) throws InvalidRequestException, UnsupportedAssignorException {
+        throwIfEmptyString(request.groupId(), "GroupId can't be empty.");
+        throwIfEmptyString(request.instanceId(), "InstanceId can't be empty.");
+        throwIfEmptyString(request.rackId(), "RackId can't be empty.");
+
+        if (request.memberEpoch() > 0 || request.memberEpoch() == LEAVE_GROUP_MEMBER_EPOCH) {
+            throwIfEmptyString(request.memberId(), "MemberId can't be empty.");
+        } else if (request.memberEpoch() == 0) {
+            if (request.rebalanceTimeoutMs() == -1) {
+                throw new InvalidRequestException("RebalanceTimeoutMs must be provided in first request.");
+            }
+            if (request.activeTasks() == null || !request.activeTasks().isEmpty()) {
+                throw new InvalidRequestException("ActiveTasks must be empty when (re-)joining.");
+            }
+            if (request.standbyTasks() == null || !request.standbyTasks().isEmpty()) {
+                throw new InvalidRequestException("StandbyTasks must be empty when (re-)joining.");
+            }
+            if (request.warmupTasks() == null || !request.warmupTasks().isEmpty()) {
+                throw new InvalidRequestException("WarmupTasks must be empty when (re-)joining.");
+            }
+            // TODO: check that active, standby and warmup do not intersect
+        } else if (request.memberEpoch() == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
+            throwIfEmptyString(request.memberId(), "MemberId can't be empty.");
+            throwIfNull(request.instanceId(), "InstanceId can't be null.");
+        } else {
+            throw new InvalidRequestException("MemberEpoch is invalid.");
+        }
+
+        // TODO: Check that task assignor exists.
+//        if (request.assignor() != null && !assignors.containsKey(request.assignor())) {
+//            throw new UnsupportedAssignorException("Assignor " + request.assignor()
+//                + " is not supported. Supported assignors: " + String.join(", ", assignors.keySet())
+//                + ".");
+//        }
+    }
+
     /**
      * Verifies that the partitions currently owned by the member (the ones set in the
      * request) matches the ones that the member should own. It matches if the consumer
@@ -3306,12 +3354,12 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Handles a ConsumerGroupHeartbeat request.
+     * Handles a StreamsInitialize request.
      *
      * @param context The request context.
-     * @param request The actual ConsumerGroupHeartbeat request.
+     * @param request The actual StreamsInitialize request.
      *
-     * @return A Result containing the ConsumerGroupHeartbeat response and
+     * @return A Result containing the StreamsInitialize response and
      *         a list of records to update the state machine.
      */
     public CoordinatorResult<StreamsInitializeResponseData, CoordinatorRecord> streamsInitialize(
@@ -3324,6 +3372,54 @@ public class GroupMetadataManager {
             request.groupId(),
             request.topology()
         );
+    }
+
+    /**
+     * Handles a StreamsHeartbeat request.
+     *
+     * @param context The request context.
+     * @param request The actual StreamsHeartbeat request.
+     *
+     * @return A Result containing the StreamsHeartbeat response and
+     *         a list of records to update the state machine.
+     */
+    public CoordinatorResult<StreamsHeartbeatResponseData, CoordinatorRecord> streamsHeartbeat(
+        RequestContext context,
+        StreamsHeartbeatRequestData request
+    ) throws ApiException {
+        throwIfStreamsHeartbeatRequestIsInvalid(request);
+
+        return new CoordinatorResult<>(
+            Collections.emptyList(),
+            new StreamsHeartbeatResponseData()
+                .setErrorCode(Errors.NONE.code())
+        );
+
+//        if (request.memberEpoch() == LEAVE_GROUP_MEMBER_EPOCH || request.memberEpoch() == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
+//            // TODO: -1 means that the member wants to leave the group.
+//            // -2 means that a static member wants to leave the group.
+//            return consumerGroupLeave(
+//                request.groupId(),
+//                request.instanceId(),
+//                request.memberId(),
+//                request.memberEpoch()
+//            );
+//        } else {
+//            // TODO: Otherwise, it is a regular heartbeat.
+//            return consumerGroupHeartbeat(
+//                request.groupId(),
+//                request.memberId(),
+//                request.memberEpoch(),
+//                request.instanceId(),
+//                request.rackId(),
+//                request.rebalanceTimeoutMs(),
+//                context.clientId(),
+//                context.clientAddress.toString(),
+//                request.subscribedTopicNames(),
+//                request.serverAssignor(),
+//                request.topicPartitions()
+//            );
+//        }
     }
 
     /**

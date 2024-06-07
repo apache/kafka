@@ -44,6 +44,8 @@ import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData.DescribedGroup;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsHeartbeatRequestData;
+import org.apache.kafka.common.message.StreamsHeartbeatResponseData;
 import org.apache.kafka.common.message.StreamsInitializeRequestData;
 import org.apache.kafka.common.message.StreamsInitializeResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
@@ -368,6 +370,35 @@ public class GroupCoordinatorService implements GroupCoordinator {
             request,
             exception,
             (error, message) -> new StreamsInitializeResponseData()
+                .setErrorCode(error.code())
+                .setErrorMessage(message)
+        ));
+    }
+
+    /**
+     * See {@link GroupCoordinator#streamsHeartbeat(RequestContext, StreamsHeartbeatRequestData)}.
+     */
+    @Override
+    public CompletableFuture<StreamsHeartbeatResponseData> streamsHeartbeat(
+        RequestContext context,
+        StreamsHeartbeatRequestData request
+    ) {
+        if (!isActive.get()) {
+            return CompletableFuture.completedFuture(new StreamsHeartbeatResponseData()
+                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+            );
+        }
+
+        return runtime.scheduleWriteOperation(
+            "streams-heartbeat",
+            topicPartitionFor(request.groupId()),
+            Duration.ofMillis(config.offsetCommitTimeoutMs),
+            coordinator -> coordinator.streamsHeartbeat(context, request)
+        ).exceptionally(exception -> handleOperationException(
+            "streams-heartbeat",
+            request,
+            exception,
+            (error, message) -> new StreamsHeartbeatResponseData()
                 .setErrorCode(error.code())
                 .setErrorMessage(message)
         ));
