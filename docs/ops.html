@@ -3248,18 +3248,28 @@ for built-in state stores, currently we have:
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
-        <td>all-latency-max</td>
+        <td>all-latency-max, from iterator create to close time.</td>
         <td>The maximum all operation execution time in ns.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
-        <td>range-latency-avg</td>
-        <td>The average range execution time in ns.</td>
+        <td>range-latency-avg, from iterator create to close time.</td>
+        <td>The average range execution time in ns, from iterator create to close time.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
-        <td>range-latency-max</td>
+        <td>range-latency-max, from iterator create to close time.</td>
         <td>The maximum range execution time in ns.</td>
+        <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>prefix-scan-latency-avg</td>
+        <td>The average prefix-scan execution time in ns, from iterator create to close time.</td>
+        <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>prefix-scan-latency-max</td>
+        <td>The maximum prefix-scan execution time in ns, from iterator create to close time.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
        <tr>
@@ -3315,6 +3325,11 @@ for built-in state stores, currently we have:
       <tr>
         <td>range-rate</td>
         <td>The average range rate for this store.</td>
+        <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>prefix-scan-rate</td>
+        <td>The average prefix-scan rate for this store.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
