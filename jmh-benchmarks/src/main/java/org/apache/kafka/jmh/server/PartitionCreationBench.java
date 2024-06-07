@@ -113,7 +113,7 @@ public class PartitionCreationBench {
         this.metrics = new Metrics();
         this.time = Time.SYSTEM;
         this.failureChannel = new LogDirFailureChannel(brokerProperties.logDirs().size());
-        final BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
+        final BrokerTopicStats brokerTopicStats = new BrokerTopicStats(false);
         final List<File> files =
                 JavaConverters.seqAsJavaList(brokerProperties.logDirs()).stream().map(File::new).collect(Collectors.toList());
         CleanerConfig cleanerConfig = new CleanerConfig(1,
@@ -133,8 +133,8 @@ public class PartitionCreationBench {
             setFlushRecoveryOffsetCheckpointMs(10000L).
             setFlushStartOffsetCheckpointMs(10000L).
             setRetentionCheckMs(1000L).
-            setMaxProducerIdExpirationMs(60000).
-            setInterBrokerProtocolVersion(MetadataVersion.latest()).
+            setProducerStateManagerConfig(60000, false).
+            setInterBrokerProtocolVersion(MetadataVersion.latestTesting()).
             setScheduler(scheduler).
             setBrokerTopicStats(brokerTopicStats).
             setLogDirFailureChannel(failureChannel).
@@ -143,7 +143,7 @@ public class PartitionCreationBench {
             build();
         scheduler.startup();
         this.quotaManagers = QuotaFactory.instantiate(this.brokerProperties, this.metrics, this.time, "");
-        this.zkClient = new KafkaZkClient(null, false, Time.SYSTEM) {
+        this.zkClient = new KafkaZkClient(null, false, Time.SYSTEM, false) {
             @Override
             public Properties getEntityConfigs(String rootEntityType, String sanitizedEntityName) {
                 return new Properties();
@@ -161,7 +161,7 @@ public class PartitionCreationBench {
             setBrokerTopicStats(brokerTopicStats).
             setMetadataCache(MetadataCache.zkMetadataCache(this.brokerProperties.brokerId(),
                 this.brokerProperties.interBrokerProtocolVersion(), BrokerFeatures.createEmpty(),
-                null)).
+                false)).
             setLogDirFailureChannel(failureChannel).
             setAlterPartitionManager(alterPartitionManager).
             build();
@@ -172,7 +172,7 @@ public class PartitionCreationBench {
     @TearDown(Level.Invocation)
     public void tearDown() throws Exception {
         this.replicaManager.shutdown(false);
-        logManager.shutdown();
+        logManager.shutdown(-1L);
         this.metrics.close();
         this.scheduler.shutdown();
         this.quotaManagers.shutdown();
@@ -217,7 +217,7 @@ public class PartitionCreationBench {
                     .setReplicas(replicas)
                     .setIsNew(true);
 
-            partition.makeFollower(partitionState, checkpoints, topicId);
+            partition.makeFollower(partitionState, checkpoints, topicId, Option.empty());
         }
     }
 }

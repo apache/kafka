@@ -19,7 +19,6 @@ package org.apache.kafka.streams.integration;
 import java.io.File;
 import java.util.Collections;
 import java.util.concurrent.atomic.AtomicReference;
-import kafka.utils.MockTime;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
@@ -27,6 +26,7 @@ import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -130,9 +130,9 @@ public class GlobalKTableEOSIntegrationTest {
     @Before
     public void before() throws Exception {
         builder = new StreamsBuilder();
-        createTopics();
+        final String safeTestName = safeUniqueTestName(testName);
+        createTopics(safeTestName);
         streamsConfiguration = new Properties();
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
@@ -464,8 +464,7 @@ public class GlobalKTableEOSIntegrationTest {
         );
     }
 
-    private void createTopics() throws Exception {
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
+    private void createTopics(final String safeTestName) throws Exception {
         streamTopic = "stream-" + safeTestName;
         globalTableTopic = "globalTable-" + safeTestName;
         CLUSTER.createTopics(streamTopic);

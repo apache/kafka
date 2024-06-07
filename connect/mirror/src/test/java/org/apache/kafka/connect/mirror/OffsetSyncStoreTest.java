@@ -22,6 +22,9 @@ import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.Test;
 
 import java.util.OptionalLong;
+import java.util.PrimitiveIterator;
+import java.util.Random;
+import java.util.stream.LongStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -31,18 +34,22 @@ public class OffsetSyncStoreTest {
     static TopicPartition tp = new TopicPartition("topic1", 2);
 
     static class FakeOffsetSyncStore extends OffsetSyncStore {
+        private boolean startCalled = false;
 
-        FakeOffsetSyncStore() {
-            super();
+        @Override
+        public void start(boolean initializationMustReadToEnd) {
+            startCalled = true;
+            super.start(initializationMustReadToEnd);
         }
 
         @Override
-        public void start() {
-            // do not call super to avoid NPE without a KafkaBasedLog.
-            readToEnd = true;
+        void backingStoreStart() {
+            // do not start KafkaBasedLog
         }
 
+        // simulate OffsetSync load as from KafkaBasedLog
         void sync(TopicPartition topicPartition, long upstreamOffset, long downstreamOffset) {
+            assertTrue(startCalled); // sync in tests should only be called after store.start
             OffsetSync offsetSync = new OffsetSync(topicPartition, upstreamOffset, downstreamOffset);
             byte[] key = offsetSync.recordKey();
             byte[] value = offsetSync.recordValue();
@@ -54,7 +61,7 @@ public class OffsetSyncStoreTest {
     @Test
     public void testOffsetTranslation() {
         try (FakeOffsetSyncStore store = new FakeOffsetSyncStore()) {
-            store.start();
+            store.start(true);
 
             // Emit synced downstream offset without dead-reckoning
             store.sync(tp, 100, 200);
@@ -79,20 +86,24 @@ public class OffsetSyncStoreTest {
 
     @Test
     public void testNoTranslationIfStoreNotStarted() {
-        try (FakeOffsetSyncStore store = new FakeOffsetSyncStore()) {
+        try (FakeOffsetSyncStore store = new FakeOffsetSyncStore() {
+            @Override
+            void backingStoreStart() {
+                // read a sync during startup
+                sync(tp, 100, 200);
+                assertEquals(OptionalLong.empty(), translateDownstream(null, tp, 0));
+                assertEquals(OptionalLong.empty(), translateDownstream(null, tp, 100));
+                assertEquals(OptionalLong.empty(), translateDownstream(null, tp, 200));
+            }
+        }) {
             // no offsets exist and store is not started
             assertEquals(OptionalLong.empty(), store.translateDownstream(null, tp, 0));
             assertEquals(OptionalLong.empty(), store.translateDownstream(null, tp, 100));
             assertEquals(OptionalLong.empty(), store.translateDownstream(null, tp, 200));
 
-            // read a sync during startup
-            store.sync(tp, 100, 200);
-            assertEquals(OptionalLong.empty(), store.translateDownstream(null, tp, 0));
-            assertEquals(OptionalLong.empty(), store.translateDownstream(null, tp, 100));
-            assertEquals(OptionalLong.empty(), store.translateDownstream(null, tp, 200));
-
             // After the store is started all offsets are visible
-            store.start();
+            store.start(true);
+
             assertEquals(OptionalLong.of(-1), store.translateDownstream(null, tp, 0));
             assertEquals(OptionalLong.of(200), store.translateDownstream(null, tp, 100));
             assertEquals(OptionalLong.of(201), store.translateDownstream(null, tp, 200));
@@ -102,26 +113,29 @@ public class OffsetSyncStoreTest {
     @Test
     public void testNoTranslationIfNoOffsetSync() {
         try (FakeOffsetSyncStore store = new FakeOffsetSyncStore()) {
-            store.start();
+            store.start(true);
             assertEquals(OptionalLong.empty(), store.translateDownstream(null, tp, 0));
         }
     }
 
     @Test
     public void testPastOffsetTranslation() {
-        try (FakeOffsetSyncStore store = new FakeOffsetSyncStore()) {
-            long maxOffsetLag = 10;
-            int offset = 0;
-            for (; offset <= 1000; offset += maxOffsetLag) {
-                store.sync(tp, offset, offset);
-                assertSparseSyncInvariant(store, tp);
+        int maxOffsetLag = 10;
+        try (FakeOffsetSyncStore store = new FakeOffsetSyncStore() {
+            @Override
+            void backingStoreStart() {
+                for (int offset = 0; offset <= 1000; offset += maxOffsetLag) {
+                    sync(tp, offset, offset);
+                    assertSparseSyncInvariant(this, tp);
+                }
             }
-            store.start();
+        }) {
+            store.start(true);
 
             // After starting but before seeing new offsets, only the latest startup offset can be translated
             assertSparseSync(store, 1000, -1);
 
-            for (; offset <= 10000; offset += maxOffsetLag) {
+            for (int offset = 1000 + maxOffsetLag; offset <= 10000; offset += maxOffsetLag) {
                 store.sync(tp, offset, offset);
                 assertSparseSyncInvariant(store, tp);
             }
@@ -152,32 +166,135 @@ public class OffsetSyncStoreTest {
         }
     }
 
+    // this test has been written knowing the exact offsets syncs stored
     @Test
-    public void testKeepMostDistinctSyncs() {
+    public void testPastOffsetTranslationWithoutInitializationReadToEnd() {
+        final int maxOffsetLag = 10;
+
+        try (FakeOffsetSyncStore store = new FakeOffsetSyncStore() {
+            @Override
+            void backingStoreStart() {
+                for (int offset = 0; offset <= 1000; offset += maxOffsetLag) {
+                    sync(tp, offset, offset);
+                    assertSparseSyncInvariant(this, tp);
+                }
+            }
+        }) {
+
+            store.start(false);
+
+            // After starting but before seeing new offsets
+            assertSparseSync(store, 480, 0);
+            assertSparseSync(store, 720, 480);
+            assertSparseSync(store, 1000, 990);
+
+            for (int offset = 1000; offset <= 10000; offset += maxOffsetLag) {
+                store.sync(tp, offset, offset);
+                assertSparseSyncInvariant(store, tp);
+            }
+
+            // After seeing new offsets, 1000 was kicked out of the store, so
+            // offsets before 3840 can only be translated to 1, only previously stored offset is 0
+            assertSparseSync(store, 3840, 0);
+            assertSparseSync(store, 7680, 3840);
+            assertSparseSync(store, 8640, 7680);
+            assertSparseSync(store, 9120, 8640);
+            assertSparseSync(store, 9600, 9120);
+            assertSparseSync(store, 9840, 9600);
+            assertSparseSync(store, 9900, 9840);
+            assertSparseSync(store, 9960, 9900);
+            assertSparseSync(store, 9990, 9960);
+            assertSparseSync(store, 10000, 9990);
+
+            // Rewinding upstream offsets should clear all historical syncs
+            store.sync(tp, 1500, 11000);
+            assertSparseSyncInvariant(store, tp);
+            assertEquals(OptionalLong.of(-1), store.translateDownstream(null, tp, 1499));
+            assertEquals(OptionalLong.of(11000), store.translateDownstream(null, tp, 1500));
+            assertEquals(OptionalLong.of(11001), store.translateDownstream(null, tp, 2000));
+        }
+    }
+
+    @Test
+    public void testConsistentlySpacedSyncs() {
         // Under normal operation, the incoming syncs will be regularly spaced and the store should keep a set of syncs
         // which provide the best translation accuracy (expires as few syncs as possible)
-        // Each new sync should be added to the cache and expire at most one other sync from the cache
-        long iterations = 10000;
+        long iterations = 100;
         long maxStep = Long.MAX_VALUE / iterations;
         // Test a variety of steps (corresponding to the offset.lag.max configuration)
         for (long step = 1; step < maxStep; step = (step * 2) + 1)  {
             for (long firstOffset = 0; firstOffset < 30; firstOffset++) {
-                try (FakeOffsetSyncStore store = new FakeOffsetSyncStore()) {
-                    int lastCount = 1;
-                    store.start();
-                    for (long offset = firstOffset; offset <= iterations; offset += step) {
-                        store.sync(tp, offset, offset);
-                        // Invariant A: the latest sync is present
-                        assertEquals(offset, store.syncFor(tp, 0).upstreamOffset());
-                        // Invariant D: the earliest sync is present
-                        assertEquals(firstOffset, store.syncFor(tp, 63).upstreamOffset());
-                        int count = countDistinctStoredSyncs(store, tp);
-                        int diff = count - lastCount;
-                        assertTrue(diff >= 0,
-                                "Store expired too many syncs: " + diff + " after receiving offset " + offset);
-                        lastCount = count;
-                    }
-                }
+                long finalStep = step;
+                // Generate a stream of consistently spaced syncs
+                // Each new sync should be added to the cache and expire at most one other sync from the cache
+                assertSyncSpacingHasBoundedExpirations(firstOffset, LongStream.generate(() -> finalStep).limit(iterations), 1);
+            }
+        }
+    }
+
+    @Test
+    public void testRandomlySpacedSyncs() {
+        Random random = new Random(0L); // arbitrary but deterministic seed
+        int iterationBits = 10;
+        long iterations = 1 << iterationBits;
+        for (int n = 1; n < Long.SIZE - iterationBits; n++) {
+            // A stream with at most n bits of difference between the largest and smallest steps
+            // will expire n + 2 syncs at once in the worst case, because the sync store is laid out exponentially.
+            long maximumDifference = 1L << n;
+            int maximumExpirations = n + 2;
+            assertSyncSpacingHasBoundedExpirations(0, random.longs(iterations, 0L, maximumDifference), maximumExpirations);
+            // This holds true even if there is a larger minimum step size, such as caused by offsetLagMax
+            long offsetLagMax = 1L << 16;
+            assertSyncSpacingHasBoundedExpirations(0, random.longs(iterations, offsetLagMax, offsetLagMax + maximumDifference), maximumExpirations);
+        }
+    }
+
+    @Test
+    public void testDroppedSyncsSpacing() {
+        Random random = new Random(0L); // arbitrary but deterministic seed
+        long iterations = 10000;
+        long offsetLagMax = 100;
+        // Half of the gaps will be offsetLagMax, and half will be double that, as if one intervening sync was dropped.
+        LongStream stream = random.doubles()
+                .mapToLong(d -> (d < 0.5 ? 2 : 1) * offsetLagMax)
+                .limit(iterations);
+        // This will cause up to 2 syncs to be discarded, because a sequence of two adjacent syncs followed by a
+        // dropped sync will set up the following situation
+        // before [d....d,c,b,a....]
+        // after  [e......e,d,a....]
+        // and syncs b and c are discarded to make room for e and the demoted sync d.
+        assertSyncSpacingHasBoundedExpirations(0, stream, 2);
+    }
+
+    /**
+     * Simulate an OffsetSyncStore receiving a sequence of offset syncs as defined by their start offset and gaps.
+     * After processing each simulated sync, assert that the store has not expired more unique syncs than the bound.
+     * @param firstOffset First offset to give to the sync store after starting
+     * @param steps A finite stream of gaps between syncs with some known distribution
+     * @param maximumExpirations The maximum number of distinct syncs allowed to be expired after a single update.
+     */
+    private void assertSyncSpacingHasBoundedExpirations(long firstOffset, LongStream steps, int maximumExpirations) {
+        try (FakeOffsetSyncStore store = new FakeOffsetSyncStore()) {
+            store.start(true);
+            store.sync(tp, firstOffset, firstOffset);
+            PrimitiveIterator.OfLong iterator = steps.iterator();
+            long offset = firstOffset;
+            int lastCount = 1;
+            while (iterator.hasNext()) {
+                offset += iterator.nextLong();
+                assertTrue(offset >= 0, "Test is invalid, offset overflowed");
+                store.sync(tp, offset, offset);
+                // Invariant A: the latest sync is present
+                assertEquals(offset, store.syncFor(tp, 0).upstreamOffset());
+                // Invariant D: the earliest sync is present
+                assertEquals(firstOffset, store.syncFor(tp, 63).upstreamOffset());
+                int count = countDistinctStoredSyncs(store, tp);
+                // We are adding one sync, so if the count didn't change, then exactly one sync expired.
+                int expiredSyncs = lastCount - count + 1;
+                assertTrue(expiredSyncs <= maximumExpirations,
+                        "Store expired too many syncs: " + expiredSyncs + " > " + maximumExpirations
+                                + " after receiving offset " + offset);
+                lastCount = count;
             }
         }
     }

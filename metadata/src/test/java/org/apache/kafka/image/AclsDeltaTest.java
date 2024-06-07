@@ -37,7 +37,7 @@ import java.util.Optional;
 @Timeout(40)
 public class AclsDeltaTest {
 
-    private Uuid aclId = Uuid.fromString("iOZpss6VQUmD6blnqzl50g");
+    private final Uuid aclId = Uuid.fromString("iOZpss6VQUmD6blnqzl50g");
 
     @Test
     public void testRemovesDeleteIfNotInImage() {

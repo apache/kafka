@@ -21,7 +21,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
@@ -30,9 +30,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * That is, older code won't necessarily be able to deserialize data serialized with newer code.
  */
 public class TopicPartitionTest {
-    private String topicName = "mytopic";
-    private String fileName = "serializedData/topicPartitionSerializedfile";
-    private int partNum = 5;
+    private final String topicName = "mytopic";
+    private final int partNum = 5;
 
     private void checkValues(TopicPartition deSerTP) {
         //assert deserialized values are same as original
@@ -48,7 +47,7 @@ public class TopicPartitionTest {
 
         //deserialize the byteArray and check if the values are same as original
         Object deserializedObject = Serializer.deserialize(byteArray);
-        assertTrue(deserializedObject instanceof TopicPartition);
+        assertInstanceOf(TopicPartition.class, deserializedObject);
         checkValues((TopicPartition) deserializedObject);
     }
 
@@ -56,8 +55,8 @@ public class TopicPartitionTest {
     public void testTopiPartitionSerializationCompatibility() throws IOException, ClassNotFoundException {
         // assert serialized TopicPartition object in file (serializedData/topicPartitionSerializedfile) is
         // deserializable into TopicPartition and is compatible
-        Object deserializedObject = Serializer.deserialize(fileName);
-        assertTrue(deserializedObject instanceof TopicPartition);
+        Object deserializedObject = Serializer.deserialize("serializedData/topicPartitionSerializedfile");
+        assertInstanceOf(TopicPartition.class, deserializedObject);
         checkValues((TopicPartition) deserializedObject);
     }
 }

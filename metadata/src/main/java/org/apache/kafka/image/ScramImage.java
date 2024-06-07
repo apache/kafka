@@ -17,6 +17,7 @@
 
 package org.apache.kafka.image;
 
+import org.apache.kafka.image.node.ScramImageNode;
 import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.clients.admin.ScramMechanism;
@@ -34,7 +35,6 @@ import java.util.ArrayList;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.Map.Entry;
-import java.util.stream.Collectors;
 
 
 /**
@@ -60,12 +60,12 @@ public final class ScramImage {
             }
         } else {
             boolean isEmpty = true;
-            StringBuffer scramImageString = new StringBuffer("ScramImage({");
+            StringBuilder scramImageString = new StringBuilder("ScramImage({");
             for (Entry<ScramMechanism, Map<String, ScramCredentialData>> mechanismEntry : mechanisms.entrySet()) {
                 if (!mechanismEntry.getValue().isEmpty()) {
                     scramImageString.append(mechanismEntry.getKey() + ":");
                     List<String> users = new ArrayList<>(mechanismEntry.getValue().keySet());
-                    scramImageString.append(users.stream().collect(Collectors.joining(", ")));
+                    scramImageString.append(String.join(", ", users));
                     scramImageString.append("},{");
                     isEmpty = false;
                 }
@@ -80,12 +80,12 @@ public final class ScramImage {
 
     private static final String DESCRIBE_DUPLICATE_USER = "Cannot describe SCRAM credentials for the same user twice in a single request: ";
     private static final String DESCRIBE_USER_THAT_DOES_NOT_EXIST = "Attempt to describe a user credential that does not exist: ";
+
     public DescribeUserScramCredentialsResponseData describe(DescribeUserScramCredentialsRequestData request) {
-
         List<UserName> users = request.users();
-        Map<String, Boolean> uniqueUsers = new HashMap<String, Boolean>();
+        Map<String, Boolean> uniqueUsers = new HashMap<>();
 
-        if ((users == null) || (users.size() == 0)) {
+        if ((users == null) || (users.isEmpty())) {
             // If there are no users listed then get all the users
             for (Map<String, ScramCredentialData> scramCredentialDataSet : mechanisms.values()) {
                 for (String user : scramCredentialDataSet.keySet()) {
@@ -110,7 +110,7 @@ public final class ScramImage {
 
             if (!user.getValue()) {
                 boolean datafound = false;
-                List<CredentialInfo> credentialInfos = new ArrayList<CredentialInfo>();
+                List<CredentialInfo> credentialInfos = new ArrayList<>();
                 for (Map.Entry<ScramMechanism, Map<String, ScramCredentialData>> mechanismsEntry : mechanisms.entrySet()) {
                     Map<String, ScramCredentialData> credentialDataSet = mechanismsEntry.getValue();
                     if (credentialDataSet.containsKey(user.getKey())) {
@@ -157,23 +157,6 @@ public final class ScramImage {
 
     @Override
     public String toString() {
-        StringBuilder builder = new StringBuilder();
-        builder.append("ScramImage(");
-        List<ScramMechanism> sortedMechanisms = mechanisms.keySet().stream().sorted().collect(Collectors.toList());
-        String preMechanismComma = "";
-        for (ScramMechanism mechanism : sortedMechanisms) {
-            builder.append(preMechanismComma).append(mechanism).append(": {");
-            Map<String, ScramCredentialData> userMap = mechanisms.get(mechanism);
-            List<String> sortedUserNames = userMap.keySet().stream().sorted().collect(Collectors.toList());
-            String preUserNameComma = "";
-            for (String userName : sortedUserNames) {
-                builder.append(preUserNameComma).append(userName).append("=").append(userMap.get(userName));
-                preUserNameComma = ", ";
-            }
-            builder.append("}");
-            preMechanismComma = ", ";
-        }
-        builder.append(")");
-        return builder.toString();
+        return new ScramImageNode(this).stringify();
     }
 }

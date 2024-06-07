@@ -17,8 +17,8 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 import org.apache.kafka.streams.processor.internals.Task;
-import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,35 +38,41 @@ import java.util.function.BiPredicate;
 import java.util.function.Function;
 
 import static org.apache.kafka.common.utils.Utils.diff;
+import static org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor.STATELESS_NON_OVERLAP_COST;
+import static org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor.STATELESS_TRAFFIC_COST;
 import static org.apache.kafka.streams.processor.internals.assignment.TaskMovement.assignActiveTaskMovements;
 import static org.apache.kafka.streams.processor.internals.assignment.TaskMovement.assignStandbyTaskMovements;
 
 public class HighAvailabilityTaskAssignor implements TaskAssignor {
     private static final Logger log = LoggerFactory.getLogger(HighAvailabilityTaskAssignor.class);
+    public static final int DEFAULT_HIGH_AVAILABILITY_TRAFFIC_COST = 10;
+    public static final int DEFAULT_HIGH_AVAILABILITY_NON_OVERLAP_COST = 1;
 
     @Override
     public boolean assign(final Map<UUID, ClientState> clients,
                           final Set<TaskId> allTaskIds,
                           final Set<TaskId> statefulTaskIds,
+                          final RackAwareTaskAssignor rackAwareTaskAssignor,
                           final AssignmentConfigs configs) {
         final SortedSet<TaskId> statefulTasks = new TreeSet<>(statefulTaskIds);
         final TreeMap<UUID, ClientState> clientStates = new TreeMap<>(clients);
 
-        assignActiveStatefulTasks(clientStates, statefulTasks);
+        assignActiveStatefulTasks(clientStates, statefulTasks, rackAwareTaskAssignor, configs);
 
         assignStandbyReplicaTasks(
             clientStates,
             allTaskIds,
             statefulTasks,
+            rackAwareTaskAssignor,
             configs
         );
 
-        final AtomicInteger remainingWarmupReplicas = new AtomicInteger(configs.maxWarmupReplicas);
+        final AtomicInteger remainingWarmupReplicas = new AtomicInteger(configs.maxWarmupReplicas());
 
         final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients = tasksToCaughtUpClients(
             statefulTasks,
             clientStates,
-            configs.acceptableRecoveryLag
+            configs.acceptableRecoveryLag()
         );
 
         final Map<TaskId, SortedSet<UUID>> tasksToClientByLag = tasksToClientByLag(statefulTasks, clientStates);
@@ -94,7 +100,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
             warmups
         );
 
-        assignStatelessActiveTasks(clientStates, diff(TreeSet::new, allTaskIds, statefulTasks));
+        assignStatelessActiveTasks(clientStates, diff(TreeSet::new, allTaskIds, statefulTasks), rackAwareTaskAssignor);
 
         final boolean probingRebalanceNeeded = neededActiveTaskMovements + neededStandbyTaskMovements > 0;
 
@@ -108,7 +114,9 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
     }
 
     private static void assignActiveStatefulTasks(final SortedMap<UUID, ClientState> clientStates,
-                                                  final SortedSet<TaskId> statefulTasks) {
+                                                  final SortedSet<TaskId> statefulTasks,
+                                                  final RackAwareTaskAssignor rackAwareTaskAssignor,
+                                                  final AssignmentConfigs configs) {
         Iterator<ClientState> clientStateIterator = null;
         for (final TaskId task : statefulTasks) {
             if (clientStateIterator == null || !clientStateIterator.hasNext()) {
@@ -124,17 +132,24 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
             ClientState::assignActive,
             (source, destination) -> true
         );
+
+        if (rackAwareTaskAssignor.canEnableRackAwareAssignor()) {
+            final int trafficCost = configs.rackAwareTrafficCost().orElse(DEFAULT_HIGH_AVAILABILITY_TRAFFIC_COST);
+            final int nonOverlapCost = configs.rackAwareNonOverlapCost().orElse(DEFAULT_HIGH_AVAILABILITY_NON_OVERLAP_COST);
+            rackAwareTaskAssignor.optimizeActiveTasks(statefulTasks, clientStates, trafficCost, nonOverlapCost);
+        }
     }
 
     private void assignStandbyReplicaTasks(final TreeMap<UUID, ClientState> clientStates,
                                            final Set<TaskId> allTaskIds,
                                            final Set<TaskId> statefulTasks,
+                                           final RackAwareTaskAssignor rackAwareTaskAssignor,
                                            final AssignmentConfigs configs) {
-        if (configs.numStandbyReplicas == 0) {
+        if (configs.numStandbyReplicas() == 0) {
             return;
         }
 
-        final StandbyTaskAssignor standbyTaskAssignor = StandbyTaskAssignorFactory.create(configs);
+        final StandbyTaskAssignor standbyTaskAssignor = StandbyTaskAssignorFactory.create(configs, null);
 
         standbyTaskAssignor.assign(clientStates, allTaskIds, statefulTasks, configs);
 
@@ -145,6 +160,12 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
             ClientState::assignStandby,
             standbyTaskAssignor::isAllowedTaskMovement
         );
+
+        if (rackAwareTaskAssignor.canEnableRackAwareAssignor()) {
+            final int trafficCost = configs.rackAwareTrafficCost().orElse(DEFAULT_HIGH_AVAILABILITY_TRAFFIC_COST);
+            final int nonOverlapCost = configs.rackAwareNonOverlapCost().orElse(DEFAULT_HIGH_AVAILABILITY_NON_OVERLAP_COST);
+            rackAwareTaskAssignor.optimizeStandbyTasks(clientStates, trafficCost, nonOverlapCost, standbyTaskAssignor::isAllowedTaskMovement);
+        }
     }
 
     private static void balanceTasksOverThreads(final SortedMap<UUID, ClientState> clientStates,
@@ -208,18 +229,26 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
     }
 
     private static void assignStatelessActiveTasks(final TreeMap<UUID, ClientState> clientStates,
-                                                   final Iterable<TaskId> statelessTasks) {
+                                                   final Iterable<TaskId> statelessTasks,
+                                                   final RackAwareTaskAssignor rackAwareTaskAssignor) {
         final ConstrainedPrioritySet statelessActiveTaskClientsByTaskLoad = new ConstrainedPrioritySet(
             (client, task) -> true,
             client -> clientStates.get(client).activeTaskLoad()
         );
         statelessActiveTaskClientsByTaskLoad.offerAll(clientStates.keySet());
 
+        final SortedSet<TaskId> sortedTasks = new TreeSet<>();
         for (final TaskId task : statelessTasks) {
+            sortedTasks.add(task);
             final UUID client = statelessActiveTaskClientsByTaskLoad.poll(task);
             final ClientState state = clientStates.get(client);
             state.assignActive(task);
             statelessActiveTaskClientsByTaskLoad.offer(client);
+        }
+
+        if (rackAwareTaskAssignor.canEnableRackAwareAssignor()) {
+            rackAwareTaskAssignor.optimizeActiveTasks(sortedTasks, clientStates,
+                STATELESS_TRAFFIC_COST, STATELESS_NON_OVERLAP_COST);
         }
     }
 

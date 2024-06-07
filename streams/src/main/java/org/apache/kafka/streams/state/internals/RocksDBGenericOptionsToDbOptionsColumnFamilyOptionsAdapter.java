@@ -40,6 +40,7 @@ import org.rocksdb.InfoLogLevel;
 import org.rocksdb.MemTableConfig;
 import org.rocksdb.MergeOperator;
 import org.rocksdb.Options;
+import org.rocksdb.PrepopulateBlobCache;
 import org.rocksdb.RateLimiter;
 import org.rocksdb.SstFileManager;
 import org.rocksdb.SstPartitionerFactory;
@@ -1728,6 +1729,17 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     public boolean memtableWholeKeyFiltering() {
         return columnFamilyOptions.memtableWholeKeyFiltering();
     }
+    
+    @Override
+    public Options setExperimentalMempurgeThreshold(final double experimentalMempurgeThreshold) {
+        columnFamilyOptions.setExperimentalMempurgeThreshold(experimentalMempurgeThreshold);
+        return this;
+    }
+
+    @Override
+    public double experimentalMempurgeThreshold() {
+        return columnFamilyOptions.experimentalMempurgeThreshold();
+    }
 
     //
     // BEGIN options for blobs (integrated BlobDB)
@@ -1808,6 +1820,29 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends 
     @Override
     public double blobGarbageCollectionForceThreshold() {
         return columnFamilyOptions.blobGarbageCollectionForceThreshold();
+    }
+
+
+    @Override
+    public Options setPrepopulateBlobCache(final PrepopulateBlobCache prepopulateBlobCache) {
+        columnFamilyOptions.setPrepopulateBlobCache(prepopulateBlobCache);
+        return this;
+    }
+
+    @Override
+    public PrepopulateBlobCache prepopulateBlobCache() {
+        return columnFamilyOptions.prepopulateBlobCache();
+    }
+
+    @Override
+    public Options setBlobFileStartingLevel(final int blobFileStartingLevel) {
+        columnFamilyOptions.setBlobFileStartingLevel(blobFileStartingLevel);
+        return this;
+    }
+
+    @Override
+    public int blobFileStartingLevel() {
+        return columnFamilyOptions.blobFileStartingLevel();
     }
 
     //

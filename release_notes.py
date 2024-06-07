@@ -44,7 +44,7 @@ def get_issues(jira, query, **kwargs):
     results = []
     startAt = 0
     new_results = None
-    while new_results == None or len(new_results) == MAX_RESULTS:
+    while new_results is None or len(new_results) == MAX_RESULTS:
         new_results = jira.search_issues(query, startAt=startAt, maxResults=MAX_RESULTS, **kwargs)
         results += new_results
         startAt += len(new_results)

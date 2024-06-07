@@ -16,38 +16,34 @@
  */
 package org.apache.kafka.common.serialization;
 
-import org.apache.kafka.common.utils.Utils;
-
 import java.nio.ByteBuffer;
 
 /**
- * Do not need to flip before call <i>serialize(String, ByteBuffer)</i>. For example:
- *
- * <blockquote>
- * <pre>
- * ByteBufferSerializer serializer = ...; // Create Serializer
- * ByteBuffer buffer = ...;               // Allocate ByteBuffer
- * buffer.put(data);                      // Put data into buffer, do not need to flip
- * serializer.serialize(topic, buffer);   // Serialize buffer
- * </pre>
- * </blockquote>
+ * {@code ByteBufferSerializer} always {@link ByteBuffer#rewind() rewinds} the position of the input buffer to zero for
+ * serialization. A manual rewind is not necessary.
+ * <p>
+ * Note: any existing buffer position is ignored.
+ * <p>
+ * The position is also rewound back to zero before {@link #serialize(String, ByteBuffer)}
+ * returns.
  */
 public class ByteBufferSerializer implements Serializer<ByteBuffer> {
-
-    @Override
     public byte[] serialize(String topic, ByteBuffer data) {
-        if (data == null) {
+        if (data == null)
             return null;
-        }
+
+        data.rewind();
 
         if (data.hasArray()) {
-            final byte[] arr = data.array();
+            byte[] arr = data.array();
             if (data.arrayOffset() == 0 && arr.length == data.remaining()) {
                 return arr;
             }
         }
 
-        data.flip();
-        return Utils.toArray(data);
+        byte[] ret = new byte[data.remaining()];
+        data.get(ret, 0, ret.length);
+        data.rewind();
+        return ret;
     }
 }

@@ -315,7 +315,7 @@ public class SessionKeySchemaTest {
     }
 
     @Test
-    public void shouldDeSerializeEmtpyByteArrayToNull() {
+    public void shouldDeSerializeEmptyByteArrayToNull() {
         assertNull(keySerde.deserializer().deserialize(topic, new byte[0]));
     }
 

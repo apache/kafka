@@ -91,7 +91,7 @@ public class DelegationTokenCommandTest {
         args.add("--command-config");
         args.add("testfile");
         args.add("--describe");
-        if (!owner.equals("")) {
+        if (!owner.isEmpty()) {
             args.add("--owner-principal");
             args.add(owner);
         }

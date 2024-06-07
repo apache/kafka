@@ -42,12 +42,16 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.apache.kafka.raft.errors.BufferAllocationException;
 import org.apache.kafka.raft.errors.NotLeaderException;
+import org.apache.kafka.raft.errors.UnexpectedBaseOffsetException;
+import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -59,6 +63,7 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
+import java.util.stream.Collectors;
 
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.raft.RaftClientTestContext.Builder.DEFAULT_ELECTION_TIMEOUT_MS;
@@ -78,6 +83,7 @@ public class KafkaRaftClientTest {
         int localId = 0;
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, Collections.singleton(localId)).build();
         context.assertElectedLeader(1, localId);
+        assertEquals(context.log.endOffset().offset, context.client.logEndOffset());
     }
 
     @Test
@@ -131,7 +137,7 @@ public class KafkaRaftClientTest {
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
-            .withVotedCandidate(epoch, localId)
+            .withVotedCandidate(epoch, ReplicaKey.of(localId, Optional.empty()))
             .build();
 
         assertEquals(0L, context.log.endOffset().offset);
@@ -182,7 +188,7 @@ public class KafkaRaftClientTest {
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
-            .withVotedCandidate(epoch, localId)
+            .withVotedCandidate(epoch, ReplicaKey.of(localId, Optional.empty()))
             .build();
 
         // Resign from candidate, will restart in candidate state
@@ -270,8 +276,12 @@ public class KafkaRaftClientTest {
         assertThrows(NotLeaderException.class, () -> context.client.scheduleAppend(epoch, Arrays.asList("a", "b")));
 
         context.pollUntilRequest();
-        int correlationId = context.assertSentEndQuorumEpochRequest(epoch, 1);
-        context.deliverResponse(correlationId, 1, context.endEpochResponse(epoch, OptionalInt.of(localId)));
+        RaftRequest.Outbound request = context.assertSentEndQuorumEpochRequest(epoch, 1);
+        context.deliverResponse(
+            request.correlationId(),
+            request.destination(),
+            context.endEpochResponse(epoch, OptionalInt.of(localId))
+        );
         context.client.poll();
 
         context.time.sleep(context.electionTimeoutMs());
@@ -300,12 +310,11 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
         MemoryPool memoryPool = Mockito.mock(MemoryPool.class);
-        ByteBuffer leaderBuffer = ByteBuffer.allocate(256);
+        ByteBuffer buffer = ByteBuffer.allocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES);
         // Return null when allocation error
         Mockito.when(memoryPool.tryAllocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES))
-            .thenReturn(null);
-        Mockito.when(memoryPool.tryAllocate(256))
-            .thenReturn(leaderBuffer);
+            .thenReturn(buffer) // Buffer for the leader message control record
+            .thenReturn(null); // Buffer for the scheduleAppend call
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withMemoryPool(memoryPool)
@@ -316,6 +325,7 @@ public class KafkaRaftClientTest {
         int epoch = context.currentEpoch();
 
         assertThrows(BufferAllocationException.class, () -> context.client.scheduleAppend(epoch, singletonList("a")));
+        Mockito.verify(memoryPool).release(buffer);
     }
 
     @Test
@@ -355,7 +365,8 @@ public class KafkaRaftClientTest {
         for (int i = 0; i < size; i++)
             batchToLarge.add("a");
 
-        assertThrows(RecordBatchTooLargeException.class, () -> context.client.scheduleAtomicAppend(epoch, batchToLarge));
+        assertThrows(RecordBatchTooLargeException.class,
+                () -> context.client.scheduleAtomicAppend(epoch, OptionalLong.empty(), batchToLarge));
     }
 
     @Test
@@ -384,14 +395,17 @@ public class KafkaRaftClientTest {
         // Respond to one of the requests so that we can verify that no additional
         // request to this node is sent.
         RaftRequest.Outbound endEpochOutbound = requests.get(0);
-        context.deliverResponse(endEpochOutbound.correlationId, endEpochOutbound.destinationId(),
-            context.endEpochResponse(epoch, OptionalInt.of(localId)));
+        context.deliverResponse(
+            endEpochOutbound.correlationId(),
+            endEpochOutbound.destination(),
+            context.endEpochResponse(epoch, OptionalInt.of(localId))
+        );
         context.client.poll();
         assertEquals(Collections.emptyList(), context.channel.drainSendQueue());
 
         // Now sleep for the request timeout and verify that we get only one
         // retried request from the voter that hasn't responded yet.
-        int nonRespondedId = requests.get(1).destinationId();
+        int nonRespondedId = requests.get(1).destination().id();
         context.time.sleep(6000);
         context.pollUntilRequest();
         List<RaftRequest.Outbound> retries = context.collectEndQuorumRequests(
@@ -451,7 +465,7 @@ public class KafkaRaftClientTest {
         context.client.poll();
 
         // Ensure we are still leader even after expiration of the election timeout.
-        context.time.sleep(context.electionTimeoutMs() * 2);
+        context.time.sleep(context.electionTimeoutMs() * 2L);
         context.client.poll();
         context.assertElectedLeader(currentEpoch, localId);
     }
@@ -482,6 +496,76 @@ public class KafkaRaftClientTest {
     }
 
     @Test
+    public void testLeaderShouldResignLeadershipIfNotGetFetchRequestFromMajorityVoters() throws Exception {
+        int localId = 0;
+        int remoteId1 = 1;
+        int remoteId2 = 2;
+        int observerId3 = 3;
+        Set<Integer> voters = Utils.mkSet(localId, remoteId1, remoteId2);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
+        int resignLeadershipTimeout = context.checkQuorumTimeoutMs;
+
+        context.becomeLeader();
+        int epoch = context.currentEpoch();
+        assertEquals(OptionalInt.of(localId), context.currentLeader());
+
+        // fetch timeout is not expired, the leader should not get resigned
+        context.time.sleep(resignLeadershipTimeout / 2);
+        context.client.poll();
+
+        assertFalse(context.client.quorum().isResigned());
+
+        // Received fetch request from a voter, the fetch timer should be reset.
+        context.deliverRequest(context.fetchRequest(epoch, remoteId1, 0, 0, 0));
+        context.pollUntilRequest();
+
+        // Since the fetch timer is reset, the leader should not get resigned
+        context.time.sleep(resignLeadershipTimeout / 2);
+        context.client.poll();
+
+        assertFalse(context.client.quorum().isResigned());
+
+        // Received fetch request from another voter, the fetch timer should be reset.
+        context.deliverRequest(context.fetchRequest(epoch, remoteId2, 0, 0, 0));
+        context.pollUntilRequest();
+
+        // Since the fetch timer is reset, the leader should not get resigned
+        context.time.sleep(resignLeadershipTimeout / 2);
+        context.client.poll();
+
+        assertFalse(context.client.quorum().isResigned());
+
+        // Received fetch request from an observer, but the fetch timer should not be reset.
+        context.deliverRequest(context.fetchRequest(epoch, observerId3, 0, 0, 0));
+        context.pollUntilRequest();
+
+        // After this sleep, the fetch timeout should expire since we don't receive fetch request from the majority voters within fetchTimeoutMs
+        context.time.sleep(resignLeadershipTimeout / 2);
+        context.client.poll();
+
+        // The leadership should get resigned now
+        assertTrue(context.client.quorum().isResigned());
+        context.assertResignedLeader(epoch, localId);
+    }
+
+    @Test
+    public void testLeaderShouldNotResignLeadershipIfOnlyOneVoters() throws Exception {
+        int localId = 0;
+        Set<Integer> voters = Utils.mkSet(localId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
+        assertEquals(OptionalInt.of(localId), context.currentLeader());
+
+        // checkQuorum timeout is expired without receiving fetch request from other voters, but since there is only 1 voter,
+        // the leader should not get resigned
+        context.time.sleep(context.checkQuorumTimeoutMs);
+        context.client.poll();
+
+        assertFalse(context.client.quorum().isResigned());
+    }
+
+    @Test
     public void testElectionTimeoutAfterUserInitiatedResign() throws Exception {
         int localId = 0;
         int otherNodeId = 1;
@@ -498,7 +582,7 @@ public class KafkaRaftClientTest {
         context.pollUntil(context.client.quorum()::isResigned);
 
         context.pollUntilRequest();
-        int correlationId = context.assertSentEndQuorumEpochRequest(resignedEpoch, otherNodeId);
+        RaftRequest.Outbound request = context.assertSentEndQuorumEpochRequest(resignedEpoch, otherNodeId);
 
         EndQuorumEpochResponseData response = EndQuorumEpochResponse.singletonResponse(
             Errors.NONE,
@@ -508,7 +592,7 @@ public class KafkaRaftClientTest {
             localId
         );
 
-        context.deliverResponse(correlationId, otherNodeId, response);
+        context.deliverResponse(request.correlationId(), request.destination(), response);
         context.client.poll();
 
         // We do not resend `EndQuorumRequest` once the other voter has acknowledged it.
@@ -523,7 +607,7 @@ public class KafkaRaftClientTest {
             resignedEpoch, OptionalInt.of(localId));
 
         // After the election timer, we should become a candidate.
-        context.time.sleep(2 * context.electionTimeoutMs());
+        context.time.sleep(2L * context.electionTimeoutMs());
         context.pollUntil(context.client.quorum()::isCandidate);
         assertEquals(resignedEpoch + 1, context.currentEpoch());
         assertEquals(new LeaderAndEpoch(OptionalInt.empty(), resignedEpoch + 1),
@@ -569,11 +653,14 @@ public class KafkaRaftClientTest {
         context.pollUntilRequest();
 
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        assertTrue(voters.contains(fetchRequest.destinationId()));
+        assertTrue(voters.contains(fetchRequest.destination().id()));
         context.assertFetchRequestData(fetchRequest, 0, 0L, 0);
 
-        context.deliverResponse(fetchRequest.correlationId, fetchRequest.destinationId(),
-            context.fetchResponse(epoch, leaderId, MemoryRecords.EMPTY, 0L, Errors.FENCED_LEADER_EPOCH));
+        context.deliverResponse(
+            fetchRequest.correlationId(),
+            fetchRequest.destination(),
+            context.fetchResponse(epoch, leaderId, MemoryRecords.EMPTY, 0L, Errors.FENCED_LEADER_EPOCH)
+        );
 
         context.client.poll();
         context.assertElectedLeader(epoch, leaderId);
@@ -587,7 +674,7 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Utils.mkSet(localId, 1, 2);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withVotedCandidate(2, localId)
+            .withVotedCandidate(2, ReplicaKey.of(localId, Optional.empty()))
             .build();
         context.assertVotedCandidate(2, localId);
         assertEquals(0L, context.log.endOffset().offset);
@@ -606,13 +693,17 @@ public class KafkaRaftClientTest {
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
 
         context.assertUnknownLeader(0);
-        context.time.sleep(2 * context.electionTimeoutMs());
+        context.time.sleep(2L * context.electionTimeoutMs());
 
         context.pollUntilRequest();
         context.assertVotedCandidate(1, localId);
 
-        int correlationId = context.assertSentVoteRequest(1, 0, 0L, 1);
-        context.deliverResponse(correlationId, otherNodeId, context.voteResponse(true, Optional.empty(), 1));
+        RaftRequest.Outbound request = context.assertSentVoteRequest(1, 0, 0L, 1);
+        context.deliverResponse(
+            request.correlationId(),
+            request.destination(),
+            context.voteResponse(true, Optional.empty(), 1)
+        );
 
         // Become leader after receiving the vote
         context.pollUntil(() -> context.log.endOffset().offset == 1L);
@@ -646,13 +737,17 @@ public class KafkaRaftClientTest {
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
 
         context.assertUnknownLeader(0);
-        context.time.sleep(2 * context.electionTimeoutMs());
+        context.time.sleep(2L * context.electionTimeoutMs());
 
         context.pollUntilRequest();
         context.assertVotedCandidate(1, localId);
 
-        int correlationId = context.assertSentVoteRequest(1, 0, 0L, 2);
-        context.deliverResponse(correlationId, firstNodeId, context.voteResponse(true, Optional.empty(), 1));
+        RaftRequest.Outbound request = context.assertSentVoteRequest(1, 0, 0L, 2);
+        context.deliverResponse(
+            request.correlationId(),
+            request.destination(),
+            context.voteResponse(true, Optional.empty(), 1)
+        );
 
         // Become leader after receiving the vote
         context.pollUntil(() -> context.log.endOffset().offset == 1L);
@@ -685,7 +780,7 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withVotedCandidate(votedCandidateEpoch, otherNodeId)
+            .withVotedCandidate(votedCandidateEpoch, ReplicaKey.of(otherNodeId, Optional.empty()))
             .build();
 
         context.deliverRequest(context.beginEpochRequest(votedCandidateEpoch, otherNodeId));
@@ -807,11 +902,8 @@ public class KafkaRaftClientTest {
 
         MemoryPool memoryPool = Mockito.mock(MemoryPool.class);
         ByteBuffer buffer = ByteBuffer.allocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES);
-        ByteBuffer leaderBuffer = ByteBuffer.allocate(256);
         Mockito.when(memoryPool.tryAllocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES))
             .thenReturn(buffer);
-        Mockito.when(memoryPool.tryAllocate(256))
-            .thenReturn(leaderBuffer);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withAppendLingerMs(lingerMs)
@@ -827,7 +919,8 @@ public class KafkaRaftClientTest {
         context.pollUntilResponse();
 
         context.assertElectedLeader(epoch + 1, otherNodeId);
-        Mockito.verify(memoryPool).release(buffer);
+        // Expect two calls one for the leader change control batch and one for the data batch
+        Mockito.verify(memoryPool, Mockito.times(2)).release(buffer);
     }
 
     @Test
@@ -839,11 +932,8 @@ public class KafkaRaftClientTest {
 
         MemoryPool memoryPool = Mockito.mock(MemoryPool.class);
         ByteBuffer buffer = ByteBuffer.allocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES);
-        ByteBuffer leaderBuffer = ByteBuffer.allocate(256);
         Mockito.when(memoryPool.tryAllocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES))
             .thenReturn(buffer);
-        Mockito.when(memoryPool.tryAllocate(256))
-            .thenReturn(leaderBuffer);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withAppendLingerMs(lingerMs)
@@ -860,7 +950,7 @@ public class KafkaRaftClientTest {
         context.pollUntilResponse();
 
         context.assertVotedCandidate(epoch + 1, otherNodeId);
-        Mockito.verify(memoryPool).release(buffer);
+        Mockito.verify(memoryPool, Mockito.times(2)).release(buffer);
     }
 
     @Test
@@ -872,11 +962,8 @@ public class KafkaRaftClientTest {
 
         MemoryPool memoryPool = Mockito.mock(MemoryPool.class);
         ByteBuffer buffer = ByteBuffer.allocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES);
-        ByteBuffer leaderBuffer = ByteBuffer.allocate(256);
         Mockito.when(memoryPool.tryAllocate(KafkaRaftClient.MAX_BATCH_SIZE_BYTES))
             .thenReturn(buffer);
-        Mockito.when(memoryPool.tryAllocate(256))
-            .thenReturn(leaderBuffer);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withAppendLingerMs(lingerMs)
@@ -892,7 +979,8 @@ public class KafkaRaftClientTest {
         context.pollUntilResponse();
 
         context.assertUnknownLeader(epoch + 1);
-        Mockito.verify(memoryPool).release(buffer);
+        // Expect two calls one for the leader change control batch and one for the data batch
+        Mockito.verify(memoryPool, Mockito.times(2)).release(buffer);
     }
 
     @Test
@@ -1030,23 +1118,31 @@ public class KafkaRaftClientTest {
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
         context.assertUnknownLeader(0);
 
-        context.time.sleep(2 * context.electionTimeoutMs());
+        context.time.sleep(2L * context.electionTimeoutMs());
         context.pollUntilRequest();
         context.assertVotedCandidate(epoch, localId);
 
-        int correlationId = context.assertSentVoteRequest(epoch, 0, 0L, 1);
+        RaftRequest.Outbound request = context.assertSentVoteRequest(epoch, 0, 0L, 1);
 
         context.time.sleep(context.requestTimeoutMs());
         context.client.poll();
-        int retryCorrelationId = context.assertSentVoteRequest(epoch, 0, 0L, 1);
+        RaftRequest.Outbound retryRequest = context.assertSentVoteRequest(epoch, 0, 0L, 1);
 
         // We will ignore the timed out response if it arrives late
-        context.deliverResponse(correlationId, otherNodeId, context.voteResponse(true, Optional.empty(), 1));
+        context.deliverResponse(
+            request.correlationId(),
+            request.destination(),
+            context.voteResponse(true, Optional.empty(), 1)
+        );
         context.client.poll();
         context.assertVotedCandidate(epoch, localId);
 
         // Become leader after receiving the retry response
-        context.deliverResponse(retryCorrelationId, otherNodeId, context.voteResponse(true, Optional.empty(), 1));
+        context.deliverResponse(
+            retryRequest.correlationId(),
+            retryRequest.destination(),
+            context.voteResponse(true, Optional.empty(), 1)
+        );
         context.client.poll();
         context.assertElectedLeader(epoch, localId);
     }
@@ -1099,7 +1195,7 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId, votedCandidateId);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withVotedCandidate(epoch, votedCandidateId)
+            .withVotedCandidate(epoch, ReplicaKey.of(votedCandidateId, Optional.empty()))
             .build();
 
         context.deliverRequest(context.voteRequest(epoch, otherNodeId, epoch - 1, 1));
@@ -1142,8 +1238,8 @@ public class KafkaRaftClientTest {
         context.deliverRequest(context.voteRequest(epoch + 1, otherNodeId, epoch, 1));
         context.pollUntilResponse();
 
-        context.assertSentVoteResponse(Errors.INCONSISTENT_VOTER_SET, epoch, OptionalInt.empty(), false);
-        context.assertUnknownLeader(epoch);
+        context.assertSentVoteResponse(Errors.NONE, epoch + 1, OptionalInt.empty(), true);
+        context.assertVotedCandidate(epoch + 1, otherNodeId);
     }
 
     @Test
@@ -1187,19 +1283,49 @@ public class KafkaRaftClientTest {
         List<String> records = Arrays.asList("a", "b", "c");
         long offset = context.client.scheduleAppend(epoch, records);
         context.client.poll();
-        assertEquals(OptionalLong.empty(), context.listener.lastCommitOffset());
+        assertEquals(OptionalLong.of(0L), context.listener.lastCommitOffset());
 
         // Let the follower send a fetch, it should advance the high watermark
         context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 1L, epoch, 500));
         context.pollUntilResponse();
         context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(localId));
         assertEquals(OptionalLong.of(1L), context.client.highWatermark());
-        assertEquals(OptionalLong.empty(), context.listener.lastCommitOffset());
+        assertEquals(OptionalLong.of(0L), context.listener.lastCommitOffset());
 
         // Let the follower send another fetch from offset 4
         context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 4L, epoch, 500));
         context.pollUntil(() -> context.client.highWatermark().equals(OptionalLong.of(4L)));
         assertEquals(records, context.listener.commitWithLastOffset(offset));
+    }
+
+    @Test
+    public void testLeaderImmediatelySendsDivergingEpoch() throws Exception {
+        int localId = 0;
+        int otherNodeId = 1;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withUnknownLeader(5)
+            .appendToLog(1, Arrays.asList("a", "b", "c"))
+            .appendToLog(3, Arrays.asList("d", "e", "f"))
+            .appendToLog(5, Arrays.asList("g", "h", "i"))
+            .build();
+
+        // Start off as the leader
+        context.becomeLeader();
+        int epoch = context.currentEpoch();
+
+        // Send a fetch request for an end offset and epoch which has diverged
+        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 6, 2, 500));
+        context.client.poll();
+
+        // Expect that the leader replies immediately with a diverging epoch
+        FetchResponseData.PartitionData partitionResponse = context.assertSentFetchPartitionResponse();
+        assertEquals(Errors.NONE, Errors.forCode(partitionResponse.errorCode()));
+        assertEquals(epoch, partitionResponse.currentLeader().leaderEpoch());
+        assertEquals(localId, partitionResponse.currentLeader().leaderId());
+        assertEquals(1, partitionResponse.divergingEpoch().epoch());
+        assertEquals(3, partitionResponse.divergingEpoch().endOffset());
     }
 
     @Test
@@ -1210,7 +1336,7 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .withVotedCandidate(leaderEpoch, localId)
+            .withVotedCandidate(leaderEpoch, ReplicaKey.of(localId, Optional.empty()))
             .build();
 
         context.pollUntilRequest();
@@ -1235,13 +1361,17 @@ public class KafkaRaftClientTest {
 
         context.assertUnknownLeader(0);
 
-        context.time.sleep(2 * context.electionTimeoutMs());
+        context.time.sleep(2L * context.electionTimeoutMs());
         context.pollUntilRequest();
         context.assertVotedCandidate(epoch, localId);
 
         // Quorum size is two. If the other member rejects, then we need to schedule a revote.
-        int correlationId = context.assertSentVoteRequest(epoch, 0, 0L, 1);
-        context.deliverResponse(correlationId, otherNodeId, context.voteResponse(false, Optional.empty(), 1));
+        RaftRequest.Outbound request = context.assertSentVoteRequest(epoch, 0, 0L, 1);
+        context.deliverResponse(
+            request.correlationId(),
+            request.destination(),
+            context.voteResponse(false, Optional.empty(), 1)
+        );
 
         context.client.poll();
 
@@ -1336,11 +1466,14 @@ public class KafkaRaftClientTest {
 
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        assertTrue(voters.contains(fetchRequest.destinationId()));
+        assertTrue(voters.contains(fetchRequest.destination().id()));
         context.assertFetchRequestData(fetchRequest, 0, 0L, 0);
 
-        context.deliverResponse(fetchRequest.correlationId, fetchRequest.destinationId(),
-            context.fetchResponse(epoch, leaderId, MemoryRecords.EMPTY, 0L, Errors.FENCED_LEADER_EPOCH));
+        context.deliverResponse(
+            fetchRequest.correlationId(),
+            fetchRequest.destination(),
+            context.fetchResponse(epoch, leaderId, MemoryRecords.EMPTY, 0L, Errors.FENCED_LEADER_EPOCH)
+        );
 
         context.client.poll();
         context.assertElectedLeader(epoch, leaderId);
@@ -1352,27 +1485,39 @@ public class KafkaRaftClientTest {
         int leaderId = 1;
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(leaderId);
+        List<InetSocketAddress> bootstrapServers = voters
+            .stream()
+            .map(RaftClientTestContext::mockAddress)
+            .collect(Collectors.toList());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withBootstrapServers(bootstrapServers)
+            .build();
 
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        assertTrue(voters.contains(fetchRequest.destinationId()));
+        assertTrue(context.bootstrapIds.contains(fetchRequest.destination().id()));
         context.assertFetchRequestData(fetchRequest, 0, 0L, 0);
 
-        context.deliverResponse(fetchRequest.correlationId, fetchRequest.destinationId(),
-            context.fetchResponse(-1, -1, MemoryRecords.EMPTY, -1, Errors.UNKNOWN_SERVER_ERROR));
+        context.deliverResponse(
+            fetchRequest.correlationId(),
+            fetchRequest.destination(),
+            context.fetchResponse(-1, -1, MemoryRecords.EMPTY, -1, Errors.UNKNOWN_SERVER_ERROR)
+        );
         context.client.poll();
 
         context.time.sleep(context.retryBackoffMs);
         context.pollUntilRequest();
 
         fetchRequest = context.assertSentFetchRequest();
-        assertTrue(voters.contains(fetchRequest.destinationId()));
+        assertTrue(context.bootstrapIds.contains(fetchRequest.destination().id()));
         context.assertFetchRequestData(fetchRequest, 0, 0L, 0);
 
-        context.deliverResponse(fetchRequest.correlationId, fetchRequest.destinationId(),
-            context.fetchResponse(epoch, leaderId, MemoryRecords.EMPTY, 0L, Errors.FENCED_LEADER_EPOCH));
+        context.deliverResponse(
+            fetchRequest.correlationId(),
+            fetchRequest.destination(),
+            context.fetchResponse(epoch, leaderId, MemoryRecords.EMPTY, 0L, Errors.FENCED_LEADER_EPOCH)
+        );
         context.client.poll();
 
         context.assertElectedLeader(epoch, leaderId);
@@ -1385,25 +1530,167 @@ public class KafkaRaftClientTest {
         int otherNodeId = 2;
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(leaderId, otherNodeId);
+        List<InetSocketAddress> bootstrapServers = voters
+            .stream()
+            .map(RaftClientTestContext::mockAddress)
+            .collect(Collectors.toList());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withBootstrapServers(bootstrapServers)
+            .build();
 
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        assertTrue(voters.contains(fetchRequest.destinationId()));
+        assertTrue(context.bootstrapIds.contains(fetchRequest.destination().id()));
         context.assertFetchRequestData(fetchRequest, 0, 0L, 0);
 
-        context.deliverResponse(fetchRequest.correlationId, fetchRequest.destinationId(),
-            context.fetchResponse(epoch, leaderId, MemoryRecords.EMPTY, 0L, Errors.FENCED_LEADER_EPOCH));
-        context.client.poll();
+        context.deliverResponse(
+            fetchRequest.correlationId(),
+            fetchRequest.destination(),
+            context.fetchResponse(epoch, leaderId, MemoryRecords.EMPTY, 0L, Errors.FENCED_LEADER_EPOCH)
+        );
 
+        context.client.poll();
         context.assertElectedLeader(epoch, leaderId);
+
         context.time.sleep(context.fetchTimeoutMs);
 
         context.pollUntilRequest();
         fetchRequest = context.assertSentFetchRequest();
-        assertTrue(voters.contains(fetchRequest.destinationId()));
+        assertNotEquals(leaderId, fetchRequest.destination().id());
+        assertTrue(context.bootstrapIds.contains(fetchRequest.destination().id()));
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+    }
+
+    @Test
+    public void testObserverHandleRetryFetchtToBootstrapServer() throws Exception {
+        // This test tries to check that KRaft is able to handle a retrying Fetch request to
+        // a boostrap server after a Fetch request to the leader.
+
+        int localId = 0;
+        int leaderId = 1;
+        int otherNodeId = 2;
+        int epoch = 5;
+        Set<Integer> voters = Utils.mkSet(leaderId, otherNodeId);
+        List<InetSocketAddress> bootstrapServers = voters
+            .stream()
+            .map(RaftClientTestContext::mockAddress)
+            .collect(Collectors.toList());
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withBootstrapServers(bootstrapServers)
+            .build();
+
+        // Expect a fetch request to one of the bootstrap servers
+        context.pollUntilRequest();
+        RaftRequest.Outbound discoveryFetchRequest = context.assertSentFetchRequest();
+        assertFalse(voters.contains(discoveryFetchRequest.destination().id()));
+        assertTrue(context.bootstrapIds.contains(discoveryFetchRequest.destination().id()));
+        context.assertFetchRequestData(discoveryFetchRequest, 0, 0L, 0);
+
+        // Send a response with the leader and epoch
+        context.deliverResponse(
+            discoveryFetchRequest.correlationId(),
+            discoveryFetchRequest.destination(),
+            context.fetchResponse(epoch, leaderId, MemoryRecords.EMPTY, 0L, Errors.FENCED_LEADER_EPOCH)
+        );
+
+        context.client.poll();
+        context.assertElectedLeader(epoch, leaderId);
+
+        // Expect a fetch request to the leader
+        context.pollUntilRequest();
+        RaftRequest.Outbound toLeaderFetchRequest = context.assertSentFetchRequest();
+        assertEquals(leaderId, toLeaderFetchRequest.destination().id());
+        context.assertFetchRequestData(toLeaderFetchRequest, epoch, 0L, 0);
+
+        context.time.sleep(context.requestTimeoutMs());
+
+        // After the fetch timeout expect a request to a bootstrap server
+        context.pollUntilRequest();
+        RaftRequest.Outbound retryToBootstrapServerFetchRequest = context.assertSentFetchRequest();
+        assertFalse(voters.contains(retryToBootstrapServerFetchRequest.destination().id()));
+        assertTrue(context.bootstrapIds.contains(retryToBootstrapServerFetchRequest.destination().id()));
+        context.assertFetchRequestData(retryToBootstrapServerFetchRequest, epoch, 0L, 0);
+
+        // Deliver the delayed responses from the leader
+        Records records = context.buildBatch(0L, 3, Arrays.asList("a", "b"));
+        context.deliverResponse(
+            toLeaderFetchRequest.correlationId(),
+            toLeaderFetchRequest.destination(),
+            context.fetchResponse(epoch, leaderId, records, 0L, Errors.NONE)
+        );
+
+        context.client.poll();
+
+        // Deliver the same delayed responses from the bootstrap server and assume that it is the leader
+        records = context.buildBatch(0L, 3, Arrays.asList("a", "b"));
+        context.deliverResponse(
+            retryToBootstrapServerFetchRequest.correlationId(),
+            retryToBootstrapServerFetchRequest.destination(),
+            context.fetchResponse(epoch, leaderId, records, 0L, Errors.NONE)
+        );
+
+        // This poll should not fail when handling the duplicate response from the bootstrap server
+        context.client.poll();
+    }
+
+    @Test
+    public void testObserverHandleRetryFetchToLeader() throws Exception {
+        // This test tries to check that KRaft is able to handle a retrying Fetch request to
+        // the leader after a Fetch request to the bootstrap server.
+
+        int localId = 0;
+        int leaderId = 1;
+        int otherNodeId = 2;
+        int epoch = 5;
+        Set<Integer> voters = Utils.mkSet(leaderId, otherNodeId);
+        List<InetSocketAddress> bootstrapServers = voters
+            .stream()
+            .map(RaftClientTestContext::mockAddress)
+            .collect(Collectors.toList());
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withBootstrapServers(bootstrapServers)
+            .build();
+
+        // Expect a fetch request to one of the bootstrap servers
+        context.pollUntilRequest();
+        RaftRequest.Outbound discoveryFetchRequest = context.assertSentFetchRequest();
+        assertFalse(voters.contains(discoveryFetchRequest.destination().id()));
+        assertTrue(context.bootstrapIds.contains(discoveryFetchRequest.destination().id()));
+        context.assertFetchRequestData(discoveryFetchRequest, 0, 0L, 0);
+
+        // Send a response with the leader and epoch
+        context.deliverResponse(
+            discoveryFetchRequest.correlationId(),
+            discoveryFetchRequest.destination(),
+            context.fetchResponse(epoch, leaderId, MemoryRecords.EMPTY, 0L, Errors.FENCED_LEADER_EPOCH)
+        );
+
+        context.client.poll();
+        context.assertElectedLeader(epoch, leaderId);
+
+        // Expect a fetch request to the leader
+        context.pollUntilRequest();
+        RaftRequest.Outbound toLeaderFetchRequest = context.assertSentFetchRequest();
+        assertEquals(leaderId, toLeaderFetchRequest.destination().id());
+        context.assertFetchRequestData(toLeaderFetchRequest, epoch, 0L, 0);
+
+        context.time.sleep(context.requestTimeoutMs());
+
+        // After the fetch timeout expect a request to a bootstrap server
+        context.pollUntilRequest();
+        RaftRequest.Outbound retryToBootstrapServerFetchRequest = context.assertSentFetchRequest();
+        assertFalse(voters.contains(retryToBootstrapServerFetchRequest.destination().id()));
+        assertTrue(context.bootstrapIds.contains(retryToBootstrapServerFetchRequest.destination().id()));
+        context.assertFetchRequestData(retryToBootstrapServerFetchRequest, epoch, 0L, 0);
+
+        // At this point toLeaderFetchRequest has timed out but retryToBootstrapServerFetchRequest
+        // is still waiting for a response.
+        // Confirm that no new fetch request has been sent
+        context.client.poll();
+        assertFalse(context.channel.hasSentRequests());
     }
 
     @Test
@@ -1593,7 +1880,7 @@ public class KafkaRaftClientTest {
     }
 
     @Test
-    public void testVoterOnlyRequestValidation() throws Exception {
+    public void testLeaderAcceptVoteFromNonVoter() throws Exception {
         int localId = 0;
         int otherNodeId = 1;
         int epoch = 5;
@@ -1602,19 +1889,13 @@ public class KafkaRaftClientTest {
         RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
 
         int nonVoterId = 2;
+        context.deliverRequest(context.voteRequest(epoch - 1, nonVoterId, 0, 0));
+        context.client.poll();
+        context.assertSentVoteResponse(Errors.FENCED_LEADER_EPOCH, epoch, OptionalInt.of(localId), false);
+
         context.deliverRequest(context.voteRequest(epoch, nonVoterId, 0, 0));
         context.client.poll();
-        context.assertSentVoteResponse(Errors.INCONSISTENT_VOTER_SET, epoch, OptionalInt.of(localId), false);
-
-        context.deliverRequest(context.beginEpochRequest(epoch, nonVoterId));
-        context.client.poll();
-        context.assertSentBeginQuorumEpochResponse(Errors.INCONSISTENT_VOTER_SET, epoch, OptionalInt.of(localId));
-
-        context.deliverRequest(context.endEpochRequest(epoch, nonVoterId, Collections.singletonList(otherNodeId)));
-        context.client.poll();
-
-        // The sent request has no localId as a preferable voter.
-        context.assertSentEndQuorumEpochResponse(Errors.INCONSISTENT_VOTER_SET, epoch, OptionalInt.of(localId));
+        context.assertSentVoteResponse(Errors.NONE, epoch, OptionalInt.of(localId), false);
     }
 
     @Test
@@ -1736,7 +2017,7 @@ public class KafkaRaftClientTest {
 
         // Wait until we have a Fetch inflight to the leader
         context.pollUntilRequest();
-        int fetchCorrelationId = context.assertSentFetchRequest(epoch, 0L, 0);
+        RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest(epoch, 0L, 0);
 
         // Now await the fetch timeout and become a candidate
         context.time.sleep(context.fetchTimeoutMs);
@@ -1745,8 +2026,11 @@ public class KafkaRaftClientTest {
 
         // The fetch response from the old leader returns, but it should be ignored
         Records records = context.buildBatch(0L, 3, Arrays.asList("a", "b"));
-        context.deliverResponse(fetchCorrelationId, otherNodeId,
-            context.fetchResponse(epoch, otherNodeId, records, 0L, Errors.NONE));
+        context.deliverResponse(
+            fetchRequest.correlationId(),
+            fetchRequest.destination(),
+            context.fetchResponse(epoch, otherNodeId, records, 0L, Errors.NONE)
+        );
 
         context.client.poll();
         assertEquals(0, context.log.endOffset().offset);
@@ -1770,7 +2054,7 @@ public class KafkaRaftClientTest {
 
         // Wait until we have a Fetch inflight to the leader
         context.pollUntilRequest();
-        int fetchCorrelationId = context.assertSentFetchRequest(epoch, 0L, 0);
+        RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest(epoch, 0L, 0);
 
         // Now receive a BeginEpoch from `voter3`
         context.deliverRequest(context.beginEpochRequest(epoch + 1, voter3));
@@ -1780,7 +2064,11 @@ public class KafkaRaftClientTest {
         // The fetch response from the old leader returns, but it should be ignored
         Records records = context.buildBatch(0L, 3, Arrays.asList("a", "b"));
         FetchResponseData response = context.fetchResponse(epoch, voter2, records, 0L, Errors.NONE);
-        context.deliverResponse(fetchCorrelationId, voter2, response);
+        context.deliverResponse(
+            fetchRequest.correlationId(),
+            fetchRequest.destination(),
+            response
+        );
 
         context.client.poll();
         assertEquals(0, context.log.endOffset().offset);
@@ -1802,7 +2090,7 @@ public class KafkaRaftClientTest {
         context.assertUnknownLeader(epoch - 1);
 
         // Sleep a little to ensure that we become a candidate
-        context.time.sleep(context.electionTimeoutMs() * 2);
+        context.time.sleep(context.electionTimeoutMs() * 2L);
 
         // Wait until the vote requests are inflight
         context.pollUntilRequest();
@@ -1817,10 +2105,18 @@ public class KafkaRaftClientTest {
 
         // The vote requests now return and should be ignored
         VoteResponseData voteResponse1 = context.voteResponse(false, Optional.empty(), epoch);
-        context.deliverResponse(voteRequests.get(0).correlationId, voter2, voteResponse1);
+        context.deliverResponse(
+            voteRequests.get(0).correlationId(),
+            voteRequests.get(0).destination(),
+            voteResponse1
+        );
 
         VoteResponseData voteResponse2 = context.voteResponse(false, Optional.of(voter3), epoch);
-        context.deliverResponse(voteRequests.get(1).correlationId, voter3, voteResponse2);
+        context.deliverResponse(
+            voteRequests.get(1).correlationId(),
+            voteRequests.get(1).destination(),
+            voteResponse2
+        );
 
         context.client.poll();
         context.assertElectedLeader(epoch, voter3);
@@ -1833,31 +2129,43 @@ public class KafkaRaftClientTest {
         int otherNodeId = 2;
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(leaderId, otherNodeId);
+        List<InetSocketAddress> bootstrapServers = voters
+            .stream()
+            .map(RaftClientTestContext::mockAddress)
+            .collect(Collectors.toList());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withBootstrapServers(bootstrapServers)
+            .build();
 
         context.discoverLeaderAsObserver(leaderId, epoch);
 
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest1 = context.assertSentFetchRequest();
-        assertEquals(leaderId, fetchRequest1.destinationId());
+        assertEquals(leaderId, fetchRequest1.destination().id());
         context.assertFetchRequestData(fetchRequest1, epoch, 0L, 0);
 
-        context.deliverResponse(fetchRequest1.correlationId, fetchRequest1.destinationId(),
-            context.fetchResponse(epoch, -1, MemoryRecords.EMPTY, -1, Errors.BROKER_NOT_AVAILABLE));
+        context.deliverResponse(
+            fetchRequest1.correlationId(),
+            fetchRequest1.destination(),
+            context.fetchResponse(epoch, -1, MemoryRecords.EMPTY, -1, Errors.BROKER_NOT_AVAILABLE)
+        );
         context.pollUntilRequest();
 
         // We should retry the Fetch against the other voter since the original
         // voter connection will be backing off.
         RaftRequest.Outbound fetchRequest2 = context.assertSentFetchRequest();
-        assertNotEquals(leaderId, fetchRequest2.destinationId());
-        assertTrue(voters.contains(fetchRequest2.destinationId()));
+        assertNotEquals(leaderId, fetchRequest2.destination().id());
+        assertTrue(context.bootstrapIds.contains(fetchRequest2.destination().id()));
         context.assertFetchRequestData(fetchRequest2, epoch, 0L, 0);
 
-        Errors error = fetchRequest2.destinationId() == leaderId ?
+        Errors error = fetchRequest2.destination().id() == leaderId ?
             Errors.NONE : Errors.NOT_LEADER_OR_FOLLOWER;
-        context.deliverResponse(fetchRequest2.correlationId, fetchRequest2.destinationId(),
-            context.fetchResponse(epoch, leaderId, MemoryRecords.EMPTY, 0L, error));
+        context.deliverResponse(
+            fetchRequest2.correlationId(),
+            fetchRequest2.destination(),
+            context.fetchResponse(epoch, leaderId, MemoryRecords.EMPTY, 0L, error)
+        );
         context.client.poll();
 
         context.assertElectedLeader(epoch, leaderId);
@@ -1870,14 +2178,20 @@ public class KafkaRaftClientTest {
         int otherNodeId = 2;
         int epoch = 5;
         Set<Integer> voters = Utils.mkSet(leaderId, otherNodeId);
+        List<InetSocketAddress> bootstrapServers = voters
+            .stream()
+            .map(RaftClientTestContext::mockAddress)
+            .collect(Collectors.toList());
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withBootstrapServers(bootstrapServers)
+            .build();
 
         context.discoverLeaderAsObserver(leaderId, epoch);
 
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest1 = context.assertSentFetchRequest();
-        assertEquals(leaderId, fetchRequest1.destinationId());
+        assertEquals(leaderId, fetchRequest1.destination().id());
         context.assertFetchRequestData(fetchRequest1, epoch, 0L, 0);
 
         context.time.sleep(context.requestTimeoutMs());
@@ -1886,12 +2200,15 @@ public class KafkaRaftClientTest {
         // We should retry the Fetch against the other voter since the original
         // voter connection will be backing off.
         RaftRequest.Outbound fetchRequest2 = context.assertSentFetchRequest();
-        assertNotEquals(leaderId, fetchRequest2.destinationId());
-        assertTrue(voters.contains(fetchRequest2.destinationId()));
+        assertNotEquals(leaderId, fetchRequest2.destination().id());
+        assertTrue(context.bootstrapIds.contains(fetchRequest2.destination().id()));
         context.assertFetchRequestData(fetchRequest2, epoch, 0L, 0);
 
-        context.deliverResponse(fetchRequest2.correlationId, fetchRequest2.destinationId(),
-            context.fetchResponse(epoch, leaderId, MemoryRecords.EMPTY, 0L, Errors.FENCED_LEADER_EPOCH));
+        context.deliverResponse(
+            fetchRequest2.correlationId(),
+            fetchRequest2.destination(),
+            context.fetchResponse(epoch, leaderId, MemoryRecords.EMPTY, 0L, Errors.FENCED_LEADER_EPOCH)
+        );
         context.client.poll();
 
         context.assertElectedLeader(epoch, leaderId);
@@ -2181,10 +2498,14 @@ public class KafkaRaftClientTest {
 
         context.pollUntilRequest();
 
-        int fetchQuorumCorrelationId = context.assertSentFetchRequest(epoch, 0L, 0);
+        RaftRequest.Outbound fetchQuorumRequest = context.assertSentFetchRequest(epoch, 0L, 0);
         Records records = context.buildBatch(0L, 3, Arrays.asList("a", "b"));
         FetchResponseData response = context.fetchResponse(epoch, otherNodeId, records, 0L, Errors.NONE);
-        context.deliverResponse(fetchQuorumCorrelationId, otherNodeId, response);
+        context.deliverResponse(
+            fetchQuorumRequest.correlationId(),
+            fetchQuorumRequest.destination(),
+            response
+        );
 
         context.client.poll();
         assertEquals(2L, context.log.endOffset().offset);
@@ -2205,10 +2526,19 @@ public class KafkaRaftClientTest {
 
         // Receive an empty fetch response
         context.pollUntilRequest();
-        int fetchQuorumCorrelationId = context.assertSentFetchRequest(epoch, 0L, 0);
-        FetchResponseData fetchResponse = context.fetchResponse(epoch, otherNodeId,
-            MemoryRecords.EMPTY, 0L, Errors.NONE);
-        context.deliverResponse(fetchQuorumCorrelationId, otherNodeId, fetchResponse);
+        RaftRequest.Outbound fetchQuorumRequest = context.assertSentFetchRequest(epoch, 0L, 0);
+        FetchResponseData fetchResponse = context.fetchResponse(
+            epoch,
+            otherNodeId,
+            MemoryRecords.EMPTY,
+            0L,
+            Errors.NONE
+        );
+        context.deliverResponse(
+            fetchQuorumRequest.correlationId(),
+            fetchQuorumRequest.destination(),
+            fetchResponse
+        );
         context.client.poll();
         assertEquals(0L, context.log.endOffset().offset);
         assertEquals(OptionalLong.of(0L), context.client.highWatermark());
@@ -2216,20 +2546,32 @@ public class KafkaRaftClientTest {
         // Receive some records in the next poll, but do not advance high watermark
         context.pollUntilRequest();
         Records records = context.buildBatch(0L, epoch, Arrays.asList("a", "b"));
-        fetchQuorumCorrelationId = context.assertSentFetchRequest(epoch, 0L, 0);
-        fetchResponse = context.fetchResponse(epoch, otherNodeId,
-            records, 0L, Errors.NONE);
-        context.deliverResponse(fetchQuorumCorrelationId, otherNodeId, fetchResponse);
+        fetchQuorumRequest = context.assertSentFetchRequest(epoch, 0L, 0);
+        fetchResponse = context.fetchResponse(epoch, otherNodeId, records, 0L, Errors.NONE);
+        context.deliverResponse(
+            fetchQuorumRequest.correlationId(),
+            fetchQuorumRequest.destination(),
+            fetchResponse
+        );
         context.client.poll();
         assertEquals(2L, context.log.endOffset().offset);
         assertEquals(OptionalLong.of(0L), context.client.highWatermark());
 
         // The next fetch response is empty, but should still advance the high watermark
         context.pollUntilRequest();
-        fetchQuorumCorrelationId = context.assertSentFetchRequest(epoch, 2L, epoch);
-        fetchResponse = context.fetchResponse(epoch, otherNodeId,
-            MemoryRecords.EMPTY, 2L, Errors.NONE);
-        context.deliverResponse(fetchQuorumCorrelationId, otherNodeId, fetchResponse);
+        fetchQuorumRequest = context.assertSentFetchRequest(epoch, 2L, epoch);
+        fetchResponse = context.fetchResponse(
+            epoch,
+            otherNodeId,
+            MemoryRecords.EMPTY,
+            2L,
+            Errors.NONE
+        );
+        context.deliverResponse(
+            fetchQuorumRequest.correlationId(),
+            fetchQuorumRequest.destination(),
+            fetchResponse
+        );
         context.client.poll();
         assertEquals(2L, context.log.endOffset().offset);
         assertEquals(OptionalLong.of(2L), context.client.highWatermark());
@@ -2354,7 +2696,7 @@ public class KafkaRaftClientTest {
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withElectedLeader(epoch, otherNodeId)
             .appendToLog(lastEpoch, Arrays.asList("foo", "bar"))
-            .appendToLog(lastEpoch, Arrays.asList("baz"))
+            .appendToLog(lastEpoch, singletonList("baz"))
             .build();
 
         context.assertElectedLeader(epoch, otherNodeId);
@@ -2362,11 +2704,11 @@ public class KafkaRaftClientTest {
 
         context.pollUntilRequest();
 
-        int correlationId = context.assertSentFetchRequest(epoch, 3L, lastEpoch);
+        RaftRequest.Outbound request = context.assertSentFetchRequest(epoch, 3L, lastEpoch);
 
         FetchResponseData response = context.divergingFetchResponse(epoch, otherNodeId, 2L,
             lastEpoch, 1L);
-        context.deliverResponse(correlationId, otherNodeId, response);
+        context.deliverResponse(request.correlationId(), request.destination(), response);
 
         // Poll again to complete truncation
         context.client.poll();
@@ -2438,10 +2780,14 @@ public class KafkaRaftClientTest {
 
         context.pollUntilRequest();
 
-        int correlationId = context.assertSentFetchRequest(epoch, 0, 0);
+        RaftRequest.Outbound request = context.assertSentFetchRequest(epoch, 0, 0);
         FetchResponseData response = new FetchResponseData()
             .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code());
-        context.deliverResponse(correlationId, otherNodeId, response);
+        context.deliverResponse(
+            request.correlationId(),
+            request.destination(),
+            response
+        );
         assertThrows(ClusterAuthorizationException.class, context.client::poll);
     }
 
@@ -2461,11 +2807,11 @@ public class KafkaRaftClientTest {
         context.expectAndGrantVotes(epoch);
 
         context.pollUntilRequest();
-        int correlationId = context.assertSentBeginQuorumEpochRequest(epoch, 1);
+        RaftRequest.Outbound request = context.assertSentBeginQuorumEpochRequest(epoch, 1);
         BeginQuorumEpochResponseData response = new BeginQuorumEpochResponseData()
             .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code());
 
-        context.deliverResponse(correlationId, otherNodeId, response);
+        context.deliverResponse(request.correlationId(), request.destination(), response);
         assertThrows(ClusterAuthorizationException.class, context.client::poll);
     }
 
@@ -2481,15 +2827,15 @@ public class KafkaRaftClientTest {
             .build();
 
         // Sleep a little to ensure that we become a candidate
-        context.time.sleep(context.electionTimeoutMs() * 2);
+        context.time.sleep(context.electionTimeoutMs() * 2L);
         context.pollUntilRequest();
         context.assertVotedCandidate(epoch, localId);
 
-        int correlationId = context.assertSentVoteRequest(epoch, 0, 0L, 1);
+        RaftRequest.Outbound request = context.assertSentVoteRequest(epoch, 0, 0L, 1);
         VoteResponseData response = new VoteResponseData()
             .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code());
 
-        context.deliverResponse(correlationId, otherNodeId, response);
+        context.deliverResponse(request.correlationId(), request.destination(), response);
         assertThrows(ClusterAuthorizationException.class, context.client::poll);
     }
 
@@ -2505,27 +2851,59 @@ public class KafkaRaftClientTest {
         context.client.shutdown(5000);
         context.pollUntilRequest();
 
-        int correlationId = context.assertSentEndQuorumEpochRequest(epoch, otherNodeId);
+        RaftRequest.Outbound request = context.assertSentEndQuorumEpochRequest(epoch, otherNodeId);
         EndQuorumEpochResponseData response = new EndQuorumEpochResponseData()
             .setErrorCode(Errors.CLUSTER_AUTHORIZATION_FAILED.code());
 
-        context.deliverResponse(correlationId, otherNodeId, response);
+        context.deliverResponse(request.correlationId(), request.destination(), response);
         assertThrows(ClusterAuthorizationException.class, context.client::poll);
     }
 
     @Test
-    public void testHandleClaimFiresImmediatelyOnEmptyLog() throws Exception {
+    public void testHandleLeaderChangeFiresAfterListenerReachesEpochStartOffsetOnEmptyLog() throws Exception {
         int localId = 0;
         int otherNodeId = 1;
-        int epoch = 5;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
-        RaftClientTestContext context = RaftClientTestContext.initializeAsLeader(localId, voters, epoch);
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .build();
+
+        context.becomeLeader();
+        context.client.poll();
+        int epoch = context.currentEpoch();
+
+        // After becoming leader, we expect the `LeaderChange` record to be appended.
+        assertEquals(1L, context.log.endOffset().offset);
+
+        // The high watermark is not known to the leader until the followers
+        // begin fetching, so we should not have fired the `handleLeaderChange` callback.
+        assertEquals(OptionalInt.empty(), context.listener.currentClaimedEpoch());
+        assertEquals(OptionalLong.empty(), context.listener.lastCommitOffset());
+
+        // Deliver a fetch from the other voter. The high watermark will not
+        // be exposed until it is able to reach the start of the leader epoch,
+        // so we are unable to deliver committed data or fire `handleLeaderChange`.
+        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 0L, 0, 0));
+        context.client.poll();
+        assertEquals(OptionalInt.empty(), context.listener.currentClaimedEpoch());
+        assertEquals(OptionalLong.empty(), context.listener.lastCommitOffset());
+
+        // Now catch up to the start of the leader epoch so that the high
+        // watermark advances and we can start sending committed data to the
+        // listener. Note that the `LeaderChange` control record is included
+        // in the committed batches.
+        context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 1L, epoch, 0));
+        context.client.poll();
+        assertEquals(OptionalLong.of(0), context.listener.lastCommitOffset());
+
+        // Poll again now that the listener has caught up to the HWM
+        context.client.poll();
         assertEquals(OptionalInt.of(epoch), context.listener.currentClaimedEpoch());
+        assertEquals(0, context.listener.claimedEpochStartOffset(epoch));
     }
 
     @Test
-    public void testHandleClaimCallbackFiresAfterHighWatermarkReachesEpochStartOffset() throws Exception {
+    public void testHandleLeaderChangeFiresAfterListenerReachesEpochStartOffset() throws Exception {
         int localId = 0;
         int otherNodeId = 1;
         int epoch = 5;
@@ -2551,13 +2929,13 @@ public class KafkaRaftClientTest {
         assertEquals(10L, context.log.endOffset().offset);
 
         // The high watermark is not known to the leader until the followers
-        // begin fetching, so we should not have fired the `handleClaim` callback.
+        // begin fetching, so we should not have fired the `handleLeaderChange` callback.
         assertEquals(OptionalInt.empty(), context.listener.currentClaimedEpoch());
         assertEquals(OptionalLong.empty(), context.listener.lastCommitOffset());
 
         // Deliver a fetch from the other voter. The high watermark will not
         // be exposed until it is able to reach the start of the leader epoch,
-        // so we are unable to deliver committed data or fire `handleClaim`.
+        // so we are unable to deliver committed data or fire `handleLeaderChange`.
         context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 3L, 1, 500));
         context.client.poll();
         assertEquals(OptionalInt.empty(), context.listener.currentClaimedEpoch());
@@ -2565,26 +2943,28 @@ public class KafkaRaftClientTest {
 
         // Now catch up to the start of the leader epoch so that the high
         // watermark advances and we can start sending committed data to the
-        // listener. Note that the `LeaderChange` control record is filtered.
+        // listener. Note that the `LeaderChange` control record is included
+        // in the committed batches.
         context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 10L, epoch, 500));
         context.pollUntil(() -> {
-            int committedBatches = context.listener.numCommittedBatches();
-            long baseOffset = 0;
-            for (int index = 0; index < committedBatches; index++) {
-                List<String> expectedBatch = expectedBatches.get(index);
-                assertEquals(expectedBatch, context.listener.commitWithBaseOffset(baseOffset));
-                baseOffset += expectedBatch.size();
+            int index = 0;
+            for (Batch<String> batch : context.listener.committedBatches()) {
+                if (index < expectedBatches.size()) {
+                    // It must be a data record so compare it
+                    assertEquals(expectedBatches.get(index), batch.records());
+                }
+                index++;
             }
+            // The control record must be the last batch committed
+            assertEquals(4, index);
 
             return context.listener.currentClaimedEpoch().isPresent();
         });
 
         assertEquals(OptionalInt.of(epoch), context.listener.currentClaimedEpoch());
-        // Note that last committed offset is inclusive, hence we subtract 1.
-        assertEquals(
-            OptionalLong.of(expectedBatches.stream().mapToInt(List::size).sum() - 1),
-            context.listener.lastCommitOffset()
-        );
+        // Note that last committed offset is inclusive and must include the leader change record.
+        assertEquals(OptionalLong.of(9), context.listener.lastCommitOffset());
+        assertEquals(9, context.listener.claimedEpochStartOffset(epoch));
     }
 
     @Test
@@ -2613,18 +2993,18 @@ public class KafkaRaftClientTest {
         context.deliverRequest(context.fetchRequest(epoch, otherNodeId, 10L, epoch, 0));
         context.pollUntil(() -> OptionalInt.of(epoch).equals(context.listener.currentClaimedEpoch()));
         assertEquals(OptionalLong.of(10L), context.client.highWatermark());
-        assertEquals(OptionalLong.of(8L), context.listener.lastCommitOffset());
+        assertEquals(OptionalLong.of(9L), context.listener.lastCommitOffset());
         assertEquals(OptionalInt.of(epoch), context.listener.currentClaimedEpoch());
-        // Ensure that the `handleClaim` callback was not fired early
+        // Ensure that the `handleLeaderChange` callback was not fired early
         assertEquals(9L, context.listener.claimedEpochStartOffset(epoch));
 
         // Register a second listener and allow it to catch up to the high watermark
         RaftClientTestContext.MockListener secondListener = new RaftClientTestContext.MockListener(OptionalInt.of(localId));
         context.client.register(secondListener);
         context.pollUntil(() -> OptionalInt.of(epoch).equals(secondListener.currentClaimedEpoch()));
-        assertEquals(OptionalLong.of(8L), secondListener.lastCommitOffset());
+        assertEquals(OptionalLong.of(9L), secondListener.lastCommitOffset());
         assertEquals(OptionalInt.of(epoch), context.listener.currentClaimedEpoch());
-        // Ensure that the `handleClaim` callback was not fired early
+        // Ensure that the `handleLeaderChange` callback was not fired early
         assertEquals(9L, secondListener.claimedEpochStartOffset(epoch));
     }
 
@@ -2652,12 +3032,12 @@ public class KafkaRaftClientTest {
 
         // Let the initial listener catch up
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
-        context.pollUntil(() -> OptionalLong.of(8).equals(context.listener.lastCommitOffset()));
+        context.pollUntil(() -> OptionalLong.of(9).equals(context.listener.lastCommitOffset()));
 
         // Register a second listener
         RaftClientTestContext.MockListener secondListener = new RaftClientTestContext.MockListener(OptionalInt.of(localId));
         context.client.register(secondListener);
-        context.pollUntil(() -> OptionalLong.of(8).equals(secondListener.lastCommitOffset()));
+        context.pollUntil(() -> OptionalLong.of(9).equals(secondListener.lastCommitOffset()));
         context.client.unregister(secondListener);
 
         // Write to the log and show that the default listener gets updated...
@@ -2666,7 +3046,7 @@ public class KafkaRaftClientTest {
         context.advanceLocalLeaderHighWatermarkToLogEndOffset();
         context.pollUntil(() -> OptionalLong.of(10).equals(context.listener.lastCommitOffset()));
         // ... but unregister listener doesn't
-        assertEquals(OptionalLong.of(8), secondListener.lastCommitOffset());
+        assertEquals(OptionalLong.of(9), secondListener.lastCommitOffset());
     }
 
     @Test
@@ -2684,14 +3064,17 @@ public class KafkaRaftClientTest {
         // Poll for our first fetch request
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
-        assertTrue(voters.contains(fetchRequest.destinationId()));
+        assertTrue(voters.contains(fetchRequest.destination().id()));
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
 
         // The response does not advance the high watermark
         List<String> records1 = Arrays.asList("a", "b", "c");
         MemoryRecords batch1 = context.buildBatch(0L, 3, records1);
-        context.deliverResponse(fetchRequest.correlationId, fetchRequest.destinationId(),
-            context.fetchResponse(epoch, otherNodeId, batch1, 0L, Errors.NONE));
+        context.deliverResponse(
+            fetchRequest.correlationId(),
+            fetchRequest.destination(),
+            context.fetchResponse(epoch, otherNodeId, batch1, 0L, Errors.NONE)
+        );
         context.client.poll();
 
         // The listener should not have seen any data
@@ -2702,14 +3085,17 @@ public class KafkaRaftClientTest {
         // Now look for the next fetch request
         context.pollUntilRequest();
         fetchRequest = context.assertSentFetchRequest();
-        assertTrue(voters.contains(fetchRequest.destinationId()));
+        assertTrue(voters.contains(fetchRequest.destination().id()));
         context.assertFetchRequestData(fetchRequest, epoch, 3L, 3);
 
         // The high watermark advances to include the first batch we fetched
         List<String> records2 = Arrays.asList("d", "e", "f");
         MemoryRecords batch2 = context.buildBatch(3L, 3, records2);
-        context.deliverResponse(fetchRequest.correlationId, fetchRequest.destinationId(),
-            context.fetchResponse(epoch, otherNodeId, batch2, 3L, Errors.NONE));
+        context.deliverResponse(
+            fetchRequest.correlationId(),
+            fetchRequest.destination(),
+            context.fetchResponse(epoch, otherNodeId, batch2, 3L, Errors.NONE)
+        );
         context.client.poll();
 
         // The listener should have seen only the data from the first batch
@@ -2751,14 +3137,18 @@ public class KafkaRaftClientTest {
         assertEquals(OptionalLong.of(10L), context.client.highWatermark());
 
         // Register another listener and verify that it catches up while we remain 'voted'
-        RaftClientTestContext.MockListener secondListener = new RaftClientTestContext.MockListener(OptionalInt.of(localId));
+        RaftClientTestContext.MockListener secondListener = new RaftClientTestContext.MockListener(
+            OptionalInt.of(localId)
+        );
         context.client.register(secondListener);
         context.client.poll();
         context.assertVotedCandidate(candidateEpoch, otherNodeId);
 
-        // Note the offset is 8 because the record at offset 9 is a control record
-        context.pollUntil(() -> secondListener.lastCommitOffset().equals(OptionalLong.of(8L)));
-        assertEquals(OptionalLong.of(8L), secondListener.lastCommitOffset());
+        // Note the offset is 9 because from offsets 0 to 8 there are data records,
+        // at offset 9 there is a control record and the raft client sends control record to the
+        // raft listener
+        context.pollUntil(() -> secondListener.lastCommitOffset().equals(OptionalLong.of(9L)));
+        assertEquals(OptionalLong.of(9L), secondListener.lastCommitOffset());
         assertEquals(OptionalInt.empty(), secondListener.currentClaimedEpoch());
     }
 
@@ -2796,20 +3186,84 @@ public class KafkaRaftClientTest {
 
         // Timeout the election and become candidate
         int candidateEpoch = epoch + 2;
-        context.time.sleep(context.electionTimeoutMs() * 2);
+        context.time.sleep(context.electionTimeoutMs() * 2L);
         context.client.poll();
         context.assertVotedCandidate(candidateEpoch, localId);
 
         // Register another listener and verify that it catches up
-        RaftClientTestContext.MockListener secondListener = new RaftClientTestContext.MockListener(OptionalInt.of(localId));
+        RaftClientTestContext.MockListener secondListener = new RaftClientTestContext.MockListener(
+            OptionalInt.of(localId)
+        );
         context.client.register(secondListener);
         context.client.poll();
         context.assertVotedCandidate(candidateEpoch, localId);
 
-        // Note the offset is 8 because the record at offset 9 is a control record
-        context.pollUntil(() -> secondListener.lastCommitOffset().equals(OptionalLong.of(8L)));
-        assertEquals(OptionalLong.of(8L), secondListener.lastCommitOffset());
+        // Note the offset is 9 because from offsets 0 to 8 there are data records,
+        // at offset 9 there is a control record and the raft client sends control record to the
+        // raft listener
+        context.pollUntil(() -> secondListener.lastCommitOffset().equals(OptionalLong.of(9L)));
+        assertEquals(OptionalLong.of(9L), secondListener.lastCommitOffset());
         assertEquals(OptionalInt.empty(), secondListener.currentClaimedEpoch());
+    }
+
+    @Test
+    public void testHandleLeaderChangeFiresAfterUnattachedRegistration() throws Exception {
+        // When registering a listener while the replica is unattached, it should get notified
+        // with the current epoch
+        // When transitioning to follower, expect another notification with the leader and epoch
+
+        int localId = 0;
+        int otherNodeId = 1;
+        int epoch = 7;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withUnknownLeader(epoch)
+            .build();
+
+        // Register another listener and verify that it is notified of latest epoch
+        RaftClientTestContext.MockListener secondListener = new RaftClientTestContext.MockListener(
+            OptionalInt.of(localId)
+        );
+        context.client.register(secondListener);
+        context.client.poll();
+
+        // Expected leader change notification
+        LeaderAndEpoch expectedLeaderAndEpoch = new LeaderAndEpoch(OptionalInt.empty(), epoch);
+        assertEquals(expectedLeaderAndEpoch, secondListener.currentLeaderAndEpoch());
+
+        // Transition to follower and then expect a leader changed notification
+        context.deliverRequest(context.beginEpochRequest(epoch, otherNodeId));
+        context.pollUntilResponse();
+
+        // Expected leader change notification
+        expectedLeaderAndEpoch = new LeaderAndEpoch(OptionalInt.of(otherNodeId), epoch);
+        assertEquals(expectedLeaderAndEpoch, secondListener.currentLeaderAndEpoch());
+    }
+
+    @Test
+    public void testHandleLeaderChangeFiresAfterFollowerRegistration() throws Exception {
+        // When registering a listener while the replica is a follower, it should get notified with
+        // the current leader and epoch
+
+        int localId = 0;
+        int otherNodeId = 1;
+        int epoch = 7;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withElectedLeader(epoch, otherNodeId)
+            .build();
+
+        // Register another listener and verify that it is notified of latest leader and epoch
+        RaftClientTestContext.MockListener secondListener = new RaftClientTestContext.MockListener(
+            OptionalInt.of(localId)
+        );
+        context.client.register(secondListener);
+        context.client.poll();
+
+        LeaderAndEpoch expectedLeaderAndEpoch = new LeaderAndEpoch(OptionalInt.of(otherNodeId), epoch);
+        assertEquals(expectedLeaderAndEpoch, secondListener.currentLeaderAndEpoch());
     }
 
     @Test
@@ -2818,21 +3272,30 @@ public class KafkaRaftClientTest {
         // This is designed for tooling/debugging use cases.
 
         Set<Integer> voters = Utils.mkSet(1, 2);
+        List<InetSocketAddress> bootstrapServers = voters
+            .stream()
+            .map(RaftClientTestContext::mockAddress)
+            .collect(Collectors.toList());
+
         RaftClientTestContext context = new RaftClientTestContext.Builder(OptionalInt.empty(), voters)
+            .withBootstrapServers(bootstrapServers)
             .build();
 
         // First fetch discovers the current leader and epoch
 
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest1 = context.assertSentFetchRequest();
-        assertTrue(voters.contains(fetchRequest1.destinationId()));
+        assertTrue(context.bootstrapIds.contains(fetchRequest1.destination().id()));
         context.assertFetchRequestData(fetchRequest1, 0, 0L, 0);
 
         int leaderEpoch = 5;
         int leaderId = 1;
 
-        context.deliverResponse(fetchRequest1.correlationId, fetchRequest1.destinationId(),
-            context.fetchResponse(5, leaderId, MemoryRecords.EMPTY, 0L, Errors.FENCED_LEADER_EPOCH));
+        context.deliverResponse(
+            fetchRequest1.correlationId(),
+            fetchRequest1.destination(),
+            context.fetchResponse(5, leaderId, MemoryRecords.EMPTY, 0L, Errors.FENCED_LEADER_EPOCH)
+        );
         context.client.poll();
         context.assertElectedLeader(leaderEpoch, leaderId);
 
@@ -2840,13 +3303,16 @@ public class KafkaRaftClientTest {
 
         context.pollUntilRequest();
         RaftRequest.Outbound fetchRequest2 = context.assertSentFetchRequest();
-        assertEquals(leaderId, fetchRequest2.destinationId());
+        assertEquals(leaderId, fetchRequest2.destination().id());
         context.assertFetchRequestData(fetchRequest2, leaderEpoch, 0L, 0);
 
         List<String> records = Arrays.asList("a", "b", "c");
         MemoryRecords batch1 = context.buildBatch(0L, 3, records);
-        context.deliverResponse(fetchRequest2.correlationId, fetchRequest2.destinationId(),
-            context.fetchResponse(leaderEpoch, leaderId, batch1, 0L, Errors.NONE));
+        context.deliverResponse(
+            fetchRequest2.correlationId(),
+            fetchRequest2.destination(),
+            context.fetchResponse(leaderEpoch, leaderId, batch1, 0L, Errors.NONE)
+        );
         context.client.poll();
         assertEquals(3L, context.log.endOffset().offset);
         assertEquals(3, context.log.lastFetchedEpoch());
@@ -2856,4 +3322,31 @@ public class KafkaRaftClientTest {
         return metrics.metrics().get(metrics.metricName(name, "raft-metrics"));
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testAppendWithRequiredBaseOffset(boolean correctOffset) throws Exception {
+        int localId = 0;
+        int otherNodeId = 1;
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+                .build();
+        context.becomeLeader();
+        assertEquals(OptionalInt.of(localId), context.currentLeader());
+        int epoch = context.currentEpoch();
+
+        if (correctOffset) {
+            assertEquals(1L, context.client.scheduleAtomicAppend(epoch,
+                OptionalLong.of(1),
+                singletonList("a")));
+            context.deliverRequest(context.beginEpochRequest(epoch + 1, otherNodeId));
+            context.pollUntilResponse();
+        } else {
+            assertThrows(UnexpectedBaseOffsetException.class, () -> {
+                context.client.scheduleAtomicAppend(epoch,
+                    OptionalLong.of(2),
+                    singletonList("a"));
+            });
+        }
+    }
 }

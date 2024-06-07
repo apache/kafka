@@ -24,9 +24,9 @@ import java.util.Set;
 
 /**
  * This is a hash set which can be snapshotted.
- *
- * See {@SnapshottableHashTable} for more details about the implementation.
- *
+ * <br>
+ * See {@link SnapshottableHashTable} for more details about the implementation.
+ * <br>
  * This class requires external synchronization.  Null values are not supported.
  *
  * @param <T>   The value type of the set.
@@ -231,9 +231,8 @@ public class TimelineHashSet<T>
     @Override
     public int hashCode() {
         int hash = 0;
-        Iterator<T> iter = iterator();
-        while (iter.hasNext()) {
-            hash += iter.next().hashCode();
+        for (T t : this) {
+            hash += t.hashCode();
         }
         return hash;
     }

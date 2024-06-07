@@ -16,16 +16,18 @@
  */
 package org.apache.kafka.streams.integration;
 
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.internals.LegacyKafkaConsumer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
+import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
-import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentListener;
 import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
@@ -90,7 +92,7 @@ public class TaskAssignorIntegrationTest {
         // ensure these configurations wind up where they belong, and any number of future code changes
         // could break this change.
 
-        final String testId = safeUniqueTestName(getClass(), testName);
+        final String testId = safeUniqueTestName(testName);
         final String appId = "appId_" + testId;
         final String inputTopic = "input" + testId;
 
@@ -131,31 +133,36 @@ public class TaskAssignorIntegrationTest {
 
             final Field mainConsumer = StreamThread.class.getDeclaredField("mainConsumer");
             mainConsumer.setAccessible(true);
-            final KafkaConsumer<?, ?> consumer = (KafkaConsumer<?, ?>) mainConsumer.get(streamThread);
+            final KafkaConsumer<?, ?> parentConsumer = (KafkaConsumer<?, ?>) mainConsumer.get(streamThread);
 
-            final Field assignors = KafkaConsumer.class.getDeclaredField("assignors");
+            final Field delegate = KafkaConsumer.class.getDeclaredField("delegate");
+            delegate.setAccessible(true);
+            final Consumer<?, ?> consumer = (Consumer<?, ?>)  delegate.get(parentConsumer);
+            assertThat(consumer, instanceOf(LegacyKafkaConsumer.class));
+
+            final Field assignors = LegacyKafkaConsumer.class.getDeclaredField("assignors");
             assignors.setAccessible(true);
             final List<ConsumerPartitionAssignor> consumerPartitionAssignors = (List<ConsumerPartitionAssignor>) assignors.get(consumer);
             final StreamsPartitionAssignor streamsPartitionAssignor = (StreamsPartitionAssignor) consumerPartitionAssignors.get(0);
 
             final Field assignmentConfigs = StreamsPartitionAssignor.class.getDeclaredField("assignmentConfigs");
             assignmentConfigs.setAccessible(true);
-            final AssignorConfiguration.AssignmentConfigs configs = (AssignorConfiguration.AssignmentConfigs) assignmentConfigs.get(streamsPartitionAssignor);
+            final AssignmentConfigs configs = (AssignmentConfigs) assignmentConfigs.get(streamsPartitionAssignor);
 
             final Field assignmentListenerField = StreamsPartitionAssignor.class.getDeclaredField("assignmentListener");
             assignmentListenerField.setAccessible(true);
             final AssignmentListener actualAssignmentListener = (AssignmentListener) assignmentListenerField.get(streamsPartitionAssignor);
 
-            final Field taskAssignorSupplierField = StreamsPartitionAssignor.class.getDeclaredField("taskAssignorSupplier");
+            final Field taskAssignorSupplierField = StreamsPartitionAssignor.class.getDeclaredField("internalTaskAssignorSupplier");
             taskAssignorSupplierField.setAccessible(true);
             final Supplier<TaskAssignor> taskAssignorSupplier =
                 (Supplier<TaskAssignor>) taskAssignorSupplierField.get(streamsPartitionAssignor);
             final TaskAssignor taskAssignor = taskAssignorSupplier.get();
 
-            assertThat(configs.numStandbyReplicas, is(5));
-            assertThat(configs.acceptableRecoveryLag, is(6L));
-            assertThat(configs.maxWarmupReplicas, is(7));
-            assertThat(configs.probingRebalanceIntervalMs, is(480000L));
+            assertThat(configs.numStandbyReplicas(), is(5));
+            assertThat(configs.acceptableRecoveryLag(), is(6L));
+            assertThat(configs.maxWarmupReplicas(), is(7));
+            assertThat(configs.probingRebalanceIntervalMs(), is(480000L));
             assertThat(actualAssignmentListener, sameInstance(configuredAssignmentListener));
             assertThat(taskAssignor, instanceOf(MyTaskAssignor.class));
         }

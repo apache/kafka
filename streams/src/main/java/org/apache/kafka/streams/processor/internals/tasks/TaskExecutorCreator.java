@@ -17,8 +17,10 @@
 package org.apache.kafka.streams.processor.internals.tasks;
 
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.processor.internals.TaskExecutionMetadata;
 
 public interface TaskExecutorCreator {
 
-    TaskExecutor create(final TaskManager taskManager, String name, Time time);
+    TaskExecutor create(final TaskManager taskManager, String name, Time time, TaskExecutionMetadata taskExecutionMetadata);
+
 }

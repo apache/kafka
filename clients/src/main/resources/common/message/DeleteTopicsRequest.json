@@ -27,6 +27,7 @@
   //
   // Version 6 reorganizes topics, adds topic IDs and allows topic names to be null.
   "validVersions": "0-6",
+  "deprecatedVersions": "0",
   "flexibleVersions": "4+",
   "fields": [
     { "name": "Topics", "type": "[]DeleteTopicState", "versions": "6+", "about": "The name or topic ID of the topic",

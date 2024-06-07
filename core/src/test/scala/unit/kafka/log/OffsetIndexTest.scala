@@ -19,9 +19,9 @@ package kafka.log
 
 import java.io._
 import java.nio.file.Files
+import java.util
+import java.util.{Collections, Optional}
 import org.junit.jupiter.api.Assertions._
-
-import java.util.{Arrays, Collections, Optional}
 import org.junit.jupiter.api._
 
 import scala.collection._
@@ -29,6 +29,7 @@ import scala.util.Random
 import kafka.utils.TestUtils
 import org.apache.kafka.common.errors.InvalidOffsetException
 import org.apache.kafka.storage.internals.log.{OffsetIndex, OffsetPosition}
+
 
 import scala.annotation.nowarn
 
@@ -45,7 +46,7 @@ class OffsetIndexTest {
   
   @AfterEach
   def teardown(): Unit = {
-    if(this.idx != null)
+    if (this.idx != null)
       this.idx.file.delete()
   }
 
@@ -62,17 +63,17 @@ class OffsetIndexTest {
     vals.foreach{x => idx.append(x._1, x._2)}
     
     // should be able to find all those values
-    for((logical, physical) <- vals)
+    for ((logical, physical) <- vals)
       assertEquals(new OffsetPosition(logical, physical), idx.lookup(logical),
         "Should be able to find values that are present.")
       
     // for non-present values we should find the offset of the largest value less than or equal to this 
     val valMap = new immutable.TreeMap[Long, (Long, Int)]() ++ vals.map(p => (p._1, p))
     val offsets = (idx.baseOffset until vals.last._1.toInt).toArray
-    Collections.shuffle(Arrays.asList(offsets))
-    for(offset <- offsets.take(30)) {
+    Collections.shuffle(util.Arrays.asList(offsets))
+    for (offset <- offsets.take(30)) {
       val rightAnswer = 
-        if(offset < valMap.firstKey)
+        if (offset < valMap.firstKey)
           new OffsetPosition(idx.baseOffset, 0)
         else
           new OffsetPosition(valMap.to(offset).last._1, valMap.to(offset).last._2._2)
@@ -85,7 +86,7 @@ class OffsetIndexTest {
   def lookupExtremeCases(): Unit = {
     assertEquals(new OffsetPosition(idx.baseOffset, 0), idx.lookup(idx.baseOffset),
       "Lookup on empty file")
-    for(i <- 0 until idx.maxEntries)
+    for (i <- 0 until idx.maxEntries)
       idx.append(idx.baseOffset + i + 1, i)
     // check first and last entry
     assertEquals(new OffsetPosition(idx.baseOffset, 0), idx.lookup(idx.baseOffset))
@@ -107,7 +108,7 @@ class OffsetIndexTest {
   
   @Test
   def appendTooMany(): Unit = {
-    for(i <- 0 until idx.maxEntries) {
+    for (i <- 0 until idx.maxEntries) {
       val offset = idx.baseOffset + i + 1
       idx.append(offset, i)
     }
@@ -161,7 +162,7 @@ class OffsetIndexTest {
   def truncate(): Unit = {
     val idx = new OffsetIndex(nonExistentTempFile(), 0L, 10 * 8)
     idx.truncate()
-    for(i <- 1 until 10)
+    for (i <- 1 until 10)
       idx.append(i, i)
       
     // now check the last offset after various truncate points and validate that we can still append to the index.      

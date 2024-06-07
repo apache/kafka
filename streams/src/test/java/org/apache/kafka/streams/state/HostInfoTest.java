@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.common.config.ConfigException;
+import org.junit.jupiter.api.Test;
+
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-
-import org.apache.kafka.common.config.ConfigException;
-import org.junit.Test;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class HostInfoTest {
     

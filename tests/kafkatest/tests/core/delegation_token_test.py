@@ -13,10 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
-from kafkatest.services.kafka import config_property, KafkaService
+from kafkatest.services.kafka import config_property, KafkaService, quorum
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.delegation_tokens import DelegationTokens
@@ -34,7 +35,7 @@ class DelegationTokenTest(Test):
 
         self.test_context = test_context
         self.topic = "topic"
-        self.zk = ZookeeperService(test_context, num_nodes=1)
+        self.zk = ZookeeperService(test_context, num_nodes=1) if quorum.for_test(test_context) == quorum.zk else None
         self.kafka = KafkaService(self.test_context, num_nodes=1, zk=self.zk, zk_chroot="/kafka",
                                   topics={self.topic: {"partitions": 1, "replication-factor": 1}},
                                   server_prop_overrides=[
@@ -67,7 +68,8 @@ client.id=console-consumer
 
 
     def setUp(self):
-        self.zk.start()
+        if self.zk:
+            self.zk.start()
 
     def tearDown(self):
         self.producer.nodes[0].account.remove(self.jaas_deleg_conf_path)
@@ -111,7 +113,8 @@ client.id=console-consumer
         self.delegation_tokens.renew_delegation_token(dt["hmac"], new_expirydate_ms)
 
     @cluster(num_nodes=5)
-    def test_delegation_token_lifecycle(self):
+    @matrix(metadata_quorum=quorum.all_non_upgrade)
+    def test_delegation_token_lifecycle(self, metadata_quorum=quorum.zk):
         self.kafka.start()
         self.delegation_tokens = DelegationTokens(self.kafka, self.test_context)
 

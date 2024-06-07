@@ -17,11 +17,10 @@
 package kafka.server.epoch
 
 import java.io.File
-
-import kafka.log.{UnifiedLog, LogManager}
+import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server._
-import kafka.utils.{MockTime, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetForLeaderPartition, OffsetForLeaderTopic}
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.{EpochEndOffset, OffsetForLeaderTopicResult}
@@ -30,6 +29,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.server.common.OffsetAndEpoch
+import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}

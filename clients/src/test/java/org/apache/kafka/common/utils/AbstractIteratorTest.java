@@ -54,14 +54,14 @@ public class AbstractIteratorTest {
     }
 
     static class ListIterator<T> extends AbstractIterator<T> {
-        private List<T> list;
+        private final List<T> list;
         private int position = 0;
 
         public ListIterator(List<T> l) {
             this.list = l;
         }
 
-        public T makeNext() {
+        protected T makeNext() {
             if (position < list.size())
                 return list.get(position++);
             else

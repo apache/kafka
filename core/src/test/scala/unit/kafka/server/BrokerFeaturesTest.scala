@@ -18,7 +18,7 @@
 package kafka.server
 
 import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.{Features => ServerFeatures, MetadataVersion}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
 
@@ -33,7 +33,7 @@ class BrokerFeaturesTest {
 
   @Test
   def testIncompatibilitiesDueToAbsentFeature(): Unit = {
-    val brokerFeatures = BrokerFeatures.createDefault()
+    val brokerFeatures = BrokerFeatures.createDefault(true)
     val supportedFeatures = Features.supportedFeatures(Map[String, SupportedVersionRange](
       "test_feature_1" -> new SupportedVersionRange(1, 4),
       "test_feature_2" -> new SupportedVersionRange(1, 3)).asJava)
@@ -51,7 +51,7 @@ class BrokerFeaturesTest {
 
   @Test
   def testIncompatibilitiesDueToIncompatibleFeature(): Unit = {
-    val brokerFeatures = BrokerFeatures.createDefault()
+    val brokerFeatures = BrokerFeatures.createDefault(true)
     val supportedFeatures = Features.supportedFeatures(Map[String, SupportedVersionRange](
       "test_feature_1" -> new SupportedVersionRange(1, 4),
       "test_feature_2" -> new SupportedVersionRange(1, 3)).asJava)
@@ -70,7 +70,7 @@ class BrokerFeaturesTest {
 
   @Test
   def testCompatibleFeatures(): Unit = {
-    val brokerFeatures = BrokerFeatures.createDefault()
+    val brokerFeatures = BrokerFeatures.createDefault(true)
     val supportedFeatures = Features.supportedFeatures(Map[String, SupportedVersionRange](
       "test_feature_1" -> new SupportedVersionRange(1, 4),
       "test_feature_2" -> new SupportedVersionRange(1, 3)).asJava)
@@ -86,7 +86,7 @@ class BrokerFeaturesTest {
 
   @Test
   def testDefaultFinalizedFeatures(): Unit = {
-    val brokerFeatures = BrokerFeatures.createDefault()
+    val brokerFeatures = BrokerFeatures.createDefault(true)
     val supportedFeatures = Features.supportedFeatures(Map[String, SupportedVersionRange](
       "test_feature_1" -> new SupportedVersionRange(1, 4),
       "test_feature_2" -> new SupportedVersionRange(1, 3),
@@ -94,7 +94,8 @@ class BrokerFeaturesTest {
     brokerFeatures.setSupportedFeatures(supportedFeatures)
 
     val expectedFeatures = Map[String, Short](
-      MetadataVersion.FEATURE_NAME -> MetadataVersion.latest().featureLevel(),
+      MetadataVersion.FEATURE_NAME -> MetadataVersion.latestTesting().featureLevel(),
+      ServerFeatures.GROUP_VERSION.featureName() -> ServerFeatures.GROUP_VERSION.latestTesting(),
       "test_feature_1" -> 4,
       "test_feature_2" -> 3,
       "test_feature_3" -> 7)

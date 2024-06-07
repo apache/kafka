@@ -16,9 +16,8 @@ import java.util.Properties
 import java.util.concurrent.ExecutionException
 import kafka.api.GroupAuthorizerIntegrationTest._
 import kafka.security.authorizer.AclAuthorizer
-import kafka.security.authorizer.AclEntry.WildcardHost
-import kafka.server.{BaseRequestTest, KafkaConfig}
-import kafka.utils.{TestInfoUtils, TestUtils}
+import kafka.server.BaseRequestTest
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
@@ -29,7 +28,11 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{AuthenticationContext, KafkaPrincipal}
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
+import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
+import org.apache.kafka.security.authorizer.AclEntry.WILDCARD_HOST
+import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -74,23 +77,23 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.put(KafkaConfig.BrokerIdProp, brokerId.toString)
+    properties.put(ServerConfigs.BROKER_ID_CONFIG, brokerId.toString)
     addNodeProperties(properties)
   }
 
   private def addNodeProperties(properties: Properties): Unit = {
     if (isKRaftTest()) {
-      properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[StandardAuthorizer].getName)
+      properties.put(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[StandardAuthorizer].getName)
       properties.put(StandardAuthorizer.SUPER_USERS_CONFIG, BrokerPrincipal.toString)
     } else {
-      properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[AclAuthorizer].getName)
+      properties.put(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[AclAuthorizer].getName)
     }
 
-    properties.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
-    properties.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
-    properties.put(KafkaConfig.TransactionsTopicPartitionsProp, "1")
-    properties.put(KafkaConfig.TransactionsTopicReplicationFactorProp, "1")
-    properties.put(KafkaConfig.TransactionsTopicMinISRProp, "1")
+    properties.put(GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, "1")
+    properties.put(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, "1")
+    properties.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, "1")
+    properties.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, "1")
+    properties.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_MIN_ISR_CONFIG, "1")
     properties.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[GroupPrincipalBuilder].getName)
   }
 
@@ -110,10 +113,10 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
   private def createAcl(aclOperation: AclOperation,
                         aclPermissionType: AclPermissionType,
                         principal: KafkaPrincipal = ClientPrincipal): AccessControlEntry = {
-    new AccessControlEntry(principal.toString, WildcardHost, aclOperation, aclPermissionType)
+    new AccessControlEntry(principal.toString, WILDCARD_HOST, aclOperation, aclPermissionType)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testUnauthorizedProduceAndConsume(quorum: String): Unit = {
     val topic = "topic"
@@ -134,7 +137,7 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
     assertEquals(Set(topic), consumeException.unauthorizedTopics.asScala)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
   def testAuthorizedProduceAndConsume(quorum: String): Unit = {
     val topic = "topic"

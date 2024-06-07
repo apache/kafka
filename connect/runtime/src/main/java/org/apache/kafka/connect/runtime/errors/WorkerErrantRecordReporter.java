@@ -43,22 +43,24 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 public class WorkerErrantRecordReporter implements ErrantRecordReporter {
 
     private static final Logger log = LoggerFactory.getLogger(WorkerErrantRecordReporter.class);
 
-    private final RetryWithToleranceOperator retryWithToleranceOperator;
+    private final RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator;
     private final Converter keyConverter;
     private final Converter valueConverter;
     private final HeaderConverter headerConverter;
 
     // Visible for testing
     protected final ConcurrentMap<TopicPartition, List<Future<Void>>> futures;
+    private final AtomicReference<Throwable> taskPutException;
 
     public WorkerErrantRecordReporter(
-        RetryWithToleranceOperator retryWithToleranceOperator,
+        RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator,
         Converter keyConverter,
         Converter valueConverter,
         HeaderConverter headerConverter
@@ -68,16 +70,17 @@ public class WorkerErrantRecordReporter implements ErrantRecordReporter {
         this.valueConverter = valueConverter;
         this.headerConverter = headerConverter;
         this.futures = new ConcurrentHashMap<>();
+        this.taskPutException = new AtomicReference<>();
     }
 
     @Override
     public Future<Void> report(SinkRecord record, Throwable error) {
-        ConsumerRecord<byte[], byte[]> consumerRecord;
+        ProcessingContext<ConsumerRecord<byte[], byte[]>> context;
 
         // Most of the records will be an internal sink record, but the task could potentially
         // report modified or new records, so handle both cases
         if (record instanceof InternalSinkRecord) {
-            consumerRecord = ((InternalSinkRecord) record).originalRecord();
+            context = ((InternalSinkRecord) record).context();
         } else {
             // Generate a new consumer record from the modified sink record. We prefer
             // to send the original consumer record (pre-transformed) to the DLQ,
@@ -101,15 +104,17 @@ public class WorkerErrantRecordReporter implements ErrantRecordReporter {
             int keyLength = key != null ? key.length : -1;
             int valLength = value != null ? value.length : -1;
 
-            consumerRecord = new ConsumerRecord<>(record.topic(), record.kafkaPartition(),
+            ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>(record.topic(), record.kafkaPartition(),
                 record.kafkaOffset(), record.timestamp(), record.timestampType(), keyLength,
                 valLength, key, value, headers, Optional.empty());
+            context = new ProcessingContext<>(consumerRecord);
         }
 
-        Future<Void> future = retryWithToleranceOperator.executeFailed(Stage.TASK_PUT, SinkTask.class, consumerRecord, error);
+        Future<Void> future = retryWithToleranceOperator.executeFailed(context, Stage.TASK_PUT, SinkTask.class, error);
+        taskPutException.compareAndSet(null, error);
 
         if (!future.isDone()) {
-            TopicPartition partition = new TopicPartition(consumerRecord.topic(), consumerRecord.partition());
+            TopicPartition partition = new TopicPartition(context.original().topic(), context.original().partition());
             futures.computeIfAbsent(partition, p -> new ArrayList<>()).add(future);
         }
         return future;
@@ -152,6 +157,12 @@ public class WorkerErrantRecordReporter implements ErrantRecordReporter {
                 .filter(Objects::nonNull)
                 .flatMap(List::stream)
                 .collect(Collectors.toList());
+    }
+
+    public synchronized void maybeThrowAsyncError() {
+        if (taskPutException.get() != null && !retryWithToleranceOperator.withinToleranceLimits()) {
+            throw new ConnectException("Tolerance exceeded in error handler", taskPutException.get());
+        }
     }
 
     /**

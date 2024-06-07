@@ -42,7 +42,7 @@ public class TableProcessorNodeTest {
         );
 
         final String asString = node.toString();
-        final String expected = "storeBuilder=null";
+        final String expected = "storeFactory=null";
         assertTrue(
             String.format(
                 "Expected toString to return string with \"%s\", received: %s",

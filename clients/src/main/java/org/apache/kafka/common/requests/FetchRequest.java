@@ -28,7 +28,6 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -317,20 +316,18 @@ public class FetchRequest extends AbstractRequest {
 
         @Override
         public String toString() {
-            StringBuilder bld = new StringBuilder();
-            bld.append("(type=FetchRequest").
-                    append(", replicaId=").append(replicaId).
-                    append(", maxWait=").append(maxWait).
-                    append(", minBytes=").append(minBytes).
-                    append(", maxBytes=").append(maxBytes).
-                    append(", fetchData=").append(toFetch).
-                    append(", isolationLevel=").append(isolationLevel).
-                    append(", removed=").append(Utils.join(removed, ", ")).
-                    append(", replaced=").append(Utils.join(replaced, ", ")).
-                    append(", metadata=").append(metadata).
-                    append(", rackId=").append(rackId).
-                    append(")");
-            return bld.toString();
+            return "(type=FetchRequest" +
+                    ", replicaId=" + replicaId +
+                    ", maxWait=" + maxWait +
+                    ", minBytes=" + minBytes +
+                    ", maxBytes=" + maxBytes +
+                    ", fetchData=" + toFetch +
+                    ", isolationLevel=" + isolationLevel +
+                    ", removed=" + removed.stream().map(TopicIdPartition::toString).collect(Collectors.joining(", ")) +
+                    ", replaced=" + replaced.stream().map(TopicIdPartition::toString).collect(Collectors.joining(", ")) +
+                    ", metadata=" + metadata +
+                    ", rackId=" + rackId +
+                    ")";
         }
     }
 

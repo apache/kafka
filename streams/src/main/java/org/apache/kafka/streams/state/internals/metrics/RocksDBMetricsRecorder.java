@@ -373,14 +373,14 @@ public class RocksDBMetricsRecorder {
                         // values of RocksDB properties are of type unsigned long in C++, i.e., in Java we need to use
                         // BigInteger and construct the object from the byte representation of the value
                         result = new BigInteger(1, longToBytes(
-                            valueProvider.db.getAggregatedLongProperty(ROCKSDB_PROPERTIES_PREFIX + propertyName)
+                            valueProvider.db.getLongProperty(ROCKSDB_PROPERTIES_PREFIX + propertyName)
                         ));
                         break;
                     } else {
                         // values of RocksDB properties are of type unsigned long in C++, i.e., in Java we need to use
                         // BigInteger and construct the object from the byte representation of the value
                         result = result.add(new BigInteger(1, longToBytes(
-                            valueProvider.db.getAggregatedLongProperty(ROCKSDB_PROPERTIES_PREFIX + propertyName)
+                            valueProvider.db.getLongProperty(ROCKSDB_PROPERTIES_PREFIX + propertyName)
                         )));
                     }
                 } catch (final RocksDBException e) {

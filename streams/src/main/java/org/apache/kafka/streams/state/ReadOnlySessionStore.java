@@ -37,7 +37,7 @@ public interface ReadOnlySessionStore<K, AGG> {
      * is the upper bound of the search interval, and the method returns all sessions that overlap
      * with the search interval.
      * Thus, if a session ends before earliestSessionEndTime, or starts after latestSessionStartTime
-     * if won't be contained in the result:
+     * it won't be contained in the result:
      * <pre>{@code
      * earliestSessionEndTime: ESET
      * latestSessionStartTime: LSST
@@ -47,7 +47,6 @@ public interface ReadOnlySessionStore<K, AGG> {
      * }</pre>
      * <p>
      * This iterator must be closed after use.
-     *
      *
      * @param key                    the key to return sessions for
      * @param earliestSessionEndTime the end timestamp of the earliest session to search for, where
@@ -72,7 +71,7 @@ public interface ReadOnlySessionStore<K, AGG> {
      * is the upper bound of the search interval, and the method returns all sessions that overlap
      * with the search interval.
      * Thus, if a session ends before earliestSessionEndTime, or starts after latestSessionStartTime
-     * if won't be contained in the result:
+     * it won't be contained in the result:
      * <pre>{@code
      * earliestSessionEndTime: ESET
      * latestSessionStartTime: LSST
@@ -106,7 +105,7 @@ public interface ReadOnlySessionStore<K, AGG> {
      * is the upper bound of the search interval, and the method returns all sessions that overlap
      * with the search interval.
      * Thus, if a session ends before earliestSessionEndTime, or starts after latestSessionStartTime
-     * if won't be contained in the result:
+     * it won't be contained in the result:
      * <pre>{@code
      * earliestSessionEndTime: ESET
      * latestSessionStartTime: LSST
@@ -140,7 +139,7 @@ public interface ReadOnlySessionStore<K, AGG> {
      * is the upper bound of the search interval, and the method returns all sessions that overlap
      * with the search interval.
      * Thus, if a session ends before earliestSessionEndTime, or starts after latestSessionStartTime
-     * if won't be contained in the result:
+     * it won't be contained in the result:
      * <pre>{@code
      * earliestSessionEndTime: ESET
      * latestSessionStartTime: LSST
@@ -175,7 +174,7 @@ public interface ReadOnlySessionStore<K, AGG> {
      * is the upper bound of the search interval, and the method returns all sessions that overlap
      * with the search interval.
      * Thus, if a session ends before earliestSessionEndTime, or starts after latestSessionStartTime
-     * if won't be contained in the result:
+     * it won't be contained in the result:
      * <pre>{@code
      * earliestSessionEndTime: ESET
      * latestSessionStartTime: LSST
@@ -213,7 +212,7 @@ public interface ReadOnlySessionStore<K, AGG> {
      * is the upper bound of the search interval, and the method returns all sessions that overlap
      * with the search interval.
      * Thus, if a session ends before earliestSessionEndTime, or starts after latestSessionStartTime
-     * if won't be contained in the result:
+     * it won't be contained in the result:
      * <pre>{@code
      * earliestSessionEndTime: ESET
      * latestSessionStartTime: LSST
@@ -251,7 +250,7 @@ public interface ReadOnlySessionStore<K, AGG> {
      * is the upper bound of the search interval, and the method returns all sessions that overlap
      * with the search interval.
      * Thus, if a session ends before earliestSessionEndTime, or starts after latestSessionStartTime
-     * if won't be contained in the result:
+     * it won't be contained in the result:
      * <pre>{@code
      * earliestSessionEndTime: ESET
      * latestSessionStartTime: LSST
@@ -289,7 +288,7 @@ public interface ReadOnlySessionStore<K, AGG> {
      * is the upper bound of the search interval, and the method returns all sessions that overlap
      * with the search interval.
      * Thus, if a session ends before earliestSessionEndTime, or starts after latestSessionStartTime
-     * if won't be contained in the result:
+     * it won't be contained in the result:
      * <pre>{@code
      * earliestSessionEndTime: ESET
      * latestSessionStartTime: LSST

@@ -20,22 +20,26 @@ package kafka.server
 import java.lang.{Byte => JByte}
 import java.util.Collections
 import kafka.network.RequestChannel
-import kafka.security.authorizer.AclEntry
 import kafka.utils.CoreUtils
+import org.apache.kafka.clients.admin.EndpointType
 import org.apache.kafka.common.acl.AclOperation
+import org.apache.kafka.common.acl.AclOperation.DESCRIBE
 import org.apache.kafka.common.errors.ClusterAuthorizationException
-import org.apache.kafka.common.requests.RequestContext
+import org.apache.kafka.common.message.DescribeClusterResponseData
+import org.apache.kafka.common.message.DescribeClusterResponseData.DescribeClusterBrokerCollection
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.requests.{DescribeClusterRequest, RequestContext}
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType.CLUSTER
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 
-import scala.collection.{Map, Seq}
+import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
 class AuthHelper(authorizer: Option[Authorizer]) {
-
   def authorize(requestContext: RequestContext,
                 operation: AclOperation,
                 resourceType: ResourceType,
@@ -56,7 +60,7 @@ class AuthHelper(authorizer: Option[Authorizer]) {
   }
 
   def authorizedOperations(request: RequestChannel.Request, resource: Resource): Int = {
-    val supportedOps = AclEntry.supportedOperations(resource.resourceType).toList
+    val supportedOps = AclEntry.supportedOperations(resource.resourceType).asScala.toList
     val authorizedOps = authorizer match {
       case Some(authZ) =>
         val resourcePattern = new ResourcePattern(resource.resourceType, resource.name, PatternType.LITERAL)
@@ -93,21 +97,6 @@ class AuthHelper(authorizer: Option[Authorizer]) {
     }
   }
 
-  def partitionMapByAuthorized[K, V](requestContext: RequestContext,
-                                     operation: AclOperation,
-                                     resourceType: ResourceType,
-                                     resources: Map[K, V],
-                                     logIfAllowed: Boolean = true,
-                                     logIfDenied: Boolean = true)(resourceName: K => String): (Map[K, V], Map[K, V]) = {
-    authorizer match {
-      case Some(_) =>
-        val authorizedResourceNames = filterByAuthorized(requestContext, operation, resourceType,
-          resources.keySet, logIfAllowed, logIfDenied)(resourceName)
-        resources.partition { case (k, _) => authorizedResourceNames.contains(resourceName(k)) }
-      case None => (resources, Map.empty)
-    }
-  }
-
   def filterByAuthorized[T](requestContext: RequestContext,
                             operation: AclOperation,
                             resourceType: ResourceType,
@@ -130,4 +119,58 @@ class AuthHelper(authorizer: Option[Authorizer]) {
     }
   }
 
+  def computeDescribeClusterResponse(
+    request: RequestChannel.Request,
+    expectedEndpointType: EndpointType,
+    clusterId: String,
+    getNodes: () => DescribeClusterBrokerCollection,
+    getControllerId: () => Int
+  ): DescribeClusterResponseData = {
+    val describeClusterRequest = request.body[DescribeClusterRequest]
+    val requestEndpointType = EndpointType.fromId(describeClusterRequest.data().endpointType())
+    if (requestEndpointType.equals(EndpointType.UNKNOWN)) {
+      return new DescribeClusterResponseData().
+        setErrorCode(if (request.header.data().requestApiVersion() == 0) {
+          Errors.INVALID_REQUEST.code()
+        } else {
+          Errors.UNSUPPORTED_ENDPOINT_TYPE.code()
+        }).
+        setErrorMessage("Unsupported endpoint type " + describeClusterRequest.data().endpointType().toInt)
+    } else if (!expectedEndpointType.equals(requestEndpointType)) {
+      return new DescribeClusterResponseData().
+        setErrorCode(if (request.header.data().requestApiVersion() == 0) {
+          Errors.INVALID_REQUEST.code()
+        } else {
+          Errors.MISMATCHED_ENDPOINT_TYPE.code()
+        }).
+        setErrorMessage("The request was sent to an endpoint of type " + expectedEndpointType +
+          ", but we wanted an endpoint of type " + requestEndpointType)
+    }
+    var clusterAuthorizedOperations = Int.MinValue // Default value in the schema
+    // get cluster authorized operations
+    if (describeClusterRequest.data.includeClusterAuthorizedOperations) {
+      if (authorize(request.context, DESCRIBE, CLUSTER, CLUSTER_NAME))
+        clusterAuthorizedOperations = authorizedOperations(request, Resource.CLUSTER)
+      else
+        clusterAuthorizedOperations = 0
+    }
+    // Get the node list and the controller ID.
+    val nodes = getNodes()
+    val controllerId = getControllerId()
+    // If the provided controller ID is not in the node list, return -1 instead
+    // to avoid confusing the client. This could happen in a case where we know
+    // the controller ID, but we don't yet have KIP-919 information about that
+    // controller.
+    val effectiveControllerId = if (nodes.find(controllerId) == null) {
+      -1
+    } else {
+      controllerId
+    }
+    new DescribeClusterResponseData().
+      setClusterId(clusterId).
+      setControllerId(effectiveControllerId).
+      setClusterAuthorizedOperations(clusterAuthorizedOperations).
+      setBrokers(nodes).
+      setEndpointType(expectedEndpointType.id())
+  }
 }

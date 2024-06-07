@@ -140,7 +140,7 @@ public class SslPrincipalMapper {
 
             if (toLowerCase && result != null) {
                 result = result.toLowerCase(Locale.ENGLISH);
-            } else if (toUpperCase & result != null) {
+            } else if (toUpperCase && result != null) {
                 result = result.toUpperCase(Locale.ENGLISH);
             }
 
@@ -178,7 +178,7 @@ public class SslPrincipalMapper {
                     final StringBuilder sb = new StringBuilder(value.length() + 1);
                     final int groupStart = backRefMatcher.start(1);
 
-                    sb.append(value.substring(0, groupStart - 1));
+                    sb.append(value, 0, groupStart - 1);
                     sb.append("\\");
                     sb.append(value.substring(groupStart - 1));
                     value = sb.toString();

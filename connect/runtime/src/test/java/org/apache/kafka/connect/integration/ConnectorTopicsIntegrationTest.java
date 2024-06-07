@@ -150,8 +150,8 @@ public class ConnectorTopicsIntegrationTest {
         // deleting a connector resets its active topics
         connect.deleteConnector(BAR_CONNECTOR);
 
-        connect.assertions().assertConnectorAndTasksAreNotRunning(BAR_CONNECTOR,
-                "Connector tasks did not stop in time.");
+        connect.assertions().assertConnectorDoesNotExist(BAR_CONNECTOR,
+                "Connector wasn't deleted in time.");
 
         connect.assertions().assertConnectorActiveTopics(BAR_CONNECTOR, Collections.emptyList(),
                 "Active topic set is not empty for deleted connector: " + BAR_CONNECTOR);
@@ -199,14 +199,14 @@ public class ConnectorTopicsIntegrationTest {
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(SINK_CONNECTOR, NUM_TASKS,
                 "Connector tasks did not start in time.");
 
-        connect.assertions().assertConnectorActiveTopics(SINK_CONNECTOR, Arrays.asList(FOO_TOPIC),
-                "Active topic set is not: " + Arrays.asList(FOO_TOPIC) + " for connector: " + SINK_CONNECTOR);
+        connect.assertions().assertConnectorActiveTopics(SINK_CONNECTOR, Collections.singletonList(FOO_TOPIC),
+                "Active topic set is not: " + Collections.singletonList(FOO_TOPIC) + " for connector: " + SINK_CONNECTOR);
 
         // deleting a connector resets its active topics
         connect.deleteConnector(FOO_CONNECTOR);
 
-        connect.assertions().assertConnectorAndTasksAreNotRunning(FOO_CONNECTOR,
-                "Connector tasks did not stop in time.");
+        connect.assertions().assertConnectorDoesNotExist(FOO_CONNECTOR,
+                "Connector wasn't deleted in time.");
 
         connect.assertions().assertConnectorActiveTopics(FOO_CONNECTOR, Collections.emptyList(),
                 "Active topic set is not empty for deleted connector: " + FOO_CONNECTOR);
@@ -296,6 +296,7 @@ public class ConnectorTopicsIntegrationTest {
                 }
             }
         }
+        verifiableConsumer.close();
     }
 
     private Map<String, String> defaultSourceConnectorProps(String topic) {

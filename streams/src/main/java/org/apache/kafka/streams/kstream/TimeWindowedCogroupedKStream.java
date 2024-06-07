@@ -41,7 +41,7 @@ import java.time.Duration;
  * materialized view) that can be queried using the name provided in the {@link Materialized} instance.
  * Furthermore, updates to the store are sent downstream into a windowed {@link KTable} changelog stream, where
  * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
- * New events are added to windows until their grace period ends (see {@link TimeWindows#grace(Duration)}).
+ * New events are added to windows until their grace period ends (see {@link TimeWindows#ofSizeAndGrace(Duration, Duration)}).
  * <p>
  * A {@code TimeWindowedCogroupedKStream} must be obtained from a {@link CogroupedKStream} via
  * {@link CogroupedKStream#windowedBy(Windows)}.
@@ -164,8 +164,8 @@ public interface TimeWindowedCogroupedKStream<K, V> {
      * <pre>{@code
      * KafkaStreams streams = ... // counting words
      * Store queryableStoreName = ... // the queryableStoreName should be the name of the store as defined by the Materialized instance
-     * ReadOnlyWindowStore<K, ValueAndTimestamp<V>> localWindowStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, ValueAndTimestamp<V>>timestampedWindowStore());
-     *
+     * StoreQueryParameters<ReadOnlyKeyValueStore<K, ValueAndTimestamp<VR>>> storeQueryParams = StoreQueryParameters.fromNameAndType(queryableStoreName, QueryableStoreTypes.timestampedWindowStore());
+     * ReadOnlyWindowStore<K, ValueAndTimestamp<VR>> localWindowStore = streams.store(storeQueryParams);
      * K key = "some-word";
      * long fromTime = ...;
      * long toTime = ...;
@@ -221,7 +221,8 @@ public interface TimeWindowedCogroupedKStream<K, V> {
      * <pre>{@code
      * KafkaStreams streams = ... // counting words
      * Store queryableStoreName = ... // the queryableStoreName should be the name of the store as defined by the Materialized instance
-     * ReadOnlyWindowStore<K, ValueAndTimestamp<V>> localWindowStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, ValueAndTimestamp<V>>timestampedWindowStore());
+     * StoreQueryParameters<ReadOnlyKeyValueStore<K, ValueAndTimestamp<VR>>> storeQueryParams = StoreQueryParameters.fromNameAndType(queryableStoreName, QueryableStoreTypes.timestampedWindowStore());
+     * ReadOnlyWindowStore<K, ValueAndTimestamp<VR>> localWindowStore = streams.store(storeQueryParams);
      *
      * K key = "some-word";
      * long fromTime = ...;

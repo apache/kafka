@@ -42,6 +42,7 @@ import java.util.Map;
 
 import static java.lang.String.format;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class JmxToolTest {
@@ -167,7 +168,7 @@ public class JmxToolTest {
         assertNormalExit();
 
         Map<String, String> csv = parseCsv(out);
-        assertTrue(csv.size() > 0);
+        assertFalse(csv.isEmpty());
     }
 
     @Test
@@ -335,6 +336,19 @@ public class JmxToolTest {
 
         Map<String, String> csv = parseCsv(out);
         assertTrue(validDateFormat(dateFormat, csv.get("time")));
+    }
+
+    @Test
+    public void unknownObjectName() {
+        String[] args = new String[]{
+            "--jmx-url", jmxUrl,
+            "--object-name", "kafka.server:type=DummyMetrics,name=MessagesInPerSec",
+            "--wait"
+        };
+
+        String err = executeAndGetErr(args);
+        assertCommandFailure();
+        assertTrue(err.contains("Could not find all requested object names after 10000 ms"));
     }
 
     private static int findRandomOpenPortOnAllLocalInterfaces() throws Exception {

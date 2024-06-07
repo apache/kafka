@@ -25,7 +25,7 @@ import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -37,8 +37,8 @@ import java.util.regex.Pattern;
 
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class RepartitionTopicNamingTest {
 
@@ -162,7 +162,7 @@ public class RepartitionTopicNamingTest {
     }
 
     @Test
-    public void shouldNotReuseRepartitionNodeWithUnamedRepartitionTopics() {
+    public void shouldNotReuseRepartitionNodeWithUnnamedRepartitionTopics() {
         final StreamsBuilder builder = new StreamsBuilder();
         final KGroupedStream<String, String> kGroupedStream = builder.<String, String>stream("topic")
                                                                      .selectKey((k, v) -> k)
@@ -174,7 +174,7 @@ public class RepartitionTopicNamingTest {
     }
 
     @Test
-    public void shouldNotReuseRepartitionNodeWithUnamedRepartitionTopicsKGroupedTable() {
+    public void shouldNotReuseRepartitionNodeWithUnnamedRepartitionTopicsKGroupedTable() {
         final StreamsBuilder builder = new StreamsBuilder();
         final KGroupedTable<String, String> kGroupedTable = builder.<String, String>table("topic").groupBy(KeyValue::pair);
         kGroupedTable.count().toStream().to("output-count");

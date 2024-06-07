@@ -24,7 +24,7 @@ import org.apache.kafka.streams.state.internals.InMemorySessionBytesStoreSupplie
 import org.apache.kafka.streams.state.internals.InMemoryWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.MemoryNavigableLRUCache;
-import org.apache.kafka.streams.state.internals.RocksDbKeyValueBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.RocksDBKeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbSessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbVersionedKeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
@@ -94,7 +94,7 @@ public final class Stores {
      */
     public static KeyValueBytesStoreSupplier persistentKeyValueStore(final String name) {
         Objects.requireNonNull(name, "name cannot be null");
-        return new RocksDbKeyValueBytesStoreSupplier(name, false);
+        return new RocksDBKeyValueBytesStoreSupplier(name, false);
     }
 
     /**
@@ -113,7 +113,7 @@ public final class Stores {
      */
     public static KeyValueBytesStoreSupplier persistentTimestampedKeyValueStore(final String name) {
         Objects.requireNonNull(name, "name cannot be null");
-        return new RocksDbKeyValueBytesStoreSupplier(name, true);
+        return new RocksDBKeyValueBytesStoreSupplier(name, true);
     }
 
     /**
@@ -426,7 +426,7 @@ public final class Stores {
      * Create an in-memory {@link SessionBytesStoreSupplier}.
      *
      * @param name              name of the store (cannot be {@code null})
-     * @param retentionPeriod   length ot time to retain data in the store (cannot be negative)
+     * @param retentionPeriod   length of time to retain data in the store (cannot be negative)
      *                          (note that the retention period must be at least as long enough to
      *                          contain the inactivity gap of the session and the entire grace period.)
      * @return an instance of a {@link  SessionBytesStoreSupplier}

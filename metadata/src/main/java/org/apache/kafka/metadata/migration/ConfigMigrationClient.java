@@ -25,6 +25,7 @@ import org.apache.kafka.common.security.scram.ScramCredential;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 public interface ConfigMigrationClient {
 
@@ -37,6 +38,10 @@ public interface ConfigMigrationClient {
     void iterateClientQuotas(ClientQuotaVisitor visitor);
 
     void iterateBrokerConfigs(BiConsumer<String, Map<String, String>> configConsumer);
+
+    void iterateTopicConfigs(BiConsumer<String, Map<String, String>> configConsumer);
+
+    void readTopicConfigs(String topicName, Consumer<Map<String, String>> configConsumer);
 
     ZkMigrationLeadershipState writeConfigs(
         ConfigResource configResource,

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.admin.internals;
 
+import org.apache.kafka.clients.admin.FenceProducersOptions;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler.ApiResult;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
@@ -34,16 +35,26 @@ import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 public class FenceProducersHandlerTest {
     private final LogContext logContext = new LogContext();
     private final Node node = new Node(1, "host", 1234);
+    private final int requestTimeoutMs = 30000;
+    private final FenceProducersOptions options = new FenceProducersOptions();
 
     @Test
     public void testBuildRequest() {
-        FenceProducersHandler handler = new FenceProducersHandler(logContext);
-        mkSet("foo", "bar", "baz").forEach(transactionalId -> assertLookup(handler, transactionalId));
+        FenceProducersHandler handler = new FenceProducersHandler(options, logContext, requestTimeoutMs);
+        mkSet("foo", "bar", "baz").forEach(transactionalId -> assertLookup(handler, transactionalId, requestTimeoutMs));
+    }
+
+    @Test
+    public void testBuildRequestOptionsTimeout() {
+        final int optionsTimeoutMs = 50000;
+        options.timeoutMs(optionsTimeoutMs);
+        FenceProducersHandler handler = new FenceProducersHandler(options, logContext, requestTimeoutMs);
+        mkSet("foo", "bar", "baz").forEach(transactionalId -> assertLookup(handler, transactionalId, optionsTimeoutMs));
     }
 
     @Test
@@ -51,7 +62,7 @@ public class FenceProducersHandlerTest {
         String transactionalId = "foo";
         CoordinatorKey key = CoordinatorKey.byTransactionalId(transactionalId);
 
-        FenceProducersHandler handler = new FenceProducersHandler(logContext);
+        FenceProducersHandler handler = new FenceProducersHandler(options, logContext, requestTimeoutMs);
 
         short epoch = 57;
         long producerId = 7;
@@ -73,7 +84,7 @@ public class FenceProducersHandlerTest {
     @Test
     public void testHandleErrorResponse() {
         String transactionalId = "foo";
-        FenceProducersHandler handler = new FenceProducersHandler(logContext);
+        FenceProducersHandler handler = new FenceProducersHandler(options, logContext, requestTimeoutMs);
         assertFatalError(handler, transactionalId, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED);
         assertFatalError(handler, transactionalId, Errors.CLUSTER_AUTHORIZATION_FAILED);
         assertFatalError(handler, transactionalId, Errors.UNKNOWN_SERVER_ERROR);
@@ -96,7 +107,7 @@ public class FenceProducersHandlerTest {
         assertEquals(mkSet(key), result.failedKeys.keySet());
 
         Throwable throwable = result.failedKeys.get(key);
-        assertTrue(error.exception().getClass().isInstance(throwable));
+        assertInstanceOf(error.exception().getClass(), throwable);
     }
 
     private void assertRetriableError(
@@ -125,8 +136,6 @@ public class FenceProducersHandlerTest {
         String transactionalId,
         Errors error
     ) {
-        int brokerId = 1;
-
         CoordinatorKey key = CoordinatorKey.byTransactionalId(transactionalId);
         Set<CoordinatorKey> keys = mkSet(key);
 
@@ -138,10 +147,10 @@ public class FenceProducersHandlerTest {
         return result;
     }
 
-    private void assertLookup(FenceProducersHandler handler, String transactionalId) {
+    private void assertLookup(FenceProducersHandler handler, String transactionalId, int txnTimeoutMs) {
         CoordinatorKey key = CoordinatorKey.byTransactionalId(transactionalId);
         InitProducerIdRequest.Builder request = handler.buildSingleRequest(1, key);
         assertEquals(transactionalId, request.data.transactionalId());
-        assertEquals(1, request.data.transactionTimeoutMs());
+        assertEquals(txnTimeoutMs, request.data.transactionTimeoutMs());
     }
 }

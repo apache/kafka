@@ -19,9 +19,11 @@ package org.apache.kafka.common.record;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
+import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.SnapshotFooterRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
+import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.junit.jupiter.api.Test;
@@ -45,6 +47,14 @@ public class ControlRecordUtilsTest {
         assertEquals(
             SnapshotFooterRecord.HIGHEST_SUPPORTED_VERSION,
             ControlRecordUtils.SNAPSHOT_FOOTER_CURRENT_VERSION
+        );
+        assertEquals(
+            KRaftVersionRecord.HIGHEST_SUPPORTED_VERSION,
+            ControlRecordUtils.KRAFT_VERSION_CURRENT_VERSION
+        );
+        assertEquals(
+            VotersRecord.HIGHEST_SUPPORTED_VERSION,
+            ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION
         );
     }
 

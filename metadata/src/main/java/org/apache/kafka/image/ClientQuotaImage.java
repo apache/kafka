@@ -21,6 +21,7 @@ import org.apache.kafka.common.message.DescribeClientQuotasResponseData.ValueDat
 import org.apache.kafka.common.metadata.ClientQuotaRecord;
 import org.apache.kafka.common.metadata.ClientQuotaRecord.EntityData;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
+import org.apache.kafka.image.node.ClientQuotaImageNode;
 import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 
@@ -31,7 +32,6 @@ import java.util.List;
 import java.util.Map.Entry;
 import java.util.Map;
 import java.util.Objects;
-import java.util.stream.Collectors;
 
 
 /**
@@ -114,8 +114,6 @@ public final class ClientQuotaImage {
 
     @Override
     public String toString() {
-        return "ClientQuotaImage(quotas=" + quotas.entrySet().stream().
-            map(e -> e.getKey() + ":" + e.getValue()).collect(Collectors.joining(", ")) +
-            ")";
+        return new ClientQuotaImageNode(this).stringify();
     }
 }

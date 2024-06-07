@@ -16,8 +16,14 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import java.util.List;
+import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
+import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,10 +48,25 @@ import static org.apache.kafka.streams.processor.internals.assignment.StandbyTas
 class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
     private static final Logger log = LoggerFactory.getLogger(ClientTagAwareStandbyTaskAssignor.class);
 
+    private final BiFunction<UUID, ClientState, Map<String, String>> clientTagFunction;
+    private final Function<AssignmentConfigs, List<String>> tagsFunction;
+
+    public ClientTagAwareStandbyTaskAssignor() {
+        this((uuid, clientState) -> clientState.clientTags(),
+            AssignmentConfigs::rackAwareAssignmentTags
+        );
+    }
+
+    public ClientTagAwareStandbyTaskAssignor(final BiFunction<UUID, ClientState, Map<String, String>> clientTagFunction,
+                                             final Function<AssignmentConfigs, List<String>> tagsFunction) {
+        this.clientTagFunction = clientTagFunction;
+        this.tagsFunction = tagsFunction;
+    }
+
     /**
      * The algorithm distributes standby tasks for the {@param statefulTaskIds} over different tag dimensions.
-     * For each stateful task, the number of standby tasks will be assigned based on configured {@link AssignmentConfigs#numStandbyReplicas}.
-     * Rack aware standby tasks distribution only takes into account tags specified via {@link AssignmentConfigs#rackAwareAssignmentTags}.
+     * For each stateful task, the number of standby tasks will be assigned based on configured {@link AssignmentConfigs#numStandbyReplicas()}.
+     * Rack aware standby tasks distribution only takes into account tags specified via {@link AssignmentConfigs#rackAwareAssignmentTags()}.
      * Ideally, all standby tasks for any given stateful task will be located on different tag dimensions to have the best possible distribution.
      * However, if the ideal (or partially ideal) distribution is impossible, the algorithm will fall back to the least-loaded clients without taking rack awareness constraints into consideration.
      * The least-loaded clients are determined based on the total number of tasks (active and standby tasks) assigned to the client.
@@ -54,9 +75,9 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
     public boolean assign(final Map<UUID, ClientState> clients,
                           final Set<TaskId> allTaskIds,
                           final Set<TaskId> statefulTaskIds,
-                          final AssignorConfiguration.AssignmentConfigs configs) {
-        final int numStandbyReplicas = configs.numStandbyReplicas;
-        final Set<String> rackAwareAssignmentTags = new HashSet<>(configs.rackAwareAssignmentTags);
+                          final AssignmentConfigs configs) {
+        final int numStandbyReplicas = configs.numStandbyReplicas();
+        final Set<String> rackAwareAssignmentTags = new HashSet<>(tagsFunction.apply(configs));
 
         final Map<TaskId, Integer> tasksToRemainingStandbys = computeTasksToRemainingStandbys(
             numStandbyReplicas,
@@ -128,8 +149,8 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
 
     @Override
     public boolean isAllowedTaskMovement(final ClientState source, final ClientState destination) {
-        final Map<String, String> sourceClientTags = source.clientTags();
-        final Map<String, String> destinationClientTags = destination.clientTags();
+        final Map<String, String> sourceClientTags = clientTagFunction.apply(source.processId(), source);
+        final Map<String, String> destinationClientTags = clientTagFunction.apply(destination.processId(), destination);
 
         for (final Entry<String, String> sourceClientTagEntry : sourceClientTags.entrySet()) {
             if (!sourceClientTagEntry.getValue().equals(destinationClientTags.get(sourceClientTagEntry.getKey()))) {
@@ -140,15 +161,57 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
         return true;
     }
 
+    /**
+     * Whether one task can be moved from source to destination. If the number of distinct tags including active
+     * and standby after the movement isn't decreased, then we can move the task. Otherwise, we can not move
+     * the task.
+     * @param source Source client
+     * @param destination Destination client
+     * @param sourceTask Task to move
+     * @param clientStateMap All client metadata
+     * @return If the task can be moved
+     */
+    @Override
+    public boolean isAllowedTaskMovement(final ClientState source,
+                                         final ClientState destination,
+                                         final TaskId sourceTask,
+                                         final Map<UUID, ClientState> clientStateMap) {
+
+        final BiConsumer<ClientState, Set<KeyValue<String, String>>> addTags = (cs, tagSet) -> {
+            final Map<String, String> tags = clientTagFunction.apply(cs.processId(), cs);
+            if (tags != null) {
+                tagSet.addAll(tags.entrySet().stream()
+                    .map(entry -> KeyValue.pair(entry.getKey(), entry.getValue()))
+                    .collect(Collectors.toList())
+                );
+            }
+        };
+
+        final Set<KeyValue<String, String>> tagsWithSource = new HashSet<>();
+        final Set<KeyValue<String, String>> tagsWithDestination = new HashSet<>();
+        for (final ClientState clientState : clientStateMap.values()) {
+            if (clientState.hasAssignedTask(sourceTask)
+                && !clientState.processId().equals(source.processId())
+                && !clientState.processId().equals(destination.processId())) {
+                addTags.accept(clientState, tagsWithSource);
+                addTags.accept(clientState, tagsWithDestination);
+            }
+        }
+        addTags.accept(source, tagsWithSource);
+        addTags.accept(destination, tagsWithDestination);
+
+        return tagsWithDestination.size() >= tagsWithSource.size();
+    }
+
     // Visible for testing
-    static void fillClientsTagStatistics(final Map<UUID, ClientState> clientStates,
-                                         final Map<TagEntry, Set<UUID>> tagEntryToClients,
-                                         final Map<String, Set<String>> tagKeyToValues) {
+    void fillClientsTagStatistics(final Map<UUID, ClientState> clientStates,
+                                  final Map<TagEntry, Set<UUID>> tagEntryToClients,
+                                  final Map<String, Set<String>> tagKeyToValues) {
         for (final Entry<UUID, ClientState> clientStateEntry : clientStates.entrySet()) {
             final UUID clientId = clientStateEntry.getKey();
             final ClientState clientState = clientStateEntry.getValue();
 
-            clientState.clientTags().forEach((tagKey, tagValue) -> {
+            clientTagFunction.apply(clientId, clientState).forEach((tagKey, tagValue) -> {
                 tagKeyToValues.computeIfAbsent(tagKey, ignored -> new HashSet<>()).add(tagValue);
                 tagEntryToClients.computeIfAbsent(new TagEntry(tagKey, tagValue), ignored -> new HashSet<>()).add(clientId);
             });
@@ -156,16 +219,16 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
     }
 
     // Visible for testing
-    static void assignStandbyTasksToClientsWithDifferentTags(final int numberOfStandbyClients,
-                                                             final ConstrainedPrioritySet standbyTaskClientsByTaskLoad,
-                                                             final TaskId activeTaskId,
-                                                             final UUID activeTaskClient,
-                                                             final Set<String> rackAwareAssignmentTags,
-                                                             final Map<UUID, ClientState> clientStates,
-                                                             final Map<TaskId, Integer> tasksToRemainingStandbys,
-                                                             final Map<String, Set<String>> tagKeyToValues,
-                                                             final Map<TagEntry, Set<UUID>> tagEntryToClients,
-                                                             final Map<TaskId, UUID> pendingStandbyTasksToClientId) {
+    void assignStandbyTasksToClientsWithDifferentTags(final int numberOfStandbyClients,
+                                                      final ConstrainedPrioritySet standbyTaskClientsByTaskLoad,
+                                                      final TaskId activeTaskId,
+                                                      final UUID activeTaskClient,
+                                                      final Set<String> rackAwareAssignmentTags,
+                                                      final Map<UUID, ClientState> clientStates,
+                                                      final Map<TaskId, Integer> tasksToRemainingStandbys,
+                                                      final Map<String, Set<String>> tagKeyToValues,
+                                                      final Map<TagEntry, Set<UUID>> tagEntryToClients,
+                                                      final Map<TaskId, UUID> pendingStandbyTasksToClientId) {
         standbyTaskClientsByTaskLoad.offerAll(clientStates.keySet());
 
         // We set countOfUsedClients as 1 because client where active task is located has to be considered as used.
@@ -199,9 +262,10 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
             numRemainingStandbys--;
 
             log.debug("Assigning {} out of {} standby tasks for an active task [{}] with client tags {}. " +
-                      "Standby task client tags are {}.",
-                      numberOfStandbyClients - numRemainingStandbys, numberOfStandbyClients, activeTaskId,
-                      clientStates.get(activeTaskClient).clientTags(), clientStateOnUsedTagDimensions.clientTags());
+                    "Standby task client tags are {}.",
+                    numberOfStandbyClients - numRemainingStandbys, numberOfStandbyClients, activeTaskId,
+                    clientTagFunction.apply(activeTaskClient, clientStates.get(activeTaskClient)),
+                    clientTagFunction.apply(clientStateOnUsedTagDimensions.processId(), clientStateOnUsedTagDimensions));
 
             clientStateOnUsedTagDimensions.assignStandby(activeTaskId);
             lastUsedClient = clientOnUnusedTagDimensions;
@@ -218,7 +282,7 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
                      "Standby task assignment will fall back to assigning standby tasks to the least loaded clients.",
                      numRemainingStandbys, numberOfStandbyClients,
                      activeTaskId, rackAwareAssignmentTags,
-                     clientStates.get(activeTaskClient).clientTags());
+                     clientTagFunction.apply(activeTaskClient, clientStates.get(activeTaskClient)));
 
         } else {
             tasksToRemainingStandbys.remove(activeTaskId);
@@ -230,14 +294,14 @@ class ClientTagAwareStandbyTaskAssignor implements StandbyTaskAssignor {
         return tagEntryToUsedClients.values().stream().anyMatch(usedClients -> usedClients.contains(client));
     }
 
-    private static void updateClientsOnAlreadyUsedTagEntries(final UUID usedClient,
+    private void updateClientsOnAlreadyUsedTagEntries(final UUID usedClient,
                                                              final int countOfUsedClients,
                                                              final Set<String> rackAwareAssignmentTags,
                                                              final Map<UUID, ClientState> clientStates,
                                                              final Map<TagEntry, Set<UUID>> tagEntryToClients,
                                                              final Map<String, Set<String>> tagKeyToValues,
                                                              final Map<TagEntry, Set<UUID>> tagEntryToUsedClients) {
-        final Map<String, String> usedClientTags = clientStates.get(usedClient).clientTags();
+        final Map<String, String> usedClientTags = clientTagFunction.apply(usedClient, clientStates.get(usedClient));
 
         for (final Entry<String, String> usedClientTagEntry : usedClientTags.entrySet()) {
             final String tagKey = usedClientTagEntry.getKey();

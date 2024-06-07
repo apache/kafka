@@ -19,11 +19,13 @@ package org.apache.kafka.server.log.remote.metadata.storage.serialization;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.log.remote.metadata.storage.RemoteLogSegmentMetadataSnapshot;
 import org.apache.kafka.server.log.remote.metadata.storage.generated.RemoteLogSegmentMetadataSnapshotRecord;
+import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 public class RemoteLogSegmentMetadataSnapshotTransform implements RemoteLogMetadataTransform<RemoteLogSegmentMetadataSnapshot> {
@@ -39,6 +41,7 @@ public class RemoteLogSegmentMetadataSnapshotTransform implements RemoteLogMetad
                 .setSegmentSizeInBytes(segmentMetadata.segmentSizeInBytes())
                 .setSegmentLeaderEpochs(createSegmentLeaderEpochsEntry(segmentMetadata.segmentLeaderEpochs()))
                 .setRemoteLogSegmentState(segmentMetadata.state().id());
+        segmentMetadata.customMetadata().ifPresent(md -> record.setCustomMetadata(md.value()));
 
         return new ApiMessageAndVersion(record, record.highestSupportedVersion());
     }
@@ -59,6 +62,7 @@ public class RemoteLogSegmentMetadataSnapshotTransform implements RemoteLogMetad
             segmentLeaderEpochs.put(segmentLeaderEpoch.leaderEpoch(), segmentLeaderEpoch.offset());
         }
 
+        Optional<CustomMetadata> customMetadata = Optional.ofNullable(record.customMetadata()).map(CustomMetadata::new);
         return new RemoteLogSegmentMetadataSnapshot(record.segmentId(),
                                                     record.startOffset(),
                                                     record.endOffset(),
@@ -66,6 +70,7 @@ public class RemoteLogSegmentMetadataSnapshotTransform implements RemoteLogMetad
                                                     record.brokerId(),
                                                     record.eventTimestampMs(),
                                                     record.segmentSizeInBytes(),
+                                                    customMetadata,
                                                     RemoteLogSegmentState.forId(record.remoteLogSegmentState()),
                                                     segmentLeaderEpochs);
     }

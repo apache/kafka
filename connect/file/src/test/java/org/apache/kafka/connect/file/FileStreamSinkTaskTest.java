@@ -32,6 +32,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -40,7 +41,6 @@ public class FileStreamSinkTaskTest {
 
     private FileStreamSinkTask task;
     private ByteArrayOutputStream os;
-    private PrintStream printStream;
 
     @TempDir
     public Path topDir;
@@ -49,7 +49,7 @@ public class FileStreamSinkTaskTest {
     @BeforeEach
     public void setup() {
         os = new ByteArrayOutputStream();
-        printStream = new PrintStream(os);
+        PrintStream printStream = new PrintStream(os);
         task = new FileStreamSinkTask(printStream);
         outputFile = topDir.resolve("connect.output").toAbsolutePath().toString();
     }
@@ -57,11 +57,11 @@ public class FileStreamSinkTaskTest {
     @Test
     public void testPutFlush() {
         HashMap<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-        final String newLine = System.getProperty("line.separator"); 
+        final String newLine = System.lineSeparator();
 
         // We do not call task.start() since it would override the output stream
 
-        task.put(Arrays.asList(
+        task.put(Collections.singletonList(
                 new SinkRecord("topic1", 0, null, null, Schema.STRING_SCHEMA, "line1", 1)
         ));
         offsets.put(new TopicPartition("topic1", 0), new OffsetAndMetadata(1L));
@@ -86,7 +86,7 @@ public class FileStreamSinkTaskTest {
         task.start(props);
 
         HashMap<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-        task.put(Arrays.asList(
+        task.put(Collections.singletonList(
                 new SinkRecord("topic1", 0, null, null, Schema.STRING_SCHEMA, "line0", 1)
         ));
         offsets.put(new TopicPartition("topic1", 0), new OffsetAndMetadata(1L));

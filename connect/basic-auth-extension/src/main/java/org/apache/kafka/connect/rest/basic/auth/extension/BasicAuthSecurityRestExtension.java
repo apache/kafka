@@ -25,7 +25,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.security.auth.login.Configuration;
-import java.io.IOException;
 import java.util.Map;
 import java.util.function.Supplier;
 
@@ -100,7 +99,7 @@ public class BasicAuthSecurityRestExtension implements ConnectRestExtension {
     }
 
     @Override
-    public void close() throws IOException {
+    public void close() {
 
     }
 

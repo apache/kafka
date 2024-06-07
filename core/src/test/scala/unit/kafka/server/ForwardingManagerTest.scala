@@ -20,10 +20,8 @@ import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.util.Optional
 import java.util.concurrent.atomic.AtomicReference
-
 import kafka.network
 import kafka.network.RequestChannel
-import kafka.utils.MockTime
 import org.apache.kafka.clients.{MockClient, NodeApiVersions}
 import org.apache.kafka.clients.MockClient.RequestMatcher
 import org.apache.kafka.common.Node
@@ -36,6 +34,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, AlterConfigsRequest, AlterConfigsResponse, EnvelopeRequest, EnvelopeResponse, RequestContext, RequestHeader, RequestTestUtils}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
+import org.apache.kafka.server.util.MockTime
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito
@@ -46,7 +45,7 @@ class ForwardingManagerTest {
   private val time = new MockTime()
   private val client = new MockClient(time)
   private val controllerNodeProvider = Mockito.mock(classOf[ControllerNodeProvider])
-  private val brokerToController = new MockBrokerToControllerChannelManager(
+  private val brokerToController = new MockNodeToControllerChannelManager(
     client, time, controllerNodeProvider, controllerApiVersions)
   private val forwardingManager = new ForwardingManagerImpl(brokerToController)
   private val principalBuilder = new DefaultKafkaPrincipalBuilder(null, null)
@@ -81,7 +80,7 @@ class ForwardingManagerTest {
 
     Mockito.when(controllerNodeProvider.getControllerInfo()).thenReturn(controllerInfo)
     val isEnvelopeRequest: RequestMatcher = request => request.isInstanceOf[EnvelopeRequest]
-    client.prepareResponse(isEnvelopeRequest, new EnvelopeResponse(responseBuffer, Errors.NONE));
+    client.prepareResponse(isEnvelopeRequest, new EnvelopeResponse(responseBuffer, Errors.NONE))
 
     val responseOpt = new AtomicReference[Option[AbstractResponse]]()
     forwardingManager.forwardRequest(request, responseOpt.set)
@@ -105,7 +104,7 @@ class ForwardingManagerTest {
 
     Mockito.when(controllerNodeProvider.getControllerInfo()).thenReturn(controllerInfo)
     val isEnvelopeRequest: RequestMatcher = request => request.isInstanceOf[EnvelopeRequest]
-    client.prepareResponse(isEnvelopeRequest, new EnvelopeResponse(responseBuffer, Errors.UNSUPPORTED_VERSION));
+    client.prepareResponse(isEnvelopeRequest, new EnvelopeResponse(responseBuffer, Errors.UNSUPPORTED_VERSION))
 
     val responseOpt = new AtomicReference[Option[AbstractResponse]]()
     forwardingManager.forwardRequest(request, responseOpt.set)
@@ -230,6 +229,7 @@ class ForwardingManagerTest {
       requestHeader,
       "1",
       InetAddress.getLocalHost,
+      Optional.empty(),
       principal,
       new ListenerName("client"),
       SecurityProtocol.SASL_PLAINTEXT,

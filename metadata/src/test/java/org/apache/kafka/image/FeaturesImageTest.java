@@ -32,6 +32,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -40,27 +41,32 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(value = 40)
 public class FeaturesImageTest {
-    final static FeaturesImage IMAGE1;
-    final static List<ApiMessageAndVersion> DELTA1_RECORDS;
+    public final static FeaturesImage IMAGE1;
+    public final static List<ApiMessageAndVersion> DELTA1_RECORDS;
     final static FeaturesDelta DELTA1;
     final static FeaturesImage IMAGE2;
+    final static List<ApiMessageAndVersion> DELTA2_RECORDS;
+    final static FeaturesDelta DELTA2;
+    final static FeaturesImage IMAGE3;
 
     static {
         Map<String, Short> map1 = new HashMap<>();
         map1.put("foo", (short) 2);
         map1.put("bar", (short) 1);
-        map1.put("baz", (short) 8);
-        IMAGE1 = new FeaturesImage(map1, MetadataVersion.latest(), ZkMigrationState.NONE);
+        IMAGE1 = new FeaturesImage(map1, MetadataVersion.latestTesting(), ZkMigrationState.NONE);
 
         DELTA1_RECORDS = new ArrayList<>();
+        // change feature level
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new FeatureLevelRecord().
             setName("foo").setFeatureLevel((short) 3),
             (short) 0));
+        // remove feature
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new FeatureLevelRecord().
             setName("bar").setFeatureLevel((short) 0),
             (short) 0));
+        // add feature
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new FeatureLevelRecord().
-            setName("baz").setFeatureLevel((short) 0),
+            setName("baz").setFeatureLevel((short) 8),
             (short) 0));
 
         DELTA1 = new FeaturesDelta(IMAGE1);
@@ -68,36 +74,87 @@ public class FeaturesImageTest {
 
         Map<String, Short> map2 = new HashMap<>();
         map2.put("foo", (short) 3);
-        IMAGE2 = new FeaturesImage(map2, MetadataVersion.latest(), ZkMigrationState.NONE);
+        map2.put("baz", (short) 8);
+        IMAGE2 = new FeaturesImage(map2, MetadataVersion.latestTesting(), ZkMigrationState.NONE);
+
+        DELTA2_RECORDS = new ArrayList<>();
+        // remove all features
+        DELTA2_RECORDS.add(new ApiMessageAndVersion(new FeatureLevelRecord().
+            setName("foo").setFeatureLevel((short) 0),
+            (short) 0));
+        DELTA2_RECORDS.add(new ApiMessageAndVersion(new FeatureLevelRecord().
+            setName("baz").setFeatureLevel((short) 0),
+            (short) 0));
+        // add feature back with different feature level
+        DELTA2_RECORDS.add(new ApiMessageAndVersion(new FeatureLevelRecord().
+            setName("bar").setFeatureLevel((short) 1),
+            (short) 0));
+
+        DELTA2 = new FeaturesDelta(IMAGE2);
+        RecordTestUtils.replayAll(DELTA2, DELTA2_RECORDS);
+
+        Map<String, Short> map3 = Collections.singletonMap("bar", (short) 1);
+        IMAGE3 = new FeaturesImage(map3, MetadataVersion.latestTesting(), ZkMigrationState.NONE);
     }
 
     @Test
-    public void testEmptyImageRoundTrip() throws Throwable {
-        testToImageAndBack(FeaturesImage.EMPTY);
+    public void testEmptyImageRoundTrip() {
+        testToImage(FeaturesImage.EMPTY);
     }
 
     @Test
-    public void testImage1RoundTrip() throws Throwable {
-        testToImageAndBack(IMAGE1);
+    public void testImage1RoundTrip() {
+        testToImage(IMAGE1);
     }
 
     @Test
-    public void testApplyDelta1() throws Throwable {
+    public void testApplyDelta1() {
         assertEquals(IMAGE2, DELTA1.apply());
+        // check image1 + delta1 = image2, since records for image1 + delta1 might differ from records from image2
+        List<ApiMessageAndVersion> records = getImageRecords(IMAGE1);
+        records.addAll(DELTA1_RECORDS);
+        testToImage(IMAGE2, records);
     }
 
     @Test
-    public void testImage2RoundTrip() throws Throwable {
-        testToImageAndBack(IMAGE2);
+    public void testImage2RoundTrip() {
+        testToImage(IMAGE2);
     }
 
-    private void testToImageAndBack(FeaturesImage image) throws Throwable {
+    @Test
+    public void testImage3RoundTrip() {
+        testToImage(IMAGE3);
+    }
+
+    @Test
+    public void testApplyDelta2() {
+        assertEquals(IMAGE3, DELTA2.apply());
+        // check image2 + delta2 = image3, since records for image2 + delta2 might differ from records from image3
+        List<ApiMessageAndVersion> records = getImageRecords(IMAGE2);
+        records.addAll(DELTA2_RECORDS);
+        testToImage(IMAGE3, records);
+    }
+
+    private static void testToImage(FeaturesImage image) {
+        testToImage(image, Optional.empty());
+    }
+
+    private static void testToImage(FeaturesImage image, Optional<List<ApiMessageAndVersion>> fromRecords) {
+        testToImage(image, fromRecords.orElseGet(() -> getImageRecords(image)));
+    }
+
+    private static void testToImage(FeaturesImage image, List<ApiMessageAndVersion> fromRecords) {
+        // test from empty image stopping each of the various intermediate images along the way
+        new RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper<>(
+            () -> FeaturesImage.EMPTY,
+            FeaturesDelta::new
+        ).test(image, fromRecords);
+    }
+
+    private static List<ApiMessageAndVersion> getImageRecords(FeaturesImage image) {
         RecordListWriter writer = new RecordListWriter();
         image.write(writer, new ImageWriterOptions.Builder().setMetadataVersion(image.metadataVersion()).build());
-        FeaturesDelta delta = new FeaturesDelta(FeaturesImage.EMPTY);
-        RecordTestUtils.replayAll(delta, writer.records());
-        FeaturesImage nextImage = delta.apply();
-        assertEquals(image, nextImage);
+        return writer.records();
     }
 
     @Test

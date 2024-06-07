@@ -25,12 +25,14 @@ import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.RestartRequest;
 import org.apache.kafka.connect.runtime.rest.HerderRequestHandler;
 import org.apache.kafka.connect.runtime.rest.RestClient;
+import org.apache.kafka.connect.runtime.rest.RestRequestTimeout;
 import org.apache.kafka.connect.runtime.rest.RestServerConfig;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
+import org.apache.kafka.connect.runtime.rest.entities.Message;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.util.ConnectorTaskId;
@@ -38,12 +40,14 @@ import org.apache.kafka.connect.util.FutureCallback;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.inject.Inject;
 import javax.servlet.ServletContext;
 import javax.ws.rs.BadRequestException;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.DefaultValue;
 import javax.ws.rs.GET;
+import javax.ws.rs.PATCH;
 import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
@@ -68,7 +72,7 @@ import static org.apache.kafka.connect.runtime.rest.HerderRequestHandler.Transla
 @Path("/connectors")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
-public class ConnectorsResource implements ConnectResource {
+public class ConnectorsResource {
     private static final Logger log = LoggerFactory.getLogger(ConnectorsResource.class);
 
     private final Herder herder;
@@ -78,20 +82,20 @@ public class ConnectorsResource implements ConnectResource {
     private final boolean isTopicTrackingDisabled;
     private final boolean isTopicTrackingResetDisabled;
 
-    public ConnectorsResource(Herder herder, RestServerConfig config, RestClient restClient) {
+    @Inject
+    public ConnectorsResource(
+            Herder herder,
+            RestServerConfig config,
+            RestClient restClient,
+            RestRequestTimeout requestTimeout
+    ) {
         this.herder = herder;
-        this.requestHandler = new HerderRequestHandler(restClient, DEFAULT_REST_REQUEST_TIMEOUT_MS);
+        this.requestHandler = new HerderRequestHandler(restClient, requestTimeout);
         this.isTopicTrackingDisabled = !config.topicTrackingEnabled();
         this.isTopicTrackingResetDisabled = !config.topicTrackingResetEnabled();
     }
 
-    @Override
-    public void requestTimeout(long requestTimeoutMs) {
-        requestHandler.requestTimeoutMs(requestTimeoutMs);
-    }
-
     @GET
-    @Path("/")
     @Operation(summary = "List all active connectors")
     public Response listConnectors(
         final @Context UriInfo uriInfo,
@@ -129,7 +133,6 @@ public class ConnectorsResource implements ConnectResource {
     }
 
     @POST
-    @Path("/")
     @Operation(summary = "Create a new connector")
     public Response createConnector(final @Parameter(hidden = true) @QueryParam("forward") Boolean forward,
                                     final @Context HttpHeaders headers,
@@ -143,7 +146,7 @@ public class ConnectorsResource implements ConnectResource {
         checkAndPutConnectorConfigName(name, configs);
 
         FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
-        herder.putConnectorConfig(name, configs, false, cb);
+        herder.putConnectorConfig(name, configs, createRequest.initialTargetState(), false, cb);
         Herder.Created<ConnectorInfo> info = requestHandler.completeOrForwardRequest(cb, "/connectors", "POST", headers, createRequest,
                 new TypeReference<ConnectorInfo>() { }, new CreatedConnectorInfoTranslator(), forward);
 
@@ -171,9 +174,11 @@ public class ConnectorsResource implements ConnectResource {
 
     @GET
     @Path("/{connector}/tasks-config")
-    @Operation(summary = "Get the configuration of all tasks for the specified connector")
+    @Operation(deprecated = true, summary = "Get the configuration of all tasks for the specified connector")
     public Map<ConnectorTaskId, Map<String, String>> getTasksConfig(
             final @PathParam("connector") String connector) throws Throwable {
+        log.warn("The 'GET /connectors/{connector}/tasks-config' endpoint is deprecated and will be removed in the next major release. "
+            + "Please use the 'GET /connectors/{connector}/tasks' endpoint instead.");
         FutureCallback<Map<ConnectorTaskId, Map<String, String>>> cb = new FutureCallback<>();
         herder.tasksConfig(connector, cb);
         return requestHandler.completeRequest(cb);
@@ -235,6 +240,19 @@ public class ConnectorsResource implements ConnectResource {
             response = Response.ok();
         }
         return response.entity(createdInfo.result()).build();
+    }
+
+    @PATCH
+    @Path("/{connector}/config")
+    public Response patchConnectorConfig(final @PathParam("connector") String connector,
+                                         final @Context HttpHeaders headers,
+                                         final @Parameter(hidden = true) @QueryParam("forward") Boolean forward,
+                                         final Map<String, String> connectorConfigPatch) throws Throwable {
+        FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
+        herder.patchConnectorConfig(connector, connectorConfigPatch, cb);
+        Herder.Created<ConnectorInfo> createdInfo = requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/config",
+                "PATCH", headers, connectorConfigPatch, new TypeReference<ConnectorInfo>() { }, new CreatedConnectorInfoTranslator(), forward);
+        return Response.ok().entity(createdInfo.result()).build();
     }
 
     @POST
@@ -299,7 +317,7 @@ public class ConnectorsResource implements ConnectResource {
 
     @GET
     @Path("/{connector}/tasks")
-    @Operation(summary = "List all tasks for the specified connector")
+    @Operation(summary = "List all tasks and their configurations for the specified connector")
     public List<TaskInfo> getTaskConfigs(final @PathParam("connector") String connector) throws Throwable {
         FutureCallback<List<TaskInfo>> cb = new FutureCallback<>();
         herder.taskConfigs(connector, cb);
@@ -325,7 +343,7 @@ public class ConnectorsResource implements ConnectResource {
         FutureCallback<Void> cb = new FutureCallback<>();
         ConnectorTaskId taskId = new ConnectorTaskId(connector, task);
         herder.restartTask(taskId, cb);
-        requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks/" + task + "/restart", "POST", headers, null, forward);
+        requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/tasks/" + task + "/restart", "POST", headers, null, new TypeReference<Void>() { }, forward);
     }
 
     @DELETE
@@ -336,7 +354,7 @@ public class ConnectorsResource implements ConnectResource {
                                  final @Parameter(hidden = true) @QueryParam("forward") Boolean forward) throws Throwable {
         FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
         herder.deleteConnectorConfig(connector, cb);
-        requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector, "DELETE", headers, null, forward);
+        requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector, "DELETE", headers, null, new TypeReference<Herder.Created<ConnectorInfo>>() { }, forward);
     }
 
     @GET
@@ -346,6 +364,35 @@ public class ConnectorsResource implements ConnectResource {
         FutureCallback<ConnectorOffsets> cb = new FutureCallback<>();
         herder.connectorOffsets(connector, cb);
         return requestHandler.completeRequest(cb);
+    }
+
+    @PATCH
+    @Path("/{connector}/offsets")
+    @Operation(summary = "Alter the offsets for the specified connector")
+    public Response alterConnectorOffsets(final @Parameter(hidden = true) @QueryParam("forward") Boolean forward,
+                                          final @Context HttpHeaders headers, final @PathParam("connector") String connector,
+                                          final ConnectorOffsets offsets) throws Throwable {
+        if (offsets.offsets() == null || offsets.offsets().isEmpty()) {
+            throw new BadRequestException("Partitions / offsets need to be provided for an alter offsets request");
+        }
+
+        FutureCallback<Message> cb = new FutureCallback<>();
+        herder.alterConnectorOffsets(connector, offsets.toMap(), cb);
+        Message msg = requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/offsets", "PATCH", headers, offsets,
+                new TypeReference<Message>() { }, new IdentityTranslator<>(), forward);
+        return Response.ok().entity(msg).build();
+    }
+
+    @DELETE
+    @Path("/{connector}/offsets")
+    @Operation(summary = "Reset the offsets for the specified connector")
+    public Response resetConnectorOffsets(final @Parameter(hidden = true) @QueryParam("forward") Boolean forward,
+                                          final @Context HttpHeaders headers, final @PathParam("connector") String connector) throws Throwable {
+        FutureCallback<Message> cb = new FutureCallback<>();
+        herder.resetConnectorOffsets(connector, cb);
+        Message msg = requestHandler.completeOrForwardRequest(cb, "/connectors/" + connector + "/offsets", "DELETE", headers, null,
+                new TypeReference<Message>() { }, new IdentityTranslator<>(), forward);
+        return Response.ok().entity(msg).build();
     }
 
     // Check whether the connector name from the url matches the one (if there is one) provided in the connectorConfig

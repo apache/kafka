@@ -19,9 +19,11 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.junit.jupiter.api.Test;
 
+import java.util.Locale;
 import java.util.Map;
 import java.util.HashMap;
 
@@ -43,7 +45,8 @@ public class MirrorConnectorConfigTest {
     @Test
     public void testSourceConsumerConfig() {
         Map<String, String> connectorProps = makeProps(
-                MirrorConnectorConfig.CONSUMER_CLIENT_PREFIX + "max.poll.interval.ms", "120000"
+                MirrorConnectorConfig.CONSUMER_CLIENT_PREFIX + "max.poll.interval.ms", "120000",
+                MirrorConnectorConfig.SOURCE_CLUSTER_PREFIX + "bootstrap.servers", "localhost:2345"
         );
         MirrorConnectorConfig config = new TestMirrorConnectorConfig(connectorProps);
         Map<String, Object> connectorConsumerProps = config.sourceConsumerConfig("test");
@@ -52,11 +55,13 @@ public class MirrorConnectorConfigTest {
         expectedConsumerProps.put("auto.offset.reset", "earliest");
         expectedConsumerProps.put("max.poll.interval.ms", "120000");
         expectedConsumerProps.put("client.id", "source1->target2|ConnectorName|test");
+        expectedConsumerProps.put("bootstrap.servers", "localhost:2345");
         assertEquals(expectedConsumerProps, connectorConsumerProps);
 
         // checking auto.offset.reset override works
         connectorProps = makeProps(
-                MirrorConnectorConfig.CONSUMER_CLIENT_PREFIX + "auto.offset.reset", "latest"
+                MirrorConnectorConfig.CONSUMER_CLIENT_PREFIX + "auto.offset.reset", "latest",
+                MirrorConnectorConfig.SOURCE_CLUSTER_PREFIX + "bootstrap.servers", "localhost:2345"
         );
         config = new TestMirrorConnectorConfig(connectorProps);
         connectorConsumerProps = config.sourceConsumerConfig("test");
@@ -170,6 +175,14 @@ public class MirrorConnectorConfigTest {
         ConfigException ce = assertThrows(ConfigException.class,
                 () -> new TestMirrorConnectorConfig(makeProps(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "abc")));
         assertTrue(ce.getMessage().contains(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
+    }
+
+    @Test
+    public void testCaseInsensitiveSecurityProtocol() {
+        final String saslSslLowerCase = SecurityProtocol.SASL_SSL.name.toLowerCase(Locale.ROOT);
+        final TestMirrorConnectorConfig config = new TestMirrorConnectorConfig(makeProps(
+                CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, saslSslLowerCase));
+        assertEquals(saslSslLowerCase, config.originalsStrings().get(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
     }
 
     @Test

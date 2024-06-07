@@ -18,8 +18,10 @@ package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
 
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * It describes the metadata update about the log segment in the remote storage. This is currently used to update the
@@ -35,6 +37,11 @@ public class RemoteLogSegmentMetadataUpdate extends RemoteLogMetadata {
     private final RemoteLogSegmentId remoteLogSegmentId;
 
     /**
+     * Custom metadata.
+     */
+    private final Optional<CustomMetadata> customMetadata;
+
+    /**
      * It indicates the state in which the action is executed on this segment.
      */
     private final RemoteLogSegmentState state;
@@ -42,13 +49,17 @@ public class RemoteLogSegmentMetadataUpdate extends RemoteLogMetadata {
     /**
      * @param remoteLogSegmentId Universally unique remote log segment id.
      * @param eventTimestampMs   Epoch time in milli seconds at which the remote log segment is copied to the remote tier storage.
+     * @param customMetadata     Custom metadata.
      * @param state              State of the remote log segment.
      * @param brokerId           Broker id from which this event is generated.
      */
     public RemoteLogSegmentMetadataUpdate(RemoteLogSegmentId remoteLogSegmentId, long eventTimestampMs,
-                                          RemoteLogSegmentState state, int brokerId) {
+                                          Optional<CustomMetadata> customMetadata,
+                                          RemoteLogSegmentState state,
+                                          int brokerId) {
         super(brokerId, eventTimestampMs);
         this.remoteLogSegmentId = Objects.requireNonNull(remoteLogSegmentId, "remoteLogSegmentId can not be null");
+        this.customMetadata = Objects.requireNonNull(customMetadata, "customMetadata can not be null");
         this.state = Objects.requireNonNull(state, "state can not be null");
     }
 
@@ -57,6 +68,13 @@ public class RemoteLogSegmentMetadataUpdate extends RemoteLogMetadata {
      */
     public RemoteLogSegmentId remoteLogSegmentId() {
         return remoteLogSegmentId;
+    }
+
+    /**
+     * @return Custom metadata.
+     */
+    public Optional<CustomMetadata> customMetadata() {
+        return customMetadata;
     }
 
     /**
@@ -81,6 +99,7 @@ public class RemoteLogSegmentMetadataUpdate extends RemoteLogMetadata {
         }
         RemoteLogSegmentMetadataUpdate that = (RemoteLogSegmentMetadataUpdate) o;
         return Objects.equals(remoteLogSegmentId, that.remoteLogSegmentId) &&
+               Objects.equals(customMetadata, that.customMetadata) &&
                state == that.state &&
                eventTimestampMs() == that.eventTimestampMs() &&
                brokerId() == that.brokerId();
@@ -88,14 +107,15 @@ public class RemoteLogSegmentMetadataUpdate extends RemoteLogMetadata {
 
     @Override
     public int hashCode() {
-        return Objects.hash(remoteLogSegmentId, state, eventTimestampMs(), brokerId());
+        return Objects.hash(remoteLogSegmentId, customMetadata, state, eventTimestampMs(), brokerId());
     }
 
     @Override
     public String toString() {
         return "RemoteLogSegmentMetadataUpdate{" +
                "remoteLogSegmentId=" + remoteLogSegmentId +
-                ", state=" + state +
+               ", customMetadata=" + customMetadata +
+               ", state=" + state +
                ", eventTimestampMs=" + eventTimestampMs() +
                ", brokerId=" + brokerId() +
                '}';

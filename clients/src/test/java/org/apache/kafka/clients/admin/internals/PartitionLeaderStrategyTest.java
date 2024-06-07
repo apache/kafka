@@ -44,7 +44,7 @@ import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 public class PartitionLeaderStrategyTest {
 
@@ -78,7 +78,7 @@ public class PartitionLeaderStrategyTest {
     public void testTopicAuthorizationFailure() {
         TopicPartition topicPartition = new TopicPartition("foo", 0);
         Throwable exception = assertFatalTopicError(topicPartition, Errors.TOPIC_AUTHORIZATION_FAILED);
-        assertTrue(exception instanceof TopicAuthorizationException);
+        assertInstanceOf(TopicAuthorizationException.class, exception);
         TopicAuthorizationException authException = (TopicAuthorizationException) exception;
         assertEquals(mkSet("foo"), authException.unauthorizedTopics());
     }
@@ -87,16 +87,16 @@ public class PartitionLeaderStrategyTest {
     public void testInvalidTopicError() {
         TopicPartition topicPartition = new TopicPartition("foo", 0);
         Throwable exception = assertFatalTopicError(topicPartition, Errors.INVALID_TOPIC_EXCEPTION);
-        assertTrue(exception instanceof InvalidTopicException);
+        assertInstanceOf(InvalidTopicException.class, exception);
         InvalidTopicException invalidTopicException = (InvalidTopicException) exception;
         assertEquals(mkSet("foo"), invalidTopicException.invalidTopics());
     }
 
     @Test
-    public void testUnexpectedTopicErrror() {
+    public void testUnexpectedTopicError() {
         TopicPartition topicPartition = new TopicPartition("foo", 0);
         Throwable exception = assertFatalTopicError(topicPartition, Errors.UNKNOWN_SERVER_ERROR);
-        assertTrue(exception instanceof UnknownServerException);
+        assertInstanceOf(UnknownServerException.class, exception);
     }
 
     @Test
@@ -121,7 +121,7 @@ public class PartitionLeaderStrategyTest {
     public void testUnexpectedPartitionError() {
         TopicPartition topicPartition = new TopicPartition("foo", 0);
         Throwable exception = assertFatalPartitionError(topicPartition, Errors.UNKNOWN_SERVER_ERROR);
-        assertTrue(exception instanceof UnknownServerException);
+        assertInstanceOf(UnknownServerException.class, exception);
     }
 
     @Test

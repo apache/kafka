@@ -272,7 +272,7 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
                 errorResponseBody);
 
             if (responseBody == null || responseBody.isEmpty())
-                throw new IOException(String.format("The token endpoint response was unexpectedly empty despite response code %s from %s and error message %s",
+                throw new IOException(String.format("The token endpoint response was unexpectedly empty despite response code %d from %s and error message %s",
                     responseCode, con.getURL(), formatErrorMessage(errorResponseBody)));
 
             return responseBody;
@@ -305,7 +305,7 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
     static String formatErrorMessage(String errorResponseBody) {
         // See https://www.ietf.org/rfc/rfc6749.txt, section 5.2 for the format
         // of this error message.
-        if (errorResponseBody == null || errorResponseBody.trim().equals("")) {
+        if (errorResponseBody == null || errorResponseBody.trim().isEmpty()) {
             return "{}";
         }
         ObjectMapper mapper = new ObjectMapper();
@@ -337,7 +337,7 @@ public class HttpAccessTokenRetriever implements AccessTokenRetriever {
             if (snippet.length() > MAX_RESPONSE_BODY_LENGTH) {
                 int actualLength = responseBody.length();
                 String s = responseBody.substring(0, MAX_RESPONSE_BODY_LENGTH);
-                snippet = String.format("%s (trimmed to first %s characters out of %s total)", s, MAX_RESPONSE_BODY_LENGTH, actualLength);
+                snippet = String.format("%s (trimmed to first %d characters out of %d total)", s, MAX_RESPONSE_BODY_LENGTH, actualLength);
             }
 
             throw new IOException(String.format("The token endpoint response did not contain an access_token value. Response: (%s)", snippet));

@@ -22,6 +22,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{AddPartitionsToTxnResponse, TransactionResult}
 import org.apache.kafka.common.utils.{LogContext, MockTime, ProducerIdAndEpoch}
+import org.apache.kafka.coordinator.transaction.TransactionStateManagerConfigs
 import org.apache.kafka.server.util.MockScheduler
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -31,6 +32,7 @@ import org.mockito.Mockito.{mock, times, verify, when}
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
+import scala.util.Success
 
 class TransactionCoordinatorTest {
 
@@ -46,7 +48,7 @@ class TransactionCoordinatorTest {
   val brokerId = 0
   val coordinatorEpoch = 0
   private val transactionalId = "known"
-  private val producerId = 10
+  private val producerId = 10L
   private val producerEpoch: Short = 1
   private val txnTimeoutMs = 1
 
@@ -68,7 +70,7 @@ class TransactionCoordinatorTest {
   private def mockPidGenerator(): Unit = {
     when(pidGenerator.generateProducerId()).thenAnswer(_ => {
       nextPid += 1
-      nextPid - 1
+      Success(nextPid - 1)
     })
   }
 
@@ -281,7 +283,7 @@ class TransactionCoordinatorTest {
 
     coordinator.handleVerifyPartitionsInTransaction(transactionalId, 0L, 0, partitions, verifyPartitionsInTxnCallback)
     errors.foreach { case (_, error) =>
-      assertEquals(Errors.INVALID_TXN_STATE, error)
+      assertEquals(Errors.TRANSACTION_ABORTABLE, error)
     }
   }
 
@@ -397,7 +399,7 @@ class TransactionCoordinatorTest {
     val extraPartitions = partitions ++ Set(new TopicPartition("topic2", 0))
     
     coordinator.handleVerifyPartitionsInTransaction(transactionalId, 0L, 0, extraPartitions, verifyPartitionsInTxnCallback)
-    assertEquals(Errors.INVALID_TXN_STATE, errors(new TopicPartition("topic2", 0)))
+    assertEquals(Errors.TRANSACTION_ABORTABLE, errors(new TopicPartition("topic2", 0)))
     assertEquals(Errors.NONE, errors(new TopicPartition("topic1", 0)))
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
@@ -908,7 +910,7 @@ class TransactionCoordinatorTest {
       (Short.MaxValue - 2).toShort, txnTimeoutMs, Empty, partitions, time.milliseconds, time.milliseconds)
 
     when(pidGenerator.generateProducerId())
-      .thenReturn(producerId + 1)
+      .thenReturn(Success(producerId + 1))
 
     when(transactionManager.validateTransactionTimeoutMs(anyInt()))
       .thenReturn(true)
@@ -949,7 +951,7 @@ class TransactionCoordinatorTest {
       (Short.MaxValue - 2).toShort, txnTimeoutMs, Empty, partitions, time.milliseconds, time.milliseconds)
 
     when(pidGenerator.generateProducerId())
-      .thenReturn(producerId + 1)
+      .thenReturn(Success(producerId + 1))
 
     when(transactionManager.validateTransactionTimeoutMs(anyInt()))
       .thenReturn(true)
@@ -1002,7 +1004,7 @@ class TransactionCoordinatorTest {
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
 
     val expectedTransition = TxnTransitMetadata(producerId, producerId, (producerEpoch + 1).toShort, RecordBatch.NO_PRODUCER_EPOCH,
-      txnTimeoutMs, PrepareAbort, partitions.toSet, now, now + TransactionStateManager.DefaultAbortTimedOutTransactionsIntervalMs)
+      txnTimeoutMs, PrepareAbort, partitions.toSet, now, now + TransactionStateManagerConfigs.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_DEFAULT)
 
     when(transactionManager.appendTransactionToLog(ArgumentMatchers.eq(transactionalId),
       ArgumentMatchers.eq(coordinatorEpoch),
@@ -1013,7 +1015,7 @@ class TransactionCoordinatorTest {
     ).thenAnswer(_ => {})
 
     coordinator.startup(() => transactionStatePartitionCount, false)
-    time.sleep(TransactionStateManager.DefaultAbortTimedOutTransactionsIntervalMs)
+    time.sleep(TransactionStateManagerConfigs.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_DEFAULT)
     scheduler.tick()
     verify(transactionManager).timedOutTransactions()
     verify(transactionManager, times(2)).getTransactionState(ArgumentMatchers.eq(transactionalId))
@@ -1062,7 +1064,7 @@ class TransactionCoordinatorTest {
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, metadata))))
 
     coordinator.startup(() => transactionStatePartitionCount, false)
-    time.sleep(TransactionStateManager.DefaultAbortTimedOutTransactionsIntervalMs)
+    time.sleep(TransactionStateManagerConfigs.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_DEFAULT)
     scheduler.tick()
     verify(transactionManager).timedOutTransactions()
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
@@ -1086,7 +1088,7 @@ class TransactionCoordinatorTest {
 
     val bumpedEpoch = (producerEpoch + 1).toShort
     val expectedTransition = TxnTransitMetadata(producerId, producerId, bumpedEpoch, RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs,
-      PrepareAbort, partitions.toSet, now, now + TransactionStateManager.DefaultAbortTimedOutTransactionsIntervalMs)
+      PrepareAbort, partitions.toSet, now, now + TransactionStateManagerConfigs.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_DEFAULT)
 
     when(transactionManager.appendTransactionToLog(ArgumentMatchers.eq(transactionalId),
       ArgumentMatchers.eq(coordinatorEpoch),
@@ -1097,7 +1099,7 @@ class TransactionCoordinatorTest {
     ).thenAnswer(_ => capturedErrorsCallback.getValue.apply(Errors.NOT_ENOUGH_REPLICAS))
 
     coordinator.startup(() => transactionStatePartitionCount, false)
-    time.sleep(TransactionStateManager.DefaultAbortTimedOutTransactionsIntervalMs)
+    time.sleep(TransactionStateManagerConfigs.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_DEFAULT)
     scheduler.tick()
 
     verify(transactionManager).timedOutTransactions()
@@ -1208,7 +1210,7 @@ class TransactionCoordinatorTest {
 
   private def validateIncrementEpochAndUpdateMetadata(state: TransactionState): Unit = {
     when(pidGenerator.generateProducerId())
-      .thenReturn(producerId)
+      .thenReturn(Success(producerId))
 
     when(transactionManager.validateTransactionTimeoutMs(anyInt()))
       .thenReturn(true)

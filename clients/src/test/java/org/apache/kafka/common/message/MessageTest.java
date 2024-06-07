@@ -276,7 +276,7 @@ public final class MessageTest {
                 .setGroupId("groupId")
                 .setMemberId(memberId)
                 .setTopics(new ArrayList<>())
-                .setGenerationId(15);
+                .setGenerationIdOrMemberEpoch(15);
         testAllMessageRoundTripsFromVersion((short) 1, request.get());
         testAllMessageRoundTripsFromVersion((short) 1, request.get().setGroupInstanceId(null));
         testAllMessageRoundTripsFromVersion((short) 7, request.get().setGroupInstanceId(instanceId));
@@ -482,7 +482,7 @@ public final class MessageTest {
             OffsetCommitRequestData requestData = request.get();
             if (version < 1) {
                 requestData.setMemberId("");
-                requestData.setGenerationId(-1);
+                requestData.setGenerationIdOrMemberEpoch(-1);
             }
 
             if (version != 1) {
@@ -1181,7 +1181,7 @@ public final class MessageTest {
     }
 
     @Test
-    public void testLongTaggedString() throws Exception {
+    public void testLongTaggedString() {
         char[] chars = new char[1024];
         Arrays.fill(chars, 'a');
         String longString = new String(chars);

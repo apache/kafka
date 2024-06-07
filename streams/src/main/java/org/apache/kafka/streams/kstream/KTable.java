@@ -54,7 +54,8 @@ import java.util.function.Function;
  *     streams.start()
  *     ...
  *     final String queryableStoreName = table.queryableStoreName(); // returns null if KTable is not queryable
- *     ReadOnlyKeyValueStore view = streams.store(queryableStoreName, QueryableStoreTypes.timestampedKeyValueStore());
+ *     final StoreQueryParameters<ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>>> storeQueryParams = StoreQueryParameters.fromNameAndType(queryableStoreName, QueryableStoreTypes.timestampedKeyValueStore());
+ *     ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> view = streams.store(storeQueryParams);
  *     view.get(key);
  *}</pre>
  *<p>
@@ -135,7 +136,8 @@ public interface KTable<K, V> {
      * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // filtering words
-     * ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, ValueAndTimestamp<V>>timestampedKeyValueStore());
+     * StoreQueryParameters<ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>>> storeQueryParams = StoreQueryParameters.fromNameAndType(queryableStoreName, QueryableStoreTypes.timestampedKeyValueStore());
+     * ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> localStore = streams.store(storeQueryParams);
      * K key = "some-word";
      * ValueAndTimestamp<V> valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -174,7 +176,8 @@ public interface KTable<K, V> {
      * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // filtering words
-     * ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, ValueAndTimestamp<V>>timestampedKeyValueStore());
+     * StoreQueryParameters<ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>>> storeQueryParams = StoreQueryParameters.fromNameAndType(queryableStoreName, QueryableStoreTypes.timestampedKeyValueStore());
+     * ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> localStore = streams.store(storeQueryParams);
      * K key = "some-word";
      * ValueAndTimestamp<V> valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -260,7 +263,8 @@ public interface KTable<K, V> {
      * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // filtering words
-     * ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, ValueAndTimestamp<V>>timestampedKeyValueStore());
+     * StoreQueryParameters<ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>>> storeQueryParams = StoreQueryParameters.fromNameAndType(queryableStoreName, QueryableStoreTypes.timestampedKeyValueStore());
+     * ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> localStore = streams.store(storeQueryParams);
      * K key = "some-word";
      * ValueAndTimestamp<V> valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -298,7 +302,8 @@ public interface KTable<K, V> {
      * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // filtering words
-     * ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, ValueAndTimestamp<V>>timestampedKeyValueStore());
+     * StoreQueryParameters<ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>>> storeQueryParams = StoreQueryParameters.fromNameAndType(queryableStoreName, QueryableStoreTypes.timestampedKeyValueStore());
+     * ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> localStore = streams.store(storeQueryParams);
      * K key = "some-word";
      * ValueAndTimestamp<V> valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -2232,7 +2237,7 @@ public interface KTable<K, V> {
      *
      * @param other               the other {@code KTable} to be joined with this {@code KTable}. Keyed by KO.
      * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V). If the
-     *                            result is null, the update is ignored as invalid.
+     *                            extract is null, then the right hand side of the result will be null.
      * @param joiner              a {@link ValueJoiner} that computes the join result for a pair of matching records
      * @param <VR>                the value type of the result {@code KTable}
      * @param <KO>                the key type of the other {@code KTable}
@@ -2249,8 +2254,8 @@ public interface KTable<K, V> {
      * This is a foreign key join, where the joining key is determined by the {@code foreignKeyExtractor}.
      *
      * @param other               the other {@code KTable} to be joined with this {@code KTable}. Keyed by KO.
-     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V) If the
-     *                            result is null, the update is ignored as invalid.
+     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V). If the
+     *                            extract is null, then the right hand side of the result will be null.
      * @param joiner              a {@link ValueJoiner} that computes the join result for a pair of matching records
      * @param named               a {@link Named} config used to name the processor in the topology
      * @param <VR>                the value type of the result {@code KTable}
@@ -2274,9 +2279,8 @@ public interface KTable<K, V> {
      * <p>
      * This is a foreign key join, where the joining key is determined by the {@code foreignKeyExtractor}.
      *
-     * @param other               the other {@code KTable} to be joined with this {@code KTable}. Keyed by KO.
-     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V) If the
-     *                            result is null, the update is ignored as invalid.
+     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V). If the
+     *                            extract is null, then the right hand side of the result will be null.
      * @param joiner              a {@link ValueJoiner} that computes the join result for a pair of matching records
      * @param tableJoined         a {@link TableJoined} used to configure partitioners and names of internal topics and stores
      * @param <VR>                the value type of the result {@code KTable}
@@ -2296,7 +2300,7 @@ public interface KTable<K, V> {
      *
      * @param other               the other {@code KTable} to be joined with this {@code KTable}. Keyed by KO.
      * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V). If the
-     *                            result is null, the update is ignored as invalid.
+     *                            extract is null, then the right hand side of the result will be null.
      * @param joiner              a {@link ValueJoiner} that computes the join result for a pair of matching records
      * @param materialized        a {@link Materialized} that describes how the {@link StateStore} for the resulting {@code KTable}
      *                            should be materialized. Cannot be {@code null}
@@ -2316,8 +2320,8 @@ public interface KTable<K, V> {
      * This is a foreign key join, where the joining key is determined by the {@code foreignKeyExtractor}.
      *
      * @param other               the other {@code KTable} to be joined with this {@code KTable}. Keyed by KO.
-     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V) If the
-     *                            result is null, the update is ignored as invalid.
+     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V). If the
+     *                            extract is null, then the right hand side of the result will be null.
      * @param joiner              a {@link ValueJoiner} that computes the join result for a pair of matching records
      * @param named               a {@link Named} config used to name the processor in the topology
      * @param materialized        a {@link Materialized} that describes how the {@link StateStore} for the resulting {@code KTable}
@@ -2345,8 +2349,8 @@ public interface KTable<K, V> {
      * This is a foreign key join, where the joining key is determined by the {@code foreignKeyExtractor}.
      *
      * @param other               the other {@code KTable} to be joined with this {@code KTable}. Keyed by KO.
-     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V) If the
-     *                            result is null, the update is ignored as invalid.
+     * @param foreignKeyExtractor a {@link Function} that extracts the key (KO) from this table's value (V). If the
+     *                            extract is null, then the right hand side of the result will be null.
      * @param joiner              a {@link ValueJoiner} that computes the join result for a pair of matching records
      * @param tableJoined         a {@link TableJoined} used to configure partitioners and names of internal topics and stores
      * @param materialized        a {@link Materialized} that describes how the {@link StateStore} for the resulting {@code KTable}

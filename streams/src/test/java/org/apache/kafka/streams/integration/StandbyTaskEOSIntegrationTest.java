@@ -121,7 +121,7 @@ public class StandbyTaskEOSIntegrationTest {
 
     @Before
     public void createTopics() throws Exception {
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        final String safeTestName = safeUniqueTestName(testName);
         appId = "app-" + safeTestName;
         inputTopic = "input-" + safeTestName;
         outputTopic = "output-" + safeTestName;

@@ -31,7 +31,7 @@ class ClientStateTask {
         this.consumerToTaskIds = consumerToTaskIds;
     }
 
-    void taskIds(final Set<TaskId> clientToTaskIds) {
+    void setTaskIds(final Set<TaskId> clientToTaskIds) {
         taskIds = clientToTaskIds;
     }
 

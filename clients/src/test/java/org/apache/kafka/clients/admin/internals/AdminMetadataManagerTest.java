@@ -19,11 +19,12 @@ package org.apache.kafka.clients.admin.internals;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.net.InetSocketAddress;
 import java.util.Collections;
@@ -40,7 +41,15 @@ public class AdminMetadataManagerTest {
     private final long refreshBackoffMs = 100;
     private final long metadataExpireMs = 60000;
     private final AdminMetadataManager mgr = new AdminMetadataManager(
-            logContext, refreshBackoffMs, metadataExpireMs);
+            logContext, refreshBackoffMs, metadataExpireMs, false);
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testSetUsingBootstrapControllers(boolean usingBootstrapControllers) {
+        AdminMetadataManager manager = new AdminMetadataManager(
+                logContext, refreshBackoffMs, metadataExpireMs, usingBootstrapControllers);
+        assertEquals(usingBootstrapControllers, manager.usingBootstrapControllers());
+    }
 
     @Test
     public void testMetadataReady() {
@@ -94,8 +103,8 @@ public class AdminMetadataManagerTest {
         nodes.put(1, new Node(1, "localhost", 8122));
         nodes.put(2, new Node(2, "localhost", 8123));
         return new Cluster("mockClusterId", nodes.values(),
-                Collections.<PartitionInfo>emptySet(), Collections.<String>emptySet(),
-                Collections.<String>emptySet(), nodes.get(0));
+                Collections.emptySet(), Collections.emptySet(),
+                Collections.emptySet(), nodes.get(0));
     }
 
 }

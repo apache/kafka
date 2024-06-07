@@ -49,7 +49,7 @@ public class PureJavaCrc32C implements Checksum {
     }
 
     @Override
-    public void reset() {
+    public final void reset() {
         crc = 0xffffffff;
     }
 

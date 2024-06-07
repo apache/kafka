@@ -21,6 +21,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.metadata.PartitionRegistration;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -30,22 +31,44 @@ import java.util.Set;
 public class CapturingTopicMigrationClient implements TopicMigrationClient {
     public List<String> deletedTopics = new ArrayList<>();
     public List<String> createdTopics = new ArrayList<>();
+    public LinkedHashMap<String, Map<Integer, PartitionRegistration>> updatedTopics = new LinkedHashMap<>();
+    public LinkedHashMap<String, Set<Integer>> newTopicPartitions = new LinkedHashMap<>();
     public LinkedHashMap<String, Set<Integer>> updatedTopicPartitions = new LinkedHashMap<>();
+    public LinkedHashMap<String, Set<Integer>> deletedTopicPartitions = new LinkedHashMap<>();
+
 
     public void reset() {
         createdTopics.clear();
         updatedTopicPartitions.clear();
         deletedTopics.clear();
+        updatedTopics.clear();
+        deletedTopicPartitions.clear();
     }
 
 
     @Override
     public void iterateTopics(EnumSet<TopicVisitorInterest> interests, TopicVisitor visitor) {
-        
+
     }
 
     @Override
-    public ZkMigrationLeadershipState deleteTopic(String topicName, ZkMigrationLeadershipState state) {
+    public Set<String> readPendingTopicDeletions() {
+        return Collections.emptySet();
+    }
+
+    @Override
+    public ZkMigrationLeadershipState clearPendingTopicDeletions(
+        Set<String> pendingTopicDeletions,
+        ZkMigrationLeadershipState state
+    ) {
+        return state;
+    }
+
+    @Override
+    public ZkMigrationLeadershipState deleteTopic(
+        String topicName,
+        ZkMigrationLeadershipState state
+    ) {
         deletedTopics.add(topicName);
         return state;
     }
@@ -57,10 +80,35 @@ public class CapturingTopicMigrationClient implements TopicMigrationClient {
     }
 
     @Override
+    public ZkMigrationLeadershipState updateTopic(
+        String topicName,
+        Uuid topicId,
+        Map<Integer, PartitionRegistration> topicPartitions,
+        ZkMigrationLeadershipState state
+    ) {
+        updatedTopics.put(topicName, topicPartitions);
+        return state;
+    }
+
+    @Override
+    public ZkMigrationLeadershipState createTopicPartitions(Map<String, Map<Integer, PartitionRegistration>> topicPartitions, ZkMigrationLeadershipState state) {
+        topicPartitions.forEach((topicName, partitionMap) ->
+            newTopicPartitions.put(topicName, partitionMap.keySet())
+        );
+        return state;
+    }
+
+    @Override
     public ZkMigrationLeadershipState updateTopicPartitions(Map<String, Map<Integer, PartitionRegistration>> topicPartitions, ZkMigrationLeadershipState state) {
         topicPartitions.forEach((topicName, partitionMap) ->
             updatedTopicPartitions.put(topicName, partitionMap.keySet())
         );
+        return state;
+    }
+
+    @Override
+    public ZkMigrationLeadershipState deleteTopicPartitions(Map<String, Set<Integer>> topicPartitions, ZkMigrationLeadershipState state) {
+        deletedTopicPartitions.putAll(topicPartitions);
         return state;
     }
 }

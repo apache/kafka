@@ -206,8 +206,8 @@ public class RebalanceSourceConnectorsIntegrationTest {
         // delete connector
         connect.deleteConnector(CONNECTOR_NAME + 3);
 
-        connect.assertions().assertConnectorAndTasksAreNotRunning(CONNECTOR_NAME + 3,
-                "Connector tasks did not stop in time.");
+        connect.assertions().assertConnectorDoesNotExist(CONNECTOR_NAME + 3,
+                "Connector wasn't deleted in time.");
 
         waitForCondition(this::assertConnectorAndTasksAreUniqueAndBalanced,
                 WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");

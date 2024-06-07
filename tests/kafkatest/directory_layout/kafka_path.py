@@ -16,7 +16,7 @@
 import importlib
 import os
 
-from kafkatest.version import get_version, KafkaVersion, DEV_BRANCH
+from kafkatest.version import get_version, KafkaVersion, DEV_BRANCH, LATEST_0_9, LATEST_3_5
 
 
 """This module serves a few purposes:
@@ -41,6 +41,7 @@ CORE_LIBS_JAR_NAME = "core-libs"
 CORE_DEPENDANT_TEST_LIBS_JAR_NAME = "core-dependant-testlibs"
 TOOLS_JAR_NAME = "tools"
 TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME = "tools-dependant-libs"
+CONNECT_FILE_JAR = "connect-file"
 
 JARS = {
     "dev": {
@@ -48,7 +49,17 @@ JARS = {
         CORE_LIBS_JAR_NAME: "core/build/libs/*.jar",
         CORE_DEPENDANT_TEST_LIBS_JAR_NAME: "core/build/dependant-testlibs/*.jar",
         TOOLS_JAR_NAME: "tools/build/libs/kafka-tools*.jar",
-        TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME: "tools/build/dependant-libs*/*.jar"
+        TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME: "tools/build/dependant-libs*/*.jar",
+        CONNECT_FILE_JAR: "connect/file/build/libs/connect-file*.jar"
+    },
+    # This version of the file connectors does not contain ServiceLoader manifests
+    LATEST_3_5.__str__(): {
+        CONNECT_FILE_JAR: "libs/connect-file*.jar"
+    },
+    # TODO: This is only used in 0.8.2.x system tests, remove with KAFKA-14762
+    LATEST_0_9.__str__(): {
+        TOOLS_JAR_NAME: "libs/kafka-tools*.jar",
+        TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME: "libs/{argparse4j,jackson}*.jar"
     }
 }
 

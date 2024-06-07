@@ -22,7 +22,7 @@ import org.apache.kafka.connect.runtime.isolation.SamplingTestPlugin;
 /**
  * Superclass for service loaded classes
  */
-public class ServiceLoadedClass extends SamplingTestPlugin {
+public class ServiceLoadedClass implements SamplingTestPlugin {
 
   private static final ClassLoader STATIC_CLASS_LOADER;
   private final ClassLoader classloader;

@@ -44,6 +44,7 @@ public final class MessageSpec {
     @JsonCreator
     public MessageSpec(@JsonProperty("name") String name,
                        @JsonProperty("validVersions") String validVersions,
+                       @JsonProperty("deprecatedVersions") String deprecatedVersions,
                        @JsonProperty("fields") List<FieldSpec> fields,
                        @JsonProperty("apiKey") Short apiKey,
                        @JsonProperty("type") MessageSpecType type,
@@ -52,7 +53,7 @@ public final class MessageSpec {
                        @JsonProperty("listeners") List<RequestListenerType> listeners,
                        @JsonProperty("latestVersionUnstable") boolean latestVersionUnstable
     ) {
-        this.struct = new StructSpec(name, validVersions, fields);
+        this.struct = new StructSpec(name, validVersions, deprecatedVersions, fields);
         this.apiKey = apiKey == null ? Optional.empty() : Optional.of(apiKey);
         this.type = Objects.requireNonNull(type);
         this.commonStructs = commonStructs == null ? Collections.emptyList() :

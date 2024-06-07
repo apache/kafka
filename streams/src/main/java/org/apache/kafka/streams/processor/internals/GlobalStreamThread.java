@@ -20,9 +20,13 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -65,6 +69,8 @@ public class GlobalStreamThread extends Thread {
     private final AtomicLong cacheSize;
     private volatile StreamsException startupException;
     private java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler;
+    private volatile long fetchDeadlineClientInstanceId = -1;
+    private volatile KafkaFutureImpl<Uuid> clientInstanceIdFuture = new KafkaFutureImpl<>();
 
     /**
      * The states that the global stream thread can be in
@@ -222,25 +228,17 @@ public class GlobalStreamThread extends Thread {
     static class StateConsumer {
         private final Consumer<byte[], byte[]> globalConsumer;
         private final GlobalStateMaintainer stateMaintainer;
-        private final Time time;
         private final Duration pollTime;
-        private final long flushInterval;
         private final Logger log;
-
-        private long lastFlush;
 
         StateConsumer(final LogContext logContext,
                       final Consumer<byte[], byte[]> globalConsumer,
                       final GlobalStateMaintainer stateMaintainer,
-                      final Time time,
-                      final Duration pollTime,
-                      final long flushInterval) {
+                      final Duration pollTime) {
             this.log = logContext.logger(getClass());
             this.globalConsumer = globalConsumer;
             this.stateMaintainer = stateMaintainer;
-            this.time = time;
             this.pollTime = pollTime;
-            this.flushInterval = flushInterval;
         }
 
         /**
@@ -253,7 +251,6 @@ public class GlobalStreamThread extends Thread {
             for (final Map.Entry<TopicPartition, Long> entry : partitionOffsets.entrySet()) {
                 globalConsumer.seek(entry.getKey(), entry.getValue());
             }
-            lastFlush = time.milliseconds();
         }
 
         void pollAndUpdate() {
@@ -261,11 +258,7 @@ public class GlobalStreamThread extends Thread {
             for (final ConsumerRecord<byte[], byte[]> record : received) {
                 stateMaintainer.update(record);
             }
-            final long now = time.milliseconds();
-            if (now - flushInterval >= lastFlush) {
-                stateMaintainer.flushState();
-                lastFlush = now;
-            }
+            stateMaintainer.maybeCheckpoint();
         }
 
         public void close(final boolean wipeStateStore) throws IOException {
@@ -310,6 +303,32 @@ public class GlobalStreamThread extends Thread {
                     cache.resize(size);
                 }
                 stateConsumer.pollAndUpdate();
+
+                if (fetchDeadlineClientInstanceId != -1) {
+                    if (fetchDeadlineClientInstanceId >= time.milliseconds()) {
+                        try {
+                            // we pass in a timeout of zero, to just trigger the "get instance id" background RPC,
+                            // we don't want to block the global thread that can do useful work in the meantime
+                            clientInstanceIdFuture.complete(globalConsumer.clientInstanceId(Duration.ZERO));
+                            fetchDeadlineClientInstanceId = -1;
+                        } catch (final IllegalStateException disabledError) {
+                            // if telemetry is disabled on a client, we swallow the error,
+                            // to allow returning a partial result for all other clients
+                            clientInstanceIdFuture.complete(null);
+                            fetchDeadlineClientInstanceId = -1;
+                        } catch (final TimeoutException swallow) {
+                            // swallow
+                        } catch (final Exception error) {
+                            clientInstanceIdFuture.completeExceptionally(error);
+                            fetchDeadlineClientInstanceId = -1;
+                        }
+                    } else {
+                        clientInstanceIdFuture.completeExceptionally(
+                            new TimeoutException("Could not retrieve global consumer client instance id.")
+                        );
+                        fetchDeadlineClientInstanceId = -1;
+                    }
+                }
             }
         } catch (final InvalidOffsetException recoverableException) {
             wipeStateStore = true;
@@ -386,11 +405,11 @@ public class GlobalStreamThread extends Thread {
                     topology,
                     globalProcessorContext,
                     stateMgr,
-                    config.defaultDeserializationExceptionHandler()
+                    config.defaultDeserializationExceptionHandler(),
+                    time,
+                    config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG)
                 ),
-                time,
-                Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG)),
-                config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG)
+                Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG))
             );
 
             try {
@@ -453,5 +472,25 @@ public class GlobalStreamThread extends Thread {
 
     public Map<MetricName, Metric> consumerMetrics() {
         return Collections.unmodifiableMap(globalConsumer.metrics());
+    }
+
+    // this method is NOT thread-safe (we rely on the callee to be `synchronized`)
+    public KafkaFuture<Uuid> globalConsumerInstanceId(final Duration timeout) {
+        boolean setDeadline = false;
+
+        if (clientInstanceIdFuture.isDone()) {
+            if (clientInstanceIdFuture.isCompletedExceptionally()) {
+                clientInstanceIdFuture = new KafkaFutureImpl<>();
+                setDeadline = true;
+            }
+        } else {
+            setDeadline = true;
+        }
+
+        if (setDeadline) {
+            fetchDeadlineClientInstanceId = time.milliseconds() + timeout.toMillis();
+        }
+
+        return clientInstanceIdFuture;
     }
 }

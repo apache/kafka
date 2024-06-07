@@ -67,20 +67,24 @@ public class TopicConfig {
         "(which consists of log segments) can grow to before we will discard old log segments to free up space if we " +
         "are using the \"delete\" retention policy. By default there is no size limit only a time limit. " +
         "Since this limit is enforced at the partition level, multiply it by the number of partitions to compute " +
-        "the topic retention in bytes.";
+        "the topic retention in bytes. Additionally, retention.bytes configuration " +
+        "operates independently of \"segment.ms\" and \"segment.bytes\" configurations. " +
+        "Moreover, it triggers the rolling of new segment if the retention.bytes is configured to zero.";
 
     public static final String RETENTION_MS_CONFIG = "retention.ms";
     public static final String RETENTION_MS_DOC = "This configuration controls the maximum time we will retain a " +
         "log before we will discard old log segments to free up space if we are using the " +
         "\"delete\" retention policy. This represents an SLA on how soon consumers must read " +
-        "their data. If set to -1, no time limit is applied.";
+        "their data. If set to -1, no time limit is applied. Additionally, retention.ms configuration " +
+        "operates independently of \"segment.ms\" and \"segment.bytes\" configurations. " +
+        "Moreover, it triggers the rolling of new segment if the retention.ms condition is satisfied.";
 
     public static final String REMOTE_LOG_STORAGE_ENABLE_CONFIG = "remote.storage.enable";
-    public static final String REMOTE_LOG_STORAGE_ENABLE_DOC = "To enable tier storage for a topic, set `remote.storage.enable` as true. " +
+    public static final String REMOTE_LOG_STORAGE_ENABLE_DOC = "To enable tiered storage for a topic, set this configuration as true. " +
             "You can not disable this config once it is enabled. It will be provided in future versions.";
 
     public static final String LOCAL_LOG_RETENTION_MS_CONFIG = "local.retention.ms";
-    public static final String LOCAL_LOG_RETENTION_MS_DOC = "The number of milli seconds to keep the local log segment before it gets deleted. " +
+    public static final String LOCAL_LOG_RETENTION_MS_DOC = "The number of milliseconds to keep the local log segment before it gets deleted. " +
             "Default value is -2, it represents `retention.ms` value is to be used. The effective value should always be less than or equal " +
             "to `retention.ms` value.";
 
@@ -169,6 +173,14 @@ public class TopicConfig {
         "accepts 'uncompressed' which is equivalent to no compression; and 'producer' which means retain the " +
         "original compression codec set by the producer.";
 
+
+    public static final String COMPRESSION_GZIP_LEVEL_CONFIG = "compression.gzip.level";
+    public static final String COMPRESSION_GZIP_LEVEL_DOC = "The compression level to use if " + COMPRESSION_TYPE_CONFIG + " is set to <code>gzip</code>.";
+    public static final String COMPRESSION_LZ4_LEVEL_CONFIG = "compression.lz4.level";
+    public static final String COMPRESSION_LZ4_LEVEL_DOC = "The compression level to use if " + COMPRESSION_TYPE_CONFIG + " is set to <code>lz4</code>.";
+    public static final String COMPRESSION_ZSTD_LEVEL_CONFIG = "compression.zstd.level";
+    public static final String COMPRESSION_ZSTD_LEVEL_DOC = "The compression level to use if " + COMPRESSION_TYPE_CONFIG + " is set to <code>zstd</code>.";
+
     public static final String PREALLOCATE_CONFIG = "preallocate";
     public static final String PREALLOCATE_DOC = "True if we should preallocate the file on disk when " +
         "creating a new log segment.";
@@ -197,12 +209,35 @@ public class TopicConfig {
     public static final String MESSAGE_TIMESTAMP_TYPE_DOC = "Define whether the timestamp in the message is " +
         "message create time or log append time. The value should be either `CreateTime` or `LogAppendTime`";
 
+    /**
+     * @deprecated since 3.6, removal planned in 4.0.
+     * Use message.timestamp.before.max.ms and message.timestamp.after.max.ms instead
+     */
+    @Deprecated
     public static final String MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG = "message.timestamp.difference.max.ms";
-    public static final String MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_DOC = "The maximum difference allowed between " +
+
+    /**
+     * @deprecated since 3.6, removal planned in 4.0.
+     * Use message.timestamp.before.max.ms and message.timestamp.after.max.ms instead
+     */
+    @Deprecated
+    public static final String MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_DOC = "[DEPRECATED] The maximum difference allowed between " +
         "the timestamp when a broker receives a message and the timestamp specified in the message. If " +
         "message.timestamp.type=CreateTime, a message will be rejected if the difference in timestamp " +
         "exceeds this threshold. This configuration is ignored if message.timestamp.type=LogAppendTime.";
 
+    public static final String MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG = "message.timestamp.before.max.ms";
+    public static final String MESSAGE_TIMESTAMP_BEFORE_MAX_MS_DOC = "This configuration sets the allowable timestamp " +
+        "difference between the broker's timestamp and the message timestamp. The message timestamp can be earlier than " +
+        "or equal to the broker's timestamp, with the maximum allowable difference determined by the value set in this " +
+        "configuration. If message.timestamp.type=CreateTime, the message will be rejected if the difference in " +
+        "timestamps exceeds this specified threshold. This configuration is ignored if message.timestamp.type=LogAppendTime.";
+    public static final String MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG = "message.timestamp.after.max.ms";
+    public static final String MESSAGE_TIMESTAMP_AFTER_MAX_MS_DOC = "This configuration sets the allowable timestamp " +
+        "difference between the message timestamp and the broker's timestamp. The message timestamp can be later than " +
+        "or equal to the broker's timestamp, with the maximum allowable difference determined by the value set in this " +
+        "configuration. If message.timestamp.type=CreateTime, the message will be rejected if the difference in " +
+        "timestamps exceeds this specified threshold. This configuration is ignored if message.timestamp.type=LogAppendTime.";
     public static final String MESSAGE_DOWNCONVERSION_ENABLE_CONFIG = "message.downconversion.enable";
     public static final String MESSAGE_DOWNCONVERSION_ENABLE_DOC = "This configuration controls whether " +
         "down-conversion of message formats is enabled to satisfy consume requests. When set to <code>false</code>, " +

@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
@@ -263,10 +264,11 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
         final S segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
         if (segment == null) {
             expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
-            LOG.warn("Skipping record for expired segment.");
         } else {
-            StoreQueryUtils.updatePosition(position, stateStoreContext);
-            segment.put(key, value);
+            synchronized (position) {
+                StoreQueryUtils.updatePosition(position, stateStoreContext);
+                segment.put(key, value);
+            }
         }
     }
 
@@ -307,11 +309,11 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
                 metrics
         );
 
-        segments.openExisting(this.context, observedStreamTime);
-
         final File positionCheckpointFile = new File(context.stateDir(), name() + ".position");
         this.positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
         this.position = StoreQueryUtils.readPositionFromCheckpoint(positionCheckpoint);
+        segments.setPosition(position);
+        segments.openExisting(this.context, observedStreamTime);
 
         // register and possibly restore the state from the logs
         stateStoreContext.register(
@@ -362,16 +364,18 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
     // Visible for testing
     void restoreAllInternal(final Collection<ConsumerRecord<byte[], byte[]>> records) {
-        try {
-            final Map<S, WriteBatch> writeBatchMap = getWriteBatches(records);
-            for (final Map.Entry<S, WriteBatch> entry : writeBatchMap.entrySet()) {
-                final S segment = entry.getKey();
-                final WriteBatch batch = entry.getValue();
-                segment.write(batch);
-                batch.close();
+        synchronized (position) {
+            try {
+                final Map<S, WriteBatch> writeBatchMap = getWriteBatches(records);
+                for (final Map.Entry<S, WriteBatch> entry : writeBatchMap.entrySet()) {
+                    final S segment = entry.getKey();
+                    final WriteBatch batch = entry.getValue();
+                    segment.write(batch);
+                    batch.close();
+                }
+            } catch (final RocksDBException e) {
+                throw new ProcessorStateException("Error restoring batch to store " + this.name, e);
             }
-        } catch (final RocksDBException e) {
-            throw new ProcessorStateException("Error restoring batch to store " + this.name, e);
         }
     }
 
@@ -394,10 +398,12 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
                     consistencyEnabled,
                     position
                 );
+                WriteBatch batch = null;
                 try {
-                    final WriteBatch batch = writeBatchMap.computeIfAbsent(segment, s -> new WriteBatch());
+                    batch = writeBatchMap.computeIfAbsent(segment, s -> new WriteBatch());
                     segment.addToBatch(new KeyValue<>(record.key(), record.value()), batch);
                 } catch (final RocksDBException e) {
+                    Utils.closeQuietly(batch, "rocksdb write batch");
                     throw new ProcessorStateException("Error restoring batch to store " + this.name, e);
                 }
             }

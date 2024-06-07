@@ -17,9 +17,11 @@
 package org.apache.kafka.raft;
 
 import java.util.Objects;
+import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.SnapshotFooterRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
+import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.record.ControlRecordType;
 
@@ -54,6 +56,16 @@ public final class ControlRecord {
                     throwIllegalArgument(recordType, message);
                 }
                 break;
+            case KRAFT_VERSION:
+                if (!(message instanceof KRaftVersionRecord)) {
+                    throwIllegalArgument(recordType, message);
+                }
+                break;
+            case KRAFT_VOTERS:
+                if (!(message instanceof VotersRecord)) {
+                    throwIllegalArgument(recordType, message);
+                }
+                break;
             default:
                 throw new IllegalArgumentException(String.format("Unknown control record type %s", recordType));
         }
@@ -74,6 +86,10 @@ public final class ControlRecord {
                 return ((SnapshotHeaderRecord) message).version();
             case SNAPSHOT_FOOTER:
                 return ((SnapshotFooterRecord) message).version();
+            case KRAFT_VERSION:
+                return ((KRaftVersionRecord) message).version();
+            case KRAFT_VOTERS:
+                return ((VotersRecord) message).version();
             default:
                 throw new IllegalStateException(String.format("Unknown control record type %s", recordType));
         }

@@ -38,7 +38,7 @@ import java.util.function.Supplier;
 /**
  * This class encapsulates the default yammer metrics registry for Kafka server,
  * and configures the set of exported JMX metrics for Yammer metrics.
- *
+ * <br>
  * KafkaYammerMetrics.defaultRegistry() should always be used instead of Metrics.defaultRegistry()
  */
 public class KafkaYammerMetrics implements Reconfigurable {
@@ -106,7 +106,7 @@ public class KafkaYammerMetrics implements Reconfigurable {
         nameBuilder.append(":type=");
         nameBuilder.append(typeName);
 
-        if (name.length() > 0) {
+        if (!name.isEmpty()) {
             nameBuilder.append(",name=");
             nameBuilder.append(name);
         }

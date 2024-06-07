@@ -17,9 +17,10 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.LogCaptureAppender;
-import org.easymock.EasyMockRunner;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.invocation.Invocation;
+import org.mockito.junit.MockitoJUnitRunner;
 import org.rocksdb.AbstractCompactionFilter;
 import org.rocksdb.AbstractCompactionFilter.Context;
 import org.rocksdb.AbstractCompactionFilterFactory;
@@ -56,28 +57,26 @@ import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Set;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-import static org.easymock.EasyMock.mock;
-import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.reset;
-import static org.easymock.EasyMock.resetToNice;
-import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.matchesPattern;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockingDetails;
 
 /**
  * The purpose of this test is, to catch interface changes if we upgrade {@link RocksDB}.
  * Using reflections, we make sure the {@link RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter} maps all
  * methods from {@link DBOptions} and {@link ColumnFamilyOptions} to/from {@link Options} correctly.
  */
-@RunWith(EasyMockRunner.class)
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
 
     private final List<String> walRelatedMethods = new LinkedList<String>() {
@@ -140,17 +139,15 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
         final Object[] parameters = getDBOptionsParameters(method.getParameterTypes());
 
         try {
-            reset(mockedDbOptions);
-            replay(mockedDbOptions);
             method.invoke(optionsFacadeDbOptions, parameters);
-            verify();
-            fail("Should have called DBOptions." + method.getName() + "()");
+            final Collection<Invocation> invocations = mockingDetails(mockedDbOptions).getInvocations();
+            final Set<String> invokedMethodNames = invocations.stream().map(invocation -> invocation.getMethod().getName()).collect(Collectors.toSet());
+            assertTrue(invokedMethodNames.contains(method.getName()), "Should have called DBOptions." + method.getName() + "()");
         } catch (final InvocationTargetException undeclaredMockMethodCall) {
             assertThat(undeclaredMockMethodCall.getCause(), instanceOf(AssertionError.class));
             assertThat(undeclaredMockMethodCall.getCause().getMessage().trim(),
                 matchesPattern("Unexpected method call DBOptions\\." + method.getName() + "((.*\n*)*):"));
         } finally {
-            resetToNice(mockedDbOptions);
             optionsFacadeDbOptions.close();
         }
     }
@@ -248,17 +245,15 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
         final Object[] parameters = getColumnFamilyOptionsParameters(method.getParameterTypes());
 
         try {
-            reset(mockedColumnFamilyOptions);
-            replay(mockedColumnFamilyOptions);
             method.invoke(optionsFacadeColumnFamilyOptions, parameters);
-            verify();
-            fail("Should have called ColumnFamilyOptions." + method.getName() + "()");
+            final Collection<Invocation> invocations = mockingDetails(mockedColumnFamilyOptions).getInvocations();
+            final Set<String> invokedMethodNames = invocations.stream().map(invocation -> invocation.getMethod().getName()).collect(Collectors.toSet());
+            assertTrue(invokedMethodNames.contains(method.getName()), "Should have called ColumnFamilyOptions." + method.getName() + "()");
         } catch (final InvocationTargetException undeclaredMockMethodCall) {
             assertThat(undeclaredMockMethodCall.getCause(), instanceOf(AssertionError.class));
             assertThat(undeclaredMockMethodCall.getCause().getMessage().trim(),
                 matchesPattern("Unexpected method call ColumnFamilyOptions\\." + method.getName() +  "(.*)"));
         } finally {
-            resetToNice(mockedColumnFamilyOptions);
             optionsFacadeColumnFamilyOptions.close();
         }
     }
