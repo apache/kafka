@@ -1884,7 +1884,7 @@ public class SaslAuthenticatorTest {
 
         // Client configures untrusted key store
         CertStores newStore = new CertStores(false, "localhost");
-        newStore.keyStoreProps().forEach((k, v) -> saslClientConfigs.put(k, v));
+        saslClientConfigs.putAll(newStore.keyStoreProps());
         if (expectedClientAuth == SslClientAuth.NONE) {
             createAndCheckClientConnectionAndPrincipal(securityProtocol, "2", principalWithOneWayTls);
         } else {

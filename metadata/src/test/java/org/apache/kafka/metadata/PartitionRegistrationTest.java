@@ -74,7 +74,7 @@ public class PartitionRegistrationTest {
             setReplicas(new int[]{1, 2, 3}).setDirectories(DirectoryId.unassignedArray(3)).
             setIsr(new int[]{1}).setLastKnownElr(new int[]{3}).setElr(new int[]{2}).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(1).build();
         assertEquals(b, a.merge(new PartitionChangeRecord().
-            setLeader(3).setIsr(Arrays.asList(3))));
+            setLeader(3).setIsr(Collections.singletonList(3))));
         assertEquals("isr: [1, 2] -> [3], leader: 1 -> 3, leaderEpoch: 0 -> 1, partitionEpoch: 0 -> 1",
             b.diff(a));
         assertEquals("isr: [1, 2] -> [1], elr: [] -> [2], lastKnownElr: [] -> [3], partitionEpoch: 0 -> 1",
@@ -322,7 +322,7 @@ public class PartitionRegistrationTest {
         if (metadataVersion.isElrSupported()) {
             expectRecord.
                 setEligibleLeaderReplicas(Arrays.asList(2, 3)).
-                setLastKnownElr(Arrays.asList(4));
+                setLastKnownElr(Collections.singletonList(4));
         }
         if (metadataVersion.isDirectoryAssignmentSupported()) {
             expectRecord.setDirectories(Arrays.asList(

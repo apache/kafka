@@ -24,7 +24,7 @@ import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
+import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -85,17 +85,15 @@ public class StickyTaskAssignor implements TaskAssignor {
 
         assignActive();
         optimizeActive();
-        assignStandby(configs.numStandbyReplicas);
+        assignStandby(configs.numStandbyReplicas());
         optimizeStandby();
         return false;
     }
 
     private void optimizeStandby() {
-        if (configs.numStandbyReplicas > 0 && rackAwareTaskAssignor != null && rackAwareTaskAssignor.canEnableRackAwareAssignor()) {
-            final int trafficCost = configs.rackAwareAssignmentTrafficCost == null ?
-                DEFAULT_STATEFUL_TRAFFIC_COST : configs.rackAwareAssignmentTrafficCost;
-            final int nonOverlapCost = configs.rackAwareAssignmentNonOverlapCost == null ?
-                DEFAULT_STATEFUL_NON_OVERLAP_COST : configs.rackAwareAssignmentNonOverlapCost;
+        if (configs.numStandbyReplicas() > 0 && rackAwareTaskAssignor != null && rackAwareTaskAssignor.canEnableRackAwareAssignor()) {
+            final int trafficCost = configs.rackAwareTrafficCost().orElse(DEFAULT_STATEFUL_TRAFFIC_COST);
+            final int nonOverlapCost = configs.rackAwareNonOverlapCost().orElse(DEFAULT_STATEFUL_NON_OVERLAP_COST);
             final TreeMap<UUID, ClientState> clientStates = new TreeMap<>(clients);
 
             rackAwareTaskAssignor.optimizeStandbyTasks(clientStates, trafficCost, nonOverlapCost, (s, d, t, c) -> true);
@@ -104,10 +102,8 @@ public class StickyTaskAssignor implements TaskAssignor {
 
     private void optimizeActive() {
         if (rackAwareTaskAssignor != null && rackAwareTaskAssignor.canEnableRackAwareAssignor()) {
-            final int trafficCost = configs.rackAwareAssignmentTrafficCost == null ?
-                DEFAULT_STATEFUL_TRAFFIC_COST : configs.rackAwareAssignmentTrafficCost;
-            final int nonOverlapCost = configs.rackAwareAssignmentNonOverlapCost == null ?
-                DEFAULT_STATEFUL_NON_OVERLAP_COST : configs.rackAwareAssignmentNonOverlapCost;
+            final int trafficCost = configs.rackAwareTrafficCost().orElse(DEFAULT_STATEFUL_TRAFFIC_COST);
+            final int nonOverlapCost = configs.rackAwareNonOverlapCost().orElse(DEFAULT_STATEFUL_NON_OVERLAP_COST);
 
             final SortedSet<TaskId> statefulTasks = new TreeSet<>(statefulTaskIds);
             final TreeMap<UUID, ClientState> clientStates = new TreeMap<>(clients);

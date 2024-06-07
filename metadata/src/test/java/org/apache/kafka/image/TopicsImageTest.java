@@ -247,11 +247,11 @@ public class TopicsImageTest {
 
         LocalReplicaChanges changes = delta.localChanges(localId);
         assertEquals(
-            new HashSet<>(Arrays.asList(new TopicPartition("baz", 0))),
+            new HashSet<>(Collections.singletonList(new TopicPartition("baz", 0))),
             changes.electedLeaders().keySet()
         );
         assertEquals(
-            new HashSet<>(Arrays.asList(new TopicPartition("baz", 0))),
+            new HashSet<>(Collections.singletonList(new TopicPartition("baz", 0))),
             changes.leaders().keySet()
         );
         assertEquals(
@@ -303,7 +303,7 @@ public class TopicsImageTest {
         RecordTestUtils.replayAll(delta, topicRecords);
 
         LocalReplicaChanges changes = delta.localChanges(localId);
-        assertEquals(new HashSet<>(Arrays.asList(new TopicPartition("zoo", 0))), changes.deletes());
+        assertEquals(new HashSet<>(Collections.singletonList(new TopicPartition("zoo", 0))), changes.deletes());
         assertEquals(Collections.emptyMap(), changes.electedLeaders());
         assertEquals(Collections.emptyMap(), changes.leaders());
         assertEquals(Collections.emptyMap(), changes.followers());
@@ -345,7 +345,7 @@ public class TopicsImageTest {
         assertEquals(Collections.emptySet(), changes.deletes());
         assertEquals(Collections.emptyMap(), changes.electedLeaders());
         assertEquals(
-            new HashSet<>(Arrays.asList(new TopicPartition("zoo", 0))),
+            new HashSet<>(Collections.singletonList(new TopicPartition("zoo", 0))),
             changes.leaders().keySet()
         );
         assertEquals(Collections.emptyMap(), changes.followers());

@@ -14,50 +14,51 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.assignor;
+package org.apache.kafka.coordinator.group.api.assignor;
 
-import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 
 /**
- * The partition assignment for a consumer group member.
+ * The partition assignment for a consumer group.
  */
-public class MemberAssignment {
+@InterfaceStability.Unstable
+public class GroupAssignment {
     /**
-     * The target partitions assigned to this member keyed by topicId.
+     * The member assignments keyed by member id.
      */
-    private final Map<Uuid, Set<Integer>> targetPartitions;
+    private final Map<String, MemberAssignment> members;
 
-    public MemberAssignment(Map<Uuid, Set<Integer>> targetPartitions) {
-        Objects.requireNonNull(targetPartitions);
-        this.targetPartitions = targetPartitions;
+    public GroupAssignment(
+        Map<String, MemberAssignment> members
+    ) {
+        this.members = Objects.requireNonNull(members);
     }
 
     /**
-     * @return Target partitions keyed by topic Ids.
+     * @return Member assignments keyed by member Ids.
      */
-    public Map<Uuid, Set<Integer>> targetPartitions() {
-        return this.targetPartitions;
+    public Map<String, MemberAssignment> members() {
+        return members;
     }
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        MemberAssignment that = (MemberAssignment) o;
-        return targetPartitions.equals(that.targetPartitions);
+        GroupAssignment that = (GroupAssignment) o;
+        return members.equals(that.members);
     }
 
     @Override
     public int hashCode() {
-        return targetPartitions.hashCode();
+        return members.hashCode();
     }
 
     @Override
     public String toString() {
-        return "MemberAssignment(targetPartitions=" + targetPartitions + ')';
+        return "GroupAssignment(members=" + members + ')';
     }
 }

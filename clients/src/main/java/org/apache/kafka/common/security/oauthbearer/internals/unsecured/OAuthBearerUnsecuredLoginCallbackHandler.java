@@ -188,7 +188,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
             callback.token(null);
             return;
         }
-        if (moduleOptions.keySet().stream().noneMatch(name -> !name.startsWith(EXTENSION_PREFIX))) {
+        if (moduleOptions.keySet().stream().allMatch(name -> name.startsWith(EXTENSION_PREFIX))) {
             throw new OAuthBearerConfigException("Extensions provided in login context without a token");
         }
         String principalClaimNameValue = optionValue(PRINCIPAL_CLAIM_NAME_OPTION);

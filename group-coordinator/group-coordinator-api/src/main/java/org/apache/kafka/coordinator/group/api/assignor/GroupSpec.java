@@ -14,17 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.assignor;
+package org.apache.kafka.coordinator.group.api.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
-import java.util.Map;
-import java.util.Set;
 
 /**
  * The group metadata specifications required to compute the target assignment.
  */
+@InterfaceStability.Unstable
 public interface GroupSpec {
     /**
      * @return All the member Ids of the consumer group.
@@ -45,18 +45,18 @@ public interface GroupSpec {
     /**
      * Gets the member subscription specification for a member.
      *
-     * @param memberId          The member Id.
+     * @param memberId The member Id.
      * @return The member's subscription metadata.
      * @throws IllegalArgumentException If the member Id isn't found.
      */
-    MemberSubscriptionSpec memberSubscription(String memberId);
+    MemberSubscription memberSubscription(String memberId);
 
     /**
      * Gets the current assignment of the member.
      *
-     * @param memberId          The member Id.
-     * @return A map of topic Ids to sets of partition numbers.
-     *         An empty map is returned if the member Id isn't found.
+     * @param memberId The member Id.
+     * @return The member's assignment or an empty assignment if the
+     *         member does not have one.
      */
-    Map<Uuid, Set<Integer>> memberAssignment(String memberId);
+    MemberAssignment memberAssignment(String memberId);
 }
