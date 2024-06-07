@@ -21,7 +21,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -62,12 +61,23 @@ public class ConsumerRecordsTest {
 
     @Test
     public void testRecords() {
-        String targetTopic = "topic";
-        Map<TopicPartition, List<ConsumerRecord<Integer, String>>> records = buildTestRecordsWithDummyRecords(targetTopic);
-        ConsumerRecords<Integer, String> consumerRecords = new ConsumerRecords<>(records);
-        Iterable<ConsumerRecord<Integer, String>> targetRecords = consumerRecords.records(targetTopic);
-        for (ConsumerRecord<Integer, String> targetRecord : targetRecords) {
-            assertEquals(targetTopic, targetRecord.topic());
+        String[] topics = {"topic1", "topic2", "topic3", "topic4"};
+        int recordSize = 3;
+        Map<TopicPartition, List<ConsumerRecord<Integer, String>>> partitionToRecords = buildTopicTestRecords(recordSize, topics);
+        ConsumerRecords<Integer, String> consumerRecords = new ConsumerRecords<>(partitionToRecords);
+        for (String topic : topics) {
+            Iterable<ConsumerRecord<Integer, String>> records = consumerRecords.records(topic);
+
+            int count  = 0;
+            Iterator<ConsumerRecord<Integer, String>> iterator = records.iterator();
+            for (; iterator.hasNext() && count < recordSize; count++) {
+                ConsumerRecord<Integer, String> record = iterator.next();
+                assertEquals(topic, record.topic());
+                assertEquals(count, record.partition());
+                assertEquals(count, record.offset());
+                assertEquals(count, record.key());
+                assertEquals(String.valueOf(count), record.value());
+            }
         }
     }
 
@@ -78,19 +88,33 @@ public class ConsumerRecordsTest {
         ConsumerRecord<Integer, String> record2 = new ConsumerRecord<>(topic, 1, 1, 0L, TimestampType.CREATE_TIME,
             0, 0, 2, "value2", new RecordHeaders(), Optional.empty());
 
+        new ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            new ConsumerRecord<>(topic, i, i, 0L, TimestampType.CREATE_TIME,
+                0, 0, 2, String.valueOf(i), new RecordHeaders(), Optional.empty());
+        }
+
         records.put(new TopicPartition(topic, 0), new ArrayList<>());
         records.put(new TopicPartition(topic, 1), Arrays.asList(record1, record2));
         records.put(new TopicPartition(topic, 2), new ArrayList<>());
         return records;
     }
 
-    private Map<TopicPartition, List<ConsumerRecord<Integer, String>>> buildTestRecordsWithDummyRecords(String topic) {
-        Map<TopicPartition, List<ConsumerRecord<Integer, String>>> records = buildSingleTopicTestRecords(topic);
+    private Map<TopicPartition, List<ConsumerRecord<Integer, String>>> buildTopicTestRecords(int recordSize, String... topics) {
+        Map<TopicPartition, List<ConsumerRecord<Integer, String>>> partitionToRecords = new LinkedHashMap<>();
+        for (String topic : topics) {
+            ArrayList<ConsumerRecord<Integer, String>> records = new ArrayList<>(recordSize);
+            int i = 0;
+            while (i < recordSize) {
+                records.add(
+                    new ConsumerRecord<>(topic, i, i, 0L, TimestampType.CREATE_TIME,
+                        0, 0, i, String.valueOf(i), new RecordHeaders(), Optional.empty())
+                );
+                i++;
+            }
+            partitionToRecords.put(new TopicPartition(topic, i), records);
+        }
 
-        String dummyTopic = "dummyTopic";
-        ConsumerRecord<Integer, String> dummyRecord = new ConsumerRecord<>(dummyTopic, 1, 0, 0L, TimestampType.CREATE_TIME,
-            0, 0, 1, "value1", new RecordHeaders(), Optional.empty());
-        records.put(new TopicPartition(dummyTopic, 0), Collections.singletonList(dummyRecord));
-        return records;
+        return partitionToRecords;
     }
 }
