@@ -73,9 +73,9 @@ public class KafkaChannelTest {
         ChannelMetadataRegistry metadataRegistry = Mockito.mock(ChannelMetadataRegistry.class);
 
         ArgumentCaptor<Integer> sizeCaptor = ArgumentCaptor.forClass(Integer.class);
-        Mockito.when(pool.tryAllocate(sizeCaptor.capture())).thenAnswer(invocation -> {
-            return ByteBuffer.allocate(sizeCaptor.getValue());
-        });
+        Mockito.when(pool.tryAllocate(sizeCaptor.capture())).thenAnswer(invocation ->
+            ByteBuffer.allocate(sizeCaptor.getValue())
+        );
 
         KafkaChannel channel = new KafkaChannel("0", transport, () -> authenticator,
             1024, pool, metadataRegistry);

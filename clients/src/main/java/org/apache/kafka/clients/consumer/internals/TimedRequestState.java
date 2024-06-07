@@ -37,13 +37,13 @@ public class TimedRequestState extends RequestState {
         this.timer = timer;
     }
 
-    TimedRequestState(final LogContext logContext,
-                      final String owner,
-                      final long retryBackoffMs,
-                      final int retryBackoffExpBase,
-                      final long retryBackoffMaxMs,
-                      final double jitter,
-                      final Timer timer) {
+    public TimedRequestState(final LogContext logContext,
+                             final String owner,
+                             final long retryBackoffMs,
+                             final int retryBackoffExpBase,
+                             final long retryBackoffMaxMs,
+                             final double jitter,
+                             final Timer timer) {
         super(logContext, owner, retryBackoffMs, retryBackoffExpBase, retryBackoffMaxMs, jitter);
         this.timer = timer;
     }
@@ -59,7 +59,6 @@ public class TimedRequestState extends RequestState {
     }
 
     public static Timer deadlineTimer(final Time time, final long deadlineMs) {
-        // Prevent the timer from being negative.
         long diff = Math.max(0, deadlineMs - time.milliseconds());
         return time.timer(diff);
     }
@@ -67,6 +66,6 @@ public class TimedRequestState extends RequestState {
 
     @Override
     protected String toStringBase() {
-        return super.toStringBase() + ", timer=" + remainingMs();
+        return super.toStringBase() + ", remainingMs=" + remainingMs();
     }
 }

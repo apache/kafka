@@ -54,7 +54,7 @@ public class ConsumerInterceptorsTest {
      * Test consumer interceptor that filters records in onConsume() intercept
      */
     private class FilterConsumerInterceptor<K, V> implements ConsumerInterceptor<K, V> {
-        private int filterPartition;
+        private final int filterPartition;
         private boolean throwExceptionOnConsume = false;
         private boolean throwExceptionOnCommit = false;
 

@@ -131,6 +131,13 @@ public class NetworkClientDelegate implements AutoCloseable {
     }
 
     /**
+     * Return true if there is at least one in-flight request or unsent request.
+     */
+    public boolean hasAnyPendingRequests() {
+        return client.hasInFlightRequests() || !unsentRequests.isEmpty();
+    }
+
+    /**
      * Tries to send the requests in the unsentRequest queue. If the request doesn't have an assigned node, it will
      * find the leastLoadedOne, and will be retried in the next {@code poll()}. If the request is expired, a
      * {@link TimeoutException} will be thrown.
@@ -266,17 +273,18 @@ public class NetworkClientDelegate implements AutoCloseable {
         private final AbstractRequest.Builder<?> requestBuilder;
         private final FutureCompletionHandler handler;
         private final Optional<Node> node; // empty if random node can be chosen
-
-        private final Timer timer;
+        private Timer timer;
 
         public UnsentRequest(final AbstractRequest.Builder<?> requestBuilder,
-                             final Optional<Node> node,
-                             final Timer timer) {
+                             final Optional<Node> node) {
             Objects.requireNonNull(requestBuilder);
             this.requestBuilder = requestBuilder;
             this.node = node;
             this.handler = new FutureCompletionHandler();
-            this.timer = timer;
+        }
+
+        void setTimer(Time time, long requestTimeoutMs) {
+            this.timer = time.timer(requestTimeoutMs);
         }
 
         Timer timer() {
@@ -306,11 +314,20 @@ public class NetworkClientDelegate implements AutoCloseable {
 
         @Override
         public String toString() {
+            String remainingMs;
+
+            if (timer != null) {
+                timer.update();
+                remainingMs = String.valueOf(timer.remainingMs());
+            } else {
+                remainingMs = "<not set>";
+            }
+
             return "UnsentRequest{" +
                     "requestBuilder=" + requestBuilder +
                     ", handler=" + handler +
                     ", node=" + node +
-                    ", timer=" + timer.remainingMs() +
+                    ", remainingMs=" + remainingMs +
                     '}';
         }
     }

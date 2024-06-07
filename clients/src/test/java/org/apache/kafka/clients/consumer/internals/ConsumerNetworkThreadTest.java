@@ -251,8 +251,7 @@ public class ConsumerNetworkThreadTest {
                         new FindCoordinatorRequestData()
                                 .setKeyType(FindCoordinatorRequest.CoordinatorType.TRANSACTION.id())
                                 .setKey("foobar")),
-                Optional.empty(),
-                time.timer(DEFAULT_REQUEST_TIMEOUT_MS));
+                Optional.empty());
 
         // purposely setting a non-MAX time to ensure it is returning Long.MAX_VALUE upon success
         NetworkClientDelegate.PollResult success = new NetworkClientDelegate.PollResult(
@@ -337,6 +336,27 @@ public class ConsumerNetworkThreadTest {
     void testRunOnceInvokesReaper() {
         consumerNetworkThread.runOnce();
         verify(applicationEventReaper).reap(any(Long.class));
+    }
+
+    @Test
+    void testSendUnsentRequest() {
+        String groupId = "group-id";
+        NetworkClientDelegate.UnsentRequest request = new NetworkClientDelegate.UnsentRequest(
+            new FindCoordinatorRequest.Builder(
+                new FindCoordinatorRequestData()
+                    .setKeyType(FindCoordinatorRequest.CoordinatorType.TRANSACTION.id())
+                    .setKey(groupId)),
+            Optional.empty());
+
+        networkClient.add(request);
+        assertTrue(networkClient.hasAnyPendingRequests());
+        assertFalse(networkClient.unsentRequests().isEmpty());
+        assertFalse(client.hasInFlightRequests());
+        consumerNetworkThread.cleanup();
+
+        assertTrue(networkClient.unsentRequests().isEmpty());
+        assertFalse(client.hasInFlightRequests());
+        assertFalse(networkClient.hasAnyPendingRequests());
     }
 
     private void prepareOffsetCommitRequest(final Map<TopicPartition, Long> expectedOffsets,

@@ -35,7 +35,6 @@ import org.junit.jupiter.api.Test;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 
 import static org.apache.kafka.clients.consumer.internals.events.CompletableEvent.calculateDeadlineMs;
@@ -47,7 +46,6 @@ import static org.mockito.Mockito.when;
 
 public class ApplicationEventProcessorTest {
     private final Time time = new MockTime(1);
-    private final BlockingQueue applicationEventQueue = mock(BlockingQueue.class);
     private final ConsumerMetadata metadata = mock(ConsumerMetadata.class);
     private ApplicationEventProcessor processor;
     private CommitRequestManager commitRequestManager;
@@ -55,7 +53,6 @@ public class ApplicationEventProcessorTest {
     private MembershipManager membershipManager;
 
     @BeforeEach
-    @SuppressWarnings("unchecked")
     public void setup() {
         LogContext logContext = new LogContext();
         OffsetsRequestManager offsetsRequestManager = mock(OffsetsRequestManager.class);

@@ -25,7 +25,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Timer;
 
 import java.util.List;
 import java.util.Map;
@@ -42,7 +41,6 @@ import java.util.stream.Collectors;
 public class FetchRequestManager extends AbstractFetch implements RequestManager {
 
     private final NetworkClientDelegate networkClientDelegate;
-    private final int requestTimeoutMs;
 
     FetchRequestManager(final LogContext logContext,
                         final Time time,
@@ -52,11 +50,9 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
                         final FetchBuffer fetchBuffer,
                         final FetchMetricsManager metricsManager,
                         final NetworkClientDelegate networkClientDelegate,
-                        final ApiVersions apiVersions,
-                        final int requestTimeoutMs) {
+                        final ApiVersions apiVersions) {
         super(logContext, metadata, subscriptions, fetchConfig, fetchBuffer, metricsManager, time, apiVersions);
         this.networkClientDelegate = networkClientDelegate;
-        this.requestTimeoutMs = requestTimeoutMs;
     }
 
     @Override
@@ -117,8 +113,7 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
                     successHandler.handle(fetchTarget, data, clientResponse);
             };
 
-            Timer timer = time.timer(requestTimeoutMs);
-            return new UnsentRequest(request, Optional.of(fetchTarget), timer).whenComplete(responseHandler);
+            return new UnsentRequest(request, Optional.of(fetchTarget)).whenComplete(responseHandler);
         }).collect(Collectors.toList());
 
         return new PollResult(requests);

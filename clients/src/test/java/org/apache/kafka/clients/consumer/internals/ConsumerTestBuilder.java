@@ -179,7 +179,6 @@ public class ConsumerTestBuilder implements Closeable {
         if (groupInfo.isPresent()) {
             GroupInformation gi = groupInfo.get();
             CoordinatorRequestManager coordinator = spy(new CoordinatorRequestManager(
-                    time,
                     logContext,
                     requestTimeoutMs,
                     DEFAULT_RETRY_BACKOFF_MS,
@@ -259,8 +258,7 @@ public class ConsumerTestBuilder implements Closeable {
                 fetchBuffer,
                 metricsManager,
                 networkClientDelegate,
-                apiVersions,
-                requestTimeoutMs));
+                apiVersions));
         this.requestManagers = new RequestManagers(logContext,
                 offsetsRequestManager,
                 topicMetadataRequestManager,
