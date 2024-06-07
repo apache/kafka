@@ -35,7 +35,7 @@ import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.H
  * subscriptions across the group members:
  * <ul>
  *     <li>
- *         <b> Uniform Homogenous Assignment Builder: </b> This strategy is used when all members have subscribed
+ *         <b> Uniform Homogeneous Assignment Builder: </b> This strategy is used when all members have subscribed
  *         to the same set of topics.
  *     </li>
  *     <li>
@@ -46,7 +46,7 @@ import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.H
  *
  * The appropriate strategy is automatically chosen based on the current members' topic subscriptions.
  *
- * @see UniformHomogenousAssignmentBuilder
+ * @see UniformHomogeneousAssignmentBuilder
  * @see UniformHeterogeneousAssignmentBuilder
  */
 public class UniformAssignor implements ConsumerGroupPartitionAssignor {
@@ -76,8 +76,8 @@ public class UniformAssignor implements ConsumerGroupPartitionAssignor {
 
         if (groupSpec.subscriptionType().equals(HOMOGENEOUS)) {
             LOG.debug("Detected that all members are subscribed to the same set of topics, invoking the "
-                + "homogenous assignment algorithm");
-            return new UniformHomogenousAssignmentBuilder(groupSpec, subscribedTopicDescriber)
+                + "homogeneous assignment algorithm");
+            return new UniformHomogeneousAssignmentBuilder(groupSpec, subscribedTopicDescriber)
                 .build();
         } else {
             LOG.debug("Detected that the members are subscribed to different sets of topics, invoking the "
