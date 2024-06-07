@@ -31,13 +31,18 @@ import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadat
 import org.apache.kafka.server.common.{ApiMessageAndVersion, Features, MetadataVersion}
 import org.apache.kafka.common.metadata.FeatureLevelRecord
 import org.apache.kafka.common.metadata.UserScramCredentialRecord
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.scram.internals.ScramFormatter
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
+import org.apache.kafka.raft.OffsetAndEpoch
+import org.apache.kafka.raft.internals.{StringSerde, VoterSet}
 import org.apache.kafka.server.common.FeatureVersion
+import org.apache.kafka.snapshot.{FileRawSnapshotWriter, RecordsSnapshotWriter}
 
+import java.net.InetSocketAddress
 import java.util
 import java.util.{Base64, Collections, Optional}
 import scala.collection.mutable
@@ -102,6 +107,17 @@ object StorageTool extends Logging {
       setClusterId(clusterId).
       setNodeId(config.nodeId).
       build()
+    val standaloneMode = namespace.getBoolean("standalone")
+    var host: String = ""
+    var port: Int = 0
+    var listenerName: String = ""
+    config.effectiveAdvertisedListeners.foreach(e => {
+      host = e.host
+      port = e.port
+      listenerName = e.listenerName.value()
+    })
+//    config.listeners.
+
     val metadataRecords : ArrayBuffer[ApiMessageAndVersion] = ArrayBuffer()
     val specifiedFeatures: util.List[String] = namespace.getList("feature")
     val releaseVersionFlagSpecified = namespace.getString("release_version") != null
@@ -137,7 +153,7 @@ object StorageTool extends Logging {
         "a legacy cluster. Formatting is only supported for clusters in KRaft mode.")
     }
     formatCommand(System.out, directories, metaProperties, bootstrapMetadata,
-      metadataVersion,ignoreFormatted)
+      metadataVersion,ignoreFormatted, standaloneMode)
   }
 
   private def validateMetadataVersion(metadataVersion: MetadataVersion, config: KafkaConfig): Unit = {
@@ -507,10 +523,11 @@ object StorageTool extends Logging {
     directories: Seq[String],
     metaProperties: MetaProperties,
     metadataVersion: MetadataVersion,
-    ignoreFormatted: Boolean
+    ignoreFormatted: Boolean,
+    standaloneMode: Boolean
   ): Int = {
     val bootstrapMetadata = buildBootstrapMetadata(metadataVersion, None, "format command")
-    formatCommand(stream, directories, metaProperties, bootstrapMetadata, metadataVersion, ignoreFormatted)
+    formatCommand(stream, directories, metaProperties, bootstrapMetadata, metadataVersion, ignoreFormatted, standaloneMode)
   }
 
   def formatCommand(
@@ -519,7 +536,8 @@ object StorageTool extends Logging {
     metaProperties: MetaProperties,
     bootstrapMetadata: BootstrapMetadata,
     metadataVersion: MetadataVersion,
-    ignoreFormatted: Boolean
+    ignoreFormatted: Boolean,
+    standaloneMode: Boolean
   ): Int = {
     if (directories.isEmpty) {
       throw new TerseFailure("No log directories found in the configuration.")
@@ -548,6 +566,7 @@ object StorageTool extends Logging {
     if (metaPropertiesEnsemble.emptyLogDirs().isEmpty) {
       stream.println("All of the log directories are already formatted.")
     } else {
+      val directoryId = copier.generateValidDirectoryId()
       metaPropertiesEnsemble.emptyLogDirs().forEach(logDir => {
         copier.setLogDirProps(logDir, new MetaProperties.Builder(metaProperties).
           setDirectoryId(copier.generateValidDirectoryId()).
@@ -561,6 +580,10 @@ object StorageTool extends Logging {
         copier.setWriteErrorHandler((logDir, e) => {
           throw new TerseFailure(s"Error while writing meta.properties file $logDir: ${e.getMessage}")
         })
+        // Write new file checkpoint file if standalone mode
+        if (standaloneMode) {
+          writeCheckpointFile(logDir, directoryId)
+        }
       })
       copier.writeLogDirChanges()
     }
@@ -588,5 +611,36 @@ object StorageTool extends Logging {
       val nameAndLevel = parseNameAndLevel(feature)
       (nameAndLevel._1, nameAndLevel._2)
     }.toMap
+  }
+
+  def writeCheckpointFile(logDir: String, directoryId: Uuid): Unit = {
+    val snapshotCheckpointDir = logDir + "/__cluster_metadata-0"
+
+    // Ensure the directory exists
+    val snapshotDir = Paths.get(snapshotCheckpointDir)
+    if (!Files.exists(snapshotDir)) {
+      Files.createDirectories(snapshotDir)
+    }
+
+    // Create the full path for the checkpoint file
+    val checkpointFilePath = snapshotDir.resolve(snapshotDir)
+
+    // Create the raw snapshot writer
+    val rawSnapshotWriter = FileRawSnapshotWriter.create(checkpointFilePath, new OffsetAndEpoch(0, 0))
+    val defaultListenerName = "LISTENER"
+    val inetSocketAddress: java.util.Map[Integer, InetSocketAddress] = new util.HashMap()
+    inetSocketAddress.put(1, new InetSocketAddress("host", 9092))
+
+    val voterSet = VoterSet.fromInetSocketAddresses(new ListenerName(defaultListenerName), inetSocketAddress, Optional.of(directoryId))
+
+    val builder = new RecordsSnapshotWriter.Builder()
+      .setKraftVersion(1)
+      .setVoterSet(Optional.of(voterSet))
+      .setRawSnapshotWriter(rawSnapshotWriter).build(new StringSerde)
+
+    // Close the builder to finalize the snapshot
+    builder.freeze()
+    builder.close()
+    println(s"Snapshot written to $checkpointFilePath")
   }
 }
