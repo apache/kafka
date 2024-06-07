@@ -29,8 +29,8 @@ import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.ThreadUtils;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.controller.Controller;
 import org.apache.kafka.metadata.bootstrap.BootstrapDirectory;
@@ -242,7 +242,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     SharedServer sharedServer = new SharedServer(
                         createNodeConfig(node),
                         node.initialMetaPropertiesEnsemble(),
-                        Time.SYSTEM,
+                        SystemTime.getSystemTime(),
                         new Metrics(),
                         connectFutureManager.future,
                         Collections.emptyList(),
@@ -275,7 +275,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                         id -> new SharedServer(
                             createNodeConfig(node),
                             node.initialMetaPropertiesEnsemble(),
-                            Time.SYSTEM,
+                            SystemTime.getSystemTime(),
                             new Metrics(),
                             connectFutureManager.future,
                             Collections.emptyList(),

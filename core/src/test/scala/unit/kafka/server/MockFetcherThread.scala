@@ -20,7 +20,7 @@ package kafka.server
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET
 import org.apache.kafka.common.requests.FetchResponse
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.SystemTime
 import org.apache.kafka.server.common.OffsetAndEpoch
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.storage.internals.log.LogAppendInfo
@@ -107,7 +107,7 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
       lastEpoch,
       maxTimestamp,
       shallowOffsetOfMaxTimestamp,
-      Time.SYSTEM.milliseconds(),
+      SystemTime.getSystemTime.milliseconds(),
       state.logStartOffset,
       RecordValidationStats.EMPTY,
       CompressionType.NONE,

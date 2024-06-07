@@ -26,7 +26,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -87,7 +87,7 @@ public class MeteredTimestampedWindowStoreTest {
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             MockRecordCollector::new,
             new ThreadCache(new LogContext("testCache "), 0, streamsMetrics),
-            Time.SYSTEM,
+            SystemTime.getSystemTime(),
             taskId
         );
 

@@ -29,7 +29,7 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.scram.ScramCredential
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{SystemTime, Time}
 import org.apache.kafka.common.{KafkaException, Uuid}
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
@@ -110,7 +110,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
   protected def trustStoreFile: Option[File] = None
   protected def serverSaslProperties: Option[Properties] = None
   protected def clientSaslProperties: Option[Properties] = None
-  protected def brokerTime(brokerId: Int): Time = Time.SYSTEM
+  protected def brokerTime(brokerId: Int): Time = SystemTime.getSystemTime
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {

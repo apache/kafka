@@ -29,7 +29,7 @@ import kafka.utils._
 import org.apache.kafka.common.compress.{Compression, GzipCompression, Lz4Compression, ZstdCompression}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{SystemTime, Utils}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.server.util.{KafkaScheduler, Scheduler}
 import org.apache.kafka.server.util.CommandLineUtils
@@ -234,7 +234,7 @@ object TestLinearWriteSpeed {
       recoveryPoint = 0L,
       scheduler = scheduler,
       brokerTopicStats = new BrokerTopicStats,
-      time = Time.SYSTEM,
+      time = SystemTime.getSystemTime,
       maxTransactionTimeoutMs = 5 * 60 * 1000,
       producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
       producerIdExpirationCheckIntervalMs = TransactionLogConfigs.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,

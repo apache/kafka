@@ -31,6 +31,7 @@ import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory;
 import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.utils.Java;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestSslUtils;
@@ -95,7 +96,7 @@ import static org.mockito.Mockito.when;
 public class SslTransportLayerTest {
 
     private static final int BUFFER_SIZE = 4 * 1024;
-    private static final Time TIME = Time.SYSTEM;
+    private static final Time TIME = SystemTime.getSystemTime();
 
     private static class Args {
         private final String tlsProtocol;
@@ -765,7 +766,7 @@ public class SslTransportLayerTest {
         LogContext logContext = new LogContext();
         ChannelBuilder channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false, logContext);
         channelBuilder.configure(args.sslClientConfigs);
-        try (Selector selector = new Selector(NetworkReceive.UNLIMITED, Selector.NO_IDLE_TIMEOUT_MS, new Metrics(), Time.SYSTEM,
+        try (Selector selector = new Selector(NetworkReceive.UNLIMITED, Selector.NO_IDLE_TIMEOUT_MS, new Metrics(), SystemTime.getSystemTime(),
                 "MetricGroup", new HashMap<>(), false, true, channelBuilder, MemoryPool.NONE, logContext)) {
 
             String node = "0";

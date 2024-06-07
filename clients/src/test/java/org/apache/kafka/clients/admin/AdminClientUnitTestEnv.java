@@ -21,6 +21,7 @@ import org.apache.kafka.clients.admin.internals.AdminMetadataManager;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 
 import java.time.Duration;
@@ -51,7 +52,7 @@ public class AdminClientUnitTestEnv implements AutoCloseable {
     private final KafkaAdminClient adminClient;
 
     public AdminClientUnitTestEnv(Cluster cluster, String... vals) {
-        this(Time.SYSTEM, cluster, vals);
+        this(SystemTime.getSystemTime(), cluster, vals);
     }
 
     public AdminClientUnitTestEnv(Time time, Cluster cluster, String... vals) {

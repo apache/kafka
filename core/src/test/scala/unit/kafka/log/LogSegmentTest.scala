@@ -22,7 +22,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.utils.{MockTime, Time, Utils}
+import org.apache.kafka.common.utils.{MockTime, SystemTime, Time, Utils}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpoint
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
@@ -46,7 +46,7 @@ class LogSegmentTest {
   /* create a segment with the given base offset */
   def createSegment(offset: Long,
                     indexIntervalBytes: Int = 10,
-                    time: Time = Time.SYSTEM): LogSegment = {
+                    time: Time = SystemTime.getSystemTime): LogSegment = {
     val seg = LogTestUtils.createSegment(offset, logDir, indexIntervalBytes, time)
     segments += seg
     seg
@@ -86,7 +86,7 @@ class LogSegmentTest {
   ))
   def testAppendForLogSegmentOffsetOverflowException(baseOffset: Long, largestOffset: Long): Unit = {
     val seg = createSegment(baseOffset)
-    val currentTime = Time.SYSTEM.milliseconds()
+    val currentTime = SystemTime.getSystemTime.milliseconds()
     val shallowOffsetOfMaxTimestamp = largestOffset
     val memoryRecords = records(0, "hello")
     assertThrows(classOf[LogSegmentOffsetOverflowException], () => {
@@ -521,7 +521,7 @@ class LogSegmentTest {
       TopicConfig.SEGMENT_INDEX_BYTES_CONFIG -> 1000,
       TopicConfig.SEGMENT_JITTER_MS_CONFIG -> 0
     ).asJava)
-    val seg = LogSegment.open(tempDir, baseOffset, logConfig, Time.SYSTEM, fileAlreadyExists, initFileSize, preallocate, "")
+    val seg = LogSegment.open(tempDir, baseOffset, logConfig, SystemTime.getSystemTime, fileAlreadyExists, initFileSize, preallocate, "")
     segments += seg
     seg
   }
@@ -548,7 +548,7 @@ class LogSegmentTest {
       TopicConfig.SEGMENT_JITTER_MS_CONFIG -> 0
     ).asJava)
 
-    val seg = LogSegment.open(tempDir, 40, logConfig, Time.SYSTEM,
+    val seg = LogSegment.open(tempDir, 40, logConfig, SystemTime.getSystemTime,
       512 * 1024 * 1024, true)
 
     val ms = records(50, "hello", "there")
@@ -565,7 +565,7 @@ class LogSegmentTest {
     //After close, file should be trimmed
     assertEquals(oldSize, seg.log.file.length)
 
-    val segReopen = LogSegment.open(tempDir, 40, logConfig, Time.SYSTEM, true, 512 * 1024 * 1024, true, "")
+    val segReopen = LogSegment.open(tempDir, 40, logConfig, SystemTime.getSystemTime, true, 512 * 1024 * 1024, true, "")
     segments += segReopen
 
     val readAgain = segReopen.read(55, 200)

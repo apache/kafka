@@ -21,10 +21,9 @@ import java.util.Random
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantLock
-
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.TestUtils
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.SystemTime
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions._
 
@@ -104,13 +103,13 @@ class DelayedOperationTest {
   @Test
   def testRequestExpiry(): Unit = {
     val expiration = 20L
-    val start = Time.SYSTEM.hiResClockMs
+    val start = SystemTime.getSystemTime.hiResClockMs
     val r1 = new MockDelayedOperation(expiration)
     val r2 = new MockDelayedOperation(200000L)
     assertFalse(purgatory.tryCompleteElseWatch(r1, Array("test1")), "r1 not satisfied and hence watched")
     assertFalse(purgatory.tryCompleteElseWatch(r2, Array("test2")), "r2 not satisfied and hence watched")
     r1.awaitExpiration()
-    val elapsed = Time.SYSTEM.hiResClockMs - start
+    val elapsed = SystemTime.getSystemTime.hiResClockMs - start
     assertTrue(r1.isCompleted, "r1 completed due to expiration")
     assertFalse(r2.isCompleted, "r2 hasn't completed")
     assertTrue(elapsed >= expiration, s"Time for expiration $elapsed should at least $expiration")
@@ -165,14 +164,14 @@ class DelayedOperationTest {
 
       // One future doesn't complete within timeout. Should expire and invoke callback after timeout.
       result.set(-1)
-      val start = Time.SYSTEM.hiResClockMs
+      val start = SystemTime.getSystemTime.hiResClockMs
       val expirationMs = 2000L
       val futures4 = List(new CompletableFuture[Integer], new CompletableFuture[Integer])
       val r4 = purgatory.tryCompleteElseWatch[Integer](expirationMs, futures4, () => updateResult(futures4))
       futures4.head.complete(40)
       TestUtils.waitUntilTrue(() => futures4(1).isDone, "r4 futures not expired")
       assertTrue(r4.isCompleted, "r4 not completed after timeout")
-      val elapsed = Time.SYSTEM.hiResClockMs - start
+      val elapsed = SystemTime.getSystemTime.hiResClockMs - start
       assertTrue(elapsed >= expirationMs, s"Time for expiration $elapsed should at least $expirationMs")
       assertEquals(40, futures4.head.get)
       assertEquals(classOf[org.apache.kafka.common.errors.TimeoutException],

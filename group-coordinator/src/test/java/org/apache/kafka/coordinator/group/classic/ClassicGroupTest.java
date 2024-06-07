@@ -33,7 +33,7 @@ import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.coordinator.group.OffsetAndMetadata;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
@@ -90,7 +90,7 @@ public class ClassicGroupTest {
 
     @BeforeEach
     public void initialize() {
-        group = new ClassicGroup(logContext, "groupId", EMPTY, Time.SYSTEM, metrics);
+        group = new ClassicGroup(logContext, "groupId", EMPTY, SystemTime.getSystemTime(), metrics);
     }
 
     @Test
@@ -1195,7 +1195,7 @@ public class ClassicGroupTest {
 
     @Test
     public void testIsSubscribedToTopic() {
-        ClassicGroup group = new ClassicGroup(new LogContext(), "groupId", EMPTY, Time.SYSTEM, mock(GroupCoordinatorMetricsShard.class));
+        ClassicGroup group = new ClassicGroup(new LogContext(), "groupId", EMPTY, SystemTime.getSystemTime(), mock(GroupCoordinatorMetricsShard.class));
 
         // 1. group has no protocol type => not subscribed
         assertFalse(group.isSubscribedToTopic("topic"));
@@ -1262,7 +1262,7 @@ public class ClassicGroupTest {
         // Confirm metrics is not updated when a new GenericGroup is created but only when the group transitions
         // its state.
         GroupCoordinatorMetricsShard metrics = mock(GroupCoordinatorMetricsShard.class);
-        ClassicGroup group = new ClassicGroup(new LogContext(), "groupId", EMPTY, Time.SYSTEM, metrics);
+        ClassicGroup group = new ClassicGroup(new LogContext(), "groupId", EMPTY, SystemTime.getSystemTime(), metrics);
         verify(metrics, times(0)).onClassicGroupStateTransition(any(), any());
 
         group.transitionTo(PREPARING_REBALANCE);
@@ -1280,7 +1280,7 @@ public class ClassicGroupTest {
 
     @Test
     public void testIsInStates() {
-        ClassicGroup group = new ClassicGroup(new LogContext(), "groupId", EMPTY, Time.SYSTEM, mock(GroupCoordinatorMetricsShard.class));
+        ClassicGroup group = new ClassicGroup(new LogContext(), "groupId", EMPTY, SystemTime.getSystemTime(), mock(GroupCoordinatorMetricsShard.class));
         assertTrue(group.isInStates(Collections.singleton("empty"), 0));
 
         group.transitionTo(PREPARING_REBALANCE);

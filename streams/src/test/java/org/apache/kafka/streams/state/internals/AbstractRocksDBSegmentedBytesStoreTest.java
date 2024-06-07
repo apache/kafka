@@ -551,7 +551,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
                 new StreamsConfig(props),
                 MockRecordCollector::new,
                 new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
-                Time.SYSTEM
+                SystemTime.getSystemTime()
         );
         bytesStore = getBytesStore();
         bytesStore.init((StateStoreContext) context, bytesStore);
@@ -589,7 +589,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
                 new StreamsConfig(props),
                 MockRecordCollector::new,
                 new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
-                Time.SYSTEM
+                SystemTime.getSystemTime()
         );
         bytesStore = getBytesStore();
         bytesStore.init((StateStoreContext) context, bytesStore);
@@ -629,7 +629,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
                 new StreamsConfig(props),
                 MockRecordCollector::new,
                 new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
-                Time.SYSTEM
+                SystemTime.getSystemTime()
         );
         bytesStore = getBytesStore();
         bytesStore.init((StateStoreContext) context, bytesStore);
@@ -671,7 +671,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
                 new StreamsConfig(props),
                 MockRecordCollector::new,
                 new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
-                Time.SYSTEM
+                SystemTime.getSystemTime()
         );
         bytesStore = getBytesStore();
         bytesStore.init((StateStoreContext) context, bytesStore);
@@ -789,7 +789,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
             TestUtils.tempDirectory(),
             new StreamsConfig(streamsConfig)
         );
-        final Time time = new SystemTime();
+        final Time time = SystemTime.getSystemTime();
         context.setSystemTimeMs(time.milliseconds());
         bytesStore.init((StateStoreContext) context, bytesStore);
 

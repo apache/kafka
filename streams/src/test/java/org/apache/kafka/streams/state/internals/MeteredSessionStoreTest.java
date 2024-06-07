@@ -30,7 +30,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -404,7 +404,7 @@ public class MeteredSessionStoreTest {
 
     @Test
     public void shouldReturnNoSessionsWhenFetchedKeyHasExpired() {
-        final long systemTime = Time.SYSTEM.milliseconds();
+        final long systemTime = SystemTime.getSystemTime().milliseconds();
         when(innerStore.findSessions(KEY_BYTES, systemTime - RETENTION_PERIOD, systemTime))
                 .thenReturn(new KeyValueIteratorStub<>(KeyValueIterators.emptyIterator()));
         init();
@@ -416,7 +416,7 @@ public class MeteredSessionStoreTest {
 
     @Test
     public void shouldReturnNoSessionsInBackwardOrderWhenFetchedKeyHasExpired() {
-        final long systemTime = Time.SYSTEM.milliseconds();
+        final long systemTime = SystemTime.getSystemTime().milliseconds();
         when(innerStore.backwardFindSessions(KEY_BYTES, systemTime - RETENTION_PERIOD, systemTime))
                 .thenReturn(new KeyValueIteratorStub<>(KeyValueIterators.emptyIterator()));
         init();
@@ -428,7 +428,7 @@ public class MeteredSessionStoreTest {
 
     @Test
     public void shouldNotFindExpiredSessionRangeFromStore() {
-        final long systemTime = Time.SYSTEM.milliseconds();
+        final long systemTime = SystemTime.getSystemTime().milliseconds();
         when(innerStore.findSessions(KEY_BYTES, KEY_BYTES, systemTime - RETENTION_PERIOD, systemTime))
                 .thenReturn(new KeyValueIteratorStub<>(KeyValueIterators.emptyIterator()));
         init();
@@ -440,7 +440,7 @@ public class MeteredSessionStoreTest {
 
     @Test
     public void shouldNotFindExpiredSessionRangeInBackwardOrderFromStore() {
-        final long systemTime = Time.SYSTEM.milliseconds();
+        final long systemTime = SystemTime.getSystemTime().milliseconds();
         when(innerStore.backwardFindSessions(KEY_BYTES, KEY_BYTES, systemTime - RETENTION_PERIOD, systemTime))
                 .thenReturn(new KeyValueIteratorStub<>(KeyValueIterators.emptyIterator()));
         init();

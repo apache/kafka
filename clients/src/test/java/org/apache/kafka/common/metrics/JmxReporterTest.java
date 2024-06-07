@@ -19,7 +19,7 @@ package org.apache.kafka.common.metrics;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.CumulativeSum;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.junit.jupiter.api.Test;
 
 import javax.management.MBeanServer;
@@ -164,7 +164,7 @@ public class JmxReporterTest {
         JmxReporter reporter = new JmxReporter();
         MetricsContext metricsContext = new KafkaMetricsContext("kafka.server");
         MetricConfig metricConfig = new MetricConfig();
-        Metrics metrics = new Metrics(metricConfig, new ArrayList<>(Collections.singletonList(reporter)), Time.SYSTEM, metricsContext);
+        Metrics metrics = new Metrics(metricConfig, new ArrayList<>(Collections.singletonList(reporter)), SystemTime.getSystemTime(), metricsContext);
 
         MBeanServer server = ManagementFactory.getPlatformMBeanServer();
         try {
@@ -183,7 +183,7 @@ public class JmxReporterTest {
 
         // for backwards compatibility, ensure prefix does not get overridden by the default empty namespace in metricscontext
         MetricConfig metricConfig = new MetricConfig();
-        Metrics metrics = new Metrics(metricConfig, new ArrayList<>(Collections.singletonList(reporter)), Time.SYSTEM);
+        Metrics metrics = new Metrics(metricConfig, new ArrayList<>(Collections.singletonList(reporter)), SystemTime.getSystemTime());
 
         MBeanServer server = ManagementFactory.getPlatformMBeanServer();
         try {

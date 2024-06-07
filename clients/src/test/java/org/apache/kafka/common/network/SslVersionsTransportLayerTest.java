@@ -32,6 +32,7 @@ import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Java;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -47,7 +48,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  */
 public class SslVersionsTransportLayerTest {
     private static final int BUFFER_SIZE = 4 * 1024;
-    private static final Time TIME = Time.SYSTEM;
+    private static final Time TIME = SystemTime.getSystemTime();
 
     public static Stream<Arguments> parameters() {
         List<Arguments> parameters = new ArrayList<>();

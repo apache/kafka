@@ -22,7 +22,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
@@ -414,7 +414,7 @@ public class BlockingConnectorTest {
          * it will block.
          */
         public static void waitForBlock() throws InterruptedException, TimeoutException {
-            Timer timer = Time.SYSTEM.timer(CONNECTOR_BLOCK_TIMEOUT_MS);
+            Timer timer = SystemTime.getSystemTime().timer(CONNECTOR_BLOCK_TIMEOUT_MS);
 
             CountDownLatch awaitBlockLatch;
             synchronized (Block.class) {

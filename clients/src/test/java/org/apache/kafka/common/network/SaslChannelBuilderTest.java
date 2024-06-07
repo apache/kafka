@@ -32,7 +32,7 @@ import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
 import org.apache.kafka.common.security.scram.ScramLoginModule;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.test.TestUtils;
 import org.ietf.jgss.GSSContext;
 import org.ietf.jgss.GSSCredential;
@@ -165,7 +165,7 @@ public class SaslChannelBuilderTest {
     private SaslChannelBuilder createGssapiChannelBuilder(Map<String, JaasContext> jaasContexts, GSSManager gssManager) {
         SaslChannelBuilder channelBuilder = new SaslChannelBuilder(Mode.SERVER, jaasContexts,
             SecurityProtocol.SASL_PLAINTEXT, new ListenerName("GSSAPI"), false, "GSSAPI",
-            true, null, null, null, Time.SYSTEM, new LogContext(), defaultApiVersionsSupplier()) {
+            true, null, null, null, SystemTime.getSystemTime(), new LogContext(), defaultApiVersionsSupplier()) {
 
             @Override
             protected GSSManager gssManager() {
@@ -205,7 +205,7 @@ public class SaslChannelBuilderTest {
         Map<String, JaasContext> jaasContexts = Collections.singletonMap(saslMechanism, jaasContext);
         return new SaslChannelBuilder(Mode.CLIENT, jaasContexts, securityProtocol, new ListenerName(saslMechanism),
                 false, saslMechanism, true, null,
-                null, null, Time.SYSTEM, new LogContext(), defaultApiVersionsSupplier());
+                null, null, SystemTime.getSystemTime(), new LogContext(), defaultApiVersionsSupplier());
     }
 
     public static final class TestGssapiLoginModule implements LoginModule {

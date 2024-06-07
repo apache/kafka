@@ -24,7 +24,7 @@ import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -49,7 +49,7 @@ public class ProducerMetadataTest {
     private final long refreshBackoffMaxMs = 1000;
     private final long metadataExpireMs = 1000;
     private final ProducerMetadata metadata = new ProducerMetadata(refreshBackoffMs, refreshBackoffMaxMs, metadataExpireMs, METADATA_IDLE_MS,
-            new LogContext(), new ClusterResourceListeners(), Time.SYSTEM);
+            new LogContext(), new ClusterResourceListeners(), SystemTime.getSystemTime());
     private final AtomicReference<Exception> backgroundError = new AtomicReference<>();
 
     @AfterEach
@@ -59,7 +59,7 @@ public class ProducerMetadataTest {
 
     @Test
     public void testMetadata() throws Exception {
-        long time = Time.SYSTEM.milliseconds();
+        long time = SystemTime.getSystemTime().milliseconds();
         String topic = "my-topic";
         metadata.add(topic, time);
 

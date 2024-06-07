@@ -19,6 +19,7 @@ package org.apache.kafka.tiered.storage.utils;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.FileLogInputStream;
 import org.apache.kafka.common.record.FileRecords;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
@@ -44,7 +45,7 @@ public final class BrokerLocalStorage {
     private final Integer storageWaitTimeoutSec;
 
     private final int storagePollPeriodSec = 1;
-    private final Time time = Time.SYSTEM;
+    private final Time time = SystemTime.getSystemTime();
 
     public BrokerLocalStorage(Integer brokerId,
                               Set<String> storageDirnames,

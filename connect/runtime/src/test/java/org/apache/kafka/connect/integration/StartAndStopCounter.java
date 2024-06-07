@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 
 public class StartAndStopCounter {
@@ -31,11 +32,11 @@ public class StartAndStopCounter {
     private final Time clock;
 
     public StartAndStopCounter() {
-        this(Time.SYSTEM);
+        this(SystemTime.getSystemTime());
     }
 
     public StartAndStopCounter(Time clock) {
-        this.clock = clock != null ? clock : Time.SYSTEM;
+        this.clock = clock != null ? clock : SystemTime.getSystemTime();
     }
 
     /**

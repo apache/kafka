@@ -92,7 +92,7 @@ public class ConsumerTaskTest {
             .collect(Collectors.toMap(Function.identity(), e -> 0L));
         consumer = spy(new MockConsumer<>(OffsetResetStrategy.EARLIEST));
         consumer.updateBeginningOffsets(offsets);
-        consumerTask = new ConsumerTask(handler, partitioner, consumer, 10L, 300_000L, new SystemTime());
+        consumerTask = new ConsumerTask(handler, partitioner, consumer, 10L, 300_000L, SystemTime.getSystemTime());
         thread = new Thread(consumerTask);
     }
 

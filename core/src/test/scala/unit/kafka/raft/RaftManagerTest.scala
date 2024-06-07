@@ -28,10 +28,10 @@ import kafka.tools.TestRaftServer.ByteArraySerde
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.SystemTime
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
-import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs, ReplicationConfigs, ServerLogConfigs, ZkConfigs}
+import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ZkConfigs}
 import org.apache.kafka.server.ProcessRole
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -114,8 +114,8 @@ class RaftManagerTest {
       new ByteArraySerde,
       topicPartition,
       topicId,
-      Time.SYSTEM,
-      new Metrics(Time.SYSTEM),
+      SystemTime.getSystemTime,
+      new Metrics(SystemTime.getSystemTime),
       Option.empty,
       CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumVoters)),
       QuorumConfig.parseBootstrapServers(config.quorumBootstrapServers),

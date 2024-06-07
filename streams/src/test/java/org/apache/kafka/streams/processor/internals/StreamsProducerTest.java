@@ -36,6 +36,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
@@ -203,7 +204,7 @@ public class StreamsProducerTest {
             );
         eosBetaStreamsProducer.initTransaction();
         eosBetaMockProducer = eosBetaMockClientSupplier.producers.get(0);
-        when(mockTime.nanoseconds()).thenReturn(Time.SYSTEM.nanoseconds());
+        when(mockTime.nanoseconds()).thenReturn(SystemTime.getSystemTime().nanoseconds());
     }
 
 

@@ -17,7 +17,7 @@
 
 package org.apache.kafka.server.util;
 
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -50,8 +50,8 @@ public class FutureUtilsTest {
             "[FutureUtilsTest] ",
             "the future to be completed",
             future,
-            Deadline.fromDelay(Time.SYSTEM, 30, TimeUnit.SECONDS),
-            Time.SYSTEM));
+            Deadline.fromDelay(SystemTime.getSystemTime(), 30, TimeUnit.SECONDS),
+            SystemTime.getSystemTime()));
         executorService.shutdownNow();
         executorService.awaitTermination(1, TimeUnit.MINUTES);
     }
@@ -68,9 +68,9 @@ public class FutureUtilsTest {
                 "the future to be completed",
                 future,
                 immediateTimeout ?
-                    Deadline.fromDelay(Time.SYSTEM, 0, TimeUnit.SECONDS) :
-                    Deadline.fromDelay(Time.SYSTEM, 1, TimeUnit.MILLISECONDS),
-                Time.SYSTEM);
+                    Deadline.fromDelay(SystemTime.getSystemTime(), 0, TimeUnit.SECONDS) :
+                    Deadline.fromDelay(SystemTime.getSystemTime(), 1, TimeUnit.MILLISECONDS),
+                    SystemTime.getSystemTime());
         });
         executorService.shutdownNow();
         executorService.awaitTermination(1, TimeUnit.MINUTES);
@@ -89,8 +89,8 @@ public class FutureUtilsTest {
                     "[FutureUtilsTest] ",
                     "the future to be completed",
                     future,
-                    Deadline.fromDelay(Time.SYSTEM, 30, TimeUnit.SECONDS),
-                    Time.SYSTEM);
+                    Deadline.fromDelay(SystemTime.getSystemTime(), 30, TimeUnit.SECONDS),
+                    SystemTime.getSystemTime());
             }).getMessage());
         executorService.shutdown();
         executorService.awaitTermination(1, TimeUnit.MINUTES);

@@ -22,7 +22,7 @@ import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.connect.runtime.MockConnectMetrics;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
@@ -66,7 +66,7 @@ public class WorkerGroupMemberTest {
         doReturn("cluster-1").when(config).kafkaClusterId();
 
         LogContext logContext = new LogContext("[Worker clientId=client-1 + groupId= group-1]");
-        member = new WorkerGroupMember(config, "", configBackingStore, null, Time.SYSTEM, "client-1", logContext);
+        member = new WorkerGroupMember(config, "", configBackingStore, null, SystemTime.getSystemTime(), "client-1", logContext);
 
         verify(config, atLeastOnce()).kafkaClusterId();
         boolean foundMockReporter = false;
@@ -109,7 +109,7 @@ public class WorkerGroupMemberTest {
         doReturn("cluster-1").when(config).kafkaClusterId();
 
         LogContext logContext = new LogContext("[Worker clientId=client-1 + groupId= group-1]");
-        member = new WorkerGroupMember(config, "", configBackingStore, null, Time.SYSTEM, "client-1", logContext);
+        member = new WorkerGroupMember(config, "", configBackingStore, null, SystemTime.getSystemTime(), "client-1", logContext);
 
         verify(config, atLeastOnce()).kafkaClusterId();
         assertTrue(member.metrics().reporters().isEmpty());

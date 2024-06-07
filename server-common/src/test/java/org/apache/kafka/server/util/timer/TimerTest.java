@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.server.util.timer;
 
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -71,7 +71,7 @@ public class TimerTest {
 
     @BeforeEach
     public void setup() {
-        timer = new SystemTimer("test", 1, 3, Time.SYSTEM.hiResClockMs());
+        timer = new SystemTimer("test", 1, 3, SystemTime.getSystemTime().hiResClockMs());
     }
 
     @AfterEach

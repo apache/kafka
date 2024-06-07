@@ -22,7 +22,7 @@ import scala.concurrent._
 import scala.concurrent.duration._
 import ExecutionContext.Implicits._
 import kafka.utils.TestUtils
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.SystemTime
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
@@ -231,6 +231,6 @@ class ServerGenerateClusterIdTest extends QuorumTestHarness {
   }
 
   def createServer(config: KafkaConfig, threadNamePrefix: Option[String]): KafkaServer = {
-    TestUtils.createServer(config, Time.SYSTEM, threadNamePrefix)
+    TestUtils.createServer(config, SystemTime.getSystemTime, threadNamePrefix)
   }
 }

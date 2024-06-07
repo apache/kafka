@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group.runtime;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorRuntimeMetrics;
 import org.junit.jupiter.api.Test;
@@ -161,7 +162,7 @@ public class MultiThreadedEventProcessorTest {
             new LogContext(),
             "event-processor-",
             2,
-            Time.SYSTEM,
+            SystemTime.getSystemTime(),
             mock(GroupCoordinatorRuntimeMetrics.class)
         );
         eventProcessor.close();
@@ -173,7 +174,7 @@ public class MultiThreadedEventProcessorTest {
             new LogContext(),
             "event-processor-",
             2,
-            Time.SYSTEM,
+            SystemTime.getSystemTime(),
             mock(GroupCoordinatorRuntimeMetrics.class)
         )) {
             AtomicInteger numEventsExecuted = new AtomicInteger(0);
@@ -210,7 +211,7 @@ public class MultiThreadedEventProcessorTest {
             new LogContext(),
             "event-processor-",
             2,
-            Time.SYSTEM,
+            SystemTime.getSystemTime(),
             mock(GroupCoordinatorRuntimeMetrics.class)
         )) {
             AtomicInteger numEventsExecuted = new AtomicInteger(0);
@@ -295,7 +296,7 @@ public class MultiThreadedEventProcessorTest {
             new LogContext(),
             "event-processor-",
             2,
-            Time.SYSTEM,
+            SystemTime.getSystemTime(),
             mock(GroupCoordinatorRuntimeMetrics.class)
         );
 
@@ -311,7 +312,7 @@ public class MultiThreadedEventProcessorTest {
             new LogContext(),
             "event-processor-",
             1, // Use a single thread to block event in the processor.
-            Time.SYSTEM,
+            SystemTime.getSystemTime(),
             mock(GroupCoordinatorRuntimeMetrics.class)
         )) {
             AtomicInteger numEventsExecuted = new AtomicInteger(0);

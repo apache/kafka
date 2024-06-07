@@ -801,7 +801,7 @@ public abstract class AbstractSessionBytesStoreTest {
             new StreamsConfig(streamsConfig),
             recordCollector
         );
-        final Time time = new SystemTime();
+        final Time time = SystemTime.getSystemTime();
         context.setTime(1L);
         context.setSystemTimeMs(time.milliseconds());
         sessionStore.init((StateStoreContext) context, sessionStore);
@@ -940,7 +940,7 @@ public abstract class AbstractSessionBytesStoreTest {
 
     @Test
     public void shouldNotFetchExpiredSessions() {
-        final long systemTime = Time.SYSTEM.milliseconds();
+        final long systemTime = SystemTime.getSystemTime().milliseconds();
         sessionStore.put(new Windowed<>("p", new SessionWindow(systemTime - 3 * RETENTION_PERIOD, systemTime - 2 * RETENTION_PERIOD)), 1L);
         sessionStore.put(new Windowed<>("q", new SessionWindow(systemTime - 2 * RETENTION_PERIOD, systemTime - RETENTION_PERIOD)), 4L);
         sessionStore.put(new Windowed<>("r", new SessionWindow(systemTime - RETENTION_PERIOD, systemTime - RETENTION_PERIOD / 2)), 3L);

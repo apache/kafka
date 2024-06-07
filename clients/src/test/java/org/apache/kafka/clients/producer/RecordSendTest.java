@@ -32,7 +32,7 @@ import org.apache.kafka.clients.producer.internals.ProduceRequestResult;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.junit.jupiter.api.Test;
 
 public class RecordSendTest {
@@ -48,7 +48,7 @@ public class RecordSendTest {
     public void testTimeout() throws Exception {
         ProduceRequestResult request = new ProduceRequestResult(topicPartition);
         FutureRecordMetadata future = new FutureRecordMetadata(request, relOffset,
-                RecordBatch.NO_TIMESTAMP, 0, 0, Time.SYSTEM);
+                RecordBatch.NO_TIMESTAMP, 0, 0, SystemTime.getSystemTime());
         assertFalse(future.isDone(), "Request is not completed");
         try {
             future.get(5, TimeUnit.MILLISECONDS);
@@ -68,7 +68,7 @@ public class RecordSendTest {
     @Test
     public void testError() {
         FutureRecordMetadata future = new FutureRecordMetadata(asyncRequest(baseOffset, new CorruptRecordException(), 50L),
-                relOffset, RecordBatch.NO_TIMESTAMP, 0, 0, Time.SYSTEM);
+                relOffset, RecordBatch.NO_TIMESTAMP, 0, 0, SystemTime.getSystemTime());
         assertThrows(ExecutionException.class, future::get);
     }
 
@@ -78,7 +78,7 @@ public class RecordSendTest {
     @Test
     public void testBlocking() throws Exception {
         FutureRecordMetadata future = new FutureRecordMetadata(asyncRequest(baseOffset, null, 50L),
-                relOffset, RecordBatch.NO_TIMESTAMP, 0, 0, Time.SYSTEM);
+                relOffset, RecordBatch.NO_TIMESTAMP, 0, 0, SystemTime.getSystemTime());
         assertEquals(baseOffset + relOffset, future.get().offset());
     }
 

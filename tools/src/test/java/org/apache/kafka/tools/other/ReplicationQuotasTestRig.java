@@ -34,7 +34,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.tools.reassign.ReassignPartitionsCommand;
 import org.apache.log4j.PropertyConfigurator;
@@ -167,7 +167,7 @@ public class ReplicationQuotasTestRig {
         void startBrokers(List<Integer> brokerIds) {
             System.out.println("Starting Brokers");
             servers = brokerIds.stream().map(i -> createBrokerConfig(i, zkConnect()))
-                .map(c -> TestUtils.createServer(KafkaConfig.fromProps(c), Time.SYSTEM))
+                .map(c -> TestUtils.createServer(KafkaConfig.fromProps(c), SystemTime.getSystemTime()))
                 .collect(Collectors.toList());
 
             TestUtils.waitUntilBrokerMetadataIsPropagated(seq(servers), DEFAULT_MAX_WAIT_MS);
@@ -224,7 +224,7 @@ public class ReplicationQuotasTestRig {
 
             ReassignPartitionsCommand.executeAssignment(adminClient, false,
                 ReassignPartitionsCommand.formatAsReassignmentJson(newAssignment, Collections.emptyMap()),
-                config.throttle, -1L, 10000L, Time.SYSTEM);
+                config.throttle, -1L, 10000L, SystemTime.getSystemTime());
 
             //Await completion
             waitForReassignmentToComplete();

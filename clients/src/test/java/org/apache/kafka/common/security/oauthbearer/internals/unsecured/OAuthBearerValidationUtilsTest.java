@@ -24,6 +24,7 @@ import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
 
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.junit.jupiter.api.Test;
 
@@ -31,7 +32,7 @@ public class OAuthBearerValidationUtilsTest {
     private static final String QUOTE = "\"";
     private static final String HEADER_COMPACT_SERIALIZATION = Base64.getUrlEncoder().withoutPadding()
             .encodeToString("{\"alg\":\"none\"}".getBytes(StandardCharsets.UTF_8)) + ".";
-    private static final Time TIME = Time.SYSTEM;
+    private static final Time TIME = SystemTime.getSystemTime();
 
     @Test
     public void validateClaimForExistenceAndType() throws OAuthBearerIllegalTokenException {

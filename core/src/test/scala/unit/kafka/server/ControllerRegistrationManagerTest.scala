@@ -22,7 +22,7 @@ import org.apache.kafka.common.message.ControllerRegistrationResponseData
 import org.apache.kafka.common.metadata.{FeatureLevelRecord, RegisterControllerRecord}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.ControllerRegistrationResponse
-import org.apache.kafka.common.utils.{ExponentialBackoff, Time}
+import org.apache.kafka.common.utils.{ExponentialBackoff, SystemTime}
 import org.apache.kafka.image.loader.{LogDeltaManifest, SnapshotManifest}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.{ListenerInfo, RecordTestUtils, VersionRange}
@@ -72,7 +72,7 @@ class ControllerRegistrationManagerTest {
   ): ControllerRegistrationManager = {
     new ControllerRegistrationManager(context.config.nodeId,
       context.clusterId,
-      Time.SYSTEM,
+      SystemTime.getSystemTime,
       "controller-registration-manager-test-",
       createSupportedFeatures(MetadataVersion.IBP_3_7_IV0),
       false,

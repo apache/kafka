@@ -79,6 +79,7 @@ import org.apache.kafka.common.telemetry.internals.ClientTelemetrySender;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.MockPartitioner;
@@ -726,14 +727,14 @@ public class KafkaProducerTest {
 
     private static KafkaProducer<String, String> producerWithOverrideNewSender(Map<String, Object> configs,
                                                                                ProducerMetadata metadata) {
-        return producerWithOverrideNewSender(configs, metadata, Time.SYSTEM);
+        return producerWithOverrideNewSender(configs, metadata, SystemTime.getSystemTime());
     }
 
     private static KafkaProducer<String, String> producerWithOverrideNewSender(Map<String, Object> configs,
                                                                                ProducerMetadata metadata,
                                                                                Time time) {
         // let mockClient#leastLoadedNode return the node directly so that we can isolate Metadata calls from KafkaProducer for idempotent producer
-        MockClient mockClient = new MockClient(Time.SYSTEM, metadata) {
+        MockClient mockClient = new MockClient(SystemTime.getSystemTime(), metadata) {
             @Override
             public Node leastLoadedNode(long now) {
                 return NODE;
@@ -1019,7 +1020,7 @@ public class KafkaProducerTest {
         Serializer<String> keySerializer = mock(serializerClassToMock);
         Serializer<String> valueSerializer = mock(serializerClassToMock);
 
-        long nowMs = Time.SYSTEM.milliseconds();
+        long nowMs = SystemTime.getSystemTime().milliseconds();
         String topic = "topic";
         ProducerMetadata metadata = newMetadata(0, 0, 90000);
         metadata.add(topic, nowMs);
@@ -1028,7 +1029,7 @@ public class KafkaProducerTest {
         metadata.updateWithCurrentRequestVersion(initialUpdateResponse, false, nowMs);
 
         KafkaProducer<String, String> producer = kafkaProducer(configs, keySerializer, valueSerializer, metadata,
-                null, null, Time.SYSTEM);
+                null, null, SystemTime.getSystemTime());
 
         when(keySerializer.serialize(any(), any(), any())).then(invocation ->
                 invocation.<String>getArgument(2).getBytes());
@@ -1159,7 +1160,7 @@ public class KafkaProducerTest {
         String topic = "topic";
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, "value");
 
-        long nowMs = Time.SYSTEM.milliseconds();
+        long nowMs = SystemTime.getSystemTime().milliseconds();
         ProducerMetadata metadata = newMetadata(0, 0, 90000);
         metadata.add(topic, nowMs);
         MetadataResponse initialUpdateResponse = RequestTestUtils.metadataUpdateWith(1, singletonMap(topic, 1));
@@ -1168,7 +1169,7 @@ public class KafkaProducerTest {
         @SuppressWarnings("unchecked") // it is safe to suppress, since this is a mock class
                 ProducerInterceptors<String, String> interceptors = mock(ProducerInterceptors.class);
         KafkaProducer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
-                new StringSerializer(), metadata, null, interceptors, Time.SYSTEM);
+                new StringSerializer(), metadata, null, interceptors, SystemTime.getSystemTime());
 
         when(interceptors.onSend(any())).then(invocation -> invocation.getArgument(0));
 
@@ -1851,7 +1852,7 @@ public class KafkaProducerTest {
         // block in Metadata#awaitUpdate for the configured max.block.ms. When close() is invoked, KafkaProducer#send should
         // return with a KafkaException.
         String topicName = "test";
-        Time time = Time.SYSTEM;
+        Time time = SystemTime.getSystemTime();
         MetadataResponse initialUpdateResponse = RequestTestUtils.metadataUpdateWith(1, emptyMap());
         ProducerMetadata metadata = new ProducerMetadata(0, 0, Long.MAX_VALUE, Long.MAX_VALUE,
                 new LogContext(), new ClusterResourceListeners(), time);
@@ -2011,7 +2012,7 @@ public class KafkaProducerTest {
 
     private static ProducerMetadata newMetadata(long refreshBackoffMs, long refreshBackoffMaxMs, long expirationMs) {
         return new ProducerMetadata(refreshBackoffMs, refreshBackoffMaxMs, expirationMs, DEFAULT_METADATA_IDLE_MS,
-                new LogContext(), new ClusterResourceListeners(), Time.SYSTEM);
+                new LogContext(), new ClusterResourceListeners(), SystemTime.getSystemTime());
     }
 
     @Test
@@ -2042,7 +2043,7 @@ public class KafkaProducerTest {
         assertTrue(config.unused().contains(SslConfigs.SSL_PROTOCOL_CONFIG));
 
         try (KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(config, null, null,
-                null, null, null, Time.SYSTEM)) {
+                null, null, null, SystemTime.getSystemTime())) {
             assertTrue(config.unused().contains(SslConfigs.SSL_PROTOCOL_CONFIG));
         }
     }

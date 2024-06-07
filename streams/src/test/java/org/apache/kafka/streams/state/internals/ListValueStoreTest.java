@@ -20,7 +20,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -102,7 +102,7 @@ public class ListValueStoreTest {
                 : Stores.inMemoryKeyValueStore("in-memory list store"),
             keySerde,
             valueSerde,
-            Time.SYSTEM)
+            SystemTime.getSystemTime())
             .build();
     }
 

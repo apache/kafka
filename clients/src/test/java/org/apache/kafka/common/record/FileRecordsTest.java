@@ -24,6 +24,7 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.network.TransferableChannel;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
@@ -427,7 +428,7 @@ public class FileRecordsTest {
 
         // Lazy down-conversion will not return any messages for a partial input batch
         TopicPartition tp = new TopicPartition("topic-1", 0);
-        LazyDownConversionRecords lazyRecords = new LazyDownConversionRecords(tp, slice, RecordBatch.MAGIC_VALUE_V0, 0, Time.SYSTEM);
+        LazyDownConversionRecords lazyRecords = new LazyDownConversionRecords(tp, slice, RecordBatch.MAGIC_VALUE_V0, 0, SystemTime.getSystemTime());
         Iterator<ConvertedRecords<?>> it = lazyRecords.iterator(16 * 1024L);
         assertFalse(it.hasNext(), "No messages should be returned");
     }
@@ -436,7 +437,7 @@ public class FileRecordsTest {
     public void testFormatConversionWithNoMessages() {
         TopicPartition tp = new TopicPartition("topic-1", 0);
         LazyDownConversionRecords lazyRecords = new LazyDownConversionRecords(tp, MemoryRecords.EMPTY, RecordBatch.MAGIC_VALUE_V0,
-            0, Time.SYSTEM);
+            0, SystemTime.getSystemTime());
         assertEquals(0, lazyRecords.sizeInBytes());
         Iterator<ConvertedRecords<?>> it = lazyRecords.iterator(16 * 1024L);
         assertFalse(it.hasNext(), "No messages should be returned");
@@ -646,7 +647,7 @@ public class FileRecordsTest {
                 1L);
         for (long readSize : maximumReadSize) {
             TopicPartition tp = new TopicPartition("topic-1", 0);
-            LazyDownConversionRecords lazyRecords = new LazyDownConversionRecords(tp, fileRecords, toMagic, firstOffset, Time.SYSTEM);
+            LazyDownConversionRecords lazyRecords = new LazyDownConversionRecords(tp, fileRecords, toMagic, firstOffset, SystemTime.getSystemTime());
             Iterator<ConvertedRecords<?>> it = lazyRecords.iterator(readSize);
             while (it.hasNext())
                 convertedRecords.add(it.next().records());

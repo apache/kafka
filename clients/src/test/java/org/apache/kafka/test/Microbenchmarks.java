@@ -27,6 +27,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 
 import org.apache.kafka.common.utils.CopyOnWriteMap;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 
 public class Microbenchmarks {
@@ -75,7 +76,7 @@ public class Microbenchmarks {
         System.out.println(loc);
         System.out.println("binary search: " + (System.nanoTime() - start) / iters);
 
-        final Time time = Time.SYSTEM;
+        final Time time = SystemTime.getSystemTime();
         final AtomicBoolean done = new AtomicBoolean(false);
         final Object lock = new Object();
         Thread t1 = new Thread(() -> {

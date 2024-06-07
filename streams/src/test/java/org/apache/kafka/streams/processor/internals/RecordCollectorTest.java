@@ -45,6 +45,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.AlwaysContinueProductionExceptionHandler;
@@ -153,7 +154,7 @@ public class RecordCollectorTest {
             null,
             processId,
             logContext,
-            Time.SYSTEM
+            SystemTime.getSystemTime()
         );
         mockProducer = clientSupplier.producers.get(0);
         final SinkNode<?, ?> sinkNode = new SinkNode<>(
@@ -1369,7 +1370,7 @@ public class RecordCollectorTest {
                 taskId,
                 processId,
                 logContext,
-                Time.SYSTEM
+                SystemTime.getSystemTime()
             ),
             productionExceptionHandler,
             streamsMetrics,
@@ -1402,7 +1403,7 @@ public class RecordCollectorTest {
                 null,
                 null,
                 logContext,
-                Time.SYSTEM
+                SystemTime.getSystemTime()
             ),
             productionExceptionHandler,
             streamsMetrics,
@@ -1438,7 +1439,7 @@ public class RecordCollectorTest {
                 taskId,
                 processId,
                 logContext,
-                Time.SYSTEM
+                SystemTime.getSystemTime()
             ),
             productionExceptionHandler,
             streamsMetrics,
@@ -1552,7 +1553,7 @@ public class RecordCollectorTest {
             null,
             null,
             logContext,
-            Time.SYSTEM
+            SystemTime.getSystemTime()
         );
     }
 
@@ -1574,7 +1575,7 @@ public class RecordCollectorTest {
             null,
             null,
             logContext,
-            Time.SYSTEM
+            SystemTime.getSystemTime()
         );
     }
 

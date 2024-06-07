@@ -21,6 +21,7 @@ import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.runtime.TopicStatus;
@@ -155,7 +156,7 @@ public class KafkaStatusBackingStoreFormatTest {
 
     @Test
     public void readTopicStatus() {
-        TopicStatus topicStatus = new TopicStatus(FOO_TOPIC, new ConnectorTaskId(FOO_CONNECTOR, 0), Time.SYSTEM.milliseconds());
+        TopicStatus topicStatus = new TopicStatus(FOO_TOPIC, new ConnectorTaskId(FOO_CONNECTOR, 0), SystemTime.getSystemTime().milliseconds());
         String key = TOPIC_STATUS_PREFIX + FOO_TOPIC + TOPIC_STATUS_SEPARATOR + FOO_CONNECTOR;
         byte[] value = store.serializeTopicStatus(topicStatus);
         ConsumerRecord<String, byte[]> statusRecord = new ConsumerRecord<>(STATUS_TOPIC, 0, 0, key, value);
@@ -167,7 +168,7 @@ public class KafkaStatusBackingStoreFormatTest {
 
     @Test
     public void deleteTopicStatus() {
-        TopicStatus topicStatus = new TopicStatus("foo", new ConnectorTaskId("bar", 0), Time.SYSTEM.milliseconds());
+        TopicStatus topicStatus = new TopicStatus("foo", new ConnectorTaskId("bar", 0), SystemTime.getSystemTime().milliseconds());
         store.topics.computeIfAbsent("bar", k -> new ConcurrentHashMap<>()).put("foo", topicStatus);
         assertTrue(store.topics.containsKey("bar"));
         assertTrue(store.topics.get("bar").containsKey("foo"));

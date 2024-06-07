@@ -29,7 +29,7 @@ import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -724,7 +724,7 @@ public class AbstractWorkerSourceTaskTest {
         when(statusBackingStore.getTopic(anyString(), anyString())).thenAnswer((Answer<TopicStatus>) invocation -> {
             String connector = invocation.getArgument(0, String.class);
             String topic = invocation.getArgument(1, String.class);
-            return new TopicStatus(topic, new ConnectorTaskId(connector, 0), Time.SYSTEM.milliseconds());
+            return new TopicStatus(topic, new ConnectorTaskId(connector, 0), SystemTime.getSystemTime().milliseconds());
         });
     }
 
@@ -812,7 +812,7 @@ public class AbstractWorkerSourceTaskTest {
         workerTask = new AbstractWorkerSourceTask(
                 taskId, sourceTask, statusListener, TargetState.STARTED, keyConverter, valueConverter, headerConverter, transformationChain,
                 sourceTaskContext, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig), offsetReader, offsetWriter, offsetStore,
-                config, metrics, errorHandlingMetrics,  plugins.delegatingLoader(), Time.SYSTEM, retryWithToleranceOperator,
+                config, metrics, errorHandlingMetrics,  plugins.delegatingLoader(), SystemTime.getSystemTime(), retryWithToleranceOperator,
                 statusBackingStore, Runnable::run, errorReportersSupplier) {
             @Override
             protected void prepareToInitializeTask() {

@@ -31,6 +31,7 @@ import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
@@ -95,8 +96,8 @@ public class GroupCoordinatorShardTest {
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            Time.SYSTEM,
-            new MockCoordinatorTimer<>(Time.SYSTEM),
+            SystemTime.getSystemTime(),
+            new MockCoordinatorTimer<>(SystemTime.getSystemTime()),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
             metricsShard
@@ -127,8 +128,8 @@ public class GroupCoordinatorShardTest {
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            Time.SYSTEM,
-            new MockCoordinatorTimer<>(Time.SYSTEM),
+            SystemTime.getSystemTime(),
+            new MockCoordinatorTimer<>(SystemTime.getSystemTime()),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
             metricsShard
@@ -159,7 +160,7 @@ public class GroupCoordinatorShardTest {
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            Time.SYSTEM,
+            SystemTime.getSystemTime(),
             new MockCoordinatorTimer<>(new MockTime()),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
@@ -189,8 +190,8 @@ public class GroupCoordinatorShardTest {
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            Time.SYSTEM,
-            new MockCoordinatorTimer<>(Time.SYSTEM),
+            SystemTime.getSystemTime(),
+            new MockCoordinatorTimer<>(SystemTime.getSystemTime()),
             mock(GroupCoordinatorConfig.class),
             mock(CoordinatorMetrics.class),
             mock(CoordinatorMetricsShard.class)
@@ -246,8 +247,8 @@ public class GroupCoordinatorShardTest {
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            Time.SYSTEM,
-            new MockCoordinatorTimer<>(Time.SYSTEM),
+            SystemTime.getSystemTime(),
+            new MockCoordinatorTimer<>(SystemTime.getSystemTime()),
             mock(GroupCoordinatorConfig.class),
             mock(CoordinatorMetrics.class),
             mock(CoordinatorMetricsShard.class)
@@ -316,8 +317,8 @@ public class GroupCoordinatorShardTest {
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            Time.SYSTEM,
-            new MockCoordinatorTimer<>(Time.SYSTEM),
+            SystemTime.getSystemTime(),
+            new MockCoordinatorTimer<>(SystemTime.getSystemTime()),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
             metricsShard
@@ -361,7 +362,7 @@ public class GroupCoordinatorShardTest {
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            Time.SYSTEM,
+            SystemTime.getSystemTime(),
             new MockCoordinatorTimer<>(new MockTime()),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
@@ -406,8 +407,8 @@ public class GroupCoordinatorShardTest {
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            Time.SYSTEM,
-            new MockCoordinatorTimer<>(Time.SYSTEM),
+            SystemTime.getSystemTime(),
+            new MockCoordinatorTimer<>(SystemTime.getSystemTime()),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
             metricsShard
@@ -450,8 +451,8 @@ public class GroupCoordinatorShardTest {
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            Time.SYSTEM,
-            new MockCoordinatorTimer<>(Time.SYSTEM),
+            SystemTime.getSystemTime(),
+            new MockCoordinatorTimer<>(SystemTime.getSystemTime()),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
             metricsShard
@@ -478,8 +479,8 @@ public class GroupCoordinatorShardTest {
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            Time.SYSTEM,
-            new MockCoordinatorTimer<>(Time.SYSTEM),
+            SystemTime.getSystemTime(),
+            new MockCoordinatorTimer<>(SystemTime.getSystemTime()),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
             metricsShard
@@ -505,8 +506,8 @@ public class GroupCoordinatorShardTest {
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            Time.SYSTEM,
-            new MockCoordinatorTimer<>(Time.SYSTEM),
+            SystemTime.getSystemTime(),
+            new MockCoordinatorTimer<>(SystemTime.getSystemTime()),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
             metricsShard
@@ -533,8 +534,8 @@ public class GroupCoordinatorShardTest {
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            Time.SYSTEM,
-            new MockCoordinatorTimer<>(Time.SYSTEM),
+            SystemTime.getSystemTime(),
+            new MockCoordinatorTimer<>(SystemTime.getSystemTime()),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
             metricsShard
@@ -560,8 +561,8 @@ public class GroupCoordinatorShardTest {
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            Time.SYSTEM,
-            new MockCoordinatorTimer<>(Time.SYSTEM),
+            SystemTime.getSystemTime(),
+            new MockCoordinatorTimer<>(SystemTime.getSystemTime()),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
             metricsShard
@@ -588,8 +589,8 @@ public class GroupCoordinatorShardTest {
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            Time.SYSTEM,
-            new MockCoordinatorTimer<>(Time.SYSTEM),
+            SystemTime.getSystemTime(),
+            new MockCoordinatorTimer<>(SystemTime.getSystemTime()),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
             metricsShard
@@ -615,8 +616,8 @@ public class GroupCoordinatorShardTest {
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            Time.SYSTEM,
-            new MockCoordinatorTimer<>(Time.SYSTEM),
+            SystemTime.getSystemTime(),
+            new MockCoordinatorTimer<>(SystemTime.getSystemTime()),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
             metricsShard
@@ -643,8 +644,8 @@ public class GroupCoordinatorShardTest {
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            Time.SYSTEM,
-            new MockCoordinatorTimer<>(Time.SYSTEM),
+            SystemTime.getSystemTime(),
+            new MockCoordinatorTimer<>(SystemTime.getSystemTime()),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
             metricsShard
@@ -670,8 +671,8 @@ public class GroupCoordinatorShardTest {
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            Time.SYSTEM,
-            new MockCoordinatorTimer<>(Time.SYSTEM),
+            SystemTime.getSystemTime(),
+            new MockCoordinatorTimer<>(SystemTime.getSystemTime()),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
             metricsShard
@@ -698,8 +699,8 @@ public class GroupCoordinatorShardTest {
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            Time.SYSTEM,
-            new MockCoordinatorTimer<>(Time.SYSTEM),
+            SystemTime.getSystemTime(),
+            new MockCoordinatorTimer<>(SystemTime.getSystemTime()),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
             metricsShard
@@ -725,8 +726,8 @@ public class GroupCoordinatorShardTest {
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            Time.SYSTEM,
-            new MockCoordinatorTimer<>(Time.SYSTEM),
+            SystemTime.getSystemTime(),
+            new MockCoordinatorTimer<>(SystemTime.getSystemTime()),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
             metricsShard
@@ -753,8 +754,8 @@ public class GroupCoordinatorShardTest {
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            Time.SYSTEM,
-            new MockCoordinatorTimer<>(Time.SYSTEM),
+            SystemTime.getSystemTime(),
+            new MockCoordinatorTimer<>(SystemTime.getSystemTime()),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
             metricsShard
@@ -780,8 +781,8 @@ public class GroupCoordinatorShardTest {
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            Time.SYSTEM,
-            new MockCoordinatorTimer<>(Time.SYSTEM),
+            SystemTime.getSystemTime(),
+            new MockCoordinatorTimer<>(SystemTime.getSystemTime()),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
             metricsShard
@@ -806,8 +807,8 @@ public class GroupCoordinatorShardTest {
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            Time.SYSTEM,
-            new MockCoordinatorTimer<>(Time.SYSTEM),
+            SystemTime.getSystemTime(),
+            new MockCoordinatorTimer<>(SystemTime.getSystemTime()),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
             metricsShard
@@ -835,8 +836,8 @@ public class GroupCoordinatorShardTest {
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            Time.SYSTEM,
-            new MockCoordinatorTimer<>(Time.SYSTEM),
+            SystemTime.getSystemTime(),
+            new MockCoordinatorTimer<>(SystemTime.getSystemTime()),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
             metricsShard
@@ -862,8 +863,8 @@ public class GroupCoordinatorShardTest {
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            Time.SYSTEM,
-            new MockCoordinatorTimer<>(Time.SYSTEM),
+            SystemTime.getSystemTime(),
+            new MockCoordinatorTimer<>(SystemTime.getSystemTime()),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
             metricsShard
@@ -890,8 +891,8 @@ public class GroupCoordinatorShardTest {
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            Time.SYSTEM,
-            new MockCoordinatorTimer<>(Time.SYSTEM),
+            SystemTime.getSystemTime(),
+            new MockCoordinatorTimer<>(SystemTime.getSystemTime()),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
             metricsShard
@@ -1003,8 +1004,8 @@ public class GroupCoordinatorShardTest {
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            Time.SYSTEM,
-            new MockCoordinatorTimer<>(Time.SYSTEM),
+            SystemTime.getSystemTime(),
+            new MockCoordinatorTimer<>(SystemTime.getSystemTime()),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
             metricsShard
@@ -1032,8 +1033,8 @@ public class GroupCoordinatorShardTest {
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            Time.SYSTEM,
-            new MockCoordinatorTimer<>(Time.SYSTEM),
+            SystemTime.getSystemTime(),
+            new MockCoordinatorTimer<>(SystemTime.getSystemTime()),
             mock(GroupCoordinatorConfig.class),
             coordinatorMetrics,
             metricsShard

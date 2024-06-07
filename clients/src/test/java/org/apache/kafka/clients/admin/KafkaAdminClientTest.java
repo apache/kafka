@@ -223,6 +223,7 @@ import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.MockMetricsReporter;
@@ -777,7 +778,7 @@ public class KafkaAdminClientTest {
      */
     @Test
     public void testTimeoutWithoutMetadata() throws Exception {
-        try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(Time.SYSTEM, mockBootstrapCluster(),
+        try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(SystemTime.getSystemTime(), mockBootstrapCluster(),
                 newStrMap(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "10"))) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareResponse(prepareCreateTopicsResponse("myTopic", Errors.NONE));
@@ -794,7 +795,7 @@ public class KafkaAdminClientTest {
         // the server disconnects before sending the full response
 
         Cluster cluster = mockBootstrapCluster();
-        try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(Time.SYSTEM, cluster)) {
+        try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(SystemTime.getSystemTime(), cluster)) {
             Cluster discoveredCluster = mockCluster(3, 0);
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareResponse(request -> request instanceof MetadataRequest, null, true);
@@ -819,7 +820,7 @@ public class KafkaAdminClientTest {
 
         Cluster cluster = Cluster.bootstrap(singletonList(new InetSocketAddress("localhost", 8121)));
         Map<Node, Long> unreachableNodes = Collections.singletonMap(cluster.nodes().get(0), 200L);
-        try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(Time.SYSTEM, cluster,
+        try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(SystemTime.getSystemTime(), cluster,
                 AdminClientUnitTestEnv.clientConfigs(), unreachableNodes)) {
             Cluster discoveredCluster = mockCluster(3, 0);
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
@@ -842,7 +843,7 @@ public class KafkaAdminClientTest {
      */
     @Test
     public void testPropagatedMetadataFetchException() throws Exception {
-        try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(Time.SYSTEM,
+        try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(SystemTime.getSystemTime(),
                 mockCluster(3, 0),
                 newStrMap(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:8121",
                 AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "10"))) {
@@ -1634,7 +1635,7 @@ public class KafkaAdminClientTest {
     @Test
     public void testAdminClientApisAuthenticationFailure() {
         Cluster cluster = mockBootstrapCluster();
-        try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(Time.SYSTEM, cluster,
+        try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(SystemTime.getSystemTime(), cluster,
                 newStrMap(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "1000"))) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().createPendingAuthenticationError(cluster.nodes().get(0),
@@ -6961,7 +6962,7 @@ public class KafkaAdminClientTest {
     @Test
     public void testUnregisterBrokerTimeoutMaxRetry() {
         int nodeId = 1;
-        try (final AdminClientUnitTestEnv env = mockClientEnv(Time.SYSTEM, AdminClientConfig.RETRIES_CONFIG, "1")) {
+        try (final AdminClientUnitTestEnv env = mockClientEnv(SystemTime.getSystemTime(), AdminClientConfig.RETRIES_CONFIG, "1")) {
             env.kafkaClient().setNodeApiVersions(
                     NodeApiVersions.create(ApiKeys.UNREGISTER_BROKER.id, (short) 0, (short) 0));
             env.kafkaClient().prepareResponse(prepareUnregisterBrokerResponse(Errors.REQUEST_TIMED_OUT, 0));

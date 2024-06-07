@@ -19,7 +19,7 @@ package kafka.log
 import java.io.File
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{SystemTime, Time, Utils}
 import org.apache.kafka.storage.internals.log.{LogSegment, LogSegments}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -38,7 +38,7 @@ class LogSegmentsTest {
   /* create a segment with the given base offset */
   private def createSegment(offset: Long,
                     indexIntervalBytes: Int = 10,
-                    time: Time = Time.SYSTEM): LogSegment = {
+                    time: Time = SystemTime.getSystemTime): LogSegment = {
     LogTestUtils.createSegment(offset, logDir, indexIntervalBytes, time)
   }
 

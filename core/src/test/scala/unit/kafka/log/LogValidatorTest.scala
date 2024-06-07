@@ -23,7 +23,7 @@ import kafka.utils.TestUtils.meterCount
 import org.apache.kafka.common.compress.{Compression, GzipCompression, Lz4Compression}
 import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.utils.{PrimitiveRef, Time}
+import org.apache.kafka.common.utils.{PrimitiveRef, SystemTime}
 import org.apache.kafka.common.{InvalidRecordException, TopicPartition}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.storage.internals.log.LogValidator.ValidationResult
@@ -38,7 +38,7 @@ import scala.jdk.CollectionConverters._
 
 class LogValidatorTest {
 
-  val time = Time.SYSTEM
+  val time = SystemTime.getSystemTime
   val topicPartition = new TopicPartition("topic", 0)
   val metricsKeySet = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala
   val metricsRecorder = UnifiedLog.newValidatorMetricsRecorder(new BrokerTopicStats().allTopicsStats)

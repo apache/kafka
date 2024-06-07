@@ -30,7 +30,7 @@ import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{OffsetFetchResponse, RequestContext, RequestHeader}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
-import org.apache.kafka.common.utils.{BufferSupplier, Time}
+import org.apache.kafka.common.utils.{BufferSupplier, SystemTime}
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.test.TestUtils.assertFutureThrows
@@ -65,7 +65,7 @@ class GroupCoordinatorAdapterTest {
   @Test
   def testJoinConsumerGroup(): Unit = {
     val groupCoordinator = mock(classOf[GroupCoordinator])
-    val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator, SystemTime.getSystemTime)
 
     val ctx = makeContext(ApiKeys.CONSUMER_GROUP_HEARTBEAT, ApiKeys.CONSUMER_GROUP_HEARTBEAT.latestVersion)
     val request = new ConsumerGroupHeartbeatRequestData()
@@ -82,7 +82,7 @@ class GroupCoordinatorAdapterTest {
   @ApiKeyVersionsSource(apiKey = ApiKeys.JOIN_GROUP)
   def testJoinGroup(version: Short): Unit = {
     val groupCoordinator = mock(classOf[GroupCoordinator])
-    val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator, SystemTime.getSystemTime)
 
     val ctx = makeContext(ApiKeys.JOIN_GROUP, version)
     val request = new JoinGroupRequestData()
@@ -170,7 +170,7 @@ class GroupCoordinatorAdapterTest {
   @ApiKeyVersionsSource(apiKey = ApiKeys.SYNC_GROUP)
   def testSyncGroup(version: Short): Unit = {
     val groupCoordinator = mock(classOf[GroupCoordinator])
-    val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator, SystemTime.getSystemTime)
 
     val ctx = makeContext(ApiKeys.SYNC_GROUP, version)
     val data = new SyncGroupRequestData()
@@ -237,7 +237,7 @@ class GroupCoordinatorAdapterTest {
   @Test
   def testHeartbeat(): Unit = {
     val groupCoordinator = mock(classOf[GroupCoordinator])
-    val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator, SystemTime.getSystemTime)
 
     val ctx = makeContext(ApiKeys.HEARTBEAT, ApiKeys.HEARTBEAT.latestVersion)
     val data = new HeartbeatRequestData()
@@ -268,7 +268,7 @@ class GroupCoordinatorAdapterTest {
 
   def testLeaveGroup(): Unit = {
     val groupCoordinator = mock(classOf[GroupCoordinator])
-    val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator, SystemTime.getSystemTime)
 
     val ctx = makeContext(ApiKeys.LEAVE_GROUP, ApiKeys.LEAVE_GROUP.latestVersion)
     val data = new LeaveGroupRequestData()
@@ -340,7 +340,7 @@ class GroupCoordinatorAdapterTest {
     expectedTypesFilter: Set[String]
   ): Unit = {
     val groupCoordinator = mock(classOf[GroupCoordinator])
-    val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator, SystemTime.getSystemTime)
 
     val ctx = makeContext(ApiKeys.LIST_GROUPS, ApiKeys.LIST_GROUPS.latestVersion)
     val data = new ListGroupsRequestData()
@@ -379,7 +379,7 @@ class GroupCoordinatorAdapterTest {
   @Test
   def testDescribeGroup(): Unit = {
     val groupCoordinator = mock(classOf[GroupCoordinator])
-    val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator, SystemTime.getSystemTime)
 
     val groupId1 = "group-1"
     val groupId2 = "group-2"
@@ -436,7 +436,7 @@ class GroupCoordinatorAdapterTest {
   @Test
   def testDeleteGroups(): Unit = {
     val groupCoordinator = mock(classOf[GroupCoordinator])
-    val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator, SystemTime.getSystemTime)
 
     val ctx = makeContext(ApiKeys.DELETE_GROUPS, ApiKeys.DELETE_GROUPS.latestVersion)
     val groupIds = List("group-1", "group-2", "group-3")
@@ -475,7 +475,7 @@ class GroupCoordinatorAdapterTest {
     val bar1 = new TopicPartition("bar", 1)
 
     val groupCoordinator = mock(classOf[GroupCoordinator])
-    val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator, SystemTime.getSystemTime)
 
     when(groupCoordinator.handleFetchOffsets(
       "group",
@@ -557,7 +557,7 @@ class GroupCoordinatorAdapterTest {
     val bar1 = new TopicPartition("bar", 1)
 
     val groupCoordinator = mock(classOf[GroupCoordinator])
-    val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator, SystemTime.getSystemTime)
 
     when(groupCoordinator.handleFetchOffsets(
       "group",
@@ -786,7 +786,7 @@ class GroupCoordinatorAdapterTest {
 
   def testDeleteOffsets(): Unit = {
     val groupCoordinator = mock(classOf[GroupCoordinator])
-    val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator, SystemTime.getSystemTime)
 
     val foo0 = new TopicPartition("foo", 0)
     val foo1 = new TopicPartition("foo", 1)
@@ -859,7 +859,7 @@ class GroupCoordinatorAdapterTest {
   @Test
   def testDeleteOffsetsWithGroupLevelError(): Unit = {
     val groupCoordinator = mock(classOf[GroupCoordinator])
-    val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator, SystemTime.getSystemTime)
 
     val foo0 = new TopicPartition("foo", 0)
     val foo1 = new TopicPartition("foo", 1)
@@ -892,7 +892,7 @@ class GroupCoordinatorAdapterTest {
   @Test
   def testConsumerGroupDescribe(): Unit = {
     val groupCoordinator = mock(classOf[GroupCoordinator])
-    val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator, SystemTime.getSystemTime)
     val context = makeContext(ApiKeys.CONSUMER_GROUP_DESCRIBE, ApiKeys.CONSUMER_GROUP_DESCRIBE.latestVersion)
     val groupIds = List("group-id-1", "group-id-2").asJava
 

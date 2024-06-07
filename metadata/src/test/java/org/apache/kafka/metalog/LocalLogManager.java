@@ -21,7 +21,7 @@ import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
@@ -518,7 +518,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         this.nodeId = nodeId;
         this.shared = shared;
         this.maxReadOffset = shared.initialMaxReadOffset();
-        this.eventQueue = new KafkaEventQueue(Time.SYSTEM, logContext,
+        this.eventQueue = new KafkaEventQueue(SystemTime.getSystemTime(), logContext,
                 threadNamePrefix, new ShutdownEvent());
         shared.registerLogManager(this);
     }

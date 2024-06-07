@@ -35,6 +35,7 @@ import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.metrics.CoordinatorMetrics;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
@@ -2695,7 +2696,7 @@ public class CoordinatorRuntimeTest {
 
         CoordinatorRuntime<MockCoordinatorShard, String> runtime =
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
-                .withTime(Time.SYSTEM)
+                .withTime(SystemTime.getSystemTime())
                 .withTimer(timer)
                 .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader(
@@ -2752,7 +2753,7 @@ public class CoordinatorRuntimeTest {
 
         CoordinatorRuntime<MockCoordinatorShard, String> runtime =
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
-                .withTime(Time.SYSTEM)
+                .withTime(SystemTime.getSystemTime())
                 .withTimer(timer)
                 .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader(

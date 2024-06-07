@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.internals.RequestFuture;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.ConnectorsAndTasks;
@@ -75,7 +76,7 @@ public class IncrementalCooperativeAssignorTest {
     @Before
     public void setup() {
         generationId = 1000;
-        time = Time.SYSTEM;
+        time = SystemTime.getSystemTime();
         rebalanceDelay = DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_DEFAULT;
         connectors = new HashMap<>();
         addNewConnector("connector1", 4);

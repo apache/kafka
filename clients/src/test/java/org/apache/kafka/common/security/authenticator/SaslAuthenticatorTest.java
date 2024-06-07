@@ -94,6 +94,7 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.SecurityUtils;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
@@ -153,7 +154,7 @@ public class SaslAuthenticatorTest {
 
     private static final long CONNECTIONS_MAX_REAUTH_MS_VALUE = 100L;
     private static final int BUFFER_SIZE = 4 * 1024;
-    private static Time time = Time.SYSTEM;
+    private static Time time = SystemTime.getSystemTime();
 
     private NioEchoServer server;
     private Selector selector;
@@ -166,7 +167,7 @@ public class SaslAuthenticatorTest {
     @BeforeEach
     public void setup() throws Exception {
         LoginManager.closeAll();
-        time = Time.SYSTEM;
+        time = SystemTime.getSystemTime();
         CertStores serverCertStores = new CertStores(true, "localhost");
         CertStores clientCertStores = new CertStores(false, "localhost");
         saslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
@@ -1767,10 +1768,10 @@ public class SaslAuthenticatorTest {
         server.verifyReauthenticationMetrics(0, 0);
         double successfulReauthentications = 0;
         int desiredNumReauthentications = 5;
-        long startMs = Time.SYSTEM.milliseconds();
+        long startMs = SystemTime.getSystemTime().milliseconds();
         long timeoutMs = startMs + 1000 * 15; // stop after 15 seconds
         while (successfulReauthentications < desiredNumReauthentications
-                && Time.SYSTEM.milliseconds() < timeoutMs) {
+                && SystemTime.getSystemTime().milliseconds() < timeoutMs) {
             checkClientConnection(node);
             successfulReauthentications = server.metricValue("successful-reauthentication-total");
         }

@@ -28,7 +28,7 @@ import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.message.LeaderAndIsrRequestData
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrTopicState
 import org.apache.kafka.common.requests.{AbstractControlRequest, LeaderAndIsrRequest}
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{SystemTime, Utils}
 import org.apache.kafka.common.{DirectoryId, KafkaException, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.image.{TopicImage, TopicsImage}
@@ -1370,7 +1370,7 @@ class LogManagerTest {
       producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfigs.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
       producerIdExpirationCheckIntervalMs = TransactionLogConfigs.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
       scheduler = scheduler,
-      time = Time.SYSTEM,
+      time = SystemTime.getSystemTime,
       brokerTopicStats = new BrokerTopicStats,
       logDirFailureChannel = new LogDirFailureChannel(1),
       keepPartitionMetadataFile = true,

@@ -47,7 +47,7 @@ import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.server.config.QuotaConfigs;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.TerseException;
@@ -714,7 +714,7 @@ public class ReassignPartitionsCommandTest {
                                       Long replicaAlterLogDirsThrottle) throws RuntimeException {
         try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
             executeAssignment(admin, additional, reassignmentJson,
-                    interBrokerThrottle, replicaAlterLogDirsThrottle, 10000L, Time.SYSTEM);
+                    interBrokerThrottle, replicaAlterLogDirsThrottle, 10000L, SystemTime.getSystemTime());
         } catch (ExecutionException | InterruptedException | JsonProcessingException | TerseException e) {
             throw new RuntimeException(e);
         }
@@ -725,7 +725,7 @@ public class ReassignPartitionsCommandTest {
             Boolean preserveThrottles
     ) {
         try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
-            return cancelAssignment(admin, jsonString, preserveThrottles, 10000L, Time.SYSTEM);
+            return cancelAssignment(admin, jsonString, preserveThrottles, 10000L, SystemTime.getSystemTime());
         } catch (ExecutionException | InterruptedException | JsonProcessingException | TerseException e) {
             throw new RuntimeException(e);
         }

@@ -17,7 +17,7 @@
 package kafka.server
 
 import kafka.utils.TestUtils
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{SystemTime, Utils}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, PropertiesUtils}
 import org.apache.kafka.server.config.ServerConfigs
 import org.apache.zookeeper.KeeperException.NodeExistsException
@@ -187,6 +187,6 @@ class ServerGenerateBrokerIdTest extends QuorumTestHarness {
   }
 
   private def createServer(config: KafkaConfig, threadNamePrefix: Option[String]): KafkaServer = {
-    TestUtils.createServer(config, Time.SYSTEM, threadNamePrefix)
+    TestUtils.createServer(config, SystemTime.getSystemTime, threadNamePrefix)
   }
 }

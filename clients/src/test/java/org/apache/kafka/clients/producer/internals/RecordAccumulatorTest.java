@@ -50,7 +50,7 @@ import org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -675,7 +675,7 @@ public class RecordAccumulatorTest {
 
     private void delayedInterrupt(final Thread thread, final long delayMs) {
         Thread t = new Thread(() -> {
-            Time.SYSTEM.sleep(delayMs);
+            SystemTime.getSystemTime().sleep(delayMs);
             thread.interrupt();
         });
         t.start();

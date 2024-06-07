@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
@@ -680,7 +681,7 @@ public class WorkerSinkTaskThreadedTest {
         when(statusBackingStore.getTopic(anyString(), anyString())).thenAnswer((Answer<TopicStatus>) invocation -> {
             String connector = invocation.getArgument(0, String.class);
             String topic = invocation.getArgument(1, String.class);
-            return new TopicStatus(topic, new ConnectorTaskId(connector, 0), Time.SYSTEM.milliseconds());
+            return new TopicStatus(topic, new ConnectorTaskId(connector, 0), SystemTime.getSystemTime().milliseconds());
         });
     }
 

@@ -51,7 +51,7 @@ import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.serialization._
 import org.apache.kafka.common.utils.Utils.formatAddress
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{SystemTime, Time, Utils}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.metadata.properties.MetaProperties
@@ -171,7 +171,7 @@ object TestUtils extends Logging {
    *
    * @param config The configuration of the server
    */
-  def createServer(config: KafkaConfig, time: Time = Time.SYSTEM): KafkaServer = {
+  def createServer(config: KafkaConfig, time: Time = SystemTime.getSystemTime): KafkaServer = {
     createServer(config, time, None)
   }
 

@@ -24,7 +24,7 @@ import org.apache.kafka.common.errors.CoordinatorLoadInProgressException
 import org.apache.kafka.common.message.AllocateProducerIdsResponseData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.AllocateProducerIdsResponse
-import org.apache.kafka.common.utils.{MockTime, Time}
+import org.apache.kafka.common.utils.{MockTime, SystemTime, Time}
 import org.apache.kafka.server.NodeToControllerChannelManager
 import org.apache.kafka.server.common.ProducerIdsBlock
 import org.junit.jupiter.api.Assertions._
@@ -52,7 +52,7 @@ class ProducerIdManagerTest {
     val idLen: Int,
     val errorQueue: ConcurrentLinkedQueue[Errors] = new ConcurrentLinkedQueue[Errors](),
     val isErroneousBlock: Boolean = false,
-    val time: Time = Time.SYSTEM
+    val time: Time = SystemTime.getSystemTime
   ) extends RPCProducerIdManager(brokerId, time, () => 1, brokerToController) {
 
     private val brokerToControllerRequestExecutor = Executors.newSingleThreadExecutor()

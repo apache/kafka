@@ -20,7 +20,7 @@ import org.apache.kafka.clients.producer.BufferExhaustedException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -130,7 +130,7 @@ public class BufferPoolTest {
 
     private void delayedDeallocate(final BufferPool pool, final ByteBuffer buffer, final long delayMs) {
         Thread thread = new Thread(() -> {
-            Time.SYSTEM.sleep(delayMs);
+            SystemTime.getSystemTime().sleep(delayMs);
             pool.deallocate(buffer);
         });
         thread.start();
@@ -167,7 +167,7 @@ public class BufferPoolTest {
      */
     @Test
     public void testBlockTimeout() throws Exception {
-        BufferPool pool = new BufferPool(10, 1, metrics, Time.SYSTEM, metricGroup);
+        BufferPool pool = new BufferPool(10, 1, metrics, SystemTime.getSystemTime(), metricGroup);
         ByteBuffer buffer1 = pool.allocate(1, maxBlockTimeMs);
         ByteBuffer buffer2 = pool.allocate(1, maxBlockTimeMs);
         ByteBuffer buffer3 = pool.allocate(1, maxBlockTimeMs);
@@ -177,7 +177,7 @@ public class BufferPoolTest {
         // The third buffer will be de-allocated after maxBlockTimeMs since the most recent allocation
         delayedDeallocate(pool, buffer3, maxBlockTimeMs / 2 * 5);
 
-        long beginTimeMs = Time.SYSTEM.milliseconds();
+        long beginTimeMs = SystemTime.getSystemTime().milliseconds();
         try {
             pool.allocate(10, maxBlockTimeMs);
             fail("The buffer allocated more memory than its maximum value 10");
@@ -186,7 +186,7 @@ public class BufferPoolTest {
         }
         // Thread scheduling sometimes means that deallocation varies by this point
         assertTrue(pool.availableMemory() >= 7 && pool.availableMemory() <= 10, "available memory " + pool.availableMemory());
-        long durationMs = Time.SYSTEM.milliseconds() - beginTimeMs;
+        long durationMs = SystemTime.getSystemTime().milliseconds() - beginTimeMs;
         assertTrue(durationMs >= maxBlockTimeMs, "BufferExhaustedException should not throw before maxBlockTimeMs");
         assertTrue(durationMs < maxBlockTimeMs + 1000, "BufferExhaustedException should throw soon after maxBlockTimeMs");
     }
@@ -389,7 +389,7 @@ public class BufferPoolTest {
 
     @Test
     public void testCloseAllocations() throws Exception {
-        BufferPool pool = new BufferPool(10, 1, metrics, Time.SYSTEM, metricGroup);
+        BufferPool pool = new BufferPool(10, 1, metrics, SystemTime.getSystemTime(), metricGroup);
         ByteBuffer buffer = pool.allocate(1, maxBlockTimeMs);
 
         // Close the buffer pool. This should prevent any further allocations.
@@ -405,7 +405,7 @@ public class BufferPoolTest {
     public void testCloseNotifyWaiters() throws Exception {
         final int numWorkers = 2;
 
-        BufferPool pool = new BufferPool(1, 1, metrics, Time.SYSTEM, metricGroup);
+        BufferPool pool = new BufferPool(1, 1, metrics, SystemTime.getSystemTime(), metricGroup);
         ByteBuffer buffer = pool.allocate(1, Long.MAX_VALUE);
 
         ExecutorService executor = Executors.newFixedThreadPool(numWorkers);

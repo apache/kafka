@@ -34,7 +34,7 @@ import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.authenticator.LoginManager
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter, ScramMechanism}
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.SystemTime
 import org.apache.kafka.server.config.ConfigType
 import org.apache.zookeeper.client.ZKClientConfig
 
@@ -203,7 +203,7 @@ trait SaslSetup {
     val zkClientConfig = new ZKClientConfig()
     Using(KafkaZkClient(
       zkConnect, JaasUtils.isZkSaslEnabled || KafkaConfig.zkTlsClientAuthEnabled(zkClientConfig), 30000, 30000,
-      Int.MaxValue, Time.SYSTEM, name = "SaslSetup", zkClientConfig = zkClientConfig, enableEntityConfigControllerCheck = false)) { zkClient =>
+      Int.MaxValue, SystemTime.getSystemTime, name = "SaslSetup", zkClientConfig = zkClientConfig, enableEntityConfigControllerCheck = false)) { zkClient =>
       val adminZkClient = new AdminZkClient(zkClient)
 
       val entityType = ConfigType.USER

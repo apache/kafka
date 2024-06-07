@@ -23,7 +23,7 @@ import java.util.Random
 import java.util.concurrent._
 import joptsimple._
 import kafka.server.{DelayedOperation, DelayedOperationPurgatory}
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.SystemTime
 import org.apache.kafka.server.util.{CommandLineUtils, ShutdownableThread}
 
 import scala.math._
@@ -275,7 +275,7 @@ object TestPurgatoryPerformance {
 
     private class Scheduled(val operation: FakeOperation) extends Delayed {
       def getDelay(unit: TimeUnit): Long = {
-        unit.convert(max(operation.completesAt - Time.SYSTEM.milliseconds, 0), TimeUnit.MILLISECONDS)
+        unit.convert(max(operation.completesAt - SystemTime.getSystemTime.milliseconds, 0), TimeUnit.MILLISECONDS)
       }
 
       def compareTo(d: Delayed): Int = {

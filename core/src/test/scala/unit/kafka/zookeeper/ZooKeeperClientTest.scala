@@ -26,7 +26,7 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import kafka.server.QuorumTestHarness
 import org.apache.kafka.common.security.JaasUtils
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.SystemTime
 import org.apache.kafka.server.config.ZkConfigs
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.zookeeper.KeeperException.{Code, NoNodeException}
@@ -41,7 +41,7 @@ import scala.jdk.CollectionConverters._
 
 class ZooKeeperClientTest extends QuorumTestHarness {
   private val mockPath = "/foo"
-  private val time = Time.SYSTEM
+  private val time = SystemTime.getSystemTime
 
   private var zooKeeperClient: ZooKeeperClient = _
 

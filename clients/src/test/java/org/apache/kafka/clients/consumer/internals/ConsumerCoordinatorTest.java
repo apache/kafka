@@ -3587,7 +3587,7 @@ public abstract class ConsumerCoordinatorTest {
     public void shouldLoseAllOwnedPartitionsBeforeRejoiningAfterDroppingOutOfTheGroup() {
         final List<TopicPartition> partitions = singletonList(t1p);
         try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, false, Optional.of("group-id"), true)) {
-            final SystemTime realTime = new SystemTime();
+            final SystemTime realTime = SystemTime.getSystemTime();
             coordinator.ensureActiveGroup();
 
             prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.REBALANCE_IN_PROGRESS);
@@ -3620,7 +3620,7 @@ public abstract class ConsumerCoordinatorTest {
     public void shouldLoseAllOwnedPartitionsBeforeRejoiningAfterResettingGenerationId() {
         final List<TopicPartition> partitions = singletonList(t1p);
         try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, false, Optional.of("group-id"), true)) {
-            final SystemTime realTime = new SystemTime();
+            final SystemTime realTime = SystemTime.getSystemTime();
             coordinator.ensureActiveGroup();
 
             prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.REBALANCE_IN_PROGRESS);

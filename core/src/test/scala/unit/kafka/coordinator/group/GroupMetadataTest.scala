@@ -22,7 +22,7 @@ import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.utils.{MockTime, Time}
+import org.apache.kafka.common.utils.{MockTime, SystemTime}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
 
@@ -44,7 +44,7 @@ class GroupMetadataTest {
 
   @BeforeEach
   def setUp(): Unit = {
-    group = new GroupMetadata("groupId", Empty, Time.SYSTEM)
+    group = new GroupMetadata("groupId", Empty, SystemTime.getSystemTime)
   }
 
   @Test
@@ -858,7 +858,7 @@ class GroupMetadataTest {
     assertTrue(group.is(targetState))
   }
 
-  private def offsetAndMetadata(offset: Long, timestamp: Long = Time.SYSTEM.milliseconds()): OffsetAndMetadata = {
+  private def offsetAndMetadata(offset: Long, timestamp: Long = SystemTime.getSystemTime.milliseconds()): OffsetAndMetadata = {
     OffsetAndMetadata(offset, "", timestamp)
   }
 

@@ -35,7 +35,7 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
@@ -1120,7 +1120,7 @@ public class MirrorConnectorsIntegrationBaseTest {
         for (ProducerRecord<byte[], byte[]> record : records) {
             futures.add(producer.send(record));
         }
-        Timer timer = Time.SYSTEM.timer(RECORD_PRODUCE_DURATION_MS);
+        Timer timer = SystemTime.getSystemTime().timer(RECORD_PRODUCE_DURATION_MS);
         try {
             for (Future<RecordMetadata> future : futures) {
                 future.get(timer.remainingMs(), TimeUnit.MILLISECONDS);

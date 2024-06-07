@@ -25,7 +25,7 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -119,14 +119,14 @@ public class IQv2IntegrationTest {
                     new ProducerRecord<>(
                         INPUT_TOPIC_NAME,
                         i % partitions,
-                        Time.SYSTEM.milliseconds(),
+                        SystemTime.getSystemTime().milliseconds(),
                         i,
                         i,
                         null
                     )
                 );
                 futures.add(send);
-                Time.SYSTEM.sleep(1L);
+                SystemTime.getSystemTime().sleep(1L);
             }
             producer.flush();
 

@@ -26,6 +26,7 @@ import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.controller.QuorumFeatures;
 import org.apache.kafka.controller.metrics.QuorumControllerMetrics;
@@ -95,7 +96,7 @@ public class KRaftMigrationDriverTest {
         final AtomicBoolean closed = new AtomicBoolean(false);
 
         MockControllerMetrics() {
-            super(Optional.empty(), Time.SYSTEM, false);
+            super(Optional.empty(), SystemTime.getSystemTime(), false);
         }
 
         @Override

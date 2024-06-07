@@ -24,6 +24,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -93,7 +94,7 @@ public class InternalMockProcessorContext<KOut, VOut>
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             null,
             null,
-            Time.SYSTEM
+            SystemTime.getSystemTime()
         );
     }
 
@@ -112,7 +113,7 @@ public class InternalMockProcessorContext<KOut, VOut>
             config,
             null,
             null,
-            Time.SYSTEM
+            SystemTime.getSystemTime()
         );
     }
 
@@ -125,7 +126,7 @@ public class InternalMockProcessorContext<KOut, VOut>
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             null,
             null,
-            Time.SYSTEM
+            SystemTime.getSystemTime()
         );
     }
 
@@ -145,7 +146,7 @@ public class InternalMockProcessorContext<KOut, VOut>
             config,
             () -> collector,
             null,
-            Time.SYSTEM
+            SystemTime.getSystemTime()
         );
     }
 
@@ -161,7 +162,7 @@ public class InternalMockProcessorContext<KOut, VOut>
             config,
             null,
             null,
-            Time.SYSTEM
+            SystemTime.getSystemTime()
         );
     }
 
@@ -181,7 +182,7 @@ public class InternalMockProcessorContext<KOut, VOut>
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             () -> collector,
             null,
-            Time.SYSTEM
+            SystemTime.getSystemTime()
         );
     }
 
@@ -198,7 +199,7 @@ public class InternalMockProcessorContext<KOut, VOut>
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             () -> collector,
             cache,
-            Time.SYSTEM
+            SystemTime.getSystemTime()
         );
     }
 

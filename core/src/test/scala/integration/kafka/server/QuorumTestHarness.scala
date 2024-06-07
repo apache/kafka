@@ -30,7 +30,7 @@ import org.apache.kafka.common.metadata.FeatureLevelRecord
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.utils.{Exit, Time}
+import org.apache.kafka.common.utils.{Exit, SystemTime, Time}
 import org.apache.kafka.common.{DirectoryId, Uuid}
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag.{REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR}
@@ -54,7 +54,7 @@ import scala.compat.java8.OptionConverters._
 trait QuorumImplementation {
   def createBroker(
     config: KafkaConfig,
-    time: Time = Time.SYSTEM,
+    time: Time = SystemTime.getSystemTime,
     startup: Boolean = true,
     threadNamePrefix: Option[String] = None,
   ): KafkaBroker
@@ -297,7 +297,7 @@ abstract class QuorumTestHarness extends Logging {
 
   def createBroker(
     config: KafkaConfig,
-    time: Time = Time.SYSTEM,
+    time: Time = SystemTime.getSystemTime,
     startup: Boolean = true,
     threadNamePrefix: Option[String] = None
   ): KafkaBroker = {
@@ -377,7 +377,7 @@ abstract class QuorumTestHarness extends Logging {
     val sharedServer = new SharedServer(
       config,
       metaPropertiesEnsemble,
-      Time.SYSTEM,
+      SystemTime.getSystemTime,
       new Metrics(),
       controllerQuorumVotersFuture,
       Collections.emptyList(),
@@ -430,7 +430,7 @@ abstract class QuorumTestHarness extends Logging {
         zkSessionTimeout,
         zkConnectionTimeout,
         zkMaxInFlightRequests,
-        Time.SYSTEM,
+        SystemTime.getSystemTime,
         name = "ZooKeeperTestHarness",
         new ZKClientConfig,
         enableEntityConfigControllerCheck = false)

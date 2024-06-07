@@ -31,7 +31,7 @@ import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{ListOffsetsRequest, ListOffsetsResponse}
-import org.apache.kafka.common.utils.{BufferSupplier, Time, Utils}
+import org.apache.kafka.common.utils.{BufferSupplier, SystemTime, Time, Utils}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
@@ -4256,8 +4256,8 @@ class UnifiedLogTest {
     val log = createLog(logDir, LogTestUtils.createLogConfig())
 
     val segments: java.util.List[LogSegment] = new java.util.ArrayList[LogSegment]()
-    val seg1 = LogTestUtils.createSegment(1, logDir, 10, Time.SYSTEM)
-    val seg2 = LogTestUtils.createSegment(2, logDir, 10, Time.SYSTEM)
+    val seg1 = LogTestUtils.createSegment(1, logDir, 10, SystemTime.getSystemTime)
+    val seg2 = LogTestUtils.createSegment(2, logDir, 10, SystemTime.getSystemTime)
     segments.add(seg1)
     segments.add(seg2)
     assertEquals(Seq(Long.MaxValue, Long.MaxValue), log.getFirstBatchTimestampForSegments(segments).asScala.toSeq)

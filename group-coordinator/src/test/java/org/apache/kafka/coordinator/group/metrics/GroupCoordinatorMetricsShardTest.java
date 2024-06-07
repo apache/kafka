@@ -21,7 +21,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
@@ -106,10 +106,10 @@ public class GroupCoordinatorMetricsShardTest {
         coordinatorMetrics.activateMetricsShard(shard);
 
         LogContext logContext = new LogContext();
-        ClassicGroup group0 = new ClassicGroup(logContext, "groupId0", EMPTY, Time.SYSTEM, shard);
-        ClassicGroup group1 = new ClassicGroup(logContext, "groupId1", EMPTY, Time.SYSTEM, shard);
-        ClassicGroup group2 = new ClassicGroup(logContext, "groupId2", EMPTY, Time.SYSTEM, shard);
-        ClassicGroup group3 = new ClassicGroup(logContext, "groupId3", EMPTY, Time.SYSTEM, shard);
+        ClassicGroup group0 = new ClassicGroup(logContext, "groupId0", EMPTY, SystemTime.getSystemTime(), shard);
+        ClassicGroup group1 = new ClassicGroup(logContext, "groupId1", EMPTY, SystemTime.getSystemTime(), shard);
+        ClassicGroup group2 = new ClassicGroup(logContext, "groupId2", EMPTY, SystemTime.getSystemTime(), shard);
+        ClassicGroup group3 = new ClassicGroup(logContext, "groupId3", EMPTY, SystemTime.getSystemTime(), shard);
 
         IntStream.range(0, 4).forEach(__ -> shard.incrementNumClassicGroups(EMPTY));
 

@@ -35,7 +35,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.SystemTime
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 class LeaderElectionTest extends QuorumTestHarness {
@@ -142,7 +142,7 @@ class LeaderElectionTest extends QuorumTestHarness {
     val controllerChannelManager = new ControllerChannelManager(
       () => controllerContext.epoch,
       controllerConfig,
-      Time.SYSTEM,
+      SystemTime.getSystemTime,
       metrics,
       new StateChangeLogger(controllerId, inControllerContext = true, None)
     )

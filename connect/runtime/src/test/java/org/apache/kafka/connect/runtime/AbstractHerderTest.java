@@ -24,7 +24,7 @@ import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.provider.DirectoryConfigProvider;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredLoginCallbackHandler;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
@@ -1198,7 +1198,7 @@ public class AbstractHerderTest {
 
     private AbstractHerder testHerder(ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
         return mock(AbstractHerder.class, withSettings()
-                .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, connectorClientConfigOverridePolicy, Time.SYSTEM)
+                .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, connectorClientConfigOverridePolicy, SystemTime.getSystemTime())
                 .defaultAnswer(CALLS_REAL_METHODS));
     }
 

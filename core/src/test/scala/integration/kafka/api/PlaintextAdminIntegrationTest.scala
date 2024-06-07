@@ -40,7 +40,7 @@ import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig, SslConfig
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{SystemTime, Utils}
 import org.apache.kafka.common.{ConsumerGroupState, ElectionType, TopicCollection, TopicPartition, TopicPartitionInfo, TopicPartitionReplica, Uuid}
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
@@ -1075,11 +1075,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, s"localhost:${TestUtils.IncorrectBrokerPort}")
     config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "0")
     client = Admin.create(config)
-    val startTimeMs = Time.SYSTEM.milliseconds()
+    val startTimeMs = SystemTime.getSystemTime.milliseconds()
     val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1.toShort)).asJava,
       new CreateTopicsOptions().timeoutMs(2)).all()
     assertFutureExceptionTypeEquals(future, classOf[TimeoutException])
-    val endTimeMs = Time.SYSTEM.milliseconds()
+    val endTimeMs = SystemTime.getSystemTime.milliseconds()
     assertTrue(endTimeMs > startTimeMs, "Expected the timeout to take at least one millisecond.")
   }
 

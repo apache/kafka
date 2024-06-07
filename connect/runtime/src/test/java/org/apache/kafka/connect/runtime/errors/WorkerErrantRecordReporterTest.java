@@ -19,7 +19,7 @@ package org.apache.kafka.connect.runtime.errors;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.InternalSinkRecord;
@@ -98,7 +98,7 @@ public class WorkerErrantRecordReporterTest {
                 5000,
                 ConnectorConfig.ERRORS_RETRY_MAX_DELAY_DEFAULT,
                 errorsTolerated ? ToleranceType.ALL : ToleranceType.NONE,
-                Time.SYSTEM,
+                SystemTime.getSystemTime(),
                 errorHandlingMetrics
         );
         retryWithToleranceOperator.reporters(Collections.singletonList(errorReporter));

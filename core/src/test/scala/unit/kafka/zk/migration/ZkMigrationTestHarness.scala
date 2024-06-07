@@ -18,7 +18,7 @@ package kafka.zk.migration
 
 import kafka.server.{KafkaConfig, QuorumTestHarness}
 import kafka.zk.ZkMigrationClient
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.SystemTime
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.security.{PasswordEncoder, PasswordEncoderConfigs}
 import org.apache.kafka.server.config.ZkConfigs
@@ -62,6 +62,6 @@ class ZkMigrationTestHarness extends QuorumTestHarness {
 
   private def initialMigrationState: ZkMigrationLeadershipState = {
     val (epoch, stat) = zkClient.getControllerEpoch.get
-    new ZkMigrationLeadershipState(3000, InitialControllerEpoch, 100, InitialKRaftEpoch, Time.SYSTEM.milliseconds(), -1, epoch, stat.getVersion)
+    new ZkMigrationLeadershipState(3000, InitialControllerEpoch, 100, InitialKRaftEpoch, SystemTime.getSystemTime.milliseconds(), -1, epoch, stat.getVersion)
   }
 }

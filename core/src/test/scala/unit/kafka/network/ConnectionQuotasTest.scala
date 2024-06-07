@@ -30,9 +30,9 @@ import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.metrics.internals.MetricsUtils
 import org.apache.kafka.common.metrics.{KafkaMetric, MetricConfig, Metrics}
 import org.apache.kafka.common.network._
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{SystemTime, Time}
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.server.config.{ReplicationConfigs, QuotaConfigs}
+import org.apache.kafka.server.config.{QuotaConfigs, ReplicationConfigs}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.MockTime
 import org.junit.jupiter.api.Assertions._
@@ -78,7 +78,7 @@ class ConnectionQuotasTest {
   }
 
   private def setupMockTime(): Unit = {
-    // clean up metrics initialized with Time.SYSTEM
+    // clean up metrics initialized with SystemTime.getSystemTime
     metrics.close()
     time = new MockTime()
     metrics = new Metrics(time)
@@ -95,7 +95,7 @@ class ConnectionQuotasTest {
     }
     // use system time, because ConnectionQuota causes the current thread to wait with timeout, which waits based on
     // system time; so using mock time will likely result in test flakiness due to a mixed use of mock and system time
-    time = Time.SYSTEM
+    time = SystemTime.getSystemTime
     metrics = new Metrics(new MetricConfig(), Collections.emptyList(), time)
     executor = Executors.newFixedThreadPool(listeners.size)
   }

@@ -26,7 +26,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, FileRecords, MemoryRecords, RecordBatch, SimpleRecord}
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{SystemTime, Time, Utils}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse}
 
 import java.nio.file.Files
@@ -47,7 +47,7 @@ object LogTestUtils {
   def createSegment(offset: Long,
                     logDir: File,
                     indexIntervalBytes: Int = 10,
-                    time: Time = Time.SYSTEM): LogSegment = {
+                    time: Time = SystemTime.getSystemTime): LogSegment = {
     val ms = FileRecords.open(LogFileUtils.logFile(logDir, offset))
     val idx = LazyIndex.forOffset(LogFileUtils.offsetIndexFile(logDir, offset), offset, 1000)
     val timeIdx = LazyIndex.forTime(LogFileUtils.timeIndexFile(logDir, offset), offset, 1500)

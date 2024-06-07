@@ -21,7 +21,7 @@ import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.network.TransferableChannel;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -54,7 +54,7 @@ public class LazyDownConversionRecordsTest {
      */
     @Test
     public void testConversionOfCommitMarker() throws IOException {
-        MemoryRecords recordsToConvert = MemoryRecords.withEndTransactionMarker(0, Time.SYSTEM.milliseconds(), RecordBatch.NO_PARTITION_LEADER_EPOCH,
+        MemoryRecords recordsToConvert = MemoryRecords.withEndTransactionMarker(0, SystemTime.getSystemTime().milliseconds(), RecordBatch.NO_PARTITION_LEADER_EPOCH,
                 1, (short) 1, new EndTransactionMarker(ControlRecordType.COMMIT, 0));
         MemoryRecords convertedRecords = convertRecords(recordsToConvert, (byte) 1, recordsToConvert.sizeInBytes());
         ByteBuffer buffer = convertedRecords.buffer();
@@ -148,7 +148,7 @@ public class LazyDownConversionRecordsTest {
             inputRecords.flush();
 
             LazyDownConversionRecords lazyRecords = new LazyDownConversionRecords(new TopicPartition("test", 1),
-                    inputRecords, toMagic, 0L, Time.SYSTEM);
+                    inputRecords, toMagic, 0L, SystemTime.getSystemTime());
             LazyDownConversionRecordsSend lazySend = lazyRecords.toSend();
             File outputFile = tempFile();
             ByteBuffer convertedRecordsBuffer;

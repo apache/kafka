@@ -19,7 +19,7 @@ package kafka.zk
 import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metadata.{FeatureLevelRecord, TopicRecord}
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{SystemTime, Utils}
 import org.apache.kafka.controller.QuorumFeatures
 import org.apache.kafka.controller.metrics.QuorumControllerMetrics
 import org.apache.kafka.image.loader.LogDeltaManifest
@@ -90,8 +90,8 @@ class ZkMigrationFailoverTest extends Logging {
       .setFaultHandler(faultHandler)
       .setQuorumFeatures(new QuorumFeatures(nodeId, QuorumFeatures.defaultFeatureMap(true), util.Arrays.asList(3000, 3001, 3002)))
       .setConfigSchema(KafkaConfigSchema.EMPTY)
-      .setControllerMetrics(new QuorumControllerMetrics(Optional.empty(), Time.SYSTEM, true))
-      .setTime(Time.SYSTEM)
+      .setControllerMetrics(new QuorumControllerMetrics(Optional.empty(), SystemTime.getSystemTime, true))
+      .setTime(SystemTime.getSystemTime)
       .setPropagator(new LegacyPropagator() {
         override def startup(): Unit = ???
 
@@ -133,7 +133,7 @@ class ZkMigrationFailoverTest extends Logging {
         30000,
         60000,
         1,
-        Time.SYSTEM,
+        SystemTime.getSystemTime,
         name = "ZkMigrationFailoverTest",
         new ZKClientConfig)
     } catch {

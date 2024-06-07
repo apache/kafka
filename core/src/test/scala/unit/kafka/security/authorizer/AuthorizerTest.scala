@@ -33,7 +33,7 @@ import org.apache.kafka.common.resource.ResourcePattern.WILDCARD_RESOURCE
 import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
-import org.apache.kafka.common.utils.{Time, SecurityUtils => JSecurityUtils}
+import org.apache.kafka.common.utils.{SystemTime, SecurityUtils => JSecurityUtils}
 import org.apache.kafka.controller.MockAclMutator
 import org.apache.kafka.metadata.authorizer.StandardAuthorizerTest.AuthorizerTestServerInfo
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
@@ -100,7 +100,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
 
     if (!TestInfoUtils.isKRaft(testInfo)) {
       zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkMaxInFlightRequests,
-        Time.SYSTEM, "kafka.test", "AclAuthorizerTest", new ZKClientConfig, "AclAuthorizerTest")
+        SystemTime.getSystemTime, "kafka.test", "AclAuthorizerTest", new ZKClientConfig, "AclAuthorizerTest")
       // Increase maxUpdateRetries to avoid transient failures
       authorizer1.asInstanceOf[AclAuthorizer].maxUpdateRetries = Int.MaxValue
       authorizer2.asInstanceOf[AclAuthorizer].maxUpdateRetries = Int.MaxValue

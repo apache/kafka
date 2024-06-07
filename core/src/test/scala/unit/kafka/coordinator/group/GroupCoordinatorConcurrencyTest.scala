@@ -32,7 +32,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{JoinGroupRequest, OffsetFetchResponse}
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.SystemTime
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -290,7 +290,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     }
     override def runWithCallback(member: GroupMember, responseCallback: CommitOffsetCallback): Unit = {
       val tip = new TopicIdPartition(Uuid.randomUuid(), 0, "topic")
-      val offsets = immutable.Map(tip -> OffsetAndMetadata(1, "", Time.SYSTEM.milliseconds()))
+      val offsets = immutable.Map(tip -> OffsetAndMetadata(1, "", SystemTime.getSystemTime.milliseconds()))
       groupCoordinator.handleCommitOffsets(member.groupId, member.memberId,
         member.groupInstanceId, member.generationId, offsets, responseCallback)
       replicaManager.tryCompleteActions()
@@ -303,7 +303,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
 
   class CommitTxnOffsetsOperation(lock: Option[Lock] = None) extends CommitOffsetsOperation {
     override def runWithCallback(member: GroupMember, responseCallback: CommitOffsetCallback): Unit = {
-      val offsets = immutable.Map(new TopicIdPartition(Uuid.randomUuid(), 0, "topic") -> OffsetAndMetadata(1, "", Time.SYSTEM.milliseconds()))
+      val offsets = immutable.Map(new TopicIdPartition(Uuid.randomUuid(), 0, "topic") -> OffsetAndMetadata(1, "", SystemTime.getSystemTime.milliseconds()))
       val producerId = 1000L
       val producerEpoch : Short = 2
       // When transaction offsets are appended to the log, transactions may be scheduled for

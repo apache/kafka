@@ -56,7 +56,6 @@ import java.util.stream.IntStream;
 
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;
-import static org.apache.kafka.common.utils.Time.SYSTEM;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_RETRY_MAX_DELAY_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_RETRY_MAX_DELAY_DEFAULT;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_RETRY_TIMEOUT_CONFIG;
@@ -97,18 +96,18 @@ public class RetryWithToleranceOperatorTest {
         return genericOperator(ERRORS_RETRY_TIMEOUT_DEFAULT, NONE, new ErrorHandlingMetrics(
                 new ConnectorTaskId("noop-connector", -1),
                 new ConnectMetrics("noop-worker", new TestableWorkerConfig(PROPERTIES),
-                        new SystemTime(), "test-cluster")));
+                        SystemTime.getSystemTime(), "test-cluster")));
     }
 
     public static <T> RetryWithToleranceOperator<T> allOperator() {
         return genericOperator(ERRORS_RETRY_TIMEOUT_DEFAULT, ALL, new ErrorHandlingMetrics(
                 new ConnectorTaskId("errors-all-tolerate-connector", -1),
                 new ConnectMetrics("errors-all-tolerate-worker", new TestableWorkerConfig(PROPERTIES),
-                        new SystemTime(), "test-cluster")));
+                        SystemTime.getSystemTime(), "test-cluster")));
     }
 
     private static <T> RetryWithToleranceOperator<T> genericOperator(int retryTimeout, ToleranceType toleranceType, ErrorHandlingMetrics metrics) {
-        return new RetryWithToleranceOperator<>(retryTimeout, ERRORS_RETRY_MAX_DELAY_DEFAULT, toleranceType, SYSTEM, metrics);
+        return new RetryWithToleranceOperator<>(retryTimeout, ERRORS_RETRY_MAX_DELAY_DEFAULT, toleranceType, SystemTime.getSystemTime(), metrics);
     }
 
     @Mock

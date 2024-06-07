@@ -29,7 +29,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.SystemTime
 import org.apache.kafka.common.{Node, Uuid}
 import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 import org.apache.kafka.server.common.MetadataVersion
@@ -67,7 +67,7 @@ class BrokerRegistrationRequestTest {
         override def getControllerInfo(): ControllerInformation =
           ControllerInformation(node, listenerName, securityProtocol, saslMechanism, isZkController)
       },
-      Time.SYSTEM,
+      SystemTime.getSystemTime,
       new Metrics(),
       clusterInstance.anyControllerSocketServer().config,
       "heartbeat",

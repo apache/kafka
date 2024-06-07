@@ -21,7 +21,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.controller.metrics.QuorumControllerMetrics;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metalog.LocalLogManagerTestEnv;
@@ -56,7 +56,7 @@ public class QuorumControllerMetricsIntegrationTest {
         final AtomicBoolean closed = new AtomicBoolean(false);
 
         MockControllerMetrics() {
-            super(Optional.empty(), Time.SYSTEM, true);
+            super(Optional.empty(), SystemTime.getSystemTime(), true);
         }
 
         @Override

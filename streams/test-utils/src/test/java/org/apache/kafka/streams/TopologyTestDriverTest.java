@@ -871,14 +871,14 @@ public abstract class TopologyTestDriverTest {
                 Stores.inMemoryKeyValueStore("store"),
                 Serdes.ByteArray(),
                 Serdes.ByteArray(),
-                new SystemTime()),
+                SystemTime.getSystemTime()),
             "processor");
         topology.addGlobalStore(
             new KeyValueStoreBuilder<>(
                 Stores.inMemoryKeyValueStore("globalStore"),
                 Serdes.ByteArray(),
                 Serdes.ByteArray(),
-                new SystemTime()).withLoggingDisabled(),
+                SystemTime.getSystemTime()).withLoggingDisabled(),
             "sourceProcessorName",
             Serdes.ByteArray().deserializer(),
             Serdes.ByteArray().deserializer(),
@@ -1263,13 +1263,13 @@ public abstract class TopologyTestDriverTest {
                 Stores.inMemoryKeyValueStore("store"),
                 Serdes.ByteArray(),
                 Serdes.ByteArray(),
-                new SystemTime()));
+                SystemTime.getSystemTime()));
         topology.addGlobalStore(
             new KeyValueStoreBuilder<>(
                 Stores.inMemoryKeyValueStore("globalStore"),
                 Serdes.ByteArray(),
                 Serdes.ByteArray(),
-                new SystemTime()).withLoggingDisabled(),
+                SystemTime.getSystemTime()).withLoggingDisabled(),
             "sourceProcessorName",
             Serdes.ByteArray().deserializer(),
             Serdes.ByteArray().deserializer(),

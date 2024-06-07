@@ -26,6 +26,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,7 +36,7 @@ import org.junit.jupiter.api.condition.JRE;
 
 public class SslTransportTls12Tls13Test {
     private static final int BUFFER_SIZE = 4 * 1024;
-    private static final Time TIME = Time.SYSTEM;
+    private static final Time TIME = SystemTime.getSystemTime();
 
     private NioEchoServer server;
     private Selector selector;

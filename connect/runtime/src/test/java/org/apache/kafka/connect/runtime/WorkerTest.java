@@ -44,6 +44,7 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
@@ -1721,7 +1722,7 @@ public class WorkerTest {
         mockFileConfigProvider();
 
         Worker worker = new Worker("worker-1",
-                Time.SYSTEM,
+                SystemTime.getSystemTime(),
                 plugins,
                 config,
                 offsetBackingStore,

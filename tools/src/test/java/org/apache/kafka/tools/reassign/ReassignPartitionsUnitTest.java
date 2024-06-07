@@ -28,6 +28,7 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.AdminCommandFailedException;
 import org.apache.kafka.server.common.AdminOperationException;
@@ -606,7 +607,7 @@ public class ReassignPartitionsUnitTest {
                     "{\"version\":1,\"partitions\":" +
                         "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[0,1],\"log_dirs\":[\"any\",\"any\"]}," +
                         "{\"topic\":\"quux\",\"partition\":0,\"replicas\":[2,3,4],\"log_dirs\":[\"any\",\"any\",\"any\"]}" +
-                        "]}", -1L, -1L, 10000L, Time.SYSTEM), "Expected reassignment with non-existent topic to fail").getCause().getMessage());
+                        "]}", -1L, -1L, 10000L, SystemTime.getSystemTime()), "Expected reassignment with non-existent topic to fail").getCause().getMessage());
         }
     }
 
@@ -619,7 +620,7 @@ public class ReassignPartitionsUnitTest {
                     "{\"version\":1,\"partitions\":" +
                         "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[0,1],\"log_dirs\":[\"any\",\"any\"]}," +
                         "{\"topic\":\"foo\",\"partition\":1,\"replicas\":[2,3,4],\"log_dirs\":[\"any\",\"any\",\"any\"]}" +
-                        "]}", -1L, -1L, 10000L, Time.SYSTEM), "Expected reassignment with non-existent broker id to fail").getMessage());
+                        "]}", -1L, -1L, 10000L, SystemTime.getSystemTime()), "Expected reassignment with non-existent broker id to fail").getMessage());
         }
     }
 
@@ -762,7 +763,7 @@ public class ReassignPartitionsUnitTest {
         try (MockAdminClient adminClient = new MockAdminClient.Builder().numBrokers(4).build()) {
             addTopics(adminClient);
             assertStartsWith("Unexpected character",
-                assertThrows(AdminOperationException.class, () -> executeAssignment(adminClient, false, "{invalid_json", -1L, -1L, 10000L, Time.SYSTEM)).getMessage());
+                assertThrows(AdminOperationException.class, () -> executeAssignment(adminClient, false, "{invalid_json", -1L, -1L, 10000L, SystemTime.getSystemTime())).getMessage());
         }
     }
 }

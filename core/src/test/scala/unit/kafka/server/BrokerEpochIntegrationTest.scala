@@ -18,7 +18,6 @@
 package kafka.server
 
 import java.util.Collections
-
 import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
 import kafka.controller.{ControllerChannelManager, ControllerContext, StateChangeLogger}
@@ -34,7 +33,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.SystemTime
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
@@ -135,7 +134,7 @@ class BrokerEpochIntegrationTest extends QuorumTestHarness {
     val controllerChannelManager = new ControllerChannelManager(
       () => controllerContext.epoch,
       controllerConfig,
-      Time.SYSTEM,
+      SystemTime.getSystemTime,
       metrics,
       new StateChangeLogger(controllerId, inControllerContext = true, None)
     )

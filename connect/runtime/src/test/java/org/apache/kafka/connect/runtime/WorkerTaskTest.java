@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.TaskStatus.Listener;
@@ -83,7 +84,7 @@ public class WorkerTaskTest {
         ConnectorTaskId taskId = new ConnectorTaskId("foo", 0);
 
         WorkerTask<Object, SourceRecord> workerTask = new TestWorkerTask(taskId, statusListener, TargetState.STARTED, loader, metrics, errorHandlingMetrics,
-                retryWithToleranceOperator, transformationChain, errorReportersSupplier, Time.SYSTEM, statusBackingStore);
+                retryWithToleranceOperator, transformationChain, errorReportersSupplier, SystemTime.getSystemTime(), statusBackingStore);
         workerTask.initialize(TASK_CONFIG);
         workerTask.run();
         workerTask.stop();
@@ -98,7 +99,7 @@ public class WorkerTaskTest {
         ConnectorTaskId taskId = new ConnectorTaskId("foo", 0);
 
         WorkerTask<Object, SourceRecord> workerTask = new TestWorkerTask(taskId, statusListener, TargetState.STARTED, loader, metrics, errorHandlingMetrics,
-                retryWithToleranceOperator, transformationChain, errorReportersSupplier, Time.SYSTEM, statusBackingStore) {
+                retryWithToleranceOperator, transformationChain, errorReportersSupplier, SystemTime.getSystemTime(), statusBackingStore) {
 
             @Override
             public void initializeAndStart() {
@@ -125,7 +126,7 @@ public class WorkerTaskTest {
         final CountDownLatch stopped = new CountDownLatch(1);
 
         WorkerTask<Object, SourceRecord> workerTask = new TestWorkerTask(taskId, statusListener, TargetState.STARTED, loader, metrics, errorHandlingMetrics,
-                retryWithToleranceOperator, transformationChain, errorReportersSupplier, Time.SYSTEM, statusBackingStore) {
+                retryWithToleranceOperator, transformationChain, errorReportersSupplier, SystemTime.getSystemTime(), statusBackingStore) {
 
             @Override
             public void execute() {
@@ -162,7 +163,7 @@ public class WorkerTaskTest {
         ConnectorTaskId taskId = new ConnectorTaskId("foo", 0);
 
         WorkerTask<Object, SourceRecord> workerTask = new TestWorkerTask(taskId, statusListener, TargetState.STARTED, loader, metrics, errorHandlingMetrics,
-                retryWithToleranceOperator, transformationChain, errorReportersSupplier, Time.SYSTEM, statusBackingStore);
+                retryWithToleranceOperator, transformationChain, errorReportersSupplier, SystemTime.getSystemTime(), statusBackingStore);
 
         List<ErrorReporter<Object>> errorReporters = new ArrayList<>();
         when(errorReportersSupplier.get()).thenReturn(errorReporters);
@@ -176,7 +177,7 @@ public class WorkerTaskTest {
         ConnectorTaskId taskId = new ConnectorTaskId("foo", 0);
 
         WorkerTask<Object, SourceRecord> workerTask = new TestWorkerTask(taskId, statusListener, TargetState.STARTED, loader, metrics, errorHandlingMetrics,
-                retryWithToleranceOperator, transformationChain, errorReportersSupplier, Time.SYSTEM, statusBackingStore);
+                retryWithToleranceOperator, transformationChain, errorReportersSupplier, SystemTime.getSystemTime(), statusBackingStore);
         when(errorReportersSupplier.get()).thenThrow(new ConnectException("Failed to create error reporters"));
 
         assertThrows(ConnectException.class, workerTask::doStart);
@@ -187,7 +188,7 @@ public class WorkerTaskTest {
         ConnectorTaskId taskId = new ConnectorTaskId("foo", 0);
 
         WorkerTask<Object, SourceRecord> workerTask = new TestWorkerTask(taskId, statusListener, TargetState.STARTED, loader, metrics, errorHandlingMetrics,
-                retryWithToleranceOperator, transformationChain, errorReportersSupplier, Time.SYSTEM, statusBackingStore);
+                retryWithToleranceOperator, transformationChain, errorReportersSupplier, SystemTime.getSystemTime(), statusBackingStore);
 
         workerTask.doClose();
 
@@ -200,7 +201,7 @@ public class WorkerTaskTest {
         ConnectorTaskId taskId = new ConnectorTaskId("foo", 0);
 
         WorkerTask<Object, SourceRecord> workerTask = new TestWorkerTask(taskId, statusListener, TargetState.STARTED, loader, metrics, errorHandlingMetrics,
-                retryWithToleranceOperator, transformationChain, errorReportersSupplier, Time.SYSTEM, statusBackingStore) {
+                retryWithToleranceOperator, transformationChain, errorReportersSupplier, SystemTime.getSystemTime(), statusBackingStore) {
             @Override
             protected void close() {
                 throw new ConnectException("Failure during close");

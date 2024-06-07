@@ -27,7 +27,7 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.integration.MonitorableSourceConnector;
@@ -263,7 +263,7 @@ public class WorkerSourceTaskTest {
                                   HeaderConverter headerConverter, RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator) {
         workerTask = new WorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverter, valueConverter, errorHandlingMetrics, headerConverter,
                 transformationChain, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig),
-                offsetReader, offsetWriter, offsetStore, config, clusterConfigState, metrics, plugins.delegatingLoader(), Time.SYSTEM,
+                offsetReader, offsetWriter, offsetStore, config, clusterConfigState, metrics, plugins.delegatingLoader(), SystemTime.getSystemTime(),
                 retryWithToleranceOperator, statusBackingStore, Runnable::run, Collections::emptyList);
     }
 
@@ -843,7 +843,7 @@ public class WorkerSourceTaskTest {
         when(statusBackingStore.getTopic(anyString(), anyString())).thenAnswer((Answer<TopicStatus>) invocation -> {
             String connector = invocation.getArgument(0, String.class);
             String topic = invocation.getArgument(1, String.class);
-            return new TopicStatus(topic, new ConnectorTaskId(connector, 0), Time.SYSTEM.milliseconds());
+            return new TopicStatus(topic, new ConnectorTaskId(connector, 0), SystemTime.getSystemTime().milliseconds());
         });
     }
 

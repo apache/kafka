@@ -18,7 +18,6 @@
 package kafka.security.auth
 
 import java.nio.charset.StandardCharsets
-
 import kafka.admin.ZkSecurityMigrator
 import kafka.server.QuorumTestHarness
 import kafka.utils.{Logging, TestUtils}
@@ -35,7 +34,7 @@ import kafka.cluster.{Broker, EndPoint}
 import kafka.controller.ReplicaAssignment
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.SystemTime
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.zookeeper.client.ZKClientConfig
 
@@ -140,7 +139,7 @@ class ZkAuthorizationTest extends QuorumTestHarness with Logging {
     (securityProtocol), securityProtocol)), rack = rack), MetadataVersion.latestTesting, jmxPort = port + 10)
 
   private def newKafkaZkClient(connectionString: String, isSecure: Boolean) =
-    KafkaZkClient(connectionString, isSecure, 6000, 6000, Int.MaxValue, Time.SYSTEM, "ZkAuthorizationTest",
+    KafkaZkClient(connectionString, isSecure, 6000, 6000, Int.MaxValue, SystemTime.getSystemTime, "ZkAuthorizationTest",
       new ZKClientConfig)
 
   /**

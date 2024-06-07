@@ -20,6 +20,6 @@ public class SystemTimeTest extends TimeTest {
 
     @Override
     protected Time createTime() {
-        return Time.SYSTEM;
+        return SystemTime.getSystemTime();
     }
 }

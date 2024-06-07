@@ -27,6 +27,7 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -196,7 +197,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
         config = new StandaloneConfig(workerProps);
         sourceConfig = new SourceConnectorConfig(plugins, sourceConnectorProps(), true);
         metrics = new MockConnectMetrics();
-        time = Time.SYSTEM;
+        time = SystemTime.getSystemTime();
         when(offsetStore.primaryOffsetsTopic()).thenReturn("offsets-topic");
         when(sourceTask.poll()).thenAnswer(invocation -> {
             // Capture the records we'll return before decrementing the poll latch,

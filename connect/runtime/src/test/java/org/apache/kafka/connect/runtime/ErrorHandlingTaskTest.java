@@ -25,6 +25,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
@@ -86,7 +87,6 @@ import java.util.Set;
 
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonList;
-import static org.apache.kafka.common.utils.Time.SYSTEM;
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
@@ -274,7 +274,7 @@ public class ErrorHandlingTaskTest {
     private <T> RetryWithToleranceOperator<T> operator() {
         return new RetryWithToleranceOperator<>(OPERATOR_RETRY_TIMEOUT_MILLIS,
                 OPERATOR_RETRY_MAX_DELAY_MILLIS, OPERATOR_TOLERANCE_TYPE,
-                SYSTEM, errorHandlingMetrics);
+                SystemTime.getSystemTime(), errorHandlingMetrics);
     }
 
     @Test
