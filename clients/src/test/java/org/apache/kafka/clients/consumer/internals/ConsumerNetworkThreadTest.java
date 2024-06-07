@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.MockClient;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
@@ -33,8 +31,6 @@ import org.apache.kafka.clients.consumer.internals.events.SyncCommitEvent;
 import org.apache.kafka.clients.consumer.internals.events.TopicMetadataEvent;
 import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsEvent;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.message.FindCoordinatorRequestData;
-import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -75,7 +71,6 @@ import static org.mockito.Mockito.when;
 
 public class ConsumerNetworkThreadTest {
     static final int DEFAULT_HEARTBEAT_INTERVAL_MS = 1000;
-    static final int DEFAULT_REQUEST_TIMEOUT_MS = 500;
 
     private final Time time;
     private final BlockingQueue<ApplicationEvent> applicationEventsQueue;
@@ -84,15 +79,11 @@ public class ConsumerNetworkThreadTest {
     private final HeartbeatRequestManager heartbeatRequestManager;
     private final CoordinatorRequestManager coordinatorRequestManager;
     private final ConsumerNetworkThread consumerNetworkThread;
-    private final MockClient client;
     private final NetworkClientDelegate networkClientDelegate;
     private final RequestManagers requestManagers;
     private final CompletableEventReaper applicationEventReaper;
-    private final LogContext logContext;
-    private final ConsumerConfig config;
 
     ConsumerNetworkThreadTest() {
-        this.config = mock(ConsumerConfig.class);
         this.networkClientDelegate = mock(NetworkClientDelegate.class);
         this.requestManagers = mock(RequestManagers.class);
         this.offsetsRequestManager = mock(OffsetsRequestManager.class);
@@ -101,9 +92,8 @@ public class ConsumerNetworkThreadTest {
         this.applicationEventProcessor = mock(ApplicationEventProcessor.class);
         this.applicationEventReaper = mock(CompletableEventReaper.class);
         this.time = new MockTime();
-        this.client = new MockClient(time);
         this.applicationEventsQueue = new LinkedBlockingQueue<>();
-        this.logContext = new LogContext();
+        LogContext logContext = new LogContext();
 
         this.consumerNetworkThread = new ConsumerNetworkThread(
                 logContext,
@@ -228,35 +218,6 @@ public class ConsumerNetworkThreadTest {
         assertDoesNotThrow(() -> consumerNetworkThread.runOnce());
 
         verify(applicationEventProcessor).process(any(ResetPositionsEvent.class));
-    }
-
-    @Test
-    public void testPollResultTimer() {
-        NetworkClientDelegate networkClientDelegate = new NetworkClientDelegate(
-                time,
-                config,
-                logContext,
-                client
-        );
-
-        NetworkClientDelegate.UnsentRequest req = new NetworkClientDelegate.UnsentRequest(
-                new FindCoordinatorRequest.Builder(
-                        new FindCoordinatorRequestData()
-                                .setKeyType(FindCoordinatorRequest.CoordinatorType.TRANSACTION.id())
-                                .setKey("foobar")),
-                Optional.empty());
-        req.setTimer(time, DEFAULT_REQUEST_TIMEOUT_MS);
-
-        // purposely setting a non-MAX time to ensure it is returning Long.MAX_VALUE upon success
-        NetworkClientDelegate.PollResult success = new NetworkClientDelegate.PollResult(
-                10,
-                Collections.singletonList(req));
-        assertEquals(10, networkClientDelegate.addAll(success));
-
-        NetworkClientDelegate.PollResult failure = new NetworkClientDelegate.PollResult(
-                10,
-                new ArrayList<>());
-        assertEquals(10, networkClientDelegate.addAll(failure));
     }
 
     @Test
