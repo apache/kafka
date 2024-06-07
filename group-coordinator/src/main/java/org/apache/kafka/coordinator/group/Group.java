@@ -37,6 +37,7 @@ public interface Group {
         CONSUMER("consumer"),
         CLASSIC("classic"),
         SHARE("share"),
+        STREAMS("streams"),
         UNKNOWN("unknown");
 
         private final String name;
