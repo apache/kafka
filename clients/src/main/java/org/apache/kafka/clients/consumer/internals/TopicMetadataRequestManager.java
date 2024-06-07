@@ -65,7 +65,6 @@ public class TopicMetadataRequestManager implements RequestManager {
     private final Time time;
     private final boolean allowAutoTopicCreation;
     private final List<TopicMetadataRequestState> inflightRequests;
-    private final int requestTimeoutMs;
     private final long retryBackoffMs;
     private final long retryBackoffMaxMs;
     private final Logger log;
@@ -76,7 +75,6 @@ public class TopicMetadataRequestManager implements RequestManager {
         log = logContext.logger(getClass());
         this.time = time;
         inflightRequests = new LinkedList<>();
-        requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
         allowAutoTopicCreation = config.getBoolean(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG);
