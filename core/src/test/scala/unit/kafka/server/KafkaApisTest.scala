@@ -76,6 +76,7 @@ import org.apache.kafka.common.utils.{ProducerIdAndEpoch, SecurityUtils, Utils}
 import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_2_IV0, IBP_2_2_IV1}
@@ -92,6 +93,7 @@ import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 
+import java.lang.{Byte => JByte}
 import java.net.InetAddress
 import java.nio.charset.StandardCharsets
 import java.time.Duration
@@ -7151,8 +7153,14 @@ class KafkaApisTest extends Logging {
       new DescribedGroup().setGroupId(groupIds.get(2))
     ).asJava)
 
+    var authorizedOperationsInt = Int.MinValue;
+    if (includeAuthorizedOperations) {
+      authorizedOperationsInt = Utils.to32BitField(
+        AclEntry.supportedOperations(ResourceType.GROUP).asScala
+          .map(_.code.asInstanceOf[JByte]).asJava)
+    }
+
     // Can't reuse the above list here because we would not test the implementation in KafkaApis then
-    val authorizedOperationsInt = if (includeAuthorizedOperations) 328 else Int.MinValue; // 328: Integer representation of authorized operations for this request
     val describedGroups = List(
       new DescribedGroup().setGroupId(groupIds.get(0)),
       new DescribedGroup().setGroupId(groupIds.get(1)),
