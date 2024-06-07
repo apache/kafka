@@ -7108,12 +7108,12 @@ class KafkaApisTest extends Logging {
     ).asJava)
 
     // Can't reuse the above list here because we would not test the implementation in KafkaApis then
-    val authorizedOperationsInt = if (includeAuthorizedOperations) 328 else Int.MinValue;
+    val authorizedOperationsInt = if (includeAuthorizedOperations) 328 else Int.MinValue; // 328: Integer representation of authorized operations for this request
     val describedGroups = List(
       new DescribedGroup().setGroupId(groupIds.get(0)),
       new DescribedGroup().setGroupId(groupIds.get(1)),
       new DescribedGroup().setGroupId(groupIds.get(2))
-    ).map(group => group.setAuthorizedOperations(authorizedOperationsInt)) // Integer representation of authorized operations for this request
+    ).map(group => group.setAuthorizedOperations(authorizedOperationsInt))
     val expectedConsumerGroupDescribeResponseData = new ConsumerGroupDescribeResponseData()
       .setGroups(describedGroups.asJava)
 
