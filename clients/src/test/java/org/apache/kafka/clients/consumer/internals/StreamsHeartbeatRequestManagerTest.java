@@ -292,11 +292,11 @@ class StreamsHeartbeatRequestManagerTest {
             .setThrottleTimeMs(TEST_THROTTLE_TIME_MS)
             .setHeartbeatIntervalMs(1000)
             .setActiveTasks(Collections.singletonList(
-                new StreamsHeartbeatResponseData.TaskId().setSubtopology("0").setPartitions(Collections.singletonList(0))))
+                new StreamsHeartbeatResponseData.TaskIds().setSubtopology("0").setPartitions(Collections.singletonList(0))))
             .setStandbyTasks(Collections.singletonList(
-                new StreamsHeartbeatResponseData.TaskId().setSubtopology("1").setPartitions(Collections.singletonList(1))))
+                new StreamsHeartbeatResponseData.TaskIds().setSubtopology("1").setPartitions(Collections.singletonList(1))))
             .setWarmupTasks(Collections.singletonList(
-                new StreamsHeartbeatResponseData.TaskId().setSubtopology("2").setPartitions(Collections.singletonList(2))));
+                new StreamsHeartbeatResponseData.TaskIds().setSubtopology("2").setPartitions(Collections.singletonList(2))));
 
         mockResponse(data);
 

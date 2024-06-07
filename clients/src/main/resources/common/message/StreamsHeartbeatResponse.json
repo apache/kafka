@@ -62,11 +62,11 @@
       "about": "An error message relating to the current state of the assignment to this member." },
 
     // The streams app knows which partitions to fetch from given this information
-    { "name": "ActiveTasks", "type": "[]TaskId", "versions": "0+", "nullableVersions": "0+", "default": "null",
+    { "name": "ActiveTasks", "type": "[]TaskIds", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "Local assignment for this consumer. Null if unchanged since last heartbeat." },
-    { "name": "StandbyTasks", "type": "[]TaskId", "versions": "0+", "nullableVersions": "0+", "default": "null",
+    { "name": "StandbyTasks", "type": "[]TaskIds", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "Local standby tasks for this consumer. Null if unchanged since last heartbeat." },
-    { "name": "WarmupTasks", "type": "[]TaskId", "versions": "0+", "nullableVersions": "0+", "default": "null",
+    { "name": "WarmupTasks", "type": "[]TaskIds", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "Local warming up tasks for this consumer. Null if unchanged since last heartbeat." },
 
     // IQ-related information
@@ -89,7 +89,7 @@
       { "name": "Partitions", "type": "[]int32", "versions": "0+",
         "about": "partitions" }
     ]},
-    { "name": "TaskId", "versions": "0+", "fields": [
+    { "name": "TaskIds", "versions": "0+", "fields": [
       // We are using strings here, to avoid fixing a structure on task IDs which will
       // allow introducing stable naming for subtopologies in the future.
       { "name": "Subtopology", "type": "string", "versions": "0+",

@@ -26,17 +26,17 @@
       "about": "If the last epoch bump is lost before reaching the member, the member will retry with the previous epoch." },
     { "name": "State", "versions": "0+", "type": "int8",
       "about": "The member state. See StreamsGroupMember.MemberState for the possible values." },
-    { "name": "ActiveTasks", "versions": "0+", "type": "[]TaskId",
+    { "name": "ActiveTasks", "versions": "0+", "type": "[]TaskIds",
       "about": "Currently assigned active tasks for this streams client." },
-    { "name": "StandbyTasks", "versions": "0+", "type": "[]TaskId",
+    { "name": "StandbyTasks", "versions": "0+", "type": "[]TaskIds",
       "about": "Currently assigned standby tasks for this streams client." },
-    { "name": "WarmupTasks", "versions": "0+", "type": "[]TaskId",
+    { "name": "WarmupTasks", "versions": "0+", "type": "[]TaskIds",
       "about": "Currently assigned warming up tasks for this streams client." },
     { "name": "ActiveTasksPendingRevocation", "versions": "0+", "type": "[]TaskId",
       "about": "The active tasks that must be revoked by this member." }
   ],
   "commonStructs": [
-    { "name": "TaskId", "versions": "0+", "fields": [
+    { "name": "TaskIds", "versions": "0+", "fields": [
       { "name": "Subtopology", "type": "string", "versions": "0+",
         "about": "The subtopology identifier." },
       { "name": "Partitions", "type": "[]int32", "versions": "0+",
