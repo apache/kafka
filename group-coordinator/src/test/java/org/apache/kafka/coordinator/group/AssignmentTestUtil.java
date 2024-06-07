@@ -71,6 +71,25 @@ public class AssignmentTestUtil {
         return Collections.unmodifiableMap(assignment);
     }
 
+    @SafeVarargs
+    public static Map<String, Set<Integer>> mkStreamsAssignment(Map.Entry<String, Set<Integer>>... entries) {
+        Map<String, Set<Integer>> assignment = new HashMap<>();
+        for (Map.Entry<String, Set<Integer>> entry : entries) {
+            assignment.put(entry.getKey(), entry.getValue());
+        }
+        return assignment;
+    }
+
+    public static Map.Entry<String, Set<Integer>> mkTaskAssignment(
+        String subtopology,
+        Integer... partitions
+    ) {
+        return new AbstractMap.SimpleEntry<>(
+            subtopology,
+            new HashSet<>(Arrays.asList(partitions))
+        );
+    }
+
     /**
      * Verifies that the expected assignment is equal to the computed assignment for every member in the group.
      */
