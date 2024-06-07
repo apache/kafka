@@ -23,7 +23,7 @@ import kafka.server.KafkaConfig
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.requests.AbstractControlRequest
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.SystemTime
 import org.apache.kafka.image.{ClusterImage, MetadataDelta, MetadataImage, TopicsImage}
 import org.apache.kafka.metadata.PartitionRegistration
 import org.apache.kafka.metadata.migration.LegacyPropagator
@@ -61,7 +61,7 @@ class MigrationPropagator(
   val channelManager = new ControllerChannelManager(
     () => _image.highestOffsetAndEpoch().epoch(),
     config,
-    Time.SYSTEM,
+    SystemTime.getSystemTime,
     new Metrics(),
     stateChangeLogger
   )

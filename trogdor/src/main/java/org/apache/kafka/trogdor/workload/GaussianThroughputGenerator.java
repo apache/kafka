@@ -19,7 +19,7 @@ package org.apache.kafka.trogdor.workload;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import java.util.Random;
 
 /*
@@ -107,7 +107,7 @@ public class GaussianThroughputGenerator implements ThroughputGenerator {
         messageTracker = 0;
 
         // Calculate the next window start time.
-        long now = Time.SYSTEM.milliseconds();
+        long now = SystemTime.getSystemTime().milliseconds();
         if (nextWindowStarts > 0) {
             while (nextWindowStarts < now) {
                 nextWindowStarts += windowSizeMs;
@@ -130,7 +130,7 @@ public class GaussianThroughputGenerator implements ThroughputGenerator {
     @Override
     public synchronized void throttle() throws InterruptedException {
         // Calculate the next window if we've moved beyond the current one.
-        if (Time.SYSTEM.milliseconds() >= nextWindowStarts) {
+        if (SystemTime.getSystemTime().milliseconds() >= nextWindowStarts) {
             calculateNextWindow(false);
         }
 
@@ -141,8 +141,8 @@ public class GaussianThroughputGenerator implements ThroughputGenerator {
         if (messageTracker >= throttleMessages) {
 
             // Wait the difference in time between now and when the next window starts.
-            while (nextWindowStarts > Time.SYSTEM.milliseconds()) {
-                wait(nextWindowStarts - Time.SYSTEM.milliseconds());
+            while (nextWindowStarts > SystemTime.getSystemTime().milliseconds()) {
+                wait(nextWindowStarts - SystemTime.getSystemTime().milliseconds());
             }
         }
     }

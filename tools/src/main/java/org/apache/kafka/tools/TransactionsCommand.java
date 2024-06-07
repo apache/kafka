@@ -39,6 +39,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.errors.TransactionalIdNotFoundException;
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -1025,7 +1026,7 @@ public abstract class TransactionsCommand {
     }
 
     public static void main(String[] args) throws Exception {
-        execute(args, TransactionsCommand::buildAdminClient, System.out, Time.SYSTEM);
+        execute(args, TransactionsCommand::buildAdminClient, System.out, SystemTime.getSystemTime());
     }
 
 }

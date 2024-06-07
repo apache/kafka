@@ -17,8 +17,8 @@
 package org.apache.kafka.server.util.timer;
 
 import org.apache.kafka.common.utils.KafkaThread;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.ThreadUtils;
-import org.apache.kafka.common.utils.Time;
 
 import java.util.concurrent.DelayQueue;
 import java.util.concurrent.ExecutorService;
@@ -42,7 +42,7 @@ public class SystemTimer implements Timer {
     private final ReentrantReadWriteLock.WriteLock writeLock = readWriteLock.writeLock();
 
     public SystemTimer(String executorName) {
-        this(executorName, 1, 20, Time.SYSTEM.hiResClockMs());
+        this(executorName, 1, 20, SystemTime.getSystemTime().hiResClockMs());
     }
 
     public SystemTimer(
@@ -67,7 +67,7 @@ public class SystemTimer implements Timer {
     public void add(TimerTask timerTask) {
         readLock.lock();
         try {
-            addTimerTaskEntry(new TimerTaskEntry(timerTask, timerTask.delayMs + Time.SYSTEM.hiResClockMs()));
+            addTimerTaskEntry(new TimerTaskEntry(timerTask, timerTask.delayMs + SystemTime.getSystemTime().hiResClockMs()));
         } finally {
             readLock.unlock();
         }

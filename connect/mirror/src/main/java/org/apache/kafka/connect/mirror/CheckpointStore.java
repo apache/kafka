@@ -21,7 +21,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.protocol.types.SchemaException;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.KafkaBasedLog;
@@ -189,7 +189,7 @@ public class CheckpointStore implements AutoCloseable {
                     null,
                     cpAdmin,
                     consumedCallback,
-                    Time.SYSTEM,
+                    SystemTime.getSystemTime(),
                     ignored -> {
                     },
                     topicPartition -> topicPartition.partition() == 0);

@@ -31,7 +31,7 @@ import kafka.server.metadata.MockConfigRepository;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.storage.internals.log.LogConfig;
@@ -102,7 +102,7 @@ public class UpdateFollowerFetchStateBenchmark {
             setScheduler(scheduler).
             setBrokerTopicStats(brokerTopicStats).
             setLogDirFailureChannel(logDirFailureChannel).
-            setTime(Time.SYSTEM).
+            setTime(SystemTime.getSystemTime()).
             setKeepPartitionMetadataFile(true).
             build();
         OffsetCheckpoints offsetCheckpoints = Mockito.mock(OffsetCheckpoints.class);
@@ -125,7 +125,7 @@ public class UpdateFollowerFetchStateBenchmark {
         AlterPartitionListener alterPartitionListener = Mockito.mock(AlterPartitionListener.class);
         AlterPartitionManager alterPartitionManager = Mockito.mock(AlterPartitionManager.class);
         partition = new Partition(topicPartition, 100,
-                MetadataVersion.latestTesting(), 0, () -> -1, Time.SYSTEM,
+                MetadataVersion.latestTesting(), 0, () -> -1, SystemTime.getSystemTime(),
                 alterPartitionListener, delayedOperations,
                 Mockito.mock(MetadataCache.class), logManager, alterPartitionManager, topicId);
         partition.makeLeader(partitionState, offsetCheckpoints, topicId, Option.empty());

@@ -28,7 +28,7 @@ import org.apache.kafka.common.internals.ClusterResourceListeners
 import org.apache.kafka.common.metrics.{Metrics, MetricsReporter}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.SystemTime
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.security.CredentialProvider
@@ -115,7 +115,7 @@ trait KafkaBroker extends Logging {
   metricsGroup.newGauge("ClusterId", () => clusterId)
   metricsGroup.newGauge("yammer-metrics-count", () =>  KafkaYammerMetrics.defaultRegistry.allMetrics.size)
 
-  private val linuxIoMetricsCollector = new LinuxIoMetricsCollector("/proc", Time.SYSTEM, logger.underlying)
+  private val linuxIoMetricsCollector = new LinuxIoMetricsCollector("/proc", SystemTime.getSystemTime, logger.underlying)
 
   if (linuxIoMetricsCollector.usable()) {
     metricsGroup.newGauge("linux-disk-read-bytes", () => linuxIoMetricsCollector.readBytes())

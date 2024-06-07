@@ -40,6 +40,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
@@ -855,7 +856,7 @@ public class KafkaStreams implements AutoCloseable {
     public KafkaStreams(final Topology topology,
                         final Properties props,
                         final KafkaClientSupplier clientSupplier) {
-        this(topology, new StreamsConfig(props), clientSupplier, Time.SYSTEM);
+        this(topology, new StreamsConfig(props), clientSupplier, SystemTime.getSystemTime());
     }
 
     /**
@@ -955,7 +956,7 @@ public class KafkaStreams implements AutoCloseable {
     protected KafkaStreams(final TopologyMetadata topologyMetadata,
                            final StreamsConfig applicationConfigs,
                            final KafkaClientSupplier clientSupplier) throws StreamsException {
-        this(topologyMetadata, applicationConfigs, clientSupplier, Time.SYSTEM);
+        this(topologyMetadata, applicationConfigs, clientSupplier, SystemTime.getSystemTime());
     }
 
     @SuppressWarnings("this-escape")

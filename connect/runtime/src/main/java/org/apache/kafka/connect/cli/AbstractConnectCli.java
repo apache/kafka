@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.cli;
 
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
@@ -45,7 +46,7 @@ public abstract class AbstractConnectCli<T extends WorkerConfig> {
 
     private static final Logger log = LoggerFactory.getLogger(AbstractConnectCli.class);
     private final String[] args;
-    private final Time time = Time.SYSTEM;
+    private final Time time = SystemTime.getSystemTime();
 
     /**
      *

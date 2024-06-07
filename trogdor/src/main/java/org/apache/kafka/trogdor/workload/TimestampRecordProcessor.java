@@ -22,8 +22,8 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.trogdor.common.JsonUtil;
-import org.apache.kafka.common.utils.Time;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -92,7 +92,7 @@ public class TimestampRecordProcessor implements RecordProcessor {
     @Override
     public synchronized void processRecords(ConsumerRecords<byte[], byte[]> consumerRecords) {
         // Save the current time to prevent skew by processing time.
-        long curTime = Time.SYSTEM.milliseconds();
+        long curTime = SystemTime.getSystemTime().milliseconds();
         for (ConsumerRecord<byte[], byte[]> record : consumerRecords) {
             try {
                 buffer.clear();

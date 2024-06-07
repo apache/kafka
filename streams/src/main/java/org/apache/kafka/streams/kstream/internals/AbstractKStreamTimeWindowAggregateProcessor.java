@@ -23,6 +23,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.d
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -44,7 +45,7 @@ import org.slf4j.Logger;
 
 public abstract class AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg> extends ContextualProcessor<KIn, VIn, Windowed<KIn>, Change<VAgg>> {
 
-    private final Time time = Time.SYSTEM;
+    private final Time time = SystemTime.getSystemTime();
     private final String storeName;
     private final EmitStrategy emitStrategy;
     private final boolean sendOldValues;

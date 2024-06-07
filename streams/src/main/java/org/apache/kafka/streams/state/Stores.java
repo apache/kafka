@@ -18,7 +18,7 @@ package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemorySessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemoryWindowBytesStoreSupplier;
@@ -460,7 +460,7 @@ public final class Stores {
                                                                                 final Serde<K> keySerde,
                                                                                 final Serde<V> valueSerde) {
         Objects.requireNonNull(supplier, "supplier cannot be null");
-        return new KeyValueStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
+        return new KeyValueStoreBuilder<>(supplier, keySerde, valueSerde, SystemTime.getSystemTime());
     }
 
     /**
@@ -482,7 +482,7 @@ public final class Stores {
                                                                                                       final Serde<K> keySerde,
                                                                                                       final Serde<V> valueSerde) {
         Objects.requireNonNull(supplier, "supplier cannot be null");
-        return new TimestampedKeyValueStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
+        return new TimestampedKeyValueStoreBuilder<>(supplier, keySerde, valueSerde, SystemTime.getSystemTime());
     }
 
     /**
@@ -500,7 +500,7 @@ public final class Stores {
                                                                                                   final Serde<K> keySerde,
                                                                                                   final Serde<V> valueSerde) {
         Objects.requireNonNull(supplier, "supplier cannot be null");
-        return new VersionedKeyValueStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
+        return new VersionedKeyValueStoreBuilder<>(supplier, keySerde, valueSerde, SystemTime.getSystemTime());
     }
 
     /**
@@ -521,7 +521,7 @@ public final class Stores {
                                                                             final Serde<K> keySerde,
                                                                             final Serde<V> valueSerde) {
         Objects.requireNonNull(supplier, "supplier cannot be null");
-        return new WindowStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
+        return new WindowStoreBuilder<>(supplier, keySerde, valueSerde, SystemTime.getSystemTime());
     }
 
     /**
@@ -543,7 +543,7 @@ public final class Stores {
                                                                                                   final Serde<K> keySerde,
                                                                                                   final Serde<V> valueSerde) {
         Objects.requireNonNull(supplier, "supplier cannot be null");
-        return new TimestampedWindowStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
+        return new TimestampedWindowStoreBuilder<>(supplier, keySerde, valueSerde, SystemTime.getSystemTime());
     }
 
     /**
@@ -561,6 +561,6 @@ public final class Stores {
                                                                               final Serde<K> keySerde,
                                                                               final Serde<V> valueSerde) {
         Objects.requireNonNull(supplier, "supplier cannot be null");
-        return new SessionStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
+        return new SessionStoreBuilder<>(supplier, keySerde, valueSerde, SystemTime.getSystemTime());
     }
 }

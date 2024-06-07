@@ -38,6 +38,7 @@ import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
@@ -129,7 +130,7 @@ public class OffsetMetadataManager {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
             if (metadataImage == null) metadataImage = MetadataImage.EMPTY;
-            if (time == null) time = Time.SYSTEM;
+            if (time == null) time = SystemTime.getSystemTime();
 
             if (groupMetadataManager == null) {
                 throw new IllegalArgumentException("GroupMetadataManager cannot be null");

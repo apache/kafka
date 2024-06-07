@@ -21,6 +21,7 @@ import org.apache.kafka.common.metadata.AbortTransactionRecord;
 import org.apache.kafka.common.metadata.BeginTransactionRecord;
 import org.apache.kafka.common.metadata.EndTransactionRecord;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.controller.metrics.QuorumControllerMetrics;
 import org.apache.kafka.raft.Batch;
@@ -48,7 +49,7 @@ class OffsetControlManager {
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
         private QuorumControllerMetrics metrics = null;
-        private Time time = Time.SYSTEM;
+        private Time time = SystemTime.getSystemTime();
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;

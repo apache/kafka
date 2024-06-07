@@ -17,6 +17,7 @@
 
 package org.apache.kafka.trogdor.workload;
 
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 
 public class Throttle {
@@ -59,7 +60,7 @@ public class Throttle {
     }
 
     protected Time time() {
-        return Time.SYSTEM;
+        return SystemTime.getSystemTime();
     }
 
     protected synchronized void delay(long amount) throws InterruptedException {

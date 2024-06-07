@@ -21,6 +21,7 @@ import kafka.cluster.BrokerEndPoint;
 import kafka.cluster.DelayedOperations;
 import kafka.cluster.AlterPartitionListener;
 import kafka.cluster.Partition;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.log.LogAppendInfo;
 import kafka.log.LogManager;
@@ -64,7 +65,6 @@ import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.UpdateMetadataRequest;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -151,7 +151,7 @@ public class ReplicaFetcherThreadBenchmark {
             setScheduler(scheduler).
             setBrokerTopicStats(brokerTopicStats).
             setLogDirFailureChannel(logDirFailureChannel).
-            setTime(Time.SYSTEM).
+            setTime(SystemTime.getSystemTime()).
             setKeepPartitionMetadataFile(true).
             build();
 
@@ -177,7 +177,7 @@ public class ReplicaFetcherThreadBenchmark {
             Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), tp)).thenReturn(Option.apply(0L));
             AlterPartitionManager isrChannelManager = Mockito.mock(AlterPartitionManager.class);
             Partition partition = new Partition(tp, 100, MetadataVersion.latestTesting(),
-                    0, () -> -1, Time.SYSTEM, alterPartitionListener, new DelayedOperationsMock(tp),
+                    0, () -> -1, SystemTime.getSystemTime(), alterPartitionListener, new DelayedOperationsMock(tp),
                     Mockito.mock(MetadataCache.class), logManager, isrChannelManager, topicId);
 
             partition.makeFollower(partitionState, offsetCheckpoints, topicId, Option.empty());
@@ -303,7 +303,7 @@ public class ReplicaFetcherThreadBenchmark {
                                     new BrokerEndPoint(3, "host", 3000),
                                     config,
                                     new Metrics(),
-                                    Time.SYSTEM,
+                                    SystemTime.getSystemTime(),
                                     3,
                                     String.format("broker-%d-fetcher-%d", 3, 3),
                                     new LogContext(String.format("[ReplicaFetcher replicaId=%d, leaderId=%d, fetcherId=%d", config.brokerId(), 3, 3))

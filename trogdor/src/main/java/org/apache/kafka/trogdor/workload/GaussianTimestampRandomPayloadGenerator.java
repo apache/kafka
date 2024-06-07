@@ -19,7 +19,7 @@ package org.apache.kafka.trogdor.workload;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -119,7 +119,7 @@ public class GaussianTimestampRandomPayloadGenerator implements PayloadGenerator
 
         // Do the timestamp generation as the very last task.
         buffer.clear();
-        buffer.putLong(Time.SYSTEM.milliseconds());
+        buffer.putLong(SystemTime.getSystemTime().milliseconds());
         buffer.rewind();
         System.arraycopy(buffer.array(), 0, result, 0, Long.BYTES);
         return result;

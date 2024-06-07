@@ -35,7 +35,7 @@ import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -176,7 +176,7 @@ public final class WorkerUtils {
      */
     private static Collection<String> createTopics(Logger log, Admin adminClient,
                                                    Collection<NewTopic> topics) throws Throwable {
-        long startMs = Time.SYSTEM.milliseconds();
+        long startMs = SystemTime.getSystemTime().milliseconds();
         int tries = 0;
         List<String> existingTopics = new ArrayList<>();
 
@@ -223,7 +223,7 @@ public final class WorkerUtils {
             if (topicsToCreate.isEmpty()) {
                 break;
             }
-            if (Time.SYSTEM.milliseconds() > startMs + CREATE_TOPICS_CALL_TIMEOUT) {
+            if (SystemTime.getSystemTime().milliseconds() > startMs + CREATE_TOPICS_CALL_TIMEOUT) {
                 String str = "Unable to create topic(s): " +
                              String.join(", ", topicsToCreate) + "after " + tries + " attempt(s)";
                 log.warn(str);

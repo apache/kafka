@@ -38,6 +38,7 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ReplicaNotAvailableException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.AdminCommandFailedException;
@@ -166,13 +167,13 @@ public class ReassignPartitionsCommand {
                 opts.options.valueOf(opts.interBrokerThrottleOpt),
                 opts.options.valueOf(opts.replicaAlterLogDirsThrottleOpt),
                 opts.options.valueOf(opts.timeoutOpt),
-                Time.SYSTEM);
+                SystemTime.getSystemTime());
         } else if (opts.options.has(opts.cancelOpt)) {
             cancelAssignment(adminClient,
                 Utils.readFileAsString(opts.options.valueOf(opts.reassignmentJsonFileOpt)),
                 opts.options.has(opts.preserveThrottlesOpt),
                 opts.options.valueOf(opts.timeoutOpt),
-                Time.SYSTEM);
+                SystemTime.getSystemTime());
         } else if (opts.options.has(opts.listOpt)) {
             listReassignments(adminClient);
         } else {

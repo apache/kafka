@@ -28,8 +28,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.ThreadUtils;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.common.Platform;
@@ -238,7 +238,7 @@ public class ConsumeBenchWorker implements TaskWorker {
         public Void call() throws Exception {
             long messagesConsumed = 0;
             long bytesConsumed = 0;
-            long startTimeMs = Time.SYSTEM.milliseconds();
+            long startTimeMs = SystemTime.getSystemTime().milliseconds();
             long startBatchMs = startTimeMs;
             long maxMessages = spec.maxMessages();
             try {
@@ -247,7 +247,7 @@ public class ConsumeBenchWorker implements TaskWorker {
                     if (records.isEmpty()) {
                         continue;
                     }
-                    long endBatchMs = Time.SYSTEM.milliseconds();
+                    long endBatchMs = SystemTime.getSystemTime().milliseconds();
                     long elapsedBatchMs = endBatchMs - startBatchMs;
 
                     // Do the record batch processing immediately to avoid latency skew.
@@ -270,7 +270,7 @@ public class ConsumeBenchWorker implements TaskWorker {
 
                         throttle.increment();
                     }
-                    startBatchMs = Time.SYSTEM.milliseconds();
+                    startBatchMs = SystemTime.getSystemTime().milliseconds();
                 }
             } catch (Exception e) {
                 WorkerUtils.abort(log, "ConsumeRecords", e, doneFuture);
@@ -278,7 +278,7 @@ public class ConsumeBenchWorker implements TaskWorker {
                 statusUpdaterFuture.cancel(false);
                 StatusData statusData =
                     new ConsumeStatusUpdater(latencyHistogram, messageSizeHistogram, consumer, spec.recordProcessor()).update();
-                long curTimeMs = Time.SYSTEM.milliseconds();
+                long curTimeMs = SystemTime.getSystemTime().milliseconds();
                 log.info("{} Consumed total number of messages={}, bytes={} in {} ms.  status: {}",
                          clientId, messagesConsumed, bytesConsumed, curTimeMs - startTimeMs, statusData);
             }

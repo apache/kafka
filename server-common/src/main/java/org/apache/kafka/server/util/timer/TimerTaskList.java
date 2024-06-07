@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.server.util.timer;
 
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 
 import java.util.concurrent.Delayed;
@@ -37,7 +38,7 @@ class TimerTaskList implements Delayed {
     TimerTaskList(
         AtomicInteger taskCounter
     ) {
-        this(taskCounter, Time.SYSTEM);
+        this(taskCounter, SystemTime.getSystemTime());
     }
 
     TimerTaskList(

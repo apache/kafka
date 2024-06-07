@@ -32,6 +32,7 @@ import kafka.server.QuotaFactory.QuotaManagers;
 import kafka.server.ReplicaManager;
 import kafka.server.metadata.ConfigRepository;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupCoordinator;
 import org.apache.kafka.server.ClientMetricsManager;
@@ -60,7 +61,7 @@ public class KafkaApisBuilder {
     private FetchManager fetchManager = null;
     private BrokerTopicStats brokerTopicStats = null;
     private String clusterId = "clusterId";
-    private Time time = Time.SYSTEM;
+    private Time time = SystemTime.getSystemTime();
     private DelegationTokenManager tokenManager = null;
     private ApiVersionManager apiVersionManager = null;
     private Optional<ClientMetricsManager> clientMetricsManager = Optional.empty();

@@ -21,7 +21,7 @@ import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDur
 
 import java.time.Duration;
 import java.util.Map;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
@@ -125,7 +125,7 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
                         supplier,
                         timestampedKeyAndJoinSideSerde,
                         leftOrRightValueSerde,
-                        Time.SYSTEM
+                        SystemTime.getSystemTime()
                 );
 
         if (loggingEnabled) {

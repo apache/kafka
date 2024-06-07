@@ -18,6 +18,7 @@ package org.apache.kafka.metadata.migration;
 
 import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.controller.QuorumFeatures;
 import org.apache.kafka.controller.metrics.QuorumControllerMetrics;
@@ -138,7 +139,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         this.log = log;
         this.migrationState = MigrationDriverState.UNINITIALIZED;
         this.migrationLeadershipState = ZkMigrationLeadershipState.EMPTY;
-        this.eventQueue = new KafkaEventQueue(Time.SYSTEM, logContext, "controller-" + nodeId + "-migration-driver-");
+        this.eventQueue = new KafkaEventQueue(SystemTime.getSystemTime(), logContext, "controller-" + nodeId + "-migration-driver-");
         this.pollTimeSupplier = new PollTimeSupplier();
         this.image = MetadataImage.EMPTY;
         this.firstPublish = false;

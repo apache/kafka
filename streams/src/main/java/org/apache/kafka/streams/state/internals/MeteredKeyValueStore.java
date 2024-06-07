@@ -20,6 +20,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
@@ -121,7 +122,7 @@ public class MeteredKeyValueStore<K, V>
                          final Serde<V> valueSerde) {
         super(inner);
         this.metricsScope = metricsScope;
-        this.time = time != null ? time : Time.SYSTEM;
+        this.time = time != null ? time : SystemTime.getSystemTime();
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
     }

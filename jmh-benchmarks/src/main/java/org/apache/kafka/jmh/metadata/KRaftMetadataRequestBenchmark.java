@@ -53,7 +53,7 @@ import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.coordinator.group.GroupCoordinator;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
@@ -198,7 +198,7 @@ public class KRaftMetadataRequestBenchmark {
                 setFetchManager(fetchManager).
                 setBrokerTopicStats(brokerTopicStats).
                 setClusterId("clusterId").
-                setTime(Time.SYSTEM).
+                setTime(SystemTime.getSystemTime()).
                 setTokenManager(null).
                 setApiVersionManager(new SimpleApiVersionManager(
                         ApiMessageType.ListenerType.BROKER,

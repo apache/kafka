@@ -36,6 +36,7 @@ import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -143,7 +144,7 @@ public class ConsoleConsumer {
     }
 
     public static class ConsumerWrapper {
-        final Time time = Time.SYSTEM;
+        final Time time = SystemTime.getSystemTime();
         final long timeoutMs;
         final Consumer<byte[], byte[]> consumer;
 

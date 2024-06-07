@@ -21,7 +21,7 @@ import kafka.utils.Logging
 import org.apache.kafka.common.errors.{KafkaStorageException, OffsetOutOfRangeException}
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.record.MemoryRecords
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{SystemTime, Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.log.{AbortedTxn, FetchDataInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogSegment, LogSegments, OffsetPosition}
@@ -948,7 +948,7 @@ object LocalLog extends Logging {
 
   private[log] def createNewCleanedSegment(dir: File, logConfig: LogConfig, baseOffset: Long): LogSegment = {
     LogSegment.deleteIfExists(dir, baseOffset, CleanedFileSuffix)
-    LogSegment.open(dir, baseOffset, logConfig, Time.SYSTEM, false, logConfig.initFileSize, logConfig.preallocate, CleanedFileSuffix)
+    LogSegment.open(dir, baseOffset, logConfig, SystemTime.getSystemTime, false, logConfig.initFileSize, logConfig.preallocate, CleanedFileSuffix)
   }
 
   /**

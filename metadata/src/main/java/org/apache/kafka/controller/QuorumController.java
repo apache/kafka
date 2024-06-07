@@ -90,6 +90,7 @@ import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.controller.errors.ControllerExceptions;
@@ -197,7 +198,7 @@ public final class QuorumController implements Controller {
         private final String clusterId;
         private FaultHandler nonFatalFaultHandler = null;
         private FaultHandler fatalFaultHandler = null;
-        private Time time = Time.SYSTEM;
+        private Time time = SystemTime.getSystemTime();
         private String threadNamePrefix = null;
         private LogContext logContext = null;
         private KafkaConfigSchema configSchema = KafkaConfigSchema.EMPTY;

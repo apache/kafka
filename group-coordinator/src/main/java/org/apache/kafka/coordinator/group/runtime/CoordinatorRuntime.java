@@ -33,6 +33,7 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.metrics.CoordinatorRuntimeMetrics;
@@ -108,7 +109,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         private PartitionWriter partitionWriter;
         private CoordinatorLoader<U> loader;
         private CoordinatorShardBuilderSupplier<S, U> coordinatorShardBuilderSupplier;
-        private Time time = Time.SYSTEM;
+        private Time time = SystemTime.getSystemTime();
         private Timer timer;
         private Duration defaultWriteTimeout;
         private CoordinatorRuntimeMetrics runtimeMetrics;

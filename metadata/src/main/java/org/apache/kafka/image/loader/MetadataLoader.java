@@ -18,6 +18,7 @@
 package org.apache.kafka.image.loader;
 
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
@@ -70,7 +71,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
     public static class Builder {
         private int nodeId = -1;
         private String threadNamePrefix = "";
-        private Time time = Time.SYSTEM;
+        private Time time = SystemTime.getSystemTime();
         private LogContext logContext = null;
         private FaultHandler faultHandler = (m, e) -> new FaultHandlerException(m, e);
         private MetadataLoaderMetrics metrics = null;
@@ -213,7 +214,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             faultHandler,
             this::maybePublishMetadata);
         this.eventQueue = new KafkaEventQueue(
-            Time.SYSTEM,
+            SystemTime.getSystemTime(),
             logContext,
             threadNamePrefix + "metadata-loader-",
             new ShutdownEvent());

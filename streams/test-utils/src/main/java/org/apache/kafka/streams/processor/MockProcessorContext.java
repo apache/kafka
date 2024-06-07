@@ -21,7 +21,7 @@ import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
@@ -242,7 +242,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
             new Metrics(metricConfig),
             threadId,
             streamsConfig.getString(StreamsConfig.BUILT_IN_METRICS_VERSION_CONFIG),
-            Time.SYSTEM
+            SystemTime.getSystemTime()
         );
         TaskMetrics.droppedRecordsSensor(threadId, taskId.toString(), metrics);
     }

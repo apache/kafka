@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.storage;
 
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.util.Callback;
@@ -77,7 +78,7 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
         Objects.requireNonNull(connectorOffsetsTopic);
         Objects.requireNonNull(connectorStoreAdmin);
         return new ConnectorOffsetBackingStore(
-                Time.SYSTEM,
+                SystemTime.getSystemTime(),
                 loggingContext,
                 connectorOffsetsTopic,
                 workerStore,
@@ -103,7 +104,7 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
     ) {
         Objects.requireNonNull(loggingContext);
         Objects.requireNonNull(workerStore);
-        return new ConnectorOffsetBackingStore(Time.SYSTEM, loggingContext, workerOffsetsTopic, workerStore, null, null);
+        return new ConnectorOffsetBackingStore(SystemTime.getSystemTime(), loggingContext, workerOffsetsTopic, workerStore, null, null);
     }
 
     /**
@@ -126,7 +127,7 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
         Objects.requireNonNull(connectorOffsetsTopic);
         Objects.requireNonNull(connectorStoreAdmin);
         return new ConnectorOffsetBackingStore(
-                Time.SYSTEM,
+                SystemTime.getSystemTime(),
                 loggingContext,
                 connectorOffsetsTopic,
                 null,

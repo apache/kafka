@@ -36,6 +36,7 @@ import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.ThreadUtils;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.trogdor.common.JsonUtil;
@@ -61,7 +62,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class ConnectionStressWorker implements TaskWorker {
     private static final Logger log = LoggerFactory.getLogger(ConnectionStressWorker.class);
-    private static final Time TIME = Time.SYSTEM;
+    private static final Time TIME = SystemTime.getSystemTime();
 
     private static final int THROTTLE_PERIOD_MS = 100;
 
@@ -251,7 +252,7 @@ public class ConnectionStressWorker implements TaskWorker {
         @Override
         public void run() {
             try {
-                long lastTimeMs = Time.SYSTEM.milliseconds();
+                long lastTimeMs = SystemTime.getSystemTime().milliseconds();
                 JsonNode node;
                 synchronized (ConnectionStressWorker.this) {
                     node = JsonUtil.JSON_SERDE.valueToTree(

@@ -28,6 +28,7 @@ import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.internals.FatalExitError;
 import org.apache.kafka.common.utils.KafkaThread;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.log.remote.storage.RemoteLogMetadata;
@@ -75,7 +76,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
     // if the field is read but not updated in a spin loop like in #initializeResources() method.
     private final AtomicBoolean closing = new AtomicBoolean(false);
     private final AtomicBoolean initialized = new AtomicBoolean(false);
-    private final Time time = Time.SYSTEM;
+    private final Time time = SystemTime.getSystemTime();
     private final boolean startConsumerThread;
 
     private Thread initializationThread;

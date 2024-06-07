@@ -36,6 +36,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -111,7 +112,7 @@ public class PartitionCreationBench {
                 Option.empty(), true, false, 0, false, 0, false, 0, Option.empty(), 1, true, 1,
                 (short) 1, false));
         this.metrics = new Metrics();
-        this.time = Time.SYSTEM;
+        this.time = SystemTime.getSystemTime();
         this.failureChannel = new LogDirFailureChannel(brokerProperties.logDirs().size());
         final BrokerTopicStats brokerTopicStats = new BrokerTopicStats(false);
         final List<File> files =
@@ -138,12 +139,12 @@ public class PartitionCreationBench {
             setScheduler(scheduler).
             setBrokerTopicStats(brokerTopicStats).
             setLogDirFailureChannel(failureChannel).
-            setTime(Time.SYSTEM).
+            setTime(SystemTime.getSystemTime()).
             setKeepPartitionMetadataFile(true).
             build();
         scheduler.startup();
         this.quotaManagers = QuotaFactory.instantiate(this.brokerProperties, this.metrics, this.time, "");
-        this.zkClient = new KafkaZkClient(null, false, Time.SYSTEM, false) {
+        this.zkClient = new KafkaZkClient(null, false, SystemTime.getSystemTime(), false) {
             @Override
             public Properties getEntityConfigs(String rootEntityType, String sanitizedEntityName) {
                 return new Properties();

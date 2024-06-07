@@ -21,7 +21,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.RemovalCause;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteResourceNotFoundException;
@@ -250,7 +250,7 @@ public class RemoteIndexCache implements Closeable {
     }
 
     private void init() throws IOException {
-        long start = Time.SYSTEM.hiResClockMs();
+        long start = SystemTime.getSystemTime().hiResClockMs();
 
         try {
             Files.createDirectory(cacheDir.toPath());
@@ -332,7 +332,7 @@ public class RemoteIndexCache implements Closeable {
                 }
             }
         }
-        log.info("RemoteIndexCache starts up in {} ms.", Time.SYSTEM.hiResClockMs() - start);
+        log.info("RemoteIndexCache starts up in {} ms.", SystemTime.getSystemTime().hiResClockMs() - start);
     }
 
     private <T> T loadIndexFile(File file, RemoteLogSegmentMetadata remoteLogSegmentMetadata,

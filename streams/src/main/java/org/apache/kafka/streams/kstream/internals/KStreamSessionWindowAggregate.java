@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -101,7 +102,7 @@ public class KStreamSessionWindowAggregate<KIn, VIn, VAgg> implements KStreamAgg
         private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
         private InternalProcessorContext<Windowed<KIn>, Change<VAgg>> internalProcessorContext;
 
-        private final Time time = Time.SYSTEM;
+        private final Time time = SystemTime.getSystemTime();
         protected final KStreamImplJoin.TimeTracker timeTracker = new KStreamImplJoin.TimeTracker();
 
         @Override

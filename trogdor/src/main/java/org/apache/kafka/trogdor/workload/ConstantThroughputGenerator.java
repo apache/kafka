@@ -18,7 +18,7 @@
 package org.apache.kafka.trogdor.workload;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 
 /**
  * This throughput generator configures constant throughput.
@@ -74,7 +74,7 @@ public class ConstantThroughputGenerator implements ThroughputGenerator {
         messageTracker = 0;
 
         // Calculate the next window start time.
-        long now = Time.SYSTEM.milliseconds();
+        long now = SystemTime.getSystemTime().milliseconds();
         if (nextWindowStarts > 0) {
             while (nextWindowStarts <= now) {
                 nextWindowStarts += windowSizeMs;
@@ -92,7 +92,7 @@ public class ConstantThroughputGenerator implements ThroughputGenerator {
         }
 
         // Calculate the next window if we've moved beyond the current one.
-        if (Time.SYSTEM.milliseconds() >= nextWindowStarts) {
+        if (SystemTime.getSystemTime().milliseconds() >= nextWindowStarts) {
             calculateNextWindow();
         }
 
@@ -103,8 +103,8 @@ public class ConstantThroughputGenerator implements ThroughputGenerator {
         if (messageTracker >= messagesPerWindow) {
 
             // Wait the difference in time between now and when the next window starts.
-            while (nextWindowStarts > Time.SYSTEM.milliseconds()) {
-                wait(nextWindowStarts - Time.SYSTEM.milliseconds());
+            while (nextWindowStarts > SystemTime.getSystemTime().milliseconds()) {
+                wait(nextWindowStarts - SystemTime.getSystemTime().milliseconds());
             }
         }
     }

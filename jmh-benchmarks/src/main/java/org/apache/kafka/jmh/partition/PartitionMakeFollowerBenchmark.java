@@ -33,7 +33,7 @@ import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.SimpleRecord;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
@@ -112,7 +112,7 @@ public class PartitionMakeFollowerBenchmark {
             setScheduler(scheduler).
             setBrokerTopicStats(brokerTopicStats).
             setLogDirFailureChannel(logDirFailureChannel).
-            setTime(Time.SYSTEM).setKeepPartitionMetadataFile(true).
+            setTime(SystemTime.getSystemTime()).setKeepPartitionMetadataFile(true).
             build();
 
         TopicPartition tp = new TopicPartition("topic", 0);
@@ -122,7 +122,7 @@ public class PartitionMakeFollowerBenchmark {
         AlterPartitionListener alterPartitionListener = Mockito.mock(AlterPartitionListener.class);
         AlterPartitionManager alterPartitionManager = Mockito.mock(AlterPartitionManager.class);
         partition = new Partition(tp, 100,
-            MetadataVersion.latestTesting(), 0, () -> -1, Time.SYSTEM,
+            MetadataVersion.latestTesting(), 0, () -> -1, SystemTime.getSystemTime(),
             alterPartitionListener, delayedOperations,
             Mockito.mock(MetadataCache.class), logManager, alterPartitionManager, topicId);
         partition.createLogIfNotExists(true, false, offsetCheckpoints, topicId, Option.empty());

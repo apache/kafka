@@ -37,6 +37,7 @@ import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.BrokerRegistrationFencingChange;
@@ -86,7 +87,7 @@ public class ClusterControlManager {
     static class Builder {
         private LogContext logContext = null;
         private String clusterId = null;
-        private Time time = Time.SYSTEM;
+        private Time time = SystemTime.getSystemTime();
         private SnapshotRegistry snapshotRegistry = null;
         private long sessionTimeoutNs = DEFAULT_SESSION_TIMEOUT_NS;
         private ReplicaPlacer replicaPlacer = null;

@@ -50,6 +50,7 @@ import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandDefaultOptions;
@@ -205,7 +206,7 @@ public class ReplicaVerificationTool {
 
                 fetcherThreads.forEach(Thread::start);
                 System.out.printf("%s: verification process is started%n",
-                    DATE_FORMAT.format(new Date(Time.SYSTEM.milliseconds())));
+                    DATE_FORMAT.format(new Date(SystemTime.getSystemTime().milliseconds())));
             }
         } catch (Throwable e) {
             System.err.println(e.getMessage());
@@ -391,7 +392,7 @@ public class ReplicaVerificationTool {
             this.recordsCache = new HashMap<>();
             this.fetcherBarrier = new AtomicReference<>(new CountDownLatch(expectedNumFetchers));
             this.verificationBarrier = new AtomicReference<>(new CountDownLatch(1));
-            this.lastReportTime = Time.SYSTEM.milliseconds();
+            this.lastReportTime = SystemTime.getSystemTime().milliseconds();
             this.maxLag = -1L;
             this.offsetWithMaxLag = -1L;
 
@@ -484,7 +485,7 @@ public class ReplicaVerificationTool {
                                         MessageInfo messageInfoFromFirstReplica = messageInfoFromFirstReplicaOpt.get();
 
                                         if (messageInfoFromFirstReplica.offset != batch.lastOffset()) {
-                                            println.accept(DATE_FORMAT.format(new Date(Time.SYSTEM.milliseconds())) +
+                                            println.accept(DATE_FORMAT.format(new Date(SystemTime.getSystemTime().milliseconds())) +
                                                 ": partition " + topicPartition +
                                                 ": replica " + messageInfoFromFirstReplica.replicaId +
                                                 "'s offset " + messageInfoFromFirstReplica.offset +
@@ -494,7 +495,7 @@ public class ReplicaVerificationTool {
                                         }
 
                                         if (messageInfoFromFirstReplica.checksum != batch.checksum())
-                                            println.accept(DATE_FORMAT.format(new Date(Time.SYSTEM.milliseconds())) +
+                                            println.accept(DATE_FORMAT.format(new Date(SystemTime.getSystemTime().milliseconds())) +
                                                 ": partition " + topicPartition +
                                                 " has unmatched checksum at offset " + batch.lastOffset() +
                                                 "; replica " + messageInfoFromFirstReplica.replicaId +
@@ -529,7 +530,7 @@ public class ReplicaVerificationTool {
                 fetchResponsePerReplica.clear();
             }
 
-            long currentTimeMs = Time.SYSTEM.milliseconds();
+            long currentTimeMs = SystemTime.getSystemTime().milliseconds();
             if (currentTimeMs - lastReportTime > reportInterval) {
                 println.accept(DATE_FORMAT.format(new Date(currentTimeMs)) +
                     ": max lag is " + maxLag + " for partition " +
@@ -573,7 +574,7 @@ public class ReplicaVerificationTool {
             this.minBytes = minBytes;
             this.doVerification = doVerification;
             this.fetchEndpoint = new ReplicaFetcherBlockingSend(sourceBroker, new ConsumerConfig(consumerConfig), new Metrics(),
-                Time.SYSTEM, fetcherId, "broker-" + FetchRequest.DEBUGGING_CONSUMER_ID + "-fetcher-" + fetcherId);
+                SystemTime.getSystemTime(), fetcherId, "broker-" + FetchRequest.DEBUGGING_CONSUMER_ID + "-fetcher-" + fetcherId);
             this.topicNames = topicIds.entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey));
         }

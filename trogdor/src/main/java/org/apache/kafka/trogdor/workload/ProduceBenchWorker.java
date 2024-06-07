@@ -29,8 +29,8 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.ThreadUtils;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.common.WorkerUtils;
@@ -139,7 +139,7 @@ public class ProduceBenchWorker implements TaskWorker {
 
         @Override
         public void onCompletion(RecordMetadata metadata, Exception exception) {
-            long now = Time.SYSTEM.milliseconds();
+            long now = SystemTime.getSystemTime().milliseconds();
             long durationMs = now - startMs;
             sendRecords.recordDuration(durationMs);
             if (exception != null) {
@@ -223,7 +223,7 @@ public class ProduceBenchWorker implements TaskWorker {
 
         @Override
         public Void call() throws Exception {
-            long startTimeMs = Time.SYSTEM.milliseconds();
+            long startTimeMs = SystemTime.getSystemTime().milliseconds();
             try {
                 try {
                     if (enableTransactions)
@@ -260,7 +260,7 @@ public class ProduceBenchWorker implements TaskWorker {
             } finally {
                 statusUpdaterFuture.cancel(false);
                 StatusData statusData = new StatusUpdater(histogram, transactionsCommitted).update();
-                long curTimeMs = Time.SYSTEM.milliseconds();
+                long curTimeMs = SystemTime.getSystemTime().milliseconds();
                 log.info("Sent {} total record(s) in {} ms.  status: {}",
                     histogram.summarize().numSamples(), curTimeMs - startTimeMs, statusData);
             }
@@ -306,7 +306,7 @@ public class ProduceBenchWorker implements TaskWorker {
                     partition.topic(), partition.partition(), keys.next(), values.next());
             }
             sendFuture = producer.send(record,
-                new SendRecordsCallback(this, Time.SYSTEM.milliseconds()));
+                new SendRecordsCallback(this, SystemTime.getSystemTime().milliseconds()));
             throttle.increment();
         }
 

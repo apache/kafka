@@ -24,7 +24,7 @@ import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.metadata.MetadataRecordSerde;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
@@ -65,7 +65,7 @@ public final class SnapshotFileReader implements AutoCloseable {
     public SnapshotFileReader(String snapshotPath, RaftClient.Listener<ApiMessageAndVersion> listener) {
         this.snapshotPath = snapshotPath;
         this.listener = listener;
-        this.queue = new KafkaEventQueue(Time.SYSTEM,
+        this.queue = new KafkaEventQueue(SystemTime.getSystemTime(),
             new LogContext("[snapshotReaderQueue] "), "snapshotReaderQueue_", new ShutdownEvent());
         this.caughtUpFuture = new CompletableFuture<>();
     }

@@ -33,10 +33,10 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
-import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.common.utils.{LogContext, SystemTime, Time}
 import org.apache.kafka.common.{ClusterResource, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.group.metrics.{GroupCoordinatorMetrics, GroupCoordinatorRuntimeMetrics}
-import org.apache.kafka.coordinator.group.{CoordinatorRecord, GroupCoordinator, GroupCoordinatorConfig, GroupCoordinatorService, CoordinatorRecordSerde}
+import org.apache.kafka.coordinator.group.{CoordinatorRecord, CoordinatorRecordSerde, GroupCoordinator, GroupCoordinatorConfig, GroupCoordinatorService}
 import org.apache.kafka.image.publisher.{BrokerRegistrationTracker, MetadataPublisher}
 import org.apache.kafka.metadata.{BrokerState, ListenerInfo, VersionRange}
 import org.apache.kafka.security.CredentialProvider
@@ -56,7 +56,7 @@ import java.util
 import java.util.Optional
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.{Condition, ReentrantLock}
-import java.util.concurrent.{CompletableFuture, ExecutionException, TimeoutException, TimeUnit}
+import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
 import scala.collection.Map
 import scala.compat.java8.OptionConverters.RichOptionForJava8
 import scala.jdk.CollectionConverters._
@@ -343,10 +343,10 @@ class BrokerServer(
       )
 
       // Create transaction coordinator, but don't start it until we've started replica manager.
-      // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good to fix the underlying issue
+      // Hardcode SystemTime.getSystemTime for now as some Streams tests fail otherwise, it would be good to fix the underlying issue
       transactionCoordinator = TransactionCoordinator(config, replicaManager,
         new KafkaScheduler(1, true, "transaction-log-manager-"),
-        producerIdManagerSupplier, metrics, metadataCache, Time.SYSTEM)
+        producerIdManagerSupplier, metrics, metadataCache, SystemTime.getSystemTime)
 
       autoTopicCreationManager = new DefaultAutoTopicCreationManager(
         config, Some(clientToControllerChannelManager), None, None,
@@ -399,7 +399,7 @@ class BrokerServer(
           sessionIdRange,
           shardNum
         ))
-      val fetchManager = new FetchManager(Time.SYSTEM, new FetchSessionCache(fetchSessionCacheShards))
+      val fetchManager = new FetchManager(SystemTime.getSystemTime, new FetchSessionCache(fetchSessionCacheShards))
 
       // Create the request processor objects.
       val raftSupport = RaftSupport(forwardingManager, metadataCache)
@@ -563,10 +563,10 @@ class BrokerServer(
 
   private def createGroupCoordinator(): GroupCoordinator = {
     // Create group coordinator, but don't start it until we've started replica manager.
-    // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good
+    // Hardcode SystemTime.getSystemTime for now as some Streams tests fail otherwise, it would be good
     // to fix the underlying issue.
     if (config.isNewGroupCoordinatorEnabled) {
-      val time = Time.SYSTEM
+      val time = SystemTime.getSystemTime
       val serde = new CoordinatorRecordSerde
       val groupCoordinatorConfig = new GroupCoordinatorConfig(
         config.groupCoordinatorNumThreads,
@@ -612,7 +612,7 @@ class BrokerServer(
       GroupCoordinatorAdapter(
         config,
         replicaManager,
-        Time.SYSTEM,
+        SystemTime.getSystemTime,
         metrics
       )
     }

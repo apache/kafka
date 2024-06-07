@@ -34,6 +34,7 @@ import kafka.server.ReplicaManager;
 import kafka.log.remote.RemoteLogManager;
 import kafka.zk.KafkaZkClient;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.DirectoryEventHandler;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
@@ -48,7 +49,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class ReplicaManagerBuilder {
     private KafkaConfig config = null;
     private Metrics metrics = null;
-    private Time time = Time.SYSTEM;
+    private Time time =  SystemTime.getSystemTime();
     private Scheduler scheduler = null;
     private LogManager logManager = null;
     private QuotaManagers quotaManagers = null;

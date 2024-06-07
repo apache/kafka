@@ -35,8 +35,8 @@ import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.ThreadUtils;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.common.Platform;
@@ -348,7 +348,7 @@ public class RoundTripWorker implements TaskWorker {
             long pollInvoked = 0;
             log.debug("{}: Starting RoundTripWorker#ConsumerRunnable.", id);
             try {
-                long lastLogTimeMs = Time.SYSTEM.milliseconds();
+                long lastLogTimeMs = SystemTime.getSystemTime().milliseconds();
                 while (true) {
                     try {
                         pollInvoked++;
@@ -376,7 +376,7 @@ public class RoundTripWorker implements TaskWorker {
                                 }
                             }
                         }
-                        long curTimeMs = Time.SYSTEM.milliseconds();
+                        long curTimeMs = SystemTime.getSystemTime().milliseconds();
                         if (curTimeMs > lastLogTimeMs + LOG_INTERVAL_MS) {
                             toReceiveTracker.log();
                             lastLogTimeMs = curTimeMs;

@@ -26,6 +26,7 @@ import org.apache.kafka.common.record.ControlRecordUtils;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.internals.BatchAccumulator.CompletedBatch;
@@ -143,7 +144,7 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
     final public static class Builder {
         private long lastContainedLogTimestamp = 0;
         private Compression compression = Compression.NONE;
-        private Time time = Time.SYSTEM;
+        private Time time = SystemTime.getSystemTime();
         private int maxBatchSize = 1024;
         private MemoryPool memoryPool = MemoryPool.NONE;
         private short kraftVersion = 1;

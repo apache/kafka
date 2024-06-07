@@ -57,7 +57,7 @@ import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.UpdateMetadataRequest;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.coordinator.group.GroupCoordinator;
 import org.apache.kafka.server.common.FinalizedFeatures;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -198,7 +198,7 @@ public class MetadataRequestBenchmark {
             setFetchManager(fetchManager).
             setBrokerTopicStats(brokerTopicStats).
             setClusterId("clusterId").
-            setTime(Time.SYSTEM).
+            setTime(SystemTime.getSystemTime()).
             setTokenManager(null).
             setApiVersionManager(new SimpleApiVersionManager(
                     ApiMessageType.ListenerType.ZK_BROKER,

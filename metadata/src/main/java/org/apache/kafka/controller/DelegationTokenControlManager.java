@@ -32,6 +32,7 @@ import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.metadata.DelegationTokenData;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -59,7 +60,7 @@ import static org.apache.kafka.common.protocol.Errors.UNSUPPORTED_VERSION;
  * Manages DelegationTokens.
  */
 public class DelegationTokenControlManager {
-    private final Time time = Time.SYSTEM;
+    private final Time time = SystemTime.getSystemTime();
 
     static class Builder {
         private LogContext logContext = null;

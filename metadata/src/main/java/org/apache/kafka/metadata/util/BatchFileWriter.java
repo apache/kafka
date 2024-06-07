@@ -21,6 +21,7 @@ import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.message.SnapshotFooterRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.record.ControlRecordUtils;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.MetadataRecordSerde;
@@ -89,7 +90,7 @@ public class BatchFileWriter implements AutoCloseable {
     }
 
     public static BatchFileWriter open(Path snapshotPath) throws IOException {
-        Time time = Time.SYSTEM;
+        Time time = SystemTime.getSystemTime();
         BatchAccumulator<ApiMessageAndVersion> batchAccumulator = new BatchAccumulator<>(
             0,
             0,

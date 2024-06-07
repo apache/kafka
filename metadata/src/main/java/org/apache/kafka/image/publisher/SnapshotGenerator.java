@@ -18,6 +18,7 @@
 package org.apache.kafka.image.publisher;
 
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
@@ -40,7 +41,7 @@ public class SnapshotGenerator implements MetadataPublisher {
     public static class Builder {
         private final Emitter emitter;
         private int nodeId = 0;
-        private Time time = Time.SYSTEM;
+        private Time time = SystemTime.getSystemTime();
         private FaultHandler faultHandler = (m, e) -> null;
         private long maxBytesSinceLastSnapshot = 100 * 1024L * 1024L;
         private long maxTimeSinceLastSnapshotNs = TimeUnit.DAYS.toNanos(1);

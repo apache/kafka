@@ -18,6 +18,7 @@
 package org.apache.kafka.image.publisher;
 
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.image.MetadataImage;
@@ -45,7 +46,7 @@ public class SnapshotEmitter implements SnapshotGenerator.Emitter {
     private final static int DEFAULT_BATCH_SIZE = 1024;
 
     public static class Builder {
-        private Time time = Time.SYSTEM;
+        private Time time = SystemTime.getSystemTime();
         private int nodeId = 0;
         private RaftClient<ApiMessageAndVersion> raftClient = null;
         private int batchSize = DEFAULT_BATCH_SIZE;
