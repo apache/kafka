@@ -1,0 +1,69 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// The streams rebalance protocol is in development. This schema is subject to non-backwards-compatible changes.
+{
+  "type": "data",
+  "name": "StreamsGroupMemberMetadataValue",
+  "validVersions": "0",
+  "flexibleVersions": "0+",
+  "fields": [
+    { "name": "InstanceId", "versions": "0+", "nullableVersions": "0+", "type": "string",
+      "about": "The (optional) instance id." },
+    { "name": "RackId", "versions": "0+", "nullableVersions": "0+", "type": "string",
+      "about": "The (optional) rack id." },
+    { "name": "ClientId", "versions": "0+", "type": "string",
+      "about": "The client id." },
+    { "name": "ClientHost", "versions": "0+", "type": "string",
+      "about": "The client host." },
+    { "name": "RebalanceTimeoutMs", "type": "int32", "versions": "0+", "default": -1,
+      "about": "The rebalance timeout." },
+
+    { "name": "TopologyHash", "type": "bytes", "versions": "0+",
+      "about": "The hash of the topology. " },
+    { "name": "Assignor", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": null,
+      "about": "The desired assignor. If set to null, the vote goes towards the broker taking a pick." },
+
+    { "name": "ProcessId", "type": "string", "versions": "0+",
+      "about": "Identity of the streams instance that may have multiple consumers." },
+    { "name": "HostInfo", "type": "HostInfo", "versions": "0+",
+      "about": "Host information for running interactive queries on this instance.",
+      "fields": [
+        { "name": "Host", "type": "string", "versions": "0+",
+          "about": "Host for running interactive queries on this instance." },
+        { "name": "Port", "type": "int32", "versions": "0+",
+          "about": "Port for running interactive queries on this instance." }
+      ]
+    },
+    // TODO: maybe it would be nice to just stuff this info into "AssignmentConfigs", since it's quite specific
+    { "name": "ClientTags", "type": "[]KeyValue", "versions": "0+",
+      "about": "Used for rack-aware assignment algorithm." },
+
+    { "name": "UserData", "type": "bytes", "versions": "0+", "nullableVersions": "0+", "default": "null",
+      "about": "Opaque user data to be passed to the client-side assignor. Null for server-side assignors." },
+    { "name": "AssignmentConfigs", "type": "[]KeyValue", "versions": "0+",
+      "about": "Generic array of assignment configuration strings." }
+  ],
+  "commonStructs": [
+    { "name": "KeyValue", "versions": "0+",
+      "fields": [
+        { "name": "Key", "type": "string", "versions": "0+",
+          "about": "key of the config" },
+        { "name": "Value", "type": "string", "versions": "0+",
+          "about": "value of the config" }
+      ]
+    }
+  ]
+}
