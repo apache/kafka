@@ -29,7 +29,7 @@ import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData.TopicPartitions;
 import org.apache.kafka.common.message.StreamsHeartbeatRequestData;
-import org.apache.kafka.common.message.StreamsHeartbeatRequestData.TaskId;
+import org.apache.kafka.common.message.StreamsHeartbeatRequestData.TaskIds;
 import org.apache.kafka.common.message.StreamsHeartbeatRequestData.HostInfo;
 import org.apache.kafka.common.message.StreamsHeartbeatResponseData;
 import org.apache.kafka.common.metrics.Metrics;
@@ -329,7 +329,7 @@ public class StreamsHeartbeatRequestManager implements RequestManager {
     }
 
     private void updateTaskIdCollection(
-        final List<StreamsHeartbeatResponseData.TaskId> source,
+        final List<StreamsHeartbeatResponseData.TaskIds> source,
         final Set<StreamsAssignmentInterface.TaskId> target
     ) {
         target.clear();
@@ -605,7 +605,7 @@ public class StreamsHeartbeatRequestManager implements RequestManager {
             return data;
         }
 
-        private List<TaskId> convertTaskIdCollection(final Set<StreamsAssignmentInterface.TaskId> tasks) {
+        private List<TaskIds> convertTaskIdCollection(final Set<StreamsAssignmentInterface.TaskId> tasks) {
             return tasks.stream()
                 .collect(
                     Collectors.groupingBy(StreamsAssignmentInterface.TaskId::subtopologyId,
@@ -614,10 +614,10 @@ public class StreamsHeartbeatRequestManager implements RequestManager {
                 .entrySet()
                 .stream()
                 .map(entry -> {
-                    TaskId id = new TaskId();
-                    id.setSubtopology(entry.getKey());
-                    id.setPartitions(entry.getValue());
-                    return id;
+                    TaskIds ids = new TaskIds();
+                    ids.setSubtopology(entry.getKey());
+                    ids.setPartitions(entry.getValue());
+                    return ids;
                 })
                 .collect(Collectors.toList());
         }

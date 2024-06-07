@@ -39,11 +39,11 @@
     { "name": "Assignor", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": null,
       "about": "The desired assignor. Picked by majority vote among clients. If null, the client votes for the broker to pick the assignor." },
 
-    { "name": "ActiveTasks", "type": "[]TaskId", "versions": "0+", "nullableVersions": "0+", "default": "null",
+    { "name": "ActiveTasks", "type": "[]TaskIds", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "Local assignment for this consumer. Null if unchanged since last heartbeat." },
-    { "name": "StandbyTasks", "type": "[]TaskId", "versions": "0+", "nullableVersions": "0+", "default": "null",
+    { "name": "StandbyTasks", "type": "[]TaskIds", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "Local standby tasks for this consumer. Null if unchanged since last heartbeat." },
-    { "name": "WarmupTasks", "type": "[]TaskId", "versions": "0+", "nullableVersions": "0+", "default": "null",
+    { "name": "WarmupTasks", "type": "[]TaskIds", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "Local warming up tasks for this consumer. Null if unchanged since last heartbeat." },
 
     { "name": "ProcessId", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
@@ -65,8 +65,10 @@
     { "name": "TaskOffset", "type": "[]TaskOffset", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "Cumulative offsets for assigned and dormant standby tasks. Only updatable when TaskOffsetUpdateReason is not zero. Null if unchanged since last heartbeat.",
       "fields": [
-        { "name": "TaskId", "type": "TaskId", "versions": "0+",
-          "about": "The task ID" },
+        { "name": "Subtopology", "type": "string", "versions": "0+",
+          "about": "A unique identifier of the subtopology." },
+        { "name": "Partition", "type": "int32", "versions": "0+",
+          "about": "The partition of the input topics." },
         { "name": "Offset", "type": "int64", "versions": "0+",
           "about": "The cumulative offset for the task" }
       ]
@@ -79,11 +81,11 @@
       "about": "Whether all Streams clients in the group should shut down." }
   ],
   "commonStructs": [
-    { "name": "TaskId", "versions": "0+", "fields": [
+    { "name": "TaskIds", "versions": "0+", "fields": [
       { "name": "Subtopology", "type": "string", "versions": "0+",
-        "about": "subtopology ID" },
+        "about": "A unique identifier of the subtopology." },
       { "name": "Partitions", "type": "[]int32", "versions": "0+",
-        "about": "partitions" }
+        "about": "The partition of the input topics." }
     ]},
     { "name": "KeyValue", "versions": "0+",
       "fields": [
