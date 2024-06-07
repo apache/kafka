@@ -1363,6 +1363,14 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       }
       validateAdvertisedListenersNonEmptyForBroker()
     }
+    if (processRoles.contains(ProcessRole.BrokerRole)
+      && originals.containsKey(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG)
+      && logDirs.size > 1) {
+        require(interBrokerProtocolVersion.isDirectoryAssignmentSupported,
+          s"Multiple log directories (aka JBOD) are not supported with the configured " +
+            s"${interBrokerProtocolVersion} ${ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG}. " +
+            s"Need ${MetadataVersion.IBP_3_7_IV2} or higher")
+    }
 
     val listenerNames = listeners.map(_.listenerName).toSet
     if (processRoles.isEmpty || processRoles.contains(ProcessRole.BrokerRole)) {
@@ -1457,6 +1465,18 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
 
     if (originals.containsKey(GroupCoordinatorConfig.OFFSET_COMMIT_REQUIRED_ACKS_CONFIG)) {
       warn(s"${GroupCoordinatorConfig.OFFSET_COMMIT_REQUIRED_ACKS_CONFIG} is deprecated and it will be removed in Apache Kafka 4.0.")
+    }
+  }
+
+  /**
+   * Validate some configurations for new MetadataVersion. A new MetadataVersion can take place when
+   * a FeatureLevelRecord for "metadata.version" is read from the cluster metadata.
+   */
+  def validateWithMetadataVersion(metadataVersion: MetadataVersion): Unit = {
+    if (processRoles.contains(ProcessRole.BrokerRole) && logDirs.size > 1) {
+      require(metadataVersion.isDirectoryAssignmentSupported,
+        s"Multiple log directories (aka JBOD) are not supported in the current MetadataVersion ${metadataVersion}. " +
+          s"Need ${MetadataVersion.IBP_3_7_IV2} or higher")
     }
   }
 
