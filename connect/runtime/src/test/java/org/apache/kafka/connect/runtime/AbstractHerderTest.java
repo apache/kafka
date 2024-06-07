@@ -84,12 +84,14 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.CALLS_REAL_METHODS;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -1114,6 +1116,31 @@ public class AbstractHerderTest {
         FutureCallback<ConnectorOffsets> cb = new FutureCallback<>();
         herder.connectorOffsets(CONN1, cb);
         assertEquals(offsets, cb.get(1000, TimeUnit.MILLISECONDS));
+    }
+
+    @Test
+    public void testTaskConfigComparison() {
+        ClusterConfigState snapshot = mock(ClusterConfigState.class);
+
+        when(snapshot.taskCount(CONN1)).thenReturn(TASK_CONFIGS.size());
+        TASK_CONFIGS_MAP.forEach((task, config) -> when(snapshot.rawTaskConfig(task)).thenReturn(config));
+        // Same task configs, same number of tasks--no change
+        assertFalse(AbstractHerder.taskConfigsChanged(snapshot, CONN1, TASK_CONFIGS));
+
+        when(snapshot.taskCount(CONN1)).thenReturn(TASK_CONFIGS.size() + 1);
+        // Different number of tasks; should report a change
+        assertTrue(AbstractHerder.taskConfigsChanged(snapshot, CONN1, TASK_CONFIGS));
+
+        when(snapshot.taskCount(CONN1)).thenReturn(TASK_CONFIG.size());
+        List<Map<String, String>> alteredTaskConfigs = new ArrayList<>(TASK_CONFIGS);
+        alteredTaskConfigs.set(alteredTaskConfigs.size() - 1, Collections.emptyMap());
+        // Last task config is different; should report a change
+        assertTrue(AbstractHerder.taskConfigsChanged(snapshot, CONN1, alteredTaskConfigs));
+
+        // Make sure we used exclusively raw task configs and never attempted transformation,
+        // since otherwise failures in transformation could either cause an infinite loop of task
+        // config generation, or prevent any task configs from being published
+        verify(snapshot, never()).taskConfig(any());
     }
 
     protected void addConfigKey(Map<String, ConfigDef.ConfigKey> keys, String name, String group) {

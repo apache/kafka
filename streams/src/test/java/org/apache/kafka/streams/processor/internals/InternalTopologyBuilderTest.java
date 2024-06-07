@@ -71,6 +71,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -566,6 +567,29 @@ public class InternalTopologyBuilderTest {
         final List<StateStore> suppliers = builder.buildTopology().stateStores();
         assertEquals(1, suppliers.size());
         assertEquals(storeBuilder.name(), suppliers.get(0).name());
+    }
+
+    @Test
+    public void testStateStoreNamesForSubtopology() {
+        builder.addStateStore(storeBuilder);
+        builder.setApplicationId("X");
+
+        builder.addSource(null, "source-1", null, null, null, "topic-1");
+        builder.addProcessor("processor-1", new MockApiProcessorSupplier<>(), "source-1");
+        builder.connectProcessorAndStateStores("processor-1", storeBuilder.name());
+
+        builder.addSource(null, "source-2", null, null, null, "topic-2");
+        builder.addProcessor("processor-2", new MockApiProcessorSupplier<>(), "source-2");
+
+        builder.buildTopology();
+        final Set<String> stateStoreNames = builder.stateStoreNamesForSubtopology(0);
+        assertThat(stateStoreNames, equalTo(mkSet(storeBuilder.name())));
+
+        final Set<String> emptyStoreNames = builder.stateStoreNamesForSubtopology(1);
+        assertThat(emptyStoreNames, equalTo(mkSet()));
+
+        final Set<String> stateStoreNamesUnknownSubtopology = builder.stateStoreNamesForSubtopology(13);
+        assertThat(stateStoreNamesUnknownSubtopology, nullValue());
     }
 
     @Test

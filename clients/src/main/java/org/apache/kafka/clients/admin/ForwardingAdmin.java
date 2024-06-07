@@ -289,6 +289,16 @@ public class ForwardingAdmin implements Admin {
     }
 
     @Override
+    public AddRaftVoterResult addRaftVoter(int voterId, Uuid voterDirectoryId, Set<RaftVoterEndpoint> endpoints, AddRaftVoterOptions options) {
+        return delegate.addRaftVoter(voterId, voterDirectoryId, endpoints, options);
+    }
+
+    @Override
+    public RemoveRaftVoterResult removeRaftVoter(int voterId, Uuid voterDirectoryId, RemoveRaftVoterOptions options) {
+        return delegate.removeRaftVoter(voterId, voterDirectoryId, options);
+    }
+
+    @Override
     public Map<MetricName, ? extends Metric> metrics() {
         return delegate.metrics();
     }

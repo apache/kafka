@@ -26,9 +26,9 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
-import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -463,7 +463,7 @@ public class StickyTaskAssignorTest {
         final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask = getTaskTopicPartitionMap(topicSize, partitionSize, true);
         final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer = getRandomProcessRacks(clientSize, nodeSize);
         final InternalTopicManager internalTopicManager = mockInternalTopicManagerForRandomChangelog(nodeSize, topicSize, partitionSize);
-        final AssignmentConfigs configs = new AssignorConfiguration.AssignmentConfigs(
+        final AssignmentConfigs configs = new AssignmentConfigs(
             0L,
             1,
             1,
@@ -786,7 +786,7 @@ public class StickyTaskAssignorTest {
         final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer = getRandomProcessRacks(clientSize, nodeSize);
         final InternalTopicManager internalTopicManager = mockInternalTopicManagerForRandomChangelog(nodeSize, topicSize, partitionSize);
 
-        final AssignmentConfigs configs = new AssignorConfiguration.AssignmentConfigs(
+        final AssignmentConfigs configs = new AssignmentConfigs(
             0L,
             1,
             0,
@@ -836,7 +836,7 @@ public class StickyTaskAssignorTest {
         final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer = getProcessRacksForAllProcess();
         final InternalTopicManager internalTopicManager = mockInternalTopicManagerForChangelog();
 
-        final AssignmentConfigs configs = new AssignorConfiguration.AssignmentConfigs(
+        final AssignmentConfigs configs = new AssignmentConfigs(
             0L,
             1,
             1,
@@ -907,7 +907,7 @@ public class StickyTaskAssignorTest {
         final int maxCapacity = 3;
         final SortedMap<TaskId, Set<TopicPartition>> taskTopicPartitionMap = getTaskTopicPartitionMap(
             tpSize, partitionSize, false);
-        final AssignmentConfigs configs = new AssignorConfiguration.AssignmentConfigs(
+        final AssignmentConfigs configs = new AssignmentConfigs(
             0L,
             1,
             replicaCount,
@@ -976,7 +976,7 @@ public class StickyTaskAssignorTest {
         final Map<UUID, Map<String, Optional<String>>> processRackMap = getRandomProcessRacks(clientSize, nodeSize);
         final InternalTopicManager mockInternalTopicManager = mockInternalTopicManagerForRandomChangelog(nodeSize, tpSize, partitionSize);
 
-        AssignmentConfigs configs = new AssignorConfiguration.AssignmentConfigs(
+        AssignmentConfigs configs = new AssignmentConfigs(
             0L,
             1,
             replicaCount,
@@ -1025,7 +1025,7 @@ public class StickyTaskAssignorTest {
         }
 
         final SortedMap<UUID, ClientState> clientStateMapCopy = copyClientStateMap(clientStateMap);
-        configs = new AssignorConfiguration.AssignmentConfigs(
+        configs = new AssignmentConfigs(
             0L,
             1,
             replicaCount,
@@ -1068,7 +1068,7 @@ public class StickyTaskAssignorTest {
     private boolean assign(final int numStandbys, final TaskId... tasks) {
         final List<TaskId> taskIds = asList(tasks);
         Collections.shuffle(taskIds);
-        final AssignmentConfigs configs = new AssignorConfiguration.AssignmentConfigs(
+        final AssignmentConfigs configs = new AssignmentConfigs(
             0L,
             1,
             numStandbys,

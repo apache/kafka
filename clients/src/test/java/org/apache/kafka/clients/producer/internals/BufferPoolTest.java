@@ -89,7 +89,7 @@ public class BufferPoolTest {
     }
 
     /**
-     * Test that we cannot try to allocate more memory then we have in the whole pool
+     * Test that we cannot try to allocate more memory than we have in the whole pool
      */
     @Test
     public void testCantAllocateMoreMemoryThanWeHave() throws Exception {

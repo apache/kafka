@@ -824,13 +824,15 @@ public class ClassicGroup implements Group {
      * @param groupInstanceId   The group instance id.
      * @param generationId      The generation id.
      * @param isTransactional   Whether the offset commit is transactional or not.
+     * @param apiVersion        The api version.
      */
     @Override
     public void validateOffsetCommit(
         String memberId,
         String groupInstanceId,
         int generationId,
-        boolean isTransactional
+        boolean isTransactional,
+        short apiVersion
     ) throws CoordinatorNotAvailableException, UnknownMemberIdException, IllegalGenerationException, FencedInstanceIdException {
         if (isInState(DEAD)) {
             throw Errors.COORDINATOR_NOT_AVAILABLE.exception();

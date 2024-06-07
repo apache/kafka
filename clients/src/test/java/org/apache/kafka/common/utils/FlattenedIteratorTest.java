@@ -19,6 +19,7 @@ package org.apache.kafka.common.utils;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -36,11 +37,11 @@ public class FlattenedIteratorTest {
             Collections.singletonList("ddddd"),
             asList("", "bar2", "baz45"));
 
-        Iterable<String> flattenedIterable = () -> new FlattenedIterator<>(list.iterator(), l -> l.iterator());
+        Iterable<String> flattenedIterable = () -> new FlattenedIterator<>(list.iterator(), List::iterator);
         List<String> flattened = new ArrayList<>();
         flattenedIterable.forEach(flattened::add);
 
-        assertEquals(list.stream().flatMap(l -> l.stream()).collect(Collectors.toList()), flattened);
+        assertEquals(list.stream().flatMap(Collection::stream).collect(Collectors.toList()), flattened);
 
         // Ensure we can iterate multiple times
         List<String> flattened2 = new ArrayList<>();
@@ -53,7 +54,7 @@ public class FlattenedIteratorTest {
     public void testEmptyList() {
         List<List<String>> list = emptyList();
 
-        Iterable<String> flattenedIterable = () -> new FlattenedIterator<>(list.iterator(), l -> l.iterator());
+        Iterable<String> flattenedIterable = () -> new FlattenedIterator<>(list.iterator(), List::iterator);
         List<String> flattened = new ArrayList<>();
         flattenedIterable.forEach(flattened::add);
 
@@ -64,7 +65,7 @@ public class FlattenedIteratorTest {
     public void testNestedSingleEmptyList() {
         List<List<String>> list = Collections.singletonList(emptyList());
 
-        Iterable<String> flattenedIterable = () -> new FlattenedIterator<>(list.iterator(), l -> l.iterator());
+        Iterable<String> flattenedIterable = () -> new FlattenedIterator<>(list.iterator(), List::iterator);
         List<String> flattened = new ArrayList<>();
         flattenedIterable.forEach(flattened::add);
 
@@ -77,11 +78,11 @@ public class FlattenedIteratorTest {
             emptyList(),
             asList("boo", "b", "de"));
 
-        Iterable<String> flattenedIterable = () -> new FlattenedIterator<>(list.iterator(), l -> l.iterator());
+        Iterable<String> flattenedIterable = () -> new FlattenedIterator<>(list.iterator(), List::iterator);
         List<String> flattened = new ArrayList<>();
         flattenedIterable.forEach(flattened::add);
 
-        assertEquals(list.stream().flatMap(l -> l.stream()).collect(Collectors.toList()), flattened);
+        assertEquals(list.stream().flatMap(Collection::stream).collect(Collectors.toList()), flattened);
     }
 
     @Test
@@ -91,11 +92,11 @@ public class FlattenedIteratorTest {
             emptyList(),
             asList("ee", "aa", "dd"));
 
-        Iterable<String> flattenedIterable = () -> new FlattenedIterator<>(list.iterator(), l -> l.iterator());
+        Iterable<String> flattenedIterable = () -> new FlattenedIterator<>(list.iterator(), List::iterator);
         List<String> flattened = new ArrayList<>();
         flattenedIterable.forEach(flattened::add);
 
-        assertEquals(list.stream().flatMap(l -> l.stream()).collect(Collectors.toList()), flattened);
+        assertEquals(list.stream().flatMap(Collection::stream).collect(Collectors.toList()), flattened);
     }
 
     @Test
@@ -105,11 +106,11 @@ public class FlattenedIteratorTest {
             Collections.singletonList("e"),
             emptyList());
 
-        Iterable<String> flattenedIterable = () -> new FlattenedIterator<>(list.iterator(), l -> l.iterator());
+        Iterable<String> flattenedIterable = () -> new FlattenedIterator<>(list.iterator(), List::iterator);
         List<String> flattened = new ArrayList<>();
         flattenedIterable.forEach(flattened::add);
 
-        assertEquals(list.stream().flatMap(l -> l.stream()).collect(Collectors.toList()), flattened);
+        assertEquals(list.stream().flatMap(Collection::stream).collect(Collectors.toList()), flattened);
     }
 
 }

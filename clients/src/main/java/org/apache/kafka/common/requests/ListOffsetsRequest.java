@@ -181,13 +181,4 @@ public class ListOffsetsRequest extends AbstractRequest {
         }
         return new ArrayList<>(topics.values());
     }
-
-    public static ListOffsetsTopic singletonRequestData(String topic, int partitionIndex, long timestamp, int maxNumOffsets) {
-        return new ListOffsetsTopic()
-                .setName(topic)
-                .setPartitions(Collections.singletonList(new ListOffsetsPartition()
-                        .setPartitionIndex(partitionIndex)
-                        .setTimestamp(timestamp)
-                        .setMaxNumOffsets(maxNumOffsets)));
-    }
 }

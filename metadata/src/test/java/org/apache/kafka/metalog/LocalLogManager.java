@@ -99,8 +99,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         public boolean equals(Object o) {
             if (!(o instanceof LeaderChangeBatch)) return false;
             LeaderChangeBatch other = (LeaderChangeBatch) o;
-            if (!other.newLeader.equals(newLeader)) return false;
-            return true;
+            return other.newLeader.equals(newLeader);
         }
 
         @Override

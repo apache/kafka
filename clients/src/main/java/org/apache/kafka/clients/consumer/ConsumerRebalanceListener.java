@@ -152,7 +152,7 @@ public interface ConsumerRebalanceListener {
      * {@link #onPartitionsRevoked(Collection)} callback before any instance executes its
      * {@link #onPartitionsAssigned(Collection)} callback. During exceptional scenarios, partitions may be migrated
      * without the old owner being notified (i.e. their {@link #onPartitionsRevoked(Collection)} callback not triggered),
-     * and later when the old owner consumer realized this event, the {@link #onPartitionsLost(Collection)} (Collection)} callback
+     * and later when the old owner consumer realized this event, the {@link #onPartitionsLost(Collection)} callback
      * will be triggered by the consumer then.
      * <p>
      * It is common for the assignment callback to use the consumer instance in order to query offsets. It is possible
