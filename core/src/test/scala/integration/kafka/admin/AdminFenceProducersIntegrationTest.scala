@@ -122,7 +122,7 @@ class AdminFenceProducersIntegrationTest extends IntegrationTestHarness {
       case ee: ExecutionException =>
         assertTrue(ee.getCause.isInstanceOf[ProducerFencedException] ||
                    ee.getCause.isInstanceOf[InvalidProducerEpochException],
-                   "Unexpected ExecutionException cause " + ee.getCause.getCause)
+                   "Unexpected ExecutionException cause " + ee.getCause)
       case e: Exception =>
         throw e
     }
