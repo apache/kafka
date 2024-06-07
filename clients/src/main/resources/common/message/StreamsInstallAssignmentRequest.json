@@ -20,16 +20,16 @@
       "about": "The members.", "fields": [
       { "name": "MemberId", "type": "string", "versions": "0+",
         "about": "The member ID." },
-      { "name": "ActiveTasks", "type": "[]TaskId", "versions": "0+",
+      { "name": "ActiveTasks", "type": "[]TaskIds", "versions": "0+",
         "about": "Local assignment for this consumer." },
-      { "name": "StandbyTasks", "type": "[]TaskId", "versions": "0+",
+      { "name": "StandbyTasks", "type": "[]TaskIds", "versions": "0+",
         "about": "Local standby tasks for this consumer." },
-      { "name": "WarmupTasks", "type": "[]TaskId", "versions": "0+",
+      { "name": "WarmupTasks", "type": "[]TaskIds", "versions": "0+",
         "about": "Local warming up tasks for this consumer." }
     ]}
   ],
   "commonStructs": [
-    { "name": "TaskId", "versions": "0+", "fields": [
+    { "name": "TaskIds", "versions": "0+", "fields": [
       { "name": "Subtopology", "type": "string", "versions": "0+",
         "about": "subtopology ID" },
       { "name": "Partitions", "type": "[]int32", "versions": "0+",
