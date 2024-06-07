@@ -1243,7 +1243,6 @@ public class CommitRequestManagerTest {
             // Mimic the request taking 10 ms, which would be past our timeout of 0. But it does come back within
             // the network request's timeout, so we should
             time.sleep(10);
-            unsentRequest.timer().update(time.milliseconds());
             Map<TopicPartition, OffsetFetchResponse.PartitionData> topicPartitionData = Collections.singletonMap(
                 tp,
                 new OffsetFetchResponse.PartitionData(
