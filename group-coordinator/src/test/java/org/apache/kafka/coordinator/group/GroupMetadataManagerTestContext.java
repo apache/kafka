@@ -46,7 +46,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.coordinator.group.assignor.ConsumerGroupPartitionAssignor;
+import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupBuilder;

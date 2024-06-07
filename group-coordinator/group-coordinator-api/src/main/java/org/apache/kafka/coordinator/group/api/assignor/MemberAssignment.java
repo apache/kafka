@@ -14,21 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.storage.internals.checkpoint;
+package org.apache.kafka.coordinator.group.api.assignor;
 
-import org.apache.kafka.storage.internals.log.EpochEntry;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.util.Collection;
-import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
-public interface LeaderEpochCheckpoint {
-    // in file-backed checkpoint implementation, the content should be
-    // synced to the device if `sync` is true
-    void write(Collection<EpochEntry> epochs, boolean sync);
-
-    default void write(Collection<EpochEntry> epochs) {
-        write(epochs, true);
-    }
-
-    List<EpochEntry> read();
+/**
+ * The partition assignment for a consumer group member.
+ */
+@InterfaceStability.Unstable
+public interface MemberAssignment {
+    /**
+     * @return The assigned partitions keyed by topic Ids.
+     */
+    Map<Uuid, Set<Integer>> partitions();
 }

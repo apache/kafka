@@ -20,18 +20,17 @@ import java.util.Optional;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.internals.UpgradeFromValues;
+import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 import org.apache.kafka.streams.processor.internals.ClientUtils;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.slf4j.Logger;
 
-import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.common.utils.Utils.getHost;
@@ -240,11 +239,7 @@ public final class AssignorConfiguration {
     }
 
     public AssignmentConfigs assignmentConfigs() {
-        return new AssignmentConfigs(streamsConfig);
-    }
-
-    public org.apache.kafka.streams.processor.assignment.AssignmentConfigs publicAssignmentConfigs() {
-        return org.apache.kafka.streams.processor.assignment.AssignmentConfigs.of(streamsConfig);
+        return AssignmentConfigs.of(streamsConfig);
     }
 
     public TaskAssignor taskAssignor() {
@@ -296,73 +291,5 @@ public final class AssignorConfiguration {
 
     public interface AssignmentListener {
         void onAssignmentComplete(final boolean stable);
-    }
-
-    public static class AssignmentConfigs {
-        public final long acceptableRecoveryLag;
-        public final int maxWarmupReplicas;
-        public final int numStandbyReplicas;
-        public final long probingRebalanceIntervalMs;
-        public final List<String> rackAwareAssignmentTags;
-        public final Integer rackAwareAssignmentTrafficCost;
-        public final Integer rackAwareAssignmentNonOverlapCost;
-        public final String rackAwareAssignmentStrategy;
-
-        private AssignmentConfigs(final StreamsConfig configs) {
-            acceptableRecoveryLag = configs.getLong(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG);
-            maxWarmupReplicas = configs.getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG);
-            numStandbyReplicas = configs.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
-            probingRebalanceIntervalMs = configs.getLong(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG);
-            rackAwareAssignmentTags = configs.getList(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
-            rackAwareAssignmentTrafficCost = configs.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG);
-            rackAwareAssignmentNonOverlapCost = configs.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG);
-            rackAwareAssignmentStrategy = configs.getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG);
-        }
-
-        AssignmentConfigs(final Long acceptableRecoveryLag,
-                          final Integer maxWarmupReplicas,
-                          final Integer numStandbyReplicas,
-                          final Long probingRebalanceIntervalMs,
-                          final List<String> rackAwareAssignmentTags) {
-            this(acceptableRecoveryLag, maxWarmupReplicas, numStandbyReplicas, probingRebalanceIntervalMs, rackAwareAssignmentTags,
-                null, null, StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE);
-        }
-
-        AssignmentConfigs(final Long acceptableRecoveryLag,
-                          final Integer maxWarmupReplicas,
-                          final Integer numStandbyReplicas,
-                          final Long probingRebalanceIntervalMs,
-                          final List<String> rackAwareAssignmentTags,
-                          final Integer rackAwareAssignmentTrafficCost,
-                          final Integer rackAwareAssignmentNonOverlapCost,
-                          final String rackAwareAssignmentStrategy) {
-            this.acceptableRecoveryLag = validated(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, acceptableRecoveryLag);
-            this.maxWarmupReplicas = validated(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, maxWarmupReplicas);
-            this.numStandbyReplicas = validated(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, numStandbyReplicas);
-            this.probingRebalanceIntervalMs = validated(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, probingRebalanceIntervalMs);
-            this.rackAwareAssignmentTags = validated(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, rackAwareAssignmentTags);
-            this.rackAwareAssignmentTrafficCost = validated(StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG, rackAwareAssignmentTrafficCost);
-            this.rackAwareAssignmentNonOverlapCost = validated(StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG, rackAwareAssignmentNonOverlapCost);
-            this.rackAwareAssignmentStrategy = validated(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG, rackAwareAssignmentStrategy);
-        }
-
-        private static <T> T validated(final String configKey, final T value) {
-            final ConfigDef.Validator validator = StreamsConfig.configDef().configKeys().get(configKey).validator;
-            if (validator != null) {
-                validator.ensureValid(configKey, value);
-            }
-            return value;
-        }
-
-        @Override
-        public String toString() {
-            return "AssignmentConfigs{" +
-                "\n  acceptableRecoveryLag=" + acceptableRecoveryLag +
-                "\n  maxWarmupReplicas=" + maxWarmupReplicas +
-                "\n  numStandbyReplicas=" + numStandbyReplicas +
-                "\n  probingRebalanceIntervalMs=" + probingRebalanceIntervalMs +
-                "\n  rackAwareAssignmentTags=" + rackAwareAssignmentTags +
-                "\n}";
-        }
     }
 }

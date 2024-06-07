@@ -19,12 +19,13 @@ package kafka.server.checkpoints
 import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.KafkaStorageException
-import org.apache.kafka.storage.internals.checkpoint.CheckpointFileWithFailureHandler
-import org.apache.kafka.storage.internals.log.LogDirFailureChannel
+import org.apache.kafka.storage.internals.checkpoint.{CheckpointFileWithFailureHandler, LeaderEpochCheckpointFile}
+import org.apache.kafka.storage.internals.log.{EpochEntry, LogDirFailureChannel}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito
 
+import java.io.File
 import java.util.Collections
 import scala.collection.Map
 
@@ -97,7 +98,7 @@ class OffsetCheckpointFileWithFailureHandlerTest extends Logging {
     val logDirFailureChannel = new LogDirFailureChannel(10)
     val checkpointFile = new CheckpointFileWithFailureHandler(file, OffsetCheckpointFile.CurrentVersion + 1,
       OffsetCheckpointFile.Formatter, logDirFailureChannel, file.getParent)
-    checkpointFile.write(Collections.singletonList(new TopicPartition("foo", 5) -> 10L), true)
+    checkpointFile.write(Collections.singletonList(new TopicPartition("foo", 5) -> 10L))
     assertThrows(classOf[KafkaStorageException], () => new OffsetCheckpointFile(checkpointFile.file, logDirFailureChannel).read())
   }
 
@@ -133,4 +134,15 @@ class OffsetCheckpointFileWithFailureHandlerTest extends Logging {
     assertThrows(classOf[IllegalArgumentException], () => lazyCheckpoints.fetch("/invalid/kafka-logs", new TopicPartition("foo", 0)))
   }
 
+  @Test
+  def testWriteIfDirExistsShouldNotThrowWhenDirNotExists(): Unit = {
+    val dir = TestUtils.tempDir()
+    val file = dir.toPath.resolve("test-checkpoint").toFile
+    val logDirFailureChannel = new LogDirFailureChannel(10)
+    val checkpointFile = new CheckpointFileWithFailureHandler(file, 0,
+      LeaderEpochCheckpointFile.FORMATTER, logDirFailureChannel, file.getParent)
+
+    dir.renameTo(new File(dir.getAbsolutePath + "-renamed"))
+    checkpointFile.writeIfDirExists(Collections.singletonList(new EpochEntry(1, 42)))
+  }
 }
