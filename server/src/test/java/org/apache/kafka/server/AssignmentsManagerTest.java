@@ -313,11 +313,11 @@ public class AssignmentsManagerTest {
     }
 
     private static ClientResponse buildSuccessfulResponse(AssignReplicasToDirsRequestData request) {
-        return buildSuccessfulResponse(request, topicIdPartition -> Errors.NONE);
+        return buildResponse(request, topicIdPartition -> Errors.NONE);
     }
 
-    private static ClientResponse buildSuccessfulResponse(AssignReplicasToDirsRequestData request,
-                                                          Function<TopicIdPartition, Errors> perPartitionError) {
+    private static ClientResponse buildResponse(AssignReplicasToDirsRequestData request,
+                                                Function<TopicIdPartition, Errors> perPartitionError) {
         Map<Uuid, Map<TopicIdPartition, Errors>> errors = new HashMap<>();
         for (AssignReplicasToDirsRequestData.DirectoryData directory : request.directories()) {
             for (AssignReplicasToDirsRequestData.TopicData topic : directory.topics()) {
@@ -429,7 +429,7 @@ public class AssignmentsManagerTest {
             ControllerRequestCompletionHandler completionHandler = invocation.getArgument(1, ControllerRequestCompletionHandler.class);
             if (readyToAssert.getCount() == 2) {
                 // First request, reply with a partition-level NOT_LEADER_OR_FOLLOWER error and queue a different assignment
-                completionHandler.onComplete(buildSuccessfulResponse(request, topicIdPartition -> Errors.NOT_LEADER_OR_FOLLOWER));
+                completionHandler.onComplete(buildResponse(request, topicIdPartition -> Errors.NOT_LEADER_OR_FOLLOWER));
                 manager.onAssignment(tp2, DIR_1, "testDropsOldAssignments-second");
             }
             if (readyToAssert.getCount() == 1) {
