@@ -1219,219 +1219,6 @@ public class CommitRequestManagerTest {
     }
 
     @Test
-    public void testOffsetFetchTimeoutStoresResult() {
-        CommitRequestManager commitRequestManager = create(true, 100);
-        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
-        TopicPartition tp = new TopicPartition("test-topic", 0);
-        Set<TopicPartition> partitions = Collections.singleton(tp);
-
-        // Fetch offset request #1...
-        {
-            CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = commitRequestManager.fetchOffsets(
-                partitions,
-                time.milliseconds()     // Deadline is effectively a 0 ms. timeout
-            );
-
-            NetworkClientDelegate.PollResult res = commitRequestManager.poll(time.milliseconds());
-            assertEquals(1, res.unsentRequests.size());
-            NetworkClientDelegate.UnsentRequest unsentRequest = res.unsentRequests.get(0);
-
-            Map<TopicPartition, OffsetFetchResponse.PartitionData> topicPartitionData = Collections.singletonMap(
-                tp,
-                new OffsetFetchResponse.PartitionData(
-                    123L,
-                    Optional.of(1),
-                    "metadata",
-                    Errors.NONE
-                )
-            );
-            unsentRequest.handler().onComplete(
-                buildOffsetFetchClientResponse(
-                    unsentRequest,
-                    topicPartitionData,
-                    Errors.NONE,
-                    false
-                )
-            );
-
-            // Because the request state is expired, we know the result wasn't propagated up to the user, so we
-            // need to keep it around for the next request.
-            assertEquals(
-                1,
-                commitRequestManager.pendingRequests.inflightOffsetFetches.size(),
-                "The inflight offset fetch response should be cached for the next request since this request expired"
-            );
-
-            assertTrue(future.isDone());
-            assertFalse(future.isCompletedExceptionally());
-            assertTrue(commitRequestManager.pendingRequests.inflightOffsetFetches.get(0).isExpired());
-        }
-
-        // Fetch offset request #2...
-        {
-            CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = commitRequestManager.fetchOffsets(
-                partitions,
-                time.milliseconds()     // Deadline is effectively a 0 ms. timeout
-            );
-
-            // Poll for the next set of outgoing network requests
-            NetworkClientDelegate.PollResult res = commitRequestManager.poll(time.milliseconds());
-            assertEquals(0, res.unsentRequests.size());
-
-            // In this case, we should be able to return the results from the first request that were cached.
-            assertEquals(
-                0,
-                commitRequestManager.pendingRequests.inflightOffsetFetches.size(),
-                "The inflight offset fetch response should have been removed from the cache"
-            );
-
-            assertTrue(future.isDone());
-            assertFalse(future.isCompletedExceptionally());
-        }
-    }
-
-    @Test
-    public void testOffsetFetchDeletesCachedResult() {
-        CommitRequestManager commitRequestManager = create(true, 100);
-        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
-
-        TopicPartition tp = new TopicPartition("test-topic", 0);
-        Set<TopicPartition> partitions = Collections.singleton(tp);
-
-        // Fetch offset request #1...
-        {
-            CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = commitRequestManager.fetchOffsets(
-                partitions,
-                time.milliseconds()     // Deadline is effectively a 0 ms. timeout
-            );
-
-            // Poll for the next set of outgoing network requests
-            NetworkClientDelegate.PollResult res = commitRequestManager.poll(time.milliseconds());
-            assertEquals(1, res.unsentRequests.size());
-            NetworkClientDelegate.UnsentRequest unsentRequest = res.unsentRequests.get(0);
-
-            Map<TopicPartition, OffsetFetchResponse.PartitionData> topicPartitionData = Collections.singletonMap(
-                tp,
-                new OffsetFetchResponse.PartitionData(
-                    123L,
-                    Optional.of(1),
-                    "metadata",
-                    Errors.NONE
-                )
-            );
-            unsentRequest.handler().onComplete(
-                buildOffsetFetchClientResponse(
-                    unsentRequest,
-                    topicPartitionData,
-                    Errors.NONE,
-                    false
-                )
-            );
-
-            // Because the request state is expired, we know the result wasn't propagated up to the user, so we
-            // need to keep it around for the next request.
-            assertEquals(
-                1,
-                commitRequestManager.pendingRequests.inflightOffsetFetches.size(),
-                "The inflight offset fetch response should be cached for the next request since this request expired"
-            );
-
-            assertTrue(future.isDone());
-            assertFalse(future.isCompletedExceptionally());
-            assertTrue(commitRequestManager.pendingRequests.inflightOffsetFetches.get(0).isExpired());
-        }
-
-        // Update our partition to ensure we exercise the case where the cached response for the previous set
-        // of partitions is ignored.
-        tp = new TopicPartition("test-topic", 1);
-        partitions = Collections.singleton(tp);
-
-        // Fetch offset request #2...
-        {
-            CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = commitRequestManager.fetchOffsets(
-                partitions,
-                time.milliseconds()     // Deadline is effectively a 0 ms. timeout
-            );
-
-            NetworkClientDelegate.PollResult res = commitRequestManager.poll(time.milliseconds());
-            assertEquals(1, res.unsentRequests.size());
-            NetworkClientDelegate.UnsentRequest unsentRequest = res.unsentRequests.get(0);
-
-            // In this case, we aren't able to use the previous request because its set of partitions are different
-            // from the current set of requested partitions.
-            assertEquals(
-                0,
-                commitRequestManager.pendingRequests.unsentOffsetFetches.size(),
-                "The inflight offset fetch response should have been removed from the cache"
-            );
-            assertEquals(
-                1,
-                commitRequestManager.pendingRequests.inflightOffsetFetches.size(),
-                "The inflight offset fetch response should have been removed from the cache"
-            );
-            assertEquals(
-                partitions,
-                commitRequestManager.pendingRequests.inflightOffsetFetches.get(0).requestedPartitions,
-                "The inflight offset fetch should be for the most recently requested set of partitions"
-            );
-
-            assertFalse(future.isDone());
-
-            Map<TopicPartition, OffsetFetchResponse.PartitionData> topicPartitionData = Collections.singletonMap(
-                tp,
-                new OffsetFetchResponse.PartitionData(
-                    123L,
-                    Optional.of(1),
-                    "metadata",
-                    Errors.NONE
-                )
-            );
-            unsentRequest.handler().onComplete(
-                buildOffsetFetchClientResponse(
-                    unsentRequest,
-                    topicPartitionData,
-                    Errors.NONE,
-                    false
-                )
-            );
-
-            res = commitRequestManager.poll(time.milliseconds());
-            assertEquals(0, res.unsentRequests.size());
-            assertEquals(0, commitRequestManager.pendingRequests.unsentOffsetFetches.size());
-            assertEquals(1,
-                commitRequestManager.pendingRequests.inflightOffsetFetches.size(),
-                "The inflight offset fetch response should be cached since this request expired immediately"
-            );
-            assertTrue(future.isDone());
-            assertFalse(future.isCompletedExceptionally());
-        }
-
-        // Fetch offset request #3...
-        {
-            CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = commitRequestManager.fetchOffsets(
-                partitions,
-                time.milliseconds() + 10    // Deadline is a 10 ms. timeout to allow the cache to be cleared
-            );
-
-            // Poll for the next set of outgoing network requests
-            NetworkClientDelegate.PollResult res = commitRequestManager.poll(time.milliseconds());
-            assertEquals(0, res.unsentRequests.size());
-
-            // Because this is the second pass at the same set of partitions, we're able to return the cached results
-            // from the previous request.
-            assertEquals(0, commitRequestManager.pendingRequests.unsentOffsetFetches.size());
-            assertEquals(
-                0,
-                commitRequestManager.pendingRequests.inflightOffsetFetches.size(),
-                "The inflight offset fetch response should have been removed from the cache"
-            );
-
-            assertTrue(future.isDone());
-            assertFalse(future.isCompletedExceptionally());
-        }
-    }
-
-    @Test
     public void testSignalClose() {
         CommitRequestManager commitRequestManager = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
@@ -1445,6 +1232,168 @@ public class CommitRequestManagerTest {
         assertEquals(1, res.unsentRequests.size());
         OffsetCommitRequestData data = (OffsetCommitRequestData) res.unsentRequests.get(0).requestBuilder().build().data();
         assertEquals("topic", data.topics().get(0).name());
+    }
+
+    @Test
+    public void testOffsetFetchTimeoutStoresResult() {
+        CommitRequestManager commitRequestManager = create(true, 100);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+        TopicPartition tp = new TopicPartition("test-topic", 0);
+        Set<TopicPartition> partitions = Collections.singleton(tp);
+
+        // Fetch offset request #1.
+        // This request has a 0 ms. timeout, but succeeds in retrieving the offsets. Because it expired, the
+        // results will be kept in the inflight request queue as a cache for the next request.
+        {
+            CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = commitRequestManager.fetchOffsets(
+                partitions,
+                time.milliseconds()
+            );
+            NetworkClientDelegate.PollResult res = commitRequestManager.poll(time.milliseconds());
+            assertEquals(1, res.unsentRequests.size());
+            NetworkClientDelegate.UnsentRequest unsentRequest = res.unsentRequests.get(0);
+            completeOffsetFetchRequest(unsentRequest, tp);
+            assertEquals(
+                1,
+                commitRequestManager.pendingRequests.inflightOffsetFetches.size(),
+                "Since the inflight offset fetch request expired, it should remain as a cache for the next attempt"
+            );
+            assertTrue(future.isDone());
+            assertFalse(future.isCompletedExceptionally());
+            assertTrue(commitRequestManager.pendingRequests.inflightOffsetFetches.get(0).isExpired());
+        }
+
+        // Fetch offset request #2.
+        // This request has a 0 ms. timeout as well, but it will be able to return the cached results from request #1.
+        {
+            CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = commitRequestManager.fetchOffsets(
+                partitions,
+                time.milliseconds()
+            );
+            NetworkClientDelegate.PollResult res = commitRequestManager.poll(time.milliseconds());
+            assertEquals(0, res.unsentRequests.size());
+            assertEquals(
+                0,
+                commitRequestManager.pendingRequests.inflightOffsetFetches.size(),
+                "The inflight offset fetch request should have been removed"
+            );
+            assertTrue(future.isDone());
+            assertFalse(future.isCompletedExceptionally());
+        }
+    }
+
+    @Test
+    public void testOffsetFetchDeletesCachedResult() {
+        CommitRequestManager commitRequestManager = create(true, 100);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+
+        TopicPartition tp = new TopicPartition("test-topic", 0);
+        Set<TopicPartition> partitions = Collections.singleton(tp);
+
+        // Fetch offset request #1.
+        // This request has a 0 ms. timeout, but succeeds in retrieving the offsets. Because it expired, the
+        // results will be kept in the inflight request queue as a cache for the next request.
+        {
+            CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = commitRequestManager.fetchOffsets(
+                partitions,
+                time.milliseconds()
+            );
+            NetworkClientDelegate.PollResult res = commitRequestManager.poll(time.milliseconds());
+            assertEquals(1, res.unsentRequests.size());
+            NetworkClientDelegate.UnsentRequest unsentRequest = res.unsentRequests.get(0);
+            completeOffsetFetchRequest(unsentRequest, tp);
+            assertEquals(
+                1,
+                commitRequestManager.pendingRequests.inflightOffsetFetches.size(),
+                "The inflight offset fetch should remain as a cache for the next request"
+            );
+            assertTrue(future.isDone());
+            assertFalse(future.isCompletedExceptionally());
+            assertTrue(commitRequestManager.pendingRequests.inflightOffsetFetches.get(0).isExpired());
+        }
+
+        // Fetch offset request #2.
+        // We update our partition set. Since the set of partitions for request #1 are not the same as the set of
+        // partitions in request #2, the cached response can't be used. But we need to make sure it is cleared!
+        tp = new TopicPartition("test-topic", 1);
+        partitions = Collections.singleton(tp);
+        {
+            CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = commitRequestManager.fetchOffsets(
+                partitions,
+                time.milliseconds()     // Deadline is effectively a 0 ms. timeout
+            );
+            NetworkClientDelegate.PollResult res = commitRequestManager.poll(time.milliseconds());
+            assertEquals(1, res.unsentRequests.size());
+            NetworkClientDelegate.UnsentRequest unsentRequest = res.unsentRequests.get(0);
+
+            // In this case, we aren't able to use the previous request because its set of partitions are different
+            // from the current set of requested partitions.
+            assertEquals(
+                0,
+                commitRequestManager.pendingRequests.unsentOffsetFetches.size()
+            );
+            assertEquals(
+                1,
+                commitRequestManager.pendingRequests.inflightOffsetFetches.size()
+            );
+            assertEquals(
+                partitions,
+                commitRequestManager.pendingRequests.inflightOffsetFetches.get(0).requestedPartitions,
+                "The inflight offset fetch should be for the most recently requested set of partitions"
+            );
+            assertFalse(future.isDone());
+            completeOffsetFetchRequest(unsentRequest, tp);
+            res = commitRequestManager.poll(time.milliseconds());
+            assertEquals(0, res.unsentRequests.size());
+            assertEquals(0, commitRequestManager.pendingRequests.unsentOffsetFetches.size());
+            assertEquals(1,
+                commitRequestManager.pendingRequests.inflightOffsetFetches.size(),
+                "The inflight offset fetch response should be cached since this request expired immediately"
+            );
+            assertTrue(future.isDone());
+            assertFalse(future.isCompletedExceptionally());
+        }
+
+        // Fetch offset request #3.
+        // This request has a 10 ms. timeout, which will allow for this request to *not* expire, and should thus
+        // clear out our cache.
+        {
+            CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = commitRequestManager.fetchOffsets(
+                partitions,
+                time.milliseconds() + 10
+            );
+            NetworkClientDelegate.PollResult res = commitRequestManager.poll(time.milliseconds());
+            assertEquals(0, res.unsentRequests.size());
+            assertEquals(0, commitRequestManager.pendingRequests.unsentOffsetFetches.size());
+            assertEquals(
+                0,
+                commitRequestManager.pendingRequests.inflightOffsetFetches.size(),
+                "The inflight offset fetch response should have been removed from the cache"
+            );
+            assertTrue(future.isDone());
+            assertFalse(future.isCompletedExceptionally());
+        }
+    }
+
+    private void completeOffsetFetchRequest(final NetworkClientDelegate.UnsentRequest unsentRequest,
+                                            final TopicPartition tp) {
+        Map<TopicPartition, OffsetFetchResponse.PartitionData> topicPartitionData = Collections.singletonMap(
+            tp,
+            new OffsetFetchResponse.PartitionData(
+                123L,
+                Optional.of(1),
+                "metadata",
+                Errors.NONE
+            )
+        );
+        unsentRequest.handler().onComplete(
+            buildOffsetFetchClientResponse(
+                unsentRequest,
+                topicPartitionData,
+                Errors.NONE,
+                false
+            )
+        );
     }
 
     private static void assertEmptyPendingRequests(CommitRequestManager commitRequestManager) {
