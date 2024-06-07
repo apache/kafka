@@ -33,6 +33,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Objects;
 import java.util.Optional;
@@ -53,6 +54,7 @@ import static org.mockito.Mockito.when;
 public class NetworkClientDelegateTest {
     private static final int REQUEST_TIMEOUT_MS = 5000;
     private static final String GROUP_ID = "group";
+    private static final long DEFAULT_REQUEST_TIMEOUT_MS = 500;
     private MockTime time;
     private MockClient client;
 
@@ -60,6 +62,30 @@ public class NetworkClientDelegateTest {
     public void setup() {
         this.time = new MockTime(0);
         this.client = new MockClient(time, Collections.singletonList(mockNode()));
+    }
+
+    @Test
+    void testPollResultTimer() throws Exception {
+        try (NetworkClientDelegate ncd = newNetworkClientDelegate()) {
+            NetworkClientDelegate.UnsentRequest req = new NetworkClientDelegate.UnsentRequest(
+                    new FindCoordinatorRequest.Builder(
+                            new FindCoordinatorRequestData()
+                                    .setKeyType(FindCoordinatorRequest.CoordinatorType.TRANSACTION.id())
+                                    .setKey("foobar")),
+                    Optional.empty());
+            req.setTimer(time, DEFAULT_REQUEST_TIMEOUT_MS);
+
+            // purposely setting a non-MAX time to ensure it is returning Long.MAX_VALUE upon success
+            NetworkClientDelegate.PollResult success = new NetworkClientDelegate.PollResult(
+                    10,
+                    Collections.singletonList(req));
+            assertEquals(10, ncd.addAll(success));
+
+            NetworkClientDelegate.PollResult failure = new NetworkClientDelegate.PollResult(
+                    10,
+                    new ArrayList<>());
+            assertEquals(10, ncd.addAll(failure));
+        }
     }
 
     @Test

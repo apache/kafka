@@ -155,6 +155,7 @@ public class RequestManagers implements Closeable {
                         apiVersions);
                 final TopicMetadataRequestManager topic = new TopicMetadataRequestManager(
                         logContext,
+                        time,
                         config);
                 HeartbeatRequestManager heartbeatRequestManager = null;
                 MembershipManager membershipManager = null;
