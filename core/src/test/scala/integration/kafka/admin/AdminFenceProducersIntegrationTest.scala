@@ -49,7 +49,7 @@ class AdminFenceProducersIntegrationTest extends IntegrationTestHarness {
 
     val producerProps = new Properties
     producerProps.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, txnId)
-    producerProps.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, 2000)
+    producerProps.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, "2000")
     producer = createProducer(configOverrides = producerProps)
     adminClient = createAdminClient()
     createTopic(topicName)
