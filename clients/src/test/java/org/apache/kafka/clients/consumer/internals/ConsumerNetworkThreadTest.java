@@ -149,7 +149,7 @@ public class ConsumerNetworkThreadTest {
         when(networkClientDelegate.addAll(pollResult1)).thenReturn(pollResult1.timeUntilNextPollMs);
         consumerNetworkThread.runOnce();
 
-        verify(networkClientDelegate).poll(exampleTime < MAX_POLL_TIMEOUT_MS + 1 ? exampleTime : MAX_POLL_TIMEOUT_MS, time.milliseconds());
+        verify(networkClientDelegate).poll(Math.min(exampleTime, MAX_POLL_TIMEOUT_MS), time.milliseconds());
         assertEquals(consumerNetworkThread.maximumTimeToWait(), exampleTime);
     }
 
