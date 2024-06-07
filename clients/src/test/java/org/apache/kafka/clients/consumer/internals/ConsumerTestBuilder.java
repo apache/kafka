@@ -174,12 +174,11 @@ public class ConsumerTestBuilder implements Closeable {
                 backgroundEventHandler,
                 logContext));
 
-        this.topicMetadataRequestManager = spy(new TopicMetadataRequestManager(logContext, config));
+        this.topicMetadataRequestManager = spy(new TopicMetadataRequestManager(logContext, time, config));
 
         if (groupInfo.isPresent()) {
             GroupInformation gi = groupInfo.get();
             CoordinatorRequestManager coordinator = spy(new CoordinatorRequestManager(
-                    time,
                     logContext,
                     DEFAULT_RETRY_BACKOFF_MS,
                     DEFAULT_RETRY_BACKOFF_MAX_MS,

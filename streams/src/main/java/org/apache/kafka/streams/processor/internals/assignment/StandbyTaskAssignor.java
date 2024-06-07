@@ -20,7 +20,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
+import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 
 interface StandbyTaskAssignor extends TaskAssignor {
     default boolean isAllowedTaskMovement(final ClientState source, final ClientState destination) {
@@ -53,5 +53,5 @@ interface StandbyTaskAssignor extends TaskAssignor {
     boolean assign(final Map<UUID, ClientState> clients,
                    final Set<TaskId> allTaskIds,
                    final Set<TaskId> statefulTaskIds,
-                   final AssignorConfiguration.AssignmentConfigs configs);
+                   final AssignmentConfigs configs);
 }

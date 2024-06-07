@@ -14,15 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.assignor;
+package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
+import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.MemberSubscription;
+import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 
 /**
  * The assignment specification for a consumer group.
@@ -31,7 +34,7 @@ public class GroupSpecImpl implements GroupSpec {
     /**
      * Member subscription metadata keyed by member Id.
      */
-    private final Map<String, MemberSubscriptionSpecImpl> memberSubscriptions;
+    private final Map<String, MemberSubscriptionAndAssignmentImpl> members;
 
     /**
      * The subscription type of the group.
@@ -45,11 +48,11 @@ public class GroupSpecImpl implements GroupSpec {
     private final Map<Uuid, Map<Integer, String>> invertedMemberAssignment;
 
     public GroupSpecImpl(
-        Map<String, MemberSubscriptionSpecImpl> memberSubscriptions,
+        Map<String, MemberSubscriptionAndAssignmentImpl> members,
         SubscriptionType subscriptionType,
         Map<Uuid, Map<Integer, String>> invertedMemberAssignment
     ) {
-        this.memberSubscriptions = Objects.requireNonNull(memberSubscriptions);
+        this.members = Objects.requireNonNull(members);
         this.subscriptionType = Objects.requireNonNull(subscriptionType);
         this.invertedMemberAssignment = Objects.requireNonNull(invertedMemberAssignment);
     }
@@ -59,7 +62,7 @@ public class GroupSpecImpl implements GroupSpec {
      */
     @Override
     public Collection<String> memberIds() {
-        return memberSubscriptions.keySet();
+        return members.keySet();
     }
 
     /**
@@ -86,8 +89,8 @@ public class GroupSpecImpl implements GroupSpec {
      * {@inheritDoc}
      */
     @Override
-    public MemberSubscriptionSpec memberSubscription(String memberId) {
-        MemberSubscriptionSpec memberSubscription = memberSubscriptions.get(memberId);
+    public MemberSubscription memberSubscription(String memberId) {
+        MemberSubscription memberSubscription = members.get(memberId);
         if (memberSubscription == null) {
             throw new IllegalArgumentException("Member Id " + memberId + " not found.");
         }
@@ -98,12 +101,12 @@ public class GroupSpecImpl implements GroupSpec {
      * {@inheritDoc}
      */
     @Override
-    public Map<Uuid, Set<Integer>> memberAssignment(String memberId) {
-        MemberSubscriptionSpecImpl memberSubscription = memberSubscriptions.get(memberId);
-        if (memberSubscription == null) {
-            return Collections.emptyMap();
+    public MemberAssignment memberAssignment(String memberId) {
+        MemberSubscriptionAndAssignmentImpl member = members.get(memberId);
+        if (member == null) {
+            return new MemberAssignmentImpl(Collections.emptyMap());
         }
-        return memberSubscription.memberAssignment();
+        return member;
     }
 
     @Override
@@ -112,13 +115,13 @@ public class GroupSpecImpl implements GroupSpec {
         if (o == null || getClass() != o.getClass()) return false;
         GroupSpecImpl that = (GroupSpecImpl) o;
         return subscriptionType == that.subscriptionType &&
-            memberSubscriptions.equals(that.memberSubscriptions) &&
+            members.equals(that.members) &&
             invertedMemberAssignment.equals(that.invertedMemberAssignment);
     }
 
     @Override
     public int hashCode() {
-        int result = memberSubscriptions.hashCode();
+        int result = members.hashCode();
         result = 31 * result + subscriptionType.hashCode();
         result = 31 * result + invertedMemberAssignment.hashCode();
         return result;
@@ -126,7 +129,7 @@ public class GroupSpecImpl implements GroupSpec {
 
     @Override
     public String toString() {
-        return "GroupSpecImpl(memberSubscriptions=" + memberSubscriptions +
+        return "GroupSpecImpl(members=" + members +
             ", subscriptionType=" + subscriptionType +
             ", invertedMemberAssignment=" + invertedMemberAssignment +
             ')';

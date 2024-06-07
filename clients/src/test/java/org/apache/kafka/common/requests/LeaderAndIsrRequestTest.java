@@ -101,7 +101,7 @@ public class LeaderAndIsrRequestTest {
 
     /**
      * Verifies the logic we have in LeaderAndIsrRequest to present a unified interface across the various versions
-     * works correctly. For example, `LeaderAndIsrPartitionState.topicName` is not serialiazed/deserialized in
+     * works correctly. For example, `LeaderAndIsrPartitionState.topicName` is not serialized/deserialized in
      * recent versions, but we set it manually so that we can always present the ungrouped partition states
      * independently of the version.
      */

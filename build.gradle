@@ -527,7 +527,6 @@ subprojects {
   if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_16)) {
     testsToExclude.addAll([
       // connect tests
-      "**/KafkaConfigBackingStoreTest.*"
     ])
   }
 
@@ -1017,6 +1016,7 @@ project(':core') {
     api libs.scalaLibrary
 
     implementation project(':server-common')
+    implementation project(':group-coordinator:group-coordinator-api')
     implementation project(':group-coordinator')
     implementation project(':transaction-coordinator')
     implementation project(':metadata')
@@ -1400,6 +1400,66 @@ project(':metadata') {
   }
 }
 
+project(':group-coordinator:group-coordinator-api') {
+  base {
+    archivesName = "kafka-group-coordinator-api"
+  }
+
+  dependencies {
+    implementation project(':clients')
+  }
+
+  task createVersionFile() {
+    def receiptFile = file("$buildDir/kafka/$buildVersionFileName")
+    inputs.property "commitId", commitId
+    inputs.property "version", version
+    outputs.file receiptFile
+
+    doLast {
+      def data = [
+              commitId: commitId,
+              version: version,
+      ]
+
+      receiptFile.parentFile.mkdirs()
+      def content = data.entrySet().collect { "$it.key=$it.value" }.sort().join("\n")
+      receiptFile.setText(content, "ISO-8859-1")
+    }
+  }
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/main/java"]
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/test/java"]
+      }
+    }
+  }
+
+  jar {
+    dependsOn createVersionFile
+    from("$buildDir") {
+      include "kafka/$buildVersionFileName"
+    }
+  }
+
+  clean.doFirst {
+    delete "$buildDir/kafka/"
+  }
+
+  javadoc {
+    include "**/org/apache/kafka/coordinator/group/api/**"
+  }
+
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-group-coordinator.xml")
+  }
+}
+
 project(':group-coordinator') {
   base {
     archivesName = "kafka-group-coordinator"
@@ -1413,6 +1473,7 @@ project(':group-coordinator') {
     implementation project(':server-common')
     implementation project(':clients')
     implementation project(':metadata')
+    implementation project(':group-coordinator:group-coordinator-api')
     implementation project(':storage')
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
@@ -2957,6 +3018,7 @@ project(':jmh-benchmarks') {
     implementation project(':raft')
     implementation project(':clients')
     implementation project(':group-coordinator')
+    implementation project(':group-coordinator:group-coordinator-api')
     implementation project(':metadata')
     implementation project(':storage')
     implementation project(':streams')
