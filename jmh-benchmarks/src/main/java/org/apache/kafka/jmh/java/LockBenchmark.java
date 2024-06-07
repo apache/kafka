@@ -41,7 +41,6 @@ import java.util.concurrent.locks.ReentrantLock;
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 @Threads(2)
 public class LockBenchmark {
-
     private int counter = 0;
     private final Object lock = new Object();
     private final ReentrantLock lock2 = new ReentrantLock();
