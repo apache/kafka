@@ -22,7 +22,6 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.AsyncCommitEvent;
-import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
@@ -84,14 +83,12 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@SuppressWarnings("classfanoutcomplexity")
 public class ConsumerNetworkThreadTest {
 
     private ConsumerTestBuilder testBuilder;
     private Time time;
     private ConsumerMetadata metadata;
     private NetworkClientDelegate networkClient;
-    private BlockingQueue<BackgroundEvent> backgroundEventsQueue;
     private BlockingQueue<ApplicationEvent> applicationEventsQueue;
     private ApplicationEventProcessor applicationEventProcessor;
     private OffsetsRequestManager offsetsRequestManager;
@@ -108,7 +105,6 @@ public class ConsumerNetworkThreadTest {
         metadata = testBuilder.metadata;
         networkClient = testBuilder.networkClientDelegate;
         client = testBuilder.client;
-        backgroundEventsQueue = testBuilder.backgroundEventQueue;
         applicationEventsQueue = testBuilder.applicationEventQueue;
         applicationEventProcessor = testBuilder.applicationEventProcessor;
         commitRequestManager = testBuilder.commitRequestManager.orElseThrow(IllegalStateException::new);
