@@ -520,7 +520,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                     log.warn("The response for the offset fetch request for partitions {} was not found in the inflight buffer", fetchRequest.requestedPartitions);
                 }
             }
-
             if (error == null) {
                 result.complete(res);
             } else {
