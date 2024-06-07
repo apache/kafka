@@ -22,6 +22,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM
 import org.apache.kafka.common.config.ConfigDef.Type.INT
 import org.apache.kafka.common.config.{ConfigException, SslConfigs, TopicConfig}
+import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -418,5 +419,22 @@ class LogConfigTest {
     val logProps = KafkaConfig.fromProps(kafkaProps).extractLogConfigMap
     assertEquals(oneDayInMillis, logProps.get(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG))
     assertEquals(oneDayInMillis, logProps.get(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG))
+  }
+
+  @Test
+  def testValidateWithMetadataVersionJbodSupport(): Unit = {
+    def validate(metadataVersion: MetadataVersion, jbodConfig: Boolean): Unit =
+      KafkaConfig.fromProps(
+          TestUtils.createBrokerConfig(nodeId = 0, zkConnect = null, logDirCount = if (jbodConfig) 2 else 1)
+        ).validateWithMetadataVersion(metadataVersion)
+
+    validate(MetadataVersion.IBP_3_6_IV2, jbodConfig = false)
+    validate(MetadataVersion.IBP_3_7_IV0, jbodConfig = false)
+    validate(MetadataVersion.IBP_3_7_IV2, jbodConfig = false)
+    assertThrows(classOf[IllegalArgumentException], () =>
+      validate(MetadataVersion.IBP_3_6_IV2, jbodConfig = true))
+    assertThrows(classOf[IllegalArgumentException], () =>
+      validate(MetadataVersion.IBP_3_7_IV0, jbodConfig = true))
+    validate(MetadataVersion.IBP_3_7_IV2, jbodConfig = true)
   }
 }
