@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.StreamsInitializeRequestData;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
@@ -38,6 +39,8 @@ import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
@@ -46,11 +49,13 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * This class contains helper methods to create records stored in
  * the __consumer_offsets topic.
  */
+@SuppressWarnings("ClassDataAbstractionCoupling")
 public class CoordinatorRecordHelpers {
     private CoordinatorRecordHelpers() {}
 
@@ -559,4 +564,41 @@ public class CoordinatorRecordHelpers {
         );
         return topics;
     }
+
+    /**
+     * Creates a StreamsTopology record.
+     *
+     * @param groupId                   The consumer group id.
+     * @param subtopologies             The subtopologies in the new topology.
+     * @return The record.
+     */
+    public static CoordinatorRecord newStreamsGroupTopologyRecord(String groupId,
+                                                                  List<StreamsInitializeRequestData.Subtopology> subtopologies) {
+        StreamsGroupTopologyValue value = new StreamsGroupTopologyValue();
+        subtopologies.forEach(subtopology -> {
+            List<StreamsGroupTopologyValue.TopicInfo> repartitionSourceTopics = subtopology.repartitionSourceTopics().stream()
+                .map(topicInfo -> {
+                    List<StreamsGroupTopologyValue.TopicConfig> topicConfigs = topicInfo.topicConfigs().stream()
+                        .map(config -> new StreamsGroupTopologyValue.TopicConfig().setKey(config.key()).setValue(config.value()))
+                        .collect(Collectors.toList());
+                    return new StreamsGroupTopologyValue.TopicInfo().setName(topicInfo.name()).setTopicConfigs(topicConfigs)
+                        .setPartitions(topicInfo.partitions());
+                }).collect(Collectors.toList());
+
+            List<StreamsGroupTopologyValue.TopicInfo> stateChangelogTopics = subtopology.stateChangelogTopics().stream().map(topicInfo -> {
+                List<StreamsGroupTopologyValue.TopicConfig> topicConfigs = topicInfo.topicConfigs().stream()
+                    .map(config -> new StreamsGroupTopologyValue.TopicConfig().setKey(config.key()).setValue(config.value()))
+                    .collect(Collectors.toList());
+                return new StreamsGroupTopologyValue.TopicInfo().setName(topicInfo.name()).setTopicConfigs(topicConfigs);
+            }).collect(Collectors.toList());
+
+            value.topology().add(new StreamsGroupTopologyValue.Subtopology().setSubtopology(subtopology.subtopology())
+                .setSourceTopics(subtopology.sourceTopics()).setSinkTopics(subtopology.sinkTopics())
+                .setRepartitionSourceTopics(repartitionSourceTopics).setStateChangelogTopics(stateChangelogTopics));
+        });
+
+        return new CoordinatorRecord(new ApiMessageAndVersion(new StreamsGroupTopologyKey().setGroupId(groupId), (short) 15),
+            new ApiMessageAndVersion(value, (short) 0));
+    }
+
 }

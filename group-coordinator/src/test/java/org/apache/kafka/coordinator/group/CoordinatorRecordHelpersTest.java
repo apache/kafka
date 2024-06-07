@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
+import org.apache.kafka.common.message.StreamsInitializeRequestData;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -44,6 +45,8 @@ import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupMember;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -80,6 +83,7 @@ import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newGro
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newGroupSubscriptionMetadataTombstoneRecord;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newMemberSubscriptionRecord;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newMemberSubscriptionTombstoneRecord;
+import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newStreamsGroupTopologyRecord;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTargetAssignmentEpochRecord;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTargetAssignmentEpochTombstoneRecord;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTargetAssignmentRecord;
@@ -211,6 +215,84 @@ public class CoordinatorRecordHelpersTest {
 
         assertEquals(expectedRecord, newGroupSubscriptionMetadataTombstoneRecord(
             "group-id"
+        ));
+    }
+
+    @Test
+    public void testNewStreamsGroupTopologyRecord() {
+        List<StreamsInitializeRequestData.Subtopology> topology =
+            Collections.singletonList(new StreamsInitializeRequestData.Subtopology()
+                .setSubtopology("subtopology-id")
+                .setSinkTopics(Collections.singletonList("foo"))
+                .setSourceTopics(Collections.singletonList("bar"))
+                .setRepartitionSourceTopics(
+                    Collections.singletonList(
+                        new StreamsInitializeRequestData.TopicInfo()
+                            .setName("repartition")
+                            .setPartitions(4)
+                            .setTopicConfigs(Collections.singletonList(
+                                new StreamsInitializeRequestData.TopicConfig()
+                                    .setKey("config-name1")
+                                    .setValue("config-value1")
+                            ))
+                    )
+                )
+                .setStateChangelogTopics(
+                    Collections.singletonList(
+                        new StreamsInitializeRequestData.TopicInfo()
+                            .setName("changelog")
+                            .setTopicConfigs(Collections.singletonList(
+                                new StreamsInitializeRequestData.TopicConfig()
+                                    .setKey("config-name2")
+                                    .setValue("config-value2")
+                            ))
+                    )
+                )
+            );
+
+        List<StreamsGroupTopologyValue.Subtopology> expectedTopology =
+            Collections.singletonList(new StreamsGroupTopologyValue.Subtopology()
+                .setSubtopology("subtopology-id")
+                .setSinkTopics(Collections.singletonList("foo"))
+                .setSourceTopics(Collections.singletonList("bar"))
+                .setRepartitionSourceTopics(
+                    Collections.singletonList(
+                        new StreamsGroupTopologyValue.TopicInfo()
+                            .setName("repartition")
+                            .setPartitions(4)
+                            .setTopicConfigs(Collections.singletonList(
+                                new StreamsGroupTopologyValue.TopicConfig()
+                                    .setKey("config-name1")
+                                    .setValue("config-value1")
+                            ))
+                    )
+                )
+                .setStateChangelogTopics(
+                    Collections.singletonList(
+                        new StreamsGroupTopologyValue.TopicInfo()
+                            .setName("changelog")
+                            .setTopicConfigs(Collections.singletonList(
+                                new StreamsGroupTopologyValue.TopicConfig()
+                                    .setKey("config-name2")
+                                    .setValue("config-value2")
+                            ))
+                    )
+                )
+            );
+
+        CoordinatorRecord expectedRecord = new CoordinatorRecord(
+            new ApiMessageAndVersion(
+                new StreamsGroupTopologyKey()
+                    .setGroupId("group-id"),
+                (short) 15),
+            new ApiMessageAndVersion(
+                new StreamsGroupTopologyValue()
+                    .setTopology(expectedTopology),
+                (short) 0));
+
+        assertEquals(expectedRecord, newStreamsGroupTopologyRecord(
+            "group-id",
+            topology
         ));
     }
 
