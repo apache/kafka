@@ -316,11 +316,20 @@ public class NetworkClientDelegate implements AutoCloseable {
 
         @Override
         public String toString() {
+            String remainingMs;
+
+            if (timer != null) {
+                timer.update();
+                remainingMs = String.valueOf(timer.remainingMs());
+            } else {
+                remainingMs = "<not set>";
+            }
+
             return "UnsentRequest{" +
                     "requestBuilder=" + requestBuilder +
                     ", handler=" + handler +
                     ", node=" + node +
-                    ", timer=" + timer +
+                    ", remainingMs=" + remainingMs +
                     '}';
         }
     }
