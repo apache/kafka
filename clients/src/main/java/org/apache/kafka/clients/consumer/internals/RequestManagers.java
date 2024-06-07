@@ -166,7 +166,6 @@ public class RequestManagers implements Closeable {
                     Optional<String> serverAssignor = Optional.ofNullable(config.getString(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG));
                     coordinator = new CoordinatorRequestManager(
                             logContext,
-                            requestTimeoutMs,
                             retryBackoffMs,
                             retryBackoffMaxMs,
                             backgroundEventHandler,

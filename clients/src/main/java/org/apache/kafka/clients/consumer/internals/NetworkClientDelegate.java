@@ -242,6 +242,7 @@ public class NetworkClientDelegate implements AutoCloseable {
 
     public void add(final UnsentRequest r) {
         Objects.requireNonNull(r);
+        r.setTimer(this.time, this.requestTimeoutMs);
         unsentRequests.add(r);
     }
 
@@ -273,6 +274,7 @@ public class NetworkClientDelegate implements AutoCloseable {
         private final AbstractRequest.Builder<?> requestBuilder;
         private final FutureCompletionHandler handler;
         private final Optional<Node> node; // empty if random node can be chosen
+
         private Timer timer;
 
         public UnsentRequest(final AbstractRequest.Builder<?> requestBuilder,
@@ -283,7 +285,7 @@ public class NetworkClientDelegate implements AutoCloseable {
             this.handler = new FutureCompletionHandler();
         }
 
-        void setTimer(Time time, long requestTimeoutMs) {
+        void setTimer(final Time time, final long requestTimeoutMs) {
             this.timer = time.timer(requestTimeoutMs);
         }
 

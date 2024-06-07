@@ -659,7 +659,7 @@ public class HeartbeatRequestManagerTest {
     @Test
     public void testisExpiredByUsedForLogging() {
         Timer pollTimer = spy(time.timer(DEFAULT_MAX_POLL_INTERVAL_MS));
-        heartbeatRequestManager = new HeartbeatRequestManager(new LogContext(), time, pollTimer, config(),
+        heartbeatRequestManager = new HeartbeatRequestManager(new LogContext(), pollTimer, config(),
             coordinatorRequestManager, membershipManager, heartbeatState, heartbeatRequestState,
             backgroundEventHandler, metrics);
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
@@ -890,7 +890,6 @@ public class HeartbeatRequestManagerTest {
         pollTimer = time.timer(DEFAULT_MAX_POLL_INTERVAL_MS);
         return new HeartbeatRequestManager(
                 logContext,
-                time,
                 pollTimer,
                 config(),
                 coordinatorRequestManager,

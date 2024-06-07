@@ -81,7 +81,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
 
     private final Set<ListOffsetsRequestState> requestsToRetry;
     private final List<NetworkClientDelegate.UnsentRequest> requestsToSend;
-    private final int requestTimeoutMs;
+    private final long requestTimeoutMs;
     private final Time time;
     private final ApiVersions apiVersions;
     private final NetworkClientDelegate networkClientDelegate;
@@ -93,7 +93,7 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
                                  final IsolationLevel isolationLevel,
                                  final Time time,
                                  final long retryBackoffMs,
-                                 final int requestTimeoutMs,
+                                 final long requestTimeoutMs,
                                  final ApiVersions apiVersions,
                                  final NetworkClientDelegate networkClientDelegate,
                                  final BackgroundEventHandler backgroundEventHandler,
