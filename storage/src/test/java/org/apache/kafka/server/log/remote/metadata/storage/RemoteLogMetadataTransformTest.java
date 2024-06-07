@@ -41,7 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class RemoteLogMetadataTransformTest {
     private static final TopicIdPartition TP0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
-    private final Time time = new SystemTime();
+    private final Time time = SystemTime.getSystemTime();
 
     @Test
     public void testRemoteLogSegmentMetadataTransform() {

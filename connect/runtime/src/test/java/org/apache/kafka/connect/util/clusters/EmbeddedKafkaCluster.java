@@ -50,6 +50,7 @@ import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -111,7 +112,7 @@ public class EmbeddedKafkaCluster {
     // Kafka Config
     private final KafkaServer[] brokers;
     private final Properties brokerConfig;
-    private final Time time = Time.SYSTEM;
+    private final Time time = SystemTime.getSystemTime();
     private final int[] currentBrokerPorts;
     private final String[] currentBrokerLogDirs;
     private final boolean hasListenerConfig;

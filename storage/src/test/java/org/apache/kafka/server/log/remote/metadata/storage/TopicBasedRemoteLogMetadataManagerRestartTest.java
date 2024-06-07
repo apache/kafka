@@ -42,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Tag("integration")
 public class TopicBasedRemoteLogMetadataManagerRestartTest {
 
-    private final Time time = new SystemTime();
+    private final Time time = SystemTime.getSystemTime();
     private final String logDir = TestUtils.tempDirectory("_rlmm_segs_").getAbsolutePath();
     private final ClusterInstance clusterInstance;
 

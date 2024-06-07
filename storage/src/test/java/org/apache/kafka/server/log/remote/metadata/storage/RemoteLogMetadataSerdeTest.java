@@ -44,7 +44,7 @@ public class RemoteLogMetadataSerdeTest {
 
     public static final String TOPIC = "foo";
     private static final TopicIdPartition TP0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition(TOPIC, 0));
-    private final Time time = new SystemTime();
+    private final Time time = SystemTime.getSystemTime();
 
     @Test
     public void testRemoteLogSegmentMetadataSerde() {

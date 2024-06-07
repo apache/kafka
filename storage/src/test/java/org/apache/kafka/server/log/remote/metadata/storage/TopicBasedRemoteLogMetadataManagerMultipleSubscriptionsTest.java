@@ -58,7 +58,7 @@ import static org.mockito.Mockito.verify;
 @ClusterTestDefaults(brokers = 3)
 public class TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest {
     private final ClusterInstance clusterInstance;
-    private final Time time = new SystemTime();
+    private final Time time = SystemTime.getSystemTime();
 
     TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest(ClusterInstance clusterInstance) {
         this.clusterInstance = clusterInstance;

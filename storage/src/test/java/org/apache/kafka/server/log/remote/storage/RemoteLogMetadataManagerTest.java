@@ -55,7 +55,7 @@ public class RemoteLogMetadataManagerTest {
     private static final int SEG_SIZE = 1048576;
     private static final int BROKER_ID_0 = 0;
     private static final int BROKER_ID_1 = 1;
-    private final Time time = new SystemTime();
+    private final Time time = SystemTime.getSystemTime();
 
     RemoteLogMetadataManagerTest(ClusterInstance clusterInstance) {
         this.clusterInstance = clusterInstance;

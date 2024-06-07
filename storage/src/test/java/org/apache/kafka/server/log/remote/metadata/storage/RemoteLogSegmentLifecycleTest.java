@@ -66,7 +66,7 @@ public class RemoteLogSegmentLifecycleTest {
     private final Uuid topicId = Uuid.randomUuid();
     private final TopicPartition tp = new TopicPartition("foo", 0);
     private final TopicIdPartition topicIdPartition = new TopicIdPartition(topicId, tp);
-    private final Time time = new SystemTime();
+    private final Time time = SystemTime.getSystemTime();
     private final RemotePartitionMetadataStore spyRemotePartitionMetadataStore = spy(new RemotePartitionMetadataStore());
     private final ClusterInstance clusterInstance;
 

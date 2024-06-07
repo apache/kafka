@@ -56,7 +56,7 @@ public class TopicBasedRemoteLogMetadataManagerTest {
     private static final int SEG_SIZE = 1048576;
     private final ClusterInstance clusterInstance;
     private final RemotePartitionMetadataStore spyRemotePartitionMetadataEventHandler = spy(new RemotePartitionMetadataStore());
-    private final Time time = new SystemTime();
+    private final Time time = SystemTime.getSystemTime();
     private TopicBasedRemoteLogMetadataManager remoteLogMetadataManager;
 
     TopicBasedRemoteLogMetadataManagerTest(ClusterInstance clusterInstance) {
