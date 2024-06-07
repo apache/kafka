@@ -36,6 +36,8 @@ import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.StreamsHeartbeatRequestData;
+import org.apache.kafka.common.message.StreamsHeartbeatResponseData;
 import org.apache.kafka.common.message.StreamsInitializeRequestData;
 import org.apache.kafka.common.message.StreamsInitializeResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
@@ -682,6 +684,36 @@ public class GroupMetadataManagerTestContext {
         );
 
         CoordinatorResult<StreamsInitializeResponseData, CoordinatorRecord> result = groupMetadataManager.streamsInitialize(
+            context,
+            request
+        );
+
+        if (result.replayRecords()) {
+            result.records().forEach(this::replay);
+        }
+        return result;
+    }
+
+    public CoordinatorResult<StreamsHeartbeatResponseData, CoordinatorRecord> streamsHeartbeat(
+        StreamsHeartbeatRequestData request
+    ) {
+        RequestContext context = new RequestContext(
+            new RequestHeader(
+                ApiKeys.STREAMS_HEARTBEAT,
+                ApiKeys.STREAMS_HEARTBEAT.latestVersion(),
+                "client",
+                0
+            ),
+            "1",
+            InetAddress.getLoopbackAddress(),
+            KafkaPrincipal.ANONYMOUS,
+            ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
+            SecurityProtocol.PLAINTEXT,
+            ClientInformation.EMPTY,
+            false
+        );
+
+        CoordinatorResult<StreamsHeartbeatResponseData, CoordinatorRecord> result = groupMetadataManager.streamsHeartbeat(
             context,
             request
         );

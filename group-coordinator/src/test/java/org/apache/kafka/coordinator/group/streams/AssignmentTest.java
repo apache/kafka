@@ -62,25 +62,25 @@ public class AssignmentTest {
     public void testFromTargetAssignmentRecord() {
         String subtopology1 = "subtopology1";
         String subtopology2 = "subtopology2";
-        List<StreamsGroupTargetAssignmentMemberValue.TaskId> activeTasks = new ArrayList<>();
-        activeTasks.add(new StreamsGroupTargetAssignmentMemberValue.TaskId()
+        List<StreamsGroupTargetAssignmentMemberValue.TaskIds> activeTasks = new ArrayList<>();
+        activeTasks.add(new StreamsGroupTargetAssignmentMemberValue.TaskIds()
             .setSubtopology(subtopology1)
             .setPartitions(Arrays.asList(1, 2, 3)));
-        activeTasks.add(new StreamsGroupTargetAssignmentMemberValue.TaskId()
+        activeTasks.add(new StreamsGroupTargetAssignmentMemberValue.TaskIds()
             .setSubtopology(subtopology2)
             .setPartitions(Arrays.asList(4, 5, 6)));
-        List<StreamsGroupTargetAssignmentMemberValue.TaskId> standbyTasks = new ArrayList<>();
-        standbyTasks.add(new StreamsGroupTargetAssignmentMemberValue.TaskId()
+        List<StreamsGroupTargetAssignmentMemberValue.TaskIds> standbyTasks = new ArrayList<>();
+        standbyTasks.add(new StreamsGroupTargetAssignmentMemberValue.TaskIds()
             .setSubtopology(subtopology1)
             .setPartitions(Arrays.asList(7, 8, 9)));
-        standbyTasks.add(new StreamsGroupTargetAssignmentMemberValue.TaskId()
+        standbyTasks.add(new StreamsGroupTargetAssignmentMemberValue.TaskIds()
             .setSubtopology(subtopology2)
             .setPartitions(Arrays.asList(1, 2, 3)));
-        List<StreamsGroupTargetAssignmentMemberValue.TaskId> warmupTasks = new ArrayList<>();
-        warmupTasks.add(new StreamsGroupTargetAssignmentMemberValue.TaskId()
+        List<StreamsGroupTargetAssignmentMemberValue.TaskIds> warmupTasks = new ArrayList<>();
+        warmupTasks.add(new StreamsGroupTargetAssignmentMemberValue.TaskIds()
             .setSubtopology(subtopology1)
             .setPartitions(Arrays.asList(4, 5, 6)));
-        warmupTasks.add(new StreamsGroupTargetAssignmentMemberValue.TaskId()
+        warmupTasks.add(new StreamsGroupTargetAssignmentMemberValue.TaskIds()
             .setSubtopology(subtopology2)
             .setPartitions(Arrays.asList(7, 8, 9)));
 
