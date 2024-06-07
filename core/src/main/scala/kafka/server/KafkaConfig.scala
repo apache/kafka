@@ -2442,6 +2442,14 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       }
       validateAdvertisedListenersNonEmptyForBroker()
     }
+    if (processRoles.contains(BrokerRole)
+      && originals.containsKey(KafkaConfig.InterBrokerProtocolVersionProp)
+      && logDirs.size > 1) {
+        require(interBrokerProtocolVersion.isDirectoryAssignmentSupported,
+          s"Multiple log directories (aka JBOD) are not supported with the configured " +
+            s"${interBrokerProtocolVersion} ${KafkaConfig.InterBrokerProtocolVersionProp}. " +
+            s"Need ${MetadataVersion.IBP_3_7_IV2} or higher")
+    }
 
     val listenerNames = listeners.map(_.listenerName).toSet
     if (processRoles.isEmpty || processRoles.contains(BrokerRole)) {
@@ -2533,6 +2541,18 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     require(consumerGroupSessionTimeoutMs <= consumerGroupMaxSessionTimeoutMs,
       s"${KafkaConfig.ConsumerGroupSessionTimeoutMsProp} must be less than or equals " +
       s"to ${KafkaConfig.ConsumerGroupMaxSessionTimeoutMsProp}")
+  }
+
+  /**
+   * Validate some configurations for new MetadataVersion. A new MetadataVersion can take place when
+   * a FeatureLevelRecord for "metadata.version" is read from the cluster metadata.
+   */
+  def validateWithMetadataVersion(metadataVersion: MetadataVersion): Unit = {
+    if (processRoles.contains(KafkaRaftServer.BrokerRole) && logDirs.size > 1) {
+      require(metadataVersion.isDirectoryAssignmentSupported,
+        s"Multiple log directories (aka JBOD) are not supported in the current MetadataVersion ${metadataVersion}. " +
+          s"Need ${MetadataVersion.IBP_3_7_IV2} or higher")
+    }
   }
 
   /**
