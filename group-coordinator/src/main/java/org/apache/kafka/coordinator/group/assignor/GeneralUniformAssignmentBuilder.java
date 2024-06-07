@@ -17,6 +17,12 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
+import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
+import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
+import org.apache.kafka.coordinator.group.consumer.MemberAssignmentImpl;
 import org.apache.kafka.server.common.TopicIdPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,9 +59,9 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
     private static final Logger LOG = LoggerFactory.getLogger(GeneralUniformAssignmentBuilder.class);
 
     /**
-     * The member metadata obtained from the assignment specification.
+     * The group metadata specification.
      */
-    private final Map<String, AssignmentMemberSpec> members;
+    private final GroupSpec groupSpec;
 
     /**
      * The topic and partition metadata describer.
@@ -108,13 +114,13 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
     private final PartitionMovements partitionMovements;
 
     public GeneralUniformAssignmentBuilder(GroupSpec groupSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
-        this.members = groupSpec.members();
+        this.groupSpec = groupSpec;
         this.subscribedTopicDescriber = subscribedTopicDescriber;
         this.subscribedTopicIds = new HashSet<>();
         this.membersPerTopic = new HashMap<>();
         this.targetAssignment = new HashMap<>();
-        members.forEach((memberId, memberMetadata) ->
-            memberMetadata.subscribedTopicIds().forEach(topicId -> {
+        groupSpec.memberIds().forEach(memberId ->
+            groupSpec.memberSubscription(memberId).subscribedTopicIds().forEach(topicId -> {
                 // Check if the subscribed topic exists.
                 int partitionCount = subscribedTopicDescriber.numPartitions(topicId);
                 if (partitionCount == -1) {
@@ -124,13 +130,13 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
                 }
                 subscribedTopicIds.add(topicId);
                 membersPerTopic.computeIfAbsent(topicId, k -> new ArrayList<>()).add(memberId);
-                targetAssignment.put(memberId, new MemberAssignment(new HashMap<>()));
+                targetAssignment.put(memberId, new MemberAssignmentImpl(new HashMap<>()));
             })
         );
         this.unassignedPartitions = new HashSet<>(topicIdPartitions(subscribedTopicIds, subscribedTopicDescriber));
         this.assignedStickyPartitions = new HashSet<>();
-        this.assignmentManager = new AssignmentManager(this.members, this.subscribedTopicDescriber);
-        this.sortedMembersByAssignmentSize = assignmentManager.sortMembersByAssignmentSize(members.keySet());
+        this.assignmentManager = new AssignmentManager(this.subscribedTopicDescriber);
+        this.sortedMembersByAssignmentSize = assignmentManager.sortMembersByAssignmentSize(groupSpec.memberIds());
         this.partitionOwnerInTargetAssignment = new HashMap<>();
         this.partitionMovements = new PartitionMovements();
     }
@@ -149,7 +155,6 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
             return new GroupAssignment(Collections.emptyMap());
         }
 
-        // All existing partitions are retained until max assignment size.
         assignStickyPartitions();
 
         unassignedPartitionsAssignment();
@@ -191,9 +196,9 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
      * <li> Partitions from topics that are still present in both the new subscriptions and the topic metadata. </li>
      */
     private void assignStickyPartitions() {
-        members.forEach((memberId, assignmentMemberSpec) ->
-            assignmentMemberSpec.assignedPartitions().forEach((topicId, currentAssignment) -> {
-                if (assignmentMemberSpec.subscribedTopicIds().contains(topicId)) {
+        groupSpec.memberIds().forEach(memberId ->
+            groupSpec.memberAssignment(memberId).partitions().forEach((topicId, currentAssignment) -> {
+                if (groupSpec.memberSubscription(memberId).subscribedTopicIds().contains(topicId)) {
                     currentAssignment.forEach(partition -> {
                         TopicIdPartition topicIdPartition = new TopicIdPartition(topicId, partition);
                         assignmentManager.addPartitionToTargetAssignment(topicIdPartition, memberId);
@@ -245,7 +250,7 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
      * @return true if the member can participate in reassignment, false otherwise.
      */
     private boolean canMemberParticipateInReassignment(String memberId) {
-        Set<Uuid> assignedTopicIds = targetAssignment.get(memberId).targetPartitions().keySet();
+        Set<Uuid> assignedTopicIds = targetAssignment.get(memberId).partitions().keySet();
 
         int currentAssignmentSize = assignmentManager.targetAssignmentSize(memberId);
         int maxAssignmentSize = assignmentManager.maxAssignmentSize(memberId);
@@ -292,8 +297,8 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
                 continue;
 
             // Otherwise make sure it cannot get any more partitions.
-            for (Uuid topicId : members.get(member).subscribedTopicIds()) {
-                Set<Integer> assignedPartitions = targetAssignment.get(member).targetPartitions().get(topicId);
+            for (Uuid topicId : groupSpec.memberSubscription(member).subscribedTopicIds()) {
+                Set<Integer> assignedPartitions = targetAssignment.get(member).partitions().get(topicId);
                 for (int i = 0; i < subscribedTopicDescriber.numPartitions(topicId); i++) {
                     TopicIdPartition topicIdPartition = new TopicIdPartition(topicId, i);
                     if (assignedPartitions == null || !assignedPartitions.contains(i)) {
@@ -332,7 +337,7 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
         unassignedPartitions.removeAll(fixedPartitions);
 
         // Narrow down the reassignment scope to only those members that are subject to reassignment.
-        for (String member : members.keySet()) {
+        for (String member : groupSpec.memberIds()) {
             if (!canMemberParticipateInReassignment(member)) {
                 sortedMembersByAssignmentSize.remove(member);
             }
@@ -411,7 +416,7 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
         // Find the new member with the least assignment size.
         String newOwner = null;
         for (String anotherMember : sortedMembersByAssignmentSize) {
-            if (members.get(anotherMember).subscribedTopicIds().contains(partition.topicId())) {
+            if (groupSpec.memberSubscription(anotherMember).subscribedTopicIds().contains(partition.topicId())) {
                 newOwner = anotherMember;
                 break;
             }
@@ -646,9 +651,11 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
         /**
          * Initializes an AssignmentManager, setting up the necessary data structures.
          */
-        public AssignmentManager(Map<String, AssignmentMemberSpec> members, SubscribedTopicDescriber subscribedTopicDescriber) {
-            members.forEach((memberId, member) -> {
-                int maxSize = member.subscribedTopicIds().stream()
+        public AssignmentManager(
+            SubscribedTopicDescriber subscribedTopicDescriber
+        ) {
+            groupSpec.memberIds().forEach(memberId -> {
+                int maxSize = groupSpec.memberSubscription(memberId).subscribedTopicIds().stream()
                     .mapToInt(subscribedTopicDescriber::numPartitions)
                     .sum();
 
@@ -734,7 +741,7 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
             String memberId
         ) {
             // If member is not subscribed to the partition's topic, return false without assigning.
-            if (!members.get(memberId).subscribedTopicIds().contains(topicIdPartition.topicId())) {
+            if (!groupSpec.memberSubscription(memberId).subscribedTopicIds().contains(topicIdPartition.topicId())) {
                 return false;
             }
 
@@ -783,7 +790,7 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
          * @param memberId              Member that the partition needs to be revoked from.
          */
         private void removePartitionFromTargetAssignment(TopicIdPartition topicIdPartition, String memberId) {
-            Map<Uuid, Set<Integer>> targetPartitionsMap = targetAssignment.get(memberId).targetPartitions();
+            Map<Uuid, Set<Integer>> targetPartitionsMap = targetAssignment.get(memberId).partitions();
             Set<Integer> partitionsSet = targetPartitionsMap.get(topicIdPartition.topicId());
             // Remove the partition from the assignment, if there are no more partitions from a particular topic,
             // remove the topic from the assignment as well.

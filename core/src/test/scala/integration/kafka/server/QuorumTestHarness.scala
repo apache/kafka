@@ -37,7 +37,7 @@ import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationF
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
-import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, Features, MetadataVersion}
 import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs}
 import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
 import org.apache.zookeeper.client.ZKClientConfig
@@ -124,12 +124,15 @@ class KRaftQuorumImplementation(
     metaPropertiesEnsemble.verify(Optional.of(clusterId),
       OptionalInt.of(config.nodeId),
       util.EnumSet.of(REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR))
-    val sharedServer = new SharedServer(config,
+    val sharedServer = new SharedServer(
+      config,
       metaPropertiesEnsemble,
       time,
       new Metrics(),
       controllerQuorumVotersFuture,
-      faultHandlerFactory)
+      controllerQuorumVotersFuture.get().values(),
+      faultHandlerFactory
+    )
     var broker: BrokerServer = null
     try {
       broker = new BrokerServer(sharedServer)
@@ -342,6 +345,15 @@ abstract class QuorumTestHarness extends Logging {
                         setName(MetadataVersion.FEATURE_NAME).
                         setFeatureLevel(metadataVersion.featureLevel()), 0.toShort))
 
+    if (isNewGroupCoordinatorEnabled()) {
+      metadataRecords.add(new ApiMessageAndVersion(
+        new FeatureLevelRecord()
+          .setName(Features.GROUP_VERSION.featureName)
+          .setFeatureLevel(Features.GROUP_VERSION.latestTesting),
+        0.toShort
+      ))
+    }
+
     optionalMetadataRecords.foreach { metadataArguments =>
       for (record <- metadataArguments) metadataRecords.add(record)
     }
@@ -362,12 +374,15 @@ abstract class QuorumTestHarness extends Logging {
     metaPropertiesEnsemble.verify(Optional.of(metaProperties.clusterId().get()),
       OptionalInt.of(nodeId),
       util.EnumSet.of(REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR))
-    val sharedServer = new SharedServer(config,
+    val sharedServer = new SharedServer(
+      config,
       metaPropertiesEnsemble,
       Time.SYSTEM,
       new Metrics(),
       controllerQuorumVotersFuture,
-      faultHandlerFactory)
+      Collections.emptyList(),
+      faultHandlerFactory
+    )
     var controllerServer: ControllerServer = null
     try {
       controllerServer = new ControllerServer(

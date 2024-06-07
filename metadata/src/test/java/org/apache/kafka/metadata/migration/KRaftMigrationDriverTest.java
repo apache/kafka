@@ -471,9 +471,9 @@ public class KRaftMigrationDriverTest {
 
             startAndWaitForRecoveringMigrationStateFromZK(driver);
             if (allNodePresent) {
-                setupDeltaWithControllerRegistrations(delta, Arrays.asList(4, 5, 6), Arrays.asList());
+                setupDeltaWithControllerRegistrations(delta, Arrays.asList(4, 5, 6), Collections.emptyList());
             } else {
-                setupDeltaWithControllerRegistrations(delta, Arrays.asList(), Arrays.asList(4, 5));
+                setupDeltaWithControllerRegistrations(delta, Collections.emptyList(), Arrays.asList(4, 5));
             }
             delta.replay(zkBrokerRecord(1));
             MetadataProvenance provenance = new MetadataProvenance(100, 1, 1);
@@ -493,7 +493,7 @@ public class KRaftMigrationDriverTest {
 
             // Update so that all controller nodes are zkMigrationReady. Now we should be able to move to the next state.
             delta = new MetadataDelta(image);
-            setupDeltaWithControllerRegistrations(delta, Arrays.asList(), Arrays.asList(4, 5, 6));
+            setupDeltaWithControllerRegistrations(delta, Collections.emptyList(), Arrays.asList(4, 5, 6));
             image = delta.apply(new MetadataProvenance(200, 1, 2));
             driver.onMetadataUpdate(delta, image, new LogDeltaManifest.Builder().
                     provenance(image.provenance()).

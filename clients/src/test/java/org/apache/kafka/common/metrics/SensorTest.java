@@ -29,7 +29,6 @@ import org.apache.kafka.common.utils.Time;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -128,7 +127,7 @@ public class SensorTest {
     public void testExpiredSensor() {
         MetricConfig config = new MetricConfig();
         Time mockTime = new MockTime();
-        try (Metrics metrics = new Metrics(config, Arrays.asList(new JmxReporter()), mockTime, true)) {
+        try (Metrics metrics = new Metrics(config, Collections.singletonList(new JmxReporter()), mockTime, true)) {
             long inactiveSensorExpirationTimeSeconds = 60L;
             Sensor sensor = new Sensor(metrics, "sensor", null, config, mockTime,
                     inactiveSensorExpirationTimeSeconds, Sensor.RecordingLevel.INFO);

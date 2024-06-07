@@ -39,7 +39,8 @@ public enum Features {
      *
      * See {@link TestFeatureVersion} as an example. See {@link FeatureVersion} when implementing a new feature.
      */
-    TEST_VERSION("test.feature.version", TestFeatureVersion.values());
+    TEST_VERSION("test.feature.version", TestFeatureVersion.values()),
+    GROUP_VERSION("group.version", GroupVersion.values());
 
     public static final Features[] FEATURES;
     public static final List<Features> PRODUCTION_FEATURES;

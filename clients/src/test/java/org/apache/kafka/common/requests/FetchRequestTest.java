@@ -42,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class FetchRequestTest {
 
     private static Stream<Arguments> fetchVersions() {
-        return ApiKeys.FETCH.allVersions().stream().map(version -> Arguments.of(version));
+        return ApiKeys.FETCH.allVersions().stream().map(Arguments::of);
     }
 
     @ParameterizedTest
@@ -64,7 +64,7 @@ public class FetchRequestTest {
 
         // If version < 13, we should not see any partitions in forgottenTopics. This is because we can not
         // distinguish different topic IDs on versions earlier than 13.
-        assertEquals(fetchRequestUsesTopicIds, fetchRequest.data().forgottenTopicsData().size() > 0);
+        assertEquals(fetchRequestUsesTopicIds, !fetchRequest.data().forgottenTopicsData().isEmpty());
         fetchRequest.data().forgottenTopicsData().forEach(forgottenTopic -> {
             // Since we didn't serialize, we should see the topic name and ID regardless of the version.
             assertEquals(tp.topic(), forgottenTopic.topic());
@@ -228,9 +228,9 @@ public class FetchRequestTest {
     public void testFetchRequestSimpleBuilderReplicaIdNotSupported(short version) {
         FetchRequestData fetchRequestData = new FetchRequestData().setReplicaId(1);
         FetchRequest.SimpleBuilder builder = new FetchRequest.SimpleBuilder(fetchRequestData);
-        assertThrows(IllegalStateException.class, () -> {
-            builder.build(version);
-        });
+        assertThrows(IllegalStateException.class, () ->
+            builder.build(version)
+        );
     }
 
     @Test

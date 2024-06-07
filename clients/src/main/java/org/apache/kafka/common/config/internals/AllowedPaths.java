@@ -70,7 +70,7 @@ public class AllowedPaths {
 
         if (allowedPaths != null) {
             Path normalisedPath = parsedPath.normalize();
-            long allowed = allowedPaths.stream().filter(allowedPath -> normalisedPath.startsWith(allowedPath)).count();
+            long allowed = allowedPaths.stream().filter(normalisedPath::startsWith).count();
             if (allowed == 0) {
                 return null;
             }

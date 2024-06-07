@@ -49,7 +49,6 @@ public class QuorumControllerTestEnv implements AutoCloseable {
         private Consumer<QuorumController.Builder> controllerBuilderInitializer = __ -> { };
         private OptionalLong sessionTimeoutMillis = OptionalLong.empty();
         private OptionalLong leaderImbalanceCheckIntervalNs = OptionalLong.empty();
-        private boolean eligibleLeaderReplicasEnabled = false;
         private BootstrapMetadata bootstrapMetadata = BootstrapMetadata.
                 fromVersion(MetadataVersion.latestTesting(), "test-provided version");
 
