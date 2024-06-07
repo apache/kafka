@@ -76,6 +76,8 @@ object TransactionLog {
             .setPartitionIds(partitions.map(tp => Integer.valueOf(tp.partition)).toList.asJava)
         }.toList.asJava
 
+    // Serialize with version 0 (highest non-flexible version) until transaction.version 1 is enabled
+    // which enables flexible fields in records.
     val version: Short =
       if (usesFlexibleRecords) 1 else 0
     MessageUtil.toVersionPrefixedBytes(version,
