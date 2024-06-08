@@ -78,9 +78,8 @@ public class ConsumerRecordsTest {
         List<String> topics = Arrays.asList("topic1", "topic2", "topic3", "topic4");
         int recordSize = 3;
         int partitionSize = 10;
-        int emptyPartitionInterval = 3;
-        // -1 because index 0 always be null
-        int expectedTotalRecordSizeOfEachTopic = ((partitionSize - 1) - (partitionSize / emptyPartitionInterval)) * recordSize;
+        int emptyPartitionInterval = 6;
+        int expectedTotalRecordSizeOfEachTopic = getExpectedTotalRecordSizeOfEachTopic(partitionSize, emptyPartitionInterval, recordSize);
 
         ConsumerRecords<Integer, String> consumerRecords = buildTopicTestRecords(recordSize, partitionSize, emptyPartitionInterval, topics);
 
@@ -133,7 +132,13 @@ public class ConsumerRecordsTest {
         return new ConsumerRecords<>(partitionToRecords);
     }
 
-    private static int getActualPartitionCount(int partitionSize, int emptyPartitionInterval, int partitionCount) {
+    private int getExpectedTotalRecordSizeOfEachTopic(int partitionSize, int emptyPartitionInterval, int recordSize) {
+        // -1 because index 0 always be null
+        int validPartitionSize = partitionSize - 1;
+        return (validPartitionSize - (validPartitionSize / emptyPartitionInterval)) * recordSize;
+    }
+
+    private int getActualPartitionCount(int partitionSize, int emptyPartitionInterval, int partitionCount) {
         // Need to add 1 if partitionSize % emptyPartitionInterval is zero, because iterator.hasNext() will return false if the value is empty.
         // In this case, partitionCount will be one less than expected.
         return (partitionSize - 1) % emptyPartitionInterval == 0 ? partitionCount + 1 : partitionCount;
