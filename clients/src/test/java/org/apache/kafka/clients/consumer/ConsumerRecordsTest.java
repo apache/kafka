@@ -80,7 +80,7 @@ public class ConsumerRecordsTest {
         int partitionSize = 10;
         int emptyPartitionInterval = 3;
         // -1 because index 0 always be null
-        int expectedTotalRecordSizeOfEachTopic = ((partitionSize - 1) - (partitionSize / 3)) * 3;
+        int expectedTotalRecordSizeOfEachTopic = ((partitionSize - 1) - (partitionSize / emptyPartitionInterval)) * recordSize;
 
         ConsumerRecords<Integer, String> consumerRecords = buildTopicTestRecords(recordSize, partitionSize, emptyPartitionInterval, topics);
 
