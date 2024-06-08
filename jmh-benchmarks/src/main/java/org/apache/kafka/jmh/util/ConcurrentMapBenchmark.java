@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.jmh.java;
+package org.apache.kafka.jmh.util;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -45,7 +45,7 @@ import org.openjdk.jmh.infra.Blackhole;
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 @Threads(2)
-public class MapBenchmark {
+public class ConcurrentMapBenchmark {
     @Param({"10000"})
     private int times;
 
@@ -65,6 +65,7 @@ public class MapBenchmark {
         copyOnWriteMap = new CopyOnWriteMap<>(mapTemplate);
     }
 
+    // added here as a baseline
     @Benchmark
     public void testHashMap(Blackhole blackhole) {
         for (int i = 0; i < times; i++) {
