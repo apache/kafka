@@ -2760,9 +2760,12 @@ public class KafkaAdminClient extends AdminClient {
             }, now);
         }
 
-        return new DescribeConfigsResult(new HashMap<>(nodeFutures.entrySet().stream()
-                .flatMap(x -> x.getValue().entrySet().stream())
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))));
+        Map<ConfigResource, KafkaFuture<Config>> resourceToConfigFuture = nodeFutures.entrySet()
+            .stream()
+            .flatMap(x -> x.getValue().entrySet().stream())
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+        return new DescribeConfigsResult(resourceToConfigFuture);
     }
 
     private Config describeConfigResult(DescribeConfigsResponseData.DescribeConfigsResult describeConfigsResult) {
@@ -4071,7 +4074,7 @@ public class KafkaAdminClient extends AdminClient {
                 }
             }, now);
 
-        return new AlterClientQuotasResult(Collections.unmodifiableMap(futures));
+        return new AlterClientQuotasResult(new HashMap<>(futures));
     }
 
     @Override
