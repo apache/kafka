@@ -34,8 +34,11 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.Endpoints;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -135,6 +138,42 @@ final public class VoterSetTest {
         assertTrue(voterSet.isVoter(ReplicaKey.of(1, Uuid.randomUuid())));
         assertFalse(voterSet.isVoter(ReplicaKey.of(4, Uuid.randomUuid())));
         assertFalse(voterSet.isVoter(ReplicaKey.of(4, ReplicaKey.NO_DIRECTORY_ID)));
+    }
+
+    @Test
+    void testVoterNodeIsVoterWithDirectoryId() {
+        VoterSet.VoterNode voterNode = voterNode(1, true);
+
+        assertTrue(voterNode.isVoter(voterNode.voterKey()));
+        assertFalse(voterNode.isVoter(ReplicaKey.of(1, Uuid.randomUuid())));
+        assertFalse(voterNode.isVoter(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID)));
+        assertFalse(voterNode.isVoter(ReplicaKey.of(2, Uuid.randomUuid())));
+        assertFalse(voterNode.isVoter(ReplicaKey.of(2, ReplicaKey.NO_DIRECTORY_ID)));
+        assertFalse(voterNode.isVoter(ReplicaKey.of(2, voterNode.voterKey().directoryId().get())));
+    }
+
+    @Test
+    void testVoterNodeIsVoterWithoutDirectoryId() {
+        VoterSet.VoterNode voterNode = voterNode(1, false);
+
+        assertTrue(voterNode.isVoter(voterNode.voterKey()));
+        assertTrue(voterNode.isVoter(ReplicaKey.of(1, Uuid.randomUuid())));
+        assertTrue(voterNode.isVoter(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID)));
+        assertTrue(voterNode.isVoter(ReplicaKey.of(1, Uuid.randomUuid())));
+        assertFalse(voterNode.isVoter(ReplicaKey.of(2, Uuid.randomUuid())));
+        assertFalse(voterNode.isVoter(ReplicaKey.of(2, ReplicaKey.NO_DIRECTORY_ID)));
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    void testEndpoints(boolean withDirectoryId) {
+        Map<Integer, VoterSet.VoterNode> aVoterMap = voterMap(IntStream.of(1, 2, 3), withDirectoryId);
+        VoterSet voterSet = new VoterSet(new HashMap<>(aVoterMap));
+
+        assertNotEquals(Endpoints.empty(), voterSet.listeners(1));
+        assertNotEquals(Endpoints.empty(), voterSet.listeners(2));
+        assertNotEquals(Endpoints.empty(), voterSet.listeners(3));
+        assertEquals(Endpoints.empty(), voterSet.listeners(4));
     }
 
     @Test

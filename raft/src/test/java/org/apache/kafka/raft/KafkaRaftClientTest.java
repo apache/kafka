@@ -75,6 +75,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+// TODO: run all of these tests with the new RPC versions
 public class KafkaRaftClientTest {
 
     @Test

@@ -53,6 +53,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+// TODO: run all of these tests with the new RPC versions
 final public class KafkaRaftClientSnapshotTest {
     @Test
     public void testLatestSnapshotId() throws Exception {

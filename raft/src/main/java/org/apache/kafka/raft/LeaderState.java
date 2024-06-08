@@ -34,7 +34,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -60,7 +59,7 @@ public class LeaderState<T> implements EpochState {
     private final Endpoints endpoints;
 
     private Optional<LogOffsetMetadata> highWatermark = Optional.empty();
-    private final Map<Integer, ReplicaState> voterStates = new HashMap<>();
+    private Map<Integer, ReplicaState> voterStates = new HashMap<>();
     private final Map<ReplicaKey, ReplicaState> observerStates = new HashMap<>();
     private final Logger log;
     private final BatchAccumulator<T> accumulator;
@@ -416,6 +415,15 @@ public class LeaderState<T> implements EpochState {
         return state;
     }
 
+    private Optional<ReplicaState> getReplicaState(ReplicaKey replicaKey) {
+        ReplicaState state = voterStates.get(replicaKey.id());
+        if (state == null || !state.matchesKey(replicaKey)) {
+            state = observerStates.get(replicaKey);
+        }
+
+        return Optional.ofNullable(state);
+    }
+
     public DescribeQuorumResponseData.PartitionData describeQuorum(long currentTimeMs) {
         clearInactiveObservers(currentTimeMs);
 
@@ -475,46 +483,28 @@ public class LeaderState<T> implements EpochState {
     }
 
     private void updateVoterAndObserverStates(VoterSet lastVoterSet) {
-        // Move any replica that is not in the last voter set from voterStates to observerStates
-        Iterator<Map.Entry<Integer, ReplicaState>> iter = voterStates.entrySet().iterator();
-        while (iter.hasNext()) {
-            Map.Entry<Integer, ReplicaState> entry = iter.next();
-            if (!lastVoterSet.isVoter(entry.getValue().replicaKey)) {
-                observerStates.put(entry.getValue().replicaKey, entry.getValue());
-                iter.remove();
-            }
-        }
+        Map<Integer, ReplicaState> newVoterStates = new HashMap<>();
+        Map<Integer, ReplicaState> oldVoterStates = new HashMap<>(voterStates);
 
-        // Add any replica that is in the last voter set and not in voterStates to voterStates (move from observerStates
-        // if necessary)
+
+        // Compute the new voter states map
         for (VoterSet.VoterNode voterNode : lastVoterSet.voterNodes()) {
-            ReplicaState voterState = voterStates.get(voterNode.voterKey().id());
-            if (voterState == null) {
-                // Find the replica in observer state
-                Optional<ReplicaState> existingObserverState = Optional.ofNullable(
-                    observerStates.remove(voterNode.voterKey())
-                );
+            ReplicaState state = getReplicaState(voterNode.voterKey())
+                .orElse(new ReplicaState(voterNode.voterKey(), false));
 
-                // Add replica as voter to voter states
-                voterStates.put(
-                    voterNode.voterKey().id(),
-                    existingObserverState.orElse(new ReplicaState(voterNode.voterKey(), false))
-                );
-            } else if (!voterNode.isVoter(voterState.replicaKey)) {
-                // TODO: figure out how to test this
-                // The ids match but the directory ids do not match. This happens when
-                // upgrading from kraft.version 0 to kraft.version 1 and the directory ids are
-                // recorded
-                log.info(
-                    "Voter {} replica key doesn't match replica key in the leader's replica state " +
-                    "{}; updating tracked replica key",
-                    voterNode,
-                    voterState
-                );
+            // Remove the voter from the previous data structures
+            oldVoterStates.remove(voterNode.voterKey().id());
+            observerStates.remove(voterNode.voterKey());
 
-                // This is safe to do for voter state because they are indexed by the replica id.
-                voterState.setReplicaKey(voterNode.voterKey());
-            }
+            // Make sure that the replica key in the replica state matches the voter's
+            state.setReplicaKey(voterNode.voterKey());
+            newVoterStates.put(state.replicaKey.id(), state);
+        }
+        voterStates = newVoterStates;
+
+        // Move any of the remaining old voters to observerStates
+        for (ReplicaState replicaStateEntry : oldVoterStates.values()) {
+            observerStates.putIfAbsent(replicaStateEntry.replicaKey, replicaStateEntry);
         }
     }
 
@@ -539,15 +529,17 @@ public class LeaderState<T> implements EpochState {
             if (this.replicaKey.id() != replicaKey.id()) {
                 throw new IllegalArgumentException(
                     String.format(
-                        "Attempting to update the replica key {} with a different replica id {}",
+                        "Attempting to update the replica key %s with a different replica id %s",
                         this.replicaKey,
                         replicaKey
                     )
                 );
-            } else if (this.replicaKey.directoryId().isPresent()) {
+            } else if (this.replicaKey.directoryId().isPresent() &&
+                !this.replicaKey.equals(replicaKey)
+            ) {
                 throw new IllegalArgumentException(
                     String.format(
-                        "Attempting to update an already set directory id {} with a different directory id {}",
+                        "Attempting to update an already set directory id %s with a different directory id %s",
                         this.replicaKey,
                         replicaKey
                     )

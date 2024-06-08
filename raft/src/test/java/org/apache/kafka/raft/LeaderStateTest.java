@@ -44,10 +44,10 @@ import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.raft.LeaderState.CHECK_QUORUM_TIMEOUT_FACTOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-// TODO: add test for leaderEndpoints
 public class LeaderStateTest {
     private final ReplicaKey localReplicaKey = ReplicaKey.of(0, Uuid.randomUuid());
     private final int epoch = 5;
@@ -111,7 +111,7 @@ public class LeaderStateTest {
                 VoterSetTest.voterSet(Stream.of(localReplicaKey)),
                 Collections.emptySet(),
                 null,
-                Endpoints.empty(), // TODO: Fix this...
+                Endpoints.empty(),
                 fetchTimeoutMs,
                 logContext
             )
@@ -904,6 +904,40 @@ public class LeaderStateTest {
             time.milliseconds()
         );
         assertEquals(Long.MAX_VALUE, state.timeUntilCheckQuorumExpires(time.milliseconds()));
+    }
+
+    @Test
+    public void testLeaderEndpoints() {
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(localReplicaKey));
+        LeaderState<?> state = newLeaderState(voters, 0L);
+
+        assertNotEquals(Endpoints.empty(), state.leaderEndpoints());
+        assertEquals(voters.listeners(localReplicaKey.id()), state.leaderEndpoints());
+    }
+
+    @Test
+    public void testUpdateVotersFromNoDirectoryIdToDirectoryId() {
+        int node1 = 1;
+        int node2 = 2;
+        ReplicaKey nodeKey1 = ReplicaKey.of(node1, Uuid.randomUuid());
+        ReplicaKey nodeKey2 = ReplicaKey.of(node2, Uuid.randomUuid());
+
+        VoterSet votersBeforeUpgrade = localWithRemoteVoterSet(
+            IntStream.of(node1, node2),
+            false
+        );
+
+        LeaderState<?> state = newLeaderState(votersBeforeUpgrade, 0L);
+
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(10L), votersBeforeUpgrade));
+        assertTrue(state.updateReplicaState(nodeKey1, 0L, new LogOffsetMetadata(10L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(10L)), state.highWatermark());
+
+        VoterSet votersAfterUpgrade = localWithRemoteVoterSet(Stream.of(nodeKey1, nodeKey2), true);
+
+        assertFalse(state.updateLocalState(new LogOffsetMetadata(15L), votersAfterUpgrade));
+        assertTrue(state.updateReplicaState(nodeKey2, 0L, new LogOffsetMetadata(13L)));
+        assertEquals(Optional.of(new LogOffsetMetadata(13L)), state.highWatermark());
     }
 
     @Test

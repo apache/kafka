@@ -231,6 +231,15 @@ public class CandidateStateTest {
         );
     }
 
+    @Test
+    void testLeaderEndpoints() {
+        CandidateState state = newCandidateState(
+            voterSetWithLocal(IntStream.of(1, 2, 3))
+        );
+
+        assertEquals(Endpoints.empty(), state.leaderEndpoints());
+    }
+
     private VoterSet voterSetWithLocal(IntStream remoteVoters) {
         Map<Integer, VoterSet.VoterNode> voterMap = VoterSetTest.voterMap(remoteVoters, true);
         voterMap.put(localNode.voterKey().id(), localNode);

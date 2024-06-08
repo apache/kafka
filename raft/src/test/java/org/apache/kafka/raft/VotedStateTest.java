@@ -31,7 +31,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-// TODO: add tests for leaderEndpoints
 class VotedStateTest {
 
     private final MockTime time = new MockTime();
@@ -111,5 +110,13 @@ class VotedStateTest {
 
         assertFalse(state.canGrantVote(ReplicaKey.of(votedId + 1, votedDirectoryId), false));
         assertFalse(state.canGrantVote(ReplicaKey.of(votedId + 1, ReplicaKey.NO_DIRECTORY_ID), false));
+    }
+
+    @Test
+    void testLeaderEndpoints() {
+        Uuid votedDirectoryId = Uuid.randomUuid();
+        VotedState state = newVotedState(votedDirectoryId);
+
+        assertEquals(Endpoints.empty(), state.leaderEndpoints());
     }
 }

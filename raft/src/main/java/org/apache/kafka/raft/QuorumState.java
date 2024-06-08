@@ -200,11 +200,6 @@ public class QuorumState {
                 logContext
             );
         } else if (election.hasLeader()) {
-            // TODO: should I fix this now?
-            /* KAFKA-16529 is going to change this so that the leader is not required to be in the set
-             * of voters. In other words, don't throw an IllegalStateException if the leader is not in
-             * the set of voters.
-             */
             VoterSet voters = latestVoterSet.get();
             initialState = new FollowerState(
                 time,
