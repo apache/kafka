@@ -20,7 +20,9 @@
   // Version 1 adds a top-level error code.
   //
   // Version 2 is the first flexible version.
-  "validVersions": "0-2",
+  //
+  // Version 3 implements designatedLeaders, as described by KIP-966
+  "validVersions": "0-3",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",

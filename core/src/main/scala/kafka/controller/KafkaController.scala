@@ -920,6 +920,7 @@ class KafkaController(val config: KafkaConfig,
            * triggered by the admin client
            */
           OfflinePartitionLeaderElectionStrategy(allowUnclean = electionTrigger == AdminClientTriggered)
+        case ElectionType.DESIGNATED => throw new UnsupportedClassVersionError("Designated election not supported by KafkaController in ZK mode")
       }
 
       val results = partitionStateMachine.handleStateChanges(
@@ -2242,6 +2243,8 @@ class KafkaController(val config: KafkaConfig,
             case ElectionType.UNCLEAN =>
               val currentLeader = controllerContext.partitionLeadershipInfo(partition).get.leaderAndIsr.leader
               currentLeader == LeaderAndIsr.NoLeader || !controllerContext.liveBrokerIds.contains(currentLeader)
+
+            case ElectionType.DESIGNATED => throw new UnsupportedClassVersionError("Designated election not supported by KafkaController in ZK mode")
           }
         }
 

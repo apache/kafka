@@ -22,7 +22,7 @@ import java.util.Objects;
 /**
  * A topic name and partition number
  */
-public final class TopicPartition implements Serializable {
+public class TopicPartition implements Serializable {
     private static final long serialVersionUID = -613627415771699627L;
 
     private int hash = 0;

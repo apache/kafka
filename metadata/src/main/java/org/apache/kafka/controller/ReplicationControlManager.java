@@ -25,6 +25,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidPartitionsException;
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException;
 import org.apache.kafka.common.errors.InvalidReplicationFactorException;
@@ -1457,7 +1458,7 @@ public class ReplicationControlManager {
                 TopicControlInfo topic = topics.get(topicEntry.getValue());
                 if (topic != null) {
                     for (int partitionId : topic.parts.keySet()) {
-                        ApiError error = electLeader(topicName, partitionId, electionType, records);
+                        ApiError error = electLeader(topicName, partitionId, electionType, records, -1);
 
                         // When electing leaders for all partitions, we do not return
                         // partitions which already have the desired leader.
@@ -1475,8 +1476,20 @@ public class ReplicationControlManager {
                 ReplicaElectionResult topicResults =
                     new ReplicaElectionResult().setTopic(topic.topic());
                 response.replicaElectionResults().add(topicResults);
-                for (int partitionId : topic.partitions()) {
-                    ApiError error = electLeader(topic.topic(), partitionId, electionType, records);
+                for (int i = 0; i < topic.partitions().size(); i++) {
+                    int partitionId = topic.partitions().get(i);
+                    int desiredLeader;
+                    if(!topic.designatedLeaders().isEmpty()) {
+                        desiredLeader = topic.designatedLeaders().get(i);
+                        if (desiredLeader < 0) {
+                            throw new UnknownServerException("Cannot pass negative number for Designated Leader");
+                        }
+                    } else if (electionType == ElectionType.DESIGNATED) {
+                        throw new InvalidConfigurationException("Designated leader input required for designated election");
+                    } else {
+                        desiredLeader = -1;
+                    }
+                    ApiError error = electLeader(topic.topic(), partitionId, electionType, records, desiredLeader);
                     topicResults.partitionResult().add(new PartitionResult().
                         setPartitionId(partitionId).
                         setErrorCode(error.error().code()).
@@ -1496,7 +1509,7 @@ public class ReplicationControlManager {
     }
 
     ApiError electLeader(String topic, int partitionId, ElectionType electionType,
-                         List<ApiMessageAndVersion> records) {
+                         List<ApiMessageAndVersion> records, int desiredLeader) {
         Uuid topicId = topicsByName.get(topic);
         if (topicId == null) {
             return new ApiError(UNKNOWN_TOPIC_OR_PARTITION,
@@ -1513,13 +1526,22 @@ public class ReplicationControlManager {
                 "No such partition as " + topic + "-" + partitionId);
         }
         if ((electionType == ElectionType.PREFERRED && partition.hasPreferredLeader())
-            || (electionType == ElectionType.UNCLEAN && partition.hasLeader())) {
+            || (electionType == ElectionType.UNCLEAN && partition.hasLeader())
+            || (electionType == ElectionType.DESIGNATED && partition.getLeader() == desiredLeader)) {
             return new ApiError(Errors.ELECTION_NOT_NEEDED);
         }
 
-        PartitionChangeBuilder.Election election = PartitionChangeBuilder.Election.PREFERRED;
-        if (electionType == ElectionType.UNCLEAN) {
-            election = PartitionChangeBuilder.Election.UNCLEAN;
+        PartitionChangeBuilder.Election election;
+        switch(electionType) {
+            case UNCLEAN:
+                election = PartitionChangeBuilder.Election.UNCLEAN;
+                break;
+            case DESIGNATED:
+                election = PartitionChangeBuilder.Election.DESIGNATED;
+                break;
+            default:
+                election = PartitionChangeBuilder.Election.PREFERRED;
+                break;
         }
         Optional<ApiMessageAndVersion> record = new PartitionChangeBuilder(
             partition,
@@ -1533,6 +1555,7 @@ public class ReplicationControlManager {
             .setZkMigrationEnabled(clusterControl.zkRegistrationAllowed())
             .setEligibleLeaderReplicasEnabled(isElrEnabled())
             .setDefaultDirProvider(clusterDescriber)
+            .setDesiredLeader(desiredLeader)
             .build();
         if (!record.isPresent()) {
             if (electionType == ElectionType.PREFERRED) {

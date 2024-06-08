@@ -33,9 +33,9 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.consumer.internals.AbstractCoordinator
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.clients.{ClientResponse, CommonClientConfigs}
-import org.apache.kafka.common._
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBindingFilter}
 import org.apache.kafka.common.compress.Compression
+import org.apache.kafka.common.{KafkaFuture, Node, TopicIdPartition, TopicPartition, TopicPartitionDesignated, Uuid}
 import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.errors.{KafkaStorageException, OperationNotAttemptedException, TopicExistsException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.header.Header
@@ -1813,6 +1813,16 @@ object TestUtils extends Logging {
   def clearYammerMetrics(): Unit = {
     for (metricName <- KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala)
       KafkaYammerMetrics.defaultRegistry.removeMetric(metricName)
+  }
+
+  def stringifyTopicPartitions(partitions: Set[TopicPartition]): String = {
+    Json.encodeAsString(Map("partitions" ->
+      partitions.map(tp => Map("topic" -> tp.topic, "partition" -> tp.partition).asJava).asJava).asJava)
+  }
+
+  def stringifyTopicPartitionsWithDesignatedLeader(partitions: Set[TopicPartitionDesignated]): String = {
+    Json.encodeAsString(Map("partitions" ->
+      partitions.map(tp => Map("topic" -> tp.topic, "partition" -> tp.partition, "designatedLeader" -> tp.getDesignatedLeader).asJava).asJava).asJava)
   }
 
   def waitForAllReassignmentsToComplete(adminClient: Admin, pause: Long = 100L): Unit = {

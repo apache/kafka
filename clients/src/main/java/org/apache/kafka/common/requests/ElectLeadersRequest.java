@@ -23,6 +23,7 @@ import java.util.Collection;
 import java.util.List;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicPartitionDesignated;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ElectLeadersRequestData.TopicPartitions;
 import org.apache.kafka.common.message.ElectLeadersRequestData;
@@ -75,6 +76,13 @@ public class ElectLeadersRequest extends AbstractRequest {
                         data.topicPartitions().add(tps);
                     }
                     tps.partitions().add(tp.partition());
+                    if (version >= 3 && tp instanceof TopicPartitionDesignated && electionType == ElectionType.DESIGNATED) {
+                        tps.designatedLeaders().add(((TopicPartitionDesignated) tp).getDesignatedLeader());
+                        if (tps.designatedLeaders().size() != tps.partitions().size()) {
+                            throw new IllegalStateException("Both desiredLeaders and partitions must be the same size " + tps.designatedLeaders().size() + " " + tps.partitions().size());
+                        }
+                    }
+
                 });
             } else {
                 data.setTopicPartitions(null);

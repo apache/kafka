@@ -27,6 +27,7 @@ import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicPartitionDesignated;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.server.common.AdminCommandFailedException;
 import org.junit.jupiter.api.Tag;
@@ -197,7 +198,7 @@ public class LeaderElectionCommandTest {
         cluster.startBroker(broker3);
         TestUtils.waitForOnlineBroker(client, broker3);
 
-        Path topicPartitionPath = tempTopicPartitionFile(singletonList(topicPartition));
+        Path topicPartitionPath = tempTopicPartitionFile(Collections.singletonList(topicPartition), false);
 
         assertEquals(0, LeaderElectionCommand.mainNoExit(
             "--bootstrap-server", cluster.bootstrapServers(),
@@ -206,6 +207,48 @@ public class LeaderElectionCommandTest {
         ));
 
         TestUtils.assertLeader(client, topicPartition, broker3);
+    }
+
+    @ClusterTest
+    public void testDesignatedReplicaElection() throws Exception {
+        if (cluster.type().toString() == "ZK") {
+            return;
+        }
+        String topic = "designated-topic";
+        int partition = 0;
+        List<Integer> assignment = Arrays.asList(broker2, broker3);
+
+        cluster.waitForReadyBrokers();
+        Admin client = cluster.createAdminClient();
+        Map<Integer, List<Integer>> partitionAssignment = new HashMap<>();
+        partitionAssignment.put(partition, assignment);
+
+        createTopic(client, topic, partitionAssignment);
+
+        TopicPartitionDesignated topicPartition = new TopicPartitionDesignated(topic, partition);
+        topicPartition.setDesignatedLeader(1);
+        Path topicPartitionPath = tempTopicPartitionFile(Collections.singletonList(topicPartition), true);
+
+        TestUtils.assertLeader(client, topicPartition, broker2);
+
+        cluster.shutdownBroker(broker2);
+        TestUtils.waitForBrokersOutOfIsr(client,
+                JavaConverters.asScalaBuffer(Collections.singletonList(topicPartition)).toSet(),
+                JavaConverters.asScalaBuffer(Collections.singletonList(broker2)).toSet()
+        );
+        TestUtils.assertLeader(client, topicPartition, broker3);
+        cluster.startBroker(broker2);
+        TestUtils.waitForBrokersInIsr(client, topicPartition,
+            JavaConverters.asScalaBuffer(Collections.singletonList(broker2)).toSet()
+        );
+
+        LeaderElectionCommand.mainNoExit(
+            "--bootstrap-server", cluster.bootstrapServers(),
+            "--election-type", "designated",
+            "--path-to-json-file", topicPartitionPath.toString()
+        );
+
+        TestUtils.assertLeader(client, topicPartition, broker2);
     }
 
     @ClusterTest
@@ -285,7 +328,7 @@ public class LeaderElectionCommandTest {
             JavaConverters.asScalaBuffer(singletonList(broker2)).toSet()
         );
 
-        Path topicPartitionPath = tempTopicPartitionFile(asList(topicPartition0, topicPartition1));
+        Path topicPartitionPath = tempTopicPartitionFile(Arrays.asList(topicPartition0, topicPartition1), false);
         String output = ToolsTestUtils.captureStandardOut(() ->
             LeaderElectionCommand.mainNoExit(
                 "--bootstrap-server", cluster.bootstrapServers(),
@@ -314,38 +357,31 @@ public class LeaderElectionCommandTest {
         createTopicResult.all().get();
     }
 
-    private Path tempTopicPartitionFile(List<TopicPartition> partitions) throws Exception {
+    private static Path tempTopicPartitionFile(List<TopicPartition> partitions, boolean designated) throws Exception {
         java.io.File file = TestUtils.tempFile("leader-election-command", ".json");
 
-        String jsonString = stringifyTopicPartitions(new HashSet<>(partitions));
+        scala.collection.immutable.Set<TopicPartition> topicPartitionSet =
+            JavaConverters.asScalaBuffer(partitions).toSet();
+        scala.collection.immutable.Set<TopicPartitionDesignated> topicPartitionDesignatedSet =
+                JavaConverters.asScalaBuffer(partitions).toSet();
+        String jsonString;
+        if (designated) {
+            jsonString = TestUtils.stringifyTopicPartitionsWithDesignatedLeader(topicPartitionDesignatedSet);
+        } else {
+            jsonString = TestUtils.stringifyTopicPartitions(topicPartitionSet);
+        }
+
 
         Files.write(file.toPath(), jsonString.getBytes(StandardCharsets.UTF_8));
 
         return file.toPath();
     }
 
-    private Path tempAdminConfig(String defaultApiTimeoutMs, String requestTimeoutMs) throws Exception {
+
+    private static Path tempAdminConfig(String defaultApiTimeoutMs, String requestTimeoutMs) throws Exception {
         String content = "default.api.timeout.ms=" + defaultApiTimeoutMs + "\nrequest.timeout.ms=" + requestTimeoutMs;
         java.io.File file = TestUtils.tempFile("admin-config", ".properties");
         Files.write(file.toPath(), content.getBytes(StandardCharsets.UTF_8));
         return file.toPath();
-    }
-
-    private String stringifyTopicPartitions(Set<TopicPartition> topicPartitions) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("{\"partitions\":[");
-        Iterator<TopicPartition> iterator = topicPartitions.iterator();
-        while (iterator.hasNext()) {
-            TopicPartition topicPartition = iterator.next();
-            sb.append("{\"topic\":\"")
-                    .append(topicPartition.topic())
-                    .append("\",\"partition\":")
-                    .append(topicPartition.partition()).append("}");
-            if (iterator.hasNext()) {
-                sb.append(",");
-            }
-        }
-        sb.append("]}");
-        return sb.toString();
     }
 }
