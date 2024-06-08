@@ -17,7 +17,6 @@
 
 package org.apache.kafka.jmh.util;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -46,40 +45,38 @@ import org.openjdk.jmh.infra.Blackhole;
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 @Threads(2)
 public class ConcurrentMapBenchmark {
-    @Param({"10000"})
+    @Param({"1000000"})
     private int times;
 
     @Param({"100"})
     private int mapSize;
 
-    private Map<Integer, Integer> hashMap;
+    // execute 1 computeIfAbsent per 10000 loops
+    @Param({"10000"})
+    private int writePerLoops;
+
+    private int counter;
     private Map<Integer, Integer> concurrentHashMap;
     private Map<Integer, Integer> copyOnWriteMap;
 
     @Setup
     public void setup() {
+        counter = 0;
         Map<Integer, Integer> mapTemplate = IntStream.range(0, mapSize).boxed()
                 .collect(Collectors.toMap(i -> i, i -> i));
-        hashMap = new HashMap<>(mapTemplate);
         concurrentHashMap = new ConcurrentHashMap<>(mapTemplate);
         copyOnWriteMap = new CopyOnWriteMap<>(mapTemplate);
-    }
-
-    // added here as a baseline
-    @Benchmark
-    public void testHashMap(Blackhole blackhole) {
-        for (int i = 0; i < times; i++) {
-            for (int j = 0; j < mapSize; j++) {
-                blackhole.consume(hashMap.get(j));
-            }
-        }
     }
 
     @Benchmark
     public void testConcurrentHashMap(Blackhole blackhole) {
         for (int i = 0; i < times; i++) {
-            for (int j = 0; j < mapSize; j++) {
-                blackhole.consume(concurrentHashMap.get(j));
+            counter++;
+            if (counter % writePerLoops == 0) {
+                // add offset mapSize to ensure computeIfAbsent do add new entry
+                concurrentHashMap.computeIfAbsent(i + mapSize, key -> key);
+            } else {
+                blackhole.consume(concurrentHashMap.get(i % mapSize));
             }
         }
     }
@@ -87,8 +84,12 @@ public class ConcurrentMapBenchmark {
     @Benchmark
     public void testCopyOnWriteMap(Blackhole blackhole) {
         for (int i = 0; i < times; i++) {
-            for (int j = 0; j < mapSize; j++) {
-                blackhole.consume(copyOnWriteMap.get(j));
+            counter++;
+            if (counter % writePerLoops == 0) {
+                // add offset mapSize to ensure computeIfAbsent do add new entry
+                copyOnWriteMap.computeIfAbsent(i + mapSize, key -> key);
+            } else {
+                blackhole.consume(copyOnWriteMap.get(i % mapSize));
             }
         }
     }
