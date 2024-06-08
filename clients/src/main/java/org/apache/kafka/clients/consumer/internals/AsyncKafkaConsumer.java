@@ -234,6 +234,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     private final SubscriptionState subscriptions;
     private final ConsumerMetadata metadata;
+    private int metadataVersionSnapshot;
     private final Metrics metrics;
     private final long retryBackoffMs;
     private final int defaultApiTimeoutMs;
@@ -311,6 +312,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             this.metadata = metadataFactory.build(config, subscriptions, logContext, clusterResourceListeners);
             final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
             metadata.bootstrap(addresses);
+            this.metadataVersionSnapshot = metadata.updateVersion();
 
             FetchMetricsManager fetchMetricsManager = createFetchMetricsManager(metrics);
             FetchConfig fetchConfig = new FetchConfig(config);
@@ -434,6 +436,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.metrics = metrics;
         this.groupMetadata.set(initializeGroupMetadata(groupId, Optional.empty()));
         this.metadata = metadata;
+        this.metadataVersionSnapshot = metadata.updateVersion();
         this.retryBackoffMs = retryBackoffMs;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.deserializers = deserializers;
@@ -463,6 +466,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.time = time;
         this.metrics = new Metrics(time);
         this.metadata = metadata;
+        this.metadataVersionSnapshot = metadata.updateVersion();
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
         this.deserializers = new Deserializers<>(keyDeserializer, valueDeserializer);
@@ -1468,12 +1472,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     /**
-     * TODO: remove this when we implement the KIP-848 protocol.
-     *
      * <p>
-     * The contents of this method are shamelessly stolen from
-     * {@link ConsumerCoordinator#updatePatternSubscription(Cluster)} and are used here because we won't have access
-     * to a {@link ConsumerCoordinator} in this code. Perhaps it could be moved to a ConsumerUtils class?
+     *
+     * This function evaluates the regex that the consumer subscribed to
+     * against the list of topic names from metadata, and updates
+     * the list of topics in subscription state accordingly
      *
      * @param cluster Cluster from which we get the topics
      */
@@ -1483,7 +1486,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 .collect(Collectors.toSet());
         if (subscriptions.subscribeFromPattern(topicsToSubscribe)) {
             applicationEventHandler.add(new SubscriptionChangeEvent());
-            metadata.requestUpdateForNewTopics();
+            this.metadataVersionSnapshot = metadata.requestUpdateForNewTopics();
         }
     }
 
@@ -1799,7 +1802,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 fetchBuffer.retainAll(currentTopicPartitions);
                 log.info("Subscribed to topic(s): {}", String.join(", ", topics));
                 if (subscriptions.subscribe(new HashSet<>(topics), listener))
-                    metadata.requestUpdateForNewTopics();
+                    this.metadataVersionSnapshot = metadata.requestUpdateForNewTopics();
 
                 // Trigger subscribe event to effectively join the group if not already part of it,
                 // or just send the new subscription to the broker.
@@ -1978,9 +1981,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     private void maybeUpdateSubscriptionMetadata() {
-        if (subscriptions.hasPatternSubscription()) {
-            updatePatternSubscription(metadata.fetch());
+        if (this.metadataVersionSnapshot < metadata.updateVersion()) {
+            this.metadataVersionSnapshot = metadata.updateVersion();
+            if (subscriptions.hasPatternSubscription()) {
+                updatePatternSubscription(metadata.fetch());
+            }
         }
     }
-
 }
+
