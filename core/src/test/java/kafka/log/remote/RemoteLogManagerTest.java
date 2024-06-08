@@ -155,6 +155,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
@@ -2744,6 +2745,54 @@ public class RemoteLogManagerTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     public void testCopyQuota(boolean quotaExceeded) throws Exception {
+        RemoteLogManager.RLMTask task = setupRLMTask(quotaExceeded);
+
+        if (quotaExceeded) {
+            // Verify that the copy operation times out, since no segments can be copied due to quota being exceeded
+            assertThrows(AssertionFailedError.class, () -> assertTimeoutPreemptively(Duration.ofMillis(200), () -> task.copyLogSegmentsToRemote(mockLog)));
+
+            // Verify the highest offset in remote storage is updated only once
+            ArgumentCaptor<Long> capture = ArgumentCaptor.forClass(Long.class);
+            verify(mockLog, times(1)).updateHighestOffsetInRemoteStorage(capture.capture());
+            // Verify the highest offset in remote storage was -1L before the copy started
+            assertEquals(-1L, capture.getValue());
+        } else {
+            // Verify the copy operation completes within the timeout, since it does not need to wait for quota availability
+            assertTimeoutPreemptively(Duration.ofMillis(100), () -> task.copyLogSegmentsToRemote(mockLog));
+
+            // Verify quota check was performed
+            verify(rlmCopyQuotaManager, times(1)).isQuotaExceeded();
+            // Verify bytes to copy was recorded with the quota manager
+            verify(rlmCopyQuotaManager, times(1)).record(10);
+
+            // Verify the highest offset in remote storage is updated
+            ArgumentCaptor<Long> capture = ArgumentCaptor.forClass(Long.class);
+            verify(mockLog, times(2)).updateHighestOffsetInRemoteStorage(capture.capture());
+            List<Long> capturedValues = capture.getAllValues();
+            // Verify the highest offset in remote storage was -1L before the copy
+            assertEquals(-1L, capturedValues.get(0).longValue());
+            // Verify it was updated to 149L after the copy
+            assertEquals(149L, capturedValues.get(1).longValue());
+        }
+    }
+
+    @Test
+    public void testRLMShutdownDuringQuotaExceededScenario() throws Exception {
+        remoteLogManager.startup();
+        setupRLMTask(true);
+        remoteLogManager.onLeadershipChange(
+            Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.emptySet(), topicIds);
+        // Ensure the copy operation is waiting for quota to be available
+        TestUtils.waitForCondition(() -> {
+            verify(rlmCopyQuotaManager, atLeast(1)).isQuotaExceeded();
+            return true;
+        }, "Quota exceeded check did not happen");
+        // Verify RLM is able to shut down
+        assertTimeoutPreemptively(Duration.ofMillis(100), () -> remoteLogManager.close());
+    }
+
+    // helper method to set up a RemoteLogManager.RLMTask for testing copy quota behaviour
+    private RemoteLogManager.RLMTask setupRLMTask(boolean quotaExceeded) throws RemoteStorageException, IOException {
         long oldSegmentStartOffset = 0L;
         long nextSegmentStartOffset = 150L;
 
@@ -2753,6 +2802,7 @@ public class RemoteLogManagerTest {
         checkpoint.write(totalEpochEntries);
         LeaderEpochFileCache cache = new LeaderEpochFileCache(leaderTopicIdPartition.topicPartition(), checkpoint, scheduler);
         when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
+        when(mockLog.parentDir()).thenReturn("dir1");
         when(remoteLogMetadataManager.highestOffsetForEpoch(any(TopicIdPartition.class), anyInt())).thenReturn(Optional.of(0L));
 
         // create 2 log segments, with 0 and 150 as log start offset
@@ -2804,34 +2854,7 @@ public class RemoteLogManagerTest {
 
         RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition, 128);
         task.convertToLeader(2);
-
-        if (quotaExceeded) {
-            // Verify that the copy operation times out, since no segments can be copied due to quota being exceeded
-            assertThrows(AssertionFailedError.class, () -> assertTimeoutPreemptively(Duration.ofMillis(200), () -> task.copyLogSegmentsToRemote(mockLog)));
-
-            // Verify the highest offset in remote storage is updated only once
-            ArgumentCaptor<Long> capture = ArgumentCaptor.forClass(Long.class);
-            verify(mockLog, times(1)).updateHighestOffsetInRemoteStorage(capture.capture());
-            // Verify the highest offset in remote storage was -1L before the copy started
-            assertEquals(-1L, capture.getValue());
-        } else {
-            // Verify the copy operation completes within the timeout, since it does not need to wait for quota availability
-            assertTimeoutPreemptively(Duration.ofMillis(100), () -> task.copyLogSegmentsToRemote(mockLog));
-
-            // Verify quota check was performed
-            verify(rlmCopyQuotaManager, times(1)).isQuotaExceeded();
-            // Verify bytes to copy was recorded with the quota manager
-            verify(rlmCopyQuotaManager, times(1)).record(10);
-
-            // Verify the highest offset in remote storage is updated
-            ArgumentCaptor<Long> capture = ArgumentCaptor.forClass(Long.class);
-            verify(mockLog, times(2)).updateHighestOffsetInRemoteStorage(capture.capture());
-            List<Long> capturedValues = capture.getAllValues();
-            // Verify the highest offset in remote storage was -1L before the copy
-            assertEquals(-1L, capturedValues.get(0).longValue());
-            // Verify it was updated to 149L after the copy
-            assertEquals(149L, capturedValues.get(1).longValue());
-        }
+        return task;
     }
 
     @Test
