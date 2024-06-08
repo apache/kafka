@@ -54,6 +54,7 @@ import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsEvent
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
@@ -103,6 +104,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
@@ -139,6 +141,7 @@ import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.clearInvocations;
 
 @SuppressWarnings("unchecked")
 public class AsyncKafkaConsumerTest {
@@ -474,6 +477,44 @@ public class AsyncKafkaConsumerTest {
         consumer.subscribe(Collections.singletonList(topicName), listener);
         consumer.poll(Duration.ZERO);
         assertTrue(callbackExecuted.get());
+    }
+
+    @Test
+    public void testSubscriptionRegexEvalOnPollOnlyIfMetadataChanges() {
+        SubscriptionState subscriptions = mock(SubscriptionState.class);
+        Cluster cluster = mock(Cluster.class);
+
+        consumer = newConsumer(
+                mock(FetchBuffer.class),
+                mock(ConsumerInterceptors.class),
+                mock(ConsumerRebalanceListenerInvoker.class),
+                subscriptions,
+                "group-id",
+                "client-id");
+
+        final String topicName = "foo";
+        final int partition = 3;
+        final TopicPartition tp = new TopicPartition(topicName, partition);
+        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
+        Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(tp, new OffsetAndMetadata(1));
+        completeFetchedCommittedOffsetApplicationEventSuccessfully(offsets);
+        doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
+        doReturn(cluster).when(metadata).fetch();
+        doReturn(Collections.singleton(topicName)).when(cluster).topics();
+
+        consumer.subscribe(Pattern.compile("f*"));
+        verify(metadata).requestUpdateForNewTopics();
+        verify(subscriptions).matchesSubscribedPattern(topicName);
+        clearInvocations(subscriptions);
+
+        when(subscriptions.hasPatternSubscription()).thenReturn(true);
+        consumer.poll(Duration.ZERO);
+        verify(subscriptions, never()).matchesSubscribedPattern(topicName);
+
+        when(metadata.updateVersion()).thenReturn(2);
+        when(subscriptions.hasPatternSubscription()).thenReturn(true);
+        consumer.poll(Duration.ZERO);
+        verify(subscriptions).matchesSubscribedPattern(topicName);
     }
 
     @Test
@@ -817,9 +858,7 @@ public class AsyncKafkaConsumerTest {
         AtomicReference<Throwable> exception = new AtomicReference<>();
         CompletableFuture<Object> future = CompletableFuture.completedFuture(null);
         consumer = newConsumer();
-        assertDoesNotThrow(() -> consumer.completeQuietly(() -> {
-            future.get(0, TimeUnit.MILLISECONDS);
-        }, "test", exception));
+        assertDoesNotThrow(() -> consumer.completeQuietly(() -> future.get(0, TimeUnit.MILLISECONDS), "test", exception));
         assertNull(exception.get());
 
         assertDoesNotThrow(() -> consumer.completeQuietly(() -> {
@@ -1766,9 +1805,9 @@ public class AsyncKafkaConsumerTest {
             // Mock the subscription being assigned as the first fetch is collected
             consumer.subscriptions().assignFromSubscribed(Collections.singleton(tp));
             return Fetch.empty();
-        }).doAnswer(invocation -> {
-            return Fetch.forPartition(tp, records, true);
-        }).when(fetchCollector).collectFetch(any(FetchBuffer.class));
+        }).doAnswer(invocation ->
+            Fetch.forPartition(tp, records, true)
+        ).when(fetchCollector).collectFetch(any(FetchBuffer.class));
 
         // And then poll for up to 10000ms, which should return 2 records without timing out
         ConsumerRecords<?, ?> returnedRecords = consumer.poll(Duration.ofMillis(10000));

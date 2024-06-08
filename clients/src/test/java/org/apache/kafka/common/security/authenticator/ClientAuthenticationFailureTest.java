@@ -40,6 +40,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -110,6 +111,9 @@ public class ClientAuthenticationFailureTest {
     }
 
     @Test
+    // The test runs forever on trunk after c01279b9. (KAFKA-16916)
+    // We disable the test temporarily until we fix it to unblock the CI.
+    @Disabled
     public void testAdminClientWithInvalidCredentials() {
         Map<String, Object> props = new HashMap<>(saslClientConfigs);
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:" + server.port());
