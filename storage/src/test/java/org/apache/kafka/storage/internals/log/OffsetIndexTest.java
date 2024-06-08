@@ -15,11 +15,9 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.server.log.OffsetIndex;
+package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.errors.InvalidOffsetException;
-import org.apache.kafka.storage.internals.log.OffsetIndex;
-import org.apache.kafka.storage.internals.log.OffsetPosition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
