@@ -2326,7 +2326,7 @@ public class KafkaAdminClient extends AdminClient {
         clusterResult.nodes().whenComplete(
             (nodes, exception) -> {
                 if (exception != null) {
-                    completeAllExceptionally(topicFutures.values(), exception.getCause());
+                    completeAllExceptionally(topicFutures.values(), exception);
                     return;
                 }
 
