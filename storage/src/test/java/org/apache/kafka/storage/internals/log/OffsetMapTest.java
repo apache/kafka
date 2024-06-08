@@ -72,7 +72,7 @@ public class OffsetMapTest {
     }
 
     @Test
-    public void updateLatestOffset() throws Exception {
+    public void testUpdateLatestOffset() throws Exception {
         SkimpyOffsetMap map = new SkimpyOffsetMap(MEMORY_SIZE);
         int i = 37;
         while (map.size() < map.slots()) {
@@ -86,7 +86,7 @@ public class OffsetMapTest {
     }
 
     @Test
-    public void latestOffset() throws Exception {
+    public void testLatestOffset() throws Exception {
         SkimpyOffsetMap map = new SkimpyOffsetMap(MEMORY_SIZE);
         int i = 37;
         while (map.size() < map.slots()) {
