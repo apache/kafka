@@ -1308,21 +1308,18 @@ public class ReassignPartitionsCommand {
     }
 
     private static List<String> parseTopicsData(int version, JsonValue js) throws JsonMappingException {
-        switch (version) {
-            case 1:
-                List<String> results = new ArrayList<>();
-                Optional<JsonValue> partitionsSeq = js.asJsonObject().get("topics");
-                if (partitionsSeq.isPresent()) {
-                    Iterator<JsonValue> iter = partitionsSeq.get().asJsonArray().iterator();
-                    while (iter.hasNext()) {
-                        results.add(iter.next().asJsonObject().apply("topic").to(STRING));
-                    }
+        if (version == 1) {
+            List<String> results = new ArrayList<>();
+            Optional<JsonValue> partitionsSeq = js.asJsonObject().get("topics");
+            if (partitionsSeq.isPresent()) {
+                Iterator<JsonValue> iter = partitionsSeq.get().asJsonArray().iterator();
+                while (iter.hasNext()) {
+                    results.add(iter.next().asJsonObject().apply("topic").to(STRING));
                 }
-                return results;
-
-            default:
-                throw new AdminOperationException("Not supported version field value " + version);
+            }
+            return results;
         }
+        throw new AdminOperationException("Not supported version field value " + version);
     }
 
     private static Entry<List<Entry<TopicPartition, List<Integer>>>, Map<TopicPartitionReplica, String>> parsePartitionReassignmentData(
@@ -1342,46 +1339,43 @@ public class ReassignPartitionsCommand {
     private static Entry<List<Entry<TopicPartition, List<Integer>>>, Map<TopicPartitionReplica, String>> parsePartitionReassignmentData(
         int version, JsonValue jsonData
     ) throws JsonMappingException {
-        switch (version) {
-            case 1:
-                List<Entry<TopicPartition, List<Integer>>> partitionAssignment = new ArrayList<>();
-                Map<TopicPartitionReplica, String> replicaAssignment = new HashMap<>();
+        if (version == 1) {
+            List<Entry<TopicPartition, List<Integer>>> partitionAssignment = new ArrayList<>();
+            Map<TopicPartitionReplica, String> replicaAssignment = new HashMap<>();
 
-                Optional<JsonValue> partitionsSeq = jsonData.asJsonObject().get("partitions");
-                if (partitionsSeq.isPresent()) {
-                    Iterator<JsonValue> iter = partitionsSeq.get().asJsonArray().iterator();
-                    while (iter.hasNext()) {
-                        JsonObject partitionFields = iter.next().asJsonObject();
-                        String topic = partitionFields.apply("topic").to(STRING);
-                        int partition = partitionFields.apply("partition").to(INT);
-                        List<Integer> newReplicas = partitionFields.apply("replicas").to(INT_LIST);
-                        Optional<JsonValue> logDirsOpts = partitionFields.get("log_dirs");
-                        List<String> newLogDirs;
-                        if (logDirsOpts.isPresent())
-                            newLogDirs = logDirsOpts.get().to(STRING_LIST);
-                        else
-                            newLogDirs = newReplicas.stream().map(r -> ANY_LOG_DIR).collect(Collectors.toList());
-                        if (newReplicas.size() != newLogDirs.size())
-                            throw new AdminCommandFailedException("Size of replicas list " + newReplicas + " is different from " +
+            Optional<JsonValue> partitionsSeq = jsonData.asJsonObject().get("partitions");
+            if (partitionsSeq.isPresent()) {
+                Iterator<JsonValue> iter = partitionsSeq.get().asJsonArray().iterator();
+                while (iter.hasNext()) {
+                    JsonObject partitionFields = iter.next().asJsonObject();
+                    String topic = partitionFields.apply("topic").to(STRING);
+                    int partition = partitionFields.apply("partition").to(INT);
+                    List<Integer> newReplicas = partitionFields.apply("replicas").to(INT_LIST);
+                    Optional<JsonValue> logDirsOpts = partitionFields.get("log_dirs");
+                    List<String> newLogDirs;
+                    if (logDirsOpts.isPresent())
+                        newLogDirs = logDirsOpts.get().to(STRING_LIST);
+                    else
+                        newLogDirs = newReplicas.stream().map(r -> ANY_LOG_DIR).collect(Collectors.toList());
+                    if (newReplicas.size() != newLogDirs.size())
+                        throw new AdminCommandFailedException("Size of replicas list " + newReplicas + " is different from " +
                                 "size of log dirs list " + newLogDirs + " for partition " + new TopicPartition(topic, partition));
-                        partitionAssignment.add(new SimpleImmutableEntry<>(new TopicPartition(topic, partition), newReplicas));
-                        for (int i = 0; i < newLogDirs.size(); i++) {
-                            Integer replica = newReplicas.get(i);
-                            String logDir = newLogDirs.get(i);
+                    partitionAssignment.add(new SimpleImmutableEntry<>(new TopicPartition(topic, partition), newReplicas));
+                    for (int i = 0; i < newLogDirs.size(); i++) {
+                        Integer replica = newReplicas.get(i);
+                        String logDir = newLogDirs.get(i);
 
-                            if (logDir.equals(ANY_LOG_DIR))
-                                continue;
+                        if (logDir.equals(ANY_LOG_DIR))
+                            continue;
 
-                            replicaAssignment.put(new TopicPartitionReplica(topic, partition, replica), logDir);
-                        }
+                        replicaAssignment.put(new TopicPartitionReplica(topic, partition, replica), logDir);
                     }
                 }
+            }
 
-                return new SimpleImmutableEntry<>(partitionAssignment, replicaAssignment);
-
-            default:
-                throw new AdminOperationException("Not supported version field value " + version);
+            return new SimpleImmutableEntry<>(partitionAssignment, replicaAssignment);
         }
+        throw new AdminOperationException("Not supported version field value " + version);
     }
 
     static ReassignPartitionsCommandOptions validateAndParseArgs(String[] args) {

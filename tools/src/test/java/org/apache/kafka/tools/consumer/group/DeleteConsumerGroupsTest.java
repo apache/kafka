@@ -17,7 +17,6 @@
 package org.apache.kafka.tools.consumer.group;
 
 import joptsimple.OptionException;
-import kafka.test.ClusterConfig;
 import kafka.test.ClusterInstance;
 import kafka.test.annotation.ClusterTemplate;
 import kafka.test.junit.ClusterTestExtensions;
@@ -36,7 +35,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.Arrays;
-import java.util.List;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -67,10 +65,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith(value = ClusterTestExtensions.class)
 public class DeleteConsumerGroupsTest {
-
-    private static List<ClusterConfig> generator() {
-        return ConsumerGroupCommandTestUtils.generator();
-    }
 
     @Test
     public void testDeleteWithTopicOption() {

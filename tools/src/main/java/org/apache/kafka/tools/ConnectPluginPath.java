@@ -196,7 +196,7 @@ public class ConnectPluginPath {
     }
 
     enum Command {
-        LIST, SYNC_MANIFESTS;
+        LIST, SYNC_MANIFESTS
     }
 
     private static class Config {

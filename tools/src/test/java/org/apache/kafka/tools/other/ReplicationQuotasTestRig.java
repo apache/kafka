@@ -82,7 +82,7 @@ import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
  * and view the html output file, with charts, that are produced. You can also render the charts to the screen if
  * you wish.
  *
- * Currently you'll need about 40GB of disk space to run these experiments (largest data written x2). Tune the msgSize
+ * Currently, you'll need about 40GB of disk space to run these experiments (largest data written x2). Tune the msgSize
  * & #partitions and throttle to adjust this.
  */
 public class ReplicationQuotasTestRig {
@@ -443,7 +443,7 @@ public class ReplicationQuotasTestRig {
             StringBuilder message = new StringBuilder();
             if (first)
                 message.append("<p><p>");
-            message.append("<img src=\"" + path + "\" alt=\"Chart\" style=\"width:600px;height:400px;align=\"middle\"\">");
+            message.append("<img src=\"").append(path).append("\" alt=\"Chart\" style=\"width:600px;height:400px;align=\"middle\"\">");
             if (!first)
                 message.append("<p><p>");
             append(message.toString());

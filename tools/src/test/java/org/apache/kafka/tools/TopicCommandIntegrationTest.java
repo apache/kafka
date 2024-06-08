@@ -930,7 +930,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         fullyReplicatedReplicaAssignmentMap.put(0, JavaConverters.asScalaBufferConverter(Arrays.asList((Object) 1, (Object) 2, (Object) 3)).asScala().toSeq());
 
         scala.collection.mutable.HashMap<Object, Seq<Object>> offlineReplicaAssignmentMap = new scala.collection.mutable.HashMap<>();
-        offlineReplicaAssignmentMap.put(0, JavaConverters.asScalaBufferConverter(Arrays.asList((Object) 0)).asScala().toSeq());
+        offlineReplicaAssignmentMap.put(0, JavaConverters.asScalaBufferConverter(Collections.singletonList((Object) 0)).asScala().toSeq());
 
         Properties topicConfig = new Properties();
         topicConfig.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "6");
@@ -1063,8 +1063,7 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
                                          Boolean verifyLeaderDistribution,
                                          Boolean verifyReplicasDistribution) {
         // always verify that no broker will be assigned for more than one replica
-        assignment.entrySet().stream()
-            .forEach(entry -> assertEquals(new HashSet<>(entry.getValue()).size(), entry.getValue().size(),
+        assignment.forEach((key, value1) -> assertEquals(new HashSet<>(value1).size(), value1.size(),
                 "More than one replica is assigned to same broker for the same partition"));
 
         ReplicaDistributions distribution = getReplicaDistribution(assignment, brokerRackMapping);
@@ -1122,12 +1121,10 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
         Map<Integer, Integer> partitionCount = new HashMap<>();
         Map<Integer, List<String>>  partitionRackMap = new HashMap<>();
 
-        assignment.entrySet().stream().forEach(entry -> {
-            Integer partitionId = entry.getKey();
-            List<Integer> replicaList = entry.getValue();
+        assignment.forEach((partitionId, replicaList) -> {
             Integer leader = replicaList.get(0);
             leaderCount.put(leader, leaderCount.getOrDefault(leader, 0) + 1);
-            replicaList.stream().forEach(brokerId -> {
+            replicaList.forEach(brokerId -> {
                 partitionCount.put(brokerId, partitionCount.getOrDefault(brokerId, 0) + 1);
                 String rack;
                 if (brokerRackMapping.containsKey(brokerId)) {

@@ -20,7 +20,6 @@ import kafka.api.BaseConsumerTest;
 import kafka.server.KafkaConfig;
 import kafka.utils.TestUtils;
 import org.apache.kafka.clients.admin.AdminClientConfig;
-import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -42,21 +41,17 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
-import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestHarness {
     public static final String TOPIC = "foo";
     public static final String GROUP = "test.group";
-    public static final String PROTOCOL_GROUP = "protocol-group";
 
     List<ConsumerGroupCommand.ConsumerGroupService> consumerGroupService = new ArrayList<>();
     List<AbstractConsumerGroupExecutor> consumerGroupExecutors = new ArrayList<>();
@@ -109,25 +104,6 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
         consumerGroupService.forEach(ConsumerGroupCommand.ConsumerGroupService::close);
         consumerGroupExecutors.forEach(AbstractConsumerGroupExecutor::shutdown);
         super.tearDown();
-    }
-
-    Map<TopicPartition, Long> committedOffsets(String topic, String group) {
-        try (Consumer<String, String> consumer = createNoAutoCommitConsumer(group)) {
-            Set<TopicPartition> partitions = consumer.partitionsFor(topic).stream()
-                .map(partitionInfo -> new TopicPartition(partitionInfo.topic(), partitionInfo.partition()))
-                .collect(Collectors.toSet());
-            return consumer.committed(partitions).entrySet().stream()
-                .filter(e -> e.getValue() != null)
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().offset()));
-        }
-    }
-
-    Consumer<String, String> createNoAutoCommitConsumer(String group) {
-        Properties props = new Properties();
-        props.put("bootstrap.servers", bootstrapServers(listenerName()));
-        props.put("group.id", group);
-        props.put("enable.auto.commit", "false");
-        return new KafkaConsumer<>(props, new StringDeserializer(), new StringDeserializer());
     }
 
     ConsumerGroupCommand.ConsumerGroupService getConsumerGroupService(String[] args) {
