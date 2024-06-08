@@ -2318,7 +2318,7 @@ public class KafkaAdminClient extends AdminClient {
         }
 
         if (topicNamesList.isEmpty()) {
-            return Collections.unmodifiableMap(topicFutures);
+            return new HashMap<>(topicFutures);
         }
 
         // First, we need to retrieve the node info.
@@ -2338,7 +2338,7 @@ public class KafkaAdminClient extends AdminClient {
                 );
             });
 
-        return Collections.unmodifiableMap(topicFutures);
+        return new HashMap<>(topicFutures);
     }
 
     private Map<Uuid, KafkaFuture<TopicDescription>> handleDescribeTopicsByIds(Collection<Uuid> topicIds, DescribeTopicsOptions options) {
@@ -3652,7 +3652,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public Map<MetricName, ? extends Metric> metrics() {
-        return Collections.unmodifiableMap(this.metrics.metrics());
+        return new HashMap<>(this.metrics.metrics());
     }
 
     @Override
