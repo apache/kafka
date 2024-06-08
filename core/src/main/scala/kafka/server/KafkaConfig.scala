@@ -2442,14 +2442,6 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       }
       validateAdvertisedListenersNonEmptyForBroker()
     }
-    if (processRoles.contains(BrokerRole)
-      && originals.containsKey(KafkaConfig.InterBrokerProtocolVersionProp)
-      && logDirs.size > 1) {
-        require(interBrokerProtocolVersion.isDirectoryAssignmentSupported,
-          s"Multiple log directories (aka JBOD) are not supported with the configured " +
-            s"${interBrokerProtocolVersion} ${KafkaConfig.InterBrokerProtocolVersionProp}. " +
-            s"Need ${MetadataVersion.IBP_3_7_IV2} or higher")
-    }
 
     val listenerNames = listeners.map(_.listenerName).toSet
     if (processRoles.isEmpty || processRoles.contains(BrokerRole)) {
