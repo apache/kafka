@@ -40,15 +40,18 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.mockito.ArgumentCaptor;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 import static org.apache.kafka.metadata.AssignmentsHelper.buildRequestData;
@@ -310,12 +313,21 @@ public class AssignmentsManagerTest {
     }
 
     private static ClientResponse buildSuccessfulResponse(AssignReplicasToDirsRequestData request) {
+        return buildResponse(request, topicIdPartition -> Errors.NONE);
+    }
+
+    private static ClientResponse buildResponse(AssignReplicasToDirsRequestData request,
+                                                Function<TopicIdPartition, Errors> perPartitionError) {
         Map<Uuid, Map<TopicIdPartition, Errors>> errors = new HashMap<>();
         for (AssignReplicasToDirsRequestData.DirectoryData directory : request.directories()) {
             for (AssignReplicasToDirsRequestData.TopicData topic : directory.topics()) {
                 for (AssignReplicasToDirsRequestData.PartitionData partition : topic.partitions()) {
                     TopicIdPartition topicIdPartition = new TopicIdPartition(topic.topicId(), partition.partitionIndex());
-                    errors.computeIfAbsent(directory.id(), d -> new HashMap<>()).put(topicIdPartition, Errors.NONE);
+                    Errors error = perPartitionError.apply(topicIdPartition);
+                    if (error == null) {
+                        error = Errors.NONE;
+                    }
+                    errors.computeIfAbsent(directory.id(), d -> new HashMap<>()).put(topicIdPartition, error);
                 }
             }
         }
@@ -402,5 +414,49 @@ public class AssignmentsManagerTest {
             manager.onAssignment(new TopicIdPartition(TOPIC_1, i), DIR_1, "testQueuedReplicaToDirAssignmentsMetric", () -> { });
         }
         TestUtils.retryOnExceptionWithTimeout(5_000, () -> assertEquals(8, queuedReplicaToDirAssignments.value()));
+    }
+
+    // AssignmentsManager retries to propagate assignments (via AssignReplicasToDirsRequest) after failures.
+    // When an assignment fails to propagate with NOT_LEADER_OR_FOLLOWER, AssignmentsManager should conclude
+    // that the broker has been removed as a replica for the partition, and stop trying to propagate it.
+    @Test
+    void testDropsOldAssignments() throws InterruptedException {
+        TopicIdPartition tp1 = new TopicIdPartition(TOPIC_1, 1), tp2 = new TopicIdPartition(TOPIC_1, 2);
+        List<AssignReplicasToDirsRequestData> requests = new ArrayList<>();
+        CountDownLatch readyToAssert = new CountDownLatch(2);
+        doAnswer(invocation -> {
+            AssignReplicasToDirsRequestData request = invocation.getArgument(0, AssignReplicasToDirsRequest.Builder.class).build().data();
+            ControllerRequestCompletionHandler completionHandler = invocation.getArgument(1, ControllerRequestCompletionHandler.class);
+            if (readyToAssert.getCount() == 2) {
+                // First request, reply with a partition-level NOT_LEADER_OR_FOLLOWER error and queue a different assignment
+                completionHandler.onComplete(buildResponse(request, topicIdPartition -> Errors.NOT_LEADER_OR_FOLLOWER));
+                manager.onAssignment(tp2, DIR_1, "testDropsOldAssignments-second");
+            }
+            if (readyToAssert.getCount() == 1) {
+                // Second request, reply with success
+                completionHandler.onComplete(buildSuccessfulResponse(request));
+            }
+            requests.add(request);
+            readyToAssert.countDown();
+            return null;
+        }).when(channelManager).sendRequest(any(), any());
+
+        manager.onAssignment(tp1, DIR_1, "testDropsOldAssignments-first");
+        TestUtils.waitForCondition(() -> {
+            time.sleep(TimeUnit.SECONDS.toMillis(1));
+            manager.wakeup();
+            return readyToAssert.await(1, TimeUnit.MILLISECONDS);
+        }, "Timed out waiting for AssignReplicasToDirsRequest to be sent.");
+
+        assertEquals(Arrays.asList(
+                buildRequestData(8, 100, new HashMap<TopicIdPartition, Uuid>() {{
+                        put(tp1, DIR_1);
+                    }}),
+                // Even though the controller replied with NOT_LEADER_OR_FOLLOWER, the second request does not include
+                // partition 1, meaning AssignmentManager dropped (no longer retries) the assignment.
+                buildRequestData(8, 100, new HashMap<TopicIdPartition, Uuid>() {{
+                        put(tp2, DIR_1);
+                    }})
+        ), requests);
     }
 }
