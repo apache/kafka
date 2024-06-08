@@ -14,38 +14,33 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.log;
+package org.apache.kafka.server.log.OffsetIndex;
 
 import org.apache.kafka.storage.internals.log.SkimpyOffsetMap;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.ByteBuffer;
 import java.security.DigestException;
 import java.security.NoSuchAlgorithmException;
 import java.util.stream.IntStream;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class OffsetMapTest {
 
-    @Test
-    public void testBasicValidation() throws NoSuchAlgorithmException {
-        validateMap(10);
-        validateMap(100);
-        validateMap(1000);
-        validateMap(5000);
+    @ParameterizedTest
+    @ValueSource(ints = {10, 100, 1000, 5000})
+    public void testBasicValidation(int items) throws NoSuchAlgorithmException {
+        validateMap(items);
     }
 
     @Test
     public void testClear() throws NoSuchAlgorithmException {
         SkimpyOffsetMap map = new SkimpyOffsetMap(4000);
-        IntStream.range(0, 10).forEach(i -> {
-            try {
-                map.put(key(i), i);
-            } catch (DigestException e) {
-                throw new RuntimeException(e);
-            }
-        });
+        IntStream.range(0, 10).forEach(i -> assertDoesNotThrow(() -> map.put(key(i), i)));
         IntStream.range(0, 10).forEach(i -> {
             try {
                 assertEquals(i, map.get(key(i)));

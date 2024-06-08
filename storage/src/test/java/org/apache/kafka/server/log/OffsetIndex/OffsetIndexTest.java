@@ -15,12 +15,12 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.server.log;
+package org.apache.kafka.server.log.OffsetIndex;
 
-import kafka.utils.TestUtils;
 import org.apache.kafka.common.errors.InvalidOffsetException;
 import org.apache.kafka.storage.internals.log.OffsetIndex;
 import org.apache.kafka.storage.internals.log.OffsetPosition;
+import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -225,17 +225,16 @@ public class OffsetIndexTest {
         idx.forceUnmap();
         // mmap should be null after unmap causing lookup to throw a NPE
         assertThrows(NullPointerException.class, () -> idx.lookup(1));
+        idx.close();
     }
 
     @Test
-    public void testSanityLastOffsetEqualToBaseOffset() {
+    public void testSanityLastOffsetEqualToBaseOffset() throws IOException {
         // Test index sanity for the case where the last offset appended to the index is equal to the base offset
         long baseOffset = 20L;
         try (OffsetIndex idx = new OffsetIndex(nonExistentTempFile(), baseOffset, 10 * 8)) {
             idx.append(baseOffset, 0);
             idx.sanityCheck();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
         }
     }
 
