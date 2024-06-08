@@ -55,13 +55,11 @@ public class ConcurrentMapBenchmark {
     @Param({"10000"})
     private int writePerLoops;
 
-    private int counter;
     private Map<Integer, Integer> concurrentHashMap;
     private Map<Integer, Integer> copyOnWriteMap;
 
     @Setup
     public void setup() {
-        counter = 0;
         Map<Integer, Integer> mapTemplate = IntStream.range(0, mapSize).boxed()
                 .collect(Collectors.toMap(i -> i, i -> i));
         concurrentHashMap = new ConcurrentHashMap<>(mapTemplate);
@@ -71,8 +69,7 @@ public class ConcurrentMapBenchmark {
     @Benchmark
     public void testConcurrentHashMap(Blackhole blackhole) {
         for (int i = 0; i < times; i++) {
-            counter++;
-            if (counter % writePerLoops == 0) {
+            if (i % writePerLoops == 0) {
                 // add offset mapSize to ensure computeIfAbsent do add new entry
                 concurrentHashMap.computeIfAbsent(i + mapSize, key -> key);
             } else {
@@ -84,8 +81,7 @@ public class ConcurrentMapBenchmark {
     @Benchmark
     public void testCopyOnWriteMap(Blackhole blackhole) {
         for (int i = 0; i < times; i++) {
-            counter++;
-            if (counter % writePerLoops == 0) {
+            if (i % writePerLoops == 0) {
                 // add offset mapSize to ensure computeIfAbsent do add new entry
                 copyOnWriteMap.computeIfAbsent(i + mapSize, key -> key);
             } else {
