@@ -30,6 +30,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class OffsetMapTest {
 
+    private static final int MEMORY_SIZE = 4096;
+
     @ParameterizedTest
     @ValueSource(ints = {10, 100, 1000, 5000})
     public void testBasicValidation(int items) throws NoSuchAlgorithmException {
@@ -38,7 +40,7 @@ public class OffsetMapTest {
 
     @Test
     public void testClear() throws NoSuchAlgorithmException {
-        SkimpyOffsetMap map = new SkimpyOffsetMap(4000);
+        SkimpyOffsetMap map = new SkimpyOffsetMap(MEMORY_SIZE);
         IntStream.range(0, 10).forEach(i -> assertDoesNotThrow(() -> map.put(key(i), i)));
         IntStream.range(0, 10).forEach(i -> {
             try {
@@ -59,7 +61,7 @@ public class OffsetMapTest {
 
     @Test
     public void testGetWhenFull() throws Exception {
-        SkimpyOffsetMap map = new SkimpyOffsetMap(4096);
+        SkimpyOffsetMap map = new SkimpyOffsetMap(MEMORY_SIZE);
         int i = 37;
         while (map.size() < map.slots()) {
             map.put(key(i), i);
@@ -67,6 +69,31 @@ public class OffsetMapTest {
         }
         assertEquals(map.get(key(i)), -1);
         assertEquals(map.get(key(i - 1)), i - 1);
+    }
+
+    @Test
+    public void updateLatestOffset() throws Exception {
+        SkimpyOffsetMap map = new SkimpyOffsetMap(MEMORY_SIZE);
+        int i = 37;
+        while (map.size() < map.slots()) {
+            map.put(key(i), i);
+            i = i + 1;
+        }
+        int lastOffsets = 40;
+        assertEquals(map.get(key(i - 1)), i - 1);
+        map.updateLatestOffset(lastOffsets);
+        assertEquals(map.get(key(lastOffsets)), lastOffsets);
+    }
+
+    @Test
+    public void latestOffset() throws Exception {
+        SkimpyOffsetMap map = new SkimpyOffsetMap(MEMORY_SIZE);
+        int i = 37;
+        while (map.size() < map.slots()) {
+            map.put(key(i), i);
+            i = i + 1;
+        }
+        assertEquals(map.latestOffset(), i - 1);
     }
 
     private ByteBuffer key(Integer key) {
