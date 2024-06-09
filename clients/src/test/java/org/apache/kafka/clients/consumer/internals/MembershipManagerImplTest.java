@@ -713,7 +713,8 @@ public class MembershipManagerImplTest {
                 mockMemberSuccessfullyReceivesAndAcksAssignment(topicId1, topic1, Collections.singletonList(0));
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.STABLE, membershipManager.state());
-        clearInvocations(membershipManager, subscriptionState);
+        //clearInvocations(membershipManager, subscriptionState);
+        clearInvocations(subscriptionState);
         when(subscriptionState.assignedPartitions()).thenReturn(Collections.singleton(new TopicPartition(topic1, 0)));
 
         // New assignment revoking the partitions owned and adding a new one (not in metadata).
@@ -804,7 +805,7 @@ public class MembershipManagerImplTest {
 
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         assertEquals(mkSet(topicId1, topicId2), membershipManager.topicsAwaitingReconciliation());
-        clearInvocations(membershipManager, commitRequestManager);
+        //clearInvocations(membershipManager, commitRequestManager);
 
         // First reconciliation completes. Should trigger follow-up reconciliation to complete the assignment,
         // with membership manager entering ACKNOWLEDGING state.
@@ -819,7 +820,7 @@ public class MembershipManagerImplTest {
         membershipManager.onHeartbeatRequestSent();
 
         assertEquals(MemberState.RECONCILING, membershipManager.state());
-        clearInvocations(membershipManager, commitRequestManager);
+        //clearInvocations(membershipManager, commitRequestManager);
 
         // Next poll should trigger final reconciliation
         membershipManager.poll(time.milliseconds());
@@ -849,7 +850,8 @@ public class MembershipManagerImplTest {
 
         assertEquals(MemberState.STABLE, membershipManager.state());
         when(subscriptionState.assignedPartitions()).thenReturn(getTopicPartitions(Collections.singleton(topicId1Partition0)));
-        clearInvocations(membershipManager, subscriptionState);
+        //clearInvocations(membershipManager, subscriptionState);
+        clearInvocations(subscriptionState);
 
         // New assignment adding a new topic2-0 (not in metadata).
         // No reconciliation triggered, because new topic in assignment is waiting for metadata.
@@ -872,7 +874,7 @@ public class MembershipManagerImplTest {
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         assertEquals(Collections.singleton(topicId2), membershipManager.topicsAwaitingReconciliation());
         verify(metadata).requestUpdate(anyBoolean());
-        clearInvocations(membershipManager, commitRequestManager);
+        //clearInvocations(membershipManager, commitRequestManager);
 
         // Metadata discovered for topic2. Should trigger reconciliation to complete the assignment,
         // with membership manager entering ACKNOWLEDGING state.
