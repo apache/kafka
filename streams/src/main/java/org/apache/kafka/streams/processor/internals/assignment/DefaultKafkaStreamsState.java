@@ -37,8 +37,8 @@ import org.apache.kafka.streams.state.HostInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class KafkaStreamsStateImpl implements KafkaStreamsState {
-    private static final Logger LOG = LoggerFactory.getLogger(KafkaStreamsStateImpl.class);
+public class DefaultKafkaStreamsState implements KafkaStreamsState {
+    private static final Logger LOG = LoggerFactory.getLogger(DefaultKafkaStreamsState.class);
 
     private final ProcessId processId;
     private final int numProcessingThreads;
@@ -50,15 +50,15 @@ public class KafkaStreamsStateImpl implements KafkaStreamsState {
     private final Optional<Map<TaskId, Long>> taskLagTotals; // contains lag for all stateful tasks in the app topology
     private final Optional<String> rackId;
 
-    public KafkaStreamsStateImpl(final ProcessId processId,
-                                 final int numProcessingThreads,
-                                 final Map<String, String> clientTags,
-                                 final SortedSet<TaskId> previousActiveTasks,
-                                 final SortedSet<TaskId> previousStandbyTasks,
-                                 final SortedMap<String, Set<TaskId>> taskIdsByConsumer,
-                                 final Optional<HostInfo> hostInfo,
-                                 final Optional<Map<TaskId, Long>> taskLagTotals,
-                                 final Optional<String> rackId) {
+    public DefaultKafkaStreamsState(final ProcessId processId,
+                                    final int numProcessingThreads,
+                                    final Map<String, String> clientTags,
+                                    final SortedSet<TaskId> previousActiveTasks,
+                                    final SortedSet<TaskId> previousStandbyTasks,
+                                    final SortedMap<String, Set<TaskId>> taskIdsByConsumer,
+                                    final Optional<HostInfo> hostInfo,
+                                    final Optional<Map<TaskId, Long>> taskLagTotals,
+                                    final Optional<String> rackId) {
         this.processId = processId;
         this.numProcessingThreads = numProcessingThreads;
         this.clientTags = unmodifiableMap(clientTags);
