@@ -3652,7 +3652,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public Map<MetricName, ? extends Metric> metrics() {
-        return new HashMap<>(this.metrics.metrics());
+        return Collections.unmodifiableMap(this.metrics.metrics());
     }
 
     @Override
