@@ -32,6 +32,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.nio.ByteBuffer;
 import java.util.stream.LongStream;
+import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
 import kafka.server.BrokerTopicStats;
@@ -396,9 +397,8 @@ public class LogValidatorTest {
             assertTrue(batch.isValid());
             assertEquals(TimestampType.CREATE_TIME, batch.timestampType());
             maybeCheckBaseTimestamp(timestampSeq.get(0), batch);
-            assertEquals(batch.maxTimestamp(), StreamSupport.stream(
-                    Spliterators.spliteratorUnknownSize(batch.iterator(), Spliterator.ORDERED),
-                    false).map(Record::timestamp).max(Long::compareTo).orElse(0L));
+            assertEquals(batch.maxTimestamp(), iterToStream(batch.iterator())
+                    .map(Record::timestamp).max(Long::compareTo).orElse(0L));
             assertEquals(producerEpoch, batch.producerEpoch());
             assertEquals(producerId, batch.producerId());
             assertEquals(baseSequence, batch.baseSequence());
@@ -597,9 +597,8 @@ public class LogValidatorTest {
             assertTrue(batch.isValid());
             assertEquals(batch.timestampType(), TimestampType.CREATE_TIME);
             maybeCheckBaseTimestamp(timestampSeq.get(0), batch);
-            assertEquals(batch.maxTimestamp(), StreamSupport.stream(
-                    Spliterators.spliteratorUnknownSize(batch.iterator(), Spliterator.ORDERED),
-                    false).map(Record::timestamp).max(Long::compareTo).get());
+            assertEquals(batch.maxTimestamp(), iterToStream(batch.iterator())
+                    .map(Record::timestamp).max(Long::compareTo).get());
             assertEquals(producerEpoch, batch.producerEpoch());
             assertEquals(producerId, batch.producerId());
             assertEquals(baseSequence, batch.baseSequence());
@@ -1813,9 +1812,8 @@ public class LogValidatorTest {
             assertTrue(batch.isValid());
             assertEquals(TimestampType.CREATE_TIME, batch.timestampType());
             maybeCheckBaseTimestamp(timestampSeq[0], batch);
-            assertEquals(batch.maxTimestamp(), StreamSupport.stream(
-                            Spliterators.spliteratorUnknownSize(batch.iterator(), Spliterator.ORDERED),
-                            false).map(Record::timestamp).max(Long::compareTo).get());
+            assertEquals(batch.maxTimestamp(), iterToStream(batch.iterator())
+                    .map(Record::timestamp).max(Long::compareTo).get());
 
             assertEquals(producerEpoch, batch.producerEpoch());
             assertEquals(producerId, batch.producerId());
@@ -2074,6 +2072,12 @@ public class LogValidatorTest {
             counter += 1;
         }
         return counter;
+    }
+
+    private static <T> Stream<T> iterToStream(Iterator<T> iterator) {
+        return StreamSupport.stream(
+                Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED),
+                false);
     }
 
     public void verifyRecordValidationStats(RecordValidationStats stats, int numConvertedRecords, MemoryRecords records,
