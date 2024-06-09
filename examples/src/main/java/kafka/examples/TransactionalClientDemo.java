@@ -90,7 +90,7 @@ public class TransactionalClientDemo {
                     // Commit transaction
                     producer.commitTransaction();
                 } catch (AbortableTransactionException e) {
-                    // Abortable Exception: Handle Kafka exception by aborting transaction. AbortTransaction path never throws abortable exception.
+                    // Abortable Exception: Handle Kafka exception by aborting transaction. producer.abortTransaction() should not throw abortable exception.
                     producer.abortTransaction();
                     resetToLastCommittedPositions(consumer);
                 }
@@ -98,7 +98,7 @@ public class TransactionalClientDemo {
                 //  Fatal Error: The error is bubbled up to the application layer. The application can decide what to do
                 closeAll();
                 throw e;
-            } catch (KafkaException e) {
+            } catch (KafkaException | ApplicationRecoverableTransactionException e) {
                 // Application Recoverable: The application must restart
                 closeAll();
                 initializeApplication();
