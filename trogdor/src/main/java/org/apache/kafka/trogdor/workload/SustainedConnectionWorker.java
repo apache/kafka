@@ -30,8 +30,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.ThreadUtils;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.common.Platform;
@@ -60,7 +60,7 @@ import java.util.stream.Collectors;
 
 public class SustainedConnectionWorker implements TaskWorker {
     private static final Logger log = LoggerFactory.getLogger(SustainedConnectionWorker.class);
-    private static final SystemTime SYSTEM_TIME = new SystemTime();
+    private static final Time SYSTEM_TIME = Time.SYSTEM;
 
     // This is the metadata for the test itself.
     private final String id;
