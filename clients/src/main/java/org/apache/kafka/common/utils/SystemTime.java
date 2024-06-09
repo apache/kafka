@@ -24,6 +24,7 @@ import java.util.function.Supplier;
  * A time implementation that uses the system clock and sleep call. Use `Time.SYSTEM` instead of creating an instance
  * of this class.
  */
+@Deprecated
 public class SystemTime implements Time {
 
     @Override
