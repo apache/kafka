@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -34,6 +31,10 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
 import org.junit.jupiter.api.Test;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.fail;
+
 public class ConsumerRecordsTest {
 
     @Test
@@ -41,28 +42,40 @@ public class ConsumerRecordsTest {
         String topic = "topic";
         int recordSize = 10;
         int partitionSize = 15;
-        int emptyPartitionInterval = 3;
-        ConsumerRecords<Integer, String> records = buildTopicTestRecords(recordSize, partitionSize, emptyPartitionInterval, Collections.singleton(topic));
+        int emptyPartitionIndex = 3;
+        ConsumerRecords<Integer, String> records = buildTopicTestRecords(recordSize, partitionSize, emptyPartitionIndex, Collections.singleton(topic));
         Iterator<ConsumerRecord<Integer, String>> iterator = records.iterator();
 
+        int recordCount = 0;
         int partitionCount = 0;
-        for (; iterator.hasNext(); partitionCount++) {
-            if (partitionCount % emptyPartitionInterval != 0) {
-                int i = 0;
-                for (; i < recordSize; i++) {
-                    ConsumerRecord<Integer, String> record = iterator.next();
-                    assertEquals(partitionCount, record.partition());
-                    assertEquals(topic, record.topic());
-                    assertEquals(i, record.offset());
-                    assertEquals(i, record.key());
-                    assertEquals(String.valueOf(i), record.value());
-                }
-                assertEquals(recordSize, i);
+        int currentPartition = -1;
+
+        while (iterator.hasNext()) {
+            ConsumerRecord<Integer, String> record = iterator.next();
+
+            if (record.partition() == emptyPartitionIndex) {
+                fail("Partition " + emptyPartitionIndex + " is not empty");
             }
+
+            // Check if we have moved to a new partition
+            if (currentPartition != record.partition()) {
+                // Increment the partition count as we have encountered a new partition
+                partitionCount++;
+                // Update the current partition to the new partition
+                currentPartition = record.partition();
+            }
+
+            assertEquals(topic, record.topic());
+            assertEquals(currentPartition, record.partition());
+            assertEquals(recordCount % recordSize, record.offset());
+            assertEquals(recordCount % recordSize, record.key());
+            assertEquals(String.valueOf(recordCount % recordSize), record.value());
+
+            recordCount++;
         }
 
-        int actualPartitionCount = getActualPartitionCount(partitionSize, emptyPartitionInterval, partitionCount);
-        assertEquals(partitionSize, actualPartitionCount);
+        // Including empty partition
+        assertEquals(partitionSize, partitionCount + 1);
     }
 
     @Test
@@ -73,51 +86,63 @@ public class ConsumerRecordsTest {
         assertEquals("Topic must be non-null.", exception.getMessage());
     }
 
+
     @Test
     public void testRecords() {
         List<String> topics = Arrays.asList("topic1", "topic2", "topic3", "topic4");
         int recordSize = 3;
         int partitionSize = 10;
-        int emptyPartitionInterval = 6;
-        int expectedTotalRecordSizeOfEachTopic = getExpectedTotalRecordSizeOfEachTopic(partitionSize, emptyPartitionInterval, recordSize);
+        int emptyPartitionIndex = 6;
+        int expectedTotalRecordSizeOfEachTopic = recordSize * (partitionSize - 1);
 
-        ConsumerRecords<Integer, String> consumerRecords = buildTopicTestRecords(recordSize, partitionSize, emptyPartitionInterval, topics);
+        ConsumerRecords<Integer, String> consumerRecords = buildTopicTestRecords(recordSize, partitionSize, emptyPartitionIndex, topics);
 
         for (String topic : topics) {
             Iterable<ConsumerRecord<Integer, String>> records = consumerRecords.records(topic);
             Iterator<ConsumerRecord<Integer, String>> iterator = records.iterator();
             int recordCount = 0;
             int partitionCount = 0;
-            for (; iterator.hasNext(); partitionCount++) {
-                if (partitionCount > 0 && partitionCount % emptyPartitionInterval != 0) {
-                    int i = 0;
-                    for (; i < recordSize; i++, recordCount++) {
-                        ConsumerRecord<Integer, String> record = iterator.next();
-                        assertEquals(partitionCount, record.partition());
-                        assertEquals(topic, record.topic());
-                        assertEquals(i, record.offset());
-                        assertEquals(i, record.key());
-                        assertEquals(String.valueOf(i), record.value());
-                    }
-                    assertEquals(recordSize, i);
+            int currentPartition = -1;
+
+            while (iterator.hasNext()) {
+                ConsumerRecord<Integer, String> record = iterator.next();
+
+                if (record.partition() == emptyPartitionIndex) {
+                    fail("Partition " + emptyPartitionIndex + " is not empty");
                 }
+
+                // Check if we have moved to a new partition
+                if (currentPartition != record.partition()) {
+                    // Increment the partition count as we have encountered a new partition
+                    partitionCount++;
+                    // Update the current partition to the new partition
+                    currentPartition = record.partition();
+                }
+
+                assertEquals(topic, record.topic());
+                assertEquals(currentPartition, record.partition());
+                assertEquals(recordCount % recordSize, record.offset());
+                assertEquals(recordCount % recordSize,  record.key());
+                assertEquals(String.valueOf(recordCount % recordSize), record.value());
+
+                recordCount++;
             }
 
-            int actualPartitionCount = getActualPartitionCount(partitionSize, emptyPartitionInterval, partitionCount);
-            assertEquals(partitionSize, actualPartitionCount);
+            // Including empty partition
+            assertEquals(partitionSize, partitionCount + 1);
             assertEquals(expectedTotalRecordSizeOfEachTopic, recordCount);
         }
     }
 
     private ConsumerRecords<Integer, String> buildTopicTestRecords(int recordSize,
                                                                    int partitionSize,
-                                                                   int emptyPartitionInterval,
+                                                                   int emptyPartitionIndex,
                                                                    Collection<String> topics) {
         Map<TopicPartition, List<ConsumerRecord<Integer, String>>> partitionToRecords = new LinkedHashMap<>();
         for (String topic : topics) {
             for (int i = 0; i < partitionSize; i++) {
                 List<ConsumerRecord<Integer, String>> records = new ArrayList<>(recordSize);
-                if (i % emptyPartitionInterval != 0) {
+                if (i != emptyPartitionIndex) {
                     for (int j = 0; j < recordSize; j++) {
                         records.add(
                             new ConsumerRecord<>(topic, i, j, 0L, TimestampType.CREATE_TIME,
@@ -130,17 +155,5 @@ public class ConsumerRecordsTest {
         }
 
         return new ConsumerRecords<>(partitionToRecords);
-    }
-
-    private int getExpectedTotalRecordSizeOfEachTopic(int partitionSize, int emptyPartitionInterval, int recordSize) {
-        // -1 because index 0 always be null
-        int validPartitionSize = partitionSize - 1;
-        return (validPartitionSize - (validPartitionSize / emptyPartitionInterval)) * recordSize;
-    }
-
-    private int getActualPartitionCount(int partitionSize, int emptyPartitionInterval, int partitionCount) {
-        // Need to add 1 if partitionSize % emptyPartitionInterval is zero, because iterator.hasNext() will return false if the value is empty.
-        // In this case, partitionCount will be one less than expected.
-        return (partitionSize - 1) % emptyPartitionInterval == 0 ? partitionCount + 1 : partitionCount;
     }
 }
