@@ -38,14 +38,14 @@ public class NewTopicTest {
 
     public static final String TEST_TOPIC = "testtopic";
     public static final int NUM_PARTITIONS = 3;
-    public static final int REPLICATION_FACTOR = 1;
+    public static final short REPLICATION_FACTOR = 1;
     public static final String CLEANUP_POLICY_CONFIG_KEY = "cleanup.policy";
     public static final String CLEANUP_POLICY_CONFIG_VALUE = "compact";
     public static final List<Integer> BROKER_IDS = Arrays.asList(1, 2);
 
     @Test
     public void testConstructorWithPartitionsAndReplicationFactor() {
-        NewTopic topic = new NewTopic(TEST_TOPIC, NUM_PARTITIONS, (short) REPLICATION_FACTOR);
+        NewTopic topic = new NewTopic(TEST_TOPIC, NUM_PARTITIONS, REPLICATION_FACTOR);
         assertEquals(TEST_TOPIC, topic.name());
         assertEquals(NUM_PARTITIONS, topic.numPartitions());
         assertEquals(REPLICATION_FACTOR, topic.replicationFactor());
@@ -75,12 +75,18 @@ public class NewTopicTest {
     }
 
     @Test
-    public void testConfigs() {
-        NewTopic newTopic = new NewTopic(TEST_TOPIC, NUM_PARTITIONS, (short) REPLICATION_FACTOR);
+    public void testConfigsNotNull() {
+        NewTopic newTopic = new NewTopic(TEST_TOPIC, NUM_PARTITIONS, REPLICATION_FACTOR);
         Map<String, String> configs = new HashMap<>();
         configs.put(CLEANUP_POLICY_CONFIG_KEY, CLEANUP_POLICY_CONFIG_VALUE);
         newTopic.configs(configs);
         assertEquals(configs, newTopic.configs());
+    }
+
+    @Test
+    public void testConfigsNull() {
+        NewTopic newTopic = new NewTopic(TEST_TOPIC, NUM_PARTITIONS, REPLICATION_FACTOR);
+        assertNull(newTopic.configs());
     }
 
     @Test
@@ -96,7 +102,17 @@ public class NewTopicTest {
     }
 
     @Test
-    public void testConvertToCreatableTopic() {
+    public void testConvertToCreatableTopicWithPartitionsAndReplicationFactor() {
+        NewTopic newTopic = new NewTopic(TEST_TOPIC, NUM_PARTITIONS, REPLICATION_FACTOR);
+        CreateTopicsRequestData.CreatableTopic creatableTopic = newTopic.convertToCreatableTopic();
+
+        assertEquals(TEST_TOPIC, creatableTopic.name());
+        assertEquals(NUM_PARTITIONS, creatableTopic.numPartitions());
+        assertEquals(REPLICATION_FACTOR, creatableTopic.replicationFactor());
+    }
+
+    @Test
+    public void testConvertToCreatableTopicWithReplicasAssignments() {
         int partitionIndex = 0;
         Map<Integer, List<Integer>> replicasAssignments = new HashMap<>();
         replicasAssignments.put(partitionIndex, BROKER_IDS);
@@ -129,16 +145,16 @@ public class NewTopicTest {
 
     @Test
     public void testToString() {
-        NewTopic topic = new NewTopic(TEST_TOPIC, NUM_PARTITIONS, (short) REPLICATION_FACTOR);
+        NewTopic topic = new NewTopic(TEST_TOPIC, NUM_PARTITIONS, REPLICATION_FACTOR);
         String expected = "(name=" + TEST_TOPIC + ", numPartitions=" + NUM_PARTITIONS + ", replicationFactor=" + REPLICATION_FACTOR + ", replicasAssignments=null, configs=null)";
         assertEquals(expected, topic.toString());
     }
 
     @Test
     public void testEqualsAndHashCode() {
-        NewTopic topic1 = new NewTopic(TEST_TOPIC, NUM_PARTITIONS, (short) REPLICATION_FACTOR);
-        NewTopic topic2 = new NewTopic(TEST_TOPIC, NUM_PARTITIONS, (short) REPLICATION_FACTOR);
-        NewTopic topic3 = new NewTopic("another-topic", NUM_PARTITIONS, (short) REPLICATION_FACTOR);
+        NewTopic topic1 = new NewTopic(TEST_TOPIC, NUM_PARTITIONS, REPLICATION_FACTOR);
+        NewTopic topic2 = new NewTopic(TEST_TOPIC, NUM_PARTITIONS, REPLICATION_FACTOR);
+        NewTopic topic3 = new NewTopic("another-topic", NUM_PARTITIONS, REPLICATION_FACTOR);
 
         assertEquals(topic1, topic2);
         assertNotEquals(topic1, topic3);
