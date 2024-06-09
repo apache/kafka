@@ -24,6 +24,7 @@ import org.apache.kafka.connect.errors.DataException;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 
@@ -74,6 +75,29 @@ public class ByteArrayConverterTest {
     @Test
     public void testFromConnectNull() {
         assertNull(converter.fromConnectData(TOPIC, Schema.BYTES_SCHEMA, null));
+    }
+
+    @Test
+    public void testFromConnectByteBufferValue() {
+        ByteBuffer buffer = ByteBuffer.wrap(SAMPLE_BYTES);
+        assertArrayEquals(
+                SAMPLE_BYTES,
+                converter.fromConnectData(TOPIC, Schema.BYTES_SCHEMA, buffer));
+
+        buffer.rewind();
+        buffer.get(); // Move the position
+        assertArrayEquals(
+                SAMPLE_BYTES,
+                converter.fromConnectData(TOPIC, Schema.BYTES_SCHEMA, buffer));
+
+        buffer = null;
+        assertNull(converter.fromConnectData(TOPIC, Schema.BYTES_SCHEMA, buffer));
+
+        byte[] emptyBytes = new byte[0];
+        buffer = ByteBuffer.wrap(emptyBytes);
+        assertArrayEquals(
+                emptyBytes,
+                converter.fromConnectData(TOPIC, Schema.BYTES_SCHEMA, buffer));
     }
 
     @Test

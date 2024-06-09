@@ -124,7 +124,7 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_C
  */
 public abstract class AbstractHerder implements Herder, TaskStatus.Listener, ConnectorStatus.Listener {
 
-    private final Logger log = LoggerFactory.getLogger(AbstractHerder.class);
+    private static final Logger log = LoggerFactory.getLogger(AbstractHerder.class);
 
     private final String workerId;
     protected final Worker worker;
@@ -1039,16 +1039,16 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         return result;
     }
 
-    public boolean taskConfigsChanged(ClusterConfigState configState, String connName, List<Map<String, String>> taskProps) {
+    public static boolean taskConfigsChanged(ClusterConfigState configState, String connName, List<Map<String, String>> rawTaskProps) {
         int currentNumTasks = configState.taskCount(connName);
         boolean result = false;
-        if (taskProps.size() != currentNumTasks) {
-            log.debug("Connector {} task count changed from {} to {}", connName, currentNumTasks, taskProps.size());
+        if (rawTaskProps.size() != currentNumTasks) {
+            log.debug("Connector {} task count changed from {} to {}", connName, currentNumTasks, rawTaskProps.size());
             result = true;
         } else {
             for (int index = 0; index < currentNumTasks; index++) {
                 ConnectorTaskId taskId = new ConnectorTaskId(connName, index);
-                if (!taskProps.get(index).equals(configState.taskConfig(taskId))) {
+                if (!rawTaskProps.get(index).equals(configState.rawTaskConfig(taskId))) {
                     log.debug("Connector {} has change in configuration for task {}-{}", connName, connName, index);
                     result = true;
                 }

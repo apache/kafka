@@ -27,12 +27,11 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -44,6 +43,10 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Phaser;
 import java.util.concurrent.TimeUnit;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doAnswer;
@@ -55,10 +58,7 @@ import static org.mockito.Mockito.verify;
 @ClusterTestDefaults(brokers = 3)
 public class TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest {
     private final ClusterInstance clusterInstance;
-
-    private static final int SEG_SIZE = 1024 * 1024;
-
-    private final Time time = new MockTime(1);
+    private final Time time = new SystemTime();
 
     TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest(ClusterInstance clusterInstance) {
         this.clusterInstance = clusterInstance;
@@ -125,24 +125,25 @@ public class TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest {
             // Add segments for these partitions but an exception is received as they have not yet been subscribed.
             // These messages would have been published to the respective metadata topic partitions but the ConsumerManager
             // has not yet been subscribing as they are not yet registered.
+            int segSize = 1048576;
             RemoteLogSegmentMetadata leaderSegmentMetadata = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(leaderTopicIdPartition, Uuid.randomUuid()),
                 0, 100, -1L, 0,
-                time.milliseconds(), SEG_SIZE, Collections.singletonMap(0, 0L));
-            ExecutionException exception = Assertions.assertThrows(ExecutionException.class, () -> remoteLogMetadataManager.addRemoteLogSegmentMetadata(leaderSegmentMetadata).get());
-            Assertions.assertEquals("org.apache.kafka.common.KafkaException: This consumer is not assigned to the target partition 0. Currently assigned partitions: []",
+                time.milliseconds(), segSize, Collections.singletonMap(0, 0L));
+            ExecutionException exception = assertThrows(ExecutionException.class,
+                    () -> remoteLogMetadataManager.addRemoteLogSegmentMetadata(leaderSegmentMetadata).get());
+            assertEquals("org.apache.kafka.common.KafkaException: This consumer is not assigned to the target partition 0. Currently assigned partitions: []",
                 exception.getMessage());
 
             RemoteLogSegmentMetadata followerSegmentMetadata = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(followerTopicIdPartition, Uuid.randomUuid()),
                 0, 100, -1L, 0,
-                time.milliseconds(), SEG_SIZE, Collections.singletonMap(0, 0L));
-            exception = Assertions.assertThrows(ExecutionException.class, () -> remoteLogMetadataManager.addRemoteLogSegmentMetadata(followerSegmentMetadata).get());
-            Assertions.assertEquals("org.apache.kafka.common.KafkaException: This consumer is not assigned to the target partition 0. Currently assigned partitions: []",
+                time.milliseconds(), segSize, Collections.singletonMap(0, 0L));
+            exception = assertThrows(ExecutionException.class, () -> remoteLogMetadataManager.addRemoteLogSegmentMetadata(followerSegmentMetadata).get());
+            assertEquals("org.apache.kafka.common.KafkaException: This consumer is not assigned to the target partition 0. Currently assigned partitions: []",
                 exception.getMessage());
 
             // `listRemoteLogSegments` will receive an exception as these topic partitions are not yet registered.
-            Assertions.assertThrows(RemoteStorageException.class, () -> remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition));
-            Assertions.assertThrows(RemoteStorageException.class, () -> remoteLogMetadataManager.listRemoteLogSegments(followerTopicIdPartition));
-
+            assertThrows(RemoteStorageException.class, () -> remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition));
+            assertThrows(RemoteStorageException.class, () -> remoteLogMetadataManager.listRemoteLogSegments(followerTopicIdPartition));
 
             remoteLogMetadataManager.onPartitionLeadershipChanges(Collections.singleton(leaderTopicIdPartition),
                     Collections.emptySet());
@@ -156,8 +157,8 @@ public class TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest {
 
             // leader partitions would have received as it is registered, but follower partition is not yet registered,
             // hence it throws an exception.
-            Assertions.assertTrue(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition).hasNext());
-            Assertions.assertThrows(RemoteStorageException.class, () -> remoteLogMetadataManager.listRemoteLogSegments(followerTopicIdPartition));
+            assertTrue(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition).hasNext());
+            assertThrows(RemoteStorageException.class, () -> remoteLogMetadataManager.listRemoteLogSegments(followerTopicIdPartition));
 
             // Register follower partition
             // Phaser::bulkRegister and Phaser::register provide the "countUp" feature
@@ -172,15 +173,15 @@ public class TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest {
             verify(spyRemotePartitionMetadataStore).markInitialized(followerTopicIdPartition);
             verify(spyRemotePartitionMetadataStore).handleRemoteLogSegmentMetadata(followerSegmentMetadata);
             // In this state, all the metadata should be available in RLMM for both leader and follower partitions.
-            Assertions.assertTrue(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition).hasNext(), "No segments found");
-            Assertions.assertTrue(remoteLogMetadataManager.listRemoteLogSegments(followerTopicIdPartition).hasNext(), "No segments found");
+            assertTrue(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition).hasNext(), "No segments found");
+            assertTrue(remoteLogMetadataManager.listRemoteLogSegments(followerTopicIdPartition).hasNext(), "No segments found");
         }
     }
 
     private void createTopic(String topic, Map<Integer, List<Integer>> replicasAssignments) {
         try (Admin admin = Admin.create(Collections.singletonMap(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
             admin.createTopics(Collections.singletonList(new NewTopic(topic, replicasAssignments)));
-            Assertions.assertDoesNotThrow(() -> clusterInstance.waitForTopic(topic, replicasAssignments.size()));
+            assertDoesNotThrow(() -> clusterInstance.waitForTopic(topic, replicasAssignments.size()));
         }
     }
 }

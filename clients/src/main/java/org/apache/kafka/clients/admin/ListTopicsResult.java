@@ -48,13 +48,13 @@ public class ListTopicsResult {
      * Return a future which yields a collection of TopicListing objects.
      */
     public KafkaFuture<Collection<TopicListing>> listings() {
-        return future.thenApply(namesToDescriptions -> namesToDescriptions.values());
+        return future.thenApply(Map::values);
     }
 
     /**
      * Return a future which yields a collection of topic names.
      */
     public KafkaFuture<Set<String>> names() {
-        return future.thenApply(namesToListings -> namesToListings.keySet());
+        return future.thenApply(Map::keySet);
     }
 }

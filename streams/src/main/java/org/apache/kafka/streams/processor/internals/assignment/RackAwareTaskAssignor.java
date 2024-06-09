@@ -43,9 +43,9 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
-import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -77,7 +77,7 @@ public class RackAwareTaskAssignor {
 
     // This is number is picked based on testing. Usually the optimization for standby assignment
     // stops after 3 rounds
-    private static final int STANDBY_OPTIMIZER_MAX_ITERATION = 4;
+    public static final int STANDBY_OPTIMIZER_MAX_ITERATION = 4;
 
     private final Cluster fullMetadata;
     private final Map<TaskId, Set<TopicPartition>> partitionsForTask;
@@ -118,14 +118,14 @@ public class RackAwareTaskAssignor {
     }
 
     public synchronized boolean canEnableRackAwareAssignor() {
-        if (StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE.equals(assignmentConfigs.rackAwareAssignmentStrategy)) {
+        if (StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE.equals(assignmentConfigs.rackAwareAssignmentStrategy())) {
             return false;
         }
         if (canEnable != null) {
             return canEnable;
         }
         canEnable = validClientRack && validateTopicPartitionRack(false);
-        if (assignmentConfigs.numStandbyReplicas == 0 || !canEnable) {
+        if (assignmentConfigs.numStandbyReplicas() == 0 || !canEnable) {
             return canEnable;
         }
 
@@ -240,7 +240,7 @@ public class RackAwareTaskAssignor {
             KeyValue<String, String> previousRackInfo = null;
             for (final Map.Entry<String, Optional<String>> rackEntry : entry.getValue().entrySet()) {
                 if (!rackEntry.getValue().isPresent()) {
-                    if (!StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE.equals(assignmentConfigs.rackAwareAssignmentStrategy)) {
+                    if (!StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE.equals(assignmentConfigs.rackAwareAssignmentStrategy())) {
                         log.error(
                             String.format("RackId doesn't exist for process %s and consumer %s",
                                 processId, rackEntry.getKey()));
@@ -263,7 +263,7 @@ public class RackAwareTaskAssignor {
                 }
             }
             if (previousRackInfo == null) {
-                if (!StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE.equals(assignmentConfigs.rackAwareAssignmentStrategy)) {
+                if (!StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE.equals(assignmentConfigs.rackAwareAssignmentStrategy())) {
                     log.error(String.format("RackId doesn't exist for process %s", processId));
                 }
                 return false;
@@ -467,12 +467,12 @@ public class RackAwareTaskAssignor {
                         .sorted()
                         .collect(Collectors.toList());
 
-                    final Map<TaskId, UUID> taskClientMap = new HashMap<>();
                     final List<UUID> clients = Stream.of(clientList.get(i), clientList.get(j))
                         .sorted().collect(
                             Collectors.toList());
-                    final Map<UUID, Integer> originalAssignedTaskNumber = new HashMap<>();
 
+                    final Map<TaskId, UUID> taskClientMap = new HashMap<>();
+                    final Map<UUID, Integer> originalAssignedTaskNumber = new HashMap<>();
                     final Graph<Integer> graph = graphConstructor.constructTaskGraph(
                         clients,
                         taskIdList,

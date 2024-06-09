@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.raft;
 
-import java.net.InetSocketAddress;
+import org.apache.kafka.common.network.ListenerName;
 
 /**
  * A simple network interface with few assumptions. We do not assume ordering
@@ -37,10 +37,11 @@ public interface NetworkChannel extends AutoCloseable {
     void send(RaftRequest.Outbound request);
 
     /**
-     * Update connection information for the given id.
+     * The name of listener used when sending requests.
+     *
+     * @return the name of the listener
      */
-    void updateEndpoint(int id, InetSocketAddress address);
+    ListenerName listenerName();
 
     default void close() throws InterruptedException {}
-
 }

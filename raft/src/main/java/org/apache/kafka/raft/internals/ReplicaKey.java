@@ -45,9 +45,7 @@ public final class ReplicaKey {
         ReplicaKey that = (ReplicaKey) o;
 
         if (id != that.id) return false;
-        if (!Objects.equals(directoryId, that.directoryId)) return false;
-
-        return true;
+        return Objects.equals(directoryId, that.directoryId);
     }
 
     @Override

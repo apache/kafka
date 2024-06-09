@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.time.Instant;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
@@ -38,16 +41,18 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.ApplicationState;
+import org.apache.kafka.streams.processor.assignment.TaskAssignmentUtils;
+import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
+import org.apache.kafka.streams.processor.assignment.TaskAssignor.AssignmentError;
 import org.apache.kafka.streams.processor.assignment.TaskInfo;
 import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.assignment.TaskAssignor.TaskAssignment;
 import org.apache.kafka.streams.processor.assignment.TaskTopicPartition;
-import org.apache.kafka.streams.processor.internals.assignment.ApplicationStateImpl;
+import org.apache.kafka.streams.processor.internals.assignment.DefaultApplicationState;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder.TopicsInfo;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration;
-import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentListener;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
@@ -187,6 +192,11 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         }
     }
 
+    @FunctionalInterface
+    public interface UserTaskAssignmentListener {
+        void onAssignmentComputed(GroupAssignment assignment, GroupSubscription subscription);
+    }
+
     // keep track of any future consumers in a "dummy" Client since we can't decipher their subscription
     private static final UUID FUTURE_ID = randomUUID();
 
@@ -214,7 +224,9 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private RebalanceProtocol rebalanceProtocol;
     private AssignmentListener assignmentListener;
 
-    private Supplier<TaskAssignor> taskAssignorSupplier;
+    private Supplier<Optional<org.apache.kafka.streams.processor.assignment.TaskAssignor>>
+        customTaskAssignorSupplier;
+    private Supplier<TaskAssignor> internalTaskAssignorSupplier;
     private byte uniqueField;
     private Map<String, String> clientTags;
 
@@ -248,7 +260,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         internalTopicManager = assignorConfiguration.internalTopicManager();
         copartitionedTopicsEnforcer = assignorConfiguration.copartitionedTopicsEnforcer();
         rebalanceProtocol = assignorConfiguration.rebalanceProtocol();
-        taskAssignorSupplier = assignorConfiguration::taskAssignor;
+        customTaskAssignorSupplier = assignorConfiguration::customTaskAssignor;
+        internalTaskAssignorSupplier = assignorConfiguration::taskAssignor;
         assignmentListener = assignorConfiguration.assignmentListener();
         uniqueField = 0;
         clientTags = referenceContainer.clientTags;
@@ -400,9 +413,6 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         }
 
         try {
-            final boolean versionProbing =
-                checkMetadataVersions(minReceivedMetadataVersion, minSupportedMetadataVersion, futureMetadataVersion);
-
             log.debug("Constructed client metadata {} from the member subscriptions.", clientMetadataMap);
 
             // ---------------- Step One ---------------- //
@@ -440,8 +450,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
             final Set<TaskId> statefulTasks = new HashSet<>();
 
-            final boolean probingRebalanceNeeded = assignTasksToClients(fullMetadata, allSourceTopics, topicGroups,
-                clientMetadataMap, partitionsForTask, racksForProcessConsumer, statefulTasks);
+            final boolean versionProbing =
+                checkMetadataVersions(minReceivedMetadataVersion, minSupportedMetadataVersion, futureMetadataVersion);
+            final UserTaskAssignmentListener userTaskAssignmentListener = assignTasksToClients(fullMetadata, groupSubscription,
+                allSourceTopics, topicGroups, clientMetadataMap, partitionsForTask, racksForProcessConsumer, statefulTasks);
 
             // ---------------- Step Three ---------------- //
 
@@ -465,11 +477,12 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 allOwnedPartitions,
                 minReceivedMetadataVersion,
                 minSupportedMetadataVersion,
-                versionProbing,
-                probingRebalanceNeeded
+                versionProbing
             );
 
-            return new GroupAssignment(assignment);
+            final GroupAssignment groupAssignment = new GroupAssignment(assignment);
+            userTaskAssignmentListener.onAssignmentComputed(groupAssignment, groupSubscription);
+            return groupAssignment;
         } catch (final MissingSourceTopicException e) {
             log.error("Caught an error in the task assignment. Returning an error assignment.", e);
             return new GroupAssignment(
@@ -503,10 +516,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             changelogTopicsByGroup.put(entry.getKey(), changelogTopics);
         }
 
+        final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask = new HashMap<>();
         final Map<TaskId, Set<TopicPartition>> sourcePartitionsForTask =
-            partitionGrouper.partitionGroups(sourceTopicsByGroup, cluster);
-        final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask =
-            partitionGrouper.partitionGroups(changelogTopicsByGroup, cluster);
+            partitionGrouper.partitionGroups(sourceTopicsByGroup, changelogTopicsByGroup,
+                changelogPartitionsForTask, cluster);
 
         if (!sourcePartitionsForTask.keySet().equals(changelogPartitionsForTask.keySet())) {
             log.error("Partition grouper returned {} tasks for source topics but {} tasks for changelog topics",
@@ -515,9 +528,17 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                               + "tasks for source topics vs changelog topics.");
         }
 
-        final Set<TaskId> logicalTaskIds = unmodifiableSet(sourcePartitionsForTask.keySet());
-        final Set<DefaultTaskTopicPartition> allTopicPartitions = new HashSet<>();
+        final Set<DefaultTaskTopicPartition> topicsRequiringRackInfo = new HashSet<>();
+        final AtomicBoolean rackInformationFetched = new AtomicBoolean(false);
+        final Runnable fetchRackInformation = () -> {
+            if (!rackInformationFetched.get()) {
+                RackUtils.annotateTopicPartitionsWithRackInfo(cluster, internalTopicManager, topicsRequiringRackInfo);
+                rackInformationFetched.set(true);
+            }
+        };
+
         final Map<TaskId, Set<TaskTopicPartition>> topicPartitionsForTask = new HashMap<>();
+        final Set<TaskId> logicalTaskIds = unmodifiableSet(sourcePartitionsForTask.keySet());
         logicalTaskIds.forEach(taskId -> {
             final Set<TaskTopicPartition> topicPartitions = new HashSet<>();
 
@@ -525,8 +546,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 final boolean isSource = true;
                 final boolean isChangelog = changelogPartitionsForTask.get(taskId).contains(topicPartition);
                 final DefaultTaskTopicPartition racklessTopicPartition = new DefaultTaskTopicPartition(
-                    topicPartition, isSource, isChangelog, null);
-                allTopicPartitions.add(racklessTopicPartition);
+                    topicPartition, isSource, isChangelog, fetchRackInformation);
+                topicsRequiringRackInfo.add(racklessTopicPartition);
                 topicPartitions.add(racklessTopicPartition);
             }
 
@@ -534,42 +555,56 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 final boolean isSource = sourcePartitionsForTask.get(taskId).contains(topicPartition);
                 final boolean isChangelog = true;
                 final DefaultTaskTopicPartition racklessTopicPartition = new DefaultTaskTopicPartition(
-                    topicPartition, isSource, isChangelog, null);
-                allTopicPartitions.add(racklessTopicPartition);
+                    topicPartition, isSource, isChangelog, fetchRackInformation);
+                topicsRequiringRackInfo.add(racklessTopicPartition);
                 topicPartitions.add(racklessTopicPartition);
             }
 
             topicPartitionsForTask.put(taskId, topicPartitions);
         });
 
-        RackUtils.annotateTopicPartitionsWithRackInfo(cluster, internalTopicManager, allTopicPartitions);
+        final Map<TaskId, TaskInfo> logicalTasks = logicalTaskIds.stream().collect(Collectors.toMap(
+            Function.identity(),
+            taskId -> {
+                final Set<String> stateStoreNames = topologyMetadata
+                    .stateStoreNamesForSubtopology(taskId.topologyName(), taskId.subtopology());
+                final Set<TaskTopicPartition> topicPartitions = topicPartitionsForTask.get(taskId);
+                return new DefaultTaskInfo(
+                    taskId,
+                    !stateStoreNames.isEmpty(),
+                    stateStoreNames,
+                    topicPartitions
+                );
+            }
+        ));
 
-        final Set<TaskInfo> logicalTasks = logicalTaskIds.stream().map(taskId -> {
-            final Set<String> stateStoreNames = topologyMetadata
-                .stateStoreNameToSourceTopicsForTopology(taskId.topologyName())
-                .keySet();
-            final Set<TaskTopicPartition> topicPartitions = topicPartitionsForTask.get(taskId);
-            return new DefaultTaskInfo(
-                taskId,
-                !stateStoreNames.isEmpty(),
-                stateStoreNames,
-                topicPartitions
-            );
-        }).collect(Collectors.toSet());
-
-        return new ApplicationStateImpl(
-            assignmentConfigs.toPublicAssignmentConfigs(),
+        return new DefaultApplicationState(
+            assignmentConfigs,
             logicalTasks,
             clientMetadataMap
         );
     }
 
-    private static void processStreamsPartitionAssignment(final Map<UUID, ClientMetadata> clientMetadataMap,
-                                                          final TaskAssignment taskAssignment) {
+    private void processStreamsPartitionAssignment(final org.apache.kafka.streams.processor.assignment.TaskAssignor assignor,
+                                                   final TaskAssignment taskAssignment,
+                                                   final AssignmentError assignmentError,
+                                                   final Map<UUID, ClientMetadata> clientMetadataMap,
+                                                   final GroupSubscription groupSubscription) {
+        if (assignmentError == AssignmentError.UNKNOWN_PROCESS_ID || assignmentError == AssignmentError.UNKNOWN_TASK_ID) {
+            assignor.onAssignmentComputed(new GroupAssignment(Collections.emptyMap()), groupSubscription, assignmentError);
+            log.error("Rebalance failed due to task assignor returning assignment with error {}, " +
+                      "assignor callback will receive empty GroupAssignment due to this error", assignmentError);
+            throw new StreamsException("Task assignment with " + assignor.getClass().getName() +
+                                       " returned a fatal error: " + assignmentError);
+        }
+
         taskAssignment.assignment().forEach(kafkaStreamsAssignment -> {
             final ProcessId processId = kafkaStreamsAssignment.processId();
             final ClientMetadata clientMetadata = clientMetadataMap.get(processId.id());
             clientMetadata.state.setAssignedTasks(kafkaStreamsAssignment);
+            if (kafkaStreamsAssignment.followupRebalanceDeadline().isPresent()) {
+                clientMetadata.state.setFollowupRebalanceDeadline(kafkaStreamsAssignment.followupRebalanceDeadline().get());
+            }
         });
     }
 
@@ -712,15 +747,15 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     /**
      * Assigns a set of tasks to each client (Streams instance) using the configured task assignor, and also
      * populate the stateful tasks that have been assigned to the clients
-     * @return true if a probing rebalance should be triggered
      */
-    private boolean assignTasksToClients(final Cluster fullMetadata,
-                                         final Set<String> allSourceTopics,
-                                         final Map<Subtopology, TopicsInfo> topicGroups,
-                                         final Map<UUID, ClientMetadata> clientMetadataMap,
-                                         final Map<TaskId, Set<TopicPartition>> partitionsForTask,
-                                         final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer,
-                                         final Set<TaskId> statefulTasks) {
+    private UserTaskAssignmentListener assignTasksToClients(final Cluster fullMetadata,
+                                                            final GroupSubscription groupSubscription,
+                                                            final Set<String> allSourceTopics,
+                                                            final Map<Subtopology, TopicsInfo> topicGroups,
+                                                            final Map<UUID, ClientMetadata> clientMetadataMap,
+                                                            final Map<TaskId, Set<TopicPartition>> partitionsForTask,
+                                                            final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer,
+                                                            final Set<TaskId> statefulTasks) {
         if (!statefulTasks.isEmpty()) {
             throw new TaskAssignmentException("The stateful tasks should not be populated before assigning tasks to clients");
         }
@@ -760,23 +795,57 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         log.debug("Assigning tasks and {} standby replicas to client nodes {}",
                   numStandbyReplicas(), clientStates);
 
-        final TaskAssignor taskAssignor = createTaskAssignor(lagComputationSuccessful);
-
-        final RackAwareTaskAssignor rackAwareTaskAssignor = new RackAwareTaskAssignor(
-            fullMetadata,
-            partitionsForTask,
-            changelogTopics.changelogPartionsForTask(),
-            tasksForTopicGroup,
-            racksForProcessConsumer,
-            internalTopicManager,
-            assignmentConfigs,
-            time
-        );
-        final boolean probingRebalanceNeeded = taskAssignor.assign(clientStates,
-                                                                   allTasks,
-                                                                   statefulTasks,
-                                                                   rackAwareTaskAssignor,
-                                                                   assignmentConfigs);
+        final Optional<org.apache.kafka.streams.processor.assignment.TaskAssignor> userTaskAssignor =
+            customTaskAssignorSupplier.get();
+        final UserTaskAssignmentListener customTaskAssignmentListener;
+        if (userTaskAssignor.isPresent()) {
+            final ApplicationState applicationState = buildApplicationState(
+                taskManager.topologyMetadata(),
+                clientMetadataMap,
+                topicGroups,
+                fullMetadata
+            );
+            final org.apache.kafka.streams.processor.assignment.TaskAssignor assignor = userTaskAssignor.get();
+            final TaskAssignment taskAssignment = assignor.assign(applicationState);
+            final AssignmentError assignmentError = TaskAssignmentUtils.validateTaskAssignment(applicationState, taskAssignment);
+            processStreamsPartitionAssignment(assignor, taskAssignment, assignmentError, clientMetadataMap, groupSubscription);
+            customTaskAssignmentListener = (assignment, subscription) -> {
+                assignor.onAssignmentComputed(assignment, subscription, assignmentError);
+                if (assignmentError != AssignmentError.NONE) {
+                    log.error("Rebalance failed due to task assignor returning assignment with error {}", assignmentError);
+                    throw new StreamsException("Task assignment with " + assignor.getClass().getName() +
+                                               " returned an error: " + assignmentError);
+                }
+            };
+        } else {
+            customTaskAssignmentListener = (assignment, subscription) -> { };
+            final TaskAssignor taskAssignor = createTaskAssignor(lagComputationSuccessful);
+            final RackAwareTaskAssignor rackAwareTaskAssignor = new RackAwareTaskAssignor(
+                fullMetadata,
+                partitionsForTask,
+                changelogTopics.changelogPartionsForTask(),
+                tasksForTopicGroup,
+                racksForProcessConsumer,
+                internalTopicManager,
+                assignmentConfigs,
+                time
+            );
+            final boolean probingRebalanceNeeded = taskAssignor.assign(clientStates,
+                allTasks,
+                statefulTasks,
+                rackAwareTaskAssignor,
+                assignmentConfigs);
+            if (probingRebalanceNeeded) {
+                // Arbitrarily choose the leader's client to be responsible for triggering the probing rebalance,
+                // note once we pick the first consumer within the process to trigger probing rebalance, other consumer
+                // would not set to trigger any more.
+                final ClientMetadata rebalanceClientMetadata = clientMetadataMap.get(taskManager.processId());
+                if (rebalanceClientMetadata != null) {
+                    final Instant rebalanceDeadline = Instant.ofEpochMilli(time.milliseconds() + probingRebalanceIntervalMs());
+                    rebalanceClientMetadata.state.setFollowupRebalanceDeadline(rebalanceDeadline);
+                }
+            }
+        }
 
         // Break this up into multiple logs to make sure the summary info gets through, which helps avoid
         // info loss for example due to long line truncation with large apps
@@ -789,12 +858,11 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                      .sorted(comparingByKey())
                      .map(entry -> entry.getKey() + "=" + entry.getValue().currentAssignment())
                      .collect(Collectors.joining(Utils.NL)));
-
-        return probingRebalanceNeeded;
+        return customTaskAssignmentListener;
     }
 
     private TaskAssignor createTaskAssignor(final boolean lagComputationSuccessful) {
-        final TaskAssignor taskAssignor = taskAssignorSupplier.get();
+        final TaskAssignor taskAssignor = internalTaskAssignorSupplier.get();
         if (taskAssignor instanceof StickyTaskAssignor) {
             // special case: to preserve pre-existing behavior, we invoke the StickyTaskAssignor
             // whether or not lag computation failed.
@@ -948,9 +1016,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                                          final Set<TopicPartition> allOwnedPartitions,
                                                          final int minUserMetadataVersion,
                                                          final int minSupportedMetadataVersion,
-                                                         final boolean versionProbing,
-                                                         final boolean shouldTriggerProbingRebalance) {
-        boolean rebalanceRequired = shouldTriggerProbingRebalance || versionProbing;
+                                                         final boolean versionProbing) {
+        boolean rebalanceRequired = versionProbing;
         final Map<String, Assignment> assignment = new HashMap<>();
 
         // within the client, distribute tasks to its owned consumers
@@ -992,10 +1059,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 activeTaskAssignment.get(threadEntry.getKey()).addAll(threadEntry.getValue());
             }
 
-            // Arbitrarily choose the leader's client to be responsible for triggering the probing rebalance,
-            // note once we pick the first consumer within the process to trigger probing rebalance, other consumer
-            // would not set to trigger any more.
-            final boolean encodeNextProbingRebalanceTime = shouldTriggerProbingRebalance && clientId.equals(taskManager.processId());
+            final boolean isNextProbingRebalanceEncoded = clientMetadata.state.followupRebalanceDeadline().isPresent();
 
             final boolean tasksRevoked = addClientAssignments(
                 statefulTasks,
@@ -1008,11 +1072,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 activeTaskAssignment,
                 standbyTaskAssignment,
                 minUserMetadataVersion,
-                minSupportedMetadataVersion,
-                encodeNextProbingRebalanceTime
+                minSupportedMetadataVersion
             );
 
-            if (tasksRevoked || encodeNextProbingRebalanceTime) {
+            if (tasksRevoked || isNextProbingRebalanceEncoded) {
                 rebalanceRequired = true;
                 log.debug("Requested client {} to schedule a followup rebalance", clientId);
             }
@@ -1056,12 +1119,12 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                                          final Map<String, List<TaskId>> activeTaskAssignments,
                                          final Map<String, List<TaskId>> standbyTaskAssignments,
                                          final int minUserMetadataVersion,
-                                         final int minSupportedMetadataVersion,
-                                         final boolean probingRebalanceNeeded) {
+                                         final int minSupportedMetadataVersion) {
         boolean followupRebalanceRequiredForRevokedTasks = false;
 
         // We only want to encode a scheduled probing rebalance for a single member in this client
-        boolean shouldEncodeProbingRebalance = probingRebalanceNeeded;
+        final Optional<Instant> followupRebalanceDeadline = clientMetadata.state.followupRebalanceDeadline();
+        boolean shouldEncodeProbingRebalance = followupRebalanceDeadline.isPresent();
 
         // Loop through the consumers and build their assignment
         for (final String consumer : clientMetadata.consumers) {
@@ -1108,7 +1171,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 // Don't bother to schedule a probing rebalance if an immediate one is already scheduled
                 shouldEncodeProbingRebalance = false;
             } else if (shouldEncodeProbingRebalance) {
-                final long nextRebalanceTimeMs = time.milliseconds() + probingRebalanceIntervalMs();
+                final long nextRebalanceTimeMs = followupRebalanceDeadline.get().toEpochMilli();
                 log.info("Requesting followup rebalance be scheduled by {} for {} to probe for caught-up replica tasks.",
                         consumer, Utils.toLogDateTimeFormat(nextRebalanceTimeMs));
                 info.setNextRebalanceTime(nextRebalanceTimeMs);
@@ -1632,19 +1695,19 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     }
 
     long acceptableRecoveryLag() {
-        return assignmentConfigs.acceptableRecoveryLag;
+        return assignmentConfigs.acceptableRecoveryLag();
     }
 
     int maxWarmupReplicas() {
-        return assignmentConfigs.maxWarmupReplicas;
+        return assignmentConfigs.maxWarmupReplicas();
     }
 
     int numStandbyReplicas() {
-        return assignmentConfigs.numStandbyReplicas;
+        return assignmentConfigs.numStandbyReplicas();
     }
 
     long probingRebalanceIntervalMs() {
-        return assignmentConfigs.probingRebalanceIntervalMs;
+        return assignmentConfigs.probingRebalanceIntervalMs();
     }
 
 }
