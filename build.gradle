@@ -221,7 +221,6 @@ def excludedSpotlessModules = [':clients',
                                ':metadata',
                                ':raft',
                                ':server',
-                               ':server-common',
                                ':shell',
                                ':storage',
                                ':storage:storage-api', //  rename in settings.gradle
@@ -254,7 +253,6 @@ def excludedSpotlessModules = [':clients',
                                ':streams:upgrade-system-tests-37',
                                ':tools',
                                ':tools:tools-api',
-                               ':transaction-coordinator',
                                ':trogdor']
 
 
@@ -522,13 +520,6 @@ subprojects {
   // The suites are for running sets of tests in IDEs.
   // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
   def testsToExclude = ['**/*Suite.class']
-  // Exclude PowerMock tests when running with Java 16 or newer until a version of PowerMock that supports the relevant versions is released
-  // The relevant issues are https://github.com/powermock/powermock/issues/1094 and https://github.com/powermock/powermock/issues/1099
-  if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_16)) {
-    testsToExclude.addAll([
-      // connect tests
-    ])
-  }
 
   test {
     maxParallelForks = maxTestForks
@@ -825,10 +816,7 @@ subprojects {
       jacoco {
         toolVersion = versions.jacoco
       }
-
-      // NOTE: Jacoco Gradle plugin does not support "offline instrumentation" this means that classes mocked by PowerMock
-      // may report 0 coverage, since the source was modified after initial instrumentation.
-      // See https://github.com/jacoco/jacoco/issues/51
+      
       jacocoTestReport {
         dependsOn tasks.test
         sourceSets sourceSets.main
@@ -852,8 +840,10 @@ subprojects {
     skipProjects = [ ":jmh-benchmarks", ":trogdor" ]
     skipConfigurations = [ "zinc" ]
   }
-  
-  if(JavaVersion.current().isJava11Compatible() && project.path !in excludedSpotlessModules) {
+  //  the task `removeUnusedImports` is implemented by google-java-format, 
+  //  and unfortunately the google-java-format version used by spotless 6.14.0 can't work with JDK 21. 
+  //  Hence, we apply spotless tasks only if the env is either JDK11 or JDK17
+  if ((JavaVersion.current().isJava11() || (JavaVersion.current() == JavaVersion.VERSION_17)) && project.path !in excludedSpotlessModules) {
     apply plugin: 'com.diffplug.spotless'
     spotless {
       java {
@@ -2376,7 +2366,6 @@ project(':streams') {
     testImplementation libs.log4j
     testImplementation libs.junitJupiter
     testImplementation libs.junitVintageEngine
-    testImplementation libs.easymock
     testImplementation libs.bcpkix
     testImplementation libs.hamcrest
     testImplementation libs.mockitoCore
@@ -3257,12 +3246,9 @@ project(':connect:runtime') {
     testImplementation project(':storage')
     testImplementation project(':connect:test-plugins')
     testImplementation project(':group-coordinator')
-
-    testImplementation libs.easymock
+    
     testImplementation libs.junitJupiterApi
     testImplementation libs.junitVintageEngine
-    testImplementation libs.powermockJunit4
-    testImplementation libs.powermockEasymock
     testImplementation libs.mockitoCore
     testImplementation libs.httpclient
 
