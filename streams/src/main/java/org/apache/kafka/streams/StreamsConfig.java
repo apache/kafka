@@ -988,6 +988,10 @@ public class StreamsConfig extends AbstractConfig {
                     (name, value) -> verifyTopologyOptimizationConfigs((String) value),
                     Importance.MEDIUM,
                     TOPOLOGY_OPTIMIZATION_DOC)
+            .define(ProducerConfig.PARTITIONER_CLASS_CONFIG,
+                    Type.CLASS,
+                    null,
+                    Importance.MEDIUM, "")
 
             // LOW
 
@@ -1190,21 +1194,10 @@ public class StreamsConfig extends AbstractConfig {
         KS_DEFAULT_PRODUCER_CONFIGS_EOS_ENABLED = Collections.unmodifiableMap(tempProducerDefaultOverrides);
     }
 
-    // KS_CONTROLLED_PRODUCER_CONFIGS - Kafka Streams producer configs that cannot be overridden by the user
-    private static final Map<String, Object> KS_CONTROLLED_PRODUCER_CONFIGS;
-    static {
-        final Map<String, Object> tempProducerDefaultOverrides = new HashMap<>();
-        
-        // How to add PARTITIONER_CLASS_CONFIG to the list of controlled producer configs?
-        // tempProducerDefaultOverrides.put(ProducerConfig.PARTITIONER_CLASS_CONFIG, "StreamPartitioner");
-
-        KS_CONTROLLED_PRODUCER_CONFIGS = Collections.unmodifiableMap(tempProducerDefaultOverrides);
-    }
-
     // KS_CONTROLLED_PRODUCER_CONFIGS_EOS_ENABLED - Kafka Streams producer configs that cannot be overridden by the user with EOS enabled
     private static final Map<String, Object> KS_CONTROLLED_PRODUCER_CONFIGS_EOS_ENABLED;
     static {
-        final Map<String, Object> tempProducerDefaultOverrides = new HashMap<>(KS_CONTROLLED_PRODUCER_CONFIGS);
+        final Map<String, Object> tempProducerDefaultOverrides = new HashMap<>();
         tempProducerDefaultOverrides.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
         tempProducerDefaultOverrides.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, null);
 
@@ -1580,15 +1573,10 @@ public class StreamsConfig extends AbstractConfig {
             }
             verifyMaxInFlightRequestPerConnection(props.get(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION));
 
-        } else {
-            // Iterate over KS_CONTROLLED_CONSUMER_CONFIGS and override values if set
-            for (final Map.Entry<String, Object> entry : KS_CONTROLLED_PRODUCER_CONFIGS.entrySet()) {
-                overwritePropertyMap(props, entry.getKey(), entry.getValue(), "producer");
-            }
         }
 
         if (props.containsKey(ProducerConfig.PARTITIONER_CLASS_CONFIG)) {
-            final Class<?> c = getClass(ProducerConfig.PARTITIONER_CLASS_CONFIG);
+            final Class<?> c = (Class<?>) props.get(ProducerConfig.PARTITIONER_CLASS_CONFIG);
             if (!StreamPartitioner.class.isAssignableFrom(c)) {
                 props.remove(ProducerConfig.PARTITIONER_CLASS_CONFIG);
                 log.warn(String.format("Unexpected producer config: partitioner.class found. User setting (%s) will be ignored", c.getName()));
