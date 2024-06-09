@@ -36,7 +36,6 @@ public class CommandUtilsTest {
     }
     @Test
     public void testStripDotPathComponents(){
-        
         //double dots
         assertEquals(Arrays.asList("keep", "keep2") , CommandUtils.stripDotPathComponents(Arrays.asList("..", "keep", "keep2")));
         //single dots
