@@ -54,6 +54,7 @@ public class OffsetIndexTest {
         if (index != null) {
             Files.deleteIfExists(index.file().toPath());
         }
+        this.index.close();
     }
 
     @Test
