@@ -92,9 +92,6 @@ object KafkaConfig {
 
   val configDef = org.apache.kafka.server.config.KafkaConfig.CONFIG_DEF
 
-  /** ********* Remote Log Management Configuration *********/
-  RemoteLogManagerConfig.CONFIG_DEF.configKeys().values().forEach(key => configDef.define(key))
-
   def configNames: Seq[String] = configDef.names.asScala.toBuffer.sorted
   private[server] def defaultValues: Map[String, _] = configDef.defaultValues.asScala
   private[server] def configKeys: Map[String, ConfigKey] = configDef.configKeys.asScala

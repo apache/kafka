@@ -39,6 +39,7 @@ import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.security.PasswordEncoderConfigs;
 import org.apache.kafka.server.common.MetadataVersionValidator;
+import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.server.metrics.MetricConfigs;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
@@ -64,7 +65,7 @@ import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
 
 public class KafkaConfig {
     @SuppressWarnings("deprecation")
-    public final static ConfigDef CONFIG_DEF =  new ConfigDef()
+    public final static ConfigDef CONFIG_DEF =  new ConfigDef(RemoteLogManagerConfig.CONFIG_DEF)
         /** ********* Zookeeper Configuration ***********/
         .define(ZkConfigs.ZK_CONNECT_CONFIG, STRING, null, HIGH, ZkConfigs.ZK_CONNECT_DOC)
         .define(ZkConfigs.ZK_SESSION_TIMEOUT_MS_CONFIG, INT, ZkConfigs.ZK_SESSION_TIMEOUT_MS, HIGH, ZkConfigs.ZK_SESSION_TIMEOUT_MS_DOC)
