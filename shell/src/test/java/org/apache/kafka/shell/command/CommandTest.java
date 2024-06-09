@@ -54,9 +54,10 @@ public class CommandTest {
 
     @Test
     public void testParseInvalidCommand() {
-        assertEquals(new ErroneousCommandHandler("invalid choice: 'blah' (choose " +
+        String invalidInputCommand = "blah";
+        assertEquals(new ErroneousCommandHandler("invalid choice: \'" + invalidInputCommand + "\' (choose " +
             "from 'cat', 'cd', 'exit', 'find', 'help', 'history', 'ls', 'man', 'pwd', 'tree')"),
-            new Commands(true).parseCommand(Arrays.asList("blah")));
+            new Commands(true).parseCommand(Arrays.asList(invalidInputCommand)));
     }
 
     @Test
