@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.Optional;
+import java.util.Set;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
@@ -25,6 +27,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
@@ -53,8 +56,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
+import static java.util.Arrays.asList;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singletonList;
+import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.DEFAULT_GENERATION;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_TASKS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.createMockAdminClientForAssignor;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getInfo;
@@ -62,7 +67,9 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.mockito.ArgumentMatchers.anySet;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
 @Category({IntegrationTest.class})
@@ -190,11 +197,35 @@ public class StreamsAssignmentScaleTest {
         configMap.put(InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, taskAssignor.getName());
         configMap.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, numStandbys);
 
-        final MockInternalTopicManager mockInternalTopicManager = new MockInternalTopicManager(
+        configMap.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG,
+            StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE);
+
+        final MockInternalTopicManager mockInternalTopicManager = spy(new MockInternalTopicManager(
             new MockTime(),
             new StreamsConfig(configMap),
             new MockClientSupplier().restoreConsumer,
             false
+        ));
+
+        lenient().when(mockInternalTopicManager.getTopicPartitionInfo(anySet())).thenAnswer(
+            invocation -> {
+                final Map<String, List<TopicPartitionInfo>> answer = new HashMap<>();
+                final Set<String> topics = invocation.getArgument(0);
+                for (final String thisTopic : topics) {
+                    final List<TopicPartitionInfo> topicPartitionInfos = new ArrayList<>();
+                    partitionInfos.forEach(info -> {
+                        final TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(
+                            info.partition(),
+                            info.leader(),
+                            singletonList(new Node(1, "host1", 80, "rack-1")),
+                            asList(info.inSyncReplicas())
+                        );
+                        topicPartitionInfos.add(topicPartitionInfo);
+                    });
+                    answer.put(thisTopic, topicPartitionInfos);
+                }
+                return answer;
+            }
         );
 
         final StreamsPartitionAssignor partitionAssignor = new StreamsPartitionAssignor();
@@ -206,7 +237,13 @@ public class StreamsAssignmentScaleTest {
             for (int i = 0; i < numThreadsPerClient; ++i) {
                 subscriptions.put(
                     getConsumerName(i, client),
-                    new Subscription(topic, getInfo(uuidForInt(client), EMPTY_TASKS, EMPTY_TASKS).encode())
+                    new Subscription(
+                        topic,
+                        getInfo(uuidForInt(client), EMPTY_TASKS, EMPTY_TASKS).encode(),
+                        Collections.emptyList(),
+                        DEFAULT_GENERATION,
+                        Optional.of(String.format("rack-%d", client % 31))
+                    )
                 );
             }
         }

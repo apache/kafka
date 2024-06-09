@@ -256,6 +256,7 @@ public final class AssignorConfiguration {
     public Optional<org.apache.kafka.streams.processor.assignment.TaskAssignor> customTaskAssignor() {
         final String userTaskAssignorClassname = streamsConfig.getString(StreamsConfig.TASK_ASSIGNOR_CLASS_CONFIG);
         if (userTaskAssignorClassname == null) {
+            log.info("No custom task assignors found, defaulting to internal task assignment with {}", INTERNAL_TASK_ASSIGNOR_CLASS);
             return Optional.empty();
         }
         try {
