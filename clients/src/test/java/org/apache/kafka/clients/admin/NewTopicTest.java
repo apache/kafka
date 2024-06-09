@@ -32,6 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 public class NewTopicTest {
@@ -107,7 +108,9 @@ public class NewTopicTest {
         CreateTopicsRequestData.CreatableTopic creatableTopic = newTopic.convertToCreatableTopic();
 
         assertEquals(TEST_TOPIC, creatableTopic.name());
+        assertTrue(creatableTopic.numPartitions() > 0);
         assertEquals(NUM_PARTITIONS, creatableTopic.numPartitions());
+        assertTrue(creatableTopic.replicationFactor() > 0);
         assertEquals(REPLICATION_FACTOR, creatableTopic.replicationFactor());
     }
 
