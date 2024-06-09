@@ -127,6 +127,46 @@ public class RaftUtil {
             .setResponses(Collections.singletonList(fetchableTopic));
     }
 
+    public static VoteRequestData singletonVoteRequest(
+        TopicPartition topicPartition,
+        String clusterId,
+        int candidateEpoch,
+        ReplicaKey candidateKey,
+        ReplicaKey voterKey,
+        int lastEpoch,
+        long lastEpochEndOffset
+    ) {
+        return new VoteRequestData()
+            .setClusterId(clusterId)
+            .setVoterId(voterKey.id())
+            .setTopics(
+                Collections.singletonList(
+                    new VoteRequestData.TopicData()
+                        .setTopicName(topicPartition.topic())
+                        .setPartitions(
+                            Collections.singletonList(
+                                new VoteRequestData.PartitionData()
+                                    .setPartitionIndex(topicPartition.partition())
+                                    .setCandidateEpoch(candidateEpoch)
+                                    .setCandidateId(candidateKey.id())
+                                    .setCandidateDirectoryId(
+                                        candidateKey
+                                            .directoryId()
+                                            .orElse(ReplicaKey.NO_DIRECTORY_ID)
+                                    )
+                                    .setVoterDirectoryId(
+                                        voterKey
+                                            .directoryId()
+                                            .orElse(ReplicaKey.NO_DIRECTORY_ID)
+                                    )
+                                    .setLastOffsetEpoch(lastEpoch)
+                                    .setLastOffset(lastEpochEndOffset)
+                            )
+                        )
+                )
+            );
+    }
+
     public static VoteResponseData singletonVoteResponse(
         ListenerName listenerName,
         short apiVersion,

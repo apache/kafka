@@ -27,6 +27,7 @@ import java.util.Optional;
 
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochRequestData;
+import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.network.ListenerName;
 
@@ -111,6 +112,21 @@ final public class Endpoints {
         for (EndQuorumEpochRequestData.LeaderEndpoint endpoint : endpoints) {
             listeners.put(
                 ListenerName.normalised(endpoint.name()),
+                InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port())
+            );
+        }
+
+        return new Endpoints(listeners);
+    }
+
+    public static Endpoints fromVoteResponse(
+        ListenerName listenerName,
+        VoteResponseData.NodeEndpointCollection endpoints
+    ) {
+        Map<ListenerName, InetSocketAddress> listeners = new HashMap<>(endpoints.size());
+        for (VoteResponseData.NodeEndpoint endpoint : endpoints) {
+            listeners.put(
+                listenerName,
                 InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port())
             );
         }

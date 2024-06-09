@@ -638,7 +638,7 @@ class RequestQuotaTest extends BaseRequestTest {
           new AlterUserScramCredentialsRequest.Builder(new AlterUserScramCredentialsRequestData())
 
         case ApiKeys.VOTE =>
-          new VoteRequest.Builder(VoteRequest.singletonRequest(tp, 1, 2, 0, 10))
+          new VoteRequest.Builder(VoteRequest.singletonRequest(tp, null, 1, 2, 0, 10))
 
         case ApiKeys.BEGIN_QUORUM_EPOCH =>
           new BeginQuorumEpochRequest.Builder(BeginQuorumEpochRequest.singletonRequest(tp, 2, 5))

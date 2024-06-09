@@ -49,13 +49,13 @@ import org.apache.kafka.common.requests.BeginQuorumEpochRequest;
 import org.apache.kafka.common.requests.DescribeQuorumResponse;
 import org.apache.kafka.common.requests.EndQuorumEpochRequest;
 import org.apache.kafka.common.requests.FetchSnapshotResponse;
-import org.apache.kafka.common.requests.VoteRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.internals.BatchBuilder;
 import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.raft.internals.StringSerde;
+import org.apache.kafka.raft.internals.VoterSet;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotReader;
@@ -108,6 +108,7 @@ public final class RaftClientTestContext {
     private final QuorumStateStore quorumStateStore;
     final Uuid clusterId;
     private final OptionalInt localId;
+    public final Uuid localDirectoryId;
     public final KafkaRaftClient<String> client;
     final Metrics metrics;
     public final MockLog log;
@@ -115,11 +116,10 @@ public final class RaftClientTestContext {
     final MockMessageQueue messageQueue;
     final MockTime time;
     final MockListener listener;
-    final Set<Integer> voters;
+    final VoterSet voters;
     final Set<Integer> bootstrapIds;
-
     // Used to determine which RPC request and response to construct
-    final boolean kip853Supported = false;
+    final boolean kip853Rpc;
 
     private final List<RaftResponse.Outbound> sentResponses = new ArrayList<>();
 
@@ -145,7 +145,6 @@ public final class RaftClientTestContext {
         private final Uuid clusterId = Uuid.randomUuid();
         private final Set<Integer> voters;
         private final OptionalInt localId;
-        private final Uuid localDirectoryId = Uuid.randomUuid();
         private final short kraftVersion = 0;
 
         private int requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS;
@@ -153,6 +152,7 @@ public final class RaftClientTestContext {
         private int appendLingerMs = DEFAULT_APPEND_LINGER_MS;
         private MemoryPool memoryPool = MemoryPool.NONE;
         private List<InetSocketAddress> bootstrapServers = Collections.emptyList();
+        private boolean kip853Rpc = false;
 
         public Builder(int localId, Set<Integer> voters) {
             this(OptionalInt.of(localId), voters);
@@ -252,6 +252,11 @@ public final class RaftClientTestContext {
             return this;
         }
 
+        Builder withKip853Rpc(boolean kip853Rpc) {
+            this.kip853Rpc = kip853Rpc;
+            return this;
+        }
+
         public RaftClientTestContext build() throws IOException {
             Metrics metrics = new Metrics(time);
             MockNetworkChannel channel = new MockNetworkChannel();
@@ -259,6 +264,19 @@ public final class RaftClientTestContext {
             Map<Integer, InetSocketAddress> voterAddressMap = voters
                 .stream()
                 .collect(Collectors.toMap(Function.identity(), RaftClientTestContext::mockAddress));
+
+            VoterSet voterSet = VoterSet.fromInetSocketAddresses(
+                channel.listenerName(),
+                voterAddressMap
+            );
+
+            // Compute the local listeners. Only potential voters/leader need to provide the local listeners
+            // If the local id is not set (must be observer), the local listener can be empty.
+            Endpoints localListeners = localId.isPresent() ?
+                voterSet.listeners(localId.getAsInt()) :
+                Endpoints.empty();
+
+            Uuid localDirectoryId = Uuid.randomUuid();
 
             QuorumConfig quorumConfig = new QuorumConfig(
                 requestTimeoutMs,
@@ -282,7 +300,7 @@ public final class RaftClientTestContext {
                 FETCH_MAX_WAIT_MS,
                 clusterId.toString(),
                 bootstrapServers,
-                Endpoints.empty(), // TODO: fix this...
+                localListeners,
                 logContext,
                 random,
                 quorumConfig
@@ -298,18 +316,20 @@ public final class RaftClientTestContext {
             RaftClientTestContext context = new RaftClientTestContext(
                 clusterId,
                 localId,
+                localDirectoryId,
                 client,
                 log,
                 channel,
                 messageQueue,
                 time,
                 quorumStateStore,
-                voters,
+                voterSet,
                 IntStream
                     .iterate(-2, id -> id - 1)
                     .limit(bootstrapServers.size())
                     .boxed()
                     .collect(Collectors.toSet()),
+                kip853Rpc,
                 metrics,
                 listener
             );
@@ -322,22 +342,26 @@ public final class RaftClientTestContext {
         }
     }
 
+    @SuppressWarnings("ParameterNumber")
     private RaftClientTestContext(
         Uuid clusterId,
         OptionalInt localId,
+        Uuid localDirectoryId,
         KafkaRaftClient<String> client,
         MockLog log,
         MockNetworkChannel channel,
         MockMessageQueue messageQueue,
         MockTime time,
         QuorumStateStore quorumStateStore,
-        Set<Integer> voters,
+        VoterSet voters,
         Set<Integer> bootstrapIds,
+        boolean kip853Rpc,
         Metrics metrics,
         MockListener listener
     ) {
         this.clusterId = clusterId;
         this.localId = localId;
+        this.localDirectoryId = localDirectoryId;
         this.client = client;
         this.log = log;
         this.channel = channel;
@@ -346,6 +370,7 @@ public final class RaftClientTestContext {
         this.quorumStateStore = quorumStateStore;
         this.voters = voters;
         this.bootstrapIds = bootstrapIds;
+        this.kip853Rpc = kip853Rpc;
         this.metrics = metrics;
         this.listener = listener;
     }
@@ -477,7 +502,7 @@ public final class RaftClientTestContext {
             ElectionState.withVotedCandidate(
                 epoch,
                 ReplicaKey.of(candidateId, ReplicaKey.NO_DIRECTORY_ID),
-                voters
+                voters.voterIds()
             ),
             quorumStateStore.readElectionState().get()
         );
@@ -485,14 +510,14 @@ public final class RaftClientTestContext {
 
     public void assertElectedLeader(int epoch, int leaderId) {
         assertEquals(
-            ElectionState.withElectedLeader(epoch, leaderId, voters),
+            ElectionState.withElectedLeader(epoch, leaderId, voters.voterIds()),
             quorumStateStore.readElectionState().get()
         );
     }
 
     void assertUnknownLeader(int epoch) {
         assertEquals(
-            ElectionState.withUnknownLeader(epoch, voters),
+            ElectionState.withUnknownLeader(epoch, voters.voterIds()),
             quorumStateStore.readElectionState().get()
         );
     }
@@ -500,7 +525,7 @@ public final class RaftClientTestContext {
     void assertResignedLeader(int epoch, int leaderId) {
         assertTrue(client.quorum().isResigned());
         assertEquals(
-            ElectionState.withElectedLeader(epoch, leaderId, voters),
+            ElectionState.withElectedLeader(epoch, leaderId, voters.voterIds()),
             quorumStateStore.readElectionState().get()
         );
     }
@@ -574,6 +599,15 @@ public final class RaftClientTestContext {
         assertEquals(error, Errors.forCode(partitionResponse.errorCode()));
         assertEquals(epoch, partitionResponse.leaderEpoch());
         assertEquals(leaderId.orElse(-1), partitionResponse.leaderId());
+
+        if (kip853Rpc && leaderId.isPresent()) {
+            Endpoints expectedLeaderEndpoints = voters.listeners(leaderId.getAsInt());
+            Endpoints responseEndpoints = Endpoints.fromVoteResponse(
+                channel.listenerName(),
+                response.nodeEndpoints()
+            );
+            assertEquals(expectedLeaderEndpoints, responseEndpoints);
+        }
     }
 
     List<RaftRequest.Outbound> collectVoteRequests(
@@ -855,7 +889,7 @@ public final class RaftClientTestContext {
         RaftRequest.Outbound fetchRequest = assertSentFetchRequest();
         int destinationId = fetchRequest.destination().id();
         assertTrue(
-            voters.contains(destinationId) || bootstrapIds.contains(destinationId),
+            voters.voterIds().contains(destinationId) || bootstrapIds.contains(destinationId),
             String.format("id %d is not in sets %s or %s", destinationId, voters, bootstrapIds)
         );
         assertFetchRequestData(fetchRequest, 0, 0L, 0);
@@ -886,7 +920,7 @@ public final class RaftClientTestContext {
     }
 
     public static InetSocketAddress mockAddress(int id) {
-        return new InetSocketAddress("localhost", 9990 + id);
+        return InetSocketAddress.createUnresolved("localhost", 9990 + id);
     }
 
     EndQuorumEpochResponseData endEpochResponse(
@@ -963,12 +997,16 @@ public final class RaftClientTestContext {
         );
     }
 
-    VoteRequestData voteRequest(int epoch, int candidateId, int lastEpoch, long lastEpochOffset) {
-        return VoteRequest.singletonRequest(
-            metadataPartition,
+    VoteRequestData voteRequest(
+        int epoch,
+        ReplicaKey candidateKey,
+        int lastEpoch,
+        long lastEpochOffset
+    ) {
+        return voteRequest(
             clusterId.toString(),
             epoch,
-            candidateId,
+            candidateKey,
             lastEpoch,
             lastEpochOffset
         );
@@ -977,15 +1015,38 @@ public final class RaftClientTestContext {
     VoteRequestData voteRequest(
         String clusterId,
         int epoch,
-        int candidateId,
+        ReplicaKey candidateKey,
         int lastEpoch,
         long lastEpochOffset
     ) {
-        return VoteRequest.singletonRequest(
+        ReplicaKey localReplicaKey = kip853Rpc ?
+            ReplicaKey.of(-1, ReplicaKey.NO_DIRECTORY_ID) :
+            ReplicaKey.of(localIdOrThrow(), localDirectoryId);
+
+        return voteRequest(
+            clusterId,
+            epoch,
+            candidateKey,
+            localReplicaKey,
+            lastEpoch,
+            lastEpochOffset
+        );
+    }
+
+    VoteRequestData voteRequest(
+        String clusterId,
+        int epoch,
+        ReplicaKey candidateKey,
+        ReplicaKey voterKey,
+        int lastEpoch,
+        long lastEpochOffset
+    ) {
+        return RaftUtil.singletonVoteRequest(
                 metadataPartition,
                 clusterId,
                 epoch,
-                candidateId,
+                candidateKey,
+                voterKey,
                 lastEpoch,
                 lastEpochOffset
         );
@@ -1065,7 +1126,7 @@ public final class RaftClientTestContext {
         assertEquals(localId.orElse(-1), request.replicaState().replicaId());
 
         // Assert that voters have flushed up to the fetch offset
-        if (localId.isPresent() && voters.contains(localId.getAsInt())) {
+        if (localId.isPresent() && voters.voterIds().contains(localId.getAsInt())) {
             assertEquals(
                 log.firstUnflushedOffset(),
                 fetchOffset,
@@ -1217,7 +1278,7 @@ public final class RaftClientTestContext {
     }
 
     private short fetchRpcVersion() {
-        if (kip853Supported) {
+        if (kip853Rpc) {
             return 17;
         } else {
             return 16;
@@ -1225,7 +1286,7 @@ public final class RaftClientTestContext {
     }
 
     private short fetchSnapshotRpcVersion() {
-        if (kip853Supported) {
+        if (kip853Rpc) {
             return 1;
         } else {
             return 0;
@@ -1233,7 +1294,7 @@ public final class RaftClientTestContext {
     }
 
     private short voteRpcVersion() {
-        if (kip853Supported) {
+        if (kip853Rpc) {
             return 1;
         } else {
             return 0;
@@ -1241,7 +1302,7 @@ public final class RaftClientTestContext {
     }
 
     private short beginQuorumEpochRpcVersion() {
-        if (kip853Supported) {
+        if (kip853Rpc) {
             return 1;
         } else {
             return 0;
@@ -1249,7 +1310,7 @@ public final class RaftClientTestContext {
     }
 
     private short endQuorumEpochRpcVersion() {
-        if (kip853Supported) {
+        if (kip853Rpc) {
             return 1;
         } else {
             return 0;
@@ -1257,7 +1318,7 @@ public final class RaftClientTestContext {
     }
 
     private short describeQuorumRpcVersion() {
-        if (kip853Supported) {
+        if (kip853Rpc) {
             // KAFKA-16520 should change this to the new latest value (2)
             return 1;
         } else {
@@ -1286,7 +1347,11 @@ public final class RaftClientTestContext {
     public void advanceLocalLeaderHighWatermarkToLogEndOffset() throws InterruptedException {
         assertEquals(localId, currentLeader());
         long localLogEndOffset = log.endOffset().offset;
-        Set<Integer> followers = voters.stream().filter(voter -> voter != localId.getAsInt()).collect(Collectors.toSet());
+        Set<Integer> followers = voters
+            .voterIds()
+            .stream()
+            .filter(voter -> voter != localId.getAsInt())
+            .collect(Collectors.toSet());
 
         // Send a request from every follower
         for (int follower : followers) {
