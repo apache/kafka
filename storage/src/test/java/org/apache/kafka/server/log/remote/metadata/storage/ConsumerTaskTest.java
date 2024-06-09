@@ -26,7 +26,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteLogMetadataSerde;
 import org.apache.kafka.server.log.remote.storage.RemoteLogMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
@@ -92,7 +92,7 @@ public class ConsumerTaskTest {
             .collect(Collectors.toMap(Function.identity(), e -> 0L));
         consumer = spy(new MockConsumer<>(OffsetResetStrategy.EARLIEST));
         consumer.updateBeginningOffsets(offsets);
-        consumerTask = new ConsumerTask(handler, partitioner, consumer, 10L, 300_000L, new SystemTime());
+        consumerTask = new ConsumerTask(handler, partitioner, consumer, 10L, 300_000L, Time.SYSTEM);
         thread = new Thread(consumerTask);
     }
 
