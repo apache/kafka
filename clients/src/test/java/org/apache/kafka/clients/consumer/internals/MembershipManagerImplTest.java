@@ -1531,7 +1531,6 @@ public class MembershipManagerImplTest {
         verify(metadata, times(2)).requestUpdate(anyBoolean());
     }
 
-    // TODO
     @Test
     public void testRevokePartitionsUsesTopicNamesLocalCacheWhenMetadataNotAvailable() {
         createCommitRequestManager();
