@@ -575,6 +575,10 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      */
     @Override
     public void onMemberEpochUpdated(Optional<Integer> memberEpoch, Optional<String> memberId) {
+        if (!memberEpoch.isPresent() && memberInfo.memberEpoch.isPresent()) {
+            log.debug("Member {} has left the group so it won't include member epoch on the " +
+                "offset commit/fetch requests anymore.", memberInfo.memberId.orElse("unknown"));
+        }
         memberInfo.memberId = memberId;
         memberInfo.memberEpoch = memberEpoch;
     }
