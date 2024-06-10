@@ -33,12 +33,13 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class ConsumerRecordsTest {
 
     @Test
-    public void iterator() throws Exception {
+    public void testIterator() throws Exception {
         String topic = "topic";
         int recordSize = 10;
         int partitionSize = 15;
@@ -52,10 +53,7 @@ public class ConsumerRecordsTest {
 
         while (iterator.hasNext()) {
             ConsumerRecord<Integer, String> record = iterator.next();
-
-            if (record.partition() == emptyPartitionIndex) {
-                fail("Partition " + emptyPartitionIndex + " is not empty");
-            }
+            validateEmptyPartition(record, emptyPartitionIndex);
 
             // Check if we have moved to a new partition
             if (currentPartition != record.partition()) {
@@ -65,12 +63,7 @@ public class ConsumerRecordsTest {
                 currentPartition = record.partition();
             }
 
-            assertEquals(topic, record.topic());
-            assertEquals(currentPartition, record.partition());
-            assertEquals(recordCount % recordSize, record.offset());
-            assertEquals(recordCount % recordSize, record.key());
-            assertEquals(String.valueOf(recordCount % recordSize), record.value());
-
+            validateRecordPayload(topic, record, currentPartition, recordCount, recordSize);
             recordCount++;
         }
 
@@ -79,7 +72,34 @@ public class ConsumerRecordsTest {
     }
 
     @Test
-    public void testRecordsWithNullTopic() {
+    public void testRecordsByPartition() {
+        List<String> topics = Arrays.asList("topic1", "topic2");
+        int recordSize = 3;
+        int partitionSize = 5;
+        int emptyPartitionIndex = 2;
+
+        ConsumerRecords<Integer, String> consumerRecords = buildTopicTestRecords(recordSize, partitionSize, emptyPartitionIndex, topics);
+
+        for (String topic : topics) {
+            for (int partition = 0; partition < partitionSize; partition++) {
+                TopicPartition topicPartition = new TopicPartition(topic, partition);
+                List<ConsumerRecord<Integer, String>> records = consumerRecords.records(topicPartition);
+
+                if (partition == emptyPartitionIndex) {
+                    assertTrue(records.isEmpty());
+                } else {
+                    assertEquals(recordSize, records.size());
+                    for (int i = 0; i < records.size(); i++) {
+                        ConsumerRecord<Integer, String> record = records.get(i);
+                        validateRecordPayload(topic, record, partition, i, recordSize);
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    public void testRecordsByNullTopic() {
         String nullTopic = null;
         ConsumerRecords<Integer, String> consumerRecords = ConsumerRecords.empty();
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> consumerRecords.records(nullTopic));
@@ -88,7 +108,7 @@ public class ConsumerRecordsTest {
 
 
     @Test
-    public void testRecords() {
+    public void testRecordsByTopic() {
         List<String> topics = Arrays.asList("topic1", "topic2", "topic3", "topic4");
         int recordSize = 3;
         int partitionSize = 10;
@@ -106,10 +126,7 @@ public class ConsumerRecordsTest {
 
             while (iterator.hasNext()) {
                 ConsumerRecord<Integer, String> record = iterator.next();
-
-                if (record.partition() == emptyPartitionIndex) {
-                    fail("Partition " + emptyPartitionIndex + " is not empty");
-                }
+                validateEmptyPartition(record, emptyPartitionIndex);
 
                 // Check if we have moved to a new partition
                 if (currentPartition != record.partition()) {
@@ -119,12 +136,7 @@ public class ConsumerRecordsTest {
                     currentPartition = record.partition();
                 }
 
-                assertEquals(topic, record.topic());
-                assertEquals(currentPartition, record.partition());
-                assertEquals(recordCount % recordSize, record.offset());
-                assertEquals(recordCount % recordSize,  record.key());
-                assertEquals(String.valueOf(recordCount % recordSize), record.value());
-
+                validateRecordPayload(topic, record, currentPartition, recordCount, recordSize);
                 recordCount++;
             }
 
@@ -155,5 +167,19 @@ public class ConsumerRecordsTest {
         }
 
         return new ConsumerRecords<>(partitionToRecords);
+    }
+
+    private void validateEmptyPartition(ConsumerRecord<Integer, String> record, int emptyPartitionIndex) {
+        if (record.partition() == emptyPartitionIndex) {
+            fail("Partition " + emptyPartitionIndex + " is not empty");
+        }
+    }
+
+    private void validateRecordPayload(String topic, ConsumerRecord<Integer, String> record, int currentPartition, int recordCount, int recordSize) {
+        assertEquals(topic, record.topic());
+        assertEquals(currentPartition, record.partition());
+        assertEquals(recordCount % recordSize, record.offset());
+        assertEquals(recordCount % recordSize, record.key());
+        assertEquals(String.valueOf(recordCount % recordSize), record.value());
     }
 }
