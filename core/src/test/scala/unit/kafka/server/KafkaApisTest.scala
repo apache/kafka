@@ -76,6 +76,7 @@ import org.apache.kafka.common.utils.{ProducerIdAndEpoch, SecurityUtils, Utils}
 import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfigs
 import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_2_IV0, IBP_2_2_IV1}
@@ -92,6 +93,7 @@ import org.mockito.ArgumentMatchers._
 import org.mockito.Mockito._
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 
+import java.lang.{Byte => JByte}
 import java.net.InetAddress
 import java.nio.charset.StandardCharsets
 import java.time.Duration
@@ -7113,8 +7115,9 @@ class KafkaApisTest extends Logging {
     assertEquals(Errors.GROUP_AUTHORIZATION_FAILED.code, response.data.errorCode)
   }
 
-  @Test
-  def testConsumerGroupDescribe(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testConsumerGroupDescribe(includeAuthorizedOperations: Boolean): Unit = {
     metadataCache = mock(classOf[KRaftMetadataCache])
     when(metadataCache.features()).thenReturn {
       new FinalizedFeatures(
@@ -7127,6 +7130,7 @@ class KafkaApisTest extends Logging {
 
     val groupIds = List("group-id-0", "group-id-1", "group-id-2").asJava
     val consumerGroupDescribeRequestData = new ConsumerGroupDescribeRequestData()
+      .setIncludeAuthorizedOperations(includeAuthorizedOperations)
     consumerGroupDescribeRequestData.groupIds.addAll(groupIds)
     val requestChannelRequest = buildRequest(new ConsumerGroupDescribeRequest.Builder(consumerGroupDescribeRequestData, true).build())
 
@@ -7141,15 +7145,27 @@ class KafkaApisTest extends Logging {
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
 
+    future.complete(List(
+      new DescribedGroup().setGroupId(groupIds.get(0)),
+      new DescribedGroup().setGroupId(groupIds.get(1)),
+      new DescribedGroup().setGroupId(groupIds.get(2))
+    ).asJava)
+
+    var authorizedOperationsInt = Int.MinValue;
+    if (includeAuthorizedOperations) {
+      authorizedOperationsInt = Utils.to32BitField(
+        AclEntry.supportedOperations(ResourceType.GROUP).asScala
+          .map(_.code.asInstanceOf[JByte]).asJava)
+    }
+
+    // Can't reuse the above list here because we would not test the implementation in KafkaApis then
     val describedGroups = List(
       new DescribedGroup().setGroupId(groupIds.get(0)),
       new DescribedGroup().setGroupId(groupIds.get(1)),
       new DescribedGroup().setGroupId(groupIds.get(2))
-    ).asJava
-
-    future.complete(describedGroups)
+    ).map(group => group.setAuthorizedOperations(authorizedOperationsInt))
     val expectedConsumerGroupDescribeResponseData = new ConsumerGroupDescribeResponseData()
-      .setGroups(describedGroups)
+      .setGroups(describedGroups.asJava)
 
     val response = verifyNoThrottling[ConsumerGroupDescribeResponse](requestChannelRequest)
 
