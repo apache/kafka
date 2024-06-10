@@ -1211,6 +1211,8 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
 
   def logLocalRetentionMs: java.lang.Long = getLong(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP)
 
+  def remoteFetchMaxWaitMs = getInt(RemoteLogManagerConfig.REMOTE_FETCH_MAX_WAIT_MS_PROP)
+
   validateValues()
 
   @nowarn("cat=deprecation")
@@ -1362,14 +1364,6 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
           s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} must be empty when not running in KRaft mode: ${controllerListenerNames.asJava}")
       }
       validateAdvertisedListenersNonEmptyForBroker()
-    }
-    if (processRoles.contains(ProcessRole.BrokerRole)
-      && originals.containsKey(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG)
-      && logDirs.size > 1) {
-        require(interBrokerProtocolVersion.isDirectoryAssignmentSupported,
-          s"Multiple log directories (aka JBOD) are not supported with the configured " +
-            s"${interBrokerProtocolVersion} ${ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG}. " +
-            s"Need ${MetadataVersion.IBP_3_7_IV2} or higher")
     }
 
     val listenerNames = listeners.map(_.listenerName).toSet

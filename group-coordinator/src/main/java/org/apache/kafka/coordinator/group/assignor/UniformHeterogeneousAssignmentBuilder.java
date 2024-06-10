@@ -41,7 +41,7 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 /**
- * The general uniform assignment builder is used to generate the target assignment for a consumer group with
+ * The heterogeneous uniform assignment builder is used to generate the target assignment for a consumer group with
  * at least one of its members subscribed to a different set of topics.
  *
  * Assignments are done according to the following principles:
@@ -55,8 +55,8 @@ import java.util.stream.Collectors;
  * This assignment builder prioritizes the above properties in the following order:
  *      Balance > Stickiness.
  */
-public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBuilder {
-    private static final Logger LOG = LoggerFactory.getLogger(GeneralUniformAssignmentBuilder.class);
+public class UniformHeterogeneousAssignmentBuilder {
+    private static final Logger LOG = LoggerFactory.getLogger(UniformHeterogeneousAssignmentBuilder.class);
 
     /**
      * The group metadata specification.
@@ -113,7 +113,7 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
      */
     private final PartitionMovements partitionMovements;
 
-    public GeneralUniformAssignmentBuilder(GroupSpec groupSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
+    public UniformHeterogeneousAssignmentBuilder(GroupSpec groupSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
         this.groupSpec = groupSpec;
         this.subscribedTopicDescriber = subscribedTopicDescriber;
         this.subscribedTopicIds = new HashSet<>();
@@ -133,7 +133,7 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
                 targetAssignment.put(memberId, new MemberAssignmentImpl(new HashMap<>()));
             })
         );
-        this.unassignedPartitions = new HashSet<>(topicIdPartitions(subscribedTopicIds, subscribedTopicDescriber));
+        this.unassignedPartitions = topicIdPartitions(subscribedTopicIds, subscribedTopicDescriber);
         this.assignedStickyPartitions = new HashSet<>();
         this.assignmentManager = new AssignmentManager(this.subscribedTopicDescriber);
         this.sortedMembersByAssignmentSize = assignmentManager.sortMembersByAssignmentSize(groupSpec.memberIds());
@@ -148,8 +148,7 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
      * <li> Allocate all the remaining unassigned partitions to the members in a balanced manner.</li>
      * <li> Iterate through the assignment until it is balanced. </li>
      */
-    @Override
-    protected GroupAssignment buildAssignment() {
+    public GroupAssignment build() {
         if (subscribedTopicIds.isEmpty()) {
             LOG.info("The subscription list is empty, returning an empty assignment");
             return new GroupAssignment(Collections.emptyMap());
@@ -460,6 +459,43 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
 
         assignmentManager.removePartitionFromTargetAssignment(topicIdPartition, oldMember);
         assignmentManager.addPartitionToTargetAssignment(topicIdPartition, newMember);
+    }
+
+    /**
+     * Adds the topic's partition to the member's target assignment.
+     */
+    private static void addPartitionToAssignment(
+        Map<String, MemberAssignment> memberAssignments,
+        String memberId,
+        Uuid topicId,
+        int partition
+    ) {
+        memberAssignments.get(memberId)
+            .partitions()
+            .computeIfAbsent(topicId, __ -> new HashSet<>())
+            .add(partition);
+    }
+
+    /**
+     * Constructs a set of {@code TopicIdPartition} including all the given topic Ids based on their partition counts.
+     *
+     * @param topicIds                      Collection of topic Ids.
+     * @param subscribedTopicDescriber      Describer to fetch partition counts for topics.
+     *
+     * @return Set of {@code TopicIdPartition} including all the provided topic Ids.
+     */
+    private static Set<TopicIdPartition> topicIdPartitions(
+        Collection<Uuid> topicIds,
+        SubscribedTopicDescriber subscribedTopicDescriber
+    ) {
+        Set<TopicIdPartition> topicIdPartitions = new HashSet<>();
+        for (Uuid topicId : topicIds) {
+            int numPartitions = subscribedTopicDescriber.numPartitions(topicId);
+            for (int partitionId = 0; partitionId < numPartitions; partitionId++) {
+                topicIdPartitions.add(new TopicIdPartition(topicId, partitionId));
+            }
+        }
+        return topicIdPartitions;
     }
 
     /**
