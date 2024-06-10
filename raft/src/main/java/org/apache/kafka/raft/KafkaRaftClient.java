@@ -1354,7 +1354,9 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         return DescribeQuorumResponse.singletonResponse(
             log.topicPartition(),
             leaderState.describeQuorum(currentTimeMs),
-            leaderState.nodes(currentTimeMs)
+            requestMetadata.apiVersion() < DescribeQuorumResponseData.Node.LOWEST_SUPPORTED_VERSION
+                ? null
+                : leaderState.nodes(currentTimeMs)
         );
     }
 
@@ -1895,6 +1897,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
 
             RaftRequest.Outbound requestMessage = new RaftRequest.Outbound(
                 correlationId,
+                request.highestSupportedVersion(),
                 request,
                 destination,
                 currentTimeMs
