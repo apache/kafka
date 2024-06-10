@@ -639,7 +639,6 @@ public class MembershipManagerImplTest {
         assertEquals(toTopicIdPartitionMap(assignment1), membershipManager.currentAssignment().partitions);
     }
 
-    // TODO
     /**
      * This is the case where we receive a new assignment while reconciling an existing one. The intermediate assignment
      * is not applied, and a new assignment containing the same partitions is received and reconciled. In all assignments,
@@ -829,7 +828,6 @@ public class MembershipManagerImplTest {
         verifyReconciliationTriggeredAndCompleted(membershipManager, Arrays.asList(topicId1Partition0, topicId2Partition0));
     }
 
-    // TODO
     // Tests the case where topic metadata is not available at the time of the assignment,
     // but is made available later.
     @Test
@@ -936,7 +934,6 @@ public class MembershipManagerImplTest {
         testLeaveGroupReleasesAssignmentAndResetsEpochToSendLeaveGroup(membershipManager);
     }
 
-    // TODO
     @Test
     public void testLeaveGroupWhenMemberOwnsAssignment() {
         createCommitRequestManager();
@@ -1142,7 +1139,6 @@ public class MembershipManagerImplTest {
                 () -> membershipManager.onHeartbeatSuccess(unknownMemberResponse.data()));
     }
 
-    // TODO
     /**
      * This test should be the case when an assignment is sent to the member, and it cannot find
      * it in metadata (permanently, ex. topic deleted). The member will keep the assignment as
@@ -1176,7 +1172,7 @@ public class MembershipManagerImplTest {
 
         Set<TopicPartition> expectedAssignment = Collections.singleton(new TopicPartition(topicName, 0));
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
-        verify(subscriptionState).assignFromSubscribed(expectedAssignment);
+        verify(subscriptionState).assignFromSubscribedAwaitingCallback(eq(new HashSet<>(expectedAssignment)), any(SortedSet.class));
 
         // When ack for the reconciled assignment is sent, member should go back to STABLE
         // because the first assignment that was not resolved should have been discarded
@@ -1185,7 +1181,6 @@ public class MembershipManagerImplTest {
         assertTrue(membershipManager.topicsAwaitingReconciliation().isEmpty());
     }
 
-    // TODO
     /**
      * This test ensures that member goes back to STABLE when the broker sends assignment that
      * removes the unresolved target the client has, without triggering a reconciliation. In this
@@ -1270,7 +1265,7 @@ public class MembershipManagerImplTest {
 
         // Assignment should have been reconciled.
         Set<TopicPartition> expectedAssignment = Collections.singleton(new TopicPartition(topicName, 1));
-        verify(subscriptionState).assignFromSubscribed(expectedAssignment);
+        verify(subscriptionState).assignFromSubscribedAwaitingCallback(eq(new HashSet<>(expectedAssignment)), any(SortedSet.class));
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         assertTrue(membershipManager.topicsAwaitingReconciliation().isEmpty());
     }
@@ -1318,7 +1313,6 @@ public class MembershipManagerImplTest {
         verify(subscriptionState, never()).assignFromSubscribed(anyCollection());
     }
 
-    // TODO
     @Test
     public void testReconcileNewPartitionsAssignedWhenNoPartitionOwned() {
         createCommitRequestManager();
@@ -1335,7 +1329,6 @@ public class MembershipManagerImplTest {
         verifyReconciliationTriggeredAndCompleted(membershipManager, assignedPartitions);
     }
 
-    // TODO
     @Test
     public void testReconcileNewPartitionsAssignedWhenOtherPartitionsOwned() {
         createCommitRequestManager();
@@ -1454,7 +1447,6 @@ public class MembershipManagerImplTest {
         testRevocationOfAllPartitionsCompleted(membershipManager);
     }
 
-    // TODO
     @Test
     public void testReconcileNewPartitionsAssignedAndRevoked() {
         createCommitRequestManager();
@@ -1477,10 +1469,9 @@ public class MembershipManagerImplTest {
         assertEquals(topicIdPartitionsMap(topicId, 1, 2), membershipManager.currentAssignment().partitions);
         assertFalse(membershipManager.reconciliationInProgress());
 
-        verify(subscriptionState).assignFromSubscribed(anyCollection());
+        verify(subscriptionState).assignFromSubscribedAwaitingCallback(anyCollection(), any(SortedSet.class));
     }
 
-    // TODO
     @Test
     public void testMetadataUpdatesReconcilesUnresolvedAssignments() {
         createCommitRequestManager();
