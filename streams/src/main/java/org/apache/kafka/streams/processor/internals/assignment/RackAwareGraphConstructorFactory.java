@@ -25,14 +25,14 @@ import java.util.Set;
 import java.util.TreeMap;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
-import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 
 public class RackAwareGraphConstructorFactory {
 
     static <T> RackAwareGraphConstructor<T> create(final AssignmentConfigs assignmentConfigs,
                                                    final Map<Subtopology, Set<TaskId>> tasksForTopicGroup) {
-        return create(assignmentConfigs.rackAwareAssignmentStrategy, new ArrayList<>(new TreeMap<>(tasksForTopicGroup).values()));
+        return create(assignmentConfigs.rackAwareAssignmentStrategy(), new ArrayList<>(new TreeMap<>(tasksForTopicGroup).values()));
     }
 
     public static <T> RackAwareGraphConstructor<T> create(final String rackAwareAssignmentStrategy,
