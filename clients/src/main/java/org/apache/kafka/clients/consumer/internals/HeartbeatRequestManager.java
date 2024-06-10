@@ -263,7 +263,8 @@ public class HeartbeatRequestManager implements RequestManager {
         pollTimer.update(pollMs);
         if (pollTimer.isExpired()) {
             logger.warn("Time between subsequent calls to poll() was longer than the configured " +
-                "max.poll.interval.ms, exceeded approximately by {} ms.", pollTimer.isExpiredBy());
+                "max.poll.interval.ms, exceeded approximately by {} ms. Member {} will rejoin the group now.",
+                pollTimer.isExpiredBy(), membershipManager.memberId());
             membershipManager.maybeRejoinStaleMember();
         }
         pollTimer.reset(maxPollIntervalMs);

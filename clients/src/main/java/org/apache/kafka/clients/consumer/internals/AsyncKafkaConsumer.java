@@ -1278,12 +1278,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             autoCommitSync(timer);
 
         applicationEventHandler.add(new CommitOnCloseEvent());
-        completeQuietly(
-            () -> {
-                maybeRevokePartitions();
-                applicationEventHandler.addAndGet(new LeaveOnCloseEvent(calculateDeadlineMs(timer)));
-            },
-            "Failed to send leaveGroup heartbeat with a timeout(ms)=" + timer.timeoutMs(), firstException);
+        completeQuietly(() -> maybeRevokePartitions(),
+            "Failed to execute callback to release assignment", firstException);
+        completeQuietly(() -> applicationEventHandler.addAndGet(new LeaveOnCloseEvent(calculateDeadlineMs(timer))),
+            "Failed to send leave group heartbeat with a timeout(ms)=" + timer.timeoutMs(), firstException);
     }
 
     // Visible for testing
@@ -1324,6 +1322,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         } catch (TimeoutException e) {
             log.debug("Timeout expired before the {} operation could complete.", msg);
         } catch (Exception e) {
+            log.error(msg, e);
             firstException.compareAndSet(null, e);
         }
     }
@@ -1502,7 +1501,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 Timer timer = time.timer(Long.MAX_VALUE);
                 UnsubscribeEvent unsubscribeEvent = new UnsubscribeEvent(calculateDeadlineMs(timer));
                 applicationEventHandler.add(unsubscribeEvent);
-                log.info("Unsubscribing all topics or patterns and assigned partitions");
+                log.info("Unsubscribing all topics or patterns and assigned partitions {}",
+                    subscriptions.assignedPartitions());
 
                 try {
                     processBackgroundEvents(unsubscribeEvent.future(), timer);
@@ -1512,8 +1512,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 }
                 resetGroupMetadata();
             }
+        } catch (Exception e) {
+            log.error("Unsubscribe failed", e);
+        }
+        finally {
             subscriptions.unsubscribe();
-        } finally {
             release();
         }
     }
