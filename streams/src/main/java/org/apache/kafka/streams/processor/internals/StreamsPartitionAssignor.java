@@ -920,12 +920,12 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         }
 
         for (final Map.Entry<ProcessId, ClientMetadata> entry : clientMetadataMap.entrySet()) {
-            final ProcessId uuid = entry.getKey();
+            final ProcessId processId = entry.getKey();
             final ClientState state = entry.getValue().state;
             state.initializePrevTasks(taskForPartition, taskManager.topologyMetadata().hasNamedTopologies());
 
-            state.computeTaskLags(uuid, allTaskEndOffsetSums);
-            clientStates.put(uuid, state);
+            state.computeTaskLags(processId, allTaskEndOffsetSums);
+            clientStates.put(processId, state);
         }
 
         return fetchEndOffsetsSuccessful;
