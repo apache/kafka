@@ -27,7 +27,7 @@ import java.util.Map;
 public class AppliedConnectorConfig {
 
     private final Map<String, String> rawConfig;
-    private volatile Map<String, String> transformedConfig;
+    private Map<String, String> transformedConfig;
 
     /**
      * Create a new applied config that has not yet undergone
@@ -42,22 +42,22 @@ public class AppliedConnectorConfig {
      * If necessary, {@link WorkerConfigTransformer#transform(Map) transform} the raw
      * connector config, then return the result. Transformed configurations are cached and
      * returned in all subsequent calls.
+     * <p>
+     * This method is thread-safe: different threads may invoke it at any time and the same
+     * transformed config should always be returned, with transformation still only ever
+     * taking place once before its results are cached.
      * @param configTransformer the transformer to use, if no transformed connector
      *                          config has been cached yet; may be null
      * @return the possibly-cached, transformed, connector config; may be null
      */
-    public Map<String, String> transformedConfig(WorkerConfigTransformer configTransformer) {
+    public synchronized Map<String, String> transformedConfig(WorkerConfigTransformer configTransformer) {
         if (transformedConfig != null || rawConfig == null)
             return transformedConfig;
 
-        synchronized (this) {
-            if (transformedConfig == null) {
-                if (configTransformer != null) {
-                    transformedConfig = configTransformer.transform(rawConfig);
-                } else {
-                    transformedConfig = rawConfig;
-                }
-            }
+        if (configTransformer != null) {
+            transformedConfig = configTransformer.transform(rawConfig);
+        } else {
+            transformedConfig = rawConfig;
         }
 
         return transformedConfig;
