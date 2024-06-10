@@ -257,6 +257,32 @@ public class RaftUtil {
         return response;
     }
 
+    public static BeginQuorumEpochRequestData singletonBeginQuorumEpochRequest(
+        TopicPartition topicPartition,
+        String clusterId,
+        int leaderEpoch,
+        int leaderId,
+        Endpoints leaderEndponts
+    ) {
+        return new BeginQuorumEpochRequestData()
+            .setClusterId(clusterId)
+            .setTopics(
+                Collections.singletonList(
+                    new BeginQuorumEpochRequestData.TopicData()
+                        .setTopicName(topicPartition.topic())
+                        .setPartitions(
+                            Collections.singletonList(
+                                new BeginQuorumEpochRequestData.PartitionData()
+                                    .setPartitionIndex(topicPartition.partition())
+                                    .setLeaderEpoch(leaderEpoch)
+                                    .setLeaderId(leaderId)
+                            )
+                        )
+                )
+            )
+            .setLeaderEndpoints(leaderEndponts.toBeginQuorumEpochRequest());
+    }
+
     public static BeginQuorumEpochResponseData singletonBeginQuorumEpochResponse(
         ListenerName listenerName,
         short apiVersion,

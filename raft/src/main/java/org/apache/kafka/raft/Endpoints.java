@@ -26,6 +26,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
+import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.message.EndQuorumEpochRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.VoteResponseData;
@@ -75,6 +76,21 @@ final public class Endpoints {
         return String.format("Endpoints(endpoints=%s)", endpoints);
     }
 
+    public BeginQuorumEpochRequestData.LeaderEndpointCollection toBeginQuorumEpochRequest() {
+        BeginQuorumEpochRequestData.LeaderEndpointCollection leaderEndpoints =
+            new BeginQuorumEpochRequestData.LeaderEndpointCollection(endpoints.size());
+        for (Map.Entry<ListenerName, InetSocketAddress> entry : endpoints.entrySet()) {
+            leaderEndpoints.add(
+                new BeginQuorumEpochRequestData.LeaderEndpoint()
+                    .setName(entry.getKey().value())
+                    .setHost(entry.getValue().getHostString())
+                    .setPort(entry.getValue().getPort())
+            );
+        }
+
+        return leaderEndpoints;
+    }
+
     final private static Endpoints EMPTY = new Endpoints(Collections.emptyMap());
     public static Endpoints empty() {
         return EMPTY;
@@ -101,6 +117,21 @@ final public class Endpoints {
         for (BeginQuorumEpochRequestData.LeaderEndpoint endpoint : endpoints) {
             listeners.put(
                 ListenerName.normalised(endpoint.name()),
+                InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port())
+            );
+        }
+
+        return new Endpoints(listeners);
+    }
+
+    public static Endpoints fromBeginQuorumEpochResponse(
+        ListenerName listenerName,
+        BeginQuorumEpochResponseData.NodeEndpointCollection endpoints
+    ) {
+        Map<ListenerName, InetSocketAddress> listeners = new HashMap<>(endpoints.size());
+        for (BeginQuorumEpochResponseData.NodeEndpoint endpoint : endpoints) {
+            listeners.put(
+                listenerName,
                 InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port())
             );
         }

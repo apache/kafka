@@ -303,6 +303,7 @@ final public class KafkaRaftClientSnapshotTest {
         assertEquals(Errors.NONE, Errors.forCode(partitionResponse.errorCode()));
         assertEquals(epoch, partitionResponse.currentLeader().leaderEpoch());
         assertEquals(localId, partitionResponse.currentLeader().leaderId());
+        // TODO: check leader endpoints
         assertEquals(snapshotId.epoch(), partitionResponse.snapshotId().epoch());
         assertEquals(snapshotId.offset(), partitionResponse.snapshotId().endOffset());
     }
@@ -351,6 +352,7 @@ final public class KafkaRaftClientSnapshotTest {
         assertEquals(Errors.NONE, Errors.forCode(partitionResponse.errorCode()));
         assertEquals(epoch, partitionResponse.currentLeader().leaderEpoch());
         assertEquals(localId, partitionResponse.currentLeader().leaderId());
+        // TODO: check leader endpoints
         assertEquals(snapshotId.epoch(), partitionResponse.snapshotId().epoch());
         assertEquals(snapshotId.offset(), partitionResponse.snapshotId().endOffset());
     }
@@ -399,6 +401,7 @@ final public class KafkaRaftClientSnapshotTest {
         assertEquals(Errors.NONE, Errors.forCode(partitionResponse.errorCode()));
         assertEquals(epoch, partitionResponse.currentLeader().leaderEpoch());
         assertEquals(localId, partitionResponse.currentLeader().leaderId());
+        // TODO: check leader endpoints
         assertEquals(snapshotId.epoch(), partitionResponse.snapshotId().epoch());
         assertEquals(snapshotId.offset(), partitionResponse.snapshotId().endOffset());
     }
@@ -489,6 +492,7 @@ final public class KafkaRaftClientSnapshotTest {
         assertEquals(Errors.NONE, Errors.forCode(partitionResponse.errorCode()));
         assertEquals(epoch, partitionResponse.currentLeader().leaderEpoch());
         assertEquals(localId, partitionResponse.currentLeader().leaderId());
+        // TODO: check leader endpoints
         assertEquals(oldestSnapshotId.epoch(), partitionResponse.divergingEpoch().epoch());
         assertEquals(oldestSnapshotId.offset(), partitionResponse.divergingEpoch().endOffset());
     }
@@ -587,6 +591,7 @@ final public class KafkaRaftClientSnapshotTest {
         assertEquals(Errors.NONE, Errors.forCode(partitionResponse.errorCode()));
         assertEquals(epoch, partitionResponse.currentLeader().leaderEpoch());
         assertEquals(localId, partitionResponse.currentLeader().leaderId());
+        // TODO: check leader endpoints
         assertEquals(oldestSnapshotId.epoch(), partitionResponse.snapshotId().epoch());
         assertEquals(oldestSnapshotId.offset(), partitionResponse.snapshotId().endOffset());
     }

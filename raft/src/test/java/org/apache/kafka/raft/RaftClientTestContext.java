@@ -45,7 +45,6 @@ import org.apache.kafka.common.record.ControlRecordUtils;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.Records;
-import org.apache.kafka.common.requests.BeginQuorumEpochRequest;
 import org.apache.kafka.common.requests.DescribeQuorumResponse;
 import org.apache.kafka.common.requests.EndQuorumEpochRequest;
 import org.apache.kafka.common.requests.FetchSnapshotResponse;
@@ -683,6 +682,23 @@ public final class RaftClientTestContext {
         assertInstanceOf(BeginQuorumEpochResponseData.class, raftMessage.data());
         BeginQuorumEpochResponseData response = (BeginQuorumEpochResponseData) raftMessage.data();
         assertEquals(responseError, Errors.forCode(response.errorCode()));
+
+        if (!response.topics().isEmpty()) {
+            BeginQuorumEpochResponseData.PartitionData partitionResponse = response
+                .topics()
+                .get(0)
+                .partitions()
+                .get(0);
+            if (kip853Rpc && partitionResponse.leaderId() >= 0) {
+                int leaderId = partitionResponse.leaderId();
+                Endpoints expectedLeaderEndpoints = voters.listeners(leaderId);
+                Endpoints responseEndpoints = Endpoints.fromBeginQuorumEpochResponse(
+                    channel.listenerName(),
+                    response.nodeEndpoints()
+                );
+                assertEquals(expectedLeaderEndpoints, responseEndpoints);
+            }
+        }
     }
 
     void assertSentBeginQuorumEpochResponse(
@@ -703,6 +719,15 @@ public final class RaftClientTestContext {
         assertEquals(epoch, partitionResponse.leaderEpoch());
         assertEquals(leaderId.orElse(-1), partitionResponse.leaderId());
         assertEquals(partitionError, Errors.forCode(partitionResponse.errorCode()));
+
+        if (kip853Rpc && leaderId.isPresent()) {
+            Endpoints expectedLeaderEndpoints = voters.listeners(leaderId.getAsInt());
+            Endpoints responseEndpoints = Endpoints.fromBeginQuorumEpochResponse(
+                channel.listenerName(),
+                response.nodeEndpoints()
+            );
+            assertEquals(expectedLeaderEndpoints, responseEndpoints);
+        }
     }
 
     RaftRequest.Outbound assertSentEndQuorumEpochRequest(int epoch, int destinationId) {
@@ -765,7 +790,7 @@ public final class RaftClientTestContext {
         return raftRequest;
     }
 
-    FetchResponseData assertSentFetchResponse() {
+    FetchResponseData.PartitionData assertSentFetchPartitionResponse() {
         List<RaftResponse.Outbound> sentMessages = drainSentResponses(ApiKeys.FETCH);
         assertEquals(
             1, sentMessages.size(), "Found unexpected sent messages " + sentMessages);
@@ -777,12 +802,19 @@ public final class RaftClientTestContext {
         assertEquals(1, response.responses().size());
         assertEquals(metadataPartition.topic(), response.responses().get(0).topic());
         assertEquals(1, response.responses().get(0).partitions().size());
-        return response;
-    }
 
-    FetchResponseData.PartitionData assertSentFetchPartitionResponse() {
-        FetchResponseData response = assertSentFetchResponse();
-        return response.responses().get(0).partitions().get(0);
+        FetchResponseData.PartitionData partitionResponse = response.responses().get(0).partitions().get(0);
+        if (kip853Rpc && partitionResponse.currentLeader().leaderId() >= 0) {
+            int leaderId = partitionResponse.currentLeader().leaderId();
+            Endpoints expectedLeaderEndpoints = voters.listeners(leaderId);
+            Endpoints responseEndpoints = Endpoints.fromFetchResponse(
+                channel.listenerName(),
+                response.nodeEndpoints()
+            );
+            assertEquals(expectedLeaderEndpoints, responseEndpoints);
+        }
+
+        return partitionResponse;
     }
 
     void assertSentFetchPartitionResponse(Errors topLevelError) {
@@ -801,8 +833,7 @@ public final class RaftClientTestContext {
         int epoch,
         OptionalInt leaderId
     ) {
-        FetchResponseData response = assertSentFetchResponse();
-        FetchResponseData.PartitionData partitionResponse = response.responses().get(0).partitions().get(0);
+        FetchResponseData.PartitionData partitionResponse = assertSentFetchPartitionResponse();
         assertEquals(error, Errors.forCode(partitionResponse.errorCode()));
         assertEquals(epoch, partitionResponse.currentLeader().leaderEpoch());
         assertEquals(leaderId.orElse(-1), partitionResponse.currentLeader().leaderId());
@@ -810,15 +841,6 @@ public final class RaftClientTestContext {
         assertEquals(-1, partitionResponse.divergingEpoch().epoch());
         assertEquals(-1, partitionResponse.snapshotId().endOffset());
         assertEquals(-1, partitionResponse.snapshotId().epoch());
-
-        if (kip853Rpc && leaderId.isPresent()) {
-            Endpoints expectedLeaderEndpoints = voters.listeners(leaderId.getAsInt());
-            Endpoints responseEndpoints = Endpoints.fromFetchResponse(
-                channel.listenerName(),
-                response.nodeEndpoints()
-            );
-            assertEquals(expectedLeaderEndpoints, responseEndpoints);
-        }
 
         return (MemoryRecords) partitionResponse.records();
     }
@@ -984,20 +1006,17 @@ public final class RaftClientTestContext {
     }
 
     BeginQuorumEpochRequestData beginEpochRequest(String clusterId, int epoch, int leaderId) {
-        return BeginQuorumEpochRequest.singletonRequest(
+        return RaftUtil.singletonBeginQuorumEpochRequest(
             metadataPartition,
             clusterId,
             epoch,
-            leaderId
+            leaderId,
+            voters.listeners(leaderId)
         );
     }
 
     BeginQuorumEpochRequestData beginEpochRequest(int epoch, int leaderId) {
-        return BeginQuorumEpochRequest.singletonRequest(
-            metadataPartition,
-            epoch,
-            leaderId
-        );
+        return beginEpochRequest(clusterId.toString(), epoch, leaderId);
     }
 
     private BeginQuorumEpochResponseData beginEpochResponse(int epoch, int leaderId) {
