@@ -3408,3 +3408,4 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
         }
     }
 }
+
