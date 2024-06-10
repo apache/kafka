@@ -2760,12 +2760,10 @@ public class KafkaAdminClient extends AdminClient {
             }, now);
         }
 
-        Map<ConfigResource, KafkaFuture<Config>> resourceToConfigFuture = nodeFutures.entrySet()
+        return new DescribeConfigsResult(nodeFutures.entrySet()
             .stream()
             .flatMap(x -> x.getValue().entrySet().stream())
-            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-
-        return new DescribeConfigsResult(resourceToConfigFuture);
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
     }
 
     private Config describeConfigResult(DescribeConfigsResponseData.DescribeConfigsResult describeConfigsResult) {
