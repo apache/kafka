@@ -21,6 +21,7 @@ import org.apache.kafka.common.MessageFormatter;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Deserializer;
+
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
@@ -144,4 +145,3 @@ public class DefaultMessageFormatterTest {
         }
     }
 }
-

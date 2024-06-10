@@ -251,8 +251,6 @@ def excludedSpotlessModules = [':clients',
                                ':streams:upgrade-system-tests-35',
                                ':streams:upgrade-system-tests-36',
                                ':streams:upgrade-system-tests-37',
-                               ':tools',
-                               ':tools:tools-api',
                                ':trogdor']
 
 

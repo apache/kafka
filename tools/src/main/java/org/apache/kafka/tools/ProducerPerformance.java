@@ -16,8 +16,20 @@
  */
 package org.apache.kafka.tools;
 
-import static net.sourceforge.argparse4j.impl.Arguments.store;
-import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
+import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.util.ThroughputThrottler;
+
+import net.sourceforge.argparse4j.ArgumentParsers;
+import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.ArgumentParserException;
+import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
+import net.sourceforge.argparse4j.inf.Namespace;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -25,25 +37,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
-import java.util.Arrays;
 import java.util.SplittableRandom;
 
-import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
-import org.apache.kafka.clients.producer.Callback;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.clients.producer.RecordMetadata;
-
-import net.sourceforge.argparse4j.ArgumentParsers;
-import net.sourceforge.argparse4j.inf.ArgumentParser;
-import net.sourceforge.argparse4j.inf.ArgumentParserException;
-import net.sourceforge.argparse4j.inf.Namespace;
-import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.server.util.ThroughputThrottler;
-import org.apache.kafka.common.utils.Utils;
+import static net.sourceforge.argparse4j.impl.Arguments.store;
+import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
 
 public class ProducerPerformance {
 
