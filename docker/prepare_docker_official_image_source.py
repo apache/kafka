@@ -46,7 +46,7 @@ def remove_args_and_hardcode_values(file_path, kafka_version, kafka_url):
     filedata = filedata.replace(
         "ARG build_date", f"ENV build_date {str(date.today())}")
     original_comment = re.compile(r"# Get kafka from https://archive.apache.org/dist/kafka and pass the url through build arguments")
-    updated_comment = f"# Get Kafka from https://downloads.apache.org/kafka for version {kafka_version} passed in the env var"
+    updated_comment = f"# Get Kafka from https://downloads.apache.org/kafka, url passed as env var, for version {kafka_version}"
     filedata = original_comment.sub(updated_comment, filedata)
     with open(file_path, 'w') as file:
         file.write(filedata)
