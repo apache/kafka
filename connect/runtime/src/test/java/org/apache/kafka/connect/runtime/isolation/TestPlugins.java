@@ -114,7 +114,7 @@ public class TestPlugins {
         /**
          * A plugin which will always throw an exception during loading
          */
-        ALWAYS_THROW_EXCEPTION(TestPackage.ALWAYS_THROW_EXCEPTION, "test.plugins.AlwaysThrowException"),
+        ALWAYS_THROW_EXCEPTION(TestPackage.ALWAYS_THROW_EXCEPTION, "test.plugins.AlwaysThrowException", false),
         /**
          * A plugin which is packaged with other incorrectly packaged plugins, but itself has no issues loading.
          */

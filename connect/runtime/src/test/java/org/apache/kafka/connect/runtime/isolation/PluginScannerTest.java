@@ -17,7 +17,6 @@
 
 package org.apache.kafka.connect.runtime.isolation;
 
-import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
