@@ -70,6 +70,9 @@ public class QuorumInfo {
         return observers;
     }
 
+    /**
+     * @return The voter nodes in the Raft cluster, or an empty map if KIP-853 is not enabled.
+     */
     public Map<Integer, Node> nodes() {
         return nodes;
     }
@@ -138,7 +141,7 @@ public class QuorumInfo {
         }
 
         /**
-         * Return the directory id of the replica if configured.
+         * Return the directory id of the replica if configured, or Uuid.ZERO_UUID if not.
          */
         public Uuid replicaDirectoryId() {
             return replicaDirectoryId;

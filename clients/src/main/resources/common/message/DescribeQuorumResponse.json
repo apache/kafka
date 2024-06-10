@@ -21,6 +21,7 @@
   // Version 2 adds ErrorMessage, Nodes, ErrorMessage in ParitionData, ReplicaDirectoryId in ReplicaState (KIP-853).
   "validVersions": "0-2",
   "flexibleVersions": "0+",
+  "latestVersionUnstable": true, // Version 2 is still under development.
   "fields": [
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
       "about": "The top level error code."},
