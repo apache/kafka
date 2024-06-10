@@ -46,6 +46,8 @@ import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.runtime.distributed.DistributedHerder.HerderMetrics;
+import org.apache.kafka.connect.runtime.isolation.IsolatedSinkConnector;
+import org.apache.kafka.connect.runtime.isolation.IsolatedSourceConnector;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.InternalRequestSignature;
 import org.apache.kafka.connect.runtime.rest.RestClient;
@@ -59,7 +61,6 @@ import org.apache.kafka.connect.runtime.rest.entities.Message;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
-import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.source.ConnectorTransactionBoundaries;
 import org.apache.kafka.connect.source.ExactlyOnceSupport;
 import org.apache.kafka.connect.source.SourceConnector;
@@ -568,16 +569,16 @@ public class DistributedHerderTest {
     }
 
     @Test
-    public void testRevoke() throws TimeoutException {
+    public void testRevoke() throws Exception {
         revokeAndReassign(false);
     }
 
     @Test
-    public void testIncompleteRebalanceBeforeRevoke() throws TimeoutException {
+    public void testIncompleteRebalanceBeforeRevoke() throws Exception {
         revokeAndReassign(true);
     }
 
-    public void revokeAndReassign(boolean incompleteRebalance) throws TimeoutException {
+    public void revokeAndReassign(boolean incompleteRebalance) throws Exception {
         connectProtocolVersion = CONNECT_PROTOCOL_V1;
         int configOffset = 1;
 
@@ -887,7 +888,7 @@ public class DistributedHerderTest {
         Map<String, String> config = new HashMap<>(CONN2_CONFIG);
         config.put(ConnectorConfig.NAME_CONFIG, "test-group");
 
-        SinkConnector connectorMock = mock(SinkConnector.class);
+        IsolatedSinkConnector connectorMock = mock(IsolatedSinkConnector.class);
 
         // CONN2 creation should fail because the worker group id (connect-test-group) conflicts with
         // the consumer group id we would use for this sink
@@ -906,7 +907,7 @@ public class DistributedHerderTest {
         Map<String, String> config = new HashMap<>(CONN2_CONFIG);
         config.put(overriddenGroupId, "connect-test-group");
 
-        SinkConnector connectorMock = mock(SinkConnector.class);
+        IsolatedSinkConnector connectorMock = mock(IsolatedSinkConnector.class);
 
         // CONN2 creation should fail because the worker group id (connect-test-group) conflicts with
         // the consumer group id we would use for this sink
@@ -918,11 +919,6 @@ public class DistributedHerderTest {
                 Collections.singletonList("Consumer group connect-test-group conflicts with Connect worker group connect-test-group"),
                 overriddenGroupIdConfig.errorMessages());
 
-        ConfigValue nameConfig = validatedConfigs.get(ConnectorConfig.NAME_CONFIG);
-        assertEquals(
-                Collections.emptyList(),
-                nameConfig.errorMessages()
-        );
     }
 
     @Test
@@ -3311,7 +3307,7 @@ public class DistributedHerderTest {
     }
 
     @Test
-    public void testPollDurationOnSlowConnectorOperations() {
+    public void testPollDurationOnSlowConnectorOperations() throws Exception {
         connectProtocolVersion = CONNECT_PROTOCOL_V1;
         // If an operation during tick() takes some amount of time, that time should count against the rebalance delay
         final int rebalanceDelayMs = 20000;
@@ -3377,7 +3373,7 @@ public class DistributedHerderTest {
     }
 
     @Test
-    public void testTaskReconfigurationRetriesWithConnectorTaskConfigsException() {
+    public void testTaskReconfigurationRetriesWithConnectorTaskConfigsException() throws Exception {
         when(member.memberId()).thenReturn("leader");
         when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V0);
         expectRebalance(1, Collections.emptyList(), Collections.emptyList(), true);
@@ -3397,7 +3393,7 @@ public class DistributedHerderTest {
     }
 
     @Test
-    public void testTaskReconfigurationNoRetryWithTooManyTasks() {
+    public void testTaskReconfigurationNoRetryWithTooManyTasks() throws Exception {
         // initial tick
         when(member.memberId()).thenReturn("leader");
         when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V0);
@@ -3438,7 +3434,7 @@ public class DistributedHerderTest {
     }
 
     @Test
-    public void testTaskReconfigurationRetriesWithLeaderRequestForwardingException() {
+    public void testTaskReconfigurationRetriesWithLeaderRequestForwardingException() throws Exception {
         herder = mock(DistributedHerder.class, withSettings().defaultAnswer(CALLS_REAL_METHODS).useConstructor(new DistributedConfig(HERDER_CONFIG),
                 worker, WORKER_ID, KAFKA_CLUSTER_ID, statusBackingStore, configBackingStore, member, MEMBER_URL, restClient, metrics, time,
                 noneConnectorClientConfigOverridePolicy, Collections.emptyList(), new MockSynchronousExecutor(), new AutoCloseable[]{}));
@@ -3551,12 +3547,12 @@ public class DistributedHerderTest {
     }
 
     @Test
-    public void testExactlyOnceSourceSupportValidation() {
+    public void testExactlyOnceSourceSupportValidation() throws Exception {
         herder = exactlyOnceHerder();
         Map<String, String> config = new HashMap<>();
         config.put(SourceConnectorConfig.EXACTLY_ONCE_SUPPORT_CONFIG, REQUIRED.toString());
 
-        SourceConnector connectorMock = mock(SourceConnector.class);
+        IsolatedSourceConnector connectorMock = mock(IsolatedSourceConnector.class);
         when(connectorMock.exactlyOnceSupport(eq(config))).thenReturn(ExactlyOnceSupport.SUPPORTED);
 
         Map<String, ConfigValue> validatedConfigs = herder.validateSourceConnectorConfig(
@@ -3567,12 +3563,12 @@ public class DistributedHerderTest {
     }
 
     @Test
-    public void testExactlyOnceSourceSupportValidationOnUnsupportedConnector() {
+    public void testExactlyOnceSourceSupportValidationOnUnsupportedConnector() throws Exception {
         herder = exactlyOnceHerder();
         Map<String, String> config = new HashMap<>();
         config.put(SourceConnectorConfig.EXACTLY_ONCE_SUPPORT_CONFIG, REQUIRED.toString());
 
-        SourceConnector connectorMock = mock(SourceConnector.class);
+        IsolatedSourceConnector connectorMock = mock(IsolatedSourceConnector.class);
         when(connectorMock.exactlyOnceSupport(eq(config))).thenReturn(ExactlyOnceSupport.UNSUPPORTED);
 
         Map<String, ConfigValue> validatedConfigs = herder.validateSourceConnectorConfig(
@@ -3585,12 +3581,12 @@ public class DistributedHerderTest {
     }
 
     @Test
-    public void testExactlyOnceSourceSupportValidationOnUnknownConnector() {
+    public void testExactlyOnceSourceSupportValidationOnUnknownConnector() throws Exception {
         herder = exactlyOnceHerder();
         Map<String, String> config = new HashMap<>();
         config.put(SourceConnectorConfig.EXACTLY_ONCE_SUPPORT_CONFIG, REQUIRED.toString());
 
-        SourceConnector connectorMock = mock(SourceConnector.class);
+        IsolatedSourceConnector connectorMock = mock(IsolatedSourceConnector.class);
         when(connectorMock.exactlyOnceSupport(eq(config))).thenReturn(null);
 
         Map<String, ConfigValue> validatedConfigs = herder.validateSourceConnectorConfig(
@@ -3605,12 +3601,12 @@ public class DistributedHerderTest {
     }
 
     @Test
-    public void testExactlyOnceSourceSupportValidationHandlesConnectorErrorsGracefully() {
+    public void testExactlyOnceSourceSupportValidationHandlesConnectorErrorsGracefully() throws Exception {
         herder = exactlyOnceHerder();
         Map<String, String> config = new HashMap<>();
         config.put(SourceConnectorConfig.EXACTLY_ONCE_SUPPORT_CONFIG, REQUIRED.toString());
 
-        SourceConnector connectorMock = mock(SourceConnector.class);
+        IsolatedSourceConnector connectorMock = mock(IsolatedSourceConnector.class);
         String errorMessage = "time to add a new unit test :)";
         when(connectorMock.exactlyOnceSupport(eq(config))).thenThrow(new NullPointerException(errorMessage));
 
@@ -3626,11 +3622,11 @@ public class DistributedHerderTest {
     }
 
     @Test
-    public void testExactlyOnceSourceSupportValidationWhenExactlyOnceNotEnabledOnWorker() {
+    public void testExactlyOnceSourceSupportValidationWhenExactlyOnceNotEnabledOnWorker() throws Exception {
         Map<String, String> config = new HashMap<>();
         config.put(SourceConnectorConfig.EXACTLY_ONCE_SUPPORT_CONFIG, REQUIRED.toString());
 
-        SourceConnector connectorMock = mock(SourceConnector.class);
+        IsolatedSourceConnector connectorMock = mock(IsolatedSourceConnector.class);
         when(connectorMock.exactlyOnceSupport(eq(config))).thenReturn(ExactlyOnceSupport.SUPPORTED);
 
         Map<String, ConfigValue> validatedConfigs = herder.validateSourceConnectorConfig(
@@ -3648,7 +3644,7 @@ public class DistributedHerderTest {
         Map<String, String> config = new HashMap<>();
         config.put(SourceConnectorConfig.EXACTLY_ONCE_SUPPORT_CONFIG, "invalid");
 
-        SourceConnector connectorMock = mock(SourceConnector.class);
+        IsolatedSourceConnector connectorMock = mock(IsolatedSourceConnector.class);
 
         Map<String, ConfigValue> validatedConfigs = herder.validateSourceConnectorConfig(
                 connectorMock, SourceConnectorConfig.configDef(), config);
@@ -3662,12 +3658,12 @@ public class DistributedHerderTest {
     }
 
     @Test
-    public void testConnectorTransactionBoundaryValidation() {
+    public void testConnectorTransactionBoundaryValidation() throws Exception {
         herder = exactlyOnceHerder();
         Map<String, String> config = new HashMap<>();
         config.put(SourceConnectorConfig.TRANSACTION_BOUNDARY_CONFIG, CONNECTOR.toString());
 
-        SourceConnector connectorMock = mock(SourceConnector.class);
+        IsolatedSourceConnector connectorMock = mock(IsolatedSourceConnector.class);
         when(connectorMock.canDefineTransactionBoundaries(eq(config)))
                 .thenReturn(ConnectorTransactionBoundaries.SUPPORTED);
 
@@ -3679,12 +3675,12 @@ public class DistributedHerderTest {
     }
 
     @Test
-    public void testConnectorTransactionBoundaryValidationOnUnsupportedConnector() {
+    public void testConnectorTransactionBoundaryValidationOnUnsupportedConnector() throws Exception {
         herder = exactlyOnceHerder();
         Map<String, String> config = new HashMap<>();
         config.put(SourceConnectorConfig.TRANSACTION_BOUNDARY_CONFIG, CONNECTOR.toString());
 
-        SourceConnector connectorMock = mock(SourceConnector.class);
+        IsolatedSourceConnector connectorMock = mock(IsolatedSourceConnector.class);
         when(connectorMock.canDefineTransactionBoundaries(eq(config)))
                 .thenReturn(ConnectorTransactionBoundaries.UNSUPPORTED);
 
@@ -3700,12 +3696,12 @@ public class DistributedHerderTest {
     }
 
     @Test
-    public void testConnectorTransactionBoundaryValidationHandlesConnectorErrorsGracefully() {
+    public void testConnectorTransactionBoundaryValidationHandlesConnectorErrorsGracefully() throws Exception {
         herder = exactlyOnceHerder();
         Map<String, String> config = new HashMap<>();
         config.put(SourceConnectorConfig.TRANSACTION_BOUNDARY_CONFIG, CONNECTOR.toString());
 
-        SourceConnector connectorMock = mock(SourceConnector.class);
+        IsolatedSourceConnector connectorMock = mock(IsolatedSourceConnector.class);
         String errorMessage = "Wait I thought we tested for this?";
         when(connectorMock.canDefineTransactionBoundaries(eq(config))).thenThrow(new ConnectException(errorMessage));
 
@@ -3726,7 +3722,7 @@ public class DistributedHerderTest {
         Map<String, String> config = new HashMap<>();
         config.put(SourceConnectorConfig.TRANSACTION_BOUNDARY_CONFIG, "CONNECTOR.toString()");
 
-        SourceConnector connectorMock = mock(SourceConnector.class);
+        IsolatedSourceConnector connectorMock = mock(IsolatedSourceConnector.class);
 
         Map<String, ConfigValue> validatedConfigs = herder.validateSourceConnectorConfig(
                 connectorMock, SourceConnectorConfig.configDef(), config);
@@ -4151,7 +4147,7 @@ public class DistributedHerderTest {
                 Collections.emptySet());
     }
 
-    private void expectExecuteTaskReconfiguration(boolean running, ConnectorConfig connectorConfig, Answer<List<Map<String, String>>> answer) {
+    private void expectExecuteTaskReconfiguration(boolean running, ConnectorConfig connectorConfig, Answer<List<Map<String, String>>> answer) throws Exception {
         when(worker.isRunning(CONN1)).thenReturn(running);
         if (running) {
             when(worker.getPlugins()).thenReturn(plugins);

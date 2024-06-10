@@ -247,6 +247,15 @@ public class Plugins {
         return delegatingLoader.connectorLoader(connectorClassOrAlias);
     }
 
+    public ClassLoader pluginLoader(Object delegate) {
+        ClassLoader classLoader = delegate.getClass().getClassLoader();
+        if (classLoader instanceof PluginClassLoader) {
+            return classLoader;
+        } else {
+            return delegatingLoader;
+        }
+    }
+
     @SuppressWarnings({"unchecked", "rawtypes"})
     public Set<PluginDesc<Connector>> connectors() {
         Set<PluginDesc<Connector>> connectors = new TreeSet<>((Set) sinkConnectors());
@@ -287,7 +296,19 @@ public class Plugins {
         return newPlugin(klass);
     }
 
-    public Connector newConnector(String connectorClassOrAlias) {
+    public IsolatedConnector<?> newConnector(String connectorClassOrAlias) {
+        Connector connector = newRawConnector(connectorClassOrAlias);
+        if (connector instanceof SourceConnector) {
+            return new IsolatedSourceConnector(this, (SourceConnector) connector);
+        } else if (connector instanceof SinkConnector) {
+            return new IsolatedSinkConnector(this, (SinkConnector) connector);
+        } else {
+            throw new IllegalArgumentException(
+                "Unknown connector " + connector.getClass().getName() + " does not subclass any known connector type");
+        }
+    }
+
+    private Connector newRawConnector(String connectorClassOrAlias) {
         Class<? extends Connector> klass = connectorClass(connectorClassOrAlias);
         return newPlugin(klass);
     }

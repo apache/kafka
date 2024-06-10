@@ -238,7 +238,12 @@ public class StandaloneHerder extends AbstractHerder {
                 }
 
                 requestExecutorService.submit(() -> {
-                    updateConnectorTasks(connName);
+                    try {
+                        updateConnectorTasks(connName);
+                    } catch (Exception e) {
+                        callback.onCompletion(e, null);
+                        return;
+                    }
                     callback.onCompletion(null, new Created<>(created, createConnectorInfo(connName)));
                 });
             });
@@ -289,7 +294,11 @@ public class StandaloneHerder extends AbstractHerder {
             log.error("Task that requested reconfiguration does not exist: {}", connName);
             return;
         }
-        updateConnectorTasks(connName);
+        try {
+            updateConnectorTasks(connName);
+        } catch (Exception e) {
+            log.error("Unable to generate task configs for {}", connName, e);
+        }
     }
 
     @Override
@@ -453,7 +462,7 @@ public class StandaloneHerder extends AbstractHerder {
         worker.startConnector(connName, connConfigs, new HerderConnectorContext(this, connName), this, targetState, onStart);
     }
 
-    private List<Map<String, String>> recomputeTaskConfigs(String connName) {
+    private List<Map<String, String>> recomputeTaskConfigs(String connName) throws Exception {
         Map<String, String> config = configState.connectorConfig(connName);
 
         ConnectorConfig connConfig = worker.isSinkConnector(connName) ?
@@ -509,7 +518,7 @@ public class StandaloneHerder extends AbstractHerder {
         }
     }
 
-    private synchronized void updateConnectorTasks(String connName) {
+    private synchronized void updateConnectorTasks(String connName) throws Exception {
         if (!worker.isRunning(connName)) {
             log.info("Skipping update of tasks for connector {} since it is not running", connName);
             return;
@@ -572,7 +581,13 @@ public class StandaloneHerder extends AbstractHerder {
                     }
 
                     if (newState == TargetState.STARTED) {
-                        requestExecutorService.submit(() -> updateConnectorTasks(connector));
+                        requestExecutorService.submit(() -> {
+                            try {
+                                updateConnectorTasks(connector);
+                            } catch (Exception e) {
+                                log.error("Unable to generate task configs for {}", connector, e);
+                            }
+                        });
                     }
                 });
             }

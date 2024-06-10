@@ -40,7 +40,11 @@ import org.apache.kafka.connect.runtime.TaskStatus;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.runtime.distributed.SampleConnectorClientConfigOverridePolicy;
+import org.apache.kafka.connect.runtime.isolation.IsolatedConnector;
+import org.apache.kafka.connect.runtime.isolation.IsolatedSinkConnector;
+import org.apache.kafka.connect.runtime.isolation.IsolatedSourceConnector;
 import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
+import org.apache.kafka.connect.runtime.isolation.PluginType;
 import org.apache.kafka.connect.runtime.rest.entities.Message;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
@@ -65,6 +69,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
 
 import java.util.ArrayList;
@@ -169,18 +174,19 @@ public class StandaloneHerderTest {
     }
 
     @Test
-    public void testCreateConnectorFailedValidation() {
+    public void testCreateConnectorFailedValidation() throws Exception {
         // Basic validation should be performed and return an error, but should still evaluate the connector's config
-
         Map<String, String> config = connectorConfig(SourceSink.SOURCE);
         config.remove(ConnectorConfig.NAME_CONFIG);
 
-        Connector connectorMock = mock(SourceConnector.class);
+        IsolatedConnector<?> connectorMock = mock(IsolatedSourceConnector.class);
+        when(connectorMock.type()).thenReturn(PluginType.SOURCE);
+        Mockito.<Class<?>>when(connectorMock.pluginClass()).thenReturn(BogusSourceConnector.class);
         when(worker.configTransformer()).thenReturn(transformer);
         final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
         when(transformer.transform(configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
         when(worker.getPlugins()).thenReturn(plugins);
-        when(plugins.newConnector(anyString())).thenReturn(connectorMock);
+        Mockito.<IsolatedConnector<?>>when(plugins.newConnector(anyString())).thenReturn(connectorMock);
         when(plugins.connectorLoader(anyString())).thenReturn(pluginLoader);
         when(plugins.withClassLoader(pluginLoader)).thenReturn(loaderSwap);
 
@@ -315,7 +321,6 @@ public class StandaloneHerderTest {
         expectAdd(SourceSink.SOURCE);
 
         Map<String, String> config = connectorConfig(SourceSink.SOURCE);
-        ConnectorTaskId taskId = new ConnectorTaskId(CONNECTOR_NAME, 0);
         expectConfigValidation(SourceSink.SOURCE, config);
 
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
@@ -337,6 +342,7 @@ public class StandaloneHerderTest {
         FutureCallback<Void> restartCallback = new FutureCallback<>();
         expectStop();
         herder.restartConnector(CONNECTOR_NAME, restartCallback);
+        ConnectorTaskId taskId = new ConnectorTaskId(CONNECTOR_NAME, 0);
         verify(statusBackingStore).put(new TaskStatus(taskId, TaskStatus.State.DESTROYED, WORKER_ID, 0));
         restartCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
     }
@@ -373,7 +379,6 @@ public class StandaloneHerderTest {
         expectAdd(SourceSink.SOURCE);
 
         Map<String, String> connectorConfig = connectorConfig(SourceSink.SOURCE);
-
         expectConfigValidation(SourceSink.SOURCE, connectorConfig);
 
         doNothing().when(worker).stopAndAwaitTask(taskId);
@@ -652,8 +657,6 @@ public class StandaloneHerderTest {
 
     @Test
     public void testAccessors() throws Exception {
-        Map<String, String> connConfig = connectorConfig(SourceSink.SOURCE);
-        System.out.println(connConfig);
 
         Callback<Collection<String>> listConnectorsCb = mock(Callback.class);
         Callback<ConnectorInfo> connectorInfoCb = mock(Callback.class);
@@ -668,8 +671,9 @@ public class StandaloneHerderTest {
         doNothing().when(tasksConfigCb).onCompletion(any(NotFoundException.class), isNull());
         doNothing().when(connectorConfigCb).onCompletion(any(NotFoundException.class), isNull());
 
-
+        // Create connector
         expectAdd(SourceSink.SOURCE);
+        Map<String, String> connConfig = connectorConfig(SourceSink.SOURCE);
         expectConfigValidation(SourceSink.SOURCE, connConfig);
 
         // Validate accessors with 1 connector
@@ -714,7 +718,6 @@ public class StandaloneHerderTest {
 
         Callback<Map<String, String>> connectorConfigCb = mock(Callback.class);
 
-
         expectAdd(SourceSink.SOURCE);
         expectConfigValidation(SourceSink.SOURCE, connConfig, newConnConfig);
 
@@ -732,7 +735,6 @@ public class StandaloneHerderTest {
         // Generate same task config, which should result in no additional action to restart tasks
         when(worker.connectorTaskConfigs(CONNECTOR_NAME, new SourceConnectorConfig(plugins, newConnConfig, true)))
                 .thenReturn(singletonList(taskConfig(SourceSink.SOURCE)));
-
 
         herder.putConnectorConfig(CONNECTOR_NAME, connConfig, false, createCallback);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
@@ -833,12 +835,14 @@ public class StandaloneHerderTest {
     }
 
     @Test
-    public void testCorruptConfig() {
+    public void testCorruptConfig() throws Exception {
         Map<String, String> config = new HashMap<>();
         config.put(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME);
         config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, BogusSinkConnector.class.getName());
         config.put(SinkConnectorConfig.TOPICS_CONFIG, TOPICS_LIST_STR);
-        Connector connectorMock = mock(SinkConnector.class);
+        IsolatedConnector<?> connectorMock = mock(IsolatedSinkConnector.class);
+        when(connectorMock.type()).thenReturn(PluginType.SINK);
+        Mockito.<Class<?>>when(connectorMock.pluginClass()).thenReturn(BogusSinkConnector.class);
         String error = "This is an error in your config!";
         List<String> errors = new ArrayList<>(singletonList(error));
         String key = "foo.invalid.key";
@@ -855,7 +859,7 @@ public class StandaloneHerderTest {
         when(worker.getPlugins()).thenReturn(plugins);
         when(plugins.connectorLoader(anyString())).thenReturn(pluginLoader);
         when(plugins.withClassLoader(pluginLoader)).thenReturn(loaderSwap);
-        when(plugins.newConnector(anyString())).thenReturn(connectorMock);
+        Mockito.<IsolatedConnector<?>>when(plugins.newConnector(anyString())).thenReturn(connectorMock);
         when(connectorMock.config()).thenReturn(configDef);
 
         herder.putConnectorConfig(CONNECTOR_NAME, config, true, createCallback);
@@ -1015,11 +1019,10 @@ public class StandaloneHerderTest {
 
         // Start the connector
         Map<String, String> config = connectorConfig(SourceSink.SOURCE);
-        // Prepare for connector and task config update
         Map<String, String> newConfig = connectorConfig(SourceSink.SOURCE);
         newConfig.put("dummy-connector-property", "yes");
         expectConfigValidation(SourceSink.SOURCE, config, newConfig);
-        mockStartConnector(newConfig, TargetState.STARTED, TargetState.STARTED, null);
+
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
 
         // Wait on connector to start
@@ -1057,7 +1060,7 @@ public class StandaloneHerderTest {
         verify(statusBackingStore, times(2)).put(new TaskStatus(new ConnectorTaskId(CONNECTOR_NAME, 0), TaskStatus.State.DESTROYED, WORKER_ID, 0));
     }
 
-    private void expectAdd(SourceSink sourceSink) {
+    private void expectAdd(SourceSink sourceSink) throws Exception {
         Map<String, String> connectorProps = connectorConfig(sourceSink);
         ConnectorConfig connConfig = sourceSink == SourceSink.SOURCE ?
                 new SourceConnectorConfig(plugins, connectorProps, true) :
@@ -1163,19 +1166,27 @@ public class StandaloneHerderTest {
     private void expectConfigValidation(
             SourceSink sourceSink,
             Map<String, String>... configs
-    ) {
+    ) throws Exception {
+
+        IsolatedConnector<?> connectorMock;
+        if (sourceSink == SourceSink.SOURCE) {
+            connectorMock = mock(IsolatedSourceConnector.class);
+            when(connectorMock.type()).thenReturn(PluginType.SOURCE);
+            Mockito.<Class<?>>when(connectorMock.pluginClass()).thenReturn(BogusSourceConnector.class);
+        } else {
+            connectorMock = mock(IsolatedSinkConnector.class);
+            when(connectorMock.type()).thenReturn(PluginType.SINK);
+            Mockito.<Class<?>>when(connectorMock.pluginClass()).thenReturn(BogusSinkConnector.class);
+        }
         // config validation
-        Connector connectorMock = sourceSink == SourceSink.SOURCE ? mock(SourceConnector.class) : mock(SinkConnector.class);
         when(worker.configTransformer()).thenReturn(transformer);
         final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
         when(transformer.transform(configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
         when(worker.getPlugins()).thenReturn(plugins);
         when(plugins.connectorLoader(anyString())).thenReturn(pluginLoader);
         when(plugins.withClassLoader(pluginLoader)).thenReturn(loaderSwap);
-
-        // Assume the connector should always be created
         when(worker.getPlugins()).thenReturn(plugins);
-        when(plugins.newConnector(anyString())).thenReturn(connectorMock);
+        Mockito.<IsolatedConnector<?>>when(plugins.newConnector(anyString())).thenReturn(connectorMock);
         when(connectorMock.config()).thenReturn(new ConfigDef());
 
         // Set up validation for each config

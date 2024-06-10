@@ -33,7 +33,11 @@ import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePo
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigRequest;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.NotFoundException;
+import org.apache.kafka.connect.runtime.isolation.IsolatedConnector;
+import org.apache.kafka.connect.runtime.isolation.IsolatedSinkConnector;
+import org.apache.kafka.connect.runtime.isolation.IsolatedSourceConnector;
 import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
+import org.apache.kafka.connect.runtime.isolation.PluginType;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
@@ -137,7 +141,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     private final Time time;
     protected final Loggers loggers;
 
-    private final ConcurrentMap<String, Connector> tempConnectors = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, IsolatedConnector<?>> tempConnectors = new ConcurrentHashMap<>();
 
     public AbstractHerder(Worker worker,
                           String workerId,
@@ -389,13 +393,13 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 status.workerId(), status.trace());
     }
 
-    protected Map<String, ConfigValue> validateSinkConnectorConfig(SinkConnector connector, ConfigDef configDef, Map<String, String> config) {
+    protected Map<String, ConfigValue> validateSinkConnectorConfig(IsolatedSinkConnector connector, ConfigDef configDef, Map<String, String> config) {
         Map<String, ConfigValue> result = configDef.validateAll(config);
         SinkConnectorConfig.validate(config, result);
         return result;
     }
 
-    protected Map<String, ConfigValue> validateSourceConnectorConfig(SourceConnector connector, ConfigDef configDef, Map<String, String> config) {
+    protected Map<String, ConfigValue> validateSourceConnectorConfig(IsolatedSourceConnector connector, ConfigDef configDef, Map<String, String> config) {
         return configDef.validateAll(config);
     }
 
@@ -647,7 +651,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             Map<String, String> connectorProps,
             Function<String, TemporaryStage> reportStage,
             boolean doLog
-    ) {
+    ) throws Exception {
         String stageDescription;
         if (worker.configTransformer() != null) {
             stageDescription = "resolving transformed configuration properties for the connector";
@@ -659,25 +663,26 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         if (connType == null)
             throw new BadRequestException("Connector config " + connectorProps + " contains no connector type");
 
-        Connector connector = getConnector(connType);
+        IsolatedConnector<?> connector = getConnector(connType);
         ClassLoader connectorLoader = plugins().connectorLoader(connType);
         try (LoaderSwap loaderSwap = plugins().withClassLoader(connectorLoader)) {
             org.apache.kafka.connect.health.ConnectorType connectorType;
             ConfigDef enrichedConfigDef;
             Map<String, ConfigValue> validatedConnectorConfig;
-            if (connector instanceof SourceConnector) {
+            PluginType type = connector.type();
+            if (type == PluginType.SOURCE) {
                 connectorType = org.apache.kafka.connect.health.ConnectorType.SOURCE;
                 enrichedConfigDef = ConnectorConfig.enrich(plugins(), SourceConnectorConfig.configDef(), connectorProps, false);
                 stageDescription = "validating source connector-specific properties for the connector";
                 try (TemporaryStage stage = reportStage.apply(stageDescription)) {
-                    validatedConnectorConfig = validateSourceConnectorConfig((SourceConnector) connector, enrichedConfigDef, connectorProps);
+                    validatedConnectorConfig = validateSourceConnectorConfig((IsolatedSourceConnector) connector, enrichedConfigDef, connectorProps);
                 }
             } else {
                 connectorType = org.apache.kafka.connect.health.ConnectorType.SINK;
                 enrichedConfigDef = ConnectorConfig.enrich(plugins(), SinkConnectorConfig.configDef(), connectorProps, false);
                 stageDescription = "validating sink connector-specific properties for the connector";
                 try (TemporaryStage stage = reportStage.apply(stageDescription)) {
-                    validatedConnectorConfig = validateSinkConnectorConfig((SinkConnector) connector, enrichedConfigDef, connectorProps);
+                    validatedConnectorConfig = validateSinkConnectorConfig((IsolatedSinkConnector) connector, enrichedConfigDef, connectorProps);
                 }
             }
 
@@ -703,7 +708,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 throw new BadRequestException(
                         String.format(
                                 "%s.config() must return a ConfigDef that is not null.",
-                                connector.getClass().getName()
+                                connector.pluginClass().getName()
                         )
                 );
             }
@@ -717,7 +722,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 throw new BadRequestException(
                         String.format(
                                 "%s.validate() must return a Config that is not null.",
-                                connector.getClass().getName()
+                                connector.pluginClass().getName()
                         )
                 );
             }
@@ -757,7 +762,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                             ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX,
                             connectorConfig,
                             ProducerConfig.configDef(),
-                            connector.getClass(),
+                            connector.pluginClass(),
                             connectorType,
                             ConnectorClientConfigRequest.ClientType.PRODUCER,
                             connectorClientConfigOverridePolicy);
@@ -771,7 +776,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                             ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX,
                             connectorConfig,
                             AdminClientConfig.configDef(),
-                            connector.getClass(),
+                            connector.pluginClass(),
                             connectorType,
                             ConnectorClientConfigRequest.ClientType.ADMIN,
                             connectorClientConfigOverridePolicy);
@@ -785,7 +790,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                             ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX,
                             connectorConfig,
                             ConsumerConfig.configDef(),
-                            connector.getClass(),
+                            connector.pluginClass(),
                             connectorType,
                             ConnectorClientConfigRequest.ClientType.CONSUMER,
                             connectorClientConfigOverridePolicy);
@@ -945,7 +950,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         return new ConfigValueInfo(configValue.name(), value, recommendedValues, configValue.errorMessages(), configValue.visible());
     }
 
-    protected Connector getConnector(String connType) {
+    protected IsolatedConnector<?> getConnector(String connType) {
         return tempConnectors.computeIfAbsent(connType, k -> plugins().newConnector(k));
     }
 
@@ -964,7 +969,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             return ConnectorType.UNKNOWN;
         }
         try {
-            return ConnectorType.from(getConnector(connClass).getClass());
+            return ConnectorType.from(getConnector(connClass).pluginClass());
         } catch (ConnectException e) {
             log.warn("Unable to retrieve connector type", e);
             return ConnectorType.UNKNOWN;
