@@ -61,10 +61,11 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.MockCoordinatorTimer.ExpiredTimeout;
 import org.apache.kafka.coordinator.group.MockCoordinatorTimer.ScheduledTimeout;
-import org.apache.kafka.coordinator.group.assignor.ConsumerGroupPartitionAssignor;
-import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
-import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
-import org.apache.kafka.coordinator.group.assignor.PartitionAssignorException;
+import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
+import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
+import org.apache.kafka.coordinator.group.consumer.MemberAssignmentImpl;
+import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.consumer.Assignment;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
@@ -435,7 +436,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         assignor.prepareGroupAssignment(new GroupAssignment(
-            Collections.singletonMap(memberId, new MemberAssignment(mkAssignment(
+            Collections.singletonMap(memberId, new MemberAssignmentImpl(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
                 mkTopicAssignment(barTopicId, 0, 1, 2)
             )))
@@ -540,7 +541,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         assignor.prepareGroupAssignment(new GroupAssignment(
-            Collections.singletonMap(memberId, new MemberAssignment(mkAssignment(
+            Collections.singletonMap(memberId, new MemberAssignmentImpl(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
                 mkTopicAssignment(barTopicId, 0, 1, 2)
             )))
@@ -663,15 +664,15 @@ public class GroupMetadataManagerTest {
         assignor.prepareGroupAssignment(new GroupAssignment(
             new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId1, new MemberAssignment(mkAssignment(
+                    put(memberId1, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1),
                         mkTopicAssignment(barTopicId, 0)
                     )));
-                    put(memberId2, new MemberAssignment(mkAssignment(
+                    put(memberId2, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 2, 3),
                         mkTopicAssignment(barTopicId, 1)
                     )));
-                    put(memberId3, new MemberAssignment(mkAssignment(
+                    put(memberId3, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 4, 5),
                         mkTopicAssignment(barTopicId, 2)
                     )));
@@ -897,15 +898,15 @@ public class GroupMetadataManagerTest {
         assignor.prepareGroupAssignment(new GroupAssignment(
             new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId1, new MemberAssignment(mkAssignment(
+                    put(memberId1, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1),
                         mkTopicAssignment(barTopicId, 0)
                     )));
-                    put(memberId2, new MemberAssignment(mkAssignment(
+                    put(memberId2, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 2, 3),
                         mkTopicAssignment(barTopicId, 1)
                     )));
-                    put(memberId3, new MemberAssignment(mkAssignment(
+                    put(memberId3, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 4, 5),
                         mkTopicAssignment(barTopicId, 2)
                     )));
@@ -1047,12 +1048,12 @@ public class GroupMetadataManagerTest {
         assignor.prepareGroupAssignment(new GroupAssignment(
             new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId1, new MemberAssignment(mkAssignment(
+                    put(memberId1, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1, 2),
                         mkTopicAssignment(barTopicId, 0, 1)
                     )));
                     // When the member rejoins, it gets the same assignments.
-                    put(member2RejoinId, new MemberAssignment(mkAssignment(
+                    put(member2RejoinId, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 3, 4, 5),
                         mkTopicAssignment(barTopicId, 2)
                     )));
@@ -1680,7 +1681,7 @@ public class GroupMetadataManagerTest {
         assignor.prepareGroupAssignment(new GroupAssignment(
             new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId, new MemberAssignment(mkAssignment(
+                    put(memberId, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1)
                     )));
                 }
@@ -1816,15 +1817,15 @@ public class GroupMetadataManagerTest {
         assignor.prepareGroupAssignment(new GroupAssignment(
             new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId1, new MemberAssignment(mkAssignment(
+                    put(memberId1, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1),
                         mkTopicAssignment(barTopicId, 0)
                     )));
-                    put(memberId2, new MemberAssignment(mkAssignment(
+                    put(memberId2, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 2, 3),
                         mkTopicAssignment(barTopicId, 2)
                     )));
-                    put(memberId3, new MemberAssignment(mkAssignment(
+                    put(memberId3, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 4, 5),
                         mkTopicAssignment(barTopicId, 1)
                     )));
@@ -2395,7 +2396,7 @@ public class GroupMetadataManagerTest {
 
         // Prepare the assignment result.
         assignor.prepareGroupAssignment(new GroupAssignment(
-            Collections.singletonMap(memberId, new MemberAssignment(mkAssignment(
+            Collections.singletonMap(memberId, new MemberAssignmentImpl(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)
             )))
         ));
@@ -2506,7 +2507,7 @@ public class GroupMetadataManagerTest {
 
         // Prepare the assignment result.
         assignor.prepareGroupAssignment(new GroupAssignment(
-            Collections.singletonMap(memberId, new MemberAssignment(mkAssignment(
+            Collections.singletonMap(memberId, new MemberAssignmentImpl(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)
             )))
         ));
@@ -2808,7 +2809,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         assignor.prepareGroupAssignment(new GroupAssignment(
-            Collections.singletonMap(memberId, new MemberAssignment(mkAssignment(
+            Collections.singletonMap(memberId, new MemberAssignmentImpl(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)
             )))
         ));
@@ -2883,7 +2884,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         assignor.prepareGroupAssignment(new GroupAssignment(
-            Collections.singletonMap(memberId, new MemberAssignment(mkAssignment(
+            Collections.singletonMap(memberId, new MemberAssignmentImpl(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)
             )))
         ));
@@ -2947,7 +2948,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         assignor.prepareGroupAssignment(new GroupAssignment(
-            Collections.singletonMap(memberId, new MemberAssignment(mkAssignment(
+            Collections.singletonMap(memberId, new MemberAssignmentImpl(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)
             )))
         ));
@@ -3031,7 +3032,7 @@ public class GroupMetadataManagerTest {
         assignor.prepareGroupAssignment(new GroupAssignment(
             new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId1, new MemberAssignment(mkAssignment(
+                    put(memberId1, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1, 2)
                     )));
                 }
@@ -3071,10 +3072,10 @@ public class GroupMetadataManagerTest {
         assignor.prepareGroupAssignment(new GroupAssignment(
             new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId1, new MemberAssignment(mkAssignment(
+                    put(memberId1, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1)
                     )));
-                    put(memberId2, new MemberAssignment(mkAssignment(
+                    put(memberId2, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 2)
                     )));
                 }
@@ -3186,7 +3187,7 @@ public class GroupMetadataManagerTest {
         assignor.prepareGroupAssignment(new GroupAssignment(
             new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId1, new MemberAssignment(mkAssignment(
+                    put(memberId1, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1, 2)
                     )));
                 }
@@ -3226,10 +3227,10 @@ public class GroupMetadataManagerTest {
         assignor.prepareGroupAssignment(new GroupAssignment(
             new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId1, new MemberAssignment(mkAssignment(
+                    put(memberId1, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1)
                     )));
-                    put(memberId2, new MemberAssignment(mkAssignment(
+                    put(memberId2, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 2)
                     )));
                 }
@@ -9233,7 +9234,7 @@ public class GroupMetadataManagerTest {
             .build();
 
         assignor.prepareGroupAssignment(new GroupAssignment(
-            Collections.singletonMap(memberId, new MemberAssignment(mkAssignment(
+            Collections.singletonMap(memberId, new MemberAssignmentImpl(mkAssignment(
                 mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
                 mkTopicAssignment(barTopicId, 0, 1, 2)
             )))
@@ -9476,10 +9477,10 @@ public class GroupMetadataManagerTest {
         assignor.prepareGroupAssignment(new GroupAssignment(
             new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId1, new MemberAssignment(mkAssignment(
+                    put(memberId1, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0)
                     )));
-                    put(memberId2, new MemberAssignment(mkAssignment(
+                    put(memberId2, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(barTopicId, 0)
                     )));
                 }
@@ -9652,13 +9653,13 @@ public class GroupMetadataManagerTest {
         assignor.prepareGroupAssignment(new GroupAssignment(
             new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId1, new MemberAssignment(mkAssignment(
+                    put(memberId1, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0)
                     )));
-                    put(memberId2, new MemberAssignment(mkAssignment(
+                    put(memberId2, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(barTopicId, 0)
                     )));
-                    put(memberId3, new MemberAssignment(mkAssignment(
+                    put(memberId3, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 1)
                     )));
                 }
@@ -9899,13 +9900,13 @@ public class GroupMetadataManagerTest {
         assignor.prepareGroupAssignment(new GroupAssignment(
             new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId1, new MemberAssignment(mkAssignment(
+                    put(memberId1, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0)
                     )));
-                    put(memberId2, new MemberAssignment(mkAssignment(
+                    put(memberId2, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(barTopicId, 0)
                     )));
-                    put(memberId3, new MemberAssignment(mkAssignment(
+                    put(memberId3, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 1)
                     )));
                 }
@@ -10730,11 +10731,11 @@ public class GroupMetadataManagerTest {
         assignor.prepareGroupAssignment(new GroupAssignment(
             new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId1, new MemberAssignment(mkAssignment(
+                    put(memberId1, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1, 2),
                         mkTopicAssignment(barTopicId, 0, 1)
                     )));
-                    put(memberId2, new MemberAssignment(mkAssignment(
+                    put(memberId2, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 3, 4, 5)
                     )));
                 }
@@ -10970,10 +10971,10 @@ public class GroupMetadataManagerTest {
             assignor.prepareGroupAssignment(new GroupAssignment(
                 new HashMap<String, MemberAssignment>() {
                     {
-                        put(memberId, new MemberAssignment(mkAssignment(
+                        put(memberId, new MemberAssignmentImpl(mkAssignment(
                             mkTopicAssignment(fooTopicId, 0)
                         )));
-                        put(newMemberId, new MemberAssignment(mkAssignment(
+                        put(newMemberId, new MemberAssignmentImpl(mkAssignment(
                             mkTopicAssignment(barTopicId, 0)
                         )));
                     }
@@ -11059,10 +11060,10 @@ public class GroupMetadataManagerTest {
         assignor.prepareGroupAssignment(new GroupAssignment(
             new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId, new MemberAssignment(mkAssignment(
+                    put(memberId, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0)
                     )));
-                    put(newMemberId, new MemberAssignment(mkAssignment(
+                    put(newMemberId, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 1)
                     )));
                 }
@@ -11389,11 +11390,11 @@ public class GroupMetadataManagerTest {
         assignor.prepareGroupAssignment(new GroupAssignment(
             new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId1, new MemberAssignment(mkAssignment(
+                    put(memberId1, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0),
                         mkTopicAssignment(zarTopicId, 0)
                     )));
-                    put(memberId2, new MemberAssignment(mkAssignment(
+                    put(memberId2, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(barTopicId, 0),
                         mkTopicAssignment(fooTopicId, 1)
                     )));
@@ -11619,11 +11620,11 @@ public class GroupMetadataManagerTest {
         assignor.prepareGroupAssignment(new GroupAssignment(
             new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId1, new MemberAssignment(mkAssignment(
+                    put(memberId1, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1),
                         mkTopicAssignment(zarTopicId, 0)
                     )));
-                    put(memberId2, new MemberAssignment(mkAssignment(
+                    put(memberId2, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(barTopicId, 0)
                     )));
                 }
@@ -11861,11 +11862,11 @@ public class GroupMetadataManagerTest {
         assignor.prepareGroupAssignment(new GroupAssignment(
             new HashMap<String, MemberAssignment>() {
                 {
-                    put(memberId1, new MemberAssignment(mkAssignment(
+                    put(memberId1, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(fooTopicId, 0, 1),
                         mkTopicAssignment(zarTopicId, 0)
                     )));
-                    put(memberId2, new MemberAssignment(mkAssignment(
+                    put(memberId2, new MemberAssignmentImpl(mkAssignment(
                         mkTopicAssignment(barTopicId, 0)
                     )));
                 }

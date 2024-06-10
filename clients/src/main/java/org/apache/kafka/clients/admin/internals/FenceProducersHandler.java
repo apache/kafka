@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.admin.internals;
 
+import org.apache.kafka.clients.admin.FenceProducersOptions;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
@@ -38,12 +39,16 @@ import java.util.stream.Collectors;
 public class FenceProducersHandler extends AdminApiHandler.Unbatched<CoordinatorKey, ProducerIdAndEpoch> {
     private final Logger log;
     private final AdminApiLookupStrategy<CoordinatorKey> lookupStrategy;
+    private final int txnTimeoutMs;
 
     public FenceProducersHandler(
-        LogContext logContext
+        FenceProducersOptions options,
+        LogContext logContext,
+        int requestTimeoutMs
     ) {
         this.log = logContext.logger(FenceProducersHandler.class);
         this.lookupStrategy = new CoordinatorStrategy(FindCoordinatorRequest.CoordinatorType.TRANSACTION, logContext);
+        this.txnTimeoutMs = options.timeoutMs() != null ? options.timeoutMs() : requestTimeoutMs;
     }
 
     public static AdminApiFuture.SimpleAdminApiFuture<CoordinatorKey, ProducerIdAndEpoch> newFuture(
@@ -82,9 +87,8 @@ public class FenceProducersHandler extends AdminApiHandler.Unbatched<Coordinator
             .setProducerEpoch(ProducerIdAndEpoch.NONE.epoch)
             .setProducerId(ProducerIdAndEpoch.NONE.producerId)
             .setTransactionalId(key.idValue)
-            // Set transaction timeout to 1 since it's only being initialized to fence out older producers with the same transactional ID,
-            // and shouldn't be used for any actual record writes
-            .setTransactionTimeoutMs(1);
+            // This timeout is used by the coordinator to append the record with the new producer epoch to the transaction log.
+            .setTransactionTimeoutMs(txnTimeoutMs);
         return new InitProducerIdRequest.Builder(data);
     }
 

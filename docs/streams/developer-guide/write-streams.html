@@ -152,17 +152,9 @@ streams.start();</code></pre>
       <p>To catch any unexpected exceptions, you can set an <code class="docutils literal"><span class="pre">java.lang.Thread.UncaughtExceptionHandler</span></code> before you start the
         application.  This handler is called whenever a stream thread is terminated by an unexpected exception:</p>
         <pre class="line-numbers"><code class="language-java">// Java 8+, using lambda expressions
-streams.setUncaughtExceptionHandler((Thread thread, Throwable throwable) -&gt; {
-  // here you should examine the throwable/exception and perform an appropriate action!
-});
-
-
-// Java 7
-streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
-  public void uncaughtException(Thread thread, Throwable throwable) {
-    // here you should examine the throwable/exception and perform an appropriate action!
-  }
-});</code></pre>
+streams.setUncaughtExceptionHander((exception) -&gt; StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.REPLACE_THREAD);</code></pre>
+      <p>The <code class="docutils literal"><span class="pre">StreamsUncaughtExceptionHandler</span></code> interface enables responding to exceptions not handled by Kafka Streams. It has one method, <code class="docutils literal"><span class="pre">handle</span></code>, that returns an enum of type <code class="docutils literal"><span class="pre">StreamThreadExceptionResponse</span></code>. You have the opportunity to define how Streams responds to the exception, with three possible values: <code class="docutils literal"><span class="pre">REPLACE_THREAD</span></code>, <code class="docutils literal"><span class="pre">SHUTDOWN_CLIENT</span></code>, or <code class="docutils literal"><span class="pre">SHUTDOWN_APPLICATION</span></code>.
+      <p>The <code class="docutils literal"><span class="pre">SHUTDOWN_APPLICATION</span></code> option is best-effort only and doesn't guarantee that all application instances will be stopped.
       <p>To stop the application instance, call the <code class="docutils literal"><span class="pre">KafkaStreams#close()</span></code> method:</p>
         <pre class="line-numbers"><code class="language-java">// Stop the Kafka Streams threads
 streams.close();</code></pre>

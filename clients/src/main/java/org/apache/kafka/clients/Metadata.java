@@ -425,8 +425,8 @@ public class Metadata implements Closeable {
         // Get topic-ids for updated topics from existing topic-ids.
         Map<String, Uuid> existingTopicIds = this.metadataSnapshot.topicIds();
         Map<String, Uuid> topicIdsForUpdatedTopics = updatedTopics.stream()
-            .filter(e -> existingTopicIds.containsKey(e))
-            .collect(Collectors.toMap(e -> e, e -> existingTopicIds.get(e)));
+            .filter(existingTopicIds::containsKey)
+            .collect(Collectors.toMap(e -> e, existingTopicIds::get));
 
         if (log.isDebugEnabled()) {
             updatePartitionMetadata.forEach(

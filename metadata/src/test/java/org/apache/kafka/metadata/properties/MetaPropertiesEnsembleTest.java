@@ -54,7 +54,7 @@ final public class MetaPropertiesEnsembleTest {
     private static final MetaPropertiesEnsemble FOO =
         new MetaPropertiesEnsemble(
             new HashSet<>(Arrays.asList("/tmp/empty1", "/tmp/empty2")),
-            new HashSet<>(Arrays.asList("/tmp/error3")),
+            new HashSet<>(Collections.singletonList("/tmp/error3")),
             Stream.of(
                 new SimpleImmutableEntry<>("/tmp/dir4",
                     new MetaProperties.Builder().
@@ -104,7 +104,7 @@ final public class MetaPropertiesEnsembleTest {
 
     @Test
     public void testErrorLogDirsForFoo() {
-        assertEquals(new HashSet<>(Arrays.asList("/tmp/error3")), FOO.errorLogDirs());
+        assertEquals(new HashSet<>(Collections.singletonList("/tmp/error3")), FOO.errorLogDirs());
     }
 
     @Test
