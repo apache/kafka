@@ -215,19 +215,13 @@ public final class TaskAssignmentUtils {
             .filter(taskInfo -> tasks.contains(taskInfo.id()))
             .collect(Collectors.toMap(TaskInfo::id, TaskInfo::topicPartitions));
 
-        final Map<ProcessId, Optional<String>> clientRacks = new HashMap<>();
         final List<ProcessId> clientIds = new ArrayList<>(kafkaStreamsStates.keySet());
-        for (final Map.Entry<ProcessId, KafkaStreamsAssignment> entry : kafkaStreamsAssignments.entrySet()) {
-            final ProcessId uuid = entry.getKey();
-            clientRacks.put(uuid, kafkaStreamsStates.get(entry.getKey()).rackId());
-        }
-
         final long initialCost = computeTotalAssignmentCost(
             topicPartitionsByTaskId,
             taskIds,
             clientIds,
             kafkaStreamsAssignments,
-            clientRacks,
+            kafkaStreamsStates,
             crossRackTrafficCost,
             nonOverlapCost,
             false,
@@ -241,7 +235,7 @@ public final class TaskAssignmentUtils {
 
         final AssignmentGraph assignmentGraph = buildTaskGraph(
             kafkaStreamsAssignments,
-            clientRacks,
+            kafkaStreamsStates,
             taskIds,
             clientIds,
             topicPartitionsByTaskId,
@@ -321,19 +315,12 @@ public final class TaskAssignmentUtils {
             );
 
         final List<ProcessId> clientIds = new ArrayList<>(kafkaStreamsStates.keySet());
-
-        final Map<ProcessId, Optional<String>> clientRacks = new HashMap<>();
-        for (final Map.Entry<ProcessId, KafkaStreamsState> entry : kafkaStreamsStates.entrySet()) {
-            final ProcessId processId = entry.getKey();
-            clientRacks.put(processId, entry.getValue().rackId());
-        }
-
         final long initialCost = computeTotalAssignmentCost(
             topicPartitionsByTaskId,
             standbyTasksToOptimize,
             clientIds,
             kafkaStreamsAssignments,
-            clientRacks,
+            kafkaStreamsStates,
             crossRackTrafficCost,
             nonOverlapCost,
             true,
@@ -396,7 +383,7 @@ public final class TaskAssignmentUtils {
 
                     final AssignmentGraph assignmentGraph = buildTaskGraph(
                         kafkaStreamsAssignments,
-                        clientRacks,
+                        kafkaStreamsStates,
                         moveableTaskIds,
                         clientsInTaskRedistributionAttempt,
                         topicPartitionsByTaskId,
@@ -427,7 +414,7 @@ public final class TaskAssignmentUtils {
             standbyTasksToOptimize,
             clientIds,
             kafkaStreamsAssignments,
-            clientRacks,
+            kafkaStreamsStates,
             crossRackTrafficCost,
             nonOverlapCost,
             true,
@@ -444,7 +431,7 @@ public final class TaskAssignmentUtils {
                                                    final List<TaskId> taskIds,
                                                    final List<ProcessId> clientIds,
                                                    final Map<ProcessId, KafkaStreamsAssignment> assignments,
-                                                   final Map<ProcessId, Optional<String>> clientRacks,
+                                                   final Map<ProcessId, KafkaStreamsState> clients,
                                                    final int crossRackTrafficCost,
                                                    final int nonOverlapCost,
                                                    final boolean hasReplica,
@@ -456,7 +443,7 @@ public final class TaskAssignmentUtils {
         final RackAwareGraphConstructor<KafkaStreamsAssignment> graphConstructor = new MinTrafficGraphConstructor<>();
         final AssignmentGraph assignmentGraph = buildTaskGraph(
             assignments,
-            clientRacks,
+            clients,
             taskIds,
             clientIds,
             topicPartitionsByTaskId,
@@ -470,7 +457,7 @@ public final class TaskAssignmentUtils {
     }
 
     private static AssignmentGraph buildTaskGraph(final Map<ProcessId, KafkaStreamsAssignment> assignments,
-                                                  final Map<ProcessId, Optional<String>> clientRacks,
+                                                  final Map<ProcessId, KafkaStreamsState> clients,
                                                   final List<TaskId> taskIds,
                                                   final List<ProcessId> clientList,
                                                   final Map<TaskId, Set<TaskTopicPartition>> topicPartitionsByTaskId,
@@ -492,7 +479,7 @@ public final class TaskAssignmentUtils {
             taskCountByClient,
             (assignment, taskId) -> assignment.tasks().containsKey(taskId) && assignment.tasks().get(taskId).type() == taskType,
             (taskId, processId, inCurrentAssignment, unused0, unused1, unused2) -> {
-                final String clientRack = clientRacks.get(processId).get();
+                final String clientRack = clients.get(processId).rackId().get();
                 final int assignmentChangeCost = !inCurrentAssignment ? nonOverlapCost : 0;
                 final int trafficCost = getCrossRackTrafficCost(topicPartitionsByTaskId.get(taskId), clientRack, crossRackTrafficCost);
                 return assignmentChangeCost + trafficCost;
