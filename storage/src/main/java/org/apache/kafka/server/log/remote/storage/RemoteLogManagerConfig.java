@@ -550,10 +550,6 @@ public final class RemoteLogManagerConfig {
         return remoteLogManagerFetchQuotaWindowSizeSeconds;
     }
 
-    public int remoteFetchMaxWaitMs() {
-        return remoteFetchMaxWaitMs;
-    }
-
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
