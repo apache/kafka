@@ -6588,6 +6588,9 @@ public class KafkaAdminClientTest {
             result.values().get(goodEntity);
             TestUtils.assertFutureError(result.values().get(unauthorizedEntity), ClusterAuthorizationException.class);
             TestUtils.assertFutureError(result.values().get(invalidEntity), InvalidRequestException.class);
+
+            // ensure immutable
+            assertThrows(UnsupportedOperationException.class, () -> result.values().put(newClientQuotaEntity(ClientQuotaEntity.USER, "user-3"), null));
         }
     }
 

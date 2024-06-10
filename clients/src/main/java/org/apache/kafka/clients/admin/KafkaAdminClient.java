@@ -4072,7 +4072,7 @@ public class KafkaAdminClient extends AdminClient {
                 }
             }, now);
 
-        return new AlterClientQuotasResult(new HashMap<>(futures));
+        return new AlterClientQuotasResult(Collections.unmodifiableMap(futures));
     }
 
     @Override
