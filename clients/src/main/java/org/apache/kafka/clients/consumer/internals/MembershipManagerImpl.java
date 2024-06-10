@@ -804,7 +804,6 @@ public class MembershipManagerImpl implements MembershipManager {
                 transitionTo(MemberState.RECONCILING);
             }
         } else if (state == MemberState.LEAVING) {
-            notifyEpochChange(Optional.empty(), Optional.empty());
             if (isPollTimerExpired) {
                 log.debug("Member {} sent heartbeat to leave due to expired poll timer. It will " +
                     "remain stale (no heartbeat) until it rejoins the group on the next consumer " +
