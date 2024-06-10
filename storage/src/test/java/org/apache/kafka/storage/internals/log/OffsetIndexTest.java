@@ -51,10 +51,10 @@ public class OffsetIndexTest {
 
     @AfterEach
     public void tearDown() throws IOException {
+        this.index.close();
         if (index != null) {
             Files.deleteIfExists(index.file().toPath());
         }
-        this.index.close();
     }
 
     @Test
