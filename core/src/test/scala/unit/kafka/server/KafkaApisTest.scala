@@ -2825,7 +2825,6 @@ class KafkaApisTest extends Logging {
 
   @Test
   def requiredAclsNotPresentWriteTxnMarkersThrowsAuthorizationException(): Unit = {
-    // Here we need to use AuthHelperTest.matchSameElements instead of EasyMock.eq since the order of the request is unknown
     val topicPartition = new TopicPartition("t", 0)
     val (_, request) = createWriteTxnMarkersRequest(asList(topicPartition))
 
@@ -4098,7 +4097,6 @@ class KafkaApisTest extends Logging {
       new Action(AclOperation.DESCRIBE, new ResourcePattern(ResourceType.TOPIC, authorizedTopic, PatternType.LITERAL), 1, true, true)
     )
 
-    // Here we need to use AuthHelperTest.matchSameElements instead of EasyMock.eq since the order of the request is unknown
     when(authorizer.authorize(any[RequestContext], argThat((t: java.util.List[Action]) => t.containsAll(expectedActions.asJava))))
       .thenAnswer { invocation =>
       val actions = invocation.getArgument(1).asInstanceOf[util.List[Action]].asScala

@@ -16,7 +16,8 @@
  */
 package org.apache.kafka.server.config;
 
-import static java.util.Arrays.asList;
+import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.utils.Utils;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -25,8 +26,8 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
 import java.util.stream.Collectors;
-import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.common.utils.Utils;
+
+import static java.util.Arrays.asList;
 
 public final class ServerTopicConfigSynonyms {
     public static final String LOG_PREFIX = "log.";

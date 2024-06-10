@@ -358,7 +358,7 @@ public final class RemoteLogManagerConfig extends AbstractConfig {
         super(configDef(), props);
     }
 
-    public boolean enableRemoteStorageSystem() {
+    public boolean isRemoteStorageSystemEnabled() {
         return getBoolean(REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP);
     }
 

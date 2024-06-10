@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import java.util.Arrays;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
@@ -62,6 +63,7 @@ import org.apache.kafka.streams.processor.assignment.ApplicationState;
 import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 import org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment;
 import org.apache.kafka.streams.processor.assignment.ProcessId;
+import org.apache.kafka.streams.processor.assignment.TaskAssignmentUtils;
 import org.apache.kafka.streams.processor.assignment.TaskInfo;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
@@ -184,7 +186,7 @@ public class StreamsPartitionAssignorTest {
     @Rule
     public MockitoRule rule = MockitoJUnit.rule().strictness(Strictness.STRICT_STUBS);
     @Rule
-    public Timeout timeout = new Timeout(30_000);
+    public Timeout timeout = new Timeout(30_000, TimeUnit.SECONDS);
 
     private static final String CONSUMER_1 = "consumer1";
     private static final String CONSUMER_2 = "consumer2";
@@ -2662,7 +2664,7 @@ public class StreamsPartitionAssignorTest {
                 KafkaStreamsAssignment.of(new ProcessId(clientUuid2), mkSet())
             )
         );
-        org.apache.kafka.streams.processor.assignment.TaskAssignor.AssignmentError error = partitionAssignor.validateTaskAssignment(applicationState, noError);
+        org.apache.kafka.streams.processor.assignment.TaskAssignor.AssignmentError error = TaskAssignmentUtils.validateTaskAssignment(applicationState, noError);
         assertEquals(org.apache.kafka.streams.processor.assignment.TaskAssignor.AssignmentError.NONE, error);
 
         // ****
@@ -2675,7 +2677,7 @@ public class StreamsPartitionAssignorTest {
                 ))
             )
         );
-        error = partitionAssignor.validateTaskAssignment(applicationState, missingProcessId);
+        error = TaskAssignmentUtils.validateTaskAssignment(applicationState, missingProcessId);
         assertEquals(org.apache.kafka.streams.processor.assignment.TaskAssignor.AssignmentError.MISSING_PROCESS_ID, error);
 
         // ****
@@ -2690,7 +2692,7 @@ public class StreamsPartitionAssignorTest {
                 KafkaStreamsAssignment.of(new ProcessId(UUID.randomUUID()), mkSet())
             )
         );
-        error = partitionAssignor.validateTaskAssignment(applicationState, unknownProcessId);
+        error = TaskAssignmentUtils.validateTaskAssignment(applicationState, unknownProcessId);
         assertEquals(org.apache.kafka.streams.processor.assignment.TaskAssignor.AssignmentError.UNKNOWN_PROCESS_ID, error);
 
         // ****
@@ -2708,7 +2710,7 @@ public class StreamsPartitionAssignorTest {
                 ))
             )
         );
-        error = partitionAssignor.validateTaskAssignment(applicationState, unknownTaskId);
+        error = TaskAssignmentUtils.validateTaskAssignment(applicationState, unknownTaskId);
         assertEquals(org.apache.kafka.streams.processor.assignment.TaskAssignor.AssignmentError.UNKNOWN_TASK_ID, error);
 
         // ****
@@ -2726,7 +2728,7 @@ public class StreamsPartitionAssignorTest {
                 ))
             )
         );
-        error = partitionAssignor.validateTaskAssignment(applicationState, activeTaskDuplicated);
+        error = TaskAssignmentUtils.validateTaskAssignment(applicationState, activeTaskDuplicated);
         assertEquals(org.apache.kafka.streams.processor.assignment.TaskAssignor.AssignmentError.ACTIVE_TASK_ASSIGNED_MULTIPLE_TIMES, error);
     }
 
