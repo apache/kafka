@@ -46,7 +46,6 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.requests.DescribeQuorumResponse;
-import org.apache.kafka.common.requests.EndQuorumEpochRequest;
 import org.apache.kafka.common.requests.FetchSnapshotResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -472,6 +471,12 @@ public final class RaftClientTestContext {
         return localId.orElseThrow(() -> new AssertionError("Required local id is not defined"));
     }
 
+    public ReplicaKey localReplicaKey() {
+        return kip853Rpc ?
+            ReplicaKey.of(localIdOrThrow(), localDirectoryId) :
+            ReplicaKey.of(localIdOrThrow(), ReplicaKey.NO_DIRECTORY_ID);
+    }
+
     private void expectBeginEpoch(int epoch) throws Exception {
         pollUntilRequest();
         for (RaftRequest.Outbound request : collectBeginEpochRequests(epoch)) {
@@ -749,6 +754,23 @@ public final class RaftClientTestContext {
         assertInstanceOf(EndQuorumEpochResponseData.class, raftMessage.data());
         EndQuorumEpochResponseData response = (EndQuorumEpochResponseData) raftMessage.data();
         assertEquals(responseError, Errors.forCode(response.errorCode()));
+
+        if (!response.topics().isEmpty()) {
+            EndQuorumEpochResponseData.PartitionData partitionResponse = response
+                .topics()
+                .get(0)
+                .partitions()
+                .get(0);
+            if (kip853Rpc && partitionResponse.leaderId() >= 0) {
+                int leaderId = partitionResponse.leaderId();
+                Endpoints expectedLeaderEndpoints = voters.listeners(leaderId);
+                Endpoints responseEndpoints = Endpoints.fromEndQuorumEpochResponse(
+                    channel.listenerName(),
+                    response.nodeEndpoints()
+                );
+                assertEquals(expectedLeaderEndpoints, responseEndpoints);
+            }
+        }
     }
 
     void assertSentEndQuorumEpochResponse(
@@ -769,6 +791,15 @@ public final class RaftClientTestContext {
         assertEquals(epoch, partitionResponse.leaderEpoch());
         assertEquals(leaderId.orElse(-1), partitionResponse.leaderId());
         assertEquals(partitionError, Errors.forCode(partitionResponse.errorCode()));
+
+        if (kip853Rpc && leaderId.isPresent()) {
+            Endpoints expectedLeaderEndpoints = voters.listeners(leaderId.getAsInt());
+            Endpoints responseEndpoints = Endpoints.fromEndQuorumEpochResponse(
+                channel.listenerName(),
+                response.nodeEndpoints()
+            );
+            assertEquals(expectedLeaderEndpoints, responseEndpoints);
+        }
     }
 
     RaftRequest.Outbound assertSentFetchRequest() {
@@ -980,13 +1011,13 @@ public final class RaftClientTestContext {
     EndQuorumEpochRequestData endEpochRequest(
         int epoch,
         int leaderId,
-        List<Integer> preferredSuccessors
+        List<ReplicaKey> preferredCandidates
     ) {
-        return EndQuorumEpochRequest.singletonRequest(
-            metadataPartition,
+        return endEpochRequest(
+            clusterId.toString(),
             epoch,
             leaderId,
-            preferredSuccessors
+            preferredCandidates
         );
     }
 
@@ -994,14 +1025,14 @@ public final class RaftClientTestContext {
         String clusterId,
         int epoch,
         int leaderId,
-        List<Integer> preferredSuccessors
+        List<ReplicaKey> preferredCandidates
     ) {
-        return EndQuorumEpochRequest.singletonRequest(
+        return RaftUtil.singletonEndQuorumEpochRequest(
             metadataPartition,
             clusterId,
             epoch,
             leaderId,
-            preferredSuccessors
+            preferredCandidates
         );
     }
 

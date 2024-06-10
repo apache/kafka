@@ -36,11 +36,11 @@ import org.apache.kafka.raft.internals.ReplicaKey;
 
 import java.net.InetSocketAddress;
 import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
-
-import static java.util.Collections.singletonList;
 
 @SuppressWarnings("ClassDataAbstractionCoupling")
 public class RaftUtil {
@@ -76,10 +76,10 @@ public class RaftUtil {
             new FetchRequestData.FetchTopic()
                 .setTopic(topicPartition.topic())
                 .setTopicId(topicId)
-                .setPartitions(singletonList(fetchPartition));
+                .setPartitions(Collections.singletonList(fetchPartition));
 
         return new FetchRequestData()
-            .setTopics(singletonList(fetchTopic));
+            .setTopics(Collections.singletonList(fetchTopic));
     }
 
     public static FetchResponseData singletonFetchResponse(
@@ -327,6 +327,47 @@ public class RaftUtil {
         }
 
         return response;
+    }
+
+    public static EndQuorumEpochRequestData singletonEndQuorumEpochRequest(
+        TopicPartition topicPartition,
+        String clusterId,
+        int leaderEpoch,
+        int leaderId,
+        List<ReplicaKey> preferredReplicaKeys
+    ) {
+        List<Integer> preferredSuccessors = preferredReplicaKeys
+                .stream()
+                .map(ReplicaKey::id)
+                .collect(Collectors.toList());
+
+        List<EndQuorumEpochRequestData.ReplicaInfo> preferredCandidates = preferredReplicaKeys
+                .stream()
+                .map(replicaKey -> new EndQuorumEpochRequestData.ReplicaInfo()
+                    .setCandidateId(replicaKey.id())
+                    .setCandidateDirectoryId(replicaKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
+                )
+                .collect(Collectors.toList());
+
+        return new EndQuorumEpochRequestData()
+            .setClusterId(clusterId)
+            .setTopics(
+                Collections.singletonList(
+                    new EndQuorumEpochRequestData.TopicData()
+                        .setTopicName(topicPartition.topic())
+                        .setPartitions(
+                            Collections.singletonList(
+                                new EndQuorumEpochRequestData.PartitionData()
+                                    .setPartitionIndex(topicPartition.partition())
+                                    .setLeaderEpoch(leaderEpoch)
+                                    .setLeaderId(leaderId)
+                                    .setPreferredSuccessors(preferredSuccessors)
+                                    .setPreferredCandidates(preferredCandidates)
+                            )
+                        )
+                )
+            );
+
     }
 
     public static EndQuorumEpochResponseData singletonEndQuorumEpochResponse(

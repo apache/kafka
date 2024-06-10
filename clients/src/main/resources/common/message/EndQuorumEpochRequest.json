@@ -35,9 +35,9 @@
               "about": "The current leader ID that is resigning"},
             { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
               "about": "The current epoch"},
-            { "name": "PreferredSuccessors", "type": "[]int32", "versions": "0",
-              "about": "A sorted list of preferred successors to start the election" },
-            { "name": "PreferredCandidates", "type": "[]ReplicaInfo", "versions": "1+",
+            { "name": "PreferredSuccessors", "type": "[]int32", "versions": "0+",
+              "about": "DEPRECATED. A sorted list of preferred successors to start the election" },
+            { "name": "PreferredCandidates", "type": "[]ReplicaInfo", "versions": "1+", "ignorable": true,
               "about": "A sorted list of preferred candidates to start the election", "fields": [
                 { "name": "CandidateId", "type": "int32", "versions": "1+", "entityType": "brokerId" },
                 { "name": "CandidateDirectoryId", "type": "uuid", "versions": "1+" }
