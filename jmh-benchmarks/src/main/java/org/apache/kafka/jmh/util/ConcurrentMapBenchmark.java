@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.CopyOnWriteMap;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
+import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Measurement;
 import org.openjdk.jmh.annotations.Mode;
 import org.openjdk.jmh.annotations.OperationsPerInvocation;
@@ -42,8 +43,8 @@ import java.util.stream.IntStream;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
-@Warmup(iterations = 5)
-@Measurement(iterations = 15)
+@Warmup(iterations = 3)
+@Measurement(iterations = 5)
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 @Threads(2)
@@ -60,7 +61,7 @@ public class ConcurrentMapBenchmark {
     private Map<Integer, Integer> copyOnWriteMap;
     private int writePerLoops;
 
-    @Setup
+    @Setup(Level.Invocation)
     public void setup() {
         Map<Integer, Integer> mapTemplate = IntStream.range(0, mapSize).boxed()
                 .collect(Collectors.toMap(i -> i, i -> i));
