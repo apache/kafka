@@ -50,8 +50,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mockito;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -96,7 +94,6 @@ import static org.mockito.Mockito.when;
 
 public class CommitRequestManagerTest {
 
-    private static final Logger log = LoggerFactory.getLogger(CommitRequestManagerTest.class);
     private final long retryBackoffMs = 100;
     private final long retryBackoffMaxMs = 1000;
     private static final String CONSUMER_COORDINATOR_METRICS = "consumer-coordinator-metrics";
@@ -630,25 +627,17 @@ public class CommitRequestManagerTest {
                 1,
                 error);
 
-        log.error("testOffsetFetchRequestTimeoutRequests - a");
-
         if (isRetriableOnOffsetFetch(error)) {
-            log.error("testOffsetFetchRequestTimeoutRequests - b");
             futures.forEach(f -> assertFalse(f.isDone()));
 
             // Insert a long enough sleep to force a timeout of the operation. Invoke poll() again so that each
             // OffsetFetchRequestState is evaluated via isExpired().
-            log.error("testOffsetFetchRequestTimeoutRequests - c");
             time.sleep(defaultApiTimeoutMs);
-            log.error("testOffsetFetchRequestTimeoutRequests - d");
             assertFalse(commitRequestManager.pendingRequests.unsentOffsetFetches.isEmpty());
-            log.error("testOffsetFetchRequestTimeoutRequests - e");
             commitRequestManager.poll(time.milliseconds());
-            log.error("testOffsetFetchRequestTimeoutRequests - f");
+            futures.forEach(f -> assertTrue(f.isDone()));
             futures.forEach(f -> assertFutureThrows(f, TimeoutException.class));
-            log.error("testOffsetFetchRequestTimeoutRequests - g");
             assertTrue(commitRequestManager.pendingRequests.unsentOffsetFetches.isEmpty());
-            log.error("testOffsetFetchRequestTimeoutRequests - h");
         } else {
             futures.forEach(f -> assertFutureThrows(f, KafkaException.class));
             assertEmptyPendingRequests(commitRequestManager);

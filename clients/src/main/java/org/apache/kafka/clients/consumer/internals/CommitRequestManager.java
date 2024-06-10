@@ -629,7 +629,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             }
         } else {
             cachedOffsetFetchResult.set(null);
-            log.debug("The offset fetch request succeeded without expiration, so results cache was removed");
+            log.debug("The offset fetch request completed without expiration, so results cache was removed");
         }
     }
 
@@ -1190,7 +1190,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                     inflightOffsetFetches.stream().filter(r -> r.sameRequest(request)).findAny();
 
             if (dupe.isPresent() || inflight.isPresent()) {
-                log.debug("Duplicated offset fetch request found for partitions: {}", request.requestedPartitions);
+                log.debug("Duplicated unsent offset fetch request found for partitions: {}", request.requestedPartitions);
                 dupe.orElseGet(inflight::get).chainFuture(request.future);
             } else {
                 log.debug("Enqueuing offset fetch request for partitions: {}", request.requestedPartitions);
