@@ -63,6 +63,7 @@ import org.apache.kafka.connect.source.ConnectorTransactionBoundaries;
 import org.apache.kafka.connect.source.ExactlyOnceSupport;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.source.SourceTask;
+import org.apache.kafka.connect.storage.AppliedConnectorConfig;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
@@ -219,6 +220,7 @@ public class DistributedHerderTest {
             TASK_CONFIGS_MAP,
             Collections.emptyMap(),
             Collections.emptyMap(),
+            Collections.singletonMap(CONN1, new AppliedConnectorConfig(CONN1_CONFIG)),
             Collections.emptySet(),
             Collections.emptySet());
     private static final ClusterConfigState SNAPSHOT_PAUSED_CONN1 = new ClusterConfigState(
@@ -230,6 +232,7 @@ public class DistributedHerderTest {
             TASK_CONFIGS_MAP,
             Collections.emptyMap(),
             Collections.emptyMap(),
+            Collections.singletonMap(CONN1, new AppliedConnectorConfig(CONN1_CONFIG)),
             Collections.emptySet(),
             Collections.emptySet());
     private static final ClusterConfigState SNAPSHOT_STOPPED_CONN1 = new ClusterConfigState(
@@ -241,6 +244,7 @@ public class DistributedHerderTest {
             Collections.emptyMap(), // Stopped connectors should have an empty set of task configs
             Collections.singletonMap(CONN1, 3),
             Collections.singletonMap(CONN1, 10),
+            Collections.singletonMap(CONN1, new AppliedConnectorConfig(CONN1_CONFIG)),
             Collections.singleton(CONN1),
             Collections.emptySet());
 
@@ -253,6 +257,7 @@ public class DistributedHerderTest {
             Collections.emptyMap(),
             Collections.singletonMap(CONN1, 0),
             Collections.singletonMap(CONN1, 11),
+            Collections.singletonMap(CONN1, new AppliedConnectorConfig(CONN1_CONFIG)),
             Collections.emptySet(),
             Collections.emptySet());
     private static final ClusterConfigState SNAPSHOT_UPDATED_CONN1_CONFIG = new ClusterConfigState(
@@ -264,6 +269,7 @@ public class DistributedHerderTest {
             TASK_CONFIGS_MAP,
             Collections.emptyMap(),
             Collections.emptyMap(),
+            Collections.singletonMap(CONN1, new AppliedConnectorConfig(CONN1_CONFIG_UPDATED)),
             Collections.emptySet(),
             Collections.emptySet());
 
@@ -631,6 +637,7 @@ public class DistributedHerderTest {
                     TASK_CONFIGS_MAP,
                     Collections.emptyMap(),
                     Collections.emptyMap(),
+                    Collections.singletonMap(CONN1, new AppliedConnectorConfig(CONN1_CONFIG)),
                     Collections.emptySet(),
                     Collections.emptySet()
             );
@@ -1615,6 +1622,7 @@ public class DistributedHerderTest {
                 TASK_CONFIGS_MAP,
                 Collections.emptyMap(),
                 Collections.emptyMap(),
+                Collections.singletonMap(CONN1, new AppliedConnectorConfig(CONN1_CONFIG)),
                 Collections.emptySet(),
                 Collections.emptySet(),
                 configTransformer
@@ -2219,6 +2227,7 @@ public class DistributedHerderTest {
                 TASK_CONFIGS_MAP,
                 Collections.emptyMap(),
                 Collections.emptyMap(),
+                Collections.singletonMap(CONN1, new AppliedConnectorConfig(CONN1_CONFIG)),
                 Collections.emptySet(),
                 Collections.emptySet(),
                 configTransformer);
@@ -2362,6 +2371,7 @@ public class DistributedHerderTest {
                 TASK_CONFIGS_MAP,
                 Collections.emptyMap(),
                 Collections.emptyMap(),
+                Collections.singletonMap(CONN1, new AppliedConnectorConfig(CONN1_CONFIG)),
                 Collections.emptySet(),
                 Collections.emptySet());
         expectConfigRefreshAndSnapshot(snapshotWithKey);
@@ -2408,6 +2418,7 @@ public class DistributedHerderTest {
                 TASK_CONFIGS_MAP,
                 Collections.emptyMap(),
                 Collections.emptyMap(),
+                Collections.singletonMap(CONN1, new AppliedConnectorConfig(CONN1_CONFIG)),
                 Collections.emptySet(),
                 Collections.emptySet());
         expectConfigRefreshAndSnapshot(snapshotWithKey);
@@ -2609,6 +2620,7 @@ public class DistributedHerderTest {
                 TASK_CONFIGS_MAP,
                 Collections.emptyMap(),
                 Collections.emptyMap(),
+                Collections.singletonMap(CONN1, new AppliedConnectorConfig(CONN1_CONFIG)),
                 Collections.emptySet(),
                 Collections.emptySet());
 
@@ -3094,6 +3106,7 @@ public class DistributedHerderTest {
                 TASK_CONFIGS_MAP,
                 Collections.emptyMap(),
                 taskConfigGenerations,
+                Collections.singletonMap(CONN1, new AppliedConnectorConfig(CONN1_CONFIG)),
                 Collections.emptySet(),
                 Collections.emptySet());
 
@@ -3970,6 +3983,15 @@ public class DistributedHerderTest {
         Map<String, Map<String, String>> connectorConfigs = connectors.stream()
                 .collect(Collectors.toMap(Function.identity(), c -> CONN1_CONFIG));
 
+        Map<String, AppliedConnectorConfig> appliedConnectorConfigs = taskConfigs.keySet().stream()
+                .map(ConnectorTaskId::connector)
+                .distinct()
+                .filter(connectorConfigs::containsKey)
+                .collect(Collectors.toMap(
+                        Function.identity(),
+                        connector -> new AppliedConnectorConfig(connectorConfigs.get(connector))
+                ));
+
         return new ClusterConfigState(
                 1,
                 sessionKey,
@@ -3979,6 +4001,7 @@ public class DistributedHerderTest {
                 taskConfigs,
                 taskCountRecords,
                 taskConfigGenerations,
+                appliedConnectorConfigs,
                 pendingFencing,
                 Collections.emptySet());
     }

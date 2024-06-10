@@ -71,6 +71,7 @@ import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
+import org.apache.kafka.connect.storage.AppliedConnectorConfig;
 import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.ConnectorOffsetBackingStore;
@@ -616,7 +617,23 @@ public class WorkerTest {
 
         assertStatistics(worker, 0, 0);
         assertEquals(Collections.emptySet(), worker.taskIds());
-        worker.startSourceTask(TASK_ID, ClusterConfigState.EMPTY, anyConnectorConfigMap(), origProps, taskStatusListener, TargetState.STARTED);
+
+        Map<String, String> connectorConfigs = anyConnectorConfigMap();
+        ClusterConfigState configState = new ClusterConfigState(
+                0,
+                null,
+                Collections.singletonMap(CONNECTOR_ID, 1),
+                Collections.singletonMap(CONNECTOR_ID, connectorConfigs),
+                Collections.singletonMap(CONNECTOR_ID, TargetState.STARTED),
+                Collections.singletonMap(TASK_ID, origProps),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.singletonMap(CONNECTOR_ID, new AppliedConnectorConfig(connectorConfigs)),
+                Collections.emptySet(),
+                Collections.emptySet()
+        );
+        assertTrue(worker.startSourceTask(TASK_ID, configState, connectorConfigs, origProps, taskStatusListener, TargetState.STARTED));
+
         assertStatistics(worker, 0, 1);
         assertEquals(Collections.singleton(TASK_ID), worker.taskIds());
         worker.stopAndAwaitTask(TASK_ID);
@@ -659,7 +676,21 @@ public class WorkerTest {
         connectorConfigs.put(TOPICS_CONFIG, "t1");
         connectorConfigs.put(CONNECTOR_CLASS_CONFIG, SampleSinkConnector.class.getName());
 
-        worker.startSinkTask(TASK_ID, ClusterConfigState.EMPTY, connectorConfigs, origProps, taskStatusListener, TargetState.STARTED);
+        ClusterConfigState configState = new ClusterConfigState(
+                0,
+                null,
+                Collections.singletonMap(CONNECTOR_ID, 1),
+                Collections.singletonMap(CONNECTOR_ID, connectorConfigs),
+                Collections.singletonMap(CONNECTOR_ID, TargetState.STARTED),
+                Collections.singletonMap(TASK_ID, origProps),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.singletonMap(CONNECTOR_ID, new AppliedConnectorConfig(connectorConfigs)),
+                Collections.emptySet(),
+                Collections.emptySet()
+        );
+        assertTrue(worker.startSinkTask(TASK_ID, configState, connectorConfigs, origProps, taskStatusListener, TargetState.STARTED));
+
         assertStatistics(worker, 0, 1);
         assertEquals(Collections.singleton(TASK_ID), worker.taskIds());
         worker.stopAndAwaitTask(TASK_ID);
@@ -715,7 +746,23 @@ public class WorkerTest {
 
         assertStatistics(worker, 0, 0);
         assertEquals(Collections.emptySet(), worker.taskIds());
-        worker.startExactlyOnceSourceTask(TASK_ID, ClusterConfigState.EMPTY,  anyConnectorConfigMap(), origProps, taskStatusListener, TargetState.STARTED, preProducer, postProducer);
+
+        Map<String, String> connectorConfigs = anyConnectorConfigMap();
+        ClusterConfigState configState = new ClusterConfigState(
+                0,
+                null,
+                Collections.singletonMap(CONNECTOR_ID, 1),
+                Collections.singletonMap(CONNECTOR_ID, connectorConfigs),
+                Collections.singletonMap(CONNECTOR_ID, TargetState.STARTED),
+                Collections.singletonMap(TASK_ID, origProps),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.singletonMap(CONNECTOR_ID, new AppliedConnectorConfig(connectorConfigs)),
+                Collections.emptySet(),
+                Collections.emptySet()
+        );
+
+        assertTrue(worker.startExactlyOnceSourceTask(TASK_ID, configState,  connectorConfigs, origProps, taskStatusListener, TargetState.STARTED, preProducer, postProducer));
         assertStatistics(worker, 0, 1);
         assertEquals(Collections.singleton(TASK_ID), worker.taskIds());
         worker.stopAndAwaitTask(TASK_ID);
