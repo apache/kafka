@@ -61,6 +61,7 @@ import java.util.OptionalDouble;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
@@ -94,6 +95,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      *  group anymore.
      */
     private final MemberInfo memberInfo;
+    private final AtomicReference<OffsetFetchResult> cachedOffsetFetchResult;
 
     public CommitRequestManager(
             final Time time,
@@ -156,6 +158,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         this.memberInfo = new MemberInfo();
         this.metricsManager = new OffsetCommitMetricsManager(metrics);
         this.offsetCommitCallbackInvoker = offsetCommitCallbackInvoker;
+        this.cachedOffsetFetchResult = new AtomicReference<>();
     }
 
     /**
@@ -514,12 +517,13 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
         // Retry the same fetch request while it fails with RetriableException and the retry timeout hasn't expired.
         currentResult.whenComplete((res, error) -> {
-            if (!fetchRequest.isExpired()) {
-                boolean inflightRemoved = pendingRequests.inflightOffsetFetches.remove(fetchRequest);
-                if (!inflightRemoved) {
-                    log.warn("The response for the offset fetch request for partitions {} was not found in the inflight buffer", fetchRequest.requestedPartitions);
-                }
+            boolean inflightRemoved = pendingRequests.inflightOffsetFetches.remove(fetchRequest);
+            if (!inflightRemoved) {
+                log.warn("The response for the offset fetch request for partitions {} was not found in the inflight buffer", fetchRequest.requestedPartitions);
             }
+
+            cacheOffsetFetchResult(fetchRequest, res);
+
             if (error == null) {
                 result.complete(res);
             } else {
@@ -605,6 +609,55 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             return EMPTY;
         List<NetworkClientDelegate.UnsentRequest> requests = pendingRequests.drainPendingCommits();
         return new NetworkClientDelegate.PollResult(Long.MAX_VALUE, requests);
+    }
+
+    void cacheOffsetFetchResult(final OffsetFetchRequestState request,
+                                final Map<TopicPartition, OffsetAndMetadata> result) {
+        if (request.isExpired()) {
+            OffsetFetchResult newValue = new OffsetFetchResult(
+                request.requestedPartitions,
+                memberInfo.memberId,
+                memberInfo.memberEpoch,
+                result
+            );
+            OffsetFetchResult oldValue = cachedOffsetFetchResult.getAndSet(newValue);
+
+            if (oldValue != null) {
+                log.warn("The cached offset fetch response results were replaced; old: {}, new: {}", oldValue, newValue);
+            } else {
+                log.debug("The cached offset fetch response was set to {}", newValue);
+            }
+        } else {
+            cachedOffsetFetchResult.set(null);
+            log.debug("The offset fetch request succeeded without expiration, so results cache was removed");
+        }
+    }
+
+    boolean maybeUseCachedOffsetFetchResult(final OffsetFetchRequestState request) {
+        OffsetFetchResult last = cachedOffsetFetchResult.getAndSet(null);
+
+        if (last != null) {
+            if (last.sameRequest(request.requestedPartitions, memberInfo.memberId, memberInfo.memberEpoch)) {
+                log.debug("The cached offset fetch response matches the requested partitions ({})", last.partitions());
+                request.future.complete(last.result());
+                return true;
+            } else {
+                log.debug(
+                    "The requested partitions ({}) do not match the cached offset fetch response's partitions ({}); ignoring cached results",
+                    request.requestedPartitions,
+                    last.partitions()
+                );
+                return false;
+            }
+        } else {
+            log.debug("There are no cached offset fetch results to attempt to use");
+            return false;
+        }
+    }
+
+    Optional<OffsetFetchResult> lastCompletedOffsetFetch() {
+        OffsetFetchResult last = cachedOffsetFetchResult.get();
+        return Optional.ofNullable(last);
     }
 
     private class OffsetCommitRequestState extends RetriableRequestState {
@@ -1128,31 +1181,20 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          * upon completion.
          */
         private CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> addOffsetFetchRequest(final OffsetFetchRequestState request) {
+            if (maybeUseCachedOffsetFetchResult(request))
+                return request.future;
+
             Optional<OffsetFetchRequestState> dupe =
                     unsentOffsetFetches.stream().filter(r -> r.sameRequest(request)).findAny();
             Optional<OffsetFetchRequestState> inflight =
                     inflightOffsetFetches.stream().filter(r -> r.sameRequest(request)).findAny();
 
-            if (dupe.isPresent()) {
-                log.debug("Duplicated unsent offset fetch request found for partitions: {}", request.requestedPartitions);
-                dupe.get().chainFuture(request.future);
-            } else if (inflight.isPresent()) {
-                log.debug("Duplicated inflight offset fetch request found for partitions: {}", request.requestedPartitions);
-                OffsetFetchRequestState existing = inflight.get();
-                existing.chainFuture(request.future);
-
-                if (existing.future.isDone()) {
-                    boolean inflightRemoved = inflightOffsetFetches.remove(existing);
-                    if (!inflightRemoved)
-                        log.warn("The offset fetch request for partitions {} was not found in the inflight buffer", request.requestedPartitions);
-                }
+            if (dupe.isPresent() || inflight.isPresent()) {
+                log.debug("Duplicated offset fetch request found for partitions: {}", request.requestedPartitions);
+                dupe.orElseGet(inflight::get).chainFuture(request.future);
             } else {
                 log.debug("Enqueuing offset fetch request for partitions: {}", request.requestedPartitions);
                 this.unsentOffsetFetches.add(request);
-
-                // The incoming offset fetch request isn't in the unsent or inflight buffers, which means we don't
-                // need to keep track of the entry in the inflight buffer any longer.
-                inflightOffsetFetches.removeIf(r -> request.isExpired());
             }
             return request.future;
         }
@@ -1292,6 +1334,58 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         MemberInfo() {
             this.memberId = Optional.empty();
             this.memberEpoch = Optional.empty();
+        }
+    }
+
+    static class OffsetFetchResult {
+
+        private final Set<TopicPartition> partitions;
+        private final Optional<String> memberId;
+        private final Optional<Integer> memberEpoch;
+        private final Map<TopicPartition, OffsetAndMetadata> result;
+
+        public OffsetFetchResult(final Set<TopicPartition> partitions,
+                                 final Optional<String> memberId,
+                                 final Optional<Integer> memberEpoch,
+                                 final Map<TopicPartition, OffsetAndMetadata> result) {
+            this.partitions = Collections.unmodifiableSet(partitions);
+            this.memberId = memberId;
+            this.memberEpoch = memberEpoch;
+            this.result = Collections.unmodifiableMap(result);
+        }
+
+        public Set<TopicPartition> partitions() {
+            return partitions;
+        }
+
+        public Optional<String> memberId() {
+            return memberId;
+        }
+
+        public Optional<Integer> memberEpoch() {
+            return memberEpoch;
+        }
+
+        public Map<TopicPartition, OffsetAndMetadata> result() {
+            return result;
+        }
+
+        private boolean sameRequest(final Set<TopicPartition> partitions,
+                                    final Optional<String> memberId,
+                                    final Optional<Integer> memberEpoch) {
+            return Objects.equals(this.partitions, partitions) &&
+                    Objects.equals(this.memberId, memberId) &&
+                    Objects.equals(this.memberEpoch, memberEpoch);
+        }
+
+        @Override
+        public String toString() {
+            return "OffsetFetchResult{" +
+                    "partitions=" + partitions +
+                    ", result=" + result +
+                    ", memberId=" + memberId +
+                    ", memberEpoch=" + memberEpoch +
+                    '}';
         }
     }
 }
