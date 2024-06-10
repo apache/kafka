@@ -159,7 +159,7 @@ public class CommitRequestManagerTest {
 
         String target = requestState.toStringBase() +
                 ", memberInfo=" + memberInfo +
-                ", expirationTimeMs=" + Optional.of(1000) +
+                ", expirationTimeMs=" + (offsetFetchRequestState.expirationTimeMs().isPresent() ? offsetFetchRequestState.expirationTimeMs() : "undefined") +
                 ", isExpired=" + offsetFetchRequestState.isExpired +
                 ", requestedPartitions=" + offsetFetchRequestState.requestedPartitions +
                 ", future=" + offsetFetchRequestState.future();
