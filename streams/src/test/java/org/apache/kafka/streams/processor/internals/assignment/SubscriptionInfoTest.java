@@ -166,7 +166,7 @@ public class SubscriptionInfoTest {
         final LegacySubscriptionInfoSerde info = new LegacySubscriptionInfoSerde(
             1,
             LATEST_SUPPORTED_VERSION,
-            PID_1.id(),
+            PID_1,
             ACTIVE_TASKS,
             STANDBY_TASKS,
             "localhost:80"
@@ -231,7 +231,7 @@ public class SubscriptionInfoTest {
         final LegacySubscriptionInfoSerde info = new LegacySubscriptionInfoSerde(
             2,
             LATEST_SUPPORTED_VERSION,
-            PID_1.id(),
+            PID_1,
             ACTIVE_TASKS,
             STANDBY_TASKS,
             "localhost:80"
@@ -301,7 +301,7 @@ public class SubscriptionInfoTest {
             final LegacySubscriptionInfoSerde info = new LegacySubscriptionInfoSerde(
                 version,
                 LATEST_SUPPORTED_VERSION,
-                PID_1.id(),
+                PID_1,
                 ACTIVE_TASKS,
                 STANDBY_TASKS,
                 "localhost:80"
@@ -392,7 +392,7 @@ public class SubscriptionInfoTest {
             new LegacySubscriptionInfoSerde(
                 SubscriptionInfo.MIN_VERSION_OFFSET_SUM_SUBSCRIPTION - 1,
                 LATEST_SUPPORTED_VERSION,
-                PID_1.id(),
+                PID_1,
                 ACTIVE_TASKS,
                 STANDBY_TASKS,
                 "localhost:80")
