@@ -551,11 +551,10 @@ public class KafkaProducerTest {
         Properties props = new Properties();
         props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.put(1, "not string key");
-        try (KafkaProducer<?, ?> ff = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer())) {
-            fail("Constructor should throw exception");
-        } catch (ConfigException e) {
-            assertTrue(e.getMessage().contains("not string key"), "Unexpected exception message: " + e.getMessage());
-        }
+        ConfigException ce = assertThrows(
+            ConfigException.class,
+            () -> new KafkaProducer<>(props, new StringSerializer(), new StringSerializer()));
+        assertTrue(ce.getMessage().contains("not string key"), "Unexpected exception message: " + ce.getMessage());
     }
 
     @Test
@@ -616,10 +615,9 @@ public class KafkaProducerTest {
 
             MockProducerInterceptor.setThrowOnConfigExceptionThreshold(targetInterceptor);
 
-            assertThrows(KafkaException.class, () -> {
-                new KafkaProducer<>(
-                        props, new StringSerializer(), new StringSerializer());
-            });
+            assertThrows(KafkaException.class, () ->
+                new KafkaProducer<>(props, new StringSerializer(), new StringSerializer())
+            );
 
             assertEquals(3, MockProducerInterceptor.CONFIG_COUNT.get());
             assertEquals(3, MockProducerInterceptor.CLOSE_COUNT.get());
@@ -1208,9 +1206,8 @@ public class KafkaProducerTest {
 
         ExecutorService executor = Executors.newFixedThreadPool(1);
 
-        Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
-            new StringSerializer(), metadata, client, null, time);
-        try {
+        try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
+                new StringSerializer(), metadata, client, null, time)) {
             client.prepareResponse(
                 request -> request instanceof FindCoordinatorRequest &&
                     ((FindCoordinatorRequest) request).data().keyType() == FindCoordinatorRequest.CoordinatorType.TRANSACTION.id(),
@@ -1227,8 +1224,6 @@ public class KafkaProducerTest {
 
             Thread.sleep(1000);
             producer.initTransactions();
-        } finally {
-            producer.close(Duration.ZERO);
         }
     }
 
@@ -2071,7 +2066,7 @@ public class KafkaProducerTest {
         String invalidTopicName = "topic abc"; // Invalid topic name due to space
 
         ProducerInterceptors<String, String> producerInterceptors =
-                new ProducerInterceptors<>(Arrays.asList(new MockProducerInterceptor()));
+                new ProducerInterceptors<>(Collections.singletonList(new MockProducerInterceptor()));
 
         try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(), new StringSerializer(),
                 producerMetadata, client, producerInterceptors, time)) {
@@ -2085,7 +2080,6 @@ public class KafkaProducerTest {
 
                 assertNotNull(recordMetadata.topic(), "Topic name should be valid even on send failure");
                 assertEquals(invalidTopicName, recordMetadata.topic());
-                assertNotNull(recordMetadata.partition(), "Partition should be valid even on send failure");
 
                 assertFalse(recordMetadata.hasOffset());
                 assertEquals(ProduceResponse.INVALID_OFFSET, recordMetadata.offset());
@@ -2391,15 +2385,15 @@ public class KafkaProducerTest {
         private final TestInfo testInfo;
         private final Map<String, Object> configs;
         private final Serializer<T> serializer;
+        private final Partitioner partitioner = mock(Partitioner.class);
+        private final KafkaThread ioThread = mock(KafkaThread.class);
+        private final List<ProducerInterceptor<T, T>> interceptors = new ArrayList<>();
         private ProducerMetadata metadata = mock(ProducerMetadata.class);
         private RecordAccumulator accumulator = mock(RecordAccumulator.class);
         private Sender sender = mock(Sender.class);
         private TransactionManager transactionManager = mock(TransactionManager.class);
-        private Partitioner partitioner = mock(Partitioner.class);
-        private KafkaThread ioThread = mock(KafkaThread.class);
         private Time time = new MockTime();
-        private Metrics metrics = new Metrics(time);
-        private List<ProducerInterceptor<T, T>> interceptors = new ArrayList<>();
+        private final Metrics metrics = new Metrics(time);
 
         public KafkaProducerTestContext(
             TestInfo testInfo,

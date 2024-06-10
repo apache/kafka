@@ -17,20 +17,22 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
-import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
+import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.ControlRecordUtils;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.raft.internals.BatchAccumulator;
+import org.apache.kafka.raft.internals.ReplicaKey;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -162,7 +164,7 @@ public class LeaderState<T> implements EpochState {
             .setLeaderId(this.election().leaderId())
             .setVoters(voters)
             .setGrantingVoters(grantingVoters);
-        
+
         accumulator.appendLeaderChangeMessage(leaderChangeMessage, currentTimeMs);
         accumulator.forceDrain();
     }
@@ -242,8 +244,9 @@ public class LeaderState<T> implements EpochState {
                         );
                         return true;
                     } else if (highWatermarkUpdateOffset < currentHighWatermarkMetadata.offset) {
-                        log.error("The latest computed high watermark {} is smaller than the current " +
-                                "value {}, which suggests that one of the voters has lost committed data. " +
+                        log.info("The latest computed high watermark {} is smaller than the current " +
+                                "value {}, which should only happen when voter set membership changes. If the voter " +
+                                "set has not changed this suggests that one of the voters has lost committed data. " +
                                 "Full voter replication state: {}", highWatermarkUpdateOffset,
                             currentHighWatermarkMetadata.offset, voterStates.values());
                         return false;
@@ -295,10 +298,12 @@ public class LeaderState<T> implements EpochState {
      * Update the local replica state.
      *
      * @param endOffsetMetadata updated log end offset of local replica
+     * @param lastVoterSet the up-to-date voter set
      * @return true if the high watermark is updated as a result of this call
      */
     public boolean updateLocalState(
-        LogOffsetMetadata endOffsetMetadata
+        LogOffsetMetadata endOffsetMetadata,
+        Set<Integer> lastVoterSet
     ) {
         ReplicaState state = getOrCreateReplicaState(localId);
         state.endOffset.ifPresent(currentEndOffset -> {
@@ -307,7 +312,8 @@ public class LeaderState<T> implements EpochState {
                     "end offset: " + currentEndOffset.offset + " -> " + endOffsetMetadata.offset);
             }
         });
-        state.updateLeaderState(endOffsetMetadata);
+        state.updateLeaderEndOffset(endOffsetMetadata);
+        updateVoterAndObserverStates(lastVoterSet);
         return maybeUpdateHighWatermark();
     }
 
@@ -340,9 +346,7 @@ public class LeaderState<T> implements EpochState {
                     state.nodeId, currentEndOffset.offset, fetchOffsetMetadata.offset);
             }
         });
-
-        Optional<LogOffsetMetadata> leaderEndOffsetOpt =
-            voterStates.get(localId).endOffset;
+        Optional<LogOffsetMetadata> leaderEndOffsetOpt = getOrCreateReplicaState(localId).endOffset;
 
         state.updateFollowerState(
             currentTimeMs,
@@ -434,14 +438,38 @@ public class LeaderState<T> implements EpochState {
 
     }
 
+    /**
+     * Clear observer states that have not been active for a while and are not the leader.
+     */
     private void clearInactiveObservers(final long currentTimeMs) {
         observerStates.entrySet().removeIf(integerReplicaStateEntry ->
-            currentTimeMs - integerReplicaStateEntry.getValue().lastFetchTimestamp >= OBSERVER_SESSION_TIMEOUT_MS
+            currentTimeMs - integerReplicaStateEntry.getValue().lastFetchTimestamp >= OBSERVER_SESSION_TIMEOUT_MS &&
+                integerReplicaStateEntry.getKey() != localId
         );
     }
 
     private boolean isVoter(int remoteNodeId) {
         return voterStates.containsKey(remoteNodeId);
+    }
+
+    private void updateVoterAndObserverStates(Set<Integer> lastVoterSet) {
+        // Move any replica that is not in the last voter set from voterStates to observerStates
+        for (Iterator<Map.Entry<Integer, ReplicaState>> iter = voterStates.entrySet().iterator(); iter.hasNext(); ) {
+            Map.Entry<Integer, ReplicaState> replica = iter.next();
+            if (!lastVoterSet.contains(replica.getKey())) {
+                observerStates.put(replica.getKey(), replica.getValue());
+                iter.remove();
+            }
+        }
+
+        // Add replicas that are in the last voter set and not in voterStates to voterStates (from observerStates
+        // if they exist)
+        for (int voterId : lastVoterSet) {
+            if (!voterStates.containsKey(voterId)) {
+                Optional<ReplicaState> existingObserverState = Optional.ofNullable(observerStates.remove(voterId));
+                voterStates.put(voterId, existingObserverState.orElse(new ReplicaState(voterId, false)));
+            }
+        }
     }
 
     private static class ReplicaState implements Comparable<ReplicaState> {
@@ -461,7 +489,7 @@ public class LeaderState<T> implements EpochState {
             this.hasAcknowledgedLeader = hasAcknowledgedLeader;
         }
 
-        void updateLeaderState(
+        void updateLeaderEndOffset(
             LogOffsetMetadata endOffsetMetadata
         ) {
             // For the leader, we only update the end offset. The remaining fields
@@ -513,15 +541,18 @@ public class LeaderState<T> implements EpochState {
                 endOffset,
                 lastFetchTimestamp,
                 lastCaughtUpTimestamp,
-                hasAcknowledgedLeader 
+                hasAcknowledgedLeader
             );
         }
     }
 
     @Override
-    public boolean canGrantVote(int candidateId, boolean isLogUpToDate) {
-        log.debug("Rejecting vote request from candidate {} since we are already leader in epoch {}",
-            candidateId, epoch);
+    public boolean canGrantVote(ReplicaKey candidateKey, boolean isLogUpToDate) {
+        log.debug(
+            "Rejecting vote request from candidate ({}) since we are already leader in epoch {}",
+            candidateKey,
+            epoch
+        );
         return false;
     }
 

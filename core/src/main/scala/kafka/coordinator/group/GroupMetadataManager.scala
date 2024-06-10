@@ -27,11 +27,12 @@ import java.util.concurrent.ConcurrentHashMap
 import com.yammer.metrics.core.Gauge
 import kafka.common.OffsetAndMetadata
 import kafka.coordinator.group.GroupMetadataManager.maybeConvertOffsetCommitError
-import kafka.server.{LogAppendResult, ReplicaManager, RequestLocal}
+import kafka.server.{ReplicaManager, RequestLocal}
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.Implicits._
 import kafka.utils._
 import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.{Metrics, Sensor}
 import org.apache.kafka.common.metrics.stats.{Avg, Max, Meter}
@@ -63,7 +64,7 @@ class GroupMetadataManager(brokerId: Int,
   // Visible for test.
   private[group] val metricsGroup: KafkaMetricsGroup = new KafkaMetricsGroup(this.getClass)
 
-  private val compressionType: CompressionType = config.offsetsTopicCompressionType
+  private val compression: Compression = Compression.of(config.offsetsTopicCompressionType).build()
 
   private val groupMetadataCache = new Pool[String, GroupMetadata]
 
@@ -258,9 +259,9 @@ class GroupMetadataManager(brokerId: Int,
         val value = GroupMetadataManager.groupMetadataValue(group, groupAssignment, interBrokerProtocolVersion)
 
         val records = {
-          val buffer = ByteBuffer.allocate(AbstractRecords.estimateSizeInBytes(magicValue, compressionType,
+          val buffer = ByteBuffer.allocate(AbstractRecords.estimateSizeInBytes(magicValue, compression.`type`(),
             Seq(new SimpleRecord(timestamp, key, value)).asJava))
-          val builder = MemoryRecords.builder(buffer, magicValue, compressionType, timestampType, 0L)
+          val builder = MemoryRecords.builder(buffer, magicValue, compression, timestampType, 0L)
           builder.append(timestamp, key, value)
           builder.build()
         }
@@ -363,12 +364,12 @@ class GroupMetadataManager(brokerId: Int,
         val value = GroupMetadataManager.offsetCommitValue(offsetAndMetadata, interBrokerProtocolVersion)
         new SimpleRecord(timestamp, key, value)
       }
-      val buffer = ByteBuffer.allocate(AbstractRecords.estimateSizeInBytes(magicValue, compressionType, records.asJava))
+      val buffer = ByteBuffer.allocate(AbstractRecords.estimateSizeInBytes(magicValue, compression.`type`(), records.asJava))
 
       if (isTxnOffsetCommit && magicValue < RecordBatch.MAGIC_VALUE_V2)
         throw Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT.exception("Attempting to make a transaction offset commit with an invalid magic: " + magicValue)
 
-      val builder = MemoryRecords.builder(buffer, magicValue, compressionType, timestampType, 0L, time.milliseconds(),
+      val builder = MemoryRecords.builder(buffer, magicValue, compression, timestampType, 0L, time.milliseconds(),
         producerId, producerEpoch, 0, isTxnOffsetCommit, RecordBatch.NO_PARTITION_LEADER_EPOCH)
 
       records.foreach(builder.append)
@@ -376,14 +377,13 @@ class GroupMetadataManager(brokerId: Int,
   }
 
   private def createPutCacheCallback(isTxnOffsetCommit: Boolean,
-                             group: GroupMetadata,
-                             consumerId: String,
-                             offsetMetadata: immutable.Map[TopicIdPartition, OffsetAndMetadata],
-                             filteredOffsetMetadata: Map[TopicIdPartition, OffsetAndMetadata],
-                             responseCallback: immutable.Map[TopicIdPartition, Errors] => Unit,
-                             producerId: Long,
-                             records: Map[TopicPartition, MemoryRecords],
-                             preAppendErrors: Map[TopicPartition, LogAppendResult] = Map.empty): Map[TopicPartition, PartitionResponse] => Unit = {
+                                     group: GroupMetadata,
+                                     consumerId: String,
+                                     offsetMetadata: immutable.Map[TopicIdPartition, OffsetAndMetadata],
+                                     filteredOffsetMetadata: Map[TopicIdPartition, OffsetAndMetadata],
+                                     responseCallback: immutable.Map[TopicIdPartition, Errors] => Unit,
+                                     producerId: Long,
+                                     records: Map[TopicPartition, MemoryRecords]): Map[TopicPartition, PartitionResponse] => Unit = {
     val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partitionFor(group.groupId))
     // set the callback function to insert offsets into cache after log append completed
     def putCacheCallback(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
@@ -434,8 +434,6 @@ class GroupMetadataManager(brokerId: Int,
       val commitStatus = offsetMetadata.map { case (topicIdPartition, offsetAndMetadata) =>
         if (!validateOffsetMetadataLength(offsetAndMetadata.metadata))
           (topicIdPartition, Errors.OFFSET_METADATA_TOO_LARGE)
-        else if (preAppendErrors.contains(topicIdPartition.topicPartition))
-          (topicIdPartition, preAppendErrors(topicIdPartition.topicPartition).error)
         else
           (topicIdPartition, responseError)
       }
@@ -493,9 +491,9 @@ class GroupMetadataManager(brokerId: Int,
 
     if (isTxnOffsetCommit) {
       addProducerGroup(producerId, group.groupId)
-      group.prepareTxnOffsetCommit(producerId, offsetMetadata)
+      group.prepareTxnOffsetCommit(producerId, filteredOffsetMetadata)
     } else {
-      group.prepareOffsetCommit(offsetMetadata)
+      group.prepareOffsetCommit(filteredOffsetMetadata)
     }
 
     appendForGroup(group, records, requestLocal, putCacheCallback, verificationGuards)
@@ -908,7 +906,7 @@ class GroupMetadataManager(brokerId: Int,
               try {
                 // do not need to require acks since even if the tombstone is lost,
                 // it will be appended again in the next purge cycle
-                val records = MemoryRecords.withRecords(magicValue, 0L, compressionType, timestampType, tombstones.toArray: _*)
+                val records = MemoryRecords.withRecords(magicValue, 0L, compression, timestampType, tombstones.toArray: _*)
                 partition.appendRecordsToLeader(records, origin = AppendOrigin.COORDINATOR, requiredAcks = 0,
                   requestLocal = requestLocal)
 

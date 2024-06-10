@@ -39,7 +39,7 @@ public class DefaultRecordTest {
     public void testBasicSerde() throws IOException {
         Header[] headers = new Header[] {
             new RecordHeader("foo", "value".getBytes()),
-            new RecordHeader("bar", (byte[]) null),
+            new RecordHeader("bar", null),
             new RecordHeader("\"A\\u00ea\\u00f1\\u00fcC\"", "value".getBytes())
         };
 

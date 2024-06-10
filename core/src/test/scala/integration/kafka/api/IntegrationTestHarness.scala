@@ -62,7 +62,6 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   }
 
   override def generateConfigs: Seq[KafkaConfig] = {
-
     val cfgs = TestUtils.createBrokerConfigs(brokerCount, zkConnectOrNull, interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, logDirCount = logDirCount)
     configureListeners(cfgs)
@@ -72,6 +71,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     }
     if (isNewGroupCoordinatorEnabled()) {
       cfgs.foreach(_.setProperty(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "true"))
+      cfgs.foreach(_.setProperty(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer"))
     }
 
     if(isKRaftTest()) {
@@ -220,16 +220,18 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
 
   @AfterEach
   override def tearDown(): Unit = {
-    producers.foreach(_.close(Duration.ZERO))
-    consumers.foreach(_.wakeup())
-    consumers.foreach(_.close(Duration.ZERO))
-    adminClients.foreach(_.close(Duration.ZERO))
+    try {
+      producers.foreach(_.close(Duration.ZERO))
+      consumers.foreach(_.wakeup())
+      consumers.foreach(_.close(Duration.ZERO))
+      adminClients.foreach(_.close(Duration.ZERO))
 
-    producers.clear()
-    consumers.clear()
-    adminClients.clear()
-
-    super.tearDown()
+      producers.clear()
+      consumers.clear()
+      adminClients.clear()
+    } finally {
+      super.tearDown()
+    }
   }
 
 }

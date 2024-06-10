@@ -18,8 +18,6 @@ package kafka.admin;
 
 import kafka.test.ClusterInstance;
 import kafka.test.annotation.ClusterTest;
-import kafka.test.annotation.ClusterTestDefaults;
-import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
 import kafka.utils.Exit;
 import org.apache.kafka.test.NoRetryException;
@@ -44,7 +42,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SuppressWarnings("dontUseSystemExit")
 @ExtendWith(value = ClusterTestExtensions.class)
-@ClusterTestDefaults(clusterType = Type.ALL)
 public class UserScramCredentialsCommandTest {
     private static final String USER1 = "user1";
     private static final String USER2 = "user2";

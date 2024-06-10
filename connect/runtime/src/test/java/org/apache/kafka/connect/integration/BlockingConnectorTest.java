@@ -102,7 +102,7 @@ public class BlockingConnectorTest {
     private static final String CONNECTOR_CONFIG = "Connector::config";
     private static final String CONNECTOR_VERSION = "Connector::version";
     private static final String TASK_START = "Task::start";
-    private static final String TASK_STOP = "Task::stop";
+    static final String TASK_STOP = "Task::stop";
     private static final String TASK_VERSION = "Task::version";
     private static final String SINK_TASK_INITIALIZE = "SinkTask::initialize";
     private static final String SINK_TASK_PUT = "SinkTask::put";

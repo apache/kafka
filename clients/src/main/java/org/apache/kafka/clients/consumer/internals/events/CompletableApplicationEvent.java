@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.common.utils.Timer;
-
-import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -32,13 +29,9 @@ public abstract class CompletableApplicationEvent<T> extends ApplicationEvent im
     private final CompletableFuture<T> future;
     private final long deadlineMs;
 
-    protected CompletableApplicationEvent(final Type type, final Timer timer) {
-        super(type);
-        this.future = new CompletableFuture<>();
-        Objects.requireNonNull(timer);
-        this.deadlineMs = timer.remainingMs() + timer.currentTimeMs();
-    }
-
+    /**
+     * <em>Note</em>: the {@code deadlineMs} is the future time of expiration, <em>not</em> a timeout.
+     */
     protected CompletableApplicationEvent(final Type type, final long deadlineMs) {
         super(type);
         this.future = new CompletableFuture<>();
@@ -50,6 +43,7 @@ public abstract class CompletableApplicationEvent<T> extends ApplicationEvent im
         return future;
     }
 
+    @Override
     public long deadlineMs() {
         return deadlineMs;
     }

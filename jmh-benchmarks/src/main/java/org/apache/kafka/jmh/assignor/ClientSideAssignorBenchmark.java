@@ -23,6 +23,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -46,6 +47,8 @@ import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor.DEFAULT_GENERATION;
+import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
+import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)
@@ -73,7 +76,7 @@ public class ClientSideAssignorBenchmark {
     /**
      * The subscription pattern followed by the members of the group.
      *
-     * A subscription model is considered homogenous if all the members of the group
+     * A subscription model is considered homogeneous if all the members of the group
      * are subscribed to the same set of topics, it is heterogeneous otherwise.
      */
     public enum SubscriptionModel {
@@ -101,7 +104,7 @@ public class ClientSideAssignorBenchmark {
     private boolean isRackAware;
 
     @Param({"HOMOGENEOUS", "HETEROGENEOUS"})
-    private SubscriptionModel subscriptionModel;
+    private SubscriptionType subscriptionType;
 
     @Param({"RANGE", "COOPERATIVE_STICKY"})
     private AssignorType assignorType;
@@ -166,7 +169,7 @@ public class ClientSideAssignorBenchmark {
         int numberOfMembers = assignmentType.equals(AssignmentType.INCREMENTAL) ? memberCount - 1 : memberCount;
 
         // When subscriptions are homogeneous, all members are assigned all topics.
-        if (subscriptionModel == SubscriptionModel.HOMOGENEOUS) {
+        if (subscriptionType == HOMOGENEOUS) {
             for (int i = 0; i < numberOfMembers; i++) {
                 String memberName = "member" + i;
                 subscriptions.put(memberName, subscription(allTopicNames, i));
@@ -263,7 +266,7 @@ public class ClientSideAssignorBenchmark {
         );
 
         List<String> subscribedTopicsForNewMember;
-        if (subscriptionModel == SubscriptionModel.HETEROGENEOUS) {
+        if (subscriptionType == HETEROGENEOUS) {
             subscribedTopicsForNewMember = subscriptions.get("member" + (memberCount - 2)).topics();
         } else {
             subscribedTopicsForNewMember = allTopicNames;

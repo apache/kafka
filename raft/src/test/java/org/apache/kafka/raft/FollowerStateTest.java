@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.raft.internals.ReplicaKey;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -37,7 +39,7 @@ public class FollowerStateTest {
     private final LogContext logContext = new LogContext();
     private final int epoch = 5;
     private final int fetchTimeoutMs = 15000;
-    int leaderId = 3;
+    private final Node leader = new Node(3, "mock-host-3", 1234);
 
     private FollowerState newFollowerState(
         Set<Integer> voters,
@@ -46,7 +48,7 @@ public class FollowerStateTest {
         return new FollowerState(
             time,
             epoch,
-            leaderId,
+            leader,
             voters,
             highWatermark,
             fetchTimeoutMs,
@@ -90,9 +92,15 @@ public class FollowerStateTest {
             Optional.empty()
         );
 
-        assertFalse(state.canGrantVote(1, isLogUpToDate));
-        assertFalse(state.canGrantVote(2, isLogUpToDate));
-        assertFalse(state.canGrantVote(3, isLogUpToDate));
+        assertFalse(state.canGrantVote(ReplicaKey.of(1, Optional.empty()), isLogUpToDate));
+        assertFalse(state.canGrantVote(ReplicaKey.of(2, Optional.empty()), isLogUpToDate));
+        assertFalse(state.canGrantVote(ReplicaKey.of(3, Optional.empty()), isLogUpToDate));
     }
 
+    @Test
+    public void testLeaderNode() {
+        FollowerState state = newFollowerState(Utils.mkSet(0, 1, 2), Optional.empty());
+
+        assertEquals(leader, state.leader());
+    }
 }

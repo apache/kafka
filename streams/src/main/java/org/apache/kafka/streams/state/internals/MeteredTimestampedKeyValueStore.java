@@ -86,6 +86,7 @@ public class MeteredTimestampedKeyValueStore<K, V>
                             (query, positionBound, config, store) -> runTimestampedKeyQuery(query, positionBound, config)
                     )
             );
+
     @SuppressWarnings("unchecked")
     @Override
     protected Serde<ValueAndTimestamp<V>> prepareValueSerdeForStore(final Serde<ValueAndTimestamp<V>> valueSerde, final SerdeGetter getter) {
@@ -95,7 +96,6 @@ public class MeteredTimestampedKeyValueStore<K, V>
             return super.prepareValueSerdeForStore(valueSerde, getter);
         }
     }
-
 
     public RawAndDeserializedValue<V> getWithBinary(final K key) {
         try {
@@ -307,11 +307,12 @@ public class MeteredTimestampedKeyValueStore<K, V>
     }
 
     @SuppressWarnings("unchecked")
-    private class MeteredTimestampedKeyValueStoreIterator implements KeyValueIterator<K, V> {
+    private class MeteredTimestampedKeyValueStoreIterator implements KeyValueIterator<K, V>, MeteredIterator {
 
         private final KeyValueIterator<Bytes, byte[]> iter;
         private final Sensor sensor;
         private final long startNs;
+        private final long startTimestampMs;
         private final Function<byte[], ValueAndTimestamp<V>> valueAndTimestampDeserializer;
 
         private final boolean returnPlainValue;
@@ -324,7 +325,15 @@ public class MeteredTimestampedKeyValueStore<K, V>
             this.sensor = sensor;
             this.valueAndTimestampDeserializer = valueAndTimestampDeserializer;
             this.startNs = time.nanoseconds();
+            this.startTimestampMs = time.milliseconds();
             this.returnPlainValue = returnPlainValue;
+            numOpenIterators.increment();
+            openIterators.add(this);
+        }
+
+        @Override
+        public long startTimestamp() {
+            return startTimestampMs;
         }
 
         @Override
@@ -349,7 +358,11 @@ public class MeteredTimestampedKeyValueStore<K, V>
             try {
                 iter.close();
             } finally {
-                sensor.record(time.nanoseconds() - startNs);
+                final long duration = time.nanoseconds() - startNs;
+                sensor.record(duration);
+                iteratorDurationSensor.record(duration);
+                numOpenIterators.decrement();
+                openIterators.remove(this);
             }
         }
 

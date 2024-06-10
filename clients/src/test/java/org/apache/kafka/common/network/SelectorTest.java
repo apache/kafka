@@ -264,7 +264,7 @@ public class SelectorTest {
         } else {
             waitForCondition(() -> cipherMetrics(metrics).size() == 1,
                 "Waiting for cipher metrics to be created.");
-            assertEquals(Integer.valueOf(5), cipherMetrics(metrics).get(0).metricValue());
+            assertEquals(5, cipherMetrics(metrics).get(0).metricValue());
         }
     }
 
@@ -272,7 +272,7 @@ public class SelectorTest {
         return metrics.metrics().entrySet().stream().
             filter(e -> e.getKey().description().
                 contains("The number of connections with this SSL cipher and protocol.")).
-            map(e -> e.getValue()).
+            map(Map.Entry::getValue).
             collect(Collectors.toList());
     }
 
@@ -639,7 +639,7 @@ public class SelectorTest {
             // Poll until one or more receives complete and then close the server-side connection
             waitForCondition(() -> {
                 selector.poll(1000);
-                return selector.completedReceives().size() > 0;
+                return !selector.completedReceives().isEmpty();
             }, 5000, "Receive not completed");
             server.closeConnections();
             while (selector.disconnected().isEmpty()) {
@@ -955,7 +955,7 @@ public class SelectorTest {
         NetworkSend send = new NetworkSend("destination", new ByteBufferSend(ByteBuffer.allocate(0)));
         when(channel.maybeCompleteSend()).thenReturn(send);
         selector.write(channel);
-        assertEquals(asList(send), selector.completedSends());
+        assertEquals(Collections.singletonList(send), selector.completedSends());
     }
 
     /**

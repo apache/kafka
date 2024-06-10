@@ -28,6 +28,7 @@ import org.apache.kafka.common.errors.{TopicDeletionDisabledException, UnknownTo
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.metadata.BrokerState
+import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -38,6 +39,7 @@ import java.util.concurrent.ExecutionException
 import java.util.{Collections, Optional, Properties}
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
+import scala.util.Using
 
 class DeleteTopicTest extends QuorumTestHarness {
 
@@ -219,7 +221,7 @@ class DeleteTopicTest extends QuorumTestHarness {
       // increase the partition count for topic
       val props = new Properties()
       props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.plaintextBootstrapServers(partitionHostingBrokers))
-      TestUtils.resource(Admin.create(props)) { adminClient =>
+      Using(Admin.create(props)) { adminClient =>
         try {
           adminClient.createPartitions(Map(topic -> NewPartitions.increaseTo(2)).asJava).all().get()
         } catch {
@@ -254,7 +256,7 @@ class DeleteTopicTest extends QuorumTestHarness {
       // increase the partition count for topic
       val props = new Properties()
       props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.plaintextBootstrapServers(partitionHostingServers))
-      TestUtils.resource(Admin.create(props)) { adminClient =>
+      Using(Admin.create(props)) { adminClient =>
         try {
           adminClient.createPartitions(Map(topic -> NewPartitions.increaseTo(2)).asJava).all().get()
         } catch {
@@ -488,7 +490,7 @@ class DeleteTopicTest extends QuorumTestHarness {
     if (isKRaftTest()) {
       // Restart KRaft quorum with the updated config
       val overridingProps = new Properties()
-      overridingProps.put(KafkaConfig.DeleteTopicEnableProp, false.toString)
+      overridingProps.put(ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, false.toString)
       if (implementation != null)
         implementation.shutdown()
       implementation = newKRaftQuorum(overridingProps)
