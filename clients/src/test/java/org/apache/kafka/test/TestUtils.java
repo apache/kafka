@@ -563,7 +563,6 @@ public class TestUtils {
             assertInstanceOf(exceptionCauseClass, exception.getCause(),
                     "Unexpected exception cause " + exception.getCause());
             return exceptionCauseClass.cast(exception.getCause());
-
         } catch (Exception ignored) {
             return null;
         }
