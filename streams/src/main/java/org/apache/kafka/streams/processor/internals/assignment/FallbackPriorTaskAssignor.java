@@ -17,11 +17,11 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 
 /**
  * A special task assignor implementation to be used as a fallback in case the
