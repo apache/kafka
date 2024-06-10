@@ -19,6 +19,7 @@ package org.apache.kafka.server.config;
 import org.apache.kafka.common.compress.GzipCompression;
 import org.apache.kafka.common.compress.Lz4Compression;
 import org.apache.kafka.common.compress.ZstdCompression;
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SecurityConfig;
@@ -46,6 +47,7 @@ import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.storage.internals.log.LogConfig;
 
 import java.util.Collections;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
@@ -63,7 +65,13 @@ import static org.apache.kafka.common.config.ConfigDef.Type.PASSWORD;
 import static org.apache.kafka.common.config.ConfigDef.Type.SHORT;
 import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
 
-public class KafkaConfig {
+/**
+ * During moving {@link kafka.server.KafkaConfig} out of core we will have 2 KafkaConfig.
+ * org.apache.kafka.server.config.KafkaConfig will be the future KafkaConfig so any new getters, or updates for `CONFIG_DEF` will be defined here.
+ * Any code depends on kafka.server.KafkaConfig will keep for using kafka.server.KafkaConfig for the time being until we move it out of core
+ * For more details check KAFKA-15853
+ */
+abstract public class KafkaConfig extends AbstractConfig {
     @SuppressWarnings("deprecation")
     public final static ConfigDef CONFIG_DEF =  new ConfigDef(RemoteLogManagerConfig.configDef())
         /** ********* Zookeeper Configuration ***********/
@@ -418,4 +426,7 @@ public class KafkaConfig {
         // This indicates whether unreleased MetadataVersions should be enabled on this node.
         .defineInternal(ServerConfigs.UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG, BOOLEAN, false, HIGH);
 
+    public KafkaConfig(ConfigDef definition, Map<?, ?> originals, Map<String, ?> configProviderProps, boolean doLog) {
+        super(definition, originals, configProviderProps, doLog);
+    }
 }
