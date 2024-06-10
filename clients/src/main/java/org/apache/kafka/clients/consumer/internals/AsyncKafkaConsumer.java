@@ -1515,8 +1515,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         } catch (Exception e) {
             log.error("Unsubscribe failed", e);
             throw e;
-        }
-        finally {
+        } finally {
             subscriptions.unsubscribe();
             release();
         }
