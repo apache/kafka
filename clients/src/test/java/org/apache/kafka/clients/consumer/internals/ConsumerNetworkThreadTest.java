@@ -255,9 +255,8 @@ public class ConsumerNetworkThreadTest {
     }
 
     private static Stream<Arguments> applicationEvents() {
-        Time time1 = new MockTime();
         Map<TopicPartition, OffsetAndMetadata> offset = new HashMap<>();
-        final long currentTimeMs = time1.milliseconds();
+        final long currentTimeMs = 12345;
         return Stream.of(
                 Arguments.of(new PollEvent(100)),
                 Arguments.of(new NewTopicsMetadataUpdateRequestEvent()),
