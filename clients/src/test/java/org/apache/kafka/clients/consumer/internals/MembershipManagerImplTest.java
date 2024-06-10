@@ -115,8 +115,8 @@ public class MembershipManagerImplTest {
         metadata = mock(ConsumerMetadata.class);
         subscriptionState = mock(SubscriptionState.class);
         commitRequestManager = mock(CommitRequestManager.class);
-        backgroundEventQueue = mock(BlockingQueue.class);
         backgroundEventHandler = mock(BackgroundEventHandler.class);
+        backgroundEventQueue = mock(BlockingQueue.class);
         time = new MockTime(0);
         metrics = new Metrics(time);
         rebalanceMetricsManager = new RebalanceMetricsManager(metrics);
@@ -335,7 +335,7 @@ public class MembershipManagerImplTest {
     private void mockStableMember(MembershipManagerImpl membershipManager) {
         ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(new Assignment());
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        membershipManager.updateAssignment(mock(Map.class));
+        membershipManager.updateAssignment(new HashMap<>());
         membershipManager.onHeartbeatSuccess(heartbeatResponse.data());
         membershipManager.poll(time.milliseconds());
         membershipManager.onHeartbeatRequestSent();
