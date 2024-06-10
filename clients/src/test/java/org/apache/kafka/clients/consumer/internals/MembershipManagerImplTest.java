@@ -1032,6 +1032,8 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testLeaveGroupWhenMemberFenced() {
+        backgroundEventQueue = new LinkedBlockingQueue<>();
+        backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
         MembershipManagerImpl membershipManager = createMemberInStableState();
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
         ConsumerRebalanceListenerCallbackCompletedEvent callbackEvent = mockFencedMemberStuckOnUserCallback(membershipManager, invoker);
@@ -2225,6 +2227,8 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testRebalanceMetricsForMultipleReconciliations() {
+        backgroundEventQueue = new LinkedBlockingQueue<>();
+        backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
         MembershipManagerImpl membershipManager = createMemberInStableState();
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
 
