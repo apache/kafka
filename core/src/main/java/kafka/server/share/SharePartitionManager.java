@@ -18,16 +18,35 @@ package kafka.server.share;
 
 import kafka.server.ReplicaManager;
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.ShareSessionNotFoundException;
 import org.apache.kafka.common.message.ShareAcknowledgeResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData;
+import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.ShareFetchMetadata;
+import org.apache.kafka.common.requests.ShareFetchRequest;
+import org.apache.kafka.common.requests.ShareFetchResponse;
+import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.share.CachedSharePartition;
+import org.apache.kafka.server.share.ShareSession;
+import org.apache.kafka.server.share.ShareSessionCache;
+import org.apache.kafka.server.share.ShareSessionKey;
 import org.apache.kafka.server.share.ShareAcknowledgementBatch;
 import org.apache.kafka.storage.internals.log.FetchParams;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import scala.Tuple2;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -193,6 +212,100 @@ public class SharePartitionManager implements AutoCloseable {
         return future;
     }
 
+    public ShareFetchContext newContext(String groupId, Map<TopicIdPartition,
+            ShareFetchRequest.SharePartitionData> shareFetchData, List<TopicIdPartition> toForget, ShareFetchMetadata reqMetadata) {
+        ShareFetchContext context;
+        // TopicPartition with maxBytes as 0 should not be added in the cachedPartitions
+        Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> shareFetchDataWithMaxBytes = new HashMap<>();
+        shareFetchData.forEach((tp, sharePartitionData) -> {
+            if (sharePartitionData.maxBytes > 0) shareFetchDataWithMaxBytes.put(tp, sharePartitionData);
+        });
+        if (reqMetadata.isFull()) {
+            ShareSessionKey key = shareSessionKey(groupId, reqMetadata.memberId());
+            String removedFetchSessionStr;
+            if (reqMetadata.epoch() == ShareFetchMetadata.FINAL_EPOCH) {
+                // If the epoch is FINAL_EPOCH, don't try to create a new session.
+                if (!shareFetchDataWithMaxBytes.isEmpty()) {
+                    throw Errors.INVALID_REQUEST.exception();
+                }
+                context = new FinalContext();
+                synchronized (cache) {
+                    if (cache.remove(key) != null) {
+                        removedFetchSessionStr = "Removed share session with key " + key;
+                        log.debug(removedFetchSessionStr);
+                    }
+                }
+            } else {
+                if (cache.remove(key) != null) {
+                    removedFetchSessionStr = "Removed share session with key " + key;
+                    log.debug(removedFetchSessionStr);
+                }
+                ImplicitLinkedHashCollection<CachedSharePartition> cachedSharePartitions = new
+                        ImplicitLinkedHashCollection<>(shareFetchDataWithMaxBytes.size());
+                shareFetchDataWithMaxBytes.forEach((topicIdPartition, reqData) ->
+                    cachedSharePartitions.mustAdd(new CachedSharePartition(topicIdPartition, reqData, false)));
+                ShareSessionKey responseShareSessionKey = cache.maybeCreateSession(groupId, reqMetadata.memberId(),
+                        time.milliseconds(), shareFetchDataWithMaxBytes.size(), cachedSharePartitions);
+                log.debug("Share session context with key {} isSubsequent {} returning {}", responseShareSessionKey,
+                        false, partitionsToLogString(shareFetchDataWithMaxBytes.keySet()));
+
+                context = new ShareSessionContext(reqMetadata, shareFetchDataWithMaxBytes);
+                log.debug("Created a new ShareSessionContext with {}. A new share session will be started.",
+                        partitionsToLogString(shareFetchDataWithMaxBytes.keySet()));
+            }
+        } else {
+            synchronized (cache) {
+                ShareSessionKey key = shareSessionKey(groupId, reqMetadata.memberId());
+                ShareSession shareSession = cache.get(key);
+                if (shareSession == null) {
+                    log.debug("Share session error for {}: no such share session found", key);
+                    throw Errors.SHARE_SESSION_NOT_FOUND.exception();
+                } else {
+                    if (shareSession.epoch != reqMetadata.epoch()) {
+                        log.debug("Share session error for {}: expected epoch {}, but got {} instead", key,
+                                shareSession.epoch, reqMetadata.epoch());
+                        throw Errors.INVALID_SHARE_SESSION_EPOCH.exception();
+                    } else {
+                        Map<ShareSession.ModifiedTopicIdPartitionType, List<TopicIdPartition>> modifiedTopicIdPartitions = shareSession.update(
+                                shareFetchDataWithMaxBytes, toForget);
+                        cache.touch(shareSession, time.milliseconds());
+                        shareSession.epoch = ShareFetchMetadata.nextEpoch(shareSession.epoch);
+                        log.debug("Created a new ShareSessionContext for session key {}, epoch {}: " +
+                                        "added {}, updated {}, removed {}", shareSession.key(), shareSession.epoch,
+                                partitionsToLogString(modifiedTopicIdPartitions.get(
+                                        ShareSession.ModifiedTopicIdPartitionType.ADDED)),
+                                partitionsToLogString(modifiedTopicIdPartitions.get(ShareSession.ModifiedTopicIdPartitionType.UPDATED)),
+                                partitionsToLogString(modifiedTopicIdPartitions.get(ShareSession.ModifiedTopicIdPartitionType.REMOVED))
+                        );
+                        context = new ShareSessionContext(reqMetadata, shareSession);
+                    }
+                }
+            }
+        }
+        return context;
+    }
+
+    private ShareSessionKey shareSessionKey(String groupId, Uuid memberId) {
+        return new ShareSessionKey(groupId, memberId);
+    }
+
+    String partitionsToLogString(Collection<TopicIdPartition> partitions) {
+        return FetchSession.partitionsToLogString(partitions, log.isTraceEnabled());
+    }
+
+    public List<TopicIdPartition> cachedTopicIdPartitionsInShareSession(String groupId, Uuid memberId) {
+        ShareSessionKey key = shareSessionKey(groupId, memberId);
+        ShareSession shareSession = cache.get(key);
+        if (shareSession == null) {
+            throw new ShareSessionNotFoundException("Share session not found in cache");
+        }
+        List<TopicIdPartition> cachedTopicIdPartitions = new ArrayList<>();
+        shareSession.partitionMap().forEach(cachedSharePartition -> cachedTopicIdPartitions.add(
+                new TopicIdPartition(cachedSharePartition.topicId(), new TopicPartition(cachedSharePartition.topic(), cachedSharePartition.partition()
+                ))));
+        return cachedTopicIdPartitions;
+    }
+
     @Override
     public void close() throws Exception {
         // TODO: Provide Implementation
@@ -203,22 +316,32 @@ public class SharePartitionManager implements AutoCloseable {
      * share group id, the topic id and the partition id. The key is used to store the SharePartition
      * objects in the partition cache map.
      */
-    private static class SharePartitionKey {
+    // Visible for testing
+    static class SharePartitionKey {
+        private final String groupId;
+        private final TopicIdPartition topicIdPartition;
 
-    }
+        public SharePartitionKey(String groupId, TopicIdPartition topicIdPartition) {
+            this.groupId = Objects.requireNonNull(groupId);
+            this.topicIdPartition = Objects.requireNonNull(topicIdPartition);
+        }
 
-    /**
-     * Caches share sessions.
-     * <p>
-     * See tryEvict for an explanation of the cache eviction strategy.
-     * <p>
-     * The ShareSessionCache is thread-safe because all of its methods are synchronized.
-     * Note that individual share sessions have their own locks which are separate from the
-     * ShareSessionCache lock.  In order to avoid deadlock, the ShareSessionCache lock
-     * must never be acquired while an individual ShareSession lock is already held.
-     */
-    public static class ShareSessionCache {
-        // TODO: Provide Implementation
+        @Override
+        public int hashCode() {
+            return Objects.hash(groupId, topicIdPartition);
+        }
+
+        @Override
+        public boolean equals(final Object obj) {
+            if (this == obj)
+                return true;
+            else if (obj == null || getClass() != obj.getClass())
+                return false;
+            else {
+                SharePartitionKey that = (SharePartitionKey) obj;
+                return groupId.equals(that.groupId) && Objects.equals(topicIdPartition, that.topicIdPartition);
+            }
+        }
     }
 
     /**
@@ -226,5 +349,70 @@ public class SharePartitionManager implements AutoCloseable {
      */
     private static class ShareFetchPartitionData {
         // TODO: Provide Implementation
+    }
+
+    // Helper class to return the erroneous partitions and valid partition data
+    public static class ErroneousAndValidPartitionData {
+        private final List<Tuple2<TopicIdPartition, ShareFetchResponseData.PartitionData>> erroneous;
+        private final List<Tuple2<TopicIdPartition, ShareFetchRequest.SharePartitionData>> validTopicIdPartitions;
+
+        public ErroneousAndValidPartitionData(List<Tuple2<TopicIdPartition, ShareFetchResponseData.PartitionData>> erroneous,
+                                              List<Tuple2<TopicIdPartition, ShareFetchRequest.SharePartitionData>> validTopicIdPartitions) {
+            this.erroneous = erroneous;
+            this.validTopicIdPartitions = validTopicIdPartitions;
+        }
+
+        public ErroneousAndValidPartitionData(Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> shareFetchData) {
+            erroneous = new ArrayList<>();
+            validTopicIdPartitions = new ArrayList<>();
+            shareFetchData.forEach((topicIdPartition, sharePartitionData) -> {
+                if (topicIdPartition.topic() == null) {
+                    erroneous.add(new Tuple2<>(topicIdPartition, ShareFetchResponse.partitionResponse(topicIdPartition, Errors.UNKNOWN_TOPIC_ID)));
+                } else {
+                    validTopicIdPartitions.add(new Tuple2<>(topicIdPartition, sharePartitionData));
+                }
+            });
+        }
+
+        public ErroneousAndValidPartitionData() {
+            this.erroneous = new ArrayList<>();
+            this.validTopicIdPartitions = new ArrayList<>();
+        }
+
+        public List<Tuple2<TopicIdPartition, ShareFetchResponseData.PartitionData>> erroneous() {
+            return erroneous;
+        }
+
+        public List<Tuple2<TopicIdPartition, ShareFetchRequest.SharePartitionData>> validTopicIdPartitions() {
+            return validTopicIdPartitions;
+        }
+    }
+
+    /**
+     * The share fetch context for a final share fetch request.
+     */
+    public static class FinalContext extends ShareFetchContext {
+
+        public FinalContext() {
+            this.log = LoggerFactory.getLogger(FinalContext.class);
+        }
+
+        @Override
+        int responseSize(LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> updates, short version) {
+            return ShareFetchResponse.sizeOf(version, updates.entrySet().iterator());
+        }
+
+        @Override
+        ShareFetchResponse updateAndGenerateResponseData(String groupId, Uuid memberId,
+                                                         LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> updates) {
+            log.debug("Final context returning {}", partitionsToLogString(updates.keySet()));
+            return new ShareFetchResponse(ShareFetchResponse.toMessage(Errors.NONE, 0,
+                    updates.entrySet().iterator(), Collections.emptyList()));
+        }
+
+        @Override
+        ErroneousAndValidPartitionData getErroneousAndValidTopicIdPartitions() {
+            return new ErroneousAndValidPartitionData();
+        }
     }
 }
