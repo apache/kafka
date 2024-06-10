@@ -82,7 +82,7 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
             }
         } else {
             // Handle heterogeneous subscriptions
-            groupSpec.memberIds().forEach(memberId -> {
+            for (String memberId : groupSpec.memberIds()) {
                 Collection<Uuid> topics = groupSpec.memberSubscription(memberId).subscribedTopicIds();
                 for (Uuid topicId : topics) {
                     if (subscribedTopicDescriber.numPartitions(topicId) == -1) {
@@ -92,7 +92,7 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
                         .computeIfAbsent(topicId, k -> new ArrayList<>())
                         .add(memberId);
                 }
-            });
+            }
         }
 
         return membersPerTopic;
@@ -120,7 +120,7 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
             subscribedTopicDescriber
         );
 
-        System.out.println("Members per topic" + membersPerTopic);
+        //System.out.println("Members per topic" + membersPerTopic);
 
         // For each topic, assign partitions to members
         membersPerTopic.forEach((topicId, membersForTopic) -> {
@@ -142,7 +142,7 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
                 potentiallyUnfilledMembers
             );
 
-            System.out.println("New Target Assignment after sticky" + newTargetAssignment);
+            //System.out.println("New Target Assignment after sticky" + newTargetAssignment);
 
             assignRemainingPartitions(
                 topicId,
@@ -152,7 +152,7 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
                 newTargetAssignment
             );
 
-            System.out.println("New Target Assignment after everything" + newTargetAssignment);
+            //System.out.println("New Target Assignment after everything" + newTargetAssignment);
         });
         return new GroupAssignment(newTargetAssignment);
     }
@@ -183,7 +183,7 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
             int currentAssignmentSize = assignedPartitionsForTopic.size();
             int quota = minRequiredQuota;
 
-            System.out.println("Assigned partitions for topic " + topicId + " at member " + memberId + " is " + assignedPartitionsForTopic);
+            //System.out.println("Assigned partitions for topic " + topicId + " at member " + memberId + " is " + assignedPartitionsForTopic);
             if (numMembersWithExtraPartition > 0) {
                 quota++;
                 numMembersWithExtraPartition--;
@@ -195,13 +195,13 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
                 if (newAssignment == null) {
                     // Create a deep copy if newAssignment is still null
                     // Remove entries for topics that are no longer part of the member's subscription list.
-                    newAssignment = deepCopyWithRevokation(
+                    newAssignment = deepCopyWithRevocation(
                         oldAssignment,
                         memberId,
                         groupSpec
                     );
                     isNewAssignmentCreated = true;
-                    System.out.println("Create new assignment for member " + memberId + "at topic " + topicId);
+                    //System.out.println("Create new assignment for member " + memberId + "at topic " + topicId);
                 }
                 if (currentAssignmentSize > quota) {
                     // Sort partitions to ensure the same partitions are removed in each iteration
@@ -222,17 +222,16 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
                     quota -= currentAssignmentSize;
 
                     // Members that haven't met the quota yet need to be tracked.
-                    MemberWithRemainingAssignments newPair = new MemberWithRemainingAssignments(memberId, quota);
-                    potentiallyUnfilledMembers.add(newPair);
+                    potentiallyUnfilledMembers.add(new MemberWithRemainingAssignments(memberId, quota));
                 }
             }
-            System.out.println("Assigned sticky partitions for topic " + topicId + "are " + assignedStickyPartitionsForTopic);
+            //System.out.println("Assigned sticky partitions for topic " + topicId + "are " + assignedStickyPartitionsForTopic);
             // Use the old assignment if newAssignment is null, otherwise use the new assignment
             if (newTargetAssignment.get(memberId) == null && newAssignment == null) {
                 for (Map.Entry<Uuid, Set<Integer>> entry : oldAssignment.entrySet()) {
                     Uuid subscribedTopicId = entry.getKey();
                     if (!groupSpec.memberSubscription(memberId).subscribedTopicIds().contains(subscribedTopicId)) {
-                        newAssignment = deepCopyWithRevokation(
+                        newAssignment = deepCopyWithRevocation(
                             oldAssignment,
                             memberId,
                             groupSpec
@@ -267,7 +266,7 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
                 unassignedPartitionsForTopic.add(i);
             }
         }
-        System.out.println("unassigned partitions for topic" + topicId + "is " + unassignedPartitionsForTopic);
+        //System.out.println("unassigned partitions for topic" + topicId + "is " + unassignedPartitionsForTopic);
 
         // Assign unassigned partitions to potentially unfilled members.
         int unassignedPartitionsListStartPointer = 0;
@@ -302,7 +301,7 @@ public class RangeAssignor implements ConsumerGroupPartitionAssignor {
      * @param memberId  The member Id.
      * @return A deep copy of the map without unsubscribed topicIds.
      */
-    private static Map<Uuid, Set<Integer>> deepCopyWithRevokation(
+    private static Map<Uuid, Set<Integer>> deepCopyWithRevocation(
         Map<Uuid, Set<Integer>> map,
         String memberId,
         GroupSpec groupSpec
