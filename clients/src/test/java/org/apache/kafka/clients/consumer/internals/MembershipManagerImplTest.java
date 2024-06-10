@@ -2154,6 +2154,9 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testMemberJoiningCallsRebalanceListenerWhenReceivingEmptyAssignment() {
+        backgroundEventQueue = new LinkedBlockingQueue<>();
+        backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
+        createCommitRequestManager();
         CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
 
