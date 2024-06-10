@@ -48,7 +48,7 @@ import java.util.stream.IntStream;
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 @Threads(2)
 public class ConcurrentMapBenchmark {
-    private static final int TIMES = 1000_000;
+    private static final int TIMES = 100_000;
 
     @Param({"100"})
     private int mapSize;
@@ -129,7 +129,9 @@ public class ConcurrentMapBenchmark {
                 // add offset mapSize to ensure computeIfAbsent do add new entry
                 concurrentHashMap.computeIfAbsent(i + mapSize, key -> key);
             } else {
-                blackhole.consume(concurrentHashMap.values());
+                for (int value : concurrentHashMap.values()) {
+                    blackhole.consume(value);
+                }
             }
         }
     }
@@ -142,7 +144,9 @@ public class ConcurrentMapBenchmark {
                 // add offset mapSize to ensure computeIfAbsent do add new entry
                 copyOnWriteMap.computeIfAbsent(i + mapSize, key -> key);
             } else {
-                blackhole.consume(copyOnWriteMap.values());
+                for (int value : copyOnWriteMap.values()) {
+                    blackhole.consume(value);
+                }
             }
         }
     }
@@ -155,7 +159,9 @@ public class ConcurrentMapBenchmark {
                 // add offset mapSize to ensure computeIfAbsent do add new entry
                 concurrentHashMap.computeIfAbsent(i + mapSize, key -> key);
             } else {
-                blackhole.consume(concurrentHashMap.entrySet());
+                for (Map.Entry<Integer, Integer> entry : concurrentHashMap.entrySet()) {
+                    blackhole.consume(entry);
+                }
             }
         }
     }
@@ -168,7 +174,9 @@ public class ConcurrentMapBenchmark {
                 // add offset mapSize to ensure computeIfAbsent do add new entry
                 copyOnWriteMap.computeIfAbsent(i + mapSize, key -> key);
             } else {
-                blackhole.consume(copyOnWriteMap.entrySet());
+                for (Map.Entry<Integer, Integer> entry : copyOnWriteMap.entrySet()) {
+                    blackhole.consume(entry);
+                }
             }
         }
     }
