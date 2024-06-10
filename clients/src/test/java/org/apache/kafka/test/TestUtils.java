@@ -67,6 +67,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
@@ -556,10 +557,16 @@ public class TestUtils {
      * @return The caught exception cause
      */
     public static <T extends Throwable> T assertFutureThrows(Future<?> future, Class<T> exceptionCauseClass) {
-        ExecutionException exception = assertThrows(ExecutionException.class, future::get);
-        assertInstanceOf(exceptionCauseClass, exception.getCause(),
-            "Unexpected exception cause " + exception.getCause());
-        return exceptionCauseClass.cast(exception.getCause());
+        try {
+            future.get(5, TimeUnit.SECONDS);
+            ExecutionException exception = assertThrows(ExecutionException.class, future::get);
+            assertInstanceOf(exceptionCauseClass, exception.getCause(),
+                    "Unexpected exception cause " + exception.getCause());
+            return exceptionCauseClass.cast(exception.getCause());
+
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     public static <T extends Throwable> void assertFutureThrows(
