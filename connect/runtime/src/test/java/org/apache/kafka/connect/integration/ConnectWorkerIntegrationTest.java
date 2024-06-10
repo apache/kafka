@@ -18,19 +18,27 @@ package org.apache.kafka.connect.integration;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.provider.FileConfigProvider;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.LogCaptureAppender;
+import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedHerder;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
 import org.apache.kafka.connect.runtime.rest.resources.ConnectorsResource;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
+import org.apache.kafka.connect.sink.SinkConnector;
+import org.apache.kafka.connect.sink.SinkRecord;
+import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.storage.KafkaConfigBackingStore;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.kafka.connect.util.SinkUtils;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.WorkerHandle;
 import org.apache.kafka.test.IntegrationTest;
@@ -48,6 +56,7 @@ import org.slf4j.event.Level;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -57,6 +66,8 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static javax.ws.rs.core.Response.Status.INTERNAL_SERVER_ERROR;
 import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
@@ -1322,6 +1333,74 @@ public class ConnectWorkerIntegrationTest {
         );
     }
 
+    @Test
+    public void testRuntimePropertyReconfiguration() throws Exception {
+        final int offsetCommitIntervalMs = 1_000;
+        // force fast offset commits
+        workerProps.put(OFFSET_COMMIT_INTERVAL_MS_CONFIG, Integer.toString(offsetCommitIntervalMs));
+        connect = connectBuilder.build();
+        // start the clusters
+        connect.start();
+
+        connect.assertions().assertAtLeastNumWorkersAreUp(
+                NUM_WORKERS,
+                "Initial group of workers did not start in time."
+        );
+
+        final String topic = "kafka9228";
+        connect.kafka().createTopic(topic, 1);
+        connect.kafka().produce(topic, "non-json-value");
+
+        Map<String, String> connectorConfig = new HashMap<>();
+        connectorConfig.put(CONNECTOR_CLASS_CONFIG, EmptyTaskConfigsConnector.class.getName());
+        connectorConfig.put(TASKS_MAX_CONFIG, "1");
+        connectorConfig.put(TOPICS_CONFIG, topic);
+        // Initially configure the connector to use the JSON converter, which should cause task failure(s)
+        connectorConfig.put(VALUE_CONVERTER_CLASS_CONFIG, JsonConverter.class.getName());
+        connectorConfig.put(
+                VALUE_CONVERTER_CLASS_CONFIG + "." + JsonConverterConfig.SCHEMAS_ENABLE_CONFIG,
+                "false"
+        );
+
+        connect.configureConnector(CONNECTOR_NAME, connectorConfig);
+        connect.assertions().assertConnectorIsRunningAndTasksHaveFailed(
+                CONNECTOR_NAME,
+                1,
+                "Connector did not start or task did not fail in time"
+        );
+        assertEquals(
+                "Connector should not have any committed offsets when only task fails on first record",
+                new ConnectorOffsets(Collections.emptyList()),
+                connect.connectorOffsets(CONNECTOR_NAME)
+        );
+
+        // Reconfigure the connector to use the string converter, which should not cause any more task failures
+        connectorConfig.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        connectorConfig.remove(
+                KEY_CONVERTER_CLASS_CONFIG + "." + JsonConverterConfig.SCHEMAS_ENABLE_CONFIG
+        );
+        connect.configureConnector(CONNECTOR_NAME, connectorConfig);
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+                CONNECTOR_NAME,
+                1,
+                "Connector or tasks did not start in time"
+        );
+
+        Map<String, Object> expectedOffsetKey = new HashMap<>();
+        expectedOffsetKey.put(SinkUtils.KAFKA_TOPIC_KEY, topic);
+        expectedOffsetKey.put(SinkUtils.KAFKA_PARTITION_KEY, 0);
+        Map<String, Object> expectedOffsetValue = Collections.singletonMap(SinkUtils.KAFKA_OFFSET_KEY, 1);
+        ConnectorOffset expectedOffset = new ConnectorOffset(expectedOffsetKey, expectedOffsetValue);
+        ConnectorOffsets expectedOffsets = new ConnectorOffsets(Collections.singletonList(expectedOffset));
+
+        // Wait for it to commit offsets, signaling that it has successfully processed the record we produced earlier
+        waitForCondition(
+                () -> expectedOffsets.equals(connect.connectorOffsets(CONNECTOR_NAME)),
+                offsetCommitIntervalMs * 2,
+                "Task did not successfully process record and/or commit offsets in time"
+        );
+    }
+
     private Map<String, String> defaultSourceConnectorProps(String topic) {
         // setup props for the source connector
         Map<String, String> props = new HashMap<>();
@@ -1335,5 +1414,61 @@ public class ConnectWorkerIntegrationTest {
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG, String.valueOf(1));
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG, String.valueOf(1));
         return props;
+    }
+
+    public static class EmptyTaskConfigsConnector extends SinkConnector {
+        @Override
+        public String version() {
+            return "0.0";
+        }
+
+        @Override
+        public void start(Map<String, String> props) {
+            // no-op
+        }
+
+        @Override
+        public Class<? extends Task> taskClass() {
+            return SimpleTask.class;
+        }
+
+        @Override
+        public List<Map<String, String>> taskConfigs(int maxTasks) {
+            return IntStream.range(0, maxTasks)
+                    .mapToObj(i -> Collections.<String, String>emptyMap())
+                    .collect(Collectors.toList());
+        }
+
+        @Override
+        public void stop() {
+            // no-op
+        }
+
+        @Override
+        public ConfigDef config() {
+            return new ConfigDef();
+        }
+    }
+
+    public static class SimpleTask extends SinkTask {
+        @Override
+        public String version() {
+            return "0.0";
+        }
+
+        @Override
+        public void start(Map<String, String> props) {
+            // no-op
+        }
+
+        @Override
+        public void put(Collection<SinkRecord> records) {
+            // no-op
+        }
+
+        @Override
+        public void stop() {
+            // no-op
+        }
     }
 }
