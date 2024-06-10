@@ -638,6 +638,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                             .build(),
                         tp
                     );
+                    load();
                     break;
 
                 case ACTIVE:
@@ -662,6 +663,46 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             }
 
             runtimeMetrics.recordPartitionStateChange(oldState, state);
+        }
+
+        /**
+         * Loads the coordinator.
+         */
+        private void load() {
+            if (state != CoordinatorState.LOADING) {
+                throw new IllegalStateException("Coordinator must be in loading state");
+            }
+
+            loader.load(tp, coordinator).whenComplete((summary, exception) -> {
+                scheduleInternalOperation("CompleteLoad(tp=" + tp + ", epoch=" + epoch + ")", tp, () -> {
+                    CoordinatorContext context = coordinators.get(tp);
+                    if (context != null)  {
+                        if (context.state != CoordinatorState.LOADING) {
+                            log.info("Ignored load completion from {} because context is in {} state.",
+                                context.tp, context.state);
+                            return;
+                        }
+                        try {
+                            if (exception != null) throw exception;
+                            context.transitionTo(CoordinatorState.ACTIVE);
+                            if (summary != null) {
+                                runtimeMetrics.recordPartitionLoadSensor(summary.startTimeMs(), summary.endTimeMs());
+                                log.info("Finished loading of metadata from {} with epoch {} in {}ms where {}ms " +
+                                        "was spent in the scheduler. Loaded {} records which total to {} bytes.",
+                                    tp, epoch, summary.endTimeMs() - summary.startTimeMs(),
+                                    summary.schedulerQueueTimeMs(), summary.numRecords(), summary.numBytes());
+                            }
+                        } catch (Throwable ex) {
+                            log.error("Failed to load metadata from {} with epoch {} due to {}.",
+                                tp, epoch, ex.toString());
+                            context.transitionTo(CoordinatorState.FAILED);
+                        }
+                    } else {
+                        log.debug("Failed to complete the loading of metadata for {} in epoch {} since the coordinator does not exist.",
+                            tp, epoch);
+                    }
+                });
+            });
         }
 
         /**
@@ -711,8 +752,16 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     coordinator.updateLastWrittenOffset(offset);
 
                     if (offset != currentBatch.nextOffset) {
-                        throw new IllegalStateException("The state machine of coordinator " + tp + " is out of sync with the " +
-                            "underlying log. The last write returned " + offset + " while " + currentBatch.nextOffset + " was expected");
+                        log.error("The state machine of the coordinator {} is out of sync with the underlying log. " +
+                            "The last written offset returned is {} while the coordinator expected {}. The coordinator " +
+                            "will be reloaded in order to re-synchronize the state machine.",
+                            tp, offset, currentBatch.nextOffset);
+                        // Transition to FAILED state to unload the state machine and complete
+                        // exceptionally all the pending operations.
+                        transitionTo(CoordinatorState.FAILED);
+                        // Transition to LOADING to trigger the restoration of the state.
+                        transitionTo(CoordinatorState.LOADING);
+                        return;
                     }
 
                     // Add all the pending deferred events to the deferred event queue.
@@ -2164,36 +2213,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         case FAILED:
                         case INITIAL:
                             context.transitionTo(CoordinatorState.LOADING);
-                            loader.load(tp, context.coordinator).whenComplete((summary, exception) -> {
-                                scheduleInternalOperation("CompleteLoad(tp=" + tp + ", epoch=" + partitionEpoch + ")", tp, () -> {
-                                    CoordinatorContext ctx = coordinators.get(tp);
-                                    if (ctx != null)  {
-                                        if (ctx.state != CoordinatorState.LOADING) {
-                                            log.info("Ignored load completion from {} because context is in {} state.",
-                                                ctx.tp, ctx.state);
-                                            return;
-                                        }
-                                        try {
-                                            if (exception != null) throw exception;
-                                            ctx.transitionTo(CoordinatorState.ACTIVE);
-                                            if (summary != null) {
-                                                runtimeMetrics.recordPartitionLoadSensor(summary.startTimeMs(), summary.endTimeMs());
-                                                log.info("Finished loading of metadata from {} with epoch {} in {}ms where {}ms " +
-                                                         "was spent in the scheduler. Loaded {} records which total to {} bytes.",
-                                                    tp, partitionEpoch, summary.endTimeMs() - summary.startTimeMs(),
-                                                    summary.schedulerQueueTimeMs(), summary.numRecords(), summary.numBytes());
-                                            }
-                                        } catch (Throwable ex) {
-                                            log.error("Failed to load metadata from {} with epoch {} due to {}.",
-                                                tp, partitionEpoch, ex.toString());
-                                            ctx.transitionTo(CoordinatorState.FAILED);
-                                        }
-                                    } else {
-                                        log.debug("Failed to complete the loading of metadata for {} in epoch {} since the coordinator does not exist.",
-                                            tp, partitionEpoch);
-                                    }
-                                });
-                            });
                             break;
 
                         case LOADING:
