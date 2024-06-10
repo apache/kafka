@@ -365,6 +365,8 @@ public class MembershipManagerImplTest {
         // because member is already out of the group in the broker).
         completeCallback(callbackEvent, membershipManager);
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
+        assertEquals(ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH, membershipManager.memberEpoch());
+        verify(membershipManager).notifyEpochChange(Optional.empty(), Optional.empty());
         assertTrue(membershipManager.shouldSkipHeartbeat());
     }
 

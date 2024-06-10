@@ -520,12 +520,15 @@ public class MembershipManagerImpl implements MembershipManager {
     @Override
     public void transitionToFenced() {
         if (state == MemberState.PREPARE_LEAVING) {
-            log.debug("Member {} with epoch {} got fenced but it is already preparing to leave " +
+            log.info("Member {} with epoch {} got fenced but it is already preparing to leave " +
                     "the group, so it will stop sending heartbeat and won't attempt to rejoin.",
                 memberId, memberEpoch);
-            // Transition to UNSUBSCRIBED, ensuring that the member (that is not part of the
-            // group anymore from the broker point of view) will stop sending heartbeats while it
-            // completes the ongoing leaving operation.
+            // Briefly transition to LEAVING to ensure all required actions are applied even
+            // though there is no need to send a leave group heartbeat (ex. clear epoch and
+            // notify epoch listeners). Then transition to UNSUBSCRIBED, ensuring that the member
+            // (that is not part of the group anymore from the broker point of view) will stop
+            // sending heartbeats while it completes the ongoing leaving operation.
+            transitionToSendingLeaveGroup(false);
             transitionTo(MemberState.UNSUBSCRIBED);
             return;
         }
@@ -775,7 +778,7 @@ public class MembershipManagerImpl implements MembershipManager {
      * This also includes the latest member ID in the notification. If the member fails or leaves
      * the group, this will be invoked with empty epoch and member ID.
      */
-    private void notifyEpochChange(Optional<Integer> epoch, Optional<String> memberId) {
+    void notifyEpochChange(Optional<Integer> epoch, Optional<String> memberId) {
         stateUpdatesListeners.forEach(stateListener -> stateListener.onMemberEpochUpdated(epoch, memberId));
     }
 
