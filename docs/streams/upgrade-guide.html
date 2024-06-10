@@ -134,11 +134,44 @@
     </p>
 
     <h4><a id="streams_api_changes_380" href="#streams_api_changes_380">Streams API changes in 3.8.0</a></h3>
+
+    <p>
+        Kafka Streams now supports customizable task assignment strategies via the `task.assignor.class` configuration.
+        The configuration can be set to the fully qualified class name of a custom task assignor implementation
+        that has to extend the new `org.apache.kafka.streams.processor.assignment.TaskAssignor` interface.
+
+        The new configuration also allows users to bring back the behavior of the old task assignor
+        `StickyTaskAssignor` that was used before the introduction `HighAvailabilityTaskAssignor`.
+        If no custom task assignor is configured, the default task assignor `HighAvailabilityTaskAssignor` is used.
+
+        This change also removes the internal config `internal.task.assignor.class` that was used for the same
+        purpose. If you were using this config, you should switch to using `task.assignor.class` instead.
+
+        For more details, see the public interface section of
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-924%3A+customizable+task+assignment+for+Streams">KIP-924</a>.
+    </p>
+
     <p>
         The Processor API now support so-called read-only state stores, added via 
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-813%3A+Shareable+State+Stores">KIP-813</a>.
-	These stores don't have a dedicated changelog topic, but use their source topic for fault-tolerance,
-	simlar to <code>KTables</code> with source-topic optimization enabled.
+        These stores don't have a dedicated changelog topic, but use their source topic for fault-tolerance,
+        similar to <code>KTables</code> with source-topic optimization enabled.
+    </p>
+
+    <p>
+        To improve detection of leaked state store iterators, we added new store-level metrics to track the number and
+        age of open iterators. The new metrics are `num-open-iterators`, `iterator-duration-avg`, `iterator-duration-max`
+        and `oldest-iterator-open-since-ms`. These metrics are available for all state stores, including RocksDB,
+        in-memory, and custom stores. More details can be found in
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-989%3A+Improved+StateStore+Iterator+metrics+for+detecting+leaks">KIP-989</a>.
+    </p>
+
+    <p>
+        To facilitate the implementation of dead-letter queues in Kafka Streams,
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1036%3A+Extend+RecordDeserializationException+exception">KIP-1036</a>
+        extended the interface of the `RecordDeserializationException` in the Kafka consumer. The new method `timestampType`,
+        `timestamp`, `keyBuffer`, `valueBuffer`, `headers` and `origin` more precisely describe the original record
+        that caused the exception.
     </p>
 
     <h3><a id="streams_api_changes_370" href="#streams_api_changes_370">Streams API changes in 3.7.0</a></h3>
