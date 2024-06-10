@@ -20,17 +20,34 @@ import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 
 import java.util.Map;
 
+/**
+ * Wrapper class for a connector configuration that has been used to generate task configurations
+ * Supports lazy {@link WorkerConfigTransformer#transform(Map) transformation}.
+ */
 public class AppliedConnectorConfig {
 
     private final Map<String, String> rawConfig;
     private volatile Map<String, String> transformedConfig;
 
+    /**
+     * Create a new applied config that has not yet undergone
+     * {@link WorkerConfigTransformer#transform(Map) transformation}.
+     * @param rawConfig the non-transformed connector configuration; may be null
+     */
     public AppliedConnectorConfig(Map<String, String> rawConfig) {
         this.rawConfig = rawConfig;
     }
 
+    /**
+     * If necessary, {@link WorkerConfigTransformer#transform(Map) transform} the raw
+     * connector config, then return the result. Transformed configurations are cached and
+     * returned in all subsequent calls.
+     * @param configTransformer the transformer to use, if no transformed connector
+     *                          config has been cached yet; may be null
+     * @return the possibly-cached, transformed, connector config; may be null
+     */
     public Map<String, String> transformedConfig(WorkerConfigTransformer configTransformer) {
-        if (transformedConfig != null)
+        if (transformedConfig != null || rawConfig == null)
             return transformedConfig;
 
         synchronized (this) {
