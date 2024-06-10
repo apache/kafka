@@ -18,10 +18,8 @@ package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
-import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupMemberMetadataValue;
-import org.apache.kafka.coordinator.group.generated.StreamsGroupPartitionMetadataValue;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 
@@ -60,15 +58,11 @@ public class StreamsGroupMember {
         private int rebalanceTimeoutMs = -1;
         private String clientId = "";
         private String clientHost = "";
-        private Set<String> subscribedTopicNames = Collections.emptySet();
-        private String subscribedTopicRegex = "";
         private String serverAssignorName = null;
         private Map<String, Set<Integer>> assignedActiveTasks = Collections.emptyMap();
         private Map<String, Set<Integer>> assignedStandbyTasks = Collections.emptyMap();
         private Map<String, Set<Integer>> assignedWarmupTasks = Collections.emptyMap();
         private Map<String, Set<Integer>> activeTasksPendingRevocation = Collections.emptyMap();
-        private Map<String, Set<Integer>> standbyTasksPendingRevocation = Collections.emptyMap();
-        private Map<String, Set<Integer>> warmupTasksPendingRevocation = Collections.emptyMap();
 
         public Builder(String memberId) {
             this.memberId = Objects.requireNonNull(memberId);
@@ -85,16 +79,11 @@ public class StreamsGroupMember {
             this.rebalanceTimeoutMs = member.rebalanceTimeoutMs;
             this.clientId = member.clientId;
             this.clientHost = member.clientHost;
-            this.subscribedTopicNames = member.subscribedTopicNames;
-            this.subscribedTopicRegex = member.subscribedTopicRegex;
-            this.serverAssignorName = member.serverAssignorName;
             this.state = member.state;
             this.assignedActiveTasks = member.assignedActiveTasks;
             this.assignedStandbyTasks = member.assignedStandbyTasks;
             this.assignedWarmupTasks = member.assignedWarmupTasks;
             this.activeTasksPendingRevocation = member.activeTasksPendingRevocation;
-            this.standbyTasksPendingRevocation = member.standbyTasksPendingRevocation;
-            this.warmupTasksPendingRevocation = member.warmupTasksPendingRevocation;
         }
 
         public Builder updateMemberEpoch(int memberEpoch) {
@@ -179,16 +168,6 @@ public class StreamsGroupMember {
             return this;
         }
 
-        public Builder setStandbyTasksPendingRevocation(Map<String, Set<Integer>> standbyTasksPendingRevocation) {
-            this.standbyTasksPendingRevocation = standbyTasksPendingRevocation;
-            return this;
-        }
-
-        public Builder setWarmupTasksPendingRevocation(Map<String, Set<Integer>> warmupTasksPendingRevocation) {
-            this.warmupTasksPendingRevocation = warmupTasksPendingRevocation;
-            return this;
-        }
-
         public Builder updateWith(StreamsGroupMemberMetadataValue record) {
             setInstanceId(record.instanceId());
             setRackId(record.rackId());
@@ -202,17 +181,19 @@ public class StreamsGroupMember {
             setMemberEpoch(record.memberEpoch());
             setPreviousMemberEpoch(record.previousMemberEpoch());
             setState(MemberState.fromValue(record.state()));
-            setAssignedActiveTasks(assignmentFromTopicPartitions(record.activeTasks()));
-            setPartitionsPendingRevocation(assignmentFromTopicPartitions(record.partitionsPendingRevocation()));
+            setAssignedActiveTasks(assignmentFromTaskIds(record.activeTasks()));
+            setAssignedStandbyTasks(assignmentFromTaskIds(record.standbyTasks()));
+            setAssignedWarmupTasks(assignmentFromTaskIds(record.warmupTasks()));
+            setActiveTasksPendingRevocation(assignmentFromTaskIds(record.activeTasksPendingRevocation()));
             return this;
         }
 
-        private Map<String, Set<Integer>> assignmentFromTaskId(
-            List<StreamsGroupCurrentMemberAssignmentValue.TopicPartitions> topicPartitionsList
+        private Map<String, Set<Integer>> assignmentFromTaskIds(
+            List<StreamsGroupCurrentMemberAssignmentValue.TaskIds> topicPartitionsList
         ) {
             return topicPartitionsList.stream().collect(Collectors.toMap(
-                StreamsGroupCurrentMemberAssignmentValue.TopicPartitions::topicId,
-                topicPartitions -> Collections.unmodifiableSet(new HashSet<>(topicPartitions.partitions()))));
+                StreamsGroupCurrentMemberAssignmentValue.TaskIds::subtopology,
+                taskIds -> Collections.unmodifiableSet(new HashSet<>(taskIds.partitions()))));
         }
 
         public StreamsGroupMember build() {
@@ -225,13 +206,11 @@ public class StreamsGroupMember {
                 rebalanceTimeoutMs,
                 clientId,
                 clientHost,
-                subscribedTopicNames,
-                subscribedTopicRegex,
-                serverAssignorName,
                 state,
-                assignedPartitions,
-                partitionsPendingRevocation,
-                classicMemberMetadata
+                assignedActiveTasks,
+                assignedStandbyTasks,
+                assignedWarmupTasks,
+                activeTasksPendingRevocation
             );
         }
     }
@@ -282,21 +261,6 @@ public class StreamsGroupMember {
     private final String clientHost;
 
     /**
-     * The list of subscriptions (topic names) configured by the member.
-     */
-    private final Set<String> subscribedTopicNames;
-
-    /**
-     * The subscription pattern configured by the member.
-     */
-    private final String subscribedTopicRegex;
-
-    /**
-     * The server side assignor selected by the member.
-     */
-    private final String serverAssignorName;
-
-    /**
      * Active tasks assigned to this member.
      */
     private final Map<String, Set<Integer>> assignedActiveTasks;
@@ -316,16 +280,6 @@ public class StreamsGroupMember {
      */
     private final Map<String, Set<Integer>> activeTasksPendingRevocation;
 
-    /**
-     * Standby tasks being revoked by this member.
-     */
-    private final Map<String, Set<Integer>> standbyTasksPendingRevocation;
-
-    /**
-     * Warm-up tasks being revoked by this member.
-     */
-    private final Map<String, Set<Integer>> warmupTasksPendingRevocation;
-
     private StreamsGroupMember(
         String memberId,
         int memberEpoch,
@@ -335,16 +289,11 @@ public class StreamsGroupMember {
         int rebalanceTimeoutMs,
         String clientId,
         String clientHost,
-        Set<String> subscribedTopicNames,
-        String subscribedTopicRegex,
-        String serverAssignorName,
         MemberState state,
         Map<String, Set<Integer>> assignedActiveTasks,
         Map<String, Set<Integer>> assignedStandbyTasks,
         Map<String, Set<Integer>> assignedWarmupTasks,
-        Map<String, Set<Integer>> activeTasksPendingRevocation,
-        Map<String, Set<Integer>> standbyTasksPendingRevocation,
-        Map<String, Set<Integer>> warmupTasksPendingRevocation
+        Map<String, Set<Integer>> activeTasksPendingRevocation
     ) {
         this.memberId = memberId;
         this.memberEpoch = memberEpoch;
@@ -355,15 +304,10 @@ public class StreamsGroupMember {
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.clientId = clientId;
         this.clientHost = clientHost;
-        this.subscribedTopicNames = subscribedTopicNames;
-        this.subscribedTopicRegex = subscribedTopicRegex;
-        this.serverAssignorName = serverAssignorName;
         this.assignedActiveTasks = assignedActiveTasks;
         this.assignedStandbyTasks = assignedStandbyTasks;
         this.assignedWarmupTasks = assignedWarmupTasks;
         this.activeTasksPendingRevocation = activeTasksPendingRevocation;
-        this.standbyTasksPendingRevocation = standbyTasksPendingRevocation;
-        this.warmupTasksPendingRevocation = warmupTasksPendingRevocation;
     }
 
     /**
@@ -423,30 +367,9 @@ public class StreamsGroupMember {
     }
 
     /**
-     * @return The list of subscribed topic names.
-     */
-    public Set<String> subscribedTopicNames() {
-        return subscribedTopicNames;
-    }
-
-    /**
-     * @return The regular expression based subscription.
-     */
-    public String subscribedTopicRegex() {
-        return subscribedTopicRegex;
-    }
-
-    /**
-     * @return The server side assignor or an empty optional.
-     */
-    public Optional<String> serverAssignorName() {
-        return Optional.ofNullable(serverAssignorName);
-    }
-
-    /**
      * @return The current state.
      */
-    public org.apache.kafka.coordinator.group.consumer.MemberState state() {
+    public MemberState state() {
         return state;
     }
 
@@ -458,89 +381,31 @@ public class StreamsGroupMember {
     }
 
     /**
-     * @return The set of assigned partitions.
+     * @return The set of assigned active tasks.
      */
-    public Map<Uuid, Set<Integer>> assignedPartitions() {
-        return assignedPartitions;
+    public Map<String, Set<Integer>> assignedActiveTasks() {
+        return assignedActiveTasks;
     }
 
     /**
-     * @return The set of partitions awaiting revocation from the member.
+     * @return The set of assigned standby tasks.
      */
-    public Map<Uuid, Set<Integer>> partitionsPendingRevocation() {
-        return partitionsPendingRevocation;
+    public Map<String, Set<Integer>> assignedStandbyTasks() {
+        return assignedStandbyTasks;
     }
 
     /**
-     * @return The supported classic protocols converted to JoinGroupRequestProtocolCollection.
+     * @return The set of assigned warm-up tasks.
      */
-    public JoinGroupRequestData.JoinGroupRequestProtocolCollection supportedJoinGroupRequestProtocols() {
-        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols =
-            new JoinGroupRequestData.JoinGroupRequestProtocolCollection();
-        supportedClassicProtocols().ifPresent(classicProtocols -> classicProtocols.forEach(protocol ->
-            protocols.add(
-                new JoinGroupRequestData.JoinGroupRequestProtocol()
-                    .setName(protocol.name())
-                    .setMetadata(protocol.metadata())
-            )
-        ));
-        return protocols;
+    public Map<String, Set<Integer>> assignedWarmupTasks() {
+        return assignedWarmupTasks;
     }
 
     /**
-     * @return The session timeout if the member uses the classic protocol.
+     * @return The set of active tasks awaiting revocation from the member.
      */
-    public Optional<Integer> classicProtocolSessionTimeout() {
-        if (useClassicProtocol()) {
-            return Optional.ofNullable(classicMemberMetadata.sessionTimeoutMs());
-        } else {
-            return Optional.empty();
-        }
-    }
-
-    /**
-     * @return The classicMemberMetadata if the consumer uses the classic protocol.
-     */
-    public Optional<StreamsGroupMemberMetadataValue.ClassicMemberMetadata> classicMemberMetadata() {
-        return Optional.ofNullable(classicMemberMetadata);
-    }
-
-    /**
-     * @return The list of protocols if the consumer uses the classic protocol.
-     */
-    public Optional<List<StreamsGroupMemberMetadataValue.ClassicProtocol>> supportedClassicProtocols() {
-        if (useClassicProtocol()) {
-            return Optional.ofNullable(classicMemberMetadata.supportedProtocols());
-        } else {
-            return Optional.empty();
-        }
-    }
-
-    /**
-     * @param targetAssignment The target assignment of this member in the corresponding group.
-     *
-     * @return The ConsumerGroupMember mapped as ConsumerGroupDescribeResponseData.Member.
-     */
-    public ConsumerGroupDescribeResponseData.Member asConsumerGroupDescribeMember(
-        Assignment targetAssignment,
-        TopicsImage topicsImage
-    ) {
-        return new ConsumerGroupDescribeResponseData.Member()
-            .setMemberEpoch(memberEpoch)
-            .setMemberId(memberId)
-            .setAssignment(new ConsumerGroupDescribeResponseData.Assignment()
-                .setTopicPartitions(topicPartitionsFromMap(assignedPartitions, topicsImage)))
-            .setTargetAssignment(new ConsumerGroupDescribeResponseData.Assignment()
-                .setTopicPartitions(topicPartitionsFromMap(
-                    targetAssignment != null ? targetAssignment.partitions() : Collections.emptyMap(),
-                    topicsImage
-                )))
-            .setClientHost(clientHost)
-            .setClientId(clientId)
-            .setInstanceId(instanceId)
-            .setRackId(rackId)
-            .setSubscribedTopicNames(subscribedTopicNames == null ? null : new ArrayList<>(subscribedTopicNames))
-            .setSubscribedTopicRegex(subscribedTopicRegex);
+    public Map<String, Set<Integer>> activeTasksPendingRevocation() {
+        return activeTasksPendingRevocation;
     }
 
     private static List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitionsFromMap(
@@ -572,33 +437,6 @@ public class StreamsGroupMember {
         }
     }
 
-    /**
-     * Converts the JoinGroupRequestProtocolCollection to a list of ClassicProtocol.
-     *
-     * @param protocols The JoinGroupRequestProtocolCollection.
-     * @return The converted list of ClassicProtocol.
-     */
-    public static List<StreamsGroupMemberMetadataValue.ClassicProtocol> classicProtocolListFromJoinRequestProtocolCollection(
-        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols
-    ) {
-        List<StreamsGroupMemberMetadataValue.ClassicProtocol> newSupportedProtocols = new ArrayList<>();
-        protocols.forEach(protocol ->
-            newSupportedProtocols.add(
-                new StreamsGroupMemberMetadataValue.ClassicProtocol()
-                    .setName(protocol.name())
-                    .setMetadata(protocol.metadata())
-            )
-        );
-        return newSupportedProtocols;
-    }
-
-    /**
-     * @return A boolean indicating whether the member uses the classic protocol.
-     */
-    public boolean useClassicProtocol() {
-        return classicMemberMetadata != null;
-    }
-
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -613,12 +451,10 @@ public class StreamsGroupMember {
             && Objects.equals(rackId, that.rackId)
             && Objects.equals(clientId, that.clientId)
             && Objects.equals(clientHost, that.clientHost)
-            && Objects.equals(subscribedTopicNames, that.subscribedTopicNames)
-            && Objects.equals(subscribedTopicRegex, that.subscribedTopicRegex)
-            && Objects.equals(serverAssignorName, that.serverAssignorName)
-            && Objects.equals(assignedPartitions, that.assignedPartitions)
-            && Objects.equals(partitionsPendingRevocation, that.partitionsPendingRevocation)
-            && Objects.equals(classicMemberMetadata, that.classicMemberMetadata);
+            && Objects.equals(assignedActiveTasks, that.assignedActiveTasks)
+            && Objects.equals(assignedStandbyTasks, that.assignedStandbyTasks)
+            && Objects.equals(assignedWarmupTasks, that.assignedWarmupTasks)
+            && Objects.equals(activeTasksPendingRevocation, that.activeTasksPendingRevocation);
     }
 
     @Override
@@ -632,18 +468,15 @@ public class StreamsGroupMember {
         result = 31 * result + rebalanceTimeoutMs;
         result = 31 * result + Objects.hashCode(clientId);
         result = 31 * result + Objects.hashCode(clientHost);
-        result = 31 * result + Objects.hashCode(subscribedTopicNames);
-        result = 31 * result + Objects.hashCode(subscribedTopicRegex);
-        result = 31 * result + Objects.hashCode(serverAssignorName);
-        result = 31 * result + Objects.hashCode(assignedPartitions);
-        result = 31 * result + Objects.hashCode(partitionsPendingRevocation);
-        result = 31 * result + Objects.hashCode(classicMemberMetadata);
+        result = 31 * result + Objects.hashCode(assignedActiveTasks);
+        result = 31 * result + Objects.hashCode(assignedStandbyTasks);
+        result = 31 * result + Objects.hashCode(assignedWarmupTasks);
         return result;
     }
 
     @Override
     public String toString() {
-        return "ConsumerGroupMember(" +
+        return "StreamsGroupMember(" +
             "memberId='" + memberId + '\'' +
             ", memberEpoch=" + memberEpoch +
             ", previousMemberEpoch=" + previousMemberEpoch +
@@ -653,22 +486,40 @@ public class StreamsGroupMember {
             ", rebalanceTimeoutMs=" + rebalanceTimeoutMs +
             ", clientId='" + clientId + '\'' +
             ", clientHost='" + clientHost + '\'' +
-            ", subscribedTopicNames=" + subscribedTopicNames +
-            ", subscribedTopicRegex='" + subscribedTopicRegex + '\'' +
-            ", serverAssignorName='" + serverAssignorName + '\'' +
-            ", assignedPartitions=" + assignedPartitions +
-            ", partitionsPendingRevocation=" + partitionsPendingRevocation +
-            ", classicMemberMetadata='" + classicMemberMetadata + '\'' +
+            ", assignedActiveTasks=" + assignedActiveTasks +
+            ", assignedStandbyTasks=" + assignedStandbyTasks +
+            ", assignedWarmupTasks=" + assignedWarmupTasks +
+            ", activeTasksPendingRevocation=" + activeTasksPendingRevocation +
             ')';
     }
 
     /**
-     * @return True of the two provided members have different assigned partitions.
+     * @return True if the two provided members have different assigned active tasks.
      */
-    public static boolean hasAssignedPartitionsChanged(
+    public static boolean hasAssignedActiveTasksChanged(
         StreamsGroupMember member1,
         StreamsGroupMember member2
     ) {
-        return !member1.assignedPartitions().equals(member2.assignedPartitions());
+        return !member1.assignedActiveTasks().equals(member2.assignedActiveTasks());
+    }
+
+    /**
+     * @return True if the two provided members have different assigned active tasks.
+     */
+    public static boolean hasAssignedStandbyTasksChanged(
+        StreamsGroupMember member1,
+        StreamsGroupMember member2
+    ) {
+        return !member1.assignedStandbyTasks().equals(member2.assignedStandbyTasks());
+    }
+
+    /**
+     * @return True if the two provided members have different assigned active tasks.
+     */
+    public static boolean hasAssignedWarmupTasksChanged(
+        StreamsGroupMember member1,
+        StreamsGroupMember member2
+    ) {
+        return !member1.assignedWarmupTasks().equals(member2.assignedWarmupTasks());
     }
 }
