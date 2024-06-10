@@ -1993,6 +1993,8 @@ public class MembershipManagerImplTest {
     }
 
     private void testOnPartitionsLost(Optional<RuntimeException> lostError) {
+        backgroundEventQueue = new LinkedBlockingQueue<>();
+        backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
         // Step 1: set up mocks
         MembershipManagerImpl membershipManager = createMemberInStableState();
         String topicName = "topic1";
