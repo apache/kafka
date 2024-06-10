@@ -60,8 +60,8 @@ public class MultiThreadedEventProcessorTest {
         }
 
         @Override
-        public CoordinatorEvent poll(long timeout, TimeUnit unit) {
-            CoordinatorEvent event = super.poll(timeout, unit);
+        public CoordinatorEvent take() {
+            CoordinatorEvent event = super.take();
             time.sleep(takeDelayMs);
             return event;
         }

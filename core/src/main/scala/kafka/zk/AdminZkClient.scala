@@ -163,7 +163,7 @@ class AdminZkClient(zkClient: KafkaZkClient,
 
     LogConfig.validate(config,
       kafkaConfig.map(_.extractLogConfigMap).getOrElse(Collections.emptyMap()),
-      kafkaConfig.exists(_.remoteLogManagerConfig.isRemoteStorageSystemEnabled()))
+      kafkaConfig.exists(_.isRemoteLogStorageSystemEnabled))
   }
 
   private def writeTopicPartitionAssignment(topic: String, replicaAssignment: Map[Int, ReplicaAssignment],
@@ -481,7 +481,7 @@ class AdminZkClient(zkClient: KafkaZkClient,
     // remove the topic overrides
     LogConfig.validate(configs,
       kafkaConfig.map(_.extractLogConfigMap).getOrElse(Collections.emptyMap()),
-      kafkaConfig.exists(_.remoteLogManagerConfig.isRemoteStorageSystemEnabled()))
+      kafkaConfig.exists(_.isRemoteLogStorageSystemEnabled))
   }
 
   /**

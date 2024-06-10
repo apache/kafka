@@ -89,6 +89,7 @@ public final class ExitCommandHandler implements Commands.Handler {
 
     @Override
     public boolean equals(Object other) {
-        return other instanceof ExitCommandHandler;
+        if (!(other instanceof ExitCommandHandler)) return false;
+        return true;
     }
 }

@@ -2229,11 +2229,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     private void publishConnectorTaskConfigs(String connName, List<Map<String, String>> taskProps, Callback<Void> cb) {
-        List<Map<String, String>> rawTaskProps = reverseTransform(connName, configState, taskProps);
-        if (!taskConfigsChanged(configState, connName, rawTaskProps)) {
+        if (!taskConfigsChanged(configState, connName, taskProps)) {
             return;
         }
 
+        List<Map<String, String>> rawTaskProps = reverseTransform(connName, configState, taskProps);
         if (isLeader()) {
             writeTaskConfigs(connName, rawTaskProps);
             cb.onCompletion(null, null);

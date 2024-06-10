@@ -43,7 +43,6 @@ public abstract class CompletableApplicationEvent<T> extends ApplicationEvent im
         return future;
     }
 
-    @Override
     public long deadlineMs() {
         return deadlineMs;
     }

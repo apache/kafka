@@ -26,7 +26,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -40,7 +39,7 @@ public class DelegationTokenDataTest {
         Uuid.randomUuid().toString(),
         Uuid.randomUuid().toString());
 
-    private static final List<KafkaPrincipal> EMPTYRENEWERS = Collections.emptyList();
+    private static final List<KafkaPrincipal> EMPTYRENEWERS = Arrays.asList();
 
     private static final List<TokenInformation> TOKENINFORMATION = Arrays.asList(
         new TokenInformation(

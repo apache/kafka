@@ -115,7 +115,8 @@ public final class LsCommandHandler implements Commands.Handler {
                     MetadataNodeInfo info = entryOption.get();
                     MetadataNode node = info.node();
                     if (node.isDirectory()) {
-                        List<String> children = new ArrayList<>(node.childNames());
+                        List<String> children = new ArrayList<>();
+                        children.addAll(node.childNames());
                         children.sort(String::compareTo);
                         targetDirectories.add(
                             new TargetDirectory(info.lastPathComponent(), children));
@@ -127,7 +128,8 @@ public final class LsCommandHandler implements Commands.Handler {
                 }
             }));
         }
-        OptionalInt screenWidth = shell.map(interactiveShell -> OptionalInt.of(interactiveShell.screenWidth())).orElseGet(OptionalInt::empty);
+        OptionalInt screenWidth = shell.isPresent() ?
+            OptionalInt.of(shell.get().screenWidth()) : OptionalInt.empty();
         log.trace("LS : targetFiles = {}, targetDirectories = {}, screenWidth = {}",
             targetFiles, targetDirectories, screenWidth);
         printTargets(writer, screenWidth, targetFiles, targetDirectories);
@@ -269,7 +271,8 @@ public final class LsCommandHandler implements Commands.Handler {
             if (!(o instanceof ColumnSchema)) return false;
             ColumnSchema other = (ColumnSchema) o;
             if (entriesPerColumn != other.entriesPerColumn) return false;
-            return Arrays.equals(columnWidths, other.columnWidths);
+            if (!Arrays.equals(columnWidths, other.columnWidths)) return false;
+            return true;
         }
 
         @Override
@@ -295,6 +298,7 @@ public final class LsCommandHandler implements Commands.Handler {
     public boolean equals(Object other) {
         if (!(other instanceof LsCommandHandler)) return false;
         LsCommandHandler o = (LsCommandHandler) other;
-        return Objects.equals(o.targets, targets);
+        if (!Objects.equals(o.targets, targets)) return false;
+        return true;
     }
 }

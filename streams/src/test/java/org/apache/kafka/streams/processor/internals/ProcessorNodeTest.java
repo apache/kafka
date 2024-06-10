@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -153,9 +154,10 @@ public class ProcessorNodeTest {
             .flatMapValues(value -> Collections.singletonList(""));
         final Topology topology = builder.build();
 
-        final StreamsException se = assertThrows(StreamsException.class, () -> new TopologyTestDriver(topology));
-        assertThat(se.getMessage(), containsString("Failed to initialize key serdes for source node"));
-        assertThat(se.getCause().getMessage(), containsString("Please specify a key serde or set one through StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG"));
+        final ConfigException se = assertThrows(ConfigException.class, () -> new TopologyTestDriver(topology));
+        final String msg = se.getMessage();
+        assertTrue("Error about class cast with serdes", msg.contains("StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG"));
+        assertTrue("Error about class cast with serdes", msg.contains("specify a key serde"));
     }
 
     private static class ClassCastProcessor extends ExceptionalProcessor {

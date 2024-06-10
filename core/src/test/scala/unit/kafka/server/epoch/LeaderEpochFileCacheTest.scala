@@ -20,15 +20,15 @@ package kafka.server.epoch
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
-import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile
+import org.apache.kafka.storage.internals.checkpoint.{LeaderEpochCheckpoint, LeaderEpochCheckpointFile}
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.storage.internals.log.{EpochEntry, LogDirFailureChannel}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
 import java.io.File
-import java.util.{Collections, Optional, OptionalInt}
+import java.util.{Collections, OptionalInt, Optional}
+import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
 /**
@@ -36,10 +36,13 @@ import scala.jdk.CollectionConverters._
   */
 class LeaderEpochFileCacheTest {
   val tp = new TopicPartition("TestTopic", 5)
-  val mockTime = new MockTime()
-  private val checkpoint: LeaderEpochCheckpointFile = new LeaderEpochCheckpointFile(TestUtils.tempFile(), new LogDirFailureChannel(1))
+  private val checkpoint: LeaderEpochCheckpoint = new LeaderEpochCheckpoint {
+    private var epochs: Seq[EpochEntry] = Seq()
+    override def write(epochs: java.util.Collection[EpochEntry], ignored: Boolean): Unit = this.epochs = epochs.asScala.toSeq
+    override def read(): java.util.List[EpochEntry] = this.epochs.asJava
+  }
 
-  private val cache = new LeaderEpochFileCache(tp, checkpoint, mockTime.scheduler)
+  private val cache = new LeaderEpochFileCache(tp, checkpoint)
 
   @Test
   def testPreviousEpoch(): Unit = {
@@ -54,7 +57,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(10, 20)
     assertEquals(OptionalInt.of(4), cache.previousEpoch)
 
-    cache.truncateFromEndAsyncFlush(18)
+    cache.truncateFromEnd(18)
     assertEquals(OptionalInt.of(2), cache.previousEpoch)
   }
 
@@ -242,12 +245,12 @@ class LeaderEpochFileCacheTest {
     val checkpoint = new LeaderEpochCheckpointFile(new File(checkpointPath), new LogDirFailureChannel(1))
 
     //Given
-    val cache = new LeaderEpochFileCache(tp, checkpoint, new MockTime().scheduler)
+    val cache = new LeaderEpochFileCache(tp, checkpoint)
     cache.assign(2, 6)
 
     //When
     val checkpoint2 = new LeaderEpochCheckpointFile(new File(checkpointPath), new LogDirFailureChannel(1))
-    val cache2 = new LeaderEpochFileCache(tp, checkpoint2, new MockTime().scheduler)
+    val cache2 = new LeaderEpochFileCache(tp, checkpoint2)
 
     //Then
     assertEquals(1, cache2.epochEntries.size)
@@ -384,7 +387,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(4, 11)
 
     //When clear latest on epoch boundary
-    cache.truncateFromEndAsyncFlush(8)
+    cache.truncateFromEnd(8)
 
     //Then should remove two latest epochs (remove is inclusive)
     assertEquals(java.util.Arrays.asList(new EpochEntry(2, 6)), cache.epochEntries)
@@ -398,7 +401,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(4, 11)
 
     //When reset to offset ON epoch boundary
-    cache.truncateFromStartAsyncFlush(8)
+    cache.truncateFromStart(8)
 
     //Then should preserve (3, 8)
     assertEquals(java.util.Arrays.asList(new EpochEntry(3, 8), new EpochEntry(4, 11)), cache.epochEntries)
@@ -412,7 +415,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(4, 11)
 
     //When reset to offset BETWEEN epoch boundaries
-    cache.truncateFromStartAsyncFlush(9)
+    cache.truncateFromStart(9)
 
     //Then we should retain epoch 3, but update it's offset to 9 as 8 has been removed
     assertEquals(java.util.Arrays.asList(new EpochEntry(3, 9), new EpochEntry(4, 11)), cache.epochEntries)
@@ -426,7 +429,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(4, 11)
 
     //When reset to offset before first epoch offset
-    cache.truncateFromStartAsyncFlush(1)
+    cache.truncateFromStart(1)
 
     //Then nothing should change
     assertEquals(java.util.Arrays.asList(new EpochEntry(2, 6),new EpochEntry(3, 8), new EpochEntry(4, 11)), cache.epochEntries)
@@ -440,7 +443,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(4, 11)
 
     //When reset to offset on earliest epoch boundary
-    cache.truncateFromStartAsyncFlush(6)
+    cache.truncateFromStart(6)
 
     //Then nothing should change
     assertEquals(java.util.Arrays.asList(new EpochEntry(2, 6),new EpochEntry(3, 8), new EpochEntry(4, 11)), cache.epochEntries)
@@ -454,7 +457,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(4, 11)
 
     //When
-    cache.truncateFromStartAsyncFlush(11)
+    cache.truncateFromStart(11)
 
     //Then retain the last
     assertEquals(Collections.singletonList(new EpochEntry(4, 11)), cache.epochEntries)
@@ -468,7 +471,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(4, 11)
 
     //When we clear from a position between offset 8 & offset 11
-    cache.truncateFromStartAsyncFlush(9)
+    cache.truncateFromStart(9)
 
     //Then we should update the middle epoch entry's offset
     assertEquals(java.util.Arrays.asList(new EpochEntry(3, 9), new EpochEntry(4, 11)), cache.epochEntries)
@@ -482,7 +485,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(2, 10)
 
     //When we clear from a position between offset 0 & offset 7
-    cache.truncateFromStartAsyncFlush(5)
+    cache.truncateFromStart(5)
 
     //Then we should keep epoch 0 but update the offset appropriately
     assertEquals(java.util.Arrays.asList(new EpochEntry(0,5), new EpochEntry(1, 7), new EpochEntry(2, 10)),
@@ -497,7 +500,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(4, 11)
 
     //When reset to offset beyond last epoch
-    cache.truncateFromStartAsyncFlush(15)
+    cache.truncateFromStart(15)
 
     //Then update the last
     assertEquals(Collections.singletonList(new EpochEntry(4, 15)), cache.epochEntries)
@@ -511,7 +514,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(4, 11)
 
     //When reset to offset BETWEEN epoch boundaries
-    cache.truncateFromEndAsyncFlush( 9)
+    cache.truncateFromEnd( 9)
 
     //Then should keep the preceding epochs
     assertEquals(OptionalInt.of(3), cache.latestEpoch)
@@ -540,7 +543,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(4, 11)
 
     //When reset to offset on epoch boundary
-    cache.truncateFromStartAsyncFlush(UNDEFINED_EPOCH_OFFSET)
+    cache.truncateFromStart(UNDEFINED_EPOCH_OFFSET)
 
     //Then should do nothing
     assertEquals(3, cache.epochEntries.size)
@@ -554,7 +557,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(4, 11)
 
     //When reset to offset on epoch boundary
-    cache.truncateFromEndAsyncFlush(UNDEFINED_EPOCH_OFFSET)
+    cache.truncateFromEnd(UNDEFINED_EPOCH_OFFSET)
 
     //Then should do nothing
     assertEquals(3, cache.epochEntries.size)
@@ -575,13 +578,13 @@ class LeaderEpochFileCacheTest {
   @Test
   def shouldClearEarliestOnEmptyCache(): Unit = {
     //Then
-    cache.truncateFromStartAsyncFlush(7)
+    cache.truncateFromStart(7)
   }
 
   @Test
   def shouldClearLatestOnEmptyCache(): Unit = {
     //Then
-    cache.truncateFromEndAsyncFlush(7)
+    cache.truncateFromEnd(7)
   }
 
   @Test
@@ -597,7 +600,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(10, 20)
     assertEquals(OptionalInt.of(4), cache.previousEpoch(10))
 
-    cache.truncateFromEndAsyncFlush(18)
+    cache.truncateFromEnd(18)
     assertEquals(OptionalInt.of(2), cache.previousEpoch(cache.latestEpoch.getAsInt))
   }
 
@@ -614,7 +617,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(10, 20)
     assertEquals(Optional.of(new EpochEntry(4, 15)), cache.previousEntry(10))
 
-    cache.truncateFromEndAsyncFlush(18)
+    cache.truncateFromEnd(18)
     assertEquals(Optional.of(new EpochEntry(2, 10)), cache.previousEntry(cache.latestEpoch.getAsInt))
   }
 
@@ -655,15 +658,4 @@ class LeaderEpochFileCacheTest {
     assertEquals(OptionalInt.empty(), cache.epochForOffset(5))
   }
 
-  @Test
-  def shouldWriteCheckpointOnTruncation(): Unit = {
-    cache.assign(2, 6)
-    cache.assign(3, 8)
-    cache.assign(4, 11)
-
-    cache.truncateFromEndAsyncFlush(11)
-    cache.truncateFromStartAsyncFlush(8)
-
-    assertEquals(List(new EpochEntry(3, 8)).asJava, checkpoint.read())
-  }
 }

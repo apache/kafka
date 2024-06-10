@@ -18,7 +18,6 @@
 package org.apache.kafka.server.immutable.pcollections;
 
 import org.apache.kafka.server.immutable.ImmutableMap;
-
 import org.pcollections.HashPMap;
 import org.pcollections.HashTreePMap;
 

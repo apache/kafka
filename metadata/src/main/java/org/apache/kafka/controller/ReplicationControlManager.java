@@ -1904,7 +1904,7 @@ public class ReplicationControlManager {
                 builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
             }
             if (brokerWithUncleanShutdown != NO_LEADER) {
-                builder.setUncleanShutdownReplicas(Collections.singletonList(brokerWithUncleanShutdown));
+                builder.setUncleanShutdownReplicas(Arrays.asList(brokerWithUncleanShutdown));
             }
 
             // Note: if brokerToRemove and brokerWithUncleanShutdown were passed as NO_LEADER, this is a no-op (the new

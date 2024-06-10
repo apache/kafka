@@ -28,7 +28,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -70,7 +69,7 @@ class BatchBuilderTest {
 
         records.forEach(record -> builder.appendRecord(record, null));
         MemoryRecords builtRecordSet = builder.build();
-        assertTrue(builder.bytesNeeded(Collections.singletonList("a"), null).isPresent());
+        assertTrue(builder.bytesNeeded(Arrays.asList("a"), null).isPresent());
         assertThrows(IllegalStateException.class, () -> builder.appendRecord("a", null));
 
         List<MutableRecordBatch> builtBatches = Utils.toList(builtRecordSet.batchIterator());
@@ -114,7 +113,7 @@ class BatchBuilderTest {
 
         String record = "i am a record";
 
-        while (!builder.bytesNeeded(Collections.singletonList(record), null).isPresent()) {
+        while (!builder.bytesNeeded(Arrays.asList(record), null).isPresent()) {
             builder.appendRecord(record, null);
         }
 

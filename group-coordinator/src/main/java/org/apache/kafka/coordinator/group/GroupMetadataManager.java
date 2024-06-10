@@ -58,10 +58,9 @@ import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
-import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
-import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
-import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
+import org.apache.kafka.coordinator.group.assignor.ConsumerGroupPartitionAssignor;
+import org.apache.kafka.coordinator.group.assignor.PartitionAssignorException;
+import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.consumer.Assignment;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
@@ -1905,30 +1904,24 @@ public class GroupMetadataManager {
                     .withInvertedTargetAssignment(group.invertedTargetAssignment())
                     .withTopicsImage(metadataImage.topics())
                     .addOrUpdateMember(updatedMember.memberId(), updatedMember);
-
+            TargetAssignmentBuilder.TargetAssignmentResult assignmentResult;
+            // A new static member is replacing an older one with the same subscriptions.
+            // We just need to remove the older member and add the newer one. The new member should
+            // reuse the target assignment of the older member.
             if (staticMemberReplaced) {
-                // A new static member is replacing an older one with the same subscriptions.
-                // We just need to remove the older member and add the newer one. The new member should
-                // reuse the target assignment of the older member.
-                assignmentResultBuilder.removeMember(member.memberId());
+                assignmentResult = assignmentResultBuilder
+                    .removeMember(member.memberId())
+                    .build();
+            } else {
+                assignmentResult = assignmentResultBuilder
+                    .build();
             }
 
-            long startTimeMs = time.milliseconds();
-            TargetAssignmentBuilder.TargetAssignmentResult assignmentResult =
-                assignmentResultBuilder.build();
-            long assignorTimeMs = time.milliseconds() - startTimeMs;
-
-            log.info("[GroupId {}] Computed a new target assignment for epoch {} with '{}' assignor in {}ms: {}.",
-                group.groupId(), groupEpoch, preferredServerAssignor, assignorTimeMs, assignmentResult.targetAssignment());
+            log.info("[GroupId {}] Computed a new target assignment for epoch {} with '{}' assignor: {}.",
+                group.groupId(), groupEpoch, preferredServerAssignor, assignmentResult.targetAssignment());
 
             records.addAll(assignmentResult.records());
-
-            MemberAssignment newMemberAssignment = assignmentResult.targetAssignment().get(updatedMember.memberId());
-            if (newMemberAssignment != null) {
-                return new Assignment(newMemberAssignment.partitions());
-            } else {
-                return Assignment.EMPTY;
-            }
+            return assignmentResult.targetAssignment().get(updatedMember.memberId());
         } catch (PartitionAssignorException ex) {
             String msg = String.format("Failed to compute a new target assignment for epoch %d: %s",
                 groupEpoch, ex.getMessage());

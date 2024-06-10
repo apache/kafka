@@ -43,7 +43,6 @@ import java.util.Set;
 public class PartitionGrouper {
 
     private static final Logger log = LoggerFactory.getLogger(PartitionGrouper.class);
-
     /**
      * Generate tasks with the assigned topic partitions.
      *
@@ -52,54 +51,28 @@ public class PartitionGrouper {
      * @return The map from generated task ids to the assigned partitions
      */
     public Map<TaskId, Set<TopicPartition>> partitionGroups(final Map<Subtopology, Set<String>> topicGroups, final Cluster metadata) {
-        return partitionGroups(topicGroups, new HashMap<>(), new HashMap<>(), metadata);
-    }
+        final Map<TaskId, Set<TopicPartition>> groups = new HashMap<>();
 
-    /**
-     * Generate tasks with the assigned topic partitions.
-     *
-     * @param sourceTopicGroups        group of source topics that need to be joined together
-     * @param changelogTopicGroups     group of changelog topics that need to be joined together
-     * @param changelogPartitionGroups the output grouping of the changelog topic partitions by task
-     *                                 id. This input will be mutated.
-     * @param metadata                 metadata of the consuming cluster
-     * @return The map from generated task ids to the assigned partitions
-     */
-    public Map<TaskId, Set<TopicPartition>> partitionGroups(final Map<Subtopology, Set<String>> sourceTopicGroups,
-                                                            final Map<Subtopology, Set<String>> changelogTopicGroups,
-                                                            final Map<TaskId, Set<TopicPartition>> changelogPartitionGroups,
-                                                            final Cluster metadata) {
-        final Map<TaskId, Set<TopicPartition>> sourcePartitionGroups = new HashMap<>();
-
-        for (final Map.Entry<Subtopology, Set<String>> entry : sourceTopicGroups.entrySet()) {
+        for (final Map.Entry<Subtopology, Set<String>> entry : topicGroups.entrySet()) {
             final Subtopology subtopology = entry.getKey();
-            final Set<String> sourceTopicGroup = entry.getValue();
-            final Set<String> changelogTopicGroup = changelogTopicGroups.getOrDefault(subtopology, new HashSet<>());
+            final Set<String> topicGroup = entry.getValue();
 
-            final int maxNumPartitions = maxNumPartitions(metadata, sourceTopicGroup);
+            final int maxNumPartitions = maxNumPartitions(metadata, topicGroup);
 
             for (int partitionId = 0; partitionId < maxNumPartitions; partitionId++) {
-                final Set<TopicPartition> sourcePartitionGroup = new HashSet<>(sourceTopicGroup.size());
-                final Set<TopicPartition> changelogPartitionGroup = new HashSet<>(changelogTopicGroup.size());
+                final Set<TopicPartition> group = new HashSet<>(topicGroup.size());
 
-                for (final String topic : sourceTopicGroup) {
+                for (final String topic : topicGroup) {
                     final List<PartitionInfo> partitions = metadata.partitionsForTopic(topic);
                     if (partitionId < partitions.size()) {
-                        sourcePartitionGroup.add(new TopicPartition(topic, partitionId));
+                        group.add(new TopicPartition(topic, partitionId));
                     }
                 }
-
-                for (final String topic : changelogTopicGroup) {
-                    changelogPartitionGroup.add(new TopicPartition(topic, partitionId));
-                }
-
-                final TaskId taskId = new TaskId(subtopology.nodeGroupId, partitionId, subtopology.namedTopology);
-                sourcePartitionGroups.put(taskId, Collections.unmodifiableSet(sourcePartitionGroup));
-                changelogPartitionGroups.put(taskId, Collections.unmodifiableSet(changelogPartitionGroup));
+                groups.put(new TaskId(subtopology.nodeGroupId, partitionId, subtopology.namedTopology), Collections.unmodifiableSet(group));
             }
         }
 
-        return Collections.unmodifiableMap(sourcePartitionGroups);
+        return Collections.unmodifiableMap(groups);
     }
 
     /**

@@ -117,6 +117,7 @@ public final class TreeCommandHandler implements Commands.Handler {
     public boolean equals(Object other) {
         if (!(other instanceof TreeCommandHandler)) return false;
         TreeCommandHandler o = (TreeCommandHandler) other;
-        return Objects.equals(o.targets, targets);
+        if (!Objects.equals(o.targets, targets)) return false;
+        return true;
     }
 }

@@ -190,12 +190,9 @@ public class EventAccumulatorTest {
         MockEvent event1 = new MockEvent(1, 1);
         MockEvent event2 = new MockEvent(1, 2);
 
-        CompletableFuture<MockEvent> future0 = CompletableFuture.supplyAsync(() ->
-            accumulator.poll(Long.MAX_VALUE, TimeUnit.MILLISECONDS));
-        CompletableFuture<MockEvent> future1 = CompletableFuture.supplyAsync(() ->
-            accumulator.poll(Long.MAX_VALUE, TimeUnit.MILLISECONDS));
-        CompletableFuture<MockEvent> future2 = CompletableFuture.supplyAsync(() ->
-            accumulator.poll(Long.MAX_VALUE, TimeUnit.MILLISECONDS));
+        CompletableFuture<MockEvent> future0 = CompletableFuture.supplyAsync(accumulator::take);
+        CompletableFuture<MockEvent> future1 = CompletableFuture.supplyAsync(accumulator::take);
+        CompletableFuture<MockEvent> future2 = CompletableFuture.supplyAsync(accumulator::take);
         List<CompletableFuture<MockEvent>> futures = Arrays.asList(future0, future1, future2);
 
         assertFalse(future0.isDone());
@@ -248,12 +245,9 @@ public class EventAccumulatorTest {
     public void testCloseUnblockWaitingThreads() throws ExecutionException, InterruptedException, TimeoutException {
         EventAccumulator<Integer, MockEvent> accumulator = new EventAccumulator<>();
 
-        CompletableFuture<MockEvent> future0 = CompletableFuture.supplyAsync(() ->
-            accumulator.poll(Long.MAX_VALUE, TimeUnit.MILLISECONDS));
-        CompletableFuture<MockEvent> future1 = CompletableFuture.supplyAsync(() ->
-            accumulator.poll(Long.MAX_VALUE, TimeUnit.MILLISECONDS));
-        CompletableFuture<MockEvent> future2 = CompletableFuture.supplyAsync(() ->
-            accumulator.poll(Long.MAX_VALUE, TimeUnit.MILLISECONDS));
+        CompletableFuture<MockEvent> future0 = CompletableFuture.supplyAsync(accumulator::take);
+        CompletableFuture<MockEvent> future1 = CompletableFuture.supplyAsync(accumulator::take);
+        CompletableFuture<MockEvent> future2 = CompletableFuture.supplyAsync(accumulator::take);
 
         assertFalse(future0.isDone());
         assertFalse(future1.isDone());

@@ -213,15 +213,11 @@ public class ConnectSchema implements Schema {
         validateValue(null, schema, value);
     }
 
-    public static void validateValue(String field, Schema schema, Object value) {
-        validateValue(schema, value, field == null ? "value" : "field: \"" + field + "\"");
-    }
-
-    private static void validateValue(Schema schema, Object value, String location) {
+    public static void validateValue(String name, Schema schema, Object value) {
         if (value == null) {
             if (!schema.isOptional())
-                throw new DataException("Invalid value: null used for required " + location
-                        + ", schema type: " + schema.type());
+                throw new DataException("Invalid value: null used for required field: \"" + name
+                        + "\", schema type: " + schema.type());
             return;
         }
 
@@ -240,8 +236,8 @@ public class ConnectSchema implements Schema {
                 exceptionMessage.append(" \"").append(schema.name()).append("\"");
             }
             exceptionMessage.append(" with type ").append(schema.type()).append(": ").append(value.getClass());
-            if (location != null) {
-                exceptionMessage.append(" for ").append(location);
+            if (name != null) {
+                exceptionMessage.append(" for field: \"").append(name).append("\"");
             }
             throw new DataException(exceptionMessage.toString());
         }
@@ -255,31 +251,17 @@ public class ConnectSchema implements Schema {
                 break;
             case ARRAY:
                 List<?> array = (List<?>) value;
-                String entryLocation = "element of array " + location;
-                Schema arrayValueSchema = assertSchemaNotNull(schema.valueSchema(), entryLocation);
-                for (Object entry : array) {
-                    validateValue(arrayValueSchema, entry, entryLocation);
-                }
+                for (Object entry : array)
+                    validateValue(schema.valueSchema(), entry);
                 break;
             case MAP:
                 Map<?, ?> map = (Map<?, ?>) value;
-                String keyLocation = "key of map " + location;
-                String valueLocation = "value of map " + location;
-                Schema mapKeySchema = assertSchemaNotNull(schema.keySchema(), keyLocation);
-                Schema mapValueSchema = assertSchemaNotNull(schema.valueSchema(), valueLocation);
                 for (Map.Entry<?, ?> entry : map.entrySet()) {
-                    validateValue(mapKeySchema, entry.getKey(), keyLocation);
-                    validateValue(mapValueSchema, entry.getValue(), valueLocation);
+                    validateValue(schema.keySchema(), entry.getKey());
+                    validateValue(schema.valueSchema(), entry.getValue());
                 }
                 break;
         }
-    }
-
-    private static Schema assertSchemaNotNull(Schema schema, String location) {
-        if (schema == null) {
-            throw new DataException("No schema defined for " + location);
-        }
-        return schema;
     }
 
     private static List<Class<?>> expectedClassesFor(Schema schema) {

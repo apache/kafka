@@ -25,6 +25,7 @@ import org.apache.kafka.common.security.auth.PlaintextAuthenticationContext;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.Closeable;
+import java.io.IOException;
 import java.net.InetAddress;
 import java.nio.channels.SelectionKey;
 import java.util.Map;
@@ -71,7 +72,7 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
         return new KafkaChannel(id, transportLayer, authenticatorCreator, maxReceiveSize, memoryPool, metadataRegistry);
     }
 
-    protected PlaintextTransportLayer buildTransportLayer(SelectionKey key) {
+    protected PlaintextTransportLayer buildTransportLayer(SelectionKey key) throws IOException {
         return new PlaintextTransportLayer(key);
     }
 

@@ -208,7 +208,6 @@ public final class TieredStorageTestContext implements AutoCloseable {
         consumer.seek(topicPartition, fetchOffset);
 
         long timeoutMs = 60_000L;
-        long pollTimeoutMs = 100L;
         String sep = System.lineSeparator();
         List<ConsumerRecord<String, String>> records = new ArrayList<>();
         Function1<ConsumerRecords<String, String>, Object> pollAction = polledRecords -> {
@@ -219,7 +218,7 @@ public final class TieredStorageTestContext implements AutoCloseable {
                 String.format("Could not consume %d records of %s from offset %d in %d ms. %d message(s) consumed:%s%s",
                         expectedTotalCount, topicPartition, fetchOffset, timeoutMs, records.size(), sep,
                         records.stream().map(Object::toString).collect(Collectors.joining(sep)));
-        TestUtils.pollRecordsUntilTrue(consumer, pollAction, messageSupplier, timeoutMs, pollTimeoutMs);
+        TestUtils.pollRecordsUntilTrue(consumer, pollAction, messageSupplier, timeoutMs);
         return records;
     }
 

@@ -18,7 +18,6 @@ package org.apache.kafka.streams.processor.internals.assignment;
 
 import java.util.Arrays;
 import java.util.Collection;
-import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -104,11 +103,11 @@ public class StandbyTaskAssignorFactoryTest {
         }
     }
 
-    private static AssignmentConfigs newAssignmentConfigs(final List<String> rackAwareAssignmentTags) {
-        return new AssignmentConfigs(ACCEPTABLE_RECOVERY_LAG,
-                                     MAX_WARMUP_REPLICAS,
-                                     NUMBER_OF_STANDBY_REPLICAS,
-                                     PROBING_REBALANCE_INTERVAL_MS,
-                                     rackAwareAssignmentTags);
+    private static AssignorConfiguration.AssignmentConfigs newAssignmentConfigs(final List<String> rackAwareAssignmentTags) {
+        return new AssignorConfiguration.AssignmentConfigs(ACCEPTABLE_RECOVERY_LAG,
+                                                           MAX_WARMUP_REPLICAS,
+                                                           NUMBER_OF_STANDBY_REPLICAS,
+                                                           PROBING_REBALANCE_INTERVAL_MS,
+                                                           rackAwareAssignmentTags);
     }
 }

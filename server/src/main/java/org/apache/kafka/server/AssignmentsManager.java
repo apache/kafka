@@ -128,10 +128,6 @@ public class AssignmentsManager {
         }
     }
 
-    public void onAssignment(TopicIdPartition topicPartition, Uuid dirId, String reason) {
-        onAssignment(topicPartition, dirId, reason, null);
-    }
-
     public void onAssignment(TopicIdPartition topicPartition, Uuid dirId, String reason, Runnable callback) {
         if (callback == null) {
             callback = () -> { };
@@ -448,9 +444,7 @@ public class AssignmentsManager {
                     } else {
                         acknowledged.add(topicPartition);
                         Errors error = Errors.forCode(partition.errorCode());
-                        if (error == Errors.NOT_LEADER_OR_FOLLOWER) {
-                            log.info("Dropping late directory assignment for partition {} into directory {} because this broker is no longer a replica", partition, event.dirId);
-                        } else if (error != Errors.NONE) {
+                        if (error != Errors.NONE) {
                             log.error("Controller returned error {} for assignment of partition {} into directory {}",
                                     error.name(), partition, event.dirId);
                             failures.add(event);

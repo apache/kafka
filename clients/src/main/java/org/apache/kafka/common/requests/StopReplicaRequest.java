@@ -94,13 +94,15 @@ public class StopReplicaRequest extends AbstractControlRequest {
 
         @Override
         public String toString() {
-            return "(type=StopReplicaRequest" +
-                    ", controllerId=" + controllerId +
-                    ", controllerEpoch=" + controllerEpoch +
-                    ", brokerEpoch=" + brokerEpoch +
-                    ", deletePartitions=" + deletePartitions +
-                    ", topicStates=" + topicStates.stream().map(StopReplicaTopicState::toString).collect(Collectors.joining(",")) +
-                    ")";
+            StringBuilder bld = new StringBuilder();
+            bld.append("(type=StopReplicaRequest").
+                append(", controllerId=").append(controllerId).
+                append(", controllerEpoch=").append(controllerEpoch).
+                append(", brokerEpoch=").append(brokerEpoch).
+                append(", deletePartitions=").append(deletePartitions).
+                append(", topicStates=").append(topicStates.stream().map(StopReplicaTopicState::toString).collect(Collectors.joining(","))).
+                append(")");
+            return bld.toString();
         }
     }
 

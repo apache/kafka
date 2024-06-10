@@ -19,7 +19,6 @@ package org.apache.kafka.server.immutable.pcollections;
 
 import org.apache.kafka.server.immutable.DelegationChecker;
 import org.apache.kafka.server.immutable.ImmutableMap;
-
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;

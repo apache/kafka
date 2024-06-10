@@ -22,14 +22,13 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import java.util.Collections;
 import java.util.Map;
 import java.util.UUID;
-import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 
 class StandbyTaskAssignorFactory {
     private StandbyTaskAssignorFactory() {}
 
-    static StandbyTaskAssignor create(final AssignmentConfigs configs,
+    static StandbyTaskAssignor create(final AssignorConfiguration.AssignmentConfigs configs,
                                       final RackAwareTaskAssignor rackAwareTaskAssignor) {
-        if (!configs.rackAwareAssignmentTags().isEmpty()) {
+        if (!configs.rackAwareAssignmentTags.isEmpty()) {
             return new ClientTagAwareStandbyTaskAssignor();
         } else if (rackAwareTaskAssignor != null && rackAwareTaskAssignor.validClientRack()) {
             // racksForProcess should be populated if rackAwareTaskAssignor isn't null

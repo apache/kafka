@@ -521,8 +521,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   private def initializeLeaderEpochCache(): Unit = lock synchronized {
-    leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
-      dir, topicPartition, logDirFailureChannel, recordVersion, logIdent, leaderEpochCache, scheduler)
+    leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(dir, topicPartition, logDirFailureChannel, recordVersion, logIdent)
   }
 
   private def updateHighWatermarkWithLogEndOffset(): Unit = {
@@ -1016,7 +1015,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           updatedLogStartOffset = true
           updateLogStartOffset(newLogStartOffset)
           info(s"Incremented log start offset to $newLogStartOffset due to $reason")
-          leaderEpochCache.foreach(_.truncateFromStartAsyncFlush(logStartOffset))
+          leaderEpochCache.foreach(_.truncateFromStart(logStartOffset))
           producerStateManager.onLogStartOffsetIncremented(newLogStartOffset)
           maybeIncrementFirstUnstableOffset()
         }
@@ -1814,7 +1813,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         // and inserted the first start offset entry, but then failed to append any entries
         // before another leader was elected.
         lock synchronized {
-          leaderEpochCache.foreach(_.truncateFromEndAsyncFlush(logEndOffset))
+          leaderEpochCache.foreach(_.truncateFromEnd(logEndOffset))
         }
 
         false
@@ -1827,7 +1826,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
           } else {
             val deletedSegments = localLog.truncateTo(targetOffset)
             deleteProducerSnapshots(deletedSegments, asyncDelete = true)
-            leaderEpochCache.foreach(_.truncateFromEndAsyncFlush(targetOffset))
+            leaderEpochCache.foreach(_.truncateFromEnd(targetOffset))
             logStartOffset = math.min(targetOffset, logStartOffset)
             rebuildProducerState(targetOffset, producerStateManager)
             if (highWatermark >= localLog.logEndOffset)
@@ -2012,17 +2011,12 @@ object UnifiedLog extends Logging {
     Files.createDirectories(dir.toPath)
     val topicPartition = UnifiedLog.parseTopicPartitionName(dir)
     val segments = new LogSegments(topicPartition)
-    // The created leaderEpochCache will be truncated by LogLoader if necessary
-    // so it is guaranteed that the epoch entries will be correct even when on-disk
-    // checkpoint was stale (due to async nature of LeaderEpochFileCache#truncateFromStart/End).
     val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
       dir,
       topicPartition,
       logDirFailureChannel,
       config.recordVersion,
-      s"[UnifiedLog partition=$topicPartition, dir=${dir.getParent}] ",
-      None,
-      scheduler)
+      s"[UnifiedLog partition=$topicPartition, dir=${dir.getParent}] ")
     val producerStateManager = new ProducerStateManager(topicPartition, dir,
       maxTransactionTimeoutMs, producerStateManagerConfig, time)
     val isRemoteLogEnabled = UnifiedLog.isRemoteLogEnabled(remoteStorageSystemEnable, config, topicPartition.topic)
@@ -2109,8 +2103,7 @@ object UnifiedLog extends Logging {
   }
 
   /**
-   * If the recordVersion is >= RecordVersion.V2, create a new LeaderEpochFileCache instance.
-   * Loading the epoch entries from the backing checkpoint file or the provided currentCache if not empty.
+   * If the recordVersion is >= RecordVersion.V2, then create and return a LeaderEpochFileCache.
    * Otherwise, the message format is considered incompatible and the existing LeaderEpoch file
    * is deleted.
    *
@@ -2119,29 +2112,33 @@ object UnifiedLog extends Logging {
    * @param logDirFailureChannel The LogDirFailureChannel to asynchronously handle log dir failure
    * @param recordVersion        The record version
    * @param logPrefix            The logging prefix
-   * @param currentCache         The current LeaderEpochFileCache instance (if any)
-   * @param scheduler            The scheduler for executing asynchronous tasks
    * @return The new LeaderEpochFileCache instance (if created), none otherwise
    */
   def maybeCreateLeaderEpochCache(dir: File,
                                   topicPartition: TopicPartition,
                                   logDirFailureChannel: LogDirFailureChannel,
                                   recordVersion: RecordVersion,
-                                  logPrefix: String,
-                                  currentCache: Option[LeaderEpochFileCache],
-                                  scheduler: Scheduler): Option[LeaderEpochFileCache] = {
+                                  logPrefix: String): Option[LeaderEpochFileCache] = {
     val leaderEpochFile = LeaderEpochCheckpointFile.newFile(dir)
 
+    def newLeaderEpochFileCache(): LeaderEpochFileCache = {
+      val checkpointFile = new LeaderEpochCheckpointFile(leaderEpochFile, logDirFailureChannel)
+      new LeaderEpochFileCache(topicPartition, checkpointFile)
+    }
+
     if (recordVersion.precedes(RecordVersion.V2)) {
-      if (leaderEpochFile.exists()) {
+      val currentCache = if (leaderEpochFile.exists())
+        Some(newLeaderEpochFileCache())
+      else
+        None
+
+      if (currentCache.exists(_.nonEmpty))
         warn(s"${logPrefix}Deleting non-empty leader epoch cache due to incompatible message format $recordVersion")
-      }
+
       Files.deleteIfExists(leaderEpochFile.toPath)
       None
     } else {
-      val checkpointFile = new LeaderEpochCheckpointFile(leaderEpochFile, logDirFailureChannel)
-      currentCache.map(_.withCheckpoint(checkpointFile))
-        .orElse(Some(new LeaderEpochFileCache(topicPartition, checkpointFile, scheduler)))
+      Some(newLeaderEpochFileCache())
     }
   }
 

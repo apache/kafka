@@ -124,15 +124,12 @@ class KRaftQuorumImplementation(
     metaPropertiesEnsemble.verify(Optional.of(clusterId),
       OptionalInt.of(config.nodeId),
       util.EnumSet.of(REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR))
-    val sharedServer = new SharedServer(
-      config,
+    val sharedServer = new SharedServer(config,
       metaPropertiesEnsemble,
       time,
       new Metrics(),
       controllerQuorumVotersFuture,
-      controllerQuorumVotersFuture.get().values(),
-      faultHandlerFactory
-    )
+      faultHandlerFactory)
     var broker: BrokerServer = null
     try {
       broker = new BrokerServer(sharedServer)
@@ -374,15 +371,12 @@ abstract class QuorumTestHarness extends Logging {
     metaPropertiesEnsemble.verify(Optional.of(metaProperties.clusterId().get()),
       OptionalInt.of(nodeId),
       util.EnumSet.of(REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR))
-    val sharedServer = new SharedServer(
-      config,
+    val sharedServer = new SharedServer(config,
       metaPropertiesEnsemble,
       Time.SYSTEM,
       new Metrics(),
       controllerQuorumVotersFuture,
-      Collections.emptyList(),
-      faultHandlerFactory
-    )
+      faultHandlerFactory)
     var controllerServer: ControllerServer = null
     try {
       controllerServer = new ControllerServer(

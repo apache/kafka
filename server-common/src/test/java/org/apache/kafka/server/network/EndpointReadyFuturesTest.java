@@ -17,12 +17,6 @@
 
 package org.apache.kafka.server.network;
 
-import org.apache.kafka.common.ClusterResource;
-import org.apache.kafka.common.Endpoint;
-import org.apache.kafka.common.security.auth.SecurityProtocol;
-
-import org.junit.jupiter.api.Test;
-
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -31,6 +25,10 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 
+import org.apache.kafka.common.ClusterResource;
+import org.apache.kafka.common.Endpoint;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;

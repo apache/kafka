@@ -17,12 +17,11 @@
 
 package org.apache.kafka.timeline;
 
-import org.apache.kafka.common.utils.LogContext;
+import java.util.Arrays;
 
+import org.apache.kafka.common.utils.LogContext;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
-
-import java.util.Arrays;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;

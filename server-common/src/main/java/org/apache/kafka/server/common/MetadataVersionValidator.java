@@ -16,11 +16,10 @@
  */
 package org.apache.kafka.server.common;
 
-import org.apache.kafka.common.config.ConfigDef.Validator;
-import org.apache.kafka.common.config.ConfigException;
-
 import java.util.Arrays;
 import java.util.stream.Collectors;
+import org.apache.kafka.common.config.ConfigDef.Validator;
+import org.apache.kafka.common.config.ConfigException;
 
 public class MetadataVersionValidator implements Validator {
 

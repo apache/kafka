@@ -40,13 +40,13 @@ public interface MetricsReporter extends Reconfigurable, AutoCloseable {
 
     /**
      * This is called whenever a metric is updated or added
-     * @param metric The metric that has been added or changed
+     * @param metric
      */
     void metricChange(KafkaMetric metric);
 
     /**
      * This is called whenever a metric is removed
-     * @param metric The metric that has been removed
+     * @param metric
      */
     void metricRemoval(KafkaMetric metric);
 

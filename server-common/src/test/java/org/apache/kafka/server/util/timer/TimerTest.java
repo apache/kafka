@@ -18,7 +18,6 @@ package org.apache.kafka.server.util.timer;
 
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

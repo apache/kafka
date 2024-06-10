@@ -144,11 +144,7 @@ public class InternalTopologyBuilder {
 
     private String applicationId = null;
 
-    // keyed by subtopology id
     private Map<Integer, Set<String>> nodeGroups = null;
-
-    // keyed by subtopology id
-    private Map<Integer, Set<String>> subtopologyIdToStateStoreNames = null;
 
     // The name of the topology this builder belongs to, or null if this is not a NamedTopology
     private final String topologyName;
@@ -941,15 +937,14 @@ public class InternalTopologyBuilder {
      * @return the full topology minus any global state
      */
     public synchronized ProcessorTopology buildTopology() {
-        final Set<String> allNodes = new HashSet<>();
+        final Set<String> nodeGroup = new HashSet<>();
         for (final Set<String> value : nodeGroups().values()) {
-            allNodes.addAll(value);
+            nodeGroup.addAll(value);
         }
-        allNodes.removeAll(globalNodeGroups());
+        nodeGroup.removeAll(globalNodeGroups());
 
         initializeSubscription();
-        initializeSubtopologyIdToStateStoreNamesMap();
-        return build(allNodes);
+        return build(nodeGroup);
     }
 
     /**
@@ -1503,34 +1498,6 @@ public class InternalTopologyBuilder {
             return topics != null && topics.size() == 1 && globalTopics.contains(topics.get(0));
         }
         return false;
-    }
-
-    public Set<String> stateStoreNamesForSubtopology(final int subtopologyId) {
-        return subtopologyIdToStateStoreNames.get(subtopologyId);
-    }
-
-    private void initializeSubtopologyIdToStateStoreNamesMap() {
-        final Map<Integer, Set<String>> storeNames = new HashMap<>();
-
-        for (final Map.Entry<Integer, Set<String>> nodeGroup : makeNodeGroups().entrySet()) {
-            final Set<String> subtopologyNodes = nodeGroup.getValue();
-            final boolean isNodeGroupOfGlobalStores = nodeGroupContainsGlobalSourceNode(subtopologyNodes);
-
-            if (!isNodeGroupOfGlobalStores) {
-                final int subtopologyId = nodeGroup.getKey();
-                final Set<String> subtopologyStoreNames = new HashSet<>();
-
-                for (final String nodeName : subtopologyNodes) {
-                    final AbstractNode node = nodeFactories.get(nodeName).describe();
-                    if (node instanceof Processor) {
-                        subtopologyStoreNames.addAll(((Processor) node).stores());
-                    }
-                }
-
-                storeNames.put(subtopologyId, subtopologyStoreNames);
-            }
-        }
-        subtopologyIdToStateStoreNames = storeNames;
     }
 
     public TopologyDescription describe() {

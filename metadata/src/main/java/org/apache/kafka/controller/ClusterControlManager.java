@@ -258,7 +258,7 @@ public class ClusterControlManager {
      */
     private final boolean zkMigrationEnabled;
 
-    private final BrokerUncleanShutdownHandler brokerUncleanShutdownHandler;
+    private BrokerUncleanShutdownHandler brokerUncleanShutdownHandler;
 
     /**
      * Maps controller IDs to controller registrations.

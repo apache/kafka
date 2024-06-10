@@ -60,6 +60,7 @@ import java.util.function.Function;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.prepareKeySerde;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 import static org.apache.kafka.streams.state.internals.StoreQueryUtils.getDeserializeValue;
 
@@ -186,15 +187,21 @@ public class MeteredKeyValueStore<K, V>
     protected void initStoreSerde(final ProcessorContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
-        serdes = StoreSerdeInitializer.prepareStoreSerde(
-            context, storeName, changelogTopic, keySerde, valueSerde, this::prepareValueSerdeForStore);
+        serdes = new StateSerdes<>(
+            changelogTopic,
+            prepareKeySerde(keySerde, new SerdeGetter(context)),
+            prepareValueSerdeForStore(valueSerde, new SerdeGetter(context))
+        );
     }
 
     protected void initStoreSerde(final StateStoreContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
-        serdes = StoreSerdeInitializer.prepareStoreSerde(
-            context, storeName, changelogTopic, keySerde, valueSerde, this::prepareValueSerdeForStore);
+        serdes = new StateSerdes<>(
+            changelogTopic,
+            prepareKeySerde(keySerde, new SerdeGetter(context)),
+            prepareValueSerdeForStore(valueSerde, new SerdeGetter(context))
+        );
     }
 
     @SuppressWarnings("unchecked")

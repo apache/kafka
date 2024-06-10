@@ -42,6 +42,7 @@ public final class NoOpCommandHandler implements Commands.Handler {
 
     @Override
     public boolean equals(Object other) {
-        return other instanceof NoOpCommandHandler;
+        if (!(other instanceof NoOpCommandHandler)) return false;
+        return true;
     }
 }

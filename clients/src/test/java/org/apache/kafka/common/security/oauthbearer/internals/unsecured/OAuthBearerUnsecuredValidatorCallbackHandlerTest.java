@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Base64.Encoder;
 import java.util.Collections;
@@ -156,7 +157,7 @@ public class OAuthBearerUnsecuredValidatorCallbackHandlerTest {
                 (Map) options);
         OAuthBearerUnsecuredValidatorCallbackHandler callbackHandler = new OAuthBearerUnsecuredValidatorCallbackHandler();
         callbackHandler.configure(Collections.emptyMap(), OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
-                Collections.singletonList(config.getAppConfigurationEntry("KafkaClient")[0]));
+                Arrays.asList(config.getAppConfigurationEntry("KafkaClient")[0]));
         return callbackHandler;
     }
 

@@ -17,12 +17,17 @@
 package org.apache.kafka.server.log.remote.metadata.storage;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.test.TestUtils;
+import org.junit.jupiter.api.Assertions;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -32,9 +37,10 @@ import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemo
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_RETENTION_MS_PROP;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 public class RemoteLogMetadataManagerTestUtils {
+    private static final Logger log = LoggerFactory.getLogger(RemoteLogMetadataManagerTestUtils.class);
+
     private static final int METADATA_TOPIC_PARTITIONS_COUNT = 3;
     private static final short METADATA_TOPIC_REPLICATION_FACTOR = 2;
     private static final long METADATA_TOPIC_RETENTION_MS = 24 * 60 * 60 * 1000L;
@@ -47,6 +53,7 @@ public class RemoteLogMetadataManagerTestUtils {
         private String bootstrapServers;
         private boolean startConsumerThread;
         private Map<String, Object> overrideRemoteLogMetadataManagerProps = Collections.emptyMap();
+        private Set<TopicIdPartition> topicIdPartitions = Collections.emptySet();
         private Supplier<RemotePartitionMetadataStore> remotePartitionMetadataStore = RemotePartitionMetadataStore::new;
         private Function<Integer, RemoteLogMetadataTopicPartitioner> remoteLogMetadataTopicPartitioner = RemoteLogMetadataTopicPartitioner::new;
 
@@ -78,6 +85,11 @@ public class RemoteLogMetadataManagerTestUtils {
             return this;
         }
 
+        public Builder topicIdPartitions(Set<TopicIdPartition> topicIdPartitions) {
+            this.topicIdPartitions = Objects.requireNonNull(topicIdPartitions);
+            return this;
+        }
+
         public TopicBasedRemoteLogMetadataManager build() {
             Objects.requireNonNull(bootstrapServers);
             String logDir = TestUtils.tempDirectory("rlmm_segs_").getAbsolutePath();
@@ -93,12 +105,19 @@ public class RemoteLogMetadataManagerTestUtils {
             configs.put(REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP, METADATA_TOPIC_PARTITIONS_COUNT);
             configs.put(REMOTE_LOG_METADATA_TOPIC_REPLICATION_FACTOR_PROP, METADATA_TOPIC_REPLICATION_FACTOR);
             configs.put(REMOTE_LOG_METADATA_TOPIC_RETENTION_MS_PROP, METADATA_TOPIC_RETENTION_MS);
+
+            log.debug("TopicBasedRemoteLogMetadataManager configs before adding overridden properties: {}", configs);
             // Add override properties.
             configs.putAll(overrideRemoteLogMetadataManagerProps);
+            log.debug("TopicBasedRemoteLogMetadataManager configs after adding overridden properties: {}", configs);
 
             topicBasedRemoteLogMetadataManager.configure(configs);
-            assertDoesNotThrow(() -> TestUtils.waitForCondition(topicBasedRemoteLogMetadataManager::isInitialized, 60_000L,
+
+            Assertions.assertDoesNotThrow(() -> TestUtils.waitForCondition(topicBasedRemoteLogMetadataManager::isInitialized, 60_000L,
                     "Time out reached before it is initialized successfully"));
+
+            topicBasedRemoteLogMetadataManager.onPartitionLeadershipChanges(topicIdPartitions, Collections.emptySet());
+
             return topicBasedRemoteLogMetadataManager;
         }
     }

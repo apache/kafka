@@ -19,8 +19,6 @@ package org.apache.kafka.common.utils;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -34,14 +32,14 @@ public class FlattenedIteratorTest {
     public void testNestedLists() {
         List<List<String>> list = asList(
             asList("foo", "a", "bc"),
-            Collections.singletonList("ddddd"),
+            asList("ddddd"),
             asList("", "bar2", "baz45"));
 
-        Iterable<String> flattenedIterable = () -> new FlattenedIterator<>(list.iterator(), List::iterator);
+        Iterable<String> flattenedIterable = () -> new FlattenedIterator<>(list.iterator(), l -> l.iterator());
         List<String> flattened = new ArrayList<>();
         flattenedIterable.forEach(flattened::add);
 
-        assertEquals(list.stream().flatMap(Collection::stream).collect(Collectors.toList()), flattened);
+        assertEquals(list.stream().flatMap(l -> l.stream()).collect(Collectors.toList()), flattened);
 
         // Ensure we can iterate multiple times
         List<String> flattened2 = new ArrayList<>();
@@ -54,7 +52,7 @@ public class FlattenedIteratorTest {
     public void testEmptyList() {
         List<List<String>> list = emptyList();
 
-        Iterable<String> flattenedIterable = () -> new FlattenedIterator<>(list.iterator(), List::iterator);
+        Iterable<String> flattenedIterable = () -> new FlattenedIterator<>(list.iterator(), l -> l.iterator());
         List<String> flattened = new ArrayList<>();
         flattenedIterable.forEach(flattened::add);
 
@@ -63,9 +61,9 @@ public class FlattenedIteratorTest {
 
     @Test
     public void testNestedSingleEmptyList() {
-        List<List<String>> list = Collections.singletonList(emptyList());
+        List<List<String>> list = asList(emptyList());
 
-        Iterable<String> flattenedIterable = () -> new FlattenedIterator<>(list.iterator(), List::iterator);
+        Iterable<String> flattenedIterable = () -> new FlattenedIterator<>(list.iterator(), l -> l.iterator());
         List<String> flattened = new ArrayList<>();
         flattenedIterable.forEach(flattened::add);
 
@@ -78,39 +76,39 @@ public class FlattenedIteratorTest {
             emptyList(),
             asList("boo", "b", "de"));
 
-        Iterable<String> flattenedIterable = () -> new FlattenedIterator<>(list.iterator(), List::iterator);
+        Iterable<String> flattenedIterable = () -> new FlattenedIterator<>(list.iterator(), l -> l.iterator());
         List<String> flattened = new ArrayList<>();
         flattenedIterable.forEach(flattened::add);
 
-        assertEquals(list.stream().flatMap(Collection::stream).collect(Collectors.toList()), flattened);
+        assertEquals(list.stream().flatMap(l -> l.stream()).collect(Collectors.toList()), flattened);
     }
 
     @Test
     public void testEmptyListInBetweenNonEmpty() {
         List<List<String>> list = asList(
-            Collections.singletonList("aadwdwdw"),
+            asList("aadwdwdw"),
             emptyList(),
             asList("ee", "aa", "dd"));
 
-        Iterable<String> flattenedIterable = () -> new FlattenedIterator<>(list.iterator(), List::iterator);
+        Iterable<String> flattenedIterable = () -> new FlattenedIterator<>(list.iterator(), l -> l.iterator());
         List<String> flattened = new ArrayList<>();
         flattenedIterable.forEach(flattened::add);
 
-        assertEquals(list.stream().flatMap(Collection::stream).collect(Collectors.toList()), flattened);
+        assertEquals(list.stream().flatMap(l -> l.stream()).collect(Collectors.toList()), flattened);
     }
 
     @Test
     public void testEmptyListAtTheEnd() {
         List<List<String>> list = asList(
             asList("ee", "dd"),
-            Collections.singletonList("e"),
+            asList("e"),
             emptyList());
 
-        Iterable<String> flattenedIterable = () -> new FlattenedIterator<>(list.iterator(), List::iterator);
+        Iterable<String> flattenedIterable = () -> new FlattenedIterator<>(list.iterator(), l -> l.iterator());
         List<String> flattened = new ArrayList<>();
         flattenedIterable.forEach(flattened::add);
 
-        assertEquals(list.stream().flatMap(Collection::stream).collect(Collectors.toList()), flattened);
+        assertEquals(list.stream().flatMap(l -> l.stream()).collect(Collectors.toList()), flattened);
     }
 
 }

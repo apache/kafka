@@ -44,7 +44,7 @@ public final class RackUtils {
                                                            final Set<DefaultTaskTopicPartition> topicPartitions) {
         // First we add all the changelog topics to the set of topics to describe.
         final Set<String> topicsToDescribe = topicPartitions.stream()
-            .filter(tp -> !tp.isSource())
+            .filter(DefaultTaskTopicPartition::isChangelog)
             .map(topicPartition -> topicPartition.topicPartition().topic())
             .collect(Collectors.toSet());
 
@@ -142,7 +142,6 @@ public final class RackUtils {
             return new HashMap<>();
         }
 
-        LOG.info("Describing topics for rack information: {}", Arrays.toString(topicsToDescribe.toArray()));
         try {
             final Map<String, List<TopicPartitionInfo>> topicPartitionInfo = internalTopicManager.getTopicPartitionInfo(topicsToDescribe);
             if (topicsToDescribe.size() > topicPartitionInfo.size()) {

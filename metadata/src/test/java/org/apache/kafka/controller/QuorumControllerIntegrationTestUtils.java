@@ -17,6 +17,7 @@
 
 package org.apache.kafka.controller;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -99,7 +100,7 @@ public class QuorumControllerIntegrationTestUtils {
                         Uuid.fromString("TESTBROKER" + Integer.toString(100000 + brokerId).substring(1) + "DIRAAAA")
                     ))
                     .setListeners(new ListenerCollection(
-                        Collections.singletonList(
+                        Arrays.asList(
                             new Listener()
                                 .setName("PLAINTEXT")
                                 .setHost("localhost")

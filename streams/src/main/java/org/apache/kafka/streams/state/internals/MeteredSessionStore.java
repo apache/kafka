@@ -30,6 +30,7 @@ import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
+import org.apache.kafka.streams.processor.internals.SerdeGetter;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.query.FailureReason;
 import org.apache.kafka.streams.query.PositionBound;
@@ -150,15 +151,21 @@ public class MeteredSessionStore<K, V>
     private void initStoreSerde(final ProcessorContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
-        serdes = StoreSerdeInitializer.prepareStoreSerde(
-            context, storeName, changelogTopic, keySerde, valueSerde, WrappingNullableUtils::prepareValueSerde);
+        serdes = new StateSerdes<>(
+            changelogTopic,
+            WrappingNullableUtils.prepareKeySerde(keySerde, new SerdeGetter(context)),
+            WrappingNullableUtils.prepareValueSerde(valueSerde, new SerdeGetter(context))
+        );
     }
 
     private void initStoreSerde(final StateStoreContext context) {
         final String storeName = name();
         final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
-        serdes = StoreSerdeInitializer.prepareStoreSerde(
-            context, storeName, changelogTopic, keySerde, valueSerde, WrappingNullableUtils::prepareValueSerde);
+        serdes = new StateSerdes<>(
+            changelogTopic,
+            WrappingNullableUtils.prepareKeySerde(keySerde, new SerdeGetter(context)),
+            WrappingNullableUtils.prepareValueSerde(valueSerde, new SerdeGetter(context))
+        );
     }
 
     @SuppressWarnings("unchecked")
