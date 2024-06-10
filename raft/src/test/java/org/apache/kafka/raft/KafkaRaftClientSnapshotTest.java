@@ -41,6 +41,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -122,7 +123,7 @@ final public class KafkaRaftClientSnapshotTest {
         // Check that listener was notified of the new snapshot
         try (SnapshotReader<String> snapshot = context.listener.drainHandledSnapshot().get()) {
             assertEquals(snapshotId, snapshot.snapshotId());
-            SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(), snapshot);
+            SnapshotWriterReaderTest.assertSnapshot(Collections.emptyList(), snapshot);
         }
     }
 
@@ -164,7 +165,7 @@ final public class KafkaRaftClientSnapshotTest {
         // Check that listener was notified of the new snapshot
         try (SnapshotReader<String> snapshot = context.listener.drainHandledSnapshot().get()) {
             assertEquals(snapshotId, snapshot.snapshotId());
-            SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(), snapshot);
+            SnapshotWriterReaderTest.assertSnapshot(Collections.emptyList(), snapshot);
         }
     }
 
@@ -210,7 +211,7 @@ final public class KafkaRaftClientSnapshotTest {
         // Check that the second listener was notified of the new snapshot
         try (SnapshotReader<String> snapshot = secondListener.drainHandledSnapshot().get()) {
             assertEquals(snapshotId, snapshot.snapshotId());
-            SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(), snapshot);
+            SnapshotWriterReaderTest.assertSnapshot(Collections.emptyList(), snapshot);
         }
     }
 
@@ -245,7 +246,7 @@ final public class KafkaRaftClientSnapshotTest {
         // Check that listener was notified of the new snapshot
         try (SnapshotReader<String> snapshot = context.listener.drainHandledSnapshot().get()) {
             assertEquals(snapshotId, snapshot.snapshotId());
-            SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(), snapshot);
+            SnapshotWriterReaderTest.assertSnapshot(Collections.emptyList(), snapshot);
         }
 
         // Generate a new snapshot
@@ -264,7 +265,7 @@ final public class KafkaRaftClientSnapshotTest {
         // Check that listener was notified of the second snapshot
         try (SnapshotReader<String> snapshot = context.listener.drainHandledSnapshot().get()) {
             assertEquals(secondSnapshotId, snapshot.snapshotId());
-            SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(), snapshot);
+            SnapshotWriterReaderTest.assertSnapshot(Collections.emptyList(), snapshot);
         }
     }
 
@@ -660,7 +661,7 @@ final public class KafkaRaftClientSnapshotTest {
         List<String> records = Arrays.asList("foo", "bar");
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .appendToLog(snapshotId.epoch(), Arrays.asList("a"))
+            .appendToLog(snapshotId.epoch(), Collections.singletonList("a"))
             .build();
 
         context.becomeLeader();
@@ -712,7 +713,7 @@ final public class KafkaRaftClientSnapshotTest {
         List<String> records = Arrays.asList("foo", "bar");
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-                .appendToLog(snapshotId.epoch(), Arrays.asList("a"))
+                .appendToLog(snapshotId.epoch(), Collections.singletonList("a"))
                 .build();
 
         int resignLeadershipTimeout = context.checkQuorumTimeoutMs;
@@ -909,7 +910,7 @@ final public class KafkaRaftClientSnapshotTest {
         List<String> records = Arrays.asList("foo", "bar");
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-            .appendToLog(snapshotId.epoch(), Arrays.asList("a"))
+            .appendToLog(snapshotId.epoch(), Collections.singletonList("a"))
             .build();
 
         context.becomeLeader();
@@ -1136,12 +1137,12 @@ final public class KafkaRaftClientSnapshotTest {
         // Check that the snapshot was written to the log
         RawSnapshotReader snapshot = context.log.readSnapshot(snapshotId).get();
         assertEquals(memorySnapshot.buffer().remaining(), snapshot.sizeInBytes());
-        SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(records), snapshot);
+        SnapshotWriterReaderTest.assertSnapshot(Collections.singletonList(records), snapshot);
 
         // Check that listener was notified of the new snapshot
         try (SnapshotReader<String> reader = context.listener.drainHandledSnapshot().get()) {
             assertEquals(snapshotId, reader.snapshotId());
-            SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(records), reader);
+            SnapshotWriterReaderTest.assertSnapshot(Collections.singletonList(records), reader);
         }
     }
 
@@ -1239,12 +1240,12 @@ final public class KafkaRaftClientSnapshotTest {
         // Check that the snapshot was written to the log
         RawSnapshotReader snapshot = context.log.readSnapshot(snapshotId).get();
         assertEquals(memorySnapshot.buffer().remaining(), snapshot.sizeInBytes());
-        SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(records), snapshot);
+        SnapshotWriterReaderTest.assertSnapshot(Collections.singletonList(records), snapshot);
 
         // Check that listener was notified of the new snapshot
         try (SnapshotReader<String> reader = context.listener.drainHandledSnapshot().get()) {
             assertEquals(snapshotId, reader.snapshotId());
-            SnapshotWriterReaderTest.assertSnapshot(Arrays.asList(records), reader);
+            SnapshotWriterReaderTest.assertSnapshot(Collections.singletonList(records), reader);
         }
     }
 

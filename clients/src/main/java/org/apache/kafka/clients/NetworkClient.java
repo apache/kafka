@@ -821,9 +821,8 @@ public class NetworkClient implements KafkaClient {
                 break;
             case AUTHENTICATE:
                 log.warn("Connection to node {} ({}) terminated during authentication. This may happen " +
-                    "due to any of the following reasons: (1) Authentication failed due to invalid " +
-                    "credentials with brokers older than 1.0.0, (2) Firewall blocking Kafka TLS " +
-                    "traffic (eg it may only allow HTTPS traffic), (3) Transient network issue.",
+                    "due to any of the following reasons: (1) Firewall blocking Kafka TLS " +
+                    "traffic (eg it may only allow HTTPS traffic), (2) Transient network issue.",
                     nodeId, disconnectState.remoteAddress());
                 break;
             case NOT_CONNECTED:

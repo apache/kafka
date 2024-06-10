@@ -31,7 +31,10 @@ import kafka.utils.CoreUtils
 import kafka.utils.FileLock
 import kafka.utils.Logging
 import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, NetworkClient}
-import org.apache.kafka.common.{KafkaException, Node, TopicPartition, Uuid}
+import org.apache.kafka.common.KafkaException
+import org.apache.kafka.common.Node
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ChannelBuilders, ListenerName, NetworkReceive, Selectable, Selector}

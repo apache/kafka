@@ -65,7 +65,7 @@ import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
 
 public class KafkaConfig {
     @SuppressWarnings("deprecation")
-    public final static ConfigDef CONFIG_DEF =  new ConfigDef(RemoteLogManagerConfig.CONFIG_DEF)
+    public final static ConfigDef CONFIG_DEF =  new ConfigDef(RemoteLogManagerConfig.configDef())
         /** ********* Zookeeper Configuration ***********/
         .define(ZkConfigs.ZK_CONNECT_CONFIG, STRING, null, HIGH, ZkConfigs.ZK_CONNECT_DOC)
         .define(ZkConfigs.ZK_SESSION_TIMEOUT_MS_CONFIG, INT, ZkConfigs.ZK_SESSION_TIMEOUT_MS, HIGH, ZkConfigs.ZK_SESSION_TIMEOUT_MS_DOC)

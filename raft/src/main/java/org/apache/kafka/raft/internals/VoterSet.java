@@ -248,9 +248,7 @@ final public class VoterSet {
             .collect(Collectors.toSet());
 
         if (Utils.diff(HashSet::new, thisReplicaKeys, thatReplicaKeys).size() > 1) return false;
-        if (Utils.diff(HashSet::new, thatReplicaKeys, thisReplicaKeys).size() > 1) return false;
-
-        return true;
+        return Utils.diff(HashSet::new, thatReplicaKeys, thisReplicaKeys).size() <= 1;
     }
 
     @Override
@@ -314,9 +312,7 @@ final public class VoterSet {
 
             if (!Objects.equals(voterKey, that.voterKey)) return false;
             if (!Objects.equals(supportedKRaftVersion, that.supportedKRaftVersion)) return false;
-            if (!Objects.equals(listeners, that.listeners)) return false;
-
-            return true;
+            return Objects.equals(listeners, that.listeners);
         }
 
         @Override

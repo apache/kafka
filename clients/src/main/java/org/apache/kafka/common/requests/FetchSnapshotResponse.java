@@ -84,7 +84,7 @@ final public class FetchSnapshotResponse extends AbstractResponse {
     /**
      * Creates a FetchSnapshotResponseData with a single PartitionSnapshot for the topic partition.
      *
-     * The partition index will already by populated when calling operator.
+     * The partition index will already be populated when calling operator.
      *
      * @param topicPartition the topic partition to include
      * @param operator unary operator responsible for populating all of the appropriate fields

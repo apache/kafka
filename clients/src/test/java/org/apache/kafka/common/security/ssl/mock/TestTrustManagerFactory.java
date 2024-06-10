@@ -45,8 +45,6 @@ public class TestTrustManagerFactory extends TrustManagerFactorySpi {
 
     public static class TestTrustManager extends X509ExtendedTrustManager {
 
-        public static final String ALIAS = "TestAlias";
-
         @Override
         public void checkClientTrusted(X509Certificate[] x509Certificates, String s) {
 
