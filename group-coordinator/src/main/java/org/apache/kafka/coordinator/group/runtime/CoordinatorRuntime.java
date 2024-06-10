@@ -793,10 +793,12 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     lingerTimeoutTask = Optional.of(new TimerTask(appendLingerMs) {
                         @Override
                         public void run() {
-                            scheduleInternalOperation("FlushBatch", tp, () -> {
+                            // An event to flush the batch is pushed to the front of the queue
+                            // to ensure that the linger time is respected.
+                            enqueueFirst(new CoordinatorInternalEvent("FlushBatch", tp, () -> {
                                 if (this.isCancelled()) return;
                                 withActiveContextOrThrow(tp, CoordinatorContext::flushCurrentBatch);
-                            });
+                            }));
                         }
                     });
                     CoordinatorRuntime.this.timer.add(lingerTimeoutTask.get());
