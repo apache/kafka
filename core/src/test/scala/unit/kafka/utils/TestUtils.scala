@@ -1099,13 +1099,31 @@ object TestUtils extends Logging {
   def awaitLeaderChange[B <: KafkaBroker](
       brokers: Seq[B],
       tp: TopicPartition,
-      oldLeader: Int,
+      oldLeaderOpt: Option[Int] = None,
+      expectedLeaderOpt: Option[Int] = None,
       timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Int = {
     def newLeaderExists: Option[Int] = {
-      brokers.find { broker =>
-        broker.config.brokerId != oldLeader &&
-          broker.replicaManager.onlinePartition(tp).exists(_.leaderLogIfLocal.isDefined)
-      }.map(_.config.brokerId)
+      if (expectedLeaderOpt.isDefined) {
+        debug(s"Checking leader that has changed to ${expectedLeaderOpt.get}")
+        brokers.find { broker =>
+          broker.config.brokerId == expectedLeaderOpt.get &&
+            broker.replicaManager.onlinePartition(tp).exists(_.leaderLogIfLocal.isDefined)
+        }.map(_.config.brokerId)
+
+      } else if (oldLeaderOpt.isDefined) {
+          debug(s"Checking leader that has changed from ${oldLeaderOpt}")
+          brokers.find { broker =>
+            broker.replicaManager.onlinePartition(tp).exists(_.leaderLogIfLocal.isDefined)
+            broker.config.brokerId != oldLeaderOpt.get &&
+              broker.replicaManager.onlinePartition(tp).exists(_.leaderLogIfLocal.isDefined)
+          }.map(_.config.brokerId)
+
+      } else {
+        debug(s"Checking the elected leader")
+        brokers.find { broker =>
+            broker.replicaManager.onlinePartition(tp).exists(_.leaderLogIfLocal.isDefined)
+        }.map(_.config.brokerId)
+      }
     }
 
     waitUntilTrue(() => newLeaderExists.isDefined,

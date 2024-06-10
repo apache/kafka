@@ -76,14 +76,6 @@ if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_11))
 else
   mockitoArtifactName = "mockito-inline"
 
-// easymock 5.2 is required for Java 21 support, but it breaks tests using powermock
-// powermock doesn't work with Java 16 or newer and hence it's safe to use the newer version in this case only
-String easymockVersion
-if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_16))
-  easymockVersion = "5.2.0"
-else
-  easymockVersion = "4.3"
-
 // When adding, removing or updating dependencies, please also update the LICENSE-binary file accordingly.
 // See https://issues.apache.org/jira/browse/KAFKA-12622 for steps to verify the LICENSE-binary file is correct.
 versions += [
@@ -149,7 +141,6 @@ versions += [
   netty: "4.1.110.Final",
   opentelemetryProto: "1.0.0-alpha",
   pcollections: "4.0.1",
-  powermock: "2.0.9",
   reflections: "0.10.2",
   reload4j: "1.2.25",
   rocksDB: "7.9.2",
@@ -184,7 +175,6 @@ libs += [
   caffeine: "com.github.ben-manes.caffeine:caffeine:$versions.caffeine",
   commonsCli: "commons-cli:commons-cli:$versions.commonsCli",
   commonsValidator: "commons-validator:commons-validator:$versions.commonsValidator",
-  easymock: "org.easymock:easymock:$easymockVersion",
   jacksonAnnotations: "com.fasterxml.jackson.core:jackson-annotations:$versions.jackson",
   jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jackson",
   jacksonDataformatCsv: "com.fasterxml.jackson.dataformat:jackson-dataformat-csv:$versions.jackson",
@@ -246,8 +236,6 @@ libs += [
   nettyTransportNativeEpoll: "io.netty:netty-transport-native-epoll:$versions.netty",
   pcollections: "org.pcollections:pcollections:$versions.pcollections",
   opentelemetryProto: "io.opentelemetry.proto:opentelemetry-proto:$versions.opentelemetryProto",
-  powermockJunit4: "org.powermock:powermock-module-junit4:$versions.powermock",
-  powermockEasymock: "org.powermock:powermock-api-easymock:$versions.powermock",
   reflections: "org.reflections:reflections:$versions.reflections",
   rocksDBJni: "org.rocksdb:rocksdbjni:$versions.rocksDB",
   scalaCollectionCompat: "org.scala-lang.modules:scala-collection-compat_$versions.baseScala:$versions.scalaCollectionCompat",

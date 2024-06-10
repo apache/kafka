@@ -76,7 +76,7 @@ public class ClientSideAssignorBenchmark {
     /**
      * The subscription pattern followed by the members of the group.
      *
-     * A subscription model is considered homogenous if all the members of the group
+     * A subscription model is considered homogeneous if all the members of the group
      * are subscribed to the same set of topics, it is heterogeneous otherwise.
      */
     public enum SubscriptionModel {
