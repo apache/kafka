@@ -40,11 +40,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class RangeAssignorTest {
     private final RangeAssignor assignor = new RangeAssignor();
-    private final Uuid topic1Uuid = Uuid.fromString("T1-1qE4Svv9SSykvMapXQ0");
+    private final Uuid topic1Uuid = Uuid.randomUuid();
     private final String topic1Name = "topic1";
-    private final Uuid topic2Uuid = Uuid.fromString("T2-QEox99NxRFWfYGL3eQx");
+    private final Uuid topic2Uuid = Uuid.randomUuid();
     private final String topic2Name = "topic2";
-    private final Uuid topic3Uuid = Uuid.fromString("T3-pgqvlXp3SF2KnKtJ0bD");
+    private final Uuid topic3Uuid = Uuid.randomUuid();
     private final String topic3Name = "topic3";
     private final String memberA = "A";
     private final String memberB = "B";
