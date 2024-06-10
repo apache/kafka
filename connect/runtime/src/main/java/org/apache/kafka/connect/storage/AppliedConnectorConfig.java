@@ -23,18 +23,23 @@ import java.util.Map;
 public class AppliedConnectorConfig {
 
     private final Map<String, String> rawConfig;
-    private Map<String, String> transformedConfig;
+    private volatile Map<String, String> transformedConfig;
 
     public AppliedConnectorConfig(Map<String, String> rawConfig) {
         this.rawConfig = rawConfig;
     }
 
     public Map<String, String> transformedConfig(WorkerConfigTransformer configTransformer) {
-        if (transformedConfig == null) {
-            if (configTransformer != null) {
-                transformedConfig = configTransformer.transform(rawConfig);
-            } else {
-                transformedConfig = rawConfig;
+        if (transformedConfig != null)
+            return transformedConfig;
+
+        synchronized (this) {
+            if (transformedConfig == null) {
+                if (configTransformer != null) {
+                    transformedConfig = configTransformer.transform(rawConfig);
+                } else {
+                    transformedConfig = rawConfig;
+                }
             }
         }
 
