@@ -765,7 +765,7 @@ public final class RaftClientTestContext {
         return raftRequest;
     }
 
-    FetchResponseData.PartitionData assertSentFetchPartitionResponse() {
+    FetchResponseData assertSentFetchResponse() {
         List<RaftResponse.Outbound> sentMessages = drainSentResponses(ApiKeys.FETCH);
         assertEquals(
             1, sentMessages.size(), "Found unexpected sent messages " + sentMessages);
@@ -777,6 +777,11 @@ public final class RaftClientTestContext {
         assertEquals(1, response.responses().size());
         assertEquals(metadataPartition.topic(), response.responses().get(0).topic());
         assertEquals(1, response.responses().get(0).partitions().size());
+        return response;
+    }
+
+    FetchResponseData.PartitionData assertSentFetchPartitionResponse() {
+        FetchResponseData response = assertSentFetchResponse();
         return response.responses().get(0).partitions().get(0);
     }
 
@@ -796,7 +801,8 @@ public final class RaftClientTestContext {
         int epoch,
         OptionalInt leaderId
     ) {
-        FetchResponseData.PartitionData partitionResponse = assertSentFetchPartitionResponse();
+        FetchResponseData response = assertSentFetchResponse();
+        FetchResponseData.PartitionData partitionResponse = response.responses().get(0).partitions().get(0);
         assertEquals(error, Errors.forCode(partitionResponse.errorCode()));
         assertEquals(epoch, partitionResponse.currentLeader().leaderEpoch());
         assertEquals(leaderId.orElse(-1), partitionResponse.currentLeader().leaderId());
@@ -804,6 +810,16 @@ public final class RaftClientTestContext {
         assertEquals(-1, partitionResponse.divergingEpoch().epoch());
         assertEquals(-1, partitionResponse.snapshotId().endOffset());
         assertEquals(-1, partitionResponse.snapshotId().epoch());
+
+        if (kip853Rpc && leaderId.isPresent()) {
+            Endpoints expectedLeaderEndpoints = voters.listeners(leaderId.getAsInt());
+            Endpoints responseEndpoints = Endpoints.fromFetchResponse(
+                channel.listenerName(),
+                response.nodeEndpoints()
+            );
+            assertEquals(expectedLeaderEndpoints, responseEndpoints);
+        }
+
         return (MemoryRecords) partitionResponse.records();
     }
 
@@ -1143,7 +1159,7 @@ public final class RaftClientTestContext {
 
     FetchRequestData fetchRequest(
         int epoch,
-        int replicaId,
+        ReplicaKey replicaKey,
         long fetchOffset,
         int lastFetchedEpoch,
         int maxWaitTimeMs
@@ -1151,7 +1167,7 @@ public final class RaftClientTestContext {
         return fetchRequest(
             epoch,
             clusterId.toString(),
-            replicaId,
+            replicaKey,
             fetchOffset,
             lastFetchedEpoch,
             maxWaitTimeMs
@@ -1161,21 +1177,28 @@ public final class RaftClientTestContext {
     FetchRequestData fetchRequest(
         int epoch,
         String clusterId,
-        int replicaId,
+        ReplicaKey replicaKey,
         long fetchOffset,
         int lastFetchedEpoch,
         int maxWaitTimeMs
     ) {
-        FetchRequestData request = RaftUtil.singletonFetchRequest(metadataPartition, metadataTopicId, fetchPartition -> {
-            fetchPartition
+        FetchRequestData request = RaftUtil.singletonFetchRequest(
+            metadataPartition,
+            metadataTopicId,
+            fetchPartition -> fetchPartition
                 .setCurrentLeaderEpoch(epoch)
                 .setLastFetchedEpoch(lastFetchedEpoch)
-                .setFetchOffset(fetchOffset);
-        });
+                .setFetchOffset(fetchOffset)
+                .setReplicaDirectoryId(
+                    replicaKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID)
+                )
+        );
         return request
             .setMaxWaitMs(maxWaitTimeMs)
             .setClusterId(clusterId)
-            .setReplicaState(new FetchRequestData.ReplicaState().setReplicaId(replicaId));
+            .setReplicaState(
+                new FetchRequestData.ReplicaState().setReplicaId(replicaKey.id())
+            );
     }
 
     FetchResponseData fetchResponse(
@@ -1347,17 +1370,19 @@ public final class RaftClientTestContext {
     public void advanceLocalLeaderHighWatermarkToLogEndOffset() throws InterruptedException {
         assertEquals(localId, currentLeader());
         long localLogEndOffset = log.endOffset().offset;
-        Set<Integer> followers = voters
-            .voterIds()
-            .stream()
-            .filter(voter -> voter != localId.getAsInt())
-            .collect(Collectors.toSet());
 
-        // Send a request from every follower
-        for (int follower : followers) {
+        Iterable<ReplicaKey> followers = () -> voters
+            .voterKeys()
+            .stream()
+            .filter(voterKey -> voterKey.id() != localId.getAsInt())
+            .iterator();
+
+        // Send a request from every voter
+        for (ReplicaKey follower : followers) {
             deliverRequest(
                 fetchRequest(currentEpoch(), follower, localLogEndOffset, currentEpoch(), 0)
             );
+
             pollUntilResponse();
             assertSentFetchPartitionResponse(Errors.NONE, currentEpoch(), localId);
         }
