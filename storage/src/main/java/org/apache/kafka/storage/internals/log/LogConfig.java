@@ -141,13 +141,13 @@ public class LogConfig extends AbstractConfig {
 
         @Override
         public List<String> headers() {
-            return asList("Name", "Description", "Type", "Default", "Valid Values", SERVER_DEFAULT_HEADER_NAME, "Importance");
+            return asList("Name", "Description", "Type", "Default", "Valid Values", SERVER_HEADER_NAME_DEFAULT, "Importance");
         }
 
         // Visible for testing
         @Override
         public String getConfigValue(ConfigKey key, String headerName) {
-            if (headerName.equals(SERVER_DEFAULT_HEADER_NAME))
+            if (headerName.equals(SERVER_HEADER_NAME_DEFAULT))
                 return ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.get(key.name);
             else
                 return super.getConfigValue(key, headerName);
@@ -159,31 +159,31 @@ public class LogConfig extends AbstractConfig {
     }
 
     // Visible for testing
-    public static final String SERVER_DEFAULT_HEADER_NAME = "Server Default Property";
+    public static final String SERVER_HEADER_NAME_DEFAULT = "Server Default Property";
 
-    public static final int DEFAULT_MAX_MESSAGE_BYTES = 1024 * 1024 + Records.LOG_OVERHEAD;
-    public static final int DEFAULT_SEGMENT_BYTES = 1024 * 1024 * 1024;
-    public static final long DEFAULT_SEGMENT_MS = 24 * 7 * 60 * 60 * 1000L;
-    public static final long DEFAULT_SEGMENT_JITTER_MS = 0;
-    public static final long DEFAULT_RETENTION_MS = 24 * 7 * 60 * 60 * 1000L;
-    public static final long DEFAULT_DELETE_RETENTION_MS = 24 * 60 * 60 * 1000L;
-    public static final long DEFAULT_MIN_COMPACTION_LAG_MS = 0;
-    public static final long DEFAULT_MAX_COMPACTION_LAG_MS = Long.MAX_VALUE;
-    public static final double DEFAULT_MIN_CLEANABLE_DIRTY_RATIO = 0.5;
-    public static final boolean DEFAULT_UNCLEAN_LEADER_ELECTION_ENABLE = false;
-    public static final String DEFAULT_COMPRESSION_TYPE = BrokerCompressionType.PRODUCER.name;
-    public static final boolean DEFAULT_PREALLOCATE = false;
+    public static final int MAX_MESSAGE_BYTES_DEFAULT = 1024 * 1024 + Records.LOG_OVERHEAD;
+    public static final int SEGMENT_BYTES_DEFAULT = 1024 * 1024 * 1024;
+    public static final long SEGMENT_MS_DEFAULT = 24 * 7 * 60 * 60 * 1000L;
+    public static final long SEGMENT_JITTER_MS_DEFAULT = 0;
+    public static final long RETENTION_MS_DEFAULT = 24 * 7 * 60 * 60 * 1000L;
+    public static final long DELETE_RETENTION_MS_DEFAULT = 24 * 60 * 60 * 1000L;
+    public static final long MIN_COMPACTION_LAG_MS_DEFAULT = 0;
+    public static final long MAX_COMPACTION_LAG_MS_DEFAULT = Long.MAX_VALUE;
+    public static final double MIN_CLEANABLE_DIRTY_RATIO_DEFAULT = 0.5;
+    public static final boolean UNCLEAN_LEADER_ELECTION_ENABLE_DEFAULT = false;
+    public static final String COMPRESSION_TYPE_DEFAULT = BrokerCompressionType.PRODUCER.name;
+    public static final boolean PREALLOCATE_DEFAULT = false;
     @Deprecated
-    public static final long DEFAULT_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS = ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_DEFAULT;
+    public static final long MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_DEFAULT = ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_DEFAULT;
 
-    public static final boolean DEFAULT_REMOTE_STORAGE_ENABLE = false;
-    public static final long DEFAULT_LOCAL_RETENTION_BYTES = -2; // It indicates the value to be derived from RetentionBytes
-    public static final long DEFAULT_LOCAL_RETENTION_MS = -2; // It indicates the value to be derived from RetentionMs
+    public static final boolean REMOTE_STORAGE_ENABLE_DEFAULT = false;
+    public static final long LOCAL_RETENTION_BYTES_DEFAULT = -2; // It indicates the value to be derived from RetentionBytes
+    public static final long LOCAL_RETENTION_MS_DEFAULT = -2; // It indicates the value to be derived from RetentionMs
 
     /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details
     * Keep DEFAULT_MESSAGE_FORMAT_VERSION as a way to handle the deprecated value */
     @Deprecated
-    public static final String DEFAULT_MESSAGE_FORMAT_VERSION = ServerLogConfigs.LOG_MESSAGE_FORMAT_VERSION_DEFAULT;
+    public static final String MESSAGE_FORMAT_VERSION_DEFAULT = ServerLogConfigs.LOG_MESSAGE_FORMAT_VERSION_DEFAULT;
 
     /* See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for details */
     @SuppressWarnings("deprecation")
@@ -208,10 +208,10 @@ public class LogConfig extends AbstractConfig {
     private static final LogConfigDef CONFIG = new LogConfigDef();
     static {
         CONFIG.
-            define(TopicConfig.SEGMENT_BYTES_CONFIG, INT, DEFAULT_SEGMENT_BYTES, atLeast(LegacyRecord.RECORD_OVERHEAD_V0), MEDIUM,
+            define(TopicConfig.SEGMENT_BYTES_CONFIG, INT, SEGMENT_BYTES_DEFAULT, atLeast(LegacyRecord.RECORD_OVERHEAD_V0), MEDIUM,
                 TopicConfig.SEGMENT_BYTES_DOC)
-            .define(TopicConfig.SEGMENT_MS_CONFIG, LONG, DEFAULT_SEGMENT_MS, atLeast(1), MEDIUM, TopicConfig.SEGMENT_MS_DOC)
-            .define(TopicConfig.SEGMENT_JITTER_MS_CONFIG, LONG, DEFAULT_SEGMENT_JITTER_MS, atLeast(0), MEDIUM,
+            .define(TopicConfig.SEGMENT_MS_CONFIG, LONG, SEGMENT_MS_DEFAULT, atLeast(1), MEDIUM, TopicConfig.SEGMENT_MS_DOC)
+            .define(TopicConfig.SEGMENT_JITTER_MS_CONFIG, LONG, SEGMENT_JITTER_MS_DEFAULT, atLeast(0), MEDIUM,
                 TopicConfig.SEGMENT_JITTER_MS_DOC)
             .define(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, INT, ServerLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_DEFAULT, atLeast(4), MEDIUM,
                 TopicConfig.SEGMENT_INDEX_BYTES_DOC)
@@ -222,29 +222,29 @@ public class LogConfig extends AbstractConfig {
             // can be negative. See kafka.log.LogManager.cleanupSegmentsToMaintainSize
             .define(TopicConfig.RETENTION_BYTES_CONFIG, LONG, ServerLogConfigs.LOG_RETENTION_BYTES_DEFAULT, MEDIUM, TopicConfig.RETENTION_BYTES_DOC)
             // can be negative. See kafka.log.LogManager.cleanupExpiredSegments
-            .define(TopicConfig.RETENTION_MS_CONFIG, LONG, DEFAULT_RETENTION_MS, atLeast(-1), MEDIUM,
+            .define(TopicConfig.RETENTION_MS_CONFIG, LONG, RETENTION_MS_DEFAULT, atLeast(-1), MEDIUM,
                 TopicConfig.RETENTION_MS_DOC)
-            .define(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, INT, DEFAULT_MAX_MESSAGE_BYTES, atLeast(0), MEDIUM,
+            .define(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, INT, MAX_MESSAGE_BYTES_DEFAULT, atLeast(0), MEDIUM,
                 TopicConfig.MAX_MESSAGE_BYTES_DOC)
             .define(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, INT, ServerLogConfigs.LOG_INDEX_INTERVAL_BYTES_DEFAULT, atLeast(0), MEDIUM,
                 TopicConfig.INDEX_INTERVAL_BYTES_DOC)
-            .define(TopicConfig.DELETE_RETENTION_MS_CONFIG, LONG, DEFAULT_DELETE_RETENTION_MS, atLeast(0), MEDIUM,
+            .define(TopicConfig.DELETE_RETENTION_MS_CONFIG, LONG, DELETE_RETENTION_MS_DEFAULT, atLeast(0), MEDIUM,
                 TopicConfig.DELETE_RETENTION_MS_DOC)
-            .define(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, LONG, DEFAULT_MIN_COMPACTION_LAG_MS, atLeast(0), MEDIUM,
+            .define(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, LONG, MIN_COMPACTION_LAG_MS_DEFAULT, atLeast(0), MEDIUM,
                 TopicConfig.MIN_COMPACTION_LAG_MS_DOC)
-            .define(TopicConfig.MAX_COMPACTION_LAG_MS_CONFIG, LONG, DEFAULT_MAX_COMPACTION_LAG_MS, atLeast(1), MEDIUM,
+            .define(TopicConfig.MAX_COMPACTION_LAG_MS_CONFIG, LONG, MAX_COMPACTION_LAG_MS_DEFAULT, atLeast(1), MEDIUM,
                 TopicConfig.MAX_COMPACTION_LAG_MS_DOC)
             .define(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, LONG, ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT, atLeast(0), MEDIUM,
                 TopicConfig.FILE_DELETE_DELAY_MS_DOC)
-            .define(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, DOUBLE, DEFAULT_MIN_CLEANABLE_DIRTY_RATIO, between(0, 1), MEDIUM,
+            .define(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, DOUBLE, MIN_CLEANABLE_DIRTY_RATIO_DEFAULT, between(0, 1), MEDIUM,
                 TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_DOC)
             .define(TopicConfig.CLEANUP_POLICY_CONFIG, LIST, ServerLogConfigs.LOG_CLEANUP_POLICY_DEFAULT, ValidList.in(TopicConfig.CLEANUP_POLICY_COMPACT,
                 TopicConfig.CLEANUP_POLICY_DELETE), MEDIUM, TopicConfig.CLEANUP_POLICY_DOC)
-            .define(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, BOOLEAN, DEFAULT_UNCLEAN_LEADER_ELECTION_ENABLE,
+            .define(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, BOOLEAN, UNCLEAN_LEADER_ELECTION_ENABLE_DEFAULT,
                 MEDIUM, TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_DOC)
             .define(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, INT, ServerLogConfigs.MIN_IN_SYNC_REPLICAS_DEFAULT, atLeast(1), MEDIUM,
                 TopicConfig.MIN_IN_SYNC_REPLICAS_DOC)
-            .define(TopicConfig.COMPRESSION_TYPE_CONFIG, STRING, DEFAULT_COMPRESSION_TYPE, in(BrokerCompressionType.names().toArray(new String[0])),
+            .define(TopicConfig.COMPRESSION_TYPE_CONFIG, STRING, COMPRESSION_TYPE_DEFAULT, in(BrokerCompressionType.names().toArray(new String[0])),
                 MEDIUM, TopicConfig.COMPRESSION_TYPE_DOC)
             .define(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG, INT, GzipCompression.DEFAULT_LEVEL,
                 new GzipCompression.LevelValidator(), MEDIUM, TopicConfig.COMPRESSION_GZIP_LEVEL_DOC)
@@ -252,12 +252,12 @@ public class LogConfig extends AbstractConfig {
                 between(Lz4Compression.MIN_LEVEL, Lz4Compression.MAX_LEVEL), MEDIUM, TopicConfig.COMPRESSION_LZ4_LEVEL_DOC)
             .define(TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG, INT, ZstdCompression.DEFAULT_LEVEL,
                 between(ZstdCompression.MIN_LEVEL, ZstdCompression.MAX_LEVEL), MEDIUM, TopicConfig.COMPRESSION_ZSTD_LEVEL_DOC)
-            .define(TopicConfig.PREALLOCATE_CONFIG, BOOLEAN, DEFAULT_PREALLOCATE, MEDIUM, TopicConfig.PREALLOCATE_DOC)
-            .define(MESSAGE_FORMAT_VERSION_CONFIG, STRING, DEFAULT_MESSAGE_FORMAT_VERSION, new MetadataVersionValidator(), MEDIUM,
+            .define(TopicConfig.PREALLOCATE_CONFIG, BOOLEAN, PREALLOCATE_DEFAULT, MEDIUM, TopicConfig.PREALLOCATE_DOC)
+            .define(MESSAGE_FORMAT_VERSION_CONFIG, STRING, MESSAGE_FORMAT_VERSION_DEFAULT, new MetadataVersionValidator(), MEDIUM,
                 MESSAGE_FORMAT_VERSION_DOC)
             .define(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, STRING, ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_TYPE_DEFAULT,
                 in("CreateTime", "LogAppendTime"), MEDIUM, TopicConfig.MESSAGE_TIMESTAMP_TYPE_DOC)
-            .define(MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, LONG, DEFAULT_MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS,
+            .define(MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG, LONG, MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_DEFAULT,
                 atLeast(0), MEDIUM, MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_DOC)
             .define(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG, LONG, ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_BEFORE_MAX_MS_DEFAULT,
                 atLeast(0), MEDIUM, TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_DOC)
@@ -269,11 +269,11 @@ public class LogConfig extends AbstractConfig {
                 ThrottledReplicaListValidator.INSTANCE, MEDIUM, QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_DOC)
             .define(TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG, BOOLEAN, ServerLogConfigs.LOG_MESSAGE_DOWNCONVERSION_ENABLE_DEFAULT, LOW,
                 TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_DOC)
-            .define(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, BOOLEAN, DEFAULT_REMOTE_STORAGE_ENABLE, null,
+            .define(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, BOOLEAN, REMOTE_STORAGE_ENABLE_DEFAULT, null,
                 MEDIUM, TopicConfig.REMOTE_LOG_STORAGE_ENABLE_DOC)
-            .define(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, LONG, DEFAULT_LOCAL_RETENTION_MS, atLeast(-2), MEDIUM,
+            .define(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, LONG, LOCAL_RETENTION_MS_DEFAULT, atLeast(-2), MEDIUM,
                 TopicConfig.LOCAL_LOG_RETENTION_MS_DOC)
-            .define(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, LONG, DEFAULT_LOCAL_RETENTION_BYTES, atLeast(-2), MEDIUM,
+            .define(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, LONG, LOCAL_RETENTION_BYTES_DEFAULT, atLeast(-2), MEDIUM,
                 TopicConfig.LOCAL_LOG_RETENTION_BYTES_DOC);
     }
 
@@ -456,11 +456,11 @@ public class LogConfig extends AbstractConfig {
     }
 
     public long localRetentionMs() {
-        return remoteLogConfig.localRetentionMs == LogConfig.DEFAULT_LOCAL_RETENTION_MS ? retentionMs : remoteLogConfig.localRetentionMs;
+        return remoteLogConfig.localRetentionMs == LogConfig.LOCAL_RETENTION_MS_DEFAULT ? retentionMs : remoteLogConfig.localRetentionMs;
     }
 
     public long localRetentionBytes() {
-        return remoteLogConfig.localRetentionBytes == LogConfig.DEFAULT_LOCAL_RETENTION_BYTES ? retentionSize : remoteLogConfig.localRetentionBytes;
+        return remoteLogConfig.localRetentionBytes == LogConfig.LOCAL_RETENTION_BYTES_DEFAULT ? retentionSize : remoteLogConfig.localRetentionBytes;
     }
 
     public String overriddenConfigsAsLoggableString() {

@@ -319,19 +319,19 @@ class ControllerApisTest {
           setResourceName("1").
           setResourceType(ConfigResource.Type.BROKER.id()).
           setConfigs(new OldAlterableConfigCollection(util.Arrays.asList(new OldAlterableConfig().
-            setName(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP).
+            setName(CleanerConfig.LOG_CLEANER_BACKOFF_MS_CONFIG).
             setValue("100000")).iterator())),
         new OldAlterConfigsResource().
           setResourceName("2").
           setResourceType(ConfigResource.Type.BROKER.id()).
           setConfigs(new OldAlterableConfigCollection(util.Arrays.asList(new OldAlterableConfig().
-            setName(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP).
+            setName(CleanerConfig.LOG_CLEANER_BACKOFF_MS_CONFIG).
             setValue("100000")).iterator())),
         new OldAlterConfigsResource().
           setResourceName("2").
           setResourceType(ConfigResource.Type.BROKER.id()).
           setConfigs(new OldAlterableConfigCollection(util.Arrays.asList(new OldAlterableConfig().
-            setName(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP).
+            setName(CleanerConfig.LOG_CLEANER_BACKOFF_MS_CONFIG).
             setValue("100000")).iterator())),
         new OldAlterConfigsResource().
           setResourceName("baz").
@@ -473,7 +473,7 @@ class ControllerApisTest {
           setResourceName("1").
           setResourceType(ConfigResource.Type.BROKER.id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
-            setName(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP).
+            setName(CleanerConfig.LOG_CLEANER_BACKOFF_MS_CONFIG).
             setValue("100000").
             setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
         new AlterConfigsResource().
@@ -537,14 +537,14 @@ class ControllerApisTest {
           setResourceName("3").
           setResourceType(ConfigResource.Type.BROKER.id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
-            setName(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP).
+            setName(CleanerConfig.LOG_CLEANER_BACKOFF_MS_CONFIG).
             setValue("100000").
             setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
         new AlterConfigsResource().
           setResourceName("3").
           setResourceType(ConfigResource.Type.BROKER.id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
-            setName(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP).
+            setName(CleanerConfig.LOG_CLEANER_BACKOFF_MS_CONFIG).
             setValue("100000").
             setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
         new AlterConfigsResource().

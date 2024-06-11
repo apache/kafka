@@ -440,7 +440,7 @@ class BrokerServer(
                 ListenerName.normalised(e.listenerName().get()).equals(ListenerName.normalised(listenerName))
             )
             .findFirst()
-            .orElseThrow(() => new ConfigException(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP,
+            .orElseThrow(() => new ConfigException(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_CONFIG,
               listenerName, "Should be set as a listener name within valid broker listener name list: " + listenerInfo.listeners().values()))
           rlm.onEndPointCreated(EndPoint.fromJava(endpoint))
         }

@@ -218,7 +218,7 @@ class DynamicBrokerConfigTest {
     verifyConfigUpdateWithInvalidConfig(config, origProps, validProps, nonDynamicProps)
 
     // Test update of configs with invalid type
-    val invalidProps = Map(CleanerConfig.LOG_CLEANER_THREADS_PROP -> "invalid")
+    val invalidProps = Map(CleanerConfig.LOG_CLEANER_THREADS_CONFIG -> "invalid")
     verifyConfigUpdateWithInvalidConfig(config, origProps, validProps, invalidProps)
 
     val excludedTopicConfig = Map(ServerLogConfigs.LOG_MESSAGE_FORMAT_VERSION_CONFIG -> "0.10.2")
@@ -228,21 +228,21 @@ class DynamicBrokerConfigTest {
   @Test
   def testConfigUpdateWithReconfigurableValidationFailure(): Unit = {
     val origProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
-    origProps.put(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, "100000000")
+    origProps.put(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_CONFIG, "100000000")
     val config = KafkaConfig(origProps)
     config.dynamicConfig.initialize(None, None)
 
     val validProps = Map.empty[String, String]
-    val invalidProps = Map(CleanerConfig.LOG_CLEANER_THREADS_PROP -> "20")
+    val invalidProps = Map(CleanerConfig.LOG_CLEANER_THREADS_CONFIG -> "20")
 
     def validateLogCleanerConfig(configs: util.Map[String, _]): Unit = {
-      val cleanerThreads = configs.get(CleanerConfig.LOG_CLEANER_THREADS_PROP).toString.toInt
+      val cleanerThreads = configs.get(CleanerConfig.LOG_CLEANER_THREADS_CONFIG).toString.toInt
       if (cleanerThreads <=0 || cleanerThreads >= 5)
         throw new ConfigException(s"Invalid cleaner threads $cleanerThreads")
     }
     val reconfigurable = new Reconfigurable {
       override def configure(configs: util.Map[String, _]): Unit = {}
-      override def reconfigurableConfigs(): util.Set[String] = Set(CleanerConfig.LOG_CLEANER_THREADS_PROP).asJava
+      override def reconfigurableConfigs(): util.Set[String] = Set(CleanerConfig.LOG_CLEANER_THREADS_CONFIG).asJava
       override def validateReconfiguration(configs: util.Map[String, _]): Unit = validateLogCleanerConfig(configs)
       override def reconfigure(configs: util.Map[String, _]): Unit = {}
     }
@@ -251,7 +251,7 @@ class DynamicBrokerConfigTest {
     config.dynamicConfig.removeReconfigurable(reconfigurable)
 
     val brokerReconfigurable = new BrokerReconfigurable {
-      override def reconfigurableConfigs: collection.Set[String] = Set(CleanerConfig.LOG_CLEANER_THREADS_PROP)
+      override def reconfigurableConfigs: collection.Set[String] = Set(CleanerConfig.LOG_CLEANER_THREADS_CONFIG)
       override def validateReconfiguration(newConfig: KafkaConfig): Unit = validateLogCleanerConfig(newConfig.originals)
       override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {}
     }
@@ -263,8 +263,8 @@ class DynamicBrokerConfigTest {
   def testReconfigurableValidation(): Unit = {
     val origProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     val config = KafkaConfig(origProps)
-    val invalidReconfigurableProps = Set(CleanerConfig.LOG_CLEANER_THREADS_PROP, ServerConfigs.BROKER_ID_CONFIG, "some.prop")
-    val validReconfigurableProps = Set(CleanerConfig.LOG_CLEANER_THREADS_PROP, CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, "some.prop")
+    val invalidReconfigurableProps = Set(CleanerConfig.LOG_CLEANER_THREADS_CONFIG, ServerConfigs.BROKER_ID_CONFIG, "some.prop")
+    val validReconfigurableProps = Set(CleanerConfig.LOG_CLEANER_THREADS_CONFIG, CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_CONFIG, "some.prop")
 
     def createReconfigurable(configs: Set[String]) = new Reconfigurable {
       override def configure(configs: util.Map[String, _]): Unit = {}
@@ -635,7 +635,7 @@ class DynamicBrokerConfigTest {
     config.dynamicConfig.initialize(None, None)
 
     assertEquals(SocketServerConfigs.MAX_CONNECTIONS_DEFAULT, config.maxConnections)
-    assertEquals(LogConfig.DEFAULT_MAX_MESSAGE_BYTES, config.messageMaxBytes)
+    assertEquals(LogConfig.MAX_MESSAGE_BYTES_DEFAULT, config.messageMaxBytes)
 
     var newProps = new Properties()
     newProps.put(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, "9999")
@@ -730,7 +730,7 @@ class DynamicBrokerConfigTest {
     config.dynamicConfig.addBrokerReconfigurable(dynamicLogConfig)
 
     val newProps = new Properties()
-    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, "2160000000")
+    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_CONFIG, "2160000000")
     // update default config
     config.dynamicConfig.validate(newProps, perBrokerConfig = false)
     config.dynamicConfig.updateDefaultConfig(newProps)
@@ -738,7 +738,7 @@ class DynamicBrokerConfigTest {
 
     // update per broker config
     config.dynamicConfig.validate(newProps, perBrokerConfig = true)
-    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, "2150000000")
+    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_CONFIG, "2150000000")
     config.dynamicConfig.updateBrokerConfig(0, newProps)
     assertEquals(2150000000L, config.logLocalRetentionMs)
   }
@@ -753,7 +753,7 @@ class DynamicBrokerConfigTest {
     config.dynamicConfig.addBrokerReconfigurable(dynamicLogConfig)
 
     val newProps = new Properties()
-    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, "4294967295")
+    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_CONFIG, "4294967295")
     // update default config
     config.dynamicConfig.validate(newProps, perBrokerConfig = false)
     config.dynamicConfig.updateDefaultConfig(newProps)
@@ -761,7 +761,7 @@ class DynamicBrokerConfigTest {
 
     // update per broker config
     config.dynamicConfig.validate(newProps, perBrokerConfig = true)
-    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, "4294967294")
+    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_CONFIG, "4294967294")
     config.dynamicConfig.updateBrokerConfig(0, newProps)
     assertEquals(4294967294L, config.logLocalRetentionBytes)
   }
@@ -769,15 +769,15 @@ class DynamicBrokerConfigTest {
   @Test
   def testDynamicLogLocalRetentionSkipsOnInvalidConfig(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
-    props.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, "1000")
-    props.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, "1024")
+    props.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_CONFIG, "1000")
+    props.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_CONFIG, "1024")
     val config = KafkaConfig(props)
     config.dynamicConfig.initialize(None, None)
 
     // Check for invalid localRetentionMs < -2
-    verifyConfigUpdateWithInvalidConfig(config, props, Map.empty, Map(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP -> "-3"))
+    verifyConfigUpdateWithInvalidConfig(config, props, Map.empty, Map(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_CONFIG -> "-3"))
     // Check for invalid localRetentionBytes < -2
-    verifyConfigUpdateWithInvalidConfig(config, props, Map.empty, Map(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP -> "-3"))
+    verifyConfigUpdateWithInvalidConfig(config, props, Map.empty, Map(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_CONFIG -> "-3"))
   }
 
   @Test
@@ -805,21 +805,21 @@ class DynamicBrokerConfigTest {
     config.dynamicConfig.addBrokerReconfigurable(dynamicRemoteLogConfig)
 
     val newProps = new Properties()
-    newProps.put(RemoteLogManagerConfig.REMOTE_FETCH_MAX_WAIT_MS_PROP, "30000")
+    newProps.put(RemoteLogManagerConfig.REMOTE_FETCH_MAX_WAIT_MS_CONFIG, "30000")
     // update default config
     config.dynamicConfig.validate(newProps, perBrokerConfig = false)
     config.dynamicConfig.updateDefaultConfig(newProps)
     assertEquals(30000, config.remoteFetchMaxWaitMs)
 
     // update per broker config
-    newProps.put(RemoteLogManagerConfig.REMOTE_FETCH_MAX_WAIT_MS_PROP, "10000")
+    newProps.put(RemoteLogManagerConfig.REMOTE_FETCH_MAX_WAIT_MS_CONFIG, "10000")
     config.dynamicConfig.validate(newProps, perBrokerConfig = true)
     config.dynamicConfig.updateBrokerConfig(0, newProps)
     assertEquals(10000, config.remoteFetchMaxWaitMs)
 
     // invalid values
     for (maxWaitMs <- Seq(-1, 0)) {
-      newProps.put(RemoteLogManagerConfig.REMOTE_FETCH_MAX_WAIT_MS_PROP, maxWaitMs.toString)
+      newProps.put(RemoteLogManagerConfig.REMOTE_FETCH_MAX_WAIT_MS_CONFIG, maxWaitMs.toString)
       assertThrows(classOf[ConfigException], () => config.dynamicConfig.validate(newProps, perBrokerConfig = true))
       assertThrows(classOf[ConfigException], () => config.dynamicConfig.validate(newProps, perBrokerConfig = false))
     }
@@ -828,7 +828,7 @@ class DynamicBrokerConfigTest {
   @Test
   def testUpdateDynamicRemoteLogManagerConfig(): Unit = {
     val origProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
-    origProps.put(RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP, "2")
+    origProps.put(RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_CONFIG, "2")
 
     val config = KafkaConfig(origProps)
     val serverMock = Mockito.mock(classOf[KafkaBroker])
@@ -842,9 +842,9 @@ class DynamicBrokerConfigTest {
 
     val props = new Properties()
 
-    props.put(RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP, "4")
+    props.put(RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_CONFIG, "4")
     config.dynamicConfig.updateDefaultConfig(props)
-    assertEquals(4L, config.getLong(RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP))
+    assertEquals(4L, config.getLong(RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_CONFIG))
     Mockito.verify(remoteLogManagerMockOpt.get).resizeCacheSize(4)
 
     Mockito.verifyNoMoreInteractions(remoteLogManagerMockOpt.get)
@@ -863,8 +863,8 @@ class DynamicBrokerConfigTest {
     config.dynamicConfig.addBrokerReconfigurable(dynamicLogConfig)
 
     val newProps = new Properties()
-    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, logLocalRetentionMs.toString)
-    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, logLocalRetentionBytes.toString)
+    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_CONFIG, logLocalRetentionMs.toString)
+    newProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_CONFIG, logLocalRetentionBytes.toString)
     // validate default config
     assertThrows(classOf[ConfigException], () =>  config.dynamicConfig.validate(newProps, perBrokerConfig = false))
     // validate per broker config

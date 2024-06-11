@@ -31,9 +31,9 @@ class ListOffsetsRequestWithRemoteStoreTest extends ListOffsetsRequestTest {
   }
 
   override def brokerPropertyOverrides(props: Properties): Unit = {
-    props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true")
-    props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, classOf[NoOpRemoteStorageManager].getName)
-    props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, classOf[NoOpRemoteLogMetadataManager].getName)
+    props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_CONFIG, "true")
+    props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_CONFIG, classOf[NoOpRemoteStorageManager].getName)
+    props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_CONFIG, classOf[NoOpRemoteLogMetadataManager].getName)
   }
 
   override def createTopic(numPartitions: Int, replicationFactor: Int): Map[Int, Int] = {
