@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.consumer.CommitFailedException;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
@@ -47,6 +48,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.slf4j.Logger;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -158,7 +160,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         this.memberInfo = new MemberInfo();
         this.metricsManager = new OffsetCommitMetricsManager(metrics);
         this.offsetCommitCallbackInvoker = offsetCommitCallbackInvoker;
-        this.offsetFetchResultCache = new OffsetFetchResultCache(logContext);
+        this.offsetFetchResultCache = new OffsetFetchResultCache();
     }
 
     /**
@@ -1131,7 +1133,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          * upon completion.
          */
         private CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> addOffsetFetchRequest(final OffsetFetchRequestState request) {
-            if (offsetFetchResultCache.maybeComplete(request))
+            if (offsetFetchResultCache.maybeCompleteRequest(request))
                 return request.future;
 
             Optional<OffsetFetchRequestState> dupe =
@@ -1287,46 +1289,71 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
     }
 
+    /**
+     * As the name suggests, this caches the result of an {@link OffsetFetchRequestState offset fetch request}
+     * <em>in specific cases</em>. The logic resembles that of {@link ConsumerCoordinator}'s
+     * <code>PendingCommittedOffsetRequest</code> mechanism.
+     *
+     * <p/>
+     *
+     * This handles the case where a user calls {@link Consumer#poll(Duration)} with a low timeout value, such as 0.
+     * As the timeout value approaches zero, the likelihood that the client will be able to fetch the offsets from the
+     * broker within the user's timeout also decreases. But we can take advantage of the fact that {@code poll()}
+     * is typically invoked in a tight loop, so the user's application will likely call {@code poll()} again to make
+     * a second attempt with the same set of {@link TopicPartition}s as the first attempt.
+     *
+     * <p/>
+     *
+     * The idea here is to cache the results of the last successful--but expired--response. An operation may exceed
+     * the time the user allotted, but that doesn't mean that the network request is aborted. In this scenario, it is
+     * often the case that the client receives a successful response, though it has technically exceeded the amount
+     * of time the user specified. However, as mentioned above, {@code poll()} is likely to be invoked again with the
+     * same set of partitions. By caching the successful response from attempt #1--though it timed out from the user's
+     * perspective--the client is able to satisfy attempt #2 from the cache.
+     *
+     * <p/>
+     *
+     * The cached results are only used if the set of {@link TopicPartition}s and the client's member ID and epoch
+     * for attempt #2 matches that of attempt #1.
+     */
     class OffsetFetchResultCache {
 
-        private final Logger log;
-        private final AtomicReference<OffsetFetchResultDetail> cache;
+        private final AtomicReference<OffsetFetchResultDetail> cache = new AtomicReference<>();
 
-        public OffsetFetchResultCache(final LogContext logContext) {
-            this.log = logContext.logger(OffsetFetchResultCache.class);
-            this.cache = new AtomicReference<>();
-        }
-
+        /**
+         * Iff the {@link OffsetFetchRequestState#isExpired() request timed out} <em>and</em> the request was
+         * successful, we write the result into the cache using the partition set from the request as the 'key.'
+         * Otherwise, we clear the existing cached value because the current result does not need to be cached, and
+         * thus there's no need for any previous cached value, either.
+         */
         void maybeCache(final OffsetFetchRequestState request, final Map<TopicPartition, OffsetAndMetadata> result) {
             if (request.isExpired() && result != null) {
                 OffsetFetchResultDetail newValue = new OffsetFetchResultDetail(request.requestedPartitions, result);
                 log.debug("A new offset fetch result was cached: {}", newValue);
-                cache.getAndSet(newValue);
+                cache.set(newValue);
             } else {
-                OffsetFetchResultDetail oldValue = cache.getAndSet(null);
-
-                if (oldValue != null)
-                    log.debug("The old cached offset fetch result was cleared: {}", oldValue);
+                cache.set(null);
             }
         }
 
-        boolean maybeComplete(final OffsetFetchRequestState request) {
+        /**
+         * If there's a cached value present that matches the same partitions of the previous request,
+         * {@link CompletableFuture#complete(Object) complete the Future}. In either case, we clear out the
+         * cache reference as it's either been used, or is now irrelevant.
+         */
+        boolean maybeCompleteRequest(final OffsetFetchRequestState request) {
             OffsetFetchResultDetail oldValue = cache.getAndSet(null);
 
             if (oldValue != null) {
-                boolean sameRequest = Objects.equals(oldValue.partitions, request.requestedPartitions) &&
-                        Objects.equals(oldValue.memberId, memberInfo.memberId) &&
-                        Objects.equals(oldValue.memberEpoch, memberInfo.memberEpoch);
-
-                if (sameRequest) {
-                    log.debug("The cached offset fetch response matches the requested partitions ({})", oldValue.partitions);
+                if (oldValue.sameRequest(request.requestedPartitions)) {
+                    log.debug("The cached offset fetch response matches the requested partitions ({})", request.requestedPartitions);
                     request.future.complete(oldValue.result);
                     return true;
                 } else {
                     log.debug(
-                            "The requested partitions ({}) do not match the cached offset fetch response's partitions ({}); ignoring cached results",
-                            request.requestedPartitions,
-                            oldValue.partitions
+                        "The requested partitions ({}) do not match the cached offset fetch response's partitions ({}); ignoring cached results",
+                        request.requestedPartitions,
+                        oldValue.requestedPartitions
                     );
                     return false;
                 }
@@ -1336,6 +1363,10 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             }
         }
 
+        /**
+         * Retrieves the internal value of the cache. This is intended for testing, but given that the
+         * {@link OffsetFetchResultDetail} is immutable, it shouldn't hurt to allow access to this.
+         */
         OffsetFetchResultDetail get() {
             return cache.get();
         }
@@ -1343,25 +1374,31 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
     class OffsetFetchResultDetail {
 
-        final Set<TopicPartition> partitions;
-        final Optional<String> memberId;
-        final Optional<Integer> memberEpoch;
+        final Set<TopicPartition> requestedPartitions;
+        final Optional<String> requestedMemberId;
+        final Optional<Integer> requestedMemberEpoch;
         final Map<TopicPartition, OffsetAndMetadata> result;
 
-        public OffsetFetchResultDetail(final Set<TopicPartition> partitions,
-                                       final Map<TopicPartition, OffsetAndMetadata> result) {
-            this.partitions = Collections.unmodifiableSet(partitions);
-            this.memberId = memberInfo.memberId;
-            this.memberEpoch = memberInfo.memberEpoch;
+        OffsetFetchResultDetail(final Set<TopicPartition> partitions,
+                                final Map<TopicPartition, OffsetAndMetadata> result) {
+            this.requestedPartitions = Collections.unmodifiableSet(partitions);
+            this.requestedMemberId = memberInfo.memberId;
+            this.requestedMemberEpoch = memberInfo.memberEpoch;
             this.result = Collections.unmodifiableMap(result);
+        }
+
+        boolean sameRequest(final Set<TopicPartition> currentPartitions) {
+            return Objects.equals(requestedPartitions, currentPartitions) &&
+                Objects.equals(requestedMemberId, memberInfo.memberId) &&
+                Objects.equals(requestedMemberEpoch, memberInfo.memberEpoch);
         }
 
         @Override
         public String toString() {
             return "OffsetFetchResultDetail{" +
-                    "partitions=" + partitions +
-                    ", memberId=" + memberId +
-                    ", memberEpoch=" + memberEpoch +
+                    "requestedPartitions=" + requestedPartitions +
+                    ", requestedMemberId=" + requestedMemberId +
+                    ", requestedMemberEpoch=" + requestedMemberEpoch +
                     ", result=" + result +
                     '}';
         }
