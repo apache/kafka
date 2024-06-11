@@ -703,7 +703,7 @@ public class NetworkClientTest {
     public void testLeastLoadedNode() {
         client.ready(node, time.milliseconds());
         assertFalse(client.isReady(node, time.milliseconds()));
-        assertEquals(node, client.leastLoadedNode(time.milliseconds()));
+        assertEquals(node, client.leastLoadedNode(time.milliseconds()).node());
 
         awaitReady(client, node);
         client.poll(1, time.milliseconds());
@@ -805,7 +805,7 @@ public class NetworkClientTest {
         client.poll(1, time.milliseconds());
 
         // leastloadednode should return null since the node is throttled
-        assertNull(client.leastLoadedNode(time.milliseconds()));
+        assertNull(client.leastLoadedNode(time.milliseconds()).node());
     }
 
     @Test

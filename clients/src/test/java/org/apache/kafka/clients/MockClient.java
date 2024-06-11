@@ -594,7 +594,7 @@ public class MockClient implements KafkaClient {
             if (!connectionState(node.idString()).isBackingOff(now))
                 return new LeastLoadedNode(node, true);
         }
-        return null;
+        return new LeastLoadedNode(null, false);
     }
 
     public void setWakeupHook(Runnable wakeupHook) {
