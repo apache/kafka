@@ -175,6 +175,7 @@ public class SenderTest {
     @BeforeEach
     public void setup() {
         setupWithTransactionState(null);
+        apiVersions.update("0", NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 0, (short) 12));
     }
 
     @AfterEach
@@ -582,8 +583,11 @@ public class SenderTest {
                 new BufferPool(totalSize, batchSize, m, time, "producer-internal-metrics"));
 
             SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
+            ApiVersions apiVersions1 = new ApiVersions();
+            apiVersions1.update("0", NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 0, (short) 12));
+
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL, 1,
-                senderMetrics, time, REQUEST_TIMEOUT, 1000L, null, new ApiVersions());
+                senderMetrics, time, REQUEST_TIMEOUT, 1000L, null, apiVersions1);
 
             // Produce and send batch.
             long time1 = time.milliseconds();
@@ -2407,6 +2411,7 @@ public class SenderTest {
 
         txnManager.beginTransaction();
         txnManager.maybeAddPartition(tp);
+        apiVersions.update("0", NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 0, (short) 12));
         client.prepareResponse(buildAddPartitionsToTxnResponseData(0, Collections.singletonMap(tp, Errors.NONE)));
         sender.runOnce();
 
@@ -2424,16 +2429,21 @@ public class SenderTest {
         String metricGrpName = "producer-metrics";
         // Set a good compression ratio.
         CompressionRatioEstimator.setEstimation(topic, CompressionType.GZIP, 0.2f);
+        ApiVersions apiVersions = new ApiVersions();
         try (Metrics m = new Metrics()) {
             accumulator = new RecordAccumulator(logContext, batchSize, Compression.gzip().build(),
-                0, 0L, 0L, deliveryTimeoutMs, m, metricGrpName, time, new ApiVersions(), txnManager,
+                0, 0L, 0L, deliveryTimeoutMs, m, metricGrpName, time, apiVersions, txnManager,
                 new BufferPool(totalSize, batchSize, metrics, time, "producer-internal-metrics"));
             SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
-                    senderMetrics, time, REQUEST_TIMEOUT, 1000L, txnManager, new ApiVersions());
+                    senderMetrics, time, REQUEST_TIMEOUT, 1000L, txnManager, apiVersions);
             // Create a two broker cluster, with partition 0 on broker 0 and partition 1 on broker 1
             MetadataResponse metadataUpdate1 = RequestTestUtils.metadataUpdateWith(2, Collections.singletonMap(topic, 2));
             client.prepareMetadataUpdate(metadataUpdate1);
+            metadataUpdate1.brokers().stream().forEach(node ->
+                    apiVersions.update(node.idString(), NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 0, (short) 12))
+            );
+
             // Send the first message.
             long nowMs = time.milliseconds();
             Cluster cluster = TestUtils.singletonCluster();
@@ -3426,6 +3436,9 @@ public class SenderTest {
                         }
                     }));
             Cluster startingMetadataCluster = metadata.fetch();
+            startingMetadataCluster.nodes().forEach(node ->
+                    apiVersions.update(node.idString(), NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 0, (short) 12))
+            );
 
             // Produce to tp0/1/2, where NO_LEADER_OR_FOLLOWER with new leader info is returned for tp0/1, and tp2 is returned without errors.
             Future<RecordMetadata> futureIsProducedTp0 = appendToAccumulator(tp0, 0L, "key", "value");
@@ -3446,7 +3459,9 @@ public class SenderTest {
             responses.put(tp0, new OffsetAndError(-1, Errors.NOT_LEADER_OR_FOLLOWER));
             responses.put(tp1, new OffsetAndError(-1, Errors.NOT_LEADER_OR_FOLLOWER));
             responses.put(tp2, new OffsetAndError(100, Errors.NONE));
-
+            newNodes.forEach(node ->
+                    apiVersions.update(node.idString(), NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 0, (short) 12))
+            );
             Map<TopicPartition, ProduceResponseData.LeaderIdAndEpoch> partitionLeaderInfo = new HashMap<>();
             ProduceResponseData.LeaderIdAndEpoch tp0LeaderInfo = new ProduceResponseData.LeaderIdAndEpoch();
             tp0LeaderInfo.setLeaderEpoch(tp0LeaderEpoch + 1);
