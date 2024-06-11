@@ -685,6 +685,7 @@ public class MembershipManagerImpl implements MembershipManager {
                     "group heartbeat", memberId);
             }
             // Clear the subscription, no matter if the callback execution failed or succeeded.
+            subscriptions.unsubscribe();
             clearSubscription();
 
             // Transition to ensure that a heartbeat request is sent out to effectively leave the
