@@ -770,6 +770,7 @@ public class MembershipManagerImplTest {
         verify(subscriptionState).assignFromSubscribed(topicPartitions(topic2Assignment, topic2Metadata));
     }
 
+    // TODO
     /**
      * This is the case where a member is stuck reconciling an assignment A (waiting on metadata, commit or callbacks), and the target
      * assignment changes due to a new assignment received from broker. If the reconciliation of A completes it should be applied (should
@@ -920,6 +921,7 @@ public class MembershipManagerImplTest {
             "heartbeat request to leave is sent out.");
     }
 
+    // TODO
     @ParameterizedTest
     @MethodSource("notInGroupStates")
     public void testIgnoreHeartbeatResponseWhenNotInGroup(MemberState state) {
@@ -1794,6 +1796,7 @@ public class MembershipManagerImplTest {
         assertEquals(0, listener.lostCount());
     }
 
+    // TODO
     @Test
     public void testAddedPartitionsTemporarilyDisabledAwaitingOnPartitionsAssignedCallback() {
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
