@@ -32,23 +32,20 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
-import org.junit.rules.Timeout;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
 
-import java.util.Arrays;
-import java.util.Collection;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.function.Function;
+import java.util.stream.Stream;
 
 import static java.util.Collections.emptyMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -57,48 +54,33 @@ import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
-
-@RunWith(Parameterized.class)
-@Category(IntegrationTest.class)
+@Tag("integration")
+@Timeout(600)
 public class KTableKTableForeignKeyJoinMaterializationIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
     private static final String LEFT_TABLE = "left_table";
     private static final String RIGHT_TABLE = "right_table";
     private static final String OUTPUT = "output-topic";
-    private final boolean materialized;
-    private final boolean queryable;
 
     private Properties streamsConfig;
 
-    public KTableKTableForeignKeyJoinMaterializationIntegrationTest(final boolean materialized, final boolean queryable) {
-        this.materialized = materialized;
-        this.queryable = queryable;
-    }
-
-    @Rule
-    public TestName testName = new TestName();
-
-    @Before
+    @BeforeEach
     public void before() {
         streamsConfig = mkProperties(mkMap(
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
         ));
     }
 
-
-    @Parameterized.Parameters(name = "materialized={0}, queryable={1}")
-    public static Collection<Object[]> data() {
-        return Arrays.asList(
-            new Object[] {false, false},
-            new Object[] {true, false},
-            new Object[] {true, true}
-        );
+    public static Stream<Arguments> data() {
+        return Stream.of(
+                Arguments.of(false, false),
+                Arguments.of(true, false),
+                Arguments.of(true, true));
     }
 
-    @Test
-    public void shouldEmitTombstoneWhenDeletingNonJoiningRecords() {
-        final Topology topology = getTopology(streamsConfig, "store");
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldEmitTombstoneWhenDeletingNonJoiningRecords(final boolean materialized, final boolean queryable) {
+        final Topology topology = getTopology(streamsConfig, "store", materialized, queryable);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
             final TestInputTopic<String, String> left = driver.createInputTopic(LEFT_TABLE, new StringSerializer(), new StringSerializer());
             final TestOutputTopic<String, String> outputTopic = driver.createOutputTopic(OUTPUT, new StringDeserializer(), new StringDeserializer());
@@ -167,7 +149,9 @@ public class KTableKTableForeignKeyJoinMaterializationIntegrationTest {
     }
 
     private Topology getTopology(final Properties streamsConfig,
-                                 final String queryableStoreName) {
+                                 final String queryableStoreName,
+                                 final boolean materialized,
+                                 final boolean queryable) {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KTable<String, String> left = builder.table(LEFT_TABLE, Consumed.with(Serdes.String(), Serdes.String()));
@@ -176,20 +160,20 @@ public class KTableKTableForeignKeyJoinMaterializationIntegrationTest {
         final Function<String, String> extractor = value -> value.split("\\|")[1];
         final ValueJoiner<String, String, String> joiner = (value1, value2) -> "(" + value1 + "," + value2 + ")";
 
-        final Materialized<String, String, KeyValueStore<Bytes, byte[]>> materialized;
+        final Materialized<String, String, KeyValueStore<Bytes, byte[]>> materializedStore;
         if (queryable) {
-            materialized = Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(queryableStoreName).withValueSerde(Serdes.String());
+            materializedStore = Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(queryableStoreName).withValueSerde(Serdes.String());
         } else {
-            materialized = Materialized.with(null, Serdes.String());
+            materializedStore = Materialized.with(null, Serdes.String());
         }
 
         final KTable<String, String> joinResult;
-        if (this.materialized) {
+        if (materialized) {
             joinResult = left.join(
                 right,
                 extractor,
                 joiner,
-                materialized
+                materializedStore
             );
         } else {
             joinResult = left.join(

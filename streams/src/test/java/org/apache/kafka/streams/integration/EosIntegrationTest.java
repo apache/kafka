@@ -60,20 +60,17 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.Timeout;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
+
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -82,7 +79,6 @@ import java.io.IOException;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -98,6 +94,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -113,14 +110,12 @@ import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@RunWith(Parameterized.class)
-@Category({IntegrationTest.class})
+@Tag("integration")
+@Timeout(600)
 public class EosIntegrationTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
     private static final Logger LOG = LoggerFactory.getLogger(EosIntegrationTest.class);
     private static final int NUM_BROKERS = 3;
     private static final int MAX_POLL_INTERVAL_MS = 30_000;
@@ -131,12 +126,12 @@ public class EosIntegrationTest {
         Utils.mkProperties(Collections.singletonMap("auto.create.topics.enable", "true"))
     );
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException {
         CLUSTER.start();
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
@@ -167,25 +162,25 @@ public class EosIntegrationTest {
     private String stateTmpDir;
 
     @SuppressWarnings("deprecation")
-    @Parameters(name = "{0}, processing threads = {1}")
-    public static Collection<Object[]> data() {
-        return Arrays.asList(new Object[][]{
-                {StreamsConfig.AT_LEAST_ONCE, false},
-                {StreamsConfig.EXACTLY_ONCE, false},
-                {StreamsConfig.EXACTLY_ONCE_V2, false},
-                {StreamsConfig.AT_LEAST_ONCE, true},
-                {StreamsConfig.EXACTLY_ONCE, true},
-                {StreamsConfig.EXACTLY_ONCE_V2, true}
-        });
+    public static Stream<Arguments> eosConfig() {
+        return Stream.of(
+                Arguments.of(StreamsConfig.AT_LEAST_ONCE),
+                Arguments.of(StreamsConfig.EXACTLY_ONCE),
+                Arguments.of(StreamsConfig.EXACTLY_ONCE_V2));
     }
 
-    @Parameter(0)
-    public String eosConfig;
+    @SuppressWarnings("deprecation")
+    public static Stream<Arguments> data() {
+        return Stream.of(
+                Arguments.of(StreamsConfig.AT_LEAST_ONCE, false),
+                Arguments.of(StreamsConfig.EXACTLY_ONCE, false),
+                Arguments.of(StreamsConfig.EXACTLY_ONCE_V2, false),
+                Arguments.of(StreamsConfig.AT_LEAST_ONCE, true),
+                Arguments.of(StreamsConfig.EXACTLY_ONCE, true),
+                Arguments.of(StreamsConfig.EXACTLY_ONCE_V2, true));
+    }
 
-    @Parameter(1)
-    public boolean processingThreadsEnabled;
-
-    @Before
+    @BeforeEach
     public void createTopics() throws Exception {
         applicationId = "appId-" + TEST_NUMBER.getAndIncrement();
         CLUSTER.deleteTopicsAndWait(
@@ -200,13 +195,15 @@ public class EosIntegrationTest {
         CLUSTER.createTopic(MULTI_PARTITION_OUTPUT_TOPIC, NUM_TOPIC_PARTITIONS, 1);
     }
 
-    @Test
-    public void shouldBeAbleToRunWithEosEnabled() throws Exception {
+    @ParameterizedTest
+    @MethodSource("eosConfig")
+    public void shouldBeAbleToRunWithEosEnabled(final String eosConfig) throws Exception {
         runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, false, eosConfig);
     }
 
-    @Test
-    public void shouldCommitCorrectOffsetIfInputTopicIsTransactional() throws Exception {
+    @ParameterizedTest
+    @MethodSource("eosConfig")
+    public void shouldCommitCorrectOffsetIfInputTopicIsTransactional(final String eosConfig) throws Exception {
         runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, true, eosConfig);
 
         try (final Admin adminClient = Admin.create(mkMap(mkEntry(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())));
@@ -232,28 +229,33 @@ public class EosIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldBeAbleToRestartAfterClose() throws Exception {
+    @ParameterizedTest
+    @MethodSource("eosConfig")
+    public void shouldBeAbleToRestartAfterClose(final String eosConfig) throws Exception {
         runSimpleCopyTest(2, SINGLE_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, false, eosConfig);
     }
 
-    @Test
-    public void shouldBeAbleToCommitToMultiplePartitions() throws Exception {
+    @ParameterizedTest
+    @MethodSource("eosConfig")
+    public void shouldBeAbleToCommitToMultiplePartitions(final String eosConfig) throws Exception {
         runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, null, MULTI_PARTITION_OUTPUT_TOPIC, false, eosConfig);
     }
 
-    @Test
-    public void shouldBeAbleToCommitMultiplePartitionOffsets() throws Exception {
+    @ParameterizedTest
+    @MethodSource("eosConfig")
+    public void shouldBeAbleToCommitMultiplePartitionOffsets(final String eosConfig) throws Exception {
         runSimpleCopyTest(1, MULTI_PARTITION_INPUT_TOPIC, null, SINGLE_PARTITION_OUTPUT_TOPIC, false, eosConfig);
     }
 
-    @Test
-    public void shouldBeAbleToRunWithTwoSubtopologies() throws Exception {
+    @ParameterizedTest
+    @MethodSource("eosConfig")
+    public void shouldBeAbleToRunWithTwoSubtopologies(final String eosConfig) throws Exception {
         runSimpleCopyTest(1, SINGLE_PARTITION_INPUT_TOPIC, SINGLE_PARTITION_THROUGH_TOPIC, SINGLE_PARTITION_OUTPUT_TOPIC, false, eosConfig);
     }
 
-    @Test
-    public void shouldBeAbleToRunWithTwoSubtopologiesAndMultiplePartitions() throws Exception {
+    @ParameterizedTest
+    @MethodSource("eosConfig")
+    public void shouldBeAbleToRunWithTwoSubtopologiesAndMultiplePartitions(final String eosConfig) throws Exception {
         runSimpleCopyTest(1, MULTI_PARTITION_INPUT_TOPIC, MULTI_PARTITION_THROUGH_TOPIC, MULTI_PARTITION_OUTPUT_TOPIC, false, eosConfig);
     }
 
@@ -344,8 +346,9 @@ public class EosIntegrationTest {
         return recordsPerKey;
     }
 
-    @Test
-    public void shouldBeAbleToPerformMultipleTransactions() throws Exception {
+    @ParameterizedTest
+    @MethodSource("eosConfig")
+    public void shouldBeAbleToPerformMultipleTransactions(final String eosConfig) throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(SINGLE_PARTITION_INPUT_TOPIC).to(SINGLE_PARTITION_OUTPUT_TOPIC);
 
@@ -391,8 +394,9 @@ public class EosIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldNotViolateEosIfOneTaskFails() throws Exception {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldNotViolateEosIfOneTaskFails(final String eosConfig, final boolean processingThreadsEnabled) throws Exception {
         if (eosConfig.equals(StreamsConfig.AT_LEAST_ONCE)) return;
 
         // this test writes 10 + 5 + 5 records per partition (running with 2 partitions)
@@ -404,7 +408,7 @@ public class EosIntegrationTest {
         // -> the failure only kills one thread
         // after fail over, we should read 40 committed records (even if 50 record got written)
 
-        try (final KafkaStreams streams = getKafkaStreams("dummy", false, "appDir", 2, eosConfig)) {
+        try (final KafkaStreams streams = getKafkaStreams("dummy", false, "appDir", 2, eosConfig, processingThreadsEnabled)) {
             startApplicationAndWaitUntilRunning(streams);
 
             final List<KeyValue<Long, Long>> committedDataBeforeFailure = prepareData(0L, 10L, 0L, 1L);
@@ -494,8 +498,9 @@ public class EosIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldNotViolateEosIfOneTaskFailsWithState() throws Exception {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldNotViolateEosIfOneTaskFailsWithState(final String eosConfig, final boolean processingThreadsEnabled) throws Exception {
         if (eosConfig.equals(StreamsConfig.AT_LEAST_ONCE)) return;
 
         // this test updates a store with 10 + 5 + 5 records per partition (running with 2 partitions)
@@ -512,7 +517,7 @@ public class EosIntegrationTest {
 
         // We need more processing time under "with state" situation, so increasing the max.poll.interval.ms
         // to avoid unexpected rebalance during test, which will cause unexpected fail over triggered
-        try (final KafkaStreams streams = getKafkaStreams("dummy", true, "appDir", 2, eosConfig)) {
+        try (final KafkaStreams streams = getKafkaStreams("dummy", true, "appDir", 2, eosConfig, processingThreadsEnabled)) {
             startApplicationAndWaitUntilRunning(streams);
 
             final List<KeyValue<Long, Long>> committedDataBeforeFailure = prepareData(0L, 10L, 0L, 1L);
@@ -612,8 +617,9 @@ public class EosIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldNotViolateEosIfOneTaskGetsFencedUsingIsolatedAppInstances() throws Exception {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldNotViolateEosIfOneTaskGetsFencedUsingIsolatedAppInstances(final String eosConfig, final boolean processingThreadsEnabled) throws Exception {
         if (eosConfig.equals(StreamsConfig.AT_LEAST_ONCE)) return;
 
         // this test writes 10 + 5 + 5 + 10 records per partition (running with 2 partitions)
@@ -629,8 +635,8 @@ public class EosIntegrationTest {
         // we write the remaining 20 records and verify to read 60 result records
 
         try (
-            final KafkaStreams streams1 = getKafkaStreams("streams1", false, "appDir1", 1, eosConfig);
-            final KafkaStreams streams2 = getKafkaStreams("streams2", false, "appDir2", 1, eosConfig)
+            final KafkaStreams streams1 = getKafkaStreams("streams1", false, "appDir1", 1, eosConfig, processingThreadsEnabled);
+            final KafkaStreams streams2 = getKafkaStreams("streams2", false, "appDir2", 1, eosConfig, processingThreadsEnabled)
         ) {
             startApplicationAndWaitUntilRunning(streams1);
             startApplicationAndWaitUntilRunning(streams2);
@@ -774,12 +780,13 @@ public class EosIntegrationTest {
         }
     }
 
-    @Test
-    public void shouldWriteLatestOffsetsToCheckpointOnShutdown() throws Exception {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldWriteLatestOffsetsToCheckpointOnShutdown(final String eosConfig, final boolean processingThreadsEnabled) throws Exception {
         final List<KeyValue<Long, Long>> writtenData = prepareData(0L, 10, 0L, 1L);
         final List<KeyValue<Long, Long>> expectedResult = computeExpectedResult(writtenData);
 
-        try (final KafkaStreams streams = getKafkaStreams("streams", true, "appDir", 1, eosConfig)) {
+        try (final KafkaStreams streams = getKafkaStreams("streams", true, "appDir", 1, eosConfig, processingThreadsEnabled)) {
             writeInputData(writtenData);
 
             startApplicationAndWaitUntilRunning(streams);
@@ -807,20 +814,27 @@ public class EosIntegrationTest {
         verifyOffsetsAreInCheckpoint(1);
     }
 
-    @Test
-    public void shouldCheckpointRestoredOffsetsWhenClosingCleanDuringRestoringStateUpdaterEnabled() throws Exception {
-        shouldCheckpointRestoredOffsetsWhenClosingCleanDuringRestoring(true);
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldCheckpointRestoredOffsetsWhenClosingCleanDuringRestoringStateUpdaterEnabled(
+            final String eosConfig, final boolean processingThreadsEnabled) throws Exception {
+        shouldCheckpointRestoredOffsetsWhenClosingCleanDuringRestoring(eosConfig, processingThreadsEnabled, true);
     }
 
-    @Test
-    public void shouldCheckpointRestoredOffsetsWhenClosingCleanDuringRestoringStateUpdaterDisabled() throws Exception {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldCheckpointRestoredOffsetsWhenClosingCleanDuringRestoringStateUpdaterDisabled(
+            final String eosConfig, final boolean processingThreadsEnabled) throws Exception {
         if (!processingThreadsEnabled) {
-            shouldCheckpointRestoredOffsetsWhenClosingCleanDuringRestoring(false);
+            shouldCheckpointRestoredOffsetsWhenClosingCleanDuringRestoring(eosConfig, false, false);
         }
     }
 
     @SuppressWarnings("deprecation")
-    private void shouldCheckpointRestoredOffsetsWhenClosingCleanDuringRestoring(final boolean stateUpdaterEnabled) throws Exception {
+    private void shouldCheckpointRestoredOffsetsWhenClosingCleanDuringRestoring(
+            final String eosConfig,
+            final boolean processingThreadsEnabled,
+            final boolean stateUpdaterEnabled) throws Exception {
         if (!eosConfig.equals(StreamsConfig.EXACTLY_ONCE) && !eosConfig.equals(StreamsConfig.EXACTLY_ONCE_V2)) {
             return;
         }
@@ -969,8 +983,8 @@ public class EosIntegrationTest {
         consumer.seekToEnd(partitions);
         final long topicEndOffset = consumer.position(tp);
 
-        assertTrue("changelog topic end " + topicEndOffset + " is less than checkpointed offset " + checkpointedOffset,
-                topicEndOffset >= checkpointedOffset);
+        assertTrue(topicEndOffset >= checkpointedOffset,
+                "changelog topic end " + topicEndOffset + " is less than checkpointed offset " + checkpointedOffset);
 
         consumer.seekToBeginning(partitions);
 
@@ -982,7 +996,8 @@ public class EosIntegrationTest {
             }
         }
 
-        assertEquals("Checkpointed offset does not match end of changelog", maxRecordOffset, (Long) checkpointedOffset);
+        assertEquals(maxRecordOffset, (Long) checkpointedOffset,
+                "Checkpointed offset does not match end of changelog");
     }
 
     private List<KeyValue<Long, Long>> prepareData(final long fromInclusive,
@@ -1005,7 +1020,8 @@ public class EosIntegrationTest {
                                          final boolean withState,
                                          final String appDir,
                                          final int numberOfStreamsThreads,
-                                         final String eosConfig) {
+                                         final String eosConfig,
+                                         final boolean processingThreadsEnabled) {
         commitRequested = new AtomicInteger(0);
         errorInjected = new AtomicBoolean(false);
         stallInjected = new AtomicBoolean(false);
@@ -1275,11 +1291,11 @@ public class EosIntegrationTest {
         for (final QueryResult<KeyValueIterator<Long, Long>> partitionResult: result.getPartitionResults().values()) {
             try (final KeyValueIterator<Long, Long> it = partitionResult.getResult()) {
                 while (it.hasNext()) {
-                    assertTrue(reason, expectedStoreContent.remove(it.next()));
+                    assertTrue(expectedStoreContent.remove(it.next()), reason);
                 }
             }
         }
 
-        assertTrue(reason, expectedStoreContent.isEmpty());
+        assertTrue(expectedStoreContent.isEmpty(), reason);
     }
 }
