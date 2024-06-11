@@ -519,11 +519,10 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         currentResult.whenComplete((res, error) -> {
             boolean inflightRemoved = pendingRequests.inflightOffsetFetches.remove(fetchRequest);
             if (!inflightRemoved) {
-                log.warn("The response for the offset fetch request for partitions {} was not found in the inflight buffer", fetchRequest.requestedPartitions);
+                log.warn("A duplicated, inflight, request was identified, but unable to find it in the " +
+                    "outbound buffer:" + fetchRequest);
             }
-
             offsetFetchResultCache.maybeCache(fetchRequest, res);
-
             if (error == null) {
                 result.complete(res);
             } else {
