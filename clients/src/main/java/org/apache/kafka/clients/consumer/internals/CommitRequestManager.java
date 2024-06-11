@@ -1078,14 +1078,11 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         @Override
-        public String toString() {
-            return "OffsetFetchRequestState{" +
-                    "requestedPartitions=" + requestedPartitions +
-                    ", memberId=" + memberInfo.memberId.orElse("undefined") +
-                    ", memberEpoch=" + (memberInfo.memberEpoch.isPresent() ? memberInfo.memberEpoch.get() : "undefined") +
-                    ", future=" + future +
-                    ", " + toStringBase() +
-                    '}';
+        public String toStringBase() {
+            return super.toStringBase() +
+                    ", memberInfo=" + memberInfo +
+                    ", requestedPartitions=" + requestedPartitions +
+                    ", future=" + future;
         }
     }
 
@@ -1278,5 +1275,12 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             this.memberId = Optional.empty();
             this.memberEpoch = Optional.empty();
         }
+
+        @Override
+        public String toString() {
+            return "MemberInfo{" + "memberId=" + memberId.orElse("undefined") +
+                    ", memberEpoch=" + (memberEpoch.isPresent() ? memberEpoch : "undefined") + "}";
+        }
+
     }
 }

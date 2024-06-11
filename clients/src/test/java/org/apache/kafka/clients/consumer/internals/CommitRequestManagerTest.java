@@ -75,6 +75,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZE
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_GROUP_ID;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_GROUP_INSTANCE_ID;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -120,6 +121,50 @@ public class CommitRequestManagerTest {
         this.props.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, 100);
         this.props.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         this.props.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+    }
+
+    @Test
+    public void testOffsetFetchRequestStateToStringBase() {
+        ConsumerConfig config = mock(ConsumerConfig.class);
+        CommitRequestManager.MemberInfo memberInfo = new CommitRequestManager.MemberInfo();
+
+        CommitRequestManager commitRequestManager = new CommitRequestManager(
+                time,
+                logContext,
+                subscriptionState,
+                config,
+                coordinatorRequestManager,
+                offsetCommitCallbackInvoker,
+                "groupId",
+                Optional.of("groupInstanceId"),
+                metrics);
+
+        Set<TopicPartition> requestedPartitions = new HashSet<>();
+        TopicPartition topicPartition1 = new TopicPartition("topic-1", 1);
+        requestedPartitions.add(topicPartition1);
+
+        CommitRequestManager.OffsetFetchRequestState offsetFetchRequestState = commitRequestManager.new OffsetFetchRequestState(
+                requestedPartitions,
+                retryBackoffMs,
+                retryBackoffMaxMs,
+                1000,
+                memberInfo);
+
+        TimedRequestState timedRequestState = new TimedRequestState(
+                logContext,
+                "CommitRequestManager",
+                retryBackoffMs,
+                retryBackoffMaxMs,
+                TimedRequestState.deadlineTimer(time, 0)
+        );
+
+        String target = timedRequestState.toStringBase() +
+                ", memberInfo=" + memberInfo +
+                ", requestedPartitions=" + offsetFetchRequestState.requestedPartitions +
+                ", future=" + offsetFetchRequestState.future();
+
+        assertDoesNotThrow(timedRequestState::toString);
+        assertEquals(target, offsetFetchRequestState.toStringBase());
     }
 
     @Test
