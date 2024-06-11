@@ -621,7 +621,6 @@ public class MembershipManagerImplTest {
         membershipManager.onHeartbeatSuccess(createConsumerGroupHeartbeatResponse(assignment2).data());
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         CompletableFuture<Void> commitResult = new CompletableFuture<>();
-        //when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(commitResult);
         membershipManager.poll(time.milliseconds());
 
         // Get fenced, commit completes
@@ -858,7 +857,6 @@ public class MembershipManagerImplTest {
 
         assertEquals(MemberState.STABLE, membershipManager.state());
         when(subscriptionState.assignedPartitions()).thenReturn(getTopicPartitions(Collections.singleton(topicId1Partition0)));
-        //clearInvocations(membershipManager, subscriptionState);
         clearInvocations(subscriptionState);
 
         // New assignment adding a new topic2-0 (not in metadata).
@@ -882,7 +880,6 @@ public class MembershipManagerImplTest {
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         assertEquals(Collections.singleton(topicId2), membershipManager.topicsAwaitingReconciliation());
         verify(metadata).requestUpdate(anyBoolean());
-        //clearInvocations(membershipManager, commitRequestManager);
 
         // Metadata discovered for topic2. Should trigger reconciliation to complete the assignment,
         // with membership manager entering ACKNOWLEDGING state.
