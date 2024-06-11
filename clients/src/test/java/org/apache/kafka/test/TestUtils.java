@@ -68,6 +68,7 @@ import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
@@ -559,13 +560,20 @@ public class TestUtils {
     public static <T extends Throwable> T assertFutureThrows(Future<?> future, Class<T> exceptionCauseClass) {
         try {
             future.get(5, TimeUnit.SECONDS);
+            fail("expected to throw ExecutionException...");
+        } catch (TimeoutException e) {
+            fail("timeout waiting");
+            return null;
+        } catch (ExecutionException e) {
             ExecutionException exception = assertThrows(ExecutionException.class, future::get);
             assertInstanceOf(exceptionCauseClass, exception.getCause(),
                     "Unexpected exception cause " + exception.getCause());
             return exceptionCauseClass.cast(exception.getCause());
-        } catch (Exception ignored) {
+        } catch (InterruptedException e) {
+            fail("Unexpected exception cause" + e.getCause());
             return null;
         }
+        return null;
     }
 
     public static <T extends Throwable> void assertFutureThrows(
@@ -580,13 +588,15 @@ public class TestUtils {
     public static void assertFutureError(Future<?> future, Class<? extends Throwable> exceptionClass)
         throws InterruptedException {
         try {
-            future.get();
+            future.get(5, TimeUnit.SECONDS);
             fail("Expected a " + exceptionClass.getSimpleName() + " exception, but got success.");
         } catch (ExecutionException ee) {
             Throwable cause = ee.getCause();
             assertEquals(exceptionClass, cause.getClass(),
                 "Expected a " + exceptionClass.getSimpleName() + " exception, but got " +
                     cause.getClass().getSimpleName());
+        } catch (TimeoutException e) {
+            fail("timeout waiting");
         }
     }
 
