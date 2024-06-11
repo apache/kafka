@@ -2210,6 +2210,7 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testRebalanceMetricsOnSuccessfulRebalance() {
+        createCommitRequestManager(false);
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
         ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(new Assignment());
         membershipManager.onHeartbeatSuccess(heartbeatResponse.data());
