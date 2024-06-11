@@ -296,9 +296,9 @@ object KafkaConfig {
       // Internal configuration used by integration and system tests.
       .defineInternal(ShareGroupConfigs.SHARE_GROUP_ENABLE_CONFIG, BOOLEAN, ShareGroupConfigs.SHARE_GROUP_ENABLE_DEFAULT, null, MEDIUM, ShareGroupConfigs.SHARE_GROUP_ENABLE_DOC)
       .define(ShareGroupConfigs.SHARE_GROUP_DELIVERY_COUNT_LIMIT_CONFIG, INT, ShareGroupConfigs.SHARE_GROUP_DELIVERY_COUNT_LIMIT_DEFAULT, between(2, 10), MEDIUM, ShareGroupConfigs.SHARE_GROUP_DELIVERY_COUNT_LIMIT_DOC)
-      .define(ShareGroupConfigs.SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG, INT, ShareGroupConfigs.SHARE_GROUP_RECORD_LOCK_DURATION_MS_DEFAULT, between(1000, 60000), MEDIUM, ShareGroupConfigs.SHARE_GROUP_RECORD_LOCK_DURATION_MS_DOC)
-      .define(ShareGroupConfigs.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG, INT, ShareGroupConfigs.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_DEFAULT, between(1000, 30000), MEDIUM, ShareGroupConfigs.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_DOC)
-      .define(ShareGroupConfigs.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG, INT, ShareGroupConfigs.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_DEFAULT, between(30000, 3600000), MEDIUM, ShareGroupConfigs.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_DOC)
+      .define(ShareGroupConfigs.SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG, INT, ShareGroupConfigs.SHARE_GROUP_RECORD_LOCK_DURATION_MS_DEFAULT, atLeast(1), MEDIUM, ShareGroupConfigs.SHARE_GROUP_RECORD_LOCK_DURATION_MS_DOC)
+      .define(ShareGroupConfigs.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG, INT, ShareGroupConfigs.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_DEFAULT, atLeast(1), MEDIUM, ShareGroupConfigs.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_DOC)
+      .define(ShareGroupConfigs.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG, INT, ShareGroupConfigs.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_DEFAULT, atLeast(1), MEDIUM, ShareGroupConfigs.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_DOC)
       .define(ShareGroupConfigs.SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG, INT, ShareGroupConfigs.SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_DEFAULT, between(100, 10000), MEDIUM, ShareGroupConfigs.SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_DOC)
       .define(ShareGroupConfigs.SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG, INT, ShareGroupConfigs.SHARE_GROUP_SESSION_TIMEOUT_MS_DEFAULT, atLeast(1), MEDIUM, ShareGroupConfigs.SHARE_GROUP_SESSION_TIMEOUT_MS_DOC)
       .define(ShareGroupConfigs.SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, INT, ShareGroupConfigs.SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_DEFAULT, atLeast(1), MEDIUM, ShareGroupConfigs.SHARE_GROUP_MIN_SESSION_TIMEOUT_MS_DOC)
@@ -991,6 +991,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val shareGroupMaxHeartbeatIntervalMs = getInt(ShareGroupConfigs.SHARE_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG)
   val shareGroupRecordLockDurationMs = getInt(ShareGroupConfigs.SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG)
   val shareGroupMaxRecordLockDurationMs = getInt(ShareGroupConfigs.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG)
+  val shareGroupMinRecordLockDurationMs = getInt(ShareGroupConfigs.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG)
 
   /** ********* Offset management configuration ***********/
   val offsetMetadataMaxSize = getInt(GroupCoordinatorConfig.OFFSET_METADATA_MAX_SIZE_CONFIG)
@@ -1507,6 +1508,12 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
       s"${ShareGroupConfigs.SHARE_GROUP_SESSION_TIMEOUT_MS_CONFIG} must be less than or equals " +
         s"to ${ShareGroupConfigs.SHARE_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG}")
 
+    require(shareGroupMaxRecordLockDurationMs >= shareGroupMinRecordLockDurationMs,
+      s"${ShareGroupConfigs.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG} must be greater than or equals " +
+        s"to ${ShareGroupConfigs.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG}")
+    require(shareGroupRecordLockDurationMs >= shareGroupMinRecordLockDurationMs,
+      s"${ShareGroupConfigs.SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG} must be greater than or equals " +
+        s"to ${ShareGroupConfigs.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG}")
     require(shareGroupMaxRecordLockDurationMs >= shareGroupRecordLockDurationMs,
       s"${ShareGroupConfigs.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG} must be greater than or equals " +
         s"to ${ShareGroupConfigs.SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG}")

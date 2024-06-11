@@ -1982,4 +1982,23 @@ class KafkaConfigTest {
     props.put(ShareGroupConfigs.SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, "25")
     assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
   }
+
+  @Test
+  def testShareGroupRecordLockDurationValidation(): Unit = {
+    val props = new Properties()
+    props.putAll(kraftProps())
+
+    // Max should be greater than or equals to min.
+    props.put(ShareGroupConfigs.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG, "20")
+    props.put(ShareGroupConfigs.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG, "10")
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+
+    // The duration should be within the min-max range.
+    props.put(ShareGroupConfigs.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG, "10")
+    props.put(ShareGroupConfigs.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG, "20")
+    props.put(ShareGroupConfigs.SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG, "5")
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+    props.put(ShareGroupConfigs.SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG, "25")
+    assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+  }
 }
