@@ -139,9 +139,7 @@ public class CommitRequestManagerTest {
                 Optional.of("groupInstanceId"),
                 metrics);
 
-        Set<TopicPartition> requestedPartitions = new HashSet<>();
-        TopicPartition topicPartition1 = new TopicPartition("topic-1", 1);
-        requestedPartitions.add(topicPartition1);
+        Set<TopicPartition> requestedPartitions = Collections.singleton(new TopicPartition("topic-1", 1));
 
         CommitRequestManager.OffsetFetchRequestState offsetFetchRequestState = commitRequestManager.new OffsetFetchRequestState(
                 requestedPartitions,
