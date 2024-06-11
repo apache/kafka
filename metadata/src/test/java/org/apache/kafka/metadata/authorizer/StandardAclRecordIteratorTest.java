@@ -22,7 +22,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.NoSuchElementException;
 
 import static org.apache.kafka.metadata.authorizer.StandardAclWithIdTest.TEST_ACLS;
