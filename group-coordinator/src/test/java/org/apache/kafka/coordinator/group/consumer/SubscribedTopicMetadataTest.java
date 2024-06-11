@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class SubscribedTopicMetadataTest {
 
     private Map<Uuid, TopicMetadata> topicMetadataMap;
-    private SubscribedTopicMetadata subscribedTopicMetadata;
+    private SubscribedTopicDescriberImpl subscribedTopicMetadata;
 
     @BeforeEach
     public void setUp() {
@@ -47,7 +47,7 @@ public class SubscribedTopicMetadataTest {
                 new TopicMetadata(topicId, topicName, 5, partitionRacks)
             );
         }
-        subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadataMap);
+        subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadataMap);
     }
 
     @Test
@@ -57,7 +57,7 @@ public class SubscribedTopicMetadataTest {
 
     @Test
     public void testTopicMetadataCannotBeNull() {
-        assertThrows(NullPointerException.class, () -> new SubscribedTopicMetadata(null));
+        assertThrows(NullPointerException.class, () -> new SubscribedTopicDescriberImpl(null));
     }
 
     @Test
@@ -100,11 +100,11 @@ public class SubscribedTopicMetadataTest {
 
     @Test
     public void testEquals() {
-        assertEquals(new SubscribedTopicMetadata(topicMetadataMap), subscribedTopicMetadata);
+        assertEquals(new SubscribedTopicDescriberImpl(topicMetadataMap), subscribedTopicMetadata);
 
         Map<Uuid, TopicMetadata> topicMetadataMap2 = new HashMap<>();
         Uuid topicId = Uuid.randomUuid();
         topicMetadataMap2.put(topicId, new TopicMetadata(topicId, "newTopic", 5, Collections.emptyMap()));
-        assertNotEquals(new SubscribedTopicMetadata(topicMetadataMap2), subscribedTopicMetadata);
+        assertNotEquals(new SubscribedTopicDescriberImpl(topicMetadataMap2), subscribedTopicMetadata);
     }
 }

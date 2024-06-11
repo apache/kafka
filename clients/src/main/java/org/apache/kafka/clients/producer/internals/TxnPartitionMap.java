@@ -48,7 +48,7 @@ class TxnPartitionMap {
     }
 
     TxnPartitionEntry getOrCreate(TopicPartition topicPartition) {
-        return topicPartitions.computeIfAbsent(topicPartition, tp -> new TxnPartitionEntry(tp));
+        return topicPartitions.computeIfAbsent(topicPartition, TxnPartitionEntry::new);
     }
 
     boolean contains(TopicPartition topicPartition) {

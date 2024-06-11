@@ -823,19 +823,19 @@ public class UtilsTest {
     public void shouldThrowOnInvalidDateFormatOrNullTimestamp() {
         // check some invalid formats
         // test null timestamp
-        assertTrue(assertThrows(IllegalArgumentException.class, () -> {
-            Utils.getDateTime(null);
-        }).getMessage().contains("Error parsing timestamp with null value"));
+        assertTrue(assertThrows(IllegalArgumentException.class, () ->
+            Utils.getDateTime(null)
+        ).getMessage().contains("Error parsing timestamp with null value"));
 
         // test pattern: yyyy-MM-dd'T'HH:mm:ss.X
-        checkExceptionForGetDateTimeMethod(() -> {
-            invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.X"));
-        });
+        checkExceptionForGetDateTimeMethod(() ->
+            invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.X"))
+        );
 
         // test pattern: yyyy-MM-dd HH:mm:ss
-        assertTrue(assertThrows(ParseException.class, () -> {
-            invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss"));
-        }).getMessage().contains("It does not contain a 'T' according to ISO8601 format"));
+        assertTrue(assertThrows(ParseException.class, () ->
+            invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss"))
+        ).getMessage().contains("It does not contain a 'T' according to ISO8601 format"));
 
         // KAFKA-10685: use DateTimeFormatter generate micro/nano second timestamp
         final DateTimeFormatter formatter = new DateTimeFormatterBuilder()
@@ -847,19 +847,19 @@ public class UtilsTest {
         final LocalDateTime timestampWithSeconds = timestampWithNanoSeconds.truncatedTo(ChronoUnit.SECONDS);
 
         // test pattern: yyyy-MM-dd'T'HH:mm:ss.SSSSSSSSS
-        checkExceptionForGetDateTimeMethod(() -> {
-            Utils.getDateTime(formatter.format(timestampWithNanoSeconds));
-        });
+        checkExceptionForGetDateTimeMethod(() ->
+            Utils.getDateTime(formatter.format(timestampWithNanoSeconds))
+        );
 
         // test pattern: yyyy-MM-dd'T'HH:mm:ss.SSSSSS
-        checkExceptionForGetDateTimeMethod(() -> {
-            Utils.getDateTime(formatter.format(timestampWithMicroSeconds));
-        });
+        checkExceptionForGetDateTimeMethod(() ->
+            Utils.getDateTime(formatter.format(timestampWithMicroSeconds))
+        );
 
         // test pattern: yyyy-MM-dd'T'HH:mm:ss
-        checkExceptionForGetDateTimeMethod(() -> {
-            Utils.getDateTime(formatter.format(timestampWithSeconds));
-        });
+        checkExceptionForGetDateTimeMethod(() ->
+            Utils.getDateTime(formatter.format(timestampWithSeconds))
+        );
     }
 
     private void checkExceptionForGetDateTimeMethod(Executable executable) {

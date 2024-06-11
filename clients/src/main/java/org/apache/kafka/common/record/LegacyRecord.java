@@ -123,14 +123,6 @@ public final class LegacyRecord {
         return sizeInBytes() >= RECORD_OVERHEAD_V0 && checksum() == computeChecksum();
     }
 
-    public Long wrapperRecordTimestamp() {
-        return wrapperRecordTimestamp;
-    }
-
-    public TimestampType wrapperRecordTimestampType() {
-        return wrapperRecordTimestampType;
-    }
-
     /**
      * Throw an InvalidRecordException if isValid is false for this record
      */
