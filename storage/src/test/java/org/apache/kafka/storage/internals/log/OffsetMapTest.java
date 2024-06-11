@@ -35,7 +35,21 @@ public class OffsetMapTest {
     @ParameterizedTest
     @ValueSource(ints = {10, 100, 1000, 5000})
     public void testBasicValidation(int items) throws NoSuchAlgorithmException {
-        validateMap(items);
+        SkimpyOffsetMap map = new SkimpyOffsetMap(items * 48);
+        IntStream.range(0, items).forEach(i -> {
+            try {
+                map.put(key(i), i);
+            } catch (DigestException e) {
+                throw new RuntimeException(e);
+            }
+        });
+        IntStream.range(0, items).forEach(i -> {
+            try {
+                assertEquals(map.get(key(i)), i);
+            } catch (DigestException e) {
+                throw new RuntimeException(e);
+            }
+        });
     }
 
     @Test
@@ -99,23 +113,4 @@ public class OffsetMapTest {
     private ByteBuffer key(Integer key) {
         return ByteBuffer.wrap(key.toString().getBytes());
     }
-
-    private void validateMap(int items) throws NoSuchAlgorithmException {
-        SkimpyOffsetMap map = new SkimpyOffsetMap(items * 48);
-        IntStream.range(0, items).forEach(i -> {
-            try {
-                map.put(key(i), i);
-            } catch (DigestException e) {
-                throw new RuntimeException(e);
-            }
-        });
-        IntStream.range(0, items).forEach(i -> {
-            try {
-                assertEquals(map.get(key(i)), i);
-            } catch (DigestException e) {
-                throw new RuntimeException(e);
-            }
-        });
-    }
-
 }

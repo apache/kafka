@@ -30,6 +30,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Random;
 import java.util.TreeMap;
@@ -51,8 +52,8 @@ public class OffsetIndexTest {
 
     @AfterEach
     public void tearDown() throws IOException {
-        this.index.close();
-        if (index != null) {
+        if (Objects.nonNull(index)) {
+            this.index.close();
             Files.deleteIfExists(index.file().toPath());
         }
     }
