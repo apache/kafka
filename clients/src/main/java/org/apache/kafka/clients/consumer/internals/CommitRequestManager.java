@@ -865,6 +865,11 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             }
         }
 
+        @Override
+        public String toStringBase() {
+            return super.toStringBase() + ", " + memberInfo;
+        }
+
         abstract void onResponse(final ClientResponse response);
 
         abstract void removeRequest();
@@ -1080,7 +1085,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         @Override
         public String toStringBase() {
             return super.toStringBase() +
-                    ", memberInfo=" + memberInfo +
                     ", requestedPartitions=" + requestedPartitions +
                     ", future=" + future;
         }
@@ -1278,8 +1282,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
         @Override
         public String toString() {
-            return "MemberInfo{" + "memberId=" + memberId.orElse("undefined") +
-                    ", memberEpoch=" + (memberEpoch.isPresent() ? memberEpoch : "undefined") + "}";
+            return "memberId=" + memberId.orElse("undefined") +
+                    ", memberEpoch=" + (memberEpoch.isPresent() ? memberEpoch.get() : "undefined");
         }
 
     }

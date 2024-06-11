@@ -157,10 +157,11 @@ public class CommitRequestManagerTest {
         );
 
         String target = timedRequestState.toStringBase() +
-                ", memberInfo=" + memberInfo +
+                ", " + memberInfo +
                 ", requestedPartitions=" + offsetFetchRequestState.requestedPartitions +
                 ", future=" + offsetFetchRequestState.future();
 
+        System.out.println(offsetFetchRequestState.toStringBase());
         assertDoesNotThrow(timedRequestState::toString);
         assertEquals(target, offsetFetchRequestState.toStringBase());
     }
