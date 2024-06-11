@@ -472,6 +472,50 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     }
   }
 
+  private def testBrokerIdConfigChange(brokerId: Int): Unit = {
+    val newVal: java.lang.Long = 100000L
+
+    if (isKRaftTest()) {
+      val admin = createAdminClient()
+      try {
+        val resource = new ConfigResource(ConfigResource.Type.BROKER, brokerId.toString)
+        val configEntry = new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, newVal.toString)
+        val configEntry2 = new ConfigEntry(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, newVal.toString)
+        val configEntry3 = new ConfigEntry(QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, newVal.toString)
+        val config = new Config(List(configEntry, configEntry2).asJavaCollection)
+        admin.alterConfigs(Map(
+          resource -> config,
+        ).asJava).all.get
+      } finally {
+        admin.close()
+      }
+    } else {
+      val newProps = new Properties()
+      newProps.put(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, newVal.toString)
+      newProps.put(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, newVal.toString)
+      newProps.put(QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, newVal.toString)
+      adminZkClient.changeBrokerConfig(Seq(brokerId), newProps)
+    }
+
+    TestUtils.retry(10000) {
+      assertEquals(newVal, this.brokers.filter(b => b.config.brokerId == brokerId).head.quotaManagers.leader.upperBound)
+      assertEquals(newVal, this.brokers.filter(b => b.config.brokerId == brokerId).head.quotaManagers.follower.upperBound)
+      assertEquals(newVal, this.brokers.filter(b => b.config.brokerId == brokerId).head.quotaManagers.alterLogDirs.upperBound)
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testBrokerIdConfigChange(quorum: String): Unit = {
+    testBrokerIdConfigChange(this.brokers.head.config.brokerId)
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testDefaultBrokerIdConfigChange(quorum: String): Unit = {
+    testBrokerIdConfigChange("")
+  }
+
   private def createAdminClient(): Admin = {
     val props = new Properties()
     props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
