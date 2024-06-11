@@ -124,7 +124,7 @@ public final class ClientUtils {
         InetAddress[] addresses = hostResolver.resolve(host);
         List<InetAddress> result = filterPreferredAddresses(addresses);
         if (log.isDebugEnabled())
-            log.debug("Resolved host {} as {}", host, result.stream().map(i -> i.getHostAddress()).collect(Collectors.joining(",")));
+            log.debug("Resolved host {} as {}", host, result.stream().map(InetAddress::getHostAddress).collect(Collectors.joining(",")));
         return result;
     }
 

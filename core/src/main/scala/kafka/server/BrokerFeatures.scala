@@ -71,22 +71,27 @@ class BrokerFeatures private (@volatile var supportedFeatures: Features[Supporte
 
 object BrokerFeatures extends Logging {
 
-  def createDefault(unstableMetadataVersionsEnabled: Boolean): BrokerFeatures = {
-    new BrokerFeatures(defaultSupportedFeatures(unstableMetadataVersionsEnabled))
+  def createDefault(unstableFeatureVersionsEnabled: Boolean): BrokerFeatures = {
+    new BrokerFeatures(defaultSupportedFeatures(unstableFeatureVersionsEnabled))
   }
 
-  def defaultSupportedFeatures(unstableMetadataVersionsEnabled: Boolean): Features[SupportedVersionRange] = {
+  def defaultSupportedFeatures(unstableFeatureVersionsEnabled: Boolean): Features[SupportedVersionRange] = {
     val features = new util.HashMap[String, SupportedVersionRange]()
       features.put(MetadataVersion.FEATURE_NAME,
         new SupportedVersionRange(
           MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
-          if (unstableMetadataVersionsEnabled) {
+          if (unstableFeatureVersionsEnabled) {
             MetadataVersion.latestTesting.featureLevel
           } else {
             MetadataVersion.latestProduction.featureLevel
           }))
-    PRODUCTION_FEATURES.forEach { feature =>
-        features.put(feature.featureName, new SupportedVersionRange(0, feature.latestProduction()))
+    PRODUCTION_FEATURES.forEach { feature => features.put(feature.featureName,
+          new SupportedVersionRange(0,
+            if (unstableFeatureVersionsEnabled) {
+              feature.latestTesting
+            } else {
+              feature.latestProduction
+            }))
     }
     Features.supportedFeatures(features)
   }

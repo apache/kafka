@@ -85,9 +85,9 @@ class AllBrokersStrategyTest {
         );
 
         assertEquals(expectedMappedKeys, lookupResult.mappedKeys.keySet());
-        lookupResult.mappedKeys.forEach((brokerKey, brokerId) -> {
-            assertEquals(OptionalInt.of(brokerId), brokerKey.brokerId);
-        });
+        lookupResult.mappedKeys.forEach((brokerKey, brokerId) ->
+            assertEquals(OptionalInt.of(brokerId), brokerKey.brokerId)
+        );
     }
 
     @Test

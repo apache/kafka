@@ -212,7 +212,7 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
             final Set<AclOperation> authorizedOperations = validAclOperations(describedGroup.authorizedOperations());
             final List<MemberDescription> memberDescriptions = new ArrayList<>(describedGroup.members().size());
 
-            describedGroup.members().forEach(groupMember -> {
+            describedGroup.members().forEach(groupMember ->
                 memberDescriptions.add(new MemberDescription(
                     groupMember.memberId(),
                     Optional.ofNullable(groupMember.instanceId()),
@@ -220,8 +220,8 @@ public class DescribeConsumerGroupsHandler implements AdminApiHandler<Coordinato
                     groupMember.clientHost(),
                     new MemberAssignment(convertAssignment(groupMember.assignment())),
                     Optional.of(new MemberAssignment(convertAssignment(groupMember.targetAssignment())))
-                ));
-            });
+                ))
+            );
 
             final ConsumerGroupDescription consumerGroupDescription =
                 new ConsumerGroupDescription(

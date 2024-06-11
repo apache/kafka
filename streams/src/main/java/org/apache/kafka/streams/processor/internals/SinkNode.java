@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.api.Record;
@@ -58,8 +60,17 @@ public class SinkNode<KIn, VIn> extends ProcessorNode<KIn, VIn, Void, Void> {
     public void init(final InternalProcessorContext<Void, Void> context) {
         super.init(context);
         this.context = context;
-        keySerializer = prepareKeySerializer(keySerializer, context, this.name());
-        valSerializer = prepareValueSerializer(valSerializer, context, this.name());
+        try {
+            keySerializer = prepareKeySerializer(keySerializer, context, this.name());
+        } catch (ConfigException | StreamsException e) {
+            throw new StreamsException(String.format("Failed to initialize key serdes for sink node %s", name()), e, context.taskId());
+        }
+
+        try {
+            valSerializer = prepareValueSerializer(valSerializer, context, this.name());
+        } catch (final ConfigException | StreamsException e) {
+            throw new StreamsException(String.format("Failed to initialize value serdes for sink node %s", name()), e, context.taskId());
+        }
     }
 
     @Override

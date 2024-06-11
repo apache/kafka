@@ -147,14 +147,12 @@ public class NewTopic {
 
     @Override
     public String toString() {
-        StringBuilder bld = new StringBuilder();
-        bld.append("(name=").append(name).
-                append(", numPartitions=").append(numPartitions.map(String::valueOf).orElse("default")).
-                append(", replicationFactor=").append(replicationFactor.map(String::valueOf).orElse("default")).
-                append(", replicasAssignments=").append(replicasAssignments).
-                append(", configs=").append(configs).
-                append(")");
-        return bld.toString();
+        return "(name=" + name +
+                ", numPartitions=" + numPartitions.map(String::valueOf).orElse("default") +
+                ", replicationFactor=" + replicationFactor.map(String::valueOf).orElse("default") +
+                ", replicasAssignments=" + replicasAssignments +
+                ", configs=" + configs +
+                ")";
     }
 
     @Override

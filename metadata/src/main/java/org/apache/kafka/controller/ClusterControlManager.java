@@ -258,7 +258,7 @@ public class ClusterControlManager {
      */
     private final boolean zkMigrationEnabled;
 
-    private BrokerUncleanShutdownHandler brokerUncleanShutdownHandler;
+    private final BrokerUncleanShutdownHandler brokerUncleanShutdownHandler;
 
     /**
      * Maps controller IDs to controller registrations.
@@ -408,6 +408,13 @@ public class ClusterControlManager {
             setBrokerEpoch(brokerEpoch).
             setRack(request.rack()).
             setEndPoints(listenerInfo.toBrokerRegistrationRecord());
+
+        if (existing != null && request.incarnationId().equals(existing.incarnationId())) {
+            log.info("Amending registration of broker {}", request.brokerId());
+            record.setFenced(existing.fenced());
+            record.setInControlledShutdown(existing.inControlledShutdown());
+        }
+
         for (BrokerRegistrationRequestData.Feature feature : request.features()) {
             record.features().add(processRegistrationFeature(brokerId, finalizedFeatures, feature));
         }

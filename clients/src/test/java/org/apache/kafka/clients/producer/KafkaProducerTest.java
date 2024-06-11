@@ -616,10 +616,9 @@ public class KafkaProducerTest {
 
             MockProducerInterceptor.setThrowOnConfigExceptionThreshold(targetInterceptor);
 
-            assertThrows(KafkaException.class, () -> {
-                new KafkaProducer<>(
-                        props, new StringSerializer(), new StringSerializer());
-            });
+            assertThrows(KafkaException.class, () ->
+                new KafkaProducer<>(props, new StringSerializer(), new StringSerializer())
+            );
 
             assertEquals(3, MockProducerInterceptor.CONFIG_COUNT.get());
             assertEquals(3, MockProducerInterceptor.CLOSE_COUNT.get());
@@ -1208,9 +1207,8 @@ public class KafkaProducerTest {
 
         ExecutorService executor = Executors.newFixedThreadPool(1);
 
-        Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
-            new StringSerializer(), metadata, client, null, time);
-        try {
+        try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
+                new StringSerializer(), metadata, client, null, time)) {
             client.prepareResponse(
                 request -> request instanceof FindCoordinatorRequest &&
                     ((FindCoordinatorRequest) request).data().keyType() == FindCoordinatorRequest.CoordinatorType.TRANSACTION.id(),
@@ -1227,8 +1225,6 @@ public class KafkaProducerTest {
 
             Thread.sleep(1000);
             producer.initTransactions();
-        } finally {
-            producer.close(Duration.ZERO);
         }
     }
 
@@ -2071,7 +2067,7 @@ public class KafkaProducerTest {
         String invalidTopicName = "topic abc"; // Invalid topic name due to space
 
         ProducerInterceptors<String, String> producerInterceptors =
-                new ProducerInterceptors<>(Arrays.asList(new MockProducerInterceptor()));
+                new ProducerInterceptors<>(Collections.singletonList(new MockProducerInterceptor()));
 
         try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(), new StringSerializer(),
                 producerMetadata, client, producerInterceptors, time)) {

@@ -214,20 +214,18 @@ public class ControllerRegistration {
 
     @Override
     public String toString() {
-        StringBuilder bld = new StringBuilder();
-        bld.append("ControllerRegistration(id=").append(id);
-        bld.append(", incarnationId=").append(incarnationId);
-        bld.append(", zkMigrationReady=").append(zkMigrationReady);
-        bld.append(", listeners=[").append(
-            listeners.keySet().stream().sorted().
-                map(n -> listeners.get(n).toString()).
-                collect(Collectors.joining(", ")));
-        bld.append("], supportedFeatures={").append(
-            supportedFeatures.keySet().stream().sorted().
-                map(k -> k + ": " + supportedFeatures.get(k)).
-                collect(Collectors.joining(", ")));
-        bld.append("}");
-        bld.append(")");
-        return bld.toString();
+        return "ControllerRegistration(id=" + id +
+                ", incarnationId=" + incarnationId +
+                ", zkMigrationReady=" + zkMigrationReady +
+                ", listeners=[" +
+                listeners.keySet().stream().sorted().
+                        map(n -> listeners.get(n).toString()).
+                        collect(Collectors.joining(", ")) +
+                "], supportedFeatures={" +
+                supportedFeatures.keySet().stream().sorted().
+                        map(k -> k + ": " + supportedFeatures.get(k)).
+                        collect(Collectors.joining(", ")) +
+                "}" +
+                ")";
     }
 }
