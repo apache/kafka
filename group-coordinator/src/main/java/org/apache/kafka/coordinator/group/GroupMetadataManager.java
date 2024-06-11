@@ -794,12 +794,10 @@ public class GroupMetadataManager {
      * @return A boolean indicating whether it's valid to online downgrade the consumer group.
      */
     private boolean validateOnlineDowngrade(ConsumerGroup consumerGroup, String memberId) {
-        if (!consumerGroupMigrationPolicy.isDowngradeEnabled()) {
-            log.info("Cannot downgrade consumer group {} to classic group because the online downgrade is disabled.",
-                consumerGroup.groupId());
+        if (!consumerGroup.allMembersUseClassicProtocolExcept(memberId)) {
             return false;
-        } else if (!consumerGroup.allMembersUseClassicProtocolExcept(memberId)) {
-            log.debug("Cannot downgrade consumer group {} to classic group because not all its members use the classic protocol.",
+        } else if (!consumerGroupMigrationPolicy.isDowngradeEnabled()) {
+            log.info("Cannot downgrade consumer group {} to classic group because the online downgrade is disabled.",
                 consumerGroup.groupId());
             return false;
         } else if (consumerGroup.numMembers() <= 1) {
