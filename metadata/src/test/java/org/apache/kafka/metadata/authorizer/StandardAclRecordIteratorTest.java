@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.NoSuchElementException;
 
 import static org.apache.kafka.metadata.authorizer.StandardAclWithIdTest.TEST_ACLS;
@@ -58,7 +59,6 @@ public class StandardAclRecordIteratorTest {
             new ApiMessageAndVersion(TEST_ACLS.get(8).toRecord(), (short) 0),
             new ApiMessageAndVersion(TEST_ACLS.get(9).toRecord(), (short) 0)),
             iterator.next());
-        assertTrue(iterator.hasNext());
         assertEquals(Arrays.asList(
             new ApiMessageAndVersion(TEST_ACLS.get(10).toRecord(), (short) 0)),
             iterator.next());

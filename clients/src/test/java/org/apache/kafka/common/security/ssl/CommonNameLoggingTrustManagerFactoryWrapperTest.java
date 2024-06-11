@@ -152,7 +152,7 @@ public class CommonNameLoggingTrustManagerFactoryWrapperTest {
             if (cert.getNotBefore().before(dateNow) && cert.getNotAfter().after(dateNow)) {
                 assertDoesNotThrow(() -> cert.checkValidity());
             } else {
-                assertThrows(CertificateException.class, () -> cert.checkValidity());
+                assertThrows(CertificateException.class, cert::checkValidity);
             }
             // The wrappedCert must never throw due to being expired
             assertDoesNotThrow(() -> wrappedCert.checkValidity());

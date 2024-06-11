@@ -239,12 +239,15 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     ThreadUtils.createThreadFactory("kafka-cluster-test-kit-executor-%d", false));
                 for (ControllerNode node : nodes.controllerNodes().values()) {
                     setupNodeDirectories(baseDirectory, node.metadataDirectory(), Collections.emptyList());
-                    SharedServer sharedServer = new SharedServer(createNodeConfig(node),
-                            node.initialMetaPropertiesEnsemble(),
-                            Time.SYSTEM,
-                            new Metrics(),
-                            connectFutureManager.future,
-                            faultHandlerFactory);
+                    SharedServer sharedServer = new SharedServer(
+                        createNodeConfig(node),
+                        node.initialMetaPropertiesEnsemble(),
+                        Time.SYSTEM,
+                        new Metrics(),
+                        connectFutureManager.future,
+                        Collections.emptyList(),
+                        faultHandlerFactory
+                    );
                     ControllerServer controller = null;
                     try {
                         controller = new ControllerServer(
@@ -267,13 +270,18 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     jointServers.put(node.id(), sharedServer);
                 }
                 for (BrokerNode node : nodes.brokerNodes().values()) {
-                    SharedServer sharedServer = jointServers.computeIfAbsent(node.id(),
-                        id -> new SharedServer(createNodeConfig(node),
+                    SharedServer sharedServer = jointServers.computeIfAbsent(
+                        node.id(),
+                        id -> new SharedServer(
+                            createNodeConfig(node),
                             node.initialMetaPropertiesEnsemble(),
                             Time.SYSTEM,
                             new Metrics(),
                             connectFutureManager.future,
-                            faultHandlerFactory));
+                            Collections.emptyList(),
+                            faultHandlerFactory
+                        )
+                    );
                     BrokerServer broker = null;
                     try {
                         broker = new BrokerServer(sharedServer);

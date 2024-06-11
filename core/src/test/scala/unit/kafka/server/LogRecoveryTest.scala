@@ -138,7 +138,7 @@ class LogRecoveryTest extends QuorumTestHarness {
     assertEquals(hw, hwFile1.read().getOrElse(topicPartition, 0L))
 
     // check if leader moves to the other server
-    leader = awaitLeaderChange(servers, topicPartition, leader)
+    leader = awaitLeaderChange(servers, topicPartition, oldLeaderOpt = Some(leader))
     assertEquals(1, leader, "Leader must move to broker 1")
 
     // bring the preferred replica back
@@ -166,7 +166,7 @@ class LogRecoveryTest extends QuorumTestHarness {
 
     server2.startup()
     updateProducer()
-    leader = awaitLeaderChange(servers, topicPartition, leader)
+    leader = awaitLeaderChange(servers, topicPartition, oldLeaderOpt = Some(leader))
     assertTrue(leader == 0 || leader == 1,
       "Leader must remain on broker 0, in case of ZooKeeper session expiration it can move to broker 1")
 
@@ -221,7 +221,7 @@ class LogRecoveryTest extends QuorumTestHarness {
     server2.startup()
     updateProducer()
     // check if leader moves to the other server
-    leader = awaitLeaderChange(servers, topicPartition, leader)
+    leader = awaitLeaderChange(servers, topicPartition, oldLeaderOpt = Some(leader))
     assertEquals(1, leader, "Leader must move to broker 1")
 
     assertEquals(hw, hwFile1.read().getOrElse(topicPartition, 0L))

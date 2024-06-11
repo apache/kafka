@@ -53,7 +53,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -64,7 +63,6 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_HEARTBEAT_INTERVAL_MS;
-import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_REQUEST_TIMEOUT_MS;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.createDefaultGroupInformation;
 import static org.apache.kafka.clients.consumer.internals.events.CompletableEvent.calculateDeadlineMs;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
@@ -245,28 +243,6 @@ public class ConsumerNetworkThreadTest {
     }
 
     @Test
-    void testPollResultTimer() {
-        NetworkClientDelegate.UnsentRequest req = new NetworkClientDelegate.UnsentRequest(
-                new FindCoordinatorRequest.Builder(
-                        new FindCoordinatorRequestData()
-                                .setKeyType(FindCoordinatorRequest.CoordinatorType.TRANSACTION.id())
-                                .setKey("foobar")),
-                Optional.empty());
-        req.setTimer(time, DEFAULT_REQUEST_TIMEOUT_MS);
-
-        // purposely setting a non-MAX time to ensure it is returning Long.MAX_VALUE upon success
-        NetworkClientDelegate.PollResult success = new NetworkClientDelegate.PollResult(
-                10,
-                Collections.singletonList(req));
-        assertEquals(10, networkClient.addAll(success));
-
-        NetworkClientDelegate.PollResult failure = new NetworkClientDelegate.PollResult(
-                10,
-                new ArrayList<>());
-        assertEquals(10, networkClient.addAll(failure));
-    }
-
-    @Test
     void testMaximumTimeToWait() {
         // Initial value before runOnce has been called
         assertEquals(ConsumerNetworkThread.MAX_POLL_TIMEOUT_MS, consumerNetworkThread.maximumTimeToWait());
@@ -337,6 +313,27 @@ public class ConsumerNetworkThreadTest {
     void testRunOnceInvokesReaper() {
         consumerNetworkThread.runOnce();
         verify(applicationEventReaper).reap(any(Long.class));
+    }
+
+    @Test
+    void testSendUnsentRequest() {
+        String groupId = "group-id";
+        NetworkClientDelegate.UnsentRequest request = new NetworkClientDelegate.UnsentRequest(
+            new FindCoordinatorRequest.Builder(
+                new FindCoordinatorRequestData()
+                    .setKeyType(FindCoordinatorRequest.CoordinatorType.TRANSACTION.id())
+                    .setKey(groupId)),
+            Optional.empty());
+
+        networkClient.add(request);
+        assertTrue(networkClient.hasAnyPendingRequests());
+        assertFalse(networkClient.unsentRequests().isEmpty());
+        assertFalse(client.hasInFlightRequests());
+        consumerNetworkThread.cleanup();
+
+        assertTrue(networkClient.unsentRequests().isEmpty());
+        assertFalse(client.hasInFlightRequests());
+        assertFalse(networkClient.hasAnyPendingRequests());
     }
 
     private void prepareOffsetCommitRequest(final Map<TopicPartition, Long> expectedOffsets,

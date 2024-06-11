@@ -1287,6 +1287,13 @@ class LogManagerTest {
   }
 
   @Test
+  def testIsStrayKraftMissingTopicId(): Unit = {
+    val log = Mockito.mock(classOf[UnifiedLog])
+    Mockito.when(log.topicId).thenReturn(Option.empty)
+    assertTrue(LogManager.isStrayKraftReplica(0, topicsImage(Seq()), log))
+  }
+
+  @Test
   def testFindStrayReplicasInEmptyLAIR(): Unit = {
     val onDisk = Seq(foo0, foo1, bar0, bar1, baz0, baz1, baz2, quux0)
     val expected = onDisk.map(_.topicPartition()).toSet

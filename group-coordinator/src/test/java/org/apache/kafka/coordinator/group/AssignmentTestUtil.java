@@ -17,8 +17,8 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
-import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.consumer.MemberSubscriptionAndAssignmentImpl;
 
 import java.util.AbstractMap;
 import java.util.Arrays;
@@ -80,27 +80,26 @@ public class AssignmentTestUtil {
     ) {
         assertEquals(expectedAssignment.size(), computedGroupAssignment.members().size());
         computedGroupAssignment.members().forEach((memberId, memberAssignment) -> {
-            Map<Uuid, Set<Integer>> computedAssignmentForMember = memberAssignment.targetPartitions();
+            Map<Uuid, Set<Integer>> computedAssignmentForMember = memberAssignment.partitions();
             assertEquals(expectedAssignment.get(memberId), computedAssignmentForMember);
         });
     }
 
     /**
-     * Generate a reverse look up map of partition to member target assignments from the given member spec.
+     * Generate a reverse look up map of partition to member target assignments from the given metadata.
      *
-     * @param memberSpec        A map where the key is the member Id and the value is an
-     *                          AssignmentMemberSpec object containing the member's partition assignments.
+     * @param members       The member subscription specs.
      * @return Map of topic partition to member assignments.
      */
     public static Map<Uuid, Map<Integer, String>> invertedTargetAssignment(
-        Map<String, AssignmentMemberSpec> memberSpec
+        Map<String, MemberSubscriptionAndAssignmentImpl> members
     ) {
         Map<Uuid, Map<Integer, String>> invertedTargetAssignment = new HashMap<>();
-        for (Map.Entry<String, AssignmentMemberSpec> memberEntry : memberSpec.entrySet()) {
+        for (Map.Entry<String, MemberSubscriptionAndAssignmentImpl> memberEntry : members.entrySet()) {
             String memberId = memberEntry.getKey();
-            Map<Uuid, Set<Integer>> topicsAndPartitions = memberEntry.getValue().assignedPartitions();
+            Map<Uuid, Set<Integer>> memberAssignment = memberEntry.getValue().partitions();
 
-            for (Map.Entry<Uuid, Set<Integer>> topicEntry : topicsAndPartitions.entrySet()) {
+            for (Map.Entry<Uuid, Set<Integer>> topicEntry : memberAssignment.entrySet()) {
                 Uuid topicId = topicEntry.getKey();
                 Set<Integer> partitions = topicEntry.getValue();
 
