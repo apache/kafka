@@ -286,7 +286,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         FAILED {
             @Override
             boolean canTransitionFrom(CoordinatorState state) {
-                return state == LOADING;
+                return state == LOADING || state == ACTIVE;
             }
         };
 
@@ -761,7 +761,10 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         transitionTo(CoordinatorState.FAILED);
                         // Transition to LOADING to trigger the restoration of the state.
                         transitionTo(CoordinatorState.LOADING);
-                        return;
+                        // Thrown NotCoordinatorException to fail the operation that
+                        // triggered the write. We use NotCoordinatorException to be
+                        // consistent with the transition to FAILED.
+                        throw Errors.NOT_COORDINATOR.exception();
                     }
 
                     // Add all the pending deferred events to the deferred event queue.
