@@ -2167,7 +2167,6 @@ project(':tools') {
   }
 
   dependencies {
-    compileOnly libs.slf4jlog4j
     implementation project(':clients')
     implementation project(':storage')
     implementation project(':server-common')
@@ -2178,6 +2177,7 @@ project(':tools') {
     implementation libs.jacksonDataformatCsv
     implementation libs.jacksonJDK8Datatypes
     implementation libs.slf4jApi
+    implementation libs.slf4jlog4j
     implementation libs.joptSimple
 
     implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
@@ -2204,7 +2204,6 @@ project(':tools') {
       exclude group: 'junit', module: 'junit'
     }
     testImplementation libs.log4j
-    testRuntimeOnly libs.slf4jlog4j
   }
 
   javadoc {
