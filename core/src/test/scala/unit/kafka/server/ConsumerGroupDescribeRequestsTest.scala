@@ -16,9 +16,8 @@
  */
 package kafka.server
 
-import kafka.server.GroupCoordinatorBaseRequestTest
 import kafka.test.ClusterInstance
-import kafka.test.annotation.{ClusterConfigProperty, ClusterFeature, ClusterTest, ClusterTestDefaults, Type}
+import kafka.test.annotation._
 import kafka.test.junit.ClusterTestExtensions
 import kafka.utils.TestUtils
 import org.apache.kafka.common.ConsumerGroupState
@@ -26,11 +25,15 @@ import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData.{Assign
 import org.apache.kafka.common.message.{ConsumerGroupDescribeRequestData, ConsumerGroupDescribeResponseData, ConsumerGroupHeartbeatResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ConsumerGroupDescribeRequest, ConsumerGroupDescribeResponse}
+import org.apache.kafka.common.resource.ResourceType
+import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.common.Features
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.extension.ExtendWith
 import org.junit.jupiter.api.{Tag, Timeout}
 
+import java.lang.{Byte => JByte}
 import scala.jdk.CollectionConverters._
 
 @Timeout(120)
@@ -116,6 +119,9 @@ class ConsumerGroupDescribeRequestsTest(cluster: ClusterInstance) extends GroupC
     val timeoutMs = 5 * 60 * 1000
     val clientId = "client-id"
     val clientHost = "/127.0.0.1"
+    val authorizedOperationsInt = Utils.to32BitField(
+      AclEntry.supportedOperations(ResourceType.GROUP).asScala
+        .map(_.code.asInstanceOf[JByte]).asJava)
 
     // Add first group with one member.
     var grp1Member1Response: ConsumerGroupHeartbeatResponseData = null
@@ -162,6 +168,7 @@ class ConsumerGroupDescribeRequestsTest(cluster: ClusterInstance) extends GroupC
           .setGroupEpoch(1)
           .setAssignmentEpoch(1)
           .setAssignorName("uniform")
+          .setAuthorizedOperations(authorizedOperationsInt)
           .setMembers(List(
             new ConsumerGroupDescribeResponseData.Member()
               .setMemberId(grp1Member1Response.memberId)
@@ -177,6 +184,7 @@ class ConsumerGroupDescribeRequestsTest(cluster: ClusterInstance) extends GroupC
           .setGroupEpoch(grp2Member2Response.memberEpoch)
           .setAssignmentEpoch(grp2Member2Response.memberEpoch)
           .setAssignorName("range")
+          .setAuthorizedOperations(authorizedOperationsInt)
           .setMembers(List(
             new ConsumerGroupDescribeResponseData.Member()
               .setMemberId(grp2Member2Response.memberId)
@@ -219,7 +227,8 @@ class ConsumerGroupDescribeRequestsTest(cluster: ClusterInstance) extends GroupC
 
       val actual = consumerGroupDescribe(
         groupIds = List("grp-1", "grp-2"),
-        version = version.toShort
+        includeAuthorizedOperations = true,
+        version = version.toShort,
       )
 
       assertEquals(expected, actual)

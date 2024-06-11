@@ -44,7 +44,7 @@ import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.H
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class GeneralUniformAssignmentBuilderTest {
+public class UniformHeterogeneousAssignmentBuilderTest {
     private final UniformAssignor assignor = new UniformAssignor();
     private final Uuid topic1Uuid = Uuid.fromString("T1-A4s3VTwiI5CTbEp6POw");
     private final Uuid topic2Uuid = Uuid.fromString("T2-B4s3VTwiI5YHbPp6YUe");
