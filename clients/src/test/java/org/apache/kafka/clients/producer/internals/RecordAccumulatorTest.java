@@ -1287,161 +1287,145 @@ public class RecordAccumulatorTest {
     @Test
     public void testUniformBuiltInPartitioner() throws Exception {
 
-        try {
-            // Mock random number generator with just sequential integer.
-            AtomicInteger mockRandom = new AtomicInteger();
-            BuiltInPartitioner.mockRandom = () -> mockRandom.getAndAdd(1);
+        long totalSize = 1024 * 1024;
+        int batchSize = 1024;  // note that this is also a "sticky" limit for the partitioner
+        RecordAccumulator accum = new SequentialRecordAccumulator(batchSize, totalSize, Compression.NONE, 0);
 
-            long totalSize = 1024 * 1024;
-            int batchSize = 1024;  // note that this is also a "sticky" limit for the partitioner
-            RecordAccumulator accum = createTestRecordAccumulator(batchSize, totalSize, Compression.NONE, 0);
+        // Set up callbacks so that we know what partition is chosen.
+        final AtomicInteger partition = new AtomicInteger(RecordMetadata.UNKNOWN_PARTITION);
+        RecordAccumulator.AppendCallbacks callbacks = new RecordAccumulator.AppendCallbacks() {
+            @Override
+            public void setPartition(int p) {
+                partition.set(p);
+            }
 
-            // Set up callbacks so that we know what partition is chosen.
-            final AtomicInteger partition = new AtomicInteger(RecordMetadata.UNKNOWN_PARTITION);
-            RecordAccumulator.AppendCallbacks callbacks = new RecordAccumulator.AppendCallbacks() {
-                @Override
-                public void setPartition(int p) {
-                    partition.set(p);
-                }
+            @Override
+            public void onCompletion(RecordMetadata metadata, Exception exception) {
 
-                @Override
-                public void onCompletion(RecordMetadata metadata, Exception exception) {
+            }
+        };
 
-                }
-            };
-
-            PartitionInfo part1 = MetadataResponse.toPartitionInfo(partMetadata1, nodes);
-            PartitionInfo part2 = MetadataResponse.toPartitionInfo(partMetadata2, nodes);
-            PartitionInfo part3 = MetadataResponse.toPartitionInfo(partMetadata3, nodes);
-            Cluster cluster = new Cluster(null, asList(node1, node2), asList(part1, part2, part3),
+        PartitionInfo part1 = MetadataResponse.toPartitionInfo(partMetadata1, nodes);
+        PartitionInfo part2 = MetadataResponse.toPartitionInfo(partMetadata2, nodes);
+        PartitionInfo part3 = MetadataResponse.toPartitionInfo(partMetadata3, nodes);
+        Cluster cluster = new Cluster(null, asList(node1, node2), asList(part1, part2, part3),
                 Collections.emptySet(), Collections.emptySet());
 
-            // Produce small record, we should switch to first partition.
-            accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, value, Record.EMPTY_HEADERS,
+        // Produce small record, we should switch to first partition.
+        accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, value, Record.EMPTY_HEADERS,
                 callbacks, maxBlockTimeMs, false, time.milliseconds(), cluster);
-            assertEquals(partition1, partition.get());
-            assertEquals(1, mockRandom.get());
+        assertEquals(partition1, partition.get());
+        assertEquals(1, CountableSequentialPartitioner.count.get());
 
-            // Produce large record, we should exceed "sticky" limit, but produce to this partition
-            // as we try to switch after the "sticky" limit is exceeded.  The switch is disabled
-            // because of incomplete batch.
-            byte[] largeValue = new byte[batchSize];
-            accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
+        // Produce large record, we should exceed "sticky" limit, but produce to this partition
+        // as we try to switch after the "sticky" limit is exceeded.  The switch is disabled
+        // because of incomplete batch.
+        byte[] largeValue = new byte[batchSize];
+        accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
                 callbacks, maxBlockTimeMs, false, time.milliseconds(), cluster);
-            assertEquals(partition1, partition.get());
-            assertEquals(1, mockRandom.get());
+        assertEquals(partition1, partition.get());
+        assertEquals(1, CountableSequentialPartitioner.count.get());
 
-            // Produce large record, we should switch to next partition as we complete
-            // previous batch and exceeded sticky limit.
-            accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
+        // Produce large record, we should switch to next partition as we complete
+        // previous batch and exceeded sticky limit.
+        accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
                 callbacks, maxBlockTimeMs, false, time.milliseconds(), cluster);
-            assertEquals(partition2, partition.get());
-            assertEquals(2, mockRandom.get());
+        assertEquals(partition2, partition.get());
+        assertEquals(2, CountableSequentialPartitioner.count.get());
 
-            // Produce large record, we should switch to next partition as we complete
-            // previous batch and exceeded sticky limit.
-            accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
+        // Produce large record, we should switch to next partition as we complete
+        // previous batch and exceeded sticky limit.
+        accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
                 callbacks, maxBlockTimeMs, false, time.milliseconds(), cluster);
-            assertEquals(partition3, partition.get());
-            assertEquals(3, mockRandom.get());
+        assertEquals(partition3, partition.get());
+        assertEquals(3, CountableSequentialPartitioner.count.get());
 
-            // Produce large record, we should switch to next partition as we complete
-            // previous batch and exceeded sticky limit.
-            accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
+        // Produce large record, we should switch to next partition as we complete
+        // previous batch and exceeded sticky limit.
+        accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
                 callbacks, maxBlockTimeMs, false, time.milliseconds(), cluster);
-            assertEquals(partition1, partition.get());
-            assertEquals(4, mockRandom.get());
-        } finally {
-            BuiltInPartitioner.mockRandom = null;
-        }
+        assertEquals(partition1, partition.get());
+        assertEquals(4, CountableSequentialPartitioner.count.get());
     }
 
     @Test
     public void testAdaptiveBuiltInPartitioner() throws Exception {
-        try {
-            // Mock random number generator with just sequential integer.
-            AtomicInteger mockRandom = new AtomicInteger();
-            BuiltInPartitioner.mockRandom = () -> mockRandom.getAndAdd(1);
-
-            // Create accumulator with partitioner config to enable adaptive partitioning.
-            RecordAccumulator.PartitionerConfig config = new RecordAccumulator.PartitionerConfig(true, 100);
-            long totalSize = 1024 * 1024;
-            int batchSize = 128;
-            RecordAccumulator accum = new RecordAccumulator(logContext, batchSize, Compression.NONE, 0, 0L, 0L,
+        // Create accumulator with partitioner config to enable adaptive partitioning.
+        RecordAccumulator.PartitionerConfig config = new RecordAccumulator.PartitionerConfig(true, 100);
+        long totalSize = 1024 * 1024;
+        int batchSize = 128;
+        RecordAccumulator accum = new SequentialRecordAccumulator(logContext, batchSize, Compression.NONE, 0, 0L, 0L,
                 3200, config, metrics, "producer-metrics", time, new ApiVersions(), null,
                 new BufferPool(totalSize, batchSize, metrics, time, "producer-internal-metrics"));
 
-            byte[] largeValue = new byte[batchSize];
-            int[] queueSizes = {1, 7, 2};
-            int[] expectedFrequencies = new int[queueSizes.length];
-            for (int i = 0; i < queueSizes.length; i++) {
-                expectedFrequencies[i] = 8 - queueSizes[i];  // 8 is max(queueSizes) + 1
-                for (int c = queueSizes[i]; c-- > 0; ) {
-                    // Add large records to each partition, so that each record creates a batch.
-                    accum.append(topic, i, 0L, null, largeValue, Record.EMPTY_HEADERS,
+        byte[] largeValue = new byte[batchSize];
+        int[] queueSizes = {1, 7, 2};
+        int[] expectedFrequencies = new int[queueSizes.length];
+        for (int i = 0; i < queueSizes.length; i++) {
+            expectedFrequencies[i] = 8 - queueSizes[i];  // 8 is max(queueSizes) + 1
+            for (int c = queueSizes[i]; c-- > 0; ) {
+                // Add large records to each partition, so that each record creates a batch.
+                accum.append(topic, i, 0L, null, largeValue, Record.EMPTY_HEADERS,
                         null, maxBlockTimeMs, false, time.milliseconds(), cluster);
-                }
-                assertEquals(queueSizes[i], accum.getDeque(new TopicPartition(topic, i)).size());
+            }
+            assertEquals(queueSizes[i], accum.getDeque(new TopicPartition(topic, i)).size());
+        }
+
+        // Let the accumulator generate the probability tables.
+        accum.ready(metadataCache, time.milliseconds());
+
+        // Set up callbacks so that we know what partition is chosen.
+        final AtomicInteger partition = new AtomicInteger(RecordMetadata.UNKNOWN_PARTITION);
+        RecordAccumulator.AppendCallbacks callbacks = new RecordAccumulator.AppendCallbacks() {
+            @Override
+            public void setPartition(int p) {
+                partition.set(p);
             }
 
-            // Let the accumulator generate the probability tables.
-            accum.ready(metadataCache, time.milliseconds());
+            @Override
+            public void onCompletion(RecordMetadata metadata, Exception exception) {
 
-            // Set up callbacks so that we know what partition is chosen.
-            final AtomicInteger partition = new AtomicInteger(RecordMetadata.UNKNOWN_PARTITION);
-            RecordAccumulator.AppendCallbacks callbacks = new RecordAccumulator.AppendCallbacks() {
-                @Override
-                public void setPartition(int p) {
-                    partition.set(p);
-                }
+            }
+        };
 
-                @Override
-                public void onCompletion(RecordMetadata metadata, Exception exception) {
-
-                }
-            };
-
-            // Prime built-in partitioner so that it'd switch on every record, as switching only
-            // happens after the "sticky" limit is exceeded.
-            accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
+        // Prime built-in partitioner so that it'd switch on every record, as switching only
+        // happens after the "sticky" limit is exceeded.
+        accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
                 callbacks, maxBlockTimeMs, false, time.milliseconds(), cluster);
 
-            // Issue a certain number of partition calls to validate that the partitions would be
-            // distributed with frequencies that are reciprocal to the queue sizes.  The number of
-            // iterations is defined by the last element of the cumulative frequency table which is
-            // the sum of all frequencies.  We do 2 cycles, just so it's more than 1.
-            final int numberOfCycles = 2;
-            int numberOfIterations = accum.getBuiltInPartitioner(topic).loadStatsRangeEnd() * numberOfCycles;
-            int[] frequencies = new int[queueSizes.length];
+        // Issue a certain number of partition calls to validate that the partitions would be
+        // distributed with frequencies that are reciprocal to the queue sizes.  The number of
+        // iterations is defined by the last element of the cumulative frequency table which is
+        // the sum of all frequencies.  We do 2 cycles, just so it's more than 1.
+        final int numberOfCycles = 2;
+        int numberOfIterations = accum.getBuiltInPartitioner(topic).loadStatsRangeEnd() * numberOfCycles;
+        int[] frequencies = new int[queueSizes.length];
 
-            for (int i = 0; i < numberOfIterations; i++) {
-                accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
-                    callbacks, maxBlockTimeMs, false, time.milliseconds(), cluster);
-                ++frequencies[partition.get()];
-            }
-
-            // Verify that frequencies are reciprocal of queue sizes.
-            for (int i = 0; i < frequencies.length; i++) {
-                assertEquals(expectedFrequencies[i] * numberOfCycles, frequencies[i],
-                    "Partition " + i + " was chosen " + frequencies[i] + " times");
-            }
-
-            // Test that partitions residing on high-latency nodes don't get switched to.
-            accum.updateNodeLatencyStats(0, time.milliseconds() - 200, true);
-            accum.updateNodeLatencyStats(0, time.milliseconds(), false);
-            accum.ready(metadataCache, time.milliseconds());
-
-            // Do one append, because partition gets switched after append.
+        for (int i = 0; i < numberOfIterations; i++) {
             accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
                     callbacks, maxBlockTimeMs, false, time.milliseconds(), cluster);
+            ++frequencies[partition.get()];
+        }
 
-            for (int c = 10; c-- > 0; ) {
-                accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
+        // Verify that frequencies are reciprocal of queue sizes.
+        for (int i = 0; i < frequencies.length; i++) {
+            assertEquals(expectedFrequencies[i] * numberOfCycles, frequencies[i],
+                    "Partition " + i + " was chosen " + frequencies[i] + " times");
+        }
+
+        // Test that partitions residing on high-latency nodes don't get switched to.
+        accum.updateNodeLatencyStats(0, time.milliseconds() - 200, true);
+        accum.updateNodeLatencyStats(0, time.milliseconds(), false);
+        accum.ready(metadataCache, time.milliseconds());
+
+        // Do one append, because partition gets switched after append.
+        accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
+                callbacks, maxBlockTimeMs, false, time.milliseconds(), cluster);
+
+        for (int c = 10; c-- > 0; ) {
+            accum.append(topic, RecordMetadata.UNKNOWN_PARTITION, 0L, null, largeValue, Record.EMPTY_HEADERS,
                     callbacks, maxBlockTimeMs, false, time.milliseconds(), cluster);
-                assertEquals(partition3, partition.get());
-            }
-        } finally {
-            BuiltInPartitioner.mockRandom = null;
+            assertEquals(partition3, partition.get());
         }
     }
 
@@ -1762,5 +1746,66 @@ public class RecordAccumulatorTest {
             new ApiVersions(),
             txnManager,
             new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
+    }
+
+    private class SequentialRecordAccumulator extends RecordAccumulator {
+
+        public SequentialRecordAccumulator(LogContext logContext,
+                                           int batchSize,
+                                           Compression compression,
+                                           int lingerMs,
+                                           long retryBackoffMs,
+                                           long retryBackoffMaxMs,
+                                           int deliveryTimeoutMs,
+                                           PartitionerConfig partitionerConfig,
+                                           Metrics metrics,
+                                           String metricGrpName,
+                                           Time time,
+                                           ApiVersions apiVersions,
+                                           TransactionManager transactionManager,
+                                           BufferPool bufferPool) {
+            super(logContext, batchSize, compression, lingerMs, retryBackoffMs, retryBackoffMaxMs, deliveryTimeoutMs,
+                    partitionerConfig, metrics, metricGrpName, time, apiVersions, transactionManager, bufferPool);
+        }
+
+        public SequentialRecordAccumulator(int batchSize, long totalSize, Compression compression, int lingerMs) {
+            super(
+                    logContext,
+                    batchSize,
+                    compression,
+                    lingerMs,
+                    100L,
+                    1000L,
+                    3200,
+                    metrics,
+                    "producer-metrics",
+                    time,
+                    new ApiVersions(),
+                    null,
+                    new BufferPool(totalSize, batchSize, metrics, time, "producer-metrics"));
+        }
+
+        @Override
+        protected BuiltInPartitioner createBuiltInPartitioner(LogContext logContext, String topic,
+                                                              int stickyBatchSize) {
+            return new CountableSequentialPartitioner(logContext, topic, stickyBatchSize);
+        }
+    } 
+    
+    private static class CountableSequentialPartitioner extends BuiltInPartitioner {
+        
+        static AtomicInteger count = new AtomicInteger();
+        
+        AtomicInteger mockRandom = new AtomicInteger();
+
+        public CountableSequentialPartitioner(LogContext logContext, String topic, int stickyBatchSize) {
+            super(logContext, topic, stickyBatchSize);
+        }
+
+        @Override
+        protected int randomPartition() {
+            count.incrementAndGet();
+            return mockRandom.getAndAdd(1);
+        }
     }
 }
