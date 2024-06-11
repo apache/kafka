@@ -47,6 +47,7 @@ import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 
@@ -76,7 +77,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-// TODO: add test for voterid in the vote request
 public class KafkaRaftClientTest {
 
     @Test
@@ -1865,7 +1865,6 @@ public class KafkaRaftClientTest {
         context.assertSentFetchPartitionResponse(Errors.INVALID_REQUEST, epoch, OptionalInt.of(localId));
     }
 
-    // TODO: add one more parameter
     // This test mainly focuses on whether the leader state is correctly updated under different fetch version.
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.FETCH)
@@ -1962,6 +1961,48 @@ public class KafkaRaftClientTest {
         context.deliverRequest(context.voteRequest("invalid-uuid", epoch, otherNodeKey, 0, 0));
         context.pollUntilResponse();
         context.assertSentVoteResponse(Errors.INCONSISTENT_CLUSTER_ID);
+    }
+
+    @Test
+    public void testInvalidVoterReplicaVoteRequest() throws Exception {
+        int localId = 0;
+        ReplicaKey otherNodeKey = replicaKey(1, true);
+        Set<Integer> voters = Utils.mkSet(localId, otherNodeKey.id());
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
+            .withKip853Rpc(true)
+            .build();
+
+        context.becomeLeader();
+        int epoch = context.currentEpoch();
+
+        // invalid voter id is rejected
+        context.deliverRequest(
+            context.voteRequest(
+                context.clusterId.toString(),
+                epoch + 1,
+                otherNodeKey,
+                ReplicaKey.of(10, Uuid.randomUuid()),
+                epoch,
+                100
+            )
+        );
+        context.pollUntilResponse();
+        context.assertSentVoteResponse(Errors.NONE, epoch + 1, OptionalInt.empty(), false);
+
+        // invalid voter directory id is rejected
+        context.deliverRequest(
+            context.voteRequest(
+                context.clusterId.toString(),
+                epoch + 2,
+                otherNodeKey,
+                ReplicaKey.of(0, Uuid.randomUuid()),
+                epoch,
+                100
+            )
+        );
+        context.pollUntilResponse();
+        context.assertSentVoteResponse(Errors.NONE, epoch + 2, OptionalInt.empty(), false);
     }
 
     @ParameterizedTest
@@ -3563,16 +3604,16 @@ public class KafkaRaftClientTest {
         return metrics.metrics().get(metrics.metricName(name, "raft-metrics"));
     }
 
-    // TODO: parameterize withKip853Rpc
     @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    public void testAppendWithRequiredBaseOffset(boolean correctOffset) throws Exception {
+    @CsvSource({"false,false", "false,true", "true,false", "true,true"})
+    public void testAppendWithRequiredBaseOffset(boolean correctOffset, boolean withKip853Rpc) throws Exception {
         int localId = 0;
         int otherNodeId = 1;
         Set<Integer> voters = Utils.mkSet(localId, otherNodeId);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-                .build();
+            .withKip853Rpc(withKip853Rpc)
+            .build();
         context.becomeLeader();
         assertEquals(OptionalInt.of(localId), context.currentLeader());
         int epoch = context.currentEpoch();

@@ -320,7 +320,6 @@ public class KafkaNetworkChannelTest {
             case END_QUORUM_EPOCH:
                 return new EndQuorumEpochResponseData().setErrorCode(error.code());
             case VOTE:
-                // TODO: can this be simplified to just the error?
                 return new VoteResponseData()
                     .setErrorCode(error.code())
                     .setTopics(

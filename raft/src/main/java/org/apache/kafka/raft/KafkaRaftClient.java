@@ -670,24 +670,6 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         VoteRequestData.PartitionData partitionRequest =
             request.topics().get(0).partitions().get(0);
 
-        // Check that the request was intended for this voter
-        Optional<ReplicaKey> voterKey = RaftUtil.voteRequestVoterId(request, partitionRequest);
-        if (voterKey.isPresent()) {
-            if (!OptionalInt.of(voterKey.get().id()).equals(nodeId) ||
-                (voterKey.get().directoryId().isPresent() &&
-                 !voterKey.get().directoryId().get().equals(nodeDirectoryId)
-                )
-            ) {
-                // The request is not intended to this replica since the replica keys don't match
-                return buildVoteResponse(
-                    requestMetadata.listenerName(),
-                    requestMetadata.apiVersion(),
-                    Errors.INVALID_REQUEST,
-                    false
-                );
-            }
-        }
-
         int candidateId = partitionRequest.candidateId();
         int candidateEpoch = partitionRequest.candidateEpoch();
 
@@ -714,6 +696,24 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
 
         if (candidateEpoch > quorum.epoch()) {
             transitionToUnattached(candidateEpoch);
+        }
+
+        // Check that the request was intended for this replica
+        Optional<ReplicaKey> voterKey = RaftUtil.voteRequestVoterId(request, partitionRequest);
+        if (voterKey.isPresent()) {
+            if (!OptionalInt.of(voterKey.get().id()).equals(nodeId) ||
+                (voterKey.get().directoryId().isPresent() &&
+                 !voterKey.get().directoryId().get().equals(nodeDirectoryId)
+                )
+            ) {
+                // The request is not intended to this replica since the replica keys don't match
+                return buildVoteResponse(
+                    requestMetadata.listenerName(),
+                    requestMetadata.apiVersion(),
+                    Errors.NONE,
+                    false
+                );
+            }
         }
 
         OffsetAndEpoch lastEpochEndOffsetAndEpoch = new OffsetAndEpoch(lastEpochEndOffset, lastEpoch);

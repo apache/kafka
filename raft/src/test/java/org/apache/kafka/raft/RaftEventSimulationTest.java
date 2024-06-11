@@ -772,7 +772,7 @@ public class RaftEventSimulationTest {
                 FETCH_MAX_WAIT_MS,
                 clusterId.toString(),
                 Collections.emptyList(),
-                Endpoints.empty(), // TODO: fix this...
+                Endpoints.empty(), // KAFKA-16529 will fix this
                 logContext,
                 random,
                 quorumConfig

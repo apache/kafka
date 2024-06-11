@@ -300,7 +300,6 @@ final public class VoterSet {
             return voterKey;
         }
 
-        // TODO: write test for this
         /**
          * Returns if the provided replica key matches this voter node.
          *

@@ -36,6 +36,7 @@ import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotWriterReaderTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -91,16 +92,16 @@ final public class KafkaRaftClientSnapshotTest {
         assertEquals(Optional.empty(), context.client.latestSnapshotId());
     }
 
-    // TODO: add directory id parameter
     @ParameterizedTest
-    @ValueSource(booleans = {true, false})
-    public void testLeaderListenerNotified(boolean entireLog) throws Exception {
+    @CsvSource({"false,false", "false,true", "true,false", "true,true"})
+    public void testLeaderListenerNotified(boolean entireLog, boolean withKip853Rpc) throws Exception {
         int localId = 0;
         ReplicaKey otherNodeKey = replicaKey(localId + 1, false);
         Set<Integer> voters = Utils.mkSet(localId, otherNodeKey.id());
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(3, 1);
 
         RaftClientTestContext.Builder contextBuilder = new RaftClientTestContext.Builder(localId, voters)
+            .withKip853Rpc(withKip853Rpc)
             .appendToLog(snapshotId.epoch(), Arrays.asList("a", "b", "c"))
             .appendToLog(snapshotId.epoch(), Arrays.asList("d", "e", "f"))
             .withEmptySnapshot(snapshotId);

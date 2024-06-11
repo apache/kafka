@@ -1019,7 +1019,7 @@ public final class RaftClientTestContext {
             Errors.NONE,
             epoch,
             leaderId.orElse(-1),
-            Endpoints.empty() // TODO: fix this...
+            Endpoints.empty() // KAFKA-16529 will fix this
         );
     }
 
@@ -1074,7 +1074,7 @@ public final class RaftClientTestContext {
             Errors.NONE,
             epoch,
             leaderId,
-            Endpoints.empty() // TODO: fix this...
+            Endpoints.empty() // KAFKA-16529 will fix this
         );
     }
 
@@ -1143,7 +1143,7 @@ public final class RaftClientTestContext {
             epoch,
             leaderId.orElse(-1),
             voteGranted,
-            Endpoints.empty() // TODO: fix this...
+            Endpoints.empty() // KAFKA-16529 will fix this
         );
     }
 
@@ -1280,7 +1280,7 @@ public final class RaftClientTestContext {
             metadataTopicId,
             Errors.NONE,
             leaderId,
-            Endpoints.empty(), // TODO: fix this
+            Endpoints.empty(), // KAFKA-16529 will fix this
             partitionData -> {
                 partitionData
                     .setRecords(records)
@@ -1308,7 +1308,7 @@ public final class RaftClientTestContext {
             metadataTopicId,
             Errors.NONE,
             leaderId,
-            Endpoints.empty(), // TODO: fix this
+            Endpoints.empty(), // KAFKA-16529 will fix this
             partitionData -> {
                 partitionData.setHighWatermark(highWatermark);
 
@@ -1336,7 +1336,7 @@ public final class RaftClientTestContext {
             metadataTopicId,
             Errors.NONE,
             leaderId,
-            Endpoints.empty(), // TODO: fix this
+            Endpoints.empty(), // KAFKA-16529 will fix this
             partitionData -> {
                 partitionData.setHighWatermark(highWatermark);
 
@@ -1360,7 +1360,7 @@ public final class RaftClientTestContext {
             fetchSnapshotRpcVersion(),
             metadataPartition,
             leaderId,
-            Endpoints.empty(), // TODO: fix this
+            Endpoints.empty(), // KAFKA-16529 will fix this
             operator
         );
     }
