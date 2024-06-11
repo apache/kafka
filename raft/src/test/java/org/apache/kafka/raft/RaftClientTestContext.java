@@ -899,6 +899,19 @@ public final class RaftClientTestContext {
     }
 
     void assertSentFetchSnapshotResponse(Errors responseError) {
+        assertSentFetchSnapshotResponse(responseError, metadataPartition);
+    }
+
+    Optional<FetchSnapshotResponseData.PartitionSnapshot> assertSentFetchSnapshotResponse(
+        TopicPartition topicPartition
+    ) {
+        return assertSentFetchSnapshotResponse(Errors.NONE, topicPartition);
+    }
+
+    Optional<FetchSnapshotResponseData.PartitionSnapshot> assertSentFetchSnapshotResponse(
+        Errors responseError,
+        TopicPartition topicPartition
+    ) {
         List<RaftResponse.Outbound> sentMessages = drainSentResponses(ApiKeys.FETCH_SNAPSHOT);
         assertEquals(1, sentMessages.size());
 
@@ -907,19 +920,21 @@ public final class RaftClientTestContext {
 
         FetchSnapshotResponseData response = (FetchSnapshotResponseData) message.data();
         assertEquals(responseError, Errors.forCode(response.errorCode()));
-    }
 
-    Optional<FetchSnapshotResponseData.PartitionSnapshot> assertSentFetchSnapshotResponse(TopicPartition topicPartition) {
-        List<RaftResponse.Outbound> sentMessages = drainSentResponses(ApiKeys.FETCH_SNAPSHOT);
-        assertEquals(1, sentMessages.size());
+        Optional<FetchSnapshotResponseData.PartitionSnapshot> result =
+            FetchSnapshotResponse.forTopicPartition(response, topicPartition);
 
-        RaftMessage message = sentMessages.get(0);
-        assertInstanceOf(FetchSnapshotResponseData.class, message.data());
+        if (result.isPresent() && kip853Rpc && result.get().currentLeader().leaderId() >= 0) {
+            int leaderId = result.get().currentLeader().leaderId();
+            Endpoints expectedLeaderEndpoints = voters.listeners(leaderId);
+            Endpoints responseEndpoints = Endpoints.fromFetchSnapshotResponse(
+                channel.listenerName(),
+                response.nodeEndpoints()
+            );
+            assertEquals(expectedLeaderEndpoints, responseEndpoints);
+        }
 
-        FetchSnapshotResponseData response = (FetchSnapshotResponseData) message.data();
-        assertEquals(Errors.NONE, Errors.forCode(response.errorCode()));
-
-        return FetchSnapshotResponse.forTopicPartition(response, topicPartition);
+        return result;
     }
 
     List<RaftRequest.Outbound> collectEndQuorumRequests(

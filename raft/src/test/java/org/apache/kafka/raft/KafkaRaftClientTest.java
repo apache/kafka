@@ -77,7 +77,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 // TODO: add test for voterid in the vote request
-// TODO: run all of these tests with the new RPC versions: begin quorum, fetch and end quorum
 public class KafkaRaftClientTest {
 
     @Test
@@ -1459,7 +1458,6 @@ public class KafkaRaftClientTest {
         assertEquals(Errors.NONE, Errors.forCode(partitionResponse.errorCode()));
         assertEquals(epoch, partitionResponse.currentLeader().leaderEpoch());
         assertEquals(localId, partitionResponse.currentLeader().leaderId());
-        // TODO: check the endpoints returned
         assertEquals(1, partitionResponse.divergingEpoch().epoch());
         assertEquals(3, partitionResponse.divergingEpoch().endOffset());
     }

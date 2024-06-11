@@ -30,6 +30,7 @@ import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.message.EndQuorumEpochRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.FetchResponseData;
+import org.apache.kafka.common.message.FetchSnapshotResponseData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.network.ListenerName;
@@ -192,6 +193,21 @@ final public class Endpoints {
     ) {
         Map<ListenerName, InetSocketAddress> listeners = new HashMap<>(endpoints.size());
         for (FetchResponseData.NodeEndpoint endpoint : endpoints) {
+            listeners.put(
+                listenerName,
+                InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port())
+            );
+        }
+
+        return new Endpoints(listeners);
+    }
+
+    public static Endpoints fromFetchSnapshotResponse(
+        ListenerName listenerName,
+        FetchSnapshotResponseData.NodeEndpointCollection endpoints
+    ) {
+        Map<ListenerName, InetSocketAddress> listeners = new HashMap<>(endpoints.size());
+        for (FetchSnapshotResponseData.NodeEndpoint endpoint : endpoints) {
             listeners.put(
                 listenerName,
                 InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port())

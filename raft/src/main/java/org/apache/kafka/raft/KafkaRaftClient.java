@@ -670,7 +670,6 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         VoteRequestData.PartitionData partitionRequest =
             request.topics().get(0).partitions().get(0);
 
-        // TODO: test this...
         // Check that the request was intended for this voter
         Optional<ReplicaKey> voterKey = RaftUtil.voteRequestVoterId(request, partitionRequest);
         if (voterKey.isPresent()) {
@@ -811,14 +810,10 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private int strictExponentialElectionBackoffMs(int positionInSuccessors, int totalNumSuccessors) {
-        if (positionInSuccessors <= 0 || positionInSuccessors >= totalNumSuccessors) {
-            // TODO: The old code was setting the timeout to 0 if the it was the first successor
-            // or was not in the list.
-            //
-            // Need to revist this as part of dynamic configuration.
-            //
-            // We probably should return fetch-timeout or election-timeout if we are not in the successor set.
+        if (positionInSuccessors == 0) {
             return 0;
+        } else if (positionInSuccessors < 0 || positionInSuccessors >= totalNumSuccessors) {
+            return quorumConfig.electionBackoffMaxMs();
         }
 
         int retryBackOffBaseMs = quorumConfig.electionBackoffMaxMs() >> (totalNumSuccessors - 1);

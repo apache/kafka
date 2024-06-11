@@ -25,6 +25,7 @@ import org.apache.kafka.common.message.EndQuorumEpochRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.FetchRequestData;
 import org.apache.kafka.common.message.FetchResponseData;
+import org.apache.kafka.common.message.FetchSnapshotRequestData;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
 import org.apache.kafka.common.message.VoteRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
@@ -42,7 +43,7 @@ import java.util.stream.Collectors;
 import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 
-@SuppressWarnings("ClassDataAbstractionCoupling")
+@SuppressWarnings({ "ClassDataAbstractionCoupling", "ClassFanOutComplexity" })
 public class RaftUtil {
 
     public static ApiMessage errorResponse(ApiKeys apiKey, Errors error) {
@@ -206,6 +207,39 @@ public class RaftUtil {
         }
 
         return response;
+    }
+
+    public static FetchSnapshotRequestData singletonFetchSnapshotRequest(
+        String clusterId,
+        ReplicaKey replicaKey,
+        TopicPartition topicPartition,
+        int epoch,
+        OffsetAndEpoch offsetAndEpoch,
+        int maxBytes,
+        long position
+    ) {
+        FetchSnapshotRequestData.SnapshotId snapshotId = new FetchSnapshotRequestData.SnapshotId()
+            .setEndOffset(offsetAndEpoch.offset())
+            .setEpoch(offsetAndEpoch.epoch());
+
+        FetchSnapshotRequestData.PartitionSnapshot partitionSnapshot = new FetchSnapshotRequestData.PartitionSnapshot()
+            .setPartition(topicPartition.partition())
+            .setCurrentLeaderEpoch(epoch)
+            .setSnapshotId(snapshotId)
+            .setPosition(position)
+            .setReplicaDirectoryId(replicaKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID));
+
+        return new FetchSnapshotRequestData()
+            .setClusterId(clusterId)
+            .setReplicaId(replicaKey.id())
+            .setMaxBytes(maxBytes)
+            .setTopics(
+                Collections.singletonList(
+                    new FetchSnapshotRequestData.TopicSnapshot()
+                        .setName(topicPartition.topic())
+                        .setPartitions(Collections.singletonList(partitionSnapshot))
+                )
+            );
     }
 
     /**
