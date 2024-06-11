@@ -134,7 +134,7 @@ public class TestPlugins {
         /**
          * A plugin which is incorrectly packaged, and is missing a superclass definition.
          */
-        BAD_PACKAGING_MISSING_SUPERCLASS(TestPackage.BAD_PACKAGING, "test.plugins.MissingSuperclass", false),
+        BAD_PACKAGING_MISSING_SUPERCLASS(TestPackage.BAD_PACKAGING, "test.plugins.MissingSuperclassConverter", false),
         /**
          * A plugin which is incorrectly packaged, which has a private default constructor.
          */
