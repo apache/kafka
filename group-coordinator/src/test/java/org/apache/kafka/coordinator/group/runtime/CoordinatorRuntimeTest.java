@@ -87,6 +87,7 @@ import static org.apache.kafka.coordinator.group.runtime.CoordinatorRuntime.MIN_
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -3700,10 +3701,14 @@ public class CoordinatorRuntimeTest {
 
         // Verify the initial state.
         CoordinatorRuntime<MockCoordinatorShard, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+        assertEquals(ACTIVE, ctx.state);
         assertEquals(0L, ctx.coordinator.lastWrittenOffset());
         assertEquals(0L, ctx.coordinator.lastCommittedOffset());
         assertEquals(Collections.singletonList(0L), ctx.coordinator.snapshotRegistry().epochsList());
         assertNull(ctx.currentBatch);
+
+        // Keep a reference to the current coordinator.
+        SnapshottableCoordinator<MockCoordinatorShard, String> coordinator = ctx.coordinator;
 
         // Get the max batch size.
         int maxBatchSize = writer.config(TP).maxMessageSize();
@@ -3743,6 +3748,11 @@ public class CoordinatorRuntimeTest {
 
         // Verify that the state machine was loaded twice.
         verify(loader, times(2)).load(eq(TP), any());
+
+        // Verify that the state is active and that the state machine
+        // is actually a new one.
+        assertEquals(ACTIVE, ctx.state);
+        assertNotEquals(coordinator, ctx.coordinator);
     }
 
     private static <S extends CoordinatorShard<U>, U> ArgumentMatcher<CoordinatorPlayback<U>> coordinatorMatcher(
