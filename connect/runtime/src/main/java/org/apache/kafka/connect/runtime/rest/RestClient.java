@@ -19,8 +19,8 @@ package org.apache.kafka.connect.runtime.rest;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.apache.kafka.connect.runtime.distributed.Crypto;
 import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.connect.runtime.distributed.Crypto;
 import org.apache.kafka.connect.runtime.rest.entities.ErrorMessage;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.runtime.rest.util.SSLUtils;
@@ -77,7 +77,7 @@ public class RestClient {
      * @return The deserialized response to the HTTP request, containing null if no data is expected or returned.
      */
     public <T> HttpResponse<T> httpRequest(String url, String method, HttpHeaders headers, Object requestBodyData,
-                                                  TypeReference<T> responseFormat) {
+                                           TypeReference<T> responseFormat) {
         return httpRequest(url, method, headers, requestBodyData, responseFormat, null, null);
     }
 
@@ -94,8 +94,9 @@ public class RestClient {
      *                                  may be null if the request doesn't need to be signed
      */
     public void httpRequest(String url, String method, HttpHeaders headers, Object requestBodyData,
-                                           SecretKey sessionKey, String requestSignatureAlgorithm) {
-        httpRequest(url, method, headers, requestBodyData, new TypeReference<Void>() { }, sessionKey, requestSignatureAlgorithm);
+                            SecretKey sessionKey, String requestSignatureAlgorithm) {
+        httpRequest(url, method, headers, requestBodyData, new TypeReference<Void>() {
+        }, sessionKey, requestSignatureAlgorithm);
     }
 
     /**
@@ -114,8 +115,8 @@ public class RestClient {
      * @return The deserialized response to the HTTP request, containing null if no data is expected or returned.
      */
     public <T> HttpResponse<T> httpRequest(String url, String method, HttpHeaders headers, Object requestBodyData,
-                                                  TypeReference<T> responseFormat,
-                                                  SecretKey sessionKey, String requestSignatureAlgorithm) {
+                                           TypeReference<T> responseFormat,
+                                           SecretKey sessionKey, String requestSignatureAlgorithm) {
         Objects.requireNonNull(url, "url must be non-null");
         Objects.requireNonNull(method, "method must be non-null");
         Objects.requireNonNull(responseFormat, "response format must be non-null");
@@ -145,9 +146,9 @@ public class RestClient {
     }
 
     private <T> HttpResponse<T> httpRequest(HttpClient client, String url, String method,
-                                           HttpHeaders headers, Object requestBodyData,
-                                           TypeReference<T> responseFormat, SecretKey sessionKey,
-                                           String requestSignatureAlgorithm) {
+                                            HttpHeaders headers, Object requestBodyData,
+                                            TypeReference<T> responseFormat, SecretKey sessionKey,
+                                            String requestSignatureAlgorithm) {
         try {
             String serializedBody = requestBodyData == null ? null : JSON_SERDE.writeValueAsString(requestBodyData);
             log.trace("Sending {} with input {} to {}", method, serializedBody, url);
@@ -164,11 +165,11 @@ public class RestClient {
 
             if (sessionKey != null && requestSignatureAlgorithm != null) {
                 InternalRequestSignature.addToRequest(
-                    Crypto.SYSTEM,
-                    sessionKey,
-                    serializedBody != null ? serializedBody.getBytes(StandardCharsets.UTF_8) : null,
-                    requestSignatureAlgorithm,
-                    req
+                        Crypto.SYSTEM,
+                        sessionKey,
+                        serializedBody != null ? serializedBody.getBytes(StandardCharsets.UTF_8) : null,
+                        requestSignatureAlgorithm,
+                        req
                 );
             }
 
@@ -192,7 +193,7 @@ public class RestClient {
         } catch (IOException | TimeoutException | ExecutionException e) {
             log.error("IO error forwarding REST request to {} :", url, e);
             throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR, "IO Error trying to forward REST request: " + e.getMessage(), e);
-        } catch(InterruptedException e){
+        } catch (InterruptedException e) {
             log.error("Thread was interrupted forwarding REST request to {} :", url, e);
             Thread.currentThread().interrupt();
             throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR, "Thread was interrupted trying to forward REST request: " + e.getMessage(), e);
@@ -210,8 +211,9 @@ public class RestClient {
 
     /**
      * Extract headers from REST call and add to client request
-     * @param headers         Headers from REST endpoint
-     * @param req             The client request to modify
+     *
+     * @param headers Headers from REST endpoint
+     * @param req     The client request to modify
      */
     private static void addHeadersToRequest(HttpHeaders headers, Request req) {
         if (headers != null) {
@@ -224,6 +226,7 @@ public class RestClient {
 
     /**
      * Convert response headers from Jetty format ({@link HttpFields}) to a simple {@link Map}
+     *
      * @param httpFields the response headers
      * @return a {@link Map} containing the response headers
      */
