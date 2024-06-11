@@ -827,7 +827,7 @@ public class MockLogTest {
         appendBatch(numberOfRecords, 2);
         appendBatch(numberOfRecords, 4);
 
-        // offset is not equal to oldest snapshot's offset
+        // offset is not equal to the oldest snapshot's offset
         ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(100, 3);
         assertEquals(ValidOffsetAndEpoch.diverging(new OffsetAndEpoch(20, 2)), resultOffsetAndEpoch);
     }
@@ -845,7 +845,7 @@ public class MockLogTest {
 
         appendBatch(numberOfRecords, 3);
 
-        // offset is not equal to oldest snapshot's offset
+        // offset is not equal to the oldest snapshot's offset
         ValidOffsetAndEpoch resultOffsetAndEpoch = log.validateOffsetAndEpoch(100, 2);
         assertEquals(ValidOffsetAndEpoch.diverging(olderEpochSnapshotId), resultOffsetAndEpoch);
     }

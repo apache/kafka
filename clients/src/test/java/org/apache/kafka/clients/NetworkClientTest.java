@@ -1351,17 +1351,17 @@ public class NetworkClientTest {
 
         @Override
         public void handleServerDisconnect(long now, String destinationId, Optional<AuthenticationException> maybeAuthException) {
-            maybeAuthException.ifPresent(exception -> {
-                failure = exception;
-            });
+            maybeAuthException.ifPresent(exception ->
+                failure = exception
+            );
             super.handleServerDisconnect(now, destinationId, maybeAuthException);
         }
 
         @Override
         public void handleFailedRequest(long now, Optional<KafkaException> maybeFatalException) {
-            maybeFatalException.ifPresent(exception -> {
-                failure = exception;
-            });
+            maybeFatalException.ifPresent(exception ->
+                failure = exception
+            );
         }
 
         public KafkaException getAndClearFailure() {
