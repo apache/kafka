@@ -1435,19 +1435,19 @@ RULE:[n:string](regexp)s/pattern/replacement/g/U</code></pre>
         </tr>
         <tr>
             <td>--allow-principal</td>
-            <td>Principal is in PrincipalType:name format that will be added to ACL with Allow permission. Default PrincipalType string "User" is case sensitive. <br>You can specify multiple --allow-principal in a single command.</td>
+            <td>Principal is in PrincipalType:name format that will be added to ACL with Allow permission. Default PrincipalType string "User" is case sensitive, but while defining ACL through default Kraft StandardAuthorizer, you can also use Regex, StartsWith, EndsWith, Contains as PrincipalType. <br>You can specify multiple --allow-principal in a single command.</td>
             <td></td>
             <td>Principal</td>
         </tr>
         <tr>
             <td>--deny-principal</td>
-            <td>Principal is in PrincipalType:name format that will be added to ACL with Deny permission. Default PrincipalType string "User" is case sensitive. <br>You can specify multiple --deny-principal in a single command.</td>
+            <td>Principal is in PrincipalType:name format that will be added to ACL with Deny permission. Default PrincipalType string "User" is case sensitive, but while defining ACL through default Kraft StandardAuthorizer, you can also use Regex, StartsWith, EndsWith, Contains as PrincipalType. <br>You can specify multiple --deny-principal in a single command.</td>
             <td></td>
             <td>Principal</td>
         </tr>
         <tr>
             <td>--principal</td>
-            <td>Principal is in PrincipalType:name format that will be used along with --list option. Default PrincipalType string "User" is case sensitive. This will list the ACLs for the specified principal. <br>You can specify multiple --principal in a single command.</td>
+            <td>Principal is in PrincipalType:name format that will be used along with --list option. Default PrincipalType string "User" is case sensitive, but while defining ACL through default Kraft StandardAuthorizer, you can also use Regex, StartsWith, EndsWith, Contains as PrincipalType. This will list the ACLs for the specified principal. <br>You can specify multiple --principal in a single command. </td>
             <td></td>
             <td>Principal</td>
         </tr>
@@ -1598,6 +1598,17 @@ bin/kafka-acls.sh --bootstrap-server localhost:9092 --command-config /tmp/adminc
     <p>Protocol calls are usually performing some operations on certain resources in Kafka. It is required to know the
         operations and resources to set up effective protection. In this section we'll list these operations and
         resources, then list the combination of these with the protocols to see the valid scenarios.</p>
+    <h5 class="anchor-heading"><a id="principal_type_in_kafka_standard_authorizer" class="anchor-link"></a><a href="#principal_type_in_kafka_standard_authorizer">Principal Type in default StandardAuthorizer in Kafka (Kraft mode)</a></h5>
+    <p>The Option Type Principal (option --allow-principal or --deny-principal or --principal) is defined by a KafkaPrincipal.
+        This object is defined by a string of the form "type:name". The type of a KafkaPrincipal while defining an ACL through StandardAuthorizer in Kraft mode
+        could take one of the following value:</p>
+    <ul>
+        <li>User : the historical value, in this case the name should exactly match the KafkaPrincipal name of the client</li>
+        <li>Regex : in this case the name is a regular expression that should match the KafkaPrincipal name of the client</li>
+        <li>StartsWith : in this case the name should match the beginning of KafkaPrincipal name of the client</li>
+        <li>EndsWith : in this case the name should match the end of KafkaPrincipal name of the client</li>
+        <li>Contains : in this case the name should be contained in the KafkaPrincipal name of the client</li>
+    </ul>
     <h5 class="anchor-heading"><a id="operations_in_kafka" class="anchor-link"></a><a href="#operations_in_kafka">Operations in Kafka</a></h5>
     <p>There are a few operation primitives that can be used to build up privileges. These can be matched up with
         certain resources to allow specific protocol calls for a given user. These are:</p>
