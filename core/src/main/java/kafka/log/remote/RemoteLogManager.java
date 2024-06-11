@@ -383,7 +383,7 @@ public class RemoteLogManager implements Closeable {
                                    Map<String, Uuid> topicIds) {
         LOGGER.debug("Received leadership changes for leaders: {} and followers: {}", partitionsBecomeLeader, partitionsBecomeFollower);
 
-        if (this.rlmConfig.enableRemoteStorageSystem() && !isRemoteLogManagerConfigured()) {
+        if (this.rlmConfig.isRemoteStorageSystemEnabled() && !isRemoteLogManagerConfigured()) {
             throw new KafkaException("RemoteLogManager is not configured when remote storage system is enabled");
         }
 

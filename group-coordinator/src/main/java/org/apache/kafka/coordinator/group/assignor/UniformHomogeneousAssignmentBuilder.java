@@ -34,7 +34,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * The homogenous uniform assignment builder is used to generate the target assignment for a consumer group with
+ * The homogeneous uniform assignment builder is used to generate the target assignment for a consumer group with
  * all its members subscribed to the same set of topics.
  *
  * Assignments are done according to the following principles:
@@ -48,7 +48,7 @@ import java.util.Set;
  * The assignment builder prioritizes the properties in the following order:
  *      Balance > Stickiness.
  */
-public class OptimizedUniformAssignmentBuilder {
+public class UniformHomogeneousAssignmentBuilder {
     private static final Class<?> UNMODIFIABLE_MAP_CLASS = Collections.unmodifiableMap(new HashMap<>()).getClass();
     private static final Class<?> EMPTY_MAP_CLASS = Collections.emptyMap().getClass();
 
@@ -104,7 +104,7 @@ public class OptimizedUniformAssignmentBuilder {
      */
     private int remainingMembersToGetAnExtraPartition;
 
-    OptimizedUniformAssignmentBuilder(GroupSpec groupSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
+    UniformHomogeneousAssignmentBuilder(GroupSpec groupSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
         this.groupSpec = groupSpec;
         this.subscribedTopicDescriber = subscribedTopicDescriber;
         this.subscribedTopicIds = new HashSet<>(groupSpec.memberSubscription(groupSpec.memberIds().iterator().next())

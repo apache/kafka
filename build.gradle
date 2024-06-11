@@ -221,7 +221,6 @@ def excludedSpotlessModules = [':clients',
                                ':metadata',
                                ':raft',
                                ':server',
-                               ':server-common',
                                ':shell',
                                ':storage',
                                ':storage:storage-api', //  rename in settings.gradle
@@ -252,9 +251,6 @@ def excludedSpotlessModules = [':clients',
                                ':streams:upgrade-system-tests-35',
                                ':streams:upgrade-system-tests-36',
                                ':streams:upgrade-system-tests-37',
-                               ':tools',
-                               ':tools:tools-api',
-                               ':transaction-coordinator',
                                ':trogdor']
 
 
@@ -842,8 +838,10 @@ subprojects {
     skipProjects = [ ":jmh-benchmarks", ":trogdor" ]
     skipConfigurations = [ "zinc" ]
   }
-  
-  if(JavaVersion.current().isJava11Compatible() && project.path !in excludedSpotlessModules) {
+  //  the task `removeUnusedImports` is implemented by google-java-format, 
+  //  and unfortunately the google-java-format version used by spotless 6.14.0 can't work with JDK 21. 
+  //  Hence, we apply spotless tasks only if the env is either JDK11 or JDK17
+  if ((JavaVersion.current().isJava11() || (JavaVersion.current() == JavaVersion.VERSION_17)) && project.path !in excludedSpotlessModules) {
     apply plugin: 'com.diffplug.spotless'
     spotless {
       java {
@@ -2167,7 +2165,6 @@ project(':tools') {
   }
 
   dependencies {
-    compileOnly libs.slf4jlog4j
     implementation project(':clients')
     implementation project(':storage')
     implementation project(':server-common')
@@ -2178,6 +2175,7 @@ project(':tools') {
     implementation libs.jacksonDataformatCsv
     implementation libs.jacksonJDK8Datatypes
     implementation libs.slf4jApi
+    implementation libs.slf4jlog4j
     implementation libs.joptSimple
 
     implementation libs.jose4j                    // for SASL/OAUTHBEARER JWT validation
@@ -2204,7 +2202,6 @@ project(':tools') {
       exclude group: 'junit', module: 'junit'
     }
     testImplementation libs.log4j
-    testRuntimeOnly libs.slf4jlog4j
   }
 
   javadoc {
