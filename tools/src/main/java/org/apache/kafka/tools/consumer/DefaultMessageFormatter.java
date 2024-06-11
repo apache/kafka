@@ -21,6 +21,7 @@ import org.apache.kafka.common.MessageFormatter;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.Deserializer;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

@@ -18,6 +18,7 @@
 package org.apache.kafka.deferred;
 
 import org.apache.kafka.common.utils.LogContext;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayList;

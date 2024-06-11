@@ -112,16 +112,14 @@ public final class LeaderAndIsrRequest extends AbstractControlRequest {
 
         @Override
         public String toString() {
-            StringBuilder bld = new StringBuilder();
-            bld.append("(type=LeaderAndIsRequest")
-                .append(", controllerId=").append(controllerId)
-                .append(", controllerEpoch=").append(controllerEpoch)
-                .append(", brokerEpoch=").append(brokerEpoch)
-                .append(", partitionStates=").append(partitionStates)
-                .append(", topicIds=").append(topicIds)
-                .append(", liveLeaders=(").append(liveLeaders.stream().map(Node::toString).collect(Collectors.joining(", "))).append(")")
-                .append(")");
-            return bld.toString();
+            return "(type=LeaderAndIsRequest" +
+                    ", controllerId=" + controllerId +
+                    ", controllerEpoch=" + controllerEpoch +
+                    ", brokerEpoch=" + brokerEpoch +
+                    ", partitionStates=" + partitionStates +
+                    ", topicIds=" + topicIds +
+                    ", liveLeaders=(" + liveLeaders.stream().map(Node::toString).collect(Collectors.joining(", ")) + ")" +
+                    ")";
 
         }
     }

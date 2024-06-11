@@ -70,11 +70,9 @@ public class FinalizedControllerFeatures {
 
     @Override
     public String toString() {
-        StringBuilder bld = new StringBuilder();
-        bld.append("{");
-        bld.append("featureMap=").append(featureMap.toString());
-        bld.append(", epoch=").append(epoch);
-        bld.append("}");
-        return bld.toString();
+        return "FinalizedControllerFeatures(" +
+                "featureMap=" + featureMap.toString() +
+                ", epoch=" + epoch +
+                ")";
     }
 }

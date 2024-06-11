@@ -103,7 +103,7 @@ public class ListTransactionsResult {
             }
 
             Set<Integer> remainingResponses = new HashSet<>(map.keySet());
-            map.forEach((brokerId, future) -> {
+            map.forEach((brokerId, future) ->
                 future.whenComplete((listings, brokerException) -> {
                     if (brokerException != null) {
                         allFuture.completeExceptionally(brokerException);
@@ -115,8 +115,8 @@ public class ListTransactionsResult {
                             allFuture.complete(allListingsMap);
                         }
                     }
-                });
-            });
+                })
+            );
         });
 
         return allFuture;

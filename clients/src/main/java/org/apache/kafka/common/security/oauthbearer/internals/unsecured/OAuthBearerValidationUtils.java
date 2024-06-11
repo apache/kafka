@@ -176,7 +176,7 @@ public class OAuthBearerValidationUtils {
             if (!tokenScope.contains(requiredScopeElement))
                 return OAuthBearerValidationResult.newFailure(String.format(
                         "The provided scope (%s) was missing a required scope (%s).  All required scope elements: %s",
-                        String.valueOf(tokenScope), requiredScopeElement, requiredScope),
+                        tokenScope, requiredScopeElement, requiredScope),
                         requiredScope.toString(), null);
         }
         return OAuthBearerValidationResult.newSuccess();
