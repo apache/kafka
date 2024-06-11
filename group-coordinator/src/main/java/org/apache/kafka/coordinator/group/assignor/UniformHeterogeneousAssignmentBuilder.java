@@ -119,7 +119,7 @@ public class UniformHeterogeneousAssignmentBuilder {
         this.subscribedTopicIds = new HashSet<>();
         this.membersPerTopic = new HashMap<>();
         this.targetAssignment = new HashMap<>();
-        groupSpec.memberIds().forEach(memberId ->
+        groupSpec.memberIds().forEach(memberId -> {
             groupSpec.memberSubscription(memberId).subscribedTopicIds().forEach(topicId -> {
                 // Check if the subscribed topic exists.
                 int partitionCount = subscribedTopicDescriber.numPartitions(topicId);
@@ -130,9 +130,9 @@ public class UniformHeterogeneousAssignmentBuilder {
                 }
                 subscribedTopicIds.add(topicId);
                 membersPerTopic.computeIfAbsent(topicId, k -> new ArrayList<>()).add(memberId);
-                targetAssignment.put(memberId, new MemberAssignmentImpl(new HashMap<>()));
-            })
-        );
+            });
+            targetAssignment.put(memberId, new MemberAssignmentImpl(new HashMap<>()));
+        });
         this.unassignedPartitions = topicIdPartitions(subscribedTopicIds, subscribedTopicDescriber);
         this.assignedStickyPartitions = new HashSet<>();
         this.assignmentManager = new AssignmentManager(this.subscribedTopicDescriber);
