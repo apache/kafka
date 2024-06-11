@@ -25,7 +25,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_3;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_4;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_5;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.uuidForInt;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.processIdForInt;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 
@@ -257,7 +257,7 @@ public class TaskAssignmentUtilsTest {
                                                                         final Set<TaskId> previousActiveTasks,
                                                                         final Set<TaskId> previousStandbyTasks,
                                                                         final Map<String, String> clientTags) {
-        final ProcessId processId = new ProcessId(uuidForInt(id));
+        final ProcessId processId = processIdForInt(id);
         return mkEntry(processId, new DefaultKafkaStreamsState(
             processId,
             numProcessingThreads,
@@ -272,7 +272,7 @@ public class TaskAssignmentUtilsTest {
     }
 
     public static ProcessId processId(final int id) {
-        return new ProcessId(uuidForInt(id));
+        return processIdForInt(id);
     }
 
     public static Map.Entry<ProcessId, KafkaStreamsAssignment> mkAssignment(final AssignedTask.Type taskType,
