@@ -1464,7 +1464,48 @@ public class KafkaAdminClientTest {
                 assertEquals(0, topicDescription.partitions().get(0).partition());
                 assertEquals(1, topicDescription.partitions().get(1).partition());
                 topicDescription = topicDescriptions.get(topicName1);
+                assertNull(topicDescription.authorizedOperations());
                 assertEquals(1, topicDescription.partitions().size());
+            } catch (Exception e) {
+                fail("describe using DescribeTopics API should not fail", e);
+            }
+        }
+    }
+
+    @Test
+    public void testDescribeTopicPartitionsApiWithAuthorizedOps() {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            String topicName0 = "test-0";
+            Uuid topicId =  Uuid.randomUuid();
+
+            int authorisedOperations = 1 << AclOperation.DESCRIBE.code() | 1 << AclOperation.ALTER.code();
+            env.kafkaClient().prepareResponse(
+                    prepareDescribeClusterResponse(0,
+                            env.cluster().nodes(),
+                            env.cluster().clusterResource().clusterId(),
+                            2,
+                            authorisedOperations)
+            );
+
+            DescribeTopicPartitionsResponseData responseData = new DescribeTopicPartitionsResponseData();
+            responseData.topics().add(new DescribeTopicPartitionsResponseTopic()
+                    .setErrorCode((short) 0)
+                    .setTopicId(topicId)
+                    .setName(topicName0)
+                    .setIsInternal(false)
+                    .setTopicAuthorizedOperations(authorisedOperations));
+            env.kafkaClient().prepareResponse(new DescribeTopicPartitionsResponse(responseData));
+
+            try {
+                DescribeTopicsResult result = env.adminClient().describeTopics(
+                        Arrays.asList(topicName0), new DescribeTopicsOptions().includeAuthorizedOperations(true)
+                );
+
+                Map<String, TopicDescription> topicDescriptions = result.allTopicNames().get();
+                TopicDescription topicDescription = topicDescriptions.get(topicName0);
+                assertEquals(new HashSet<>(Arrays.asList(AclOperation.DESCRIBE, AclOperation.ALTER)),
+                        topicDescription.authorizedOperations());
             } catch (Exception e) {
                 fail("describe using DescribeTopics API should not fail", e);
             }
@@ -1547,6 +1588,7 @@ public class KafkaAdminClientTest {
                 assertEquals(2, topicDescription.partitions().size());
                 topicDescription = topicDescriptions.get(topicName2);
                 assertEquals(2, topicDescription.partitions().size());
+                assertNull(topicDescription.authorizedOperations());
             } catch (Exception e) {
                 fail("describe using DescribeTopics API should not fail", e);
             }
