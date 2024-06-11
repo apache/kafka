@@ -796,12 +796,12 @@ public class GroupMetadataManager {
     private boolean validateOnlineDowngrade(ConsumerGroup consumerGroup, String memberId) {
         if (!consumerGroup.allMembersUseClassicProtocolExcept(memberId)) {
             return false;
-        } else if (!consumerGroupMigrationPolicy.isDowngradeEnabled()) {
-            log.info("Cannot downgrade consumer group {} to classic group because the online downgrade is disabled.",
-                consumerGroup.groupId());
-            return false;
         } else if (consumerGroup.numMembers() <= 1) {
             log.debug("Skip downgrading the consumer group {} to classic group because it's empty.",
+                consumerGroup.groupId());
+            return false;
+        } else if (!consumerGroupMigrationPolicy.isDowngradeEnabled()) {
+            log.info("Cannot downgrade consumer group {} to classic group because the online downgrade is disabled.",
                 consumerGroup.groupId());
             return false;
         } else if (consumerGroup.numMembers() - 1 > classicGroupMaxSize) {
