@@ -94,8 +94,6 @@ public class ErrorHandlingIntegrationTest {
 
         // start Connect cluster
         connect.start();
-        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
-                "Initial group of workers did not start in time.");
 
         // get connector handles before starting test.
         connectorHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME);

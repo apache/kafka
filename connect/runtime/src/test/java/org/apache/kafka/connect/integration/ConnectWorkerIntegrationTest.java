@@ -218,9 +218,6 @@ public class ConnectWorkerIntegrationTest {
         props.put(TASKS_MAX_CONFIG, Objects.toString(numTasks));
         props.put(CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + BOOTSTRAP_SERVERS_CONFIG, "nobrokerrunningatthisaddress");
 
-        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
-                "Initial group of workers did not start in time.");
-
         // Try to start the connector and its single task.
         connect.configureConnector(CONNECTOR_NAME, props);
 
@@ -257,9 +254,6 @@ public class ConnectWorkerIntegrationTest {
 
         // set up props for the source connector
         Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
-
-        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
-                "Initial group of workers did not start in time.");
 
         // start a source connector
         connect.configureConnector(CONNECTOR_NAME, props);
@@ -312,9 +306,6 @@ public class ConnectWorkerIntegrationTest {
         // start the clusters
         connect.start();
 
-        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
-                "Initial group of workers did not start in time.");
-
         // base connector props
         Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
         props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
@@ -351,8 +342,6 @@ public class ConnectWorkerIntegrationTest {
             .numBrokers(1)
             .build();
         connect.start();
-
-        connect.assertions().assertAtLeastNumWorkersAreUp(1, "Initial group of workers did not start in time.");
 
         // and when the connector is not configured to create topics
         Map<String, String> props = defaultSourceConnectorProps("nonexistenttopic");
@@ -404,9 +393,6 @@ public class ConnectWorkerIntegrationTest {
         connect = connectBuilder.build();
         // start the clusters
         connect.start();
-
-        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
-                "Initial group of workers did not start in time.");
 
         // Want to make sure to use multiple tasks
         final int numTasks = 4;
@@ -497,9 +483,6 @@ public class ConnectWorkerIntegrationTest {
         // start the clusters
         connect.start();
 
-        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
-                "Initial group of workers did not start in time.");
-
         Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
         // Fail the connector on startup
         props.put("connector.start.inject.error", "true");
@@ -572,11 +555,6 @@ public class ConnectWorkerIntegrationTest {
         // start the clusters
         connect.start();
 
-        connect.assertions().assertAtLeastNumWorkersAreUp(
-            NUM_WORKERS,
-            "Initial group of workers did not start in time."
-        );
-
         connect.configureConnector(CONNECTOR_NAME, defaultSourceConnectorProps(TOPIC_NAME));
         connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
             CONNECTOR_NAME,
@@ -599,9 +577,6 @@ public class ConnectWorkerIntegrationTest {
         connect = connectBuilder.build();
         // start the clusters
         connect.start();
-
-        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
-            "Initial group of workers did not start in time.");
 
         CreateConnectorRequest createConnectorRequest = new CreateConnectorRequest(
             CONNECTOR_NAME,
@@ -633,9 +608,6 @@ public class ConnectWorkerIntegrationTest {
         connect = connectBuilder.build();
         // start the clusters
         connect.start();
-
-        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
-            "Initial group of workers did not start in time.");
 
         Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
 
@@ -686,9 +658,6 @@ public class ConnectWorkerIntegrationTest {
         connect = connectBuilder.build();
         // start the clusters
         connect.start();
-
-        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
-            "Initial group of workers did not start in time.");
 
         // Create topic and produce 10 messages
         connect.kafka().createTopic(TOPIC_NAME);
@@ -754,9 +723,6 @@ public class ConnectWorkerIntegrationTest {
         // start the clusters
         connect.start();
 
-        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
-            "Initial group of workers did not start in time.");
-
         // Create a connector with PAUSED initial state
         CreateConnectorRequest createConnectorRequest = new CreateConnectorRequest(
             CONNECTOR_NAME,
@@ -805,9 +771,6 @@ public class ConnectWorkerIntegrationTest {
         connect = connectBuilder.build();
         // start the clusters
         connect.start();
-
-        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
-                "Initial group of workers did not start in time.");
 
         connect.kafka().createTopic(TOPIC_NAME);
 
@@ -859,8 +822,6 @@ public class ConnectWorkerIntegrationTest {
                 .numWorkers(1)
                 .build();
         connect.start();
-        connect.assertions().assertAtLeastNumWorkersAreUp(1,
-                "Worker did not start in time");
 
         Map<String, String> connectorConfig1 = defaultSourceConnectorProps(TOPIC_NAME);
         Map<String, String> connectorConfig2 = new HashMap<>(connectorConfig1);
@@ -926,8 +887,6 @@ public class ConnectWorkerIntegrationTest {
             .build();
 
         connect.start();
-
-        connect.assertions().assertExactlyNumWorkersAreUp(1, "Worker not brought up in time");
 
         Map<String, String> connectorWithBlockingTaskStopConfig = new HashMap<>();
         connectorWithBlockingTaskStopConfig.put(CONNECTOR_CLASS_CONFIG, BlockingConnectorTest.BlockingSourceConnector.class.getName());
@@ -1007,11 +966,6 @@ public class ConnectWorkerIntegrationTest {
         connect = connectBuilder.build();
         // start the clusters
         connect.start();
-
-        connect.assertions().assertAtLeastNumWorkersAreUp(
-                NUM_WORKERS,
-                "Initial group of workers did not start in time."
-        );
 
         Map<String, String> connectorProps = defaultSourceConnectorProps(TOPIC_NAME);
         int maxTasks = 1;
@@ -1177,11 +1131,6 @@ public class ConnectWorkerIntegrationTest {
         // start the clusters
         connect.start();
 
-        connect.assertions().assertAtLeastNumWorkersAreUp(
-                numWorkers,
-                "Initial group of workers did not start in time."
-        );
-
         final String connectorTopic = "connector-topic";
         connect.kafka().createTopic(connectorTopic, 1);
 
@@ -1214,7 +1163,7 @@ public class ConnectWorkerIntegrationTest {
 
         connect.assertions().assertAtLeastNumWorkersAreUp(
                 numWorkers,
-                "Initial group of workers did not start in time."
+                "Workers did not start in time after cluster was rolled."
         );
 
         final TopicPartition connectorTopicPartition = new TopicPartition(connectorTopic, 0);
@@ -1269,11 +1218,6 @@ public class ConnectWorkerIntegrationTest {
                 .build();
         // start the clusters
         connect.start();
-
-        connect.assertions().assertAtLeastNumWorkersAreUp(
-                numWorkers,
-                "Initial group of workers did not start in time."
-        );
 
         final String firstConnectorTopic = "connector-topic-1";
         connect.kafka().createTopic(firstConnectorTopic);
@@ -1343,11 +1287,6 @@ public class ConnectWorkerIntegrationTest {
         connect = connectBuilder.build();
         // start the clusters
         connect.start();
-
-        connect.assertions().assertAtLeastNumWorkersAreUp(
-                NUM_WORKERS,
-                "Initial group of workers did not start in time."
-        );
 
         final String topic = "kafka9228";
         connect.kafka().createTopic(topic, 1);

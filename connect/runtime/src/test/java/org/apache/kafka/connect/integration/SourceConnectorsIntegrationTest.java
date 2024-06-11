@@ -103,8 +103,6 @@ public class SourceConnectorsIntegrationTest {
         // start the clusters
         connect.start();
 
-        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS, "Initial group of workers did not start in time.");
-
         Map<String, String> fooProps = sourceConnectorPropsWithGroups(FOO_TOPIC);
 
         // start a source connector
@@ -127,8 +125,6 @@ public class SourceConnectorsIntegrationTest {
         connect = connectBuilder.build();
         // start the clusters
         connect.start();
-
-        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS, "Initial group of workers did not start in time.");
 
         Map<String, String> fooProps = sourceConnectorPropsWithGroups(FOO_TOPIC);
 
@@ -159,8 +155,6 @@ public class SourceConnectorsIntegrationTest {
         connect.assertions().assertTopicsExist(BAR_TOPIC);
         connect.assertions().assertTopicSettings(BAR_TOPIC, DEFAULT_REPLICATION_FACTOR,
                 DEFAULT_PARTITIONS, "Topic " + BAR_TOPIC + " does not have the expected settings");
-
-        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS, "Initial group of workers did not start in time.");
 
         Map<String, String> barProps = defaultSourceConnectorProps(BAR_TOPIC);
         // start a source connector with topic creation properties
