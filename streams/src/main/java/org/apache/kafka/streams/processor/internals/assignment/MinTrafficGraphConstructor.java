@@ -21,11 +21,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
-import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.BiPredicate;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor.CostFunction;
 
 public class MinTrafficGraphConstructor<T> implements RackAwareGraphConstructor<T> {
@@ -33,29 +33,29 @@ public class MinTrafficGraphConstructor<T> implements RackAwareGraphConstructor<
     @Override
     public int getSinkNodeID(
         final List<TaskId> taskIdList,
-        final List<UUID> clientList,
+        final List<ProcessId> clientList,
         final Collection<Set<TaskId>> taskSetsPerTopicGroup
     ) {
         return clientList.size() + taskIdList.size();
     }
 
     @Override
-    public int getClientNodeId(final int clientIndex, final List<TaskId> taskIdList, final List<UUID> clientList, final int topicGroupIndex) {
+    public int getClientNodeId(final int clientIndex, final List<TaskId> taskIdList, final List<ProcessId> clientList, final int topicGroupIndex) {
         return clientIndex + taskIdList.size();
     }
 
     @Override
-    public int getClientIndex(final int clientNodeId, final List<TaskId> taskIdList, final List<UUID> clientList, final int topicGroupIndex) {
+    public int getClientIndex(final int clientNodeId, final List<TaskId> taskIdList, final List<ProcessId> clientList, final int topicGroupIndex) {
         return clientNodeId - taskIdList.size();
     }
 
     @Override
     public Graph<Integer> constructTaskGraph(
-        final List<UUID> clientList,
+        final List<ProcessId> clientList,
         final List<TaskId> taskIdList,
-        final Map<UUID, T> clientStates,
-        final Map<TaskId, UUID> taskClientMap,
-        final Map<UUID, Integer> originalAssignedTaskNumber,
+        final Map<ProcessId, T> clientStates,
+        final Map<TaskId, ProcessId> taskClientMap,
+        final Map<ProcessId, Integer> originalAssignedTaskNumber,
         final BiPredicate<T, TaskId> hasAssignedTask,
         final CostFunction costFunction,
         final int trafficCost,
@@ -66,7 +66,7 @@ public class MinTrafficGraphConstructor<T> implements RackAwareGraphConstructor<
         final Graph<Integer> graph = new Graph<>();
 
         for (final TaskId taskId : taskIdList) {
-            for (final Entry<UUID, T> clientState : clientStates.entrySet()) {
+            for (final Entry<ProcessId, T> clientState : clientStates.entrySet()) {
                 if (hasAssignedTask.test(clientState.getValue(), taskId)) {
                     originalAssignedTaskNumber.merge(clientState.getKey(), 1, Integer::sum);
                 }
@@ -78,7 +78,7 @@ public class MinTrafficGraphConstructor<T> implements RackAwareGraphConstructor<
             final TaskId taskId = taskIdList.get(taskNodeId);
             for (int j = 0; j < clientList.size(); j++) {
                 final int clientNodeId = getClientNodeId(j, taskIdList, null, -1);
-                final UUID processId = clientList.get(j);
+                final ProcessId processId = clientList.get(j);
 
                 final int flow = hasAssignedTask.test(clientStates.get(processId), taskId) ? 1 : 0;
                 final int cost = costFunction.getCost(taskId, processId, flow == 1, trafficCost,
@@ -120,11 +120,11 @@ public class MinTrafficGraphConstructor<T> implements RackAwareGraphConstructor<
     @Override
     public boolean assignTaskFromMinCostFlow(
         final Graph<Integer> graph,
-        final List<UUID> clientList,
+        final List<ProcessId> clientList,
         final List<TaskId> taskIdList,
-        final Map<UUID, T> clientStates,
-        final Map<UUID, Integer> originalAssignedTaskNumber,
-        final Map<TaskId, UUID> taskClientMap,
+        final Map<ProcessId, T> clientStates,
+        final Map<ProcessId, Integer> originalAssignedTaskNumber,
+        final Map<TaskId, ProcessId> taskClientMap,
         final BiConsumer<T, TaskId> assignTask,
         final BiConsumer<T, TaskId> unAssignTask,
         final BiPredicate<T, TaskId> hasAssignedTask

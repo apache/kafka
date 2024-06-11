@@ -30,6 +30,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
@@ -50,7 +51,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
@@ -63,8 +63,8 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_0_2;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_1;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_2;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_1;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.createMockAdminClientForAssignor;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -147,7 +147,7 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
 
     private void createMockTaskManager() {
         when(taskManager.topologyMetadata()).thenReturn(topologyMetadata);
-        when(taskManager.processId()).thenReturn(UUID_1);
+        when(taskManager.processId()).thenReturn(PID_1);
         topologyMetadata.buildAndRewriteTopology();
     }
 
@@ -186,12 +186,12 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         subscriptions.put(firstConsumer,
                           new Subscription(
                               singletonList("source1"),
-                              getInfo(UUID_1, allTasks).encode()
+                              getInfo(PID_1, allTasks).encode()
                           ));
         subscriptions.put(newConsumer,
                           new Subscription(
                               singletonList("source1"),
-                              getInfo(UUID_2, EMPTY_TASKS).encode()
+                              getInfo(PID_2, EMPTY_TASKS).encode()
                           ));
 
         final Map<String, Assignment> assignments = partitionAssignor
@@ -240,12 +240,12 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         subscriptions.put(firstConsumer,
                           new Subscription(
                               singletonList("source1"),
-                              getInfo(UUID_1, allTasks).encode()
+                              getInfo(PID_1, allTasks).encode()
                           ));
         subscriptions.put(newConsumer,
                           new Subscription(
                               singletonList("source1"),
-                              getInfo(UUID_2, EMPTY_TASKS).encode()
+                              getInfo(PID_2, EMPTY_TASKS).encode()
                           ));
 
         final Map<String, Assignment> assignments = partitionAssignor
@@ -297,7 +297,7 @@ public class HighAvailabilityStreamsPartitionAssignorTest {
         return changelogEndOffsets;
     }
 
-    private static SubscriptionInfo getInfo(final UUID processId,
+    private static SubscriptionInfo getInfo(final ProcessId processId,
                                             final Set<TaskId> prevTasks) {
         return new SubscriptionInfo(
             LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks), (byte) 0, 0, Collections.emptyMap());
