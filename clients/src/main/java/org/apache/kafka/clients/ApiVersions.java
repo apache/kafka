@@ -34,15 +34,15 @@ public class ApiVersions {
 
     private final Map<String, NodeApiVersions> nodeApiVersions = new HashMap<>();
     private byte maxUsableProduceMagic = RecordBatch.CURRENT_MAGIC_VALUE;
-    private short maxProduceSupportedVersion = ApiKeys.PRODUCE.latestVersion();
+    private short maxSupportedProduceVersion = ApiKeys.PRODUCE.latestVersion();
 
     public synchronized void update(String nodeId, NodeApiVersions nodeApiVersions) {
         this.nodeApiVersions.put(nodeId, nodeApiVersions);
         this.maxUsableProduceMagic = computeMaxUsableProduceMagic();
-        this.maxProduceSupportedVersion = computeMaxProduceSupportedVersion();
+        this.maxSupportedProduceVersion = computeMaxSupportedProduceVersion();
     }
 
-    private short computeMaxProduceSupportedVersion() {
+    private short computeMaxSupportedProduceVersion() {
         Optional<Short> knownBrokerNodesMinSupportedVersionForProduce = this.nodeApiVersions.values().stream()
                 .filter(versions -> versions.apiVersion(ApiKeys.PRODUCE) != null) // filter out Raft controller nodes
                 .map(versions -> versions.latestUsableVersion(ApiKeys.PRODUCE))
@@ -54,6 +54,7 @@ public class ApiVersions {
     public synchronized void remove(String nodeId) {
         this.nodeApiVersions.remove(nodeId);
         this.maxUsableProduceMagic = computeMaxUsableProduceMagic();
+        this.maxSupportedProduceVersion = computeMaxSupportedProduceVersion();
     }
 
     public synchronized NodeApiVersions get(String nodeId) {
@@ -74,8 +75,8 @@ public class ApiVersions {
     public synchronized byte maxUsableProduceMagic() {
         return maxUsableProduceMagic;
     }
-    public synchronized short getMaxSupportedProduceVersion() {
-        return maxProduceSupportedVersion;
+    public synchronized short maxSupportedProduceVersion() {
+        return maxSupportedProduceVersion;
     }
 
 }
