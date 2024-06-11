@@ -1473,13 +1473,13 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testDescribeTopicPartitionsApiWithAuthorizedOps() {
+    public void testDescribeTopicPartitionsApiWithAuthorizedOps() throws ExecutionException, InterruptedException {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             String topicName0 = "test-0";
             Uuid topicId =  Uuid.randomUuid();
 
-            int authorisedOperations = 1 << AclOperation.DESCRIBE.code() | 1 << AclOperation.ALTER.code();
+            int authorisedOperations = Utils.to32BitField(Utils.mkSet(AclOperation.DESCRIBE.code(), AclOperation.ALTER.code()));
             env.kafkaClient().prepareResponse(
                     prepareDescribeClusterResponse(0,
                             env.cluster().nodes(),
@@ -1497,18 +1497,14 @@ public class KafkaAdminClientTest {
                     .setTopicAuthorizedOperations(authorisedOperations));
             env.kafkaClient().prepareResponse(new DescribeTopicPartitionsResponse(responseData));
 
-            try {
-                DescribeTopicsResult result = env.adminClient().describeTopics(
-                        Arrays.asList(topicName0), new DescribeTopicsOptions().includeAuthorizedOperations(true)
-                );
+            DescribeTopicsResult result = env.adminClient().describeTopics(
+                    singletonList(topicName0), new DescribeTopicsOptions().includeAuthorizedOperations(true)
+            );
 
-                Map<String, TopicDescription> topicDescriptions = result.allTopicNames().get();
-                TopicDescription topicDescription = topicDescriptions.get(topicName0);
-                assertEquals(new HashSet<>(Arrays.asList(AclOperation.DESCRIBE, AclOperation.ALTER)),
-                        topicDescription.authorizedOperations());
-            } catch (Exception e) {
-                fail("describe using DescribeTopics API should not fail", e);
-            }
+            Map<String, TopicDescription> topicDescriptions = result.allTopicNames().get();
+            TopicDescription topicDescription = topicDescriptions.get(topicName0);
+            assertEquals(new HashSet<>(asList(AclOperation.DESCRIBE, AclOperation.ALTER)),
+                    topicDescription.authorizedOperations());
         }
     }
 
