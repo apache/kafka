@@ -16,6 +16,14 @@
  */
 package org.apache.kafka.raft.internals;
 
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.feature.SupportedVersionRange;
+import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.utils.Utils;
+
+import org.junit.jupiter.api.Test;
+
 import java.net.InetSocketAddress;
 import java.util.Arrays;
 import java.util.Collections;
@@ -27,12 +35,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
-import org.apache.kafka.common.Node;
-import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.feature.SupportedVersionRange;
-import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.common.utils.Utils;
-import org.junit.jupiter.api.Test;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;

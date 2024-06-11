@@ -16,15 +16,16 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.raft.generated.QuorumStateData;
+import org.apache.kafka.raft.internals.ReplicaKey;
+
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
 import java.util.stream.Collectors;
-import org.apache.kafka.common.Uuid;
-import org.apache.kafka.raft.generated.QuorumStateData;
-import org.apache.kafka.raft.internals.ReplicaKey;
 
 /**
  * Encapsulate election state stored on disk after every state change.

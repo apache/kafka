@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.raft.internals;
 
-import java.util.Optional;
 import org.junit.jupiter.api.Test;
+
+import java.util.Optional;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 

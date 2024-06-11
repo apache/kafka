@@ -17,10 +17,11 @@
 package org.apache.kafka.snapshot;
 
 import org.apache.kafka.common.utils.BufferSupplier;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.KafkaRaftClient;
 import org.apache.kafka.raft.OffsetAndEpoch;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.internals.IdentitySerde;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

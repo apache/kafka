@@ -16,11 +16,12 @@
  */
 package org.apache.kafka.raft.internals;
 
+import org.junit.jupiter.api.Test;
+
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Set;
-import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;

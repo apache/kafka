@@ -33,6 +33,7 @@ import org.apache.kafka.snapshot.MockRawSnapshotReader;
 import org.apache.kafka.snapshot.MockRawSnapshotWriter;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RawSnapshotWriter;
+
 import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;

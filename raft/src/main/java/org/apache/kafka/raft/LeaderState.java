@@ -17,8 +17,8 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
-import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.message.LeaderChangeMessage;
+import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.ControlRecordUtils;
 import org.apache.kafka.common.utils.LogContext;
@@ -26,6 +26,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.ReplicaKey;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayList;

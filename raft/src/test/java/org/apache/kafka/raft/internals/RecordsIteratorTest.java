@@ -16,24 +16,6 @@
  */
 package org.apache.kafka.raft.internals;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.IdentityHashMap;
-import java.util.List;
-import java.util.NoSuchElementException;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.Random;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-import java.util.stream.Stream;
-import net.jqwik.api.ForAll;
-import net.jqwik.api.Property;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.message.KRaftVersionRecord;
@@ -62,12 +44,34 @@ import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.MockRawSnapshotWriter;
 import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 import org.apache.kafka.test.TestUtils;
+
+import net.jqwik.api.ForAll;
+import net.jqwik.api.Property;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mockito;
+
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Random;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
+
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;

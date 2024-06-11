@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.protocol.ApiMessage;
 
 import java.util.concurrent.CompletableFuture;
 

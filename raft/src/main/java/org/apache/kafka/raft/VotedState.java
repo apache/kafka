@@ -16,13 +16,15 @@
  */
 package org.apache.kafka.raft;
 
-import java.util.Optional;
-import java.util.Set;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.raft.internals.ReplicaKey;
+
 import org.slf4j.Logger;
+
+import java.util.Optional;
+import java.util.Set;
 
 /**
  * The "voted" state is for voters who have cast their vote for a specific candidate.

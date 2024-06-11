@@ -16,12 +16,13 @@
  */
 package org.apache.kafka.snapshot;
 
-import java.nio.ByteBuffer;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.UnalignedMemoryRecords;
 import org.apache.kafka.common.record.UnalignedRecords;
 import org.apache.kafka.raft.OffsetAndEpoch;
+
+import java.nio.ByteBuffer;
 
 public final class MockRawSnapshotReader implements RawSnapshotReader {
     private final OffsetAndEpoch snapshotId;
