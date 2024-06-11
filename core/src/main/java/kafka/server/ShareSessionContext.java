@@ -197,8 +197,8 @@ public class ShareSessionContext extends ShareFetchContext {
             synchronized (session) {
                 sessionEpoch = session.epoch;
             }
-            if (session.epoch != expectedEpoch) {
-                log.info("Subsequent share session {} expected epoch {}, but got {}. Possible duplicate request.",
+            if (sessionEpoch != expectedEpoch) {
+                log.debug("Subsequent share session {} expected epoch {}, but got {}. Possible duplicate request.",
                         session.key(), expectedEpoch, sessionEpoch);
                 return new ShareFetchResponse(ShareFetchResponse.toMessage(Errors.INVALID_SHARE_SESSION_EPOCH,
                         0, Collections.emptyIterator(), Collections.emptyList()));

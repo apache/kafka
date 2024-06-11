@@ -67,9 +67,7 @@ public class ShareSession {
     }
 
     public ShareSessionKey key() {
-        synchronized (this) {
-            return key;
-        }
+        return key;
     }
 
     public int cachedSize() {
@@ -134,8 +132,7 @@ public class ShareSession {
 
     // Update the cached partition data based on the request.
     public Map<ModifiedTopicIdPartitionType, List<TopicIdPartition>> update(Map<TopicIdPartition,
-            ShareFetchRequest.SharePartitionData> shareFetchData,
-                                                                            List<TopicIdPartition> toForget) {
+            ShareFetchRequest.SharePartitionData> shareFetchData, List<TopicIdPartition> toForget) {
         List<TopicIdPartition> added = new ArrayList<>();
         List<TopicIdPartition> updated = new ArrayList<>();
         List<TopicIdPartition> removed = new ArrayList<>();
@@ -165,7 +162,7 @@ public class ShareSession {
 
     public String toString() {
         return "ShareSession(" +
-                " key=" + key +
+                "key=" + key +
                 ", partitionMap=" + partitionMap +
                 ", creationMs=" + creationMs +
                 ", lastUsedMs=" + lastUsedMs +
