@@ -119,7 +119,6 @@ public class ConsumerRecordsTest {
 
         for (String topic : topics) {
             Iterable<ConsumerRecord<Integer, String>> records = consumerRecords.records(topic);
-            Iterator<ConsumerRecord<Integer, String>> iterator = records.iterator();
             int recordCount = 0;
             int partitionCount = 0;
             int currentPartition = -1;
