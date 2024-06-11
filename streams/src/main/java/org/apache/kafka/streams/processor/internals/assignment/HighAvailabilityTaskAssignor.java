@@ -17,8 +17,8 @@
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 import org.apache.kafka.streams.processor.internals.Task;
-import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,8 +45,8 @@ import static org.apache.kafka.streams.processor.internals.assignment.TaskMoveme
 
 public class HighAvailabilityTaskAssignor implements TaskAssignor {
     private static final Logger log = LoggerFactory.getLogger(HighAvailabilityTaskAssignor.class);
-    private static final int DEFAULT_STATEFUL_TRAFFIC_COST = 10;
-    private static final int DEFAULT_STATEFUL_NON_OVERLAP_COST = 1;
+    public static final int DEFAULT_HIGH_AVAILABILITY_TRAFFIC_COST = 10;
+    public static final int DEFAULT_HIGH_AVAILABILITY_NON_OVERLAP_COST = 1;
 
     @Override
     public boolean assign(final Map<UUID, ClientState> clients,
@@ -67,12 +67,12 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
             configs
         );
 
-        final AtomicInteger remainingWarmupReplicas = new AtomicInteger(configs.maxWarmupReplicas);
+        final AtomicInteger remainingWarmupReplicas = new AtomicInteger(configs.maxWarmupReplicas());
 
         final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients = tasksToCaughtUpClients(
             statefulTasks,
             clientStates,
-            configs.acceptableRecoveryLag
+            configs.acceptableRecoveryLag()
         );
 
         final Map<TaskId, SortedSet<UUID>> tasksToClientByLag = tasksToClientByLag(statefulTasks, clientStates);
@@ -134,10 +134,8 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         );
 
         if (rackAwareTaskAssignor.canEnableRackAwareAssignor()) {
-            final int trafficCost = configs.rackAwareAssignmentTrafficCost == null ?
-                DEFAULT_STATEFUL_TRAFFIC_COST : configs.rackAwareAssignmentTrafficCost;
-            final int nonOverlapCost = configs.rackAwareAssignmentNonOverlapCost == null ?
-                DEFAULT_STATEFUL_NON_OVERLAP_COST : configs.rackAwareAssignmentNonOverlapCost;
+            final int trafficCost = configs.rackAwareTrafficCost().orElse(DEFAULT_HIGH_AVAILABILITY_TRAFFIC_COST);
+            final int nonOverlapCost = configs.rackAwareNonOverlapCost().orElse(DEFAULT_HIGH_AVAILABILITY_NON_OVERLAP_COST);
             rackAwareTaskAssignor.optimizeActiveTasks(statefulTasks, clientStates, trafficCost, nonOverlapCost);
         }
     }
@@ -147,7 +145,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
                                            final Set<TaskId> statefulTasks,
                                            final RackAwareTaskAssignor rackAwareTaskAssignor,
                                            final AssignmentConfigs configs) {
-        if (configs.numStandbyReplicas == 0) {
+        if (configs.numStandbyReplicas() == 0) {
             return;
         }
 
@@ -164,10 +162,8 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         );
 
         if (rackAwareTaskAssignor.canEnableRackAwareAssignor()) {
-            final int trafficCost = configs.rackAwareAssignmentTrafficCost == null ?
-                DEFAULT_STATEFUL_TRAFFIC_COST : configs.rackAwareAssignmentTrafficCost;
-            final int nonOverlapCost = configs.rackAwareAssignmentNonOverlapCost == null ?
-                DEFAULT_STATEFUL_NON_OVERLAP_COST : configs.rackAwareAssignmentNonOverlapCost;
+            final int trafficCost = configs.rackAwareTrafficCost().orElse(DEFAULT_HIGH_AVAILABILITY_TRAFFIC_COST);
+            final int nonOverlapCost = configs.rackAwareNonOverlapCost().orElse(DEFAULT_HIGH_AVAILABILITY_NON_OVERLAP_COST);
             rackAwareTaskAssignor.optimizeStandbyTasks(clientStates, trafficCost, nonOverlapCost, standbyTaskAssignor::isAllowedTaskMovement);
         }
     }

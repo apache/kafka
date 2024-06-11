@@ -27,9 +27,9 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
-import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.hamcrest.Matchers;
 import org.junit.Before;
 import org.junit.Test;
@@ -1459,7 +1459,7 @@ public class HighAvailabilityTaskAssignorTest {
         final Map<UUID, Map<String, Optional<String>>> processRackMap = getRandomProcessRacks(clientSize, nodeSize);
         final InternalTopicManager mockInternalTopicManager = mockInternalTopicManagerForRandomChangelog(nodeSize, tpSize, partitionSize);
 
-        AssignmentConfigs configs = new AssignorConfiguration.AssignmentConfigs(
+        AssignmentConfigs configs = new AssignmentConfigs(
             0L,
             1,
             replicaCount,
@@ -1508,7 +1508,7 @@ public class HighAvailabilityTaskAssignorTest {
         }
 
         final SortedMap<UUID, ClientState> clientStateMapCopy = copyClientStateMap(clientStateMap);
-        configs = new AssignorConfiguration.AssignmentConfigs(
+        configs = new AssignmentConfigs(
             0L,
             1,
             replicaCount,

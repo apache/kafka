@@ -39,7 +39,7 @@ import org.junit.Test;
 public class KafkaStreamsStateTest {
     @Test
     public void shouldCorrectlyReturnTasksByLag() {
-        final KafkaStreamsState state = new KafkaStreamsStateImpl(
+        final KafkaStreamsState state = new DefaultKafkaStreamsState(
             new ProcessId(UUID.randomUUID()),
             10,
             mkMap(),
@@ -70,7 +70,7 @@ public class KafkaStreamsStateTest {
 
     @Test
     public void shouldThrowExceptionOnLagOperationsIfLagsWereNotComputed() {
-        final KafkaStreamsState state = new KafkaStreamsStateImpl(
+        final KafkaStreamsState state = new DefaultKafkaStreamsState(
             new ProcessId(UUID.randomUUID()),
             10,
             mkMap(),
