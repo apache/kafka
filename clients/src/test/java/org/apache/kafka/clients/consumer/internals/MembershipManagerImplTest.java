@@ -921,11 +921,11 @@ public class MembershipManagerImplTest {
             "heartbeat request to leave is sent out.");
     }
 
-    // TODO
     @ParameterizedTest
     @MethodSource("notInGroupStates")
     public void testIgnoreHeartbeatResponseWhenNotInGroup(MemberState state) {
-        MembershipManagerImpl membershipManager = createMembershipManager(null);
+        MembershipManagerImpl membershipManager = mock(MembershipManagerImpl.class);
+        when(membershipManager.state()).thenReturn(state);
         ConsumerGroupHeartbeatResponseData responseData = mock(ConsumerGroupHeartbeatResponseData.class);
 
         membershipManager.onHeartbeatSuccess(responseData);
