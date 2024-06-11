@@ -454,6 +454,7 @@ public class MembershipManagerImplTest {
                 membershipManager.memberEpoch());
     }
 
+    // TODO
     /**
      * This is the case where a member is stuck reconciling and transitions out of the RECONCILING
      * state (due to failure). When the reconciliation completes it should not be applied because
@@ -486,6 +487,7 @@ public class MembershipManagerImplTest {
         assertNotEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
     }
 
+    // TODO
     /**
      * This is the case where a member is stuck reconciling an assignment A (waiting for commit
      * to complete), and it rejoins (due to fence or unsubscribe/subscribe). If the
@@ -1353,7 +1355,6 @@ public class MembershipManagerImplTest {
         verifyReconciliationTriggeredAndCompleted(membershipManager, assignedPartitions);
     }
 
-    // TODO
     @Test
     public void testReconciliationSkippedWhenSameAssignmentReceived() {
         createCommitRequestManager();
@@ -1371,7 +1372,7 @@ public class MembershipManagerImplTest {
 
         verifyReconciliationTriggeredAndCompleted(membershipManager, expectedAssignmentReconciled);
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
-        clearInvocations(subscriptionState, membershipManager);
+        clearInvocations(subscriptionState);
 
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.STABLE, membershipManager.state());
@@ -1404,6 +1405,7 @@ public class MembershipManagerImplTest {
         testRevocationOfAllPartitionsCompleted(membershipManager);
     }
 
+    // TODO
     @Test
     public void testReconcilePartitionsRevokedWithSuccessfulAutoCommitNoCallbacks() {
         MembershipManagerImpl membershipManager = createMemberInStableState();
@@ -1427,6 +1429,7 @@ public class MembershipManagerImplTest {
         testRevocationOfAllPartitionsCompleted(membershipManager);
     }
 
+    // TODO
     @Test
     public void testReconcilePartitionsRevokedWithFailedAutoCommitCompletesRevocationAnyway() {
         MembershipManagerImpl membershipManager = createMemberInStableState();
