@@ -124,8 +124,7 @@ public class ConsumerRecordsTest {
             int partitionCount = 0;
             int currentPartition = -1;
 
-            while (iterator.hasNext()) {
-                ConsumerRecord<Integer, String> record = iterator.next();
+            for (ConsumerRecord<Integer, String> record : records) {
                 validateEmptyPartition(record, emptyPartitionIndex);
 
                 // Check if we have moved to a new partition
