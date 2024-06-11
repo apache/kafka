@@ -45,7 +45,7 @@ public class BuiltInPartitioner {
     private final AtomicReference<StickyPartitionInfo> stickyPartitionInfo = new AtomicReference<>();
 
     // Visible and used for testing only.
-    static volatile public Supplier<Integer> mockRandom = null;
+    protected static volatile Supplier<Integer> mockRandom = null;
 
     /**
      * BuiltInPartitioner constructor.
