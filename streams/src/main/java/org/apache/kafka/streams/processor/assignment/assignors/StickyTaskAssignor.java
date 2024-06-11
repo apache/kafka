@@ -105,6 +105,8 @@ public class StickyTaskAssignor implements TaskAssignor {
             .filter(task -> !task.isStateful())
             .map(TaskInfo::id)
             .collect(Collectors.toSet());
+
+        // TODO: We need to use stateless traffic costs and non overlap costs here.
         final Map<ProcessId, KafkaStreamsAssignment> optimizedAssignmentsForAllTasks = TaskAssignmentUtils.optimizeRackAwareActiveTasks(
             applicationState, optimizedAssignmentsForStatefulTasks, new TreeSet<>(statelessTasks));
 
