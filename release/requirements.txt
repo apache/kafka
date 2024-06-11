@@ -1,0 +1,2 @@
+jira==3.8.0
+jproperties==2.1.1
