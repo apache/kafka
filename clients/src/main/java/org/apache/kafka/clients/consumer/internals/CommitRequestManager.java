@@ -1085,8 +1085,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         @Override
         public String toStringBase() {
             return super.toStringBase() +
-                    ", requestedPartitions=" + requestedPartitions +
-                    ", future=" + future;
+                    ", requestedPartitions=" + requestedPartitions;
         }
     }
 
@@ -1286,5 +1285,9 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                     ", memberEpoch=" + (memberEpoch.isPresent() ? memberEpoch.get() : "undefined");
         }
 
+        // Visible for testing
+        protected void setMemberEpoch(int memberEpoch) {
+            this.memberEpoch = Optional.of(memberEpoch);
+        }
     }
 }

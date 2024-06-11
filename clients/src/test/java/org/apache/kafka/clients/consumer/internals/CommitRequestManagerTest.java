@@ -127,6 +127,7 @@ public class CommitRequestManagerTest {
     public void testOffsetFetchRequestStateToStringBase() {
         ConsumerConfig config = mock(ConsumerConfig.class);
         CommitRequestManager.MemberInfo memberInfo = new CommitRequestManager.MemberInfo();
+        memberInfo.setMemberEpoch(1);
 
         CommitRequestManager commitRequestManager = new CommitRequestManager(
                 time,
@@ -158,8 +159,7 @@ public class CommitRequestManagerTest {
 
         String target = timedRequestState.toStringBase() +
                 ", " + memberInfo +
-                ", requestedPartitions=" + offsetFetchRequestState.requestedPartitions +
-                ", future=" + offsetFetchRequestState.future();
+                ", requestedPartitions=" + offsetFetchRequestState.requestedPartitions;
 
         assertDoesNotThrow(timedRequestState::toString);
         assertEquals(target, offsetFetchRequestState.toStringBase());
