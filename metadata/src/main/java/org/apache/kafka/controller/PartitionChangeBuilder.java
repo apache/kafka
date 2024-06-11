@@ -32,6 +32,7 @@ import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
+import org.apache.kafka.controller.metrics.QuorumControllerMetrics;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.Replicas;
@@ -86,6 +87,7 @@ public class PartitionChangeBuilder {
     private final MetadataVersion metadataVersion;
     private final int minISR;
     private final Map<Integer, Uuid> targetDirectories;
+    private final Optional<QuorumControllerMetrics> metrics;
     private List<Integer> targetIsr;
     private List<Integer> targetReplicas;
     private List<Integer> targetRemoving;
@@ -109,7 +111,8 @@ public class PartitionChangeBuilder {
         int partitionId,
         IntPredicate isAcceptableLeader,
         MetadataVersion metadataVersion,
-        int minISR
+        int minISR,
+        Optional<QuorumControllerMetrics> metrics
     ) {
         this.partition = partition;
         this.topicId = topicId;
@@ -119,6 +122,7 @@ public class PartitionChangeBuilder {
         this.zkMigrationEnabled = false;
         this.eligibleLeaderReplicasEnabled = false;
         this.minISR = minISR;
+        this.metrics = metrics;
 
         this.targetIsr = Replicas.toList(partition.isr);
         this.targetReplicas = Replicas.toList(partition.replicas);
@@ -286,6 +290,8 @@ public class PartitionChangeBuilder {
                 .filter(replica -> isAcceptableLeader.test(replica))
                 .findFirst();
             if (uncleanLeader.isPresent()) {
+                // update "UncleanLeaderElectionsPerSec" metric
+                metrics.ifPresent(QuorumControllerMetrics::updateUncleanLeaderElection);
                 return new ElectionResult(uncleanLeader.get(), true);
             }
         }

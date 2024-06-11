@@ -19,6 +19,7 @@ package org.apache.kafka.controller.metrics;
 
 import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.Histogram;
+import com.yammer.metrics.core.Meter;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
 import org.apache.kafka.common.utils.Time;
@@ -26,6 +27,7 @@ import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 
 import java.util.Arrays;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
@@ -66,6 +68,8 @@ public class QuorumControllerMetrics implements AutoCloseable {
         "KafkaController", "EventQueueOperationsTimedOutCount");
     private final static MetricName NEW_ACTIVE_CONTROLLERS_COUNT = getMetricName(
         "KafkaController", "NewActiveControllersCount");
+    private final static MetricName UNCLEAN_LEADER_ELECTIONS_PER_SEC = getMetricName(
+        "ControllerStats", "UncleanLeaderElectionsPerSec");
 
     private final Optional<MetricsRegistry> registry;
     private volatile boolean active;
@@ -82,6 +86,8 @@ public class QuorumControllerMetrics implements AutoCloseable {
     private final AtomicLong operationsStarted = new AtomicLong(0);
     private final AtomicLong operationsTimedOut = new AtomicLong(0);
     private final AtomicLong newActiveControllers = new AtomicLong(0);
+
+    private Optional<Meter> uncleanLeaderElectionMeter = Optional.empty();
 
     private Consumer<Long> newHistogram(MetricName name, boolean biased) {
         if (registry.isPresent()) {
@@ -155,6 +161,8 @@ public class QuorumControllerMetrics implements AutoCloseable {
                 return newActiveControllers();
             }
         }));
+        registry.ifPresent(r -> uncleanLeaderElectionMeter =
+                Optional.of(registry.get().newMeter(UNCLEAN_LEADER_ELECTIONS_PER_SEC, "elections", TimeUnit.SECONDS)));
 
         if (zkMigrationEnabled) {
             registry.ifPresent(r -> r.newGauge(ZK_WRITE_BEHIND_LAG, new Gauge<Long>() {
@@ -262,6 +270,10 @@ public class QuorumControllerMetrics implements AutoCloseable {
         return newActiveControllers.get();
     }
 
+    public void updateUncleanLeaderElection() {
+        uncleanLeaderElectionMeter.ifPresent(Meter::mark);
+    }
+
     @Override
     public void close() {
         registry.ifPresent(r -> Arrays.asList(
@@ -278,7 +290,8 @@ public class QuorumControllerMetrics implements AutoCloseable {
             NEW_ACTIVE_CONTROLLERS_COUNT,
             ZK_WRITE_BEHIND_LAG,
             ZK_WRITE_SNAPSHOT_TIME_MS,
-            ZK_WRITE_DELTA_TIME_MS
+            ZK_WRITE_DELTA_TIME_MS,
+            UNCLEAN_LEADER_ELECTIONS_PER_SEC
         ).forEach(r::removeMetric));
     }
 

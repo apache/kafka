@@ -69,6 +69,7 @@ import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingPartitionReassignment;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingTopicReassignment;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
+import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
@@ -80,6 +81,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AlterPartitionRequest;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.controller.metrics.QuorumControllerMetrics;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistration;
@@ -126,6 +128,7 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
 import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
 import static org.apache.kafka.common.config.TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG;
+import static org.apache.kafka.common.config.TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG;
 import static org.apache.kafka.common.protocol.Errors.FENCED_LEADER_EPOCH;
 import static org.apache.kafka.common.protocol.Errors.INELIGIBLE_REPLICA;
 import static org.apache.kafka.common.protocol.Errors.INVALID_REQUEST;
@@ -165,6 +168,12 @@ public class ReplicationControlManager {
         private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
         private FeatureControlManager featureControl = null;
         private boolean eligibleLeaderReplicasEnabled = false;
+        private Optional<QuorumControllerMetrics> metrics = Optional.empty();
+
+        Builder setMetrics(QuorumControllerMetrics metrics) {
+            this.metrics = Optional.of(metrics);
+            return this;
+        }
 
         Builder setSnapshotRegistry(SnapshotRegistry snapshotRegistry) {
             this.snapshotRegistry = snapshotRegistry;
@@ -232,6 +241,9 @@ public class ReplicationControlManager {
             if (featureControl == null) {
                 throw new IllegalStateException("FeatureControlManager must not be null");
             }
+            if (!metrics.isPresent()) {
+                throw new IllegalStateException("QuorumControllerMetrics must not be null");
+            }
             return new ReplicationControlManager(snapshotRegistry,
                 logContext,
                 defaultReplicationFactor,
@@ -242,7 +254,8 @@ public class ReplicationControlManager {
                 configurationControl,
                 clusterControl,
                 createTopicPolicy,
-                featureControl);
+                featureControl,
+                metrics);
         }
     }
 
@@ -403,6 +416,8 @@ public class ReplicationControlManager {
      */
     final KRaftClusterDescriber clusterDescriber = new KRaftClusterDescriber();
 
+    final Optional<QuorumControllerMetrics> metrics;
+
     private ReplicationControlManager(
         SnapshotRegistry snapshotRegistry,
         LogContext logContext,
@@ -414,7 +429,8 @@ public class ReplicationControlManager {
         ConfigurationControlManager configurationControl,
         ClusterControlManager clusterControl,
         Optional<CreateTopicPolicy> createTopicPolicy,
-        FeatureControlManager featureControl
+        FeatureControlManager featureControl,
+        Optional<QuorumControllerMetrics> metrics
     ) {
         this.snapshotRegistry = snapshotRegistry;
         this.log = logContext.logger(ReplicationControlManager.class);
@@ -435,6 +451,7 @@ public class ReplicationControlManager {
         this.reassigningTopics = new TimelineHashMap<>(snapshotRegistry, 0);
         this.imbalancedPartitions = new TimelineHashSet<>(snapshotRegistry, 0);
         this.directoriesToPartitions = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.metrics = metrics;
     }
 
     public void replay(TopicRecord record) {
@@ -1081,7 +1098,8 @@ public class ReplicationControlManager {
                     partitionId,
                     new LeaderAcceptor(clusterControl, partition),
                     featureControl.metadataVersion(),
-                    getTopicEffectiveMinIsr(topic.name)
+                    getTopicEffectiveMinIsr(topic.name),
+                    metrics
                 )
                     .setZkMigrationEnabled(clusterControl.zkRegistrationAllowed())
                     .setEligibleLeaderReplicasEnabled(isElrEnabled());
@@ -1527,7 +1545,8 @@ public class ReplicationControlManager {
             partitionId,
             new LeaderAcceptor(clusterControl, partition),
             featureControl.metadataVersion(),
-            getTopicEffectiveMinIsr(topic)
+            getTopicEffectiveMinIsr(topic),
+            metrics
         )
             .setElection(election)
             .setZkMigrationEnabled(clusterControl.zkRegistrationAllowed())
@@ -1669,7 +1688,8 @@ public class ReplicationControlManager {
                 topicPartition.partitionId(),
                 new LeaderAcceptor(clusterControl, partition),
                 featureControl.metadataVersion(),
-                getTopicEffectiveMinIsr(topic.name)
+                getTopicEffectiveMinIsr(topic.name),
+                metrics
             )
                 .setElection(PartitionChangeBuilder.Election.PREFERRED)
                 .setZkMigrationEnabled(clusterControl.zkRegistrationAllowed())
@@ -1896,7 +1916,8 @@ public class ReplicationControlManager {
                 topicIdPart.partitionId(),
                 new LeaderAcceptor(clusterControl, partition, isAcceptableLeader),
                 featureControl.metadataVersion(),
-                getTopicEffectiveMinIsr(topic.name)
+                getTopicEffectiveMinIsr(topic.name),
+                metrics
             );
             builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
             builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
@@ -2015,7 +2036,8 @@ public class ReplicationControlManager {
             tp.partitionId(),
             new LeaderAcceptor(clusterControl, part),
             featureControl.metadataVersion(),
-            getTopicEffectiveMinIsr(topicName)
+            getTopicEffectiveMinIsr(topicName),
+            metrics
         );
         builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
         builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
@@ -2077,7 +2099,8 @@ public class ReplicationControlManager {
             tp.partitionId(),
             new LeaderAcceptor(clusterControl, part),
             featureControl.metadataVersion(),
-            getTopicEffectiveMinIsr(topics.get(tp.topicId()).name.toString())
+            getTopicEffectiveMinIsr(topics.get(tp.topicId()).name.toString()),
+            metrics
         );
         builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
         builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
@@ -2091,6 +2114,50 @@ public class ReplicationControlManager {
             builder.setTargetAdding(reassignment.adding());
         }
         return builder.setDefaultDirProvider(clusterDescriber).build();
+    }
+
+    /**
+     * Handle legacy configuration alterations.
+     */
+    ControllerResult<Map<ConfigResource, ApiError>> legacyAlterConfigs(
+            Map<ConfigResource, Map<String, String>> newConfigs) {
+        ControllerResult<Map<ConfigResource, ApiError>> result =
+                configurationControl.legacyAlterConfigs(newConfigs, false);
+        return maybeTriggerUncleanLeaderElection(result);
+    }
+
+    /**
+     * Handle incremental configuration alterations.
+     */
+    ControllerResult<Map<ConfigResource, ApiError>> incrementalAlterConfigs(
+            Map<ConfigResource, Map<String, Entry<OpType, String>>> configChanges) {
+        ControllerResult<Map<ConfigResource, ApiError>> result =
+                configurationControl.incrementalAlterConfigs(configChanges, false);
+        return maybeTriggerUncleanLeaderElection(result);
+    }
+
+    /**
+     * If "unclean.leader.election.enable" configurations was enabled dynamically, generating unclean leader election
+     * records for all the partitions in this topic if necessary.
+     */
+    ControllerResult<Map<ConfigResource, ApiError>> maybeTriggerUncleanLeaderElection(
+            ControllerResult<Map<ConfigResource, ApiError>> result) {
+        List<ApiMessageAndVersion> records = new ArrayList<>(result.records());
+        for (ApiMessageAndVersion messageAndVersion : result.records()) {
+            ConfigRecord record = (ConfigRecord) messageAndVersion.message();
+            if (record.name().equals(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG) && "true".equals(record.value())) {
+                String topicName = record.resourceName();
+                Uuid topicId = topicsByName.get(topicName);
+                TopicControlInfo topicInfo = this.topics.get(topicId);
+                for (int partitionIndex : topicInfo.parts.keySet()) {
+                    if (electLeader(topicName, partitionIndex, ElectionType.UNCLEAN, records).equals(ApiError.NONE)) {
+                        log.debug("Triggering unclean leader election for topic: {}, partition: {}", topicName, partitionIndex);
+                    }
+                }
+            }
+        }
+
+        return new ControllerResult<>(records, result.response(), false);
     }
 
     ListPartitionReassignmentsResponseData listPartitionReassignments(
@@ -2161,7 +2228,8 @@ public class ReplicationControlManager {
                                     partitionIndex,
                                     new LeaderAcceptor(clusterControl, partitionRegistration),
                                     featureControl.metadataVersion(),
-                                    getTopicEffectiveMinIsr(topicName)
+                                    getTopicEffectiveMinIsr(topicName),
+                                    metrics
                             )
                                     .setDirectory(brokerId, dirId)
                                     .setDefaultDirProvider(clusterDescriber)

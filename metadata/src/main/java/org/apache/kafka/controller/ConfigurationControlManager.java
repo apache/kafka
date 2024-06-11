@@ -50,6 +50,7 @@ import java.util.Optional;
 import java.util.function.Consumer;
 
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.APPEND;
+import static org.apache.kafka.common.config.TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG;
 import static org.apache.kafka.common.protocol.Errors.INVALID_CONFIG;
 import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
 
@@ -495,8 +496,19 @@ public class ConfigurationControlManager {
         configData.remove(new ConfigResource(Type.TOPIC, name));
     }
 
-    boolean uncleanLeaderElectionEnabledForTopic(String name) {
-        return false; // TODO: support configuring unclean leader election.
+    /**
+     * Check if this topic has "unclean.leader.election.enable" set to true.
+     *
+     * @param topicName            The topic name for the config.
+     * @return true if this topic has uncleanLeaderElection enabled
+     */
+    boolean uncleanLeaderElectionEnabledForTopic(String topicName) {
+        String uncleanLeaderElection = getTopicConfig(topicName, UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG);
+        if (uncleanLeaderElection != null) {
+            return Boolean.parseBoolean(uncleanLeaderElection);
+        }
+
+        return false;
     }
 
     Map<String, ConfigEntry> computeEffectiveTopicConfigs(Map<String, String> creationConfigs) {

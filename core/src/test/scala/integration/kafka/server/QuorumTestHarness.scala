@@ -314,7 +314,7 @@ abstract class QuorumTestHarness extends Logging {
 
   def optionalMetadataRecords: Option[ArrayBuffer[ApiMessageAndVersion]] = None
 
-  private def newKRaftQuorum(testInfo: TestInfo): KRaftQuorumImplementation = {
+  protected def newKRaftQuorum(testInfo: TestInfo): KRaftQuorumImplementation = {
     newKRaftQuorum(new Properties())
   }
 
