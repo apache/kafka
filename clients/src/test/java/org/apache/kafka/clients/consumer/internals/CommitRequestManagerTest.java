@@ -79,6 +79,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
@@ -613,8 +614,8 @@ public class CommitRequestManagerTest {
         }
     }
 
-//    @ParameterizedTest
-//    @MethodSource("offsetFetchExceptionSupplier")
+    @ParameterizedTest
+    @MethodSource("offsetFetchExceptionSupplier")
     public void testOffsetFetchRequestTimeoutRequests(final Errors error) {
         CommitRequestManager commitRequestManager = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
@@ -1259,10 +1260,10 @@ public class CommitRequestManagerTest {
                 commitRequestManager.pendingRequests.inflightOffsetFetches.size(),
                 "Since the inflight offset fetch request expired, it should remain as a cache for the next attempt"
             );
-            Optional<CommitRequestManager.OffsetFetchResult> cache = commitRequestManager.lastCompletedOffsetFetch();
-            assertTrue(cache.isPresent());
-            assertEquals(partitions, cache.get().partitions());
-            assertEquals(offsetAndMetadataMap, cache.get().result());
+            CommitRequestManager.OffsetFetchResultDetail cacheDetail = commitRequestManager.offsetFetchResultCache.get();
+            assertNotNull(cacheDetail);
+            assertEquals(partitions, cacheDetail.partitions);
+            assertEquals(offsetAndMetadataMap, cacheDetail.result);
             assertTrue(future.isDone());
             assertFalse(future.isCompletedExceptionally());
         }
@@ -1281,11 +1282,8 @@ public class CommitRequestManagerTest {
                 commitRequestManager.pendingRequests.inflightOffsetFetches.size(),
                 "The inflight offset fetch request should have been removed"
             );
-            Optional<CommitRequestManager.OffsetFetchResult> cache = commitRequestManager.lastCompletedOffsetFetch();
-            assertTrue(
-                cache.isPresent(),
-                "The cached offset fetch request remains present because the request expired"
-            );
+            CommitRequestManager.OffsetFetchResultDetail cacheDetail = commitRequestManager.offsetFetchResultCache.get();
+            assertNotNull(cacheDetail, "The cached offset fetch request remains present because the request expired");
             assertTrue(future.isDone());
             assertFalse(future.isCompletedExceptionally());
         }
@@ -1316,8 +1314,8 @@ public class CommitRequestManagerTest {
                 commitRequestManager.pendingRequests.inflightOffsetFetches.size(),
                 "The inflight offset fetch should remain as a cache for the next request"
             );
-            Optional<CommitRequestManager.OffsetFetchResult> cache = commitRequestManager.lastCompletedOffsetFetch();
-            assertTrue(cache.isPresent());
+            CommitRequestManager.OffsetFetchResultDetail cacheDetail = commitRequestManager.offsetFetchResultCache.get();
+            assertNotNull(cacheDetail);
             assertTrue(future.isDone());
             assertFalse(future.isCompletedExceptionally());
         }
@@ -1345,8 +1343,8 @@ public class CommitRequestManagerTest {
                 commitRequestManager.pendingRequests.inflightOffsetFetches.get(0).requestedPartitions,
                 "The inflight offset fetch should be for the most recently requested set of partitions"
             );
-            Optional<CommitRequestManager.OffsetFetchResult> cache = commitRequestManager.lastCompletedOffsetFetch();
-            assertFalse(cache.isPresent());
+            CommitRequestManager.OffsetFetchResultDetail cacheDetail = commitRequestManager.offsetFetchResultCache.get();
+            assertNull(cacheDetail);
             assertFalse(future.isDone());
             completeOffsetFetchRequest(unsentRequest, tp);
             res = commitRequestManager.poll(time.milliseconds());
@@ -1377,7 +1375,7 @@ public class CommitRequestManagerTest {
                 commitRequestManager.pendingRequests.inflightOffsetFetches.size(),
                 "The inflight offset fetch response should have been removed from the cache"
             );
-            Optional<CommitRequestManager.OffsetFetchResult> cache = commitRequestManager.lastCompletedOffsetFetch();
+            CommitRequestManager.OffsetFetchResultDetail cacheDetail = commitRequestManager.offsetFetchResultCache.get();
             assertTrue(future.isDone());
             assertFalse(future.isCompletedExceptionally());
         }
