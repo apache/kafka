@@ -127,7 +127,6 @@ public class CommitRequestManagerTest {
     public void testOffsetFetchRequestStateToStringBase() {
         ConsumerConfig config = mock(ConsumerConfig.class);
         CommitRequestManager.MemberInfo memberInfo = new CommitRequestManager.MemberInfo();
-        memberInfo.setMemberEpoch(1);
 
         CommitRequestManager commitRequestManager = new CommitRequestManager(
                 time,
@@ -140,6 +139,7 @@ public class CommitRequestManagerTest {
                 Optional.of("groupInstanceId"),
                 metrics);
 
+        commitRequestManager.onMemberEpochUpdated(Optional.of(1), Optional.empty());
         Set<TopicPartition> requestedPartitions = Collections.singleton(new TopicPartition("topic-1", 1));
 
         CommitRequestManager.OffsetFetchRequestState offsetFetchRequestState = commitRequestManager.new OffsetFetchRequestState(

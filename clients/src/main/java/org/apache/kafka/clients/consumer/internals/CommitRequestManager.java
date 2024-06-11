@@ -1284,10 +1284,5 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             return "memberId=" + memberId.orElse("undefined") +
                     ", memberEpoch=" + (memberEpoch.isPresent() ? memberEpoch.get() : "undefined");
         }
-
-        // Visible for testing
-        protected void setMemberEpoch(int memberEpoch) {
-            this.memberEpoch = Optional.of(memberEpoch);
-        }
     }
 }
