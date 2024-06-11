@@ -69,6 +69,7 @@ import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingPartitionReassignment;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingTopicReassignment;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
+import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.FenceBrokerRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
@@ -127,6 +128,7 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
 import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
 import static org.apache.kafka.common.config.TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG;
+import static org.apache.kafka.common.config.TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG;
 import static org.apache.kafka.common.protocol.Errors.FENCED_LEADER_EPOCH;
 import static org.apache.kafka.common.protocol.Errors.INELIGIBLE_REPLICA;
 import static org.apache.kafka.common.protocol.Errors.INVALID_REQUEST;
@@ -139,6 +141,7 @@ import static org.apache.kafka.common.protocol.Errors.OPERATION_NOT_ATTEMPTED;
 import static org.apache.kafka.common.protocol.Errors.TOPIC_AUTHORIZATION_FAILED;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_ID;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION;
+import static org.apache.kafka.controller.ConfigurationControlManager.DEFAULT_NODE;
 import static org.apache.kafka.controller.PartitionReassignmentReplicas.isReassignmentInProgress;
 import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
@@ -1677,6 +1680,13 @@ public class ReplicationControlManager {
                 .build().ifPresent(records::add);
         }
 
+        // There might be some partitions not triggering unclean leader election after config change due to multiple records in one metadata transaction,
+        // try to elect leaders for them here periodically.
+        // Note: We don't have to worry about overlapping with imbalanced partitions preferred leader election above because
+        // the partition will be considered as imbalanced when leader is not NO_LEADER and not the 1st replica.
+        // But unclean leader election will only be triggered when leader is NO_LEADER.
+        triggerUncleanLeaderElectionForNoLeaderPartitions(records, true);
+
         return ControllerResult.of(records, rescheduleImmediately);
     }
 
@@ -2076,7 +2086,7 @@ public class ReplicationControlManager {
             tp.partitionId(),
             new LeaderAcceptor(clusterControl, part),
             featureControl.metadataVersion(),
-            getTopicEffectiveMinIsr(topics.get(tp.topicId()).name)
+            getTopicEffectiveMinIsr(topics.get(tp.topicId()).name.toString())
         );
         builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
         builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
@@ -2090,6 +2100,89 @@ public class ReplicationControlManager {
             builder.setTargetAdding(reassignment.adding());
         }
         return builder.setDefaultDirProvider(clusterDescriber).build();
+    }
+
+    /**
+     * Handle legacy configuration alterations.
+     */
+    ControllerResult<Map<ConfigResource, ApiError>> legacyAlterConfigs(
+            Map<ConfigResource, Map<String, String>> newConfigs) {
+        ControllerResult<Map<ConfigResource, ApiError>> result =
+                configurationControl.legacyAlterConfigs(newConfigs, false);
+        return maybeTriggerUncleanLeaderElection(result);
+    }
+
+    /**
+     * Handle incremental configuration alterations.
+     */
+    ControllerResult<Map<ConfigResource, ApiError>> incrementalAlterConfigs(
+            Map<ConfigResource, Map<String, Entry<OpType, String>>> configChanges) {
+        ControllerResult<Map<ConfigResource, ApiError>> result =
+                configurationControl.incrementalAlterConfigs(configChanges, false);
+        return maybeTriggerUncleanLeaderElection(result);
+    }
+
+    /**
+     * Trigger unclean leader election for partitions without leader (visiable for testing)
+     *
+     * @param records  The record list to append to.
+     * @param shouldCheckTopicConfig  should check topic config or not before triggering unclean leader election.
+     */
+    void triggerUncleanLeaderElectionForNoLeaderPartitions(List<ApiMessageAndVersion> records, boolean shouldCheckTopicConfig) {
+        Iterator<TopicIdPartition> iterator = brokersToIsrs.partitionsWithNoLeader();
+        while (iterator.hasNext()) {
+            TopicIdPartition topicIdPartition = iterator.next();
+            TopicControlInfo topic = topics.get(topicIdPartition.topicId());
+            if (topic == null) {
+                throw new RuntimeException("Topic ID " + topicIdPartition.topicId() + " existed in " +
+                        "isrMembers, but not in the topics map.");
+            }
+            PartitionRegistration partition = topic.parts.get(topicIdPartition.partitionId());
+            if (partition == null) {
+                throw new RuntimeException("Partition " + topicIdPartition +
+                        " existed in isrMembers, but not in the partitions map.");
+            }
+            // if this topic doesn't enable unclean leader election config, skip it when shouldCheckTopicConfig is true
+            if (shouldCheckTopicConfig &&
+                    !configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
+                continue;
+            }
+            if (electLeader(topic.name, topicIdPartition.partitionId(), ElectionType.UNCLEAN, records).equals(ApiError.NONE)) {
+                log.debug("Triggering unclean leader election for topic: {}, partition: {}", topic.name, topicIdPartition.partitionId());
+            }
+        }
+    }
+
+    /**
+     * If "unclean.leader.election.enable" configurations was enabled dynamically, generating unclean leader election
+     * records for all the partitions in this topic if necessary.
+     */
+    ControllerResult<Map<ConfigResource, ApiError>> maybeTriggerUncleanLeaderElection(
+            ControllerResult<Map<ConfigResource, ApiError>> result) {
+        List<ApiMessageAndVersion> records = new ArrayList<>(result.records());
+        for (ApiMessageAndVersion messageAndVersion : result.records()) {
+            ConfigRecord record = (ConfigRecord) messageAndVersion.message();
+            if (record.name().equals(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG) && "true".equals(record.value())) {
+                if (record.resourceType() == TOPIC.id()) {
+                    String topicName = record.resourceName();
+                    Uuid topicId = topicsByName.get(topicName);
+                    TopicControlInfo topicInfo = this.topics.get(topicId);
+                    for (int partitionIndex : topicInfo.parts.keySet()) {
+                        if (electLeader(topicName, partitionIndex, ElectionType.UNCLEAN, records).equals(ApiError.NONE)) {
+                            log.debug("Triggering unclean leader election for topic: {}, partition: {}", topicName, partitionIndex);
+                        }
+                    }
+                } else if (record.resourceType() == ConfigResource.Type.BROKER.id()) {
+                    if (record.resourceName().equals(String.valueOf(clusterControl.nodeId())) ||
+                            DEFAULT_NODE.name().equals(record.resourceName())) {
+                        triggerUncleanLeaderElectionForNoLeaderPartitions(records, false);
+                    }
+                }
+
+            }
+        }
+
+        return new ControllerResult<>(records, result.response(), false);
     }
 
     ListPartitionReassignmentsResponseData listPartitionReassignments(
