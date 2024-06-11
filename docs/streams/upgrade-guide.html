@@ -166,14 +166,6 @@
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-989%3A+Improved+StateStore+Iterator+metrics+for+detecting+leaks">KIP-989</a>.
     </p>
 
-    <p>
-        To facilitate the implementation of dead-letter queues in Kafka Streams,
-        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-1036%3A+Extend+RecordDeserializationException+exception">KIP-1036</a>
-        extended the interface of the `RecordDeserializationException` in the Kafka consumer. The new method `timestampType`,
-        `timestamp`, `keyBuffer`, `valueBuffer`, `headers` and `origin` more precisely describe the original record
-        that caused the exception.
-    </p>
-
     <h3><a id="streams_api_changes_370" href="#streams_api_changes_370">Streams API changes in 3.7.0</a></h3>
     <p>
         We added a new method to <code>KafkaStreams</code>, namely <code>KafkaStreams#setStandbyUpdateListener()</code> in
