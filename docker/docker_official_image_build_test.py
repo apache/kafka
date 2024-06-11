@@ -76,7 +76,7 @@ if __name__ == '__main__':
     parser.add_argument("--test", "-t", action="store_true", dest="test_only",
                         default=False, help="Only run the tests, don't build the image")
     args = parser.parse_args()
-    kafka_url = f"https://downloads.apache.org/kafka/{args.kafka_version}/kafka_2.13-{args.kafka_version}.tgz"
+    kafka_url = f"https://archive.apache.org/dist/kafka/{args.kafka_version}/kafka_2.13-{args.kafka_version}.tgz"
     if args.build_only or not (args.build_only or args.test_only):
         if args.kafka_version:
             build_docker_official_image(args.image, args.tag, args.kafka_version, args.image_type)
