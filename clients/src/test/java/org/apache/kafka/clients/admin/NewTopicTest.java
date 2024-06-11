@@ -97,9 +97,9 @@ public class NewTopicTest {
         NewTopic newTopic = new NewTopic(TEST_TOPIC, replicasAssignments);
         Map<Integer, List<Integer>> returnedAssignments = newTopic.replicasAssignments();
 
-        assertThrows(UnsupportedOperationException.class, () -> {
-            returnedAssignments.put(1, Arrays.asList(3, 4));
-        });
+        assertThrows(UnsupportedOperationException.class, () ->
+                returnedAssignments.put(1, Arrays.asList(3, 4))
+        );
     }
 
     @Test
@@ -148,9 +148,27 @@ public class NewTopicTest {
 
     @Test
     public void testToString() {
-        NewTopic topic = new NewTopic(TEST_TOPIC, NUM_PARTITIONS, REPLICATION_FACTOR);
-        String expected = "(name=" + TEST_TOPIC + ", numPartitions=" + NUM_PARTITIONS + ", replicationFactor=" + REPLICATION_FACTOR + ", replicasAssignments=null, configs=null)";
-        assertEquals(expected, topic.toString());
+        NewTopic topic1 = new NewTopic(TEST_TOPIC, NUM_PARTITIONS, REPLICATION_FACTOR);
+        String expected1 = "(name=" + TEST_TOPIC + ", numPartitions=" + NUM_PARTITIONS
+                + ", replicationFactor=" + REPLICATION_FACTOR + ", replicasAssignments=null, configs=null)";
+        assertEquals(expected1, topic1.toString());
+
+        Map<String, String> configs = new HashMap<>();
+        configs.put(CLEANUP_POLICY_CONFIG_KEY, CLEANUP_POLICY_CONFIG_VALUE);
+        topic1.configs(configs);
+        String expected2 = "(name=" + TEST_TOPIC + ", numPartitions=" + NUM_PARTITIONS
+                + ", replicationFactor=" + REPLICATION_FACTOR + ", replicasAssignments=null, configs="
+                + "{" + CLEANUP_POLICY_CONFIG_KEY + "=" + CLEANUP_POLICY_CONFIG_VALUE + "})";
+        assertEquals(expected2, topic1.toString());
+
+        int partitionIndex = 0;
+        Map<Integer, List<Integer>> replicasAssignments = new HashMap<>();
+        replicasAssignments.put(partitionIndex, BROKER_IDS);
+        NewTopic topic2 = new NewTopic(TEST_TOPIC, replicasAssignments);
+        String expected3 = "(name=" + TEST_TOPIC + ", numPartitions=default"
+                + ", replicationFactor=default, replicasAssignments="
+                + "{" + partitionIndex + "=" + BROKER_IDS + "}" + ", configs=null)";
+        assertEquals(expected3, topic2.toString());
     }
 
     @Test
@@ -165,4 +183,3 @@ public class NewTopicTest {
         assertNotEquals(topic1.hashCode(), topic3.hashCode());
     }
 }
-
