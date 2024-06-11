@@ -1045,13 +1045,22 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         if (rawTaskProps.size() != currentNumTasks) {
             log.debug("Connector {} task count changed from {} to {}", connName, currentNumTasks, rawTaskProps.size());
             result = true;
-        } else {
+        }
+        if (!result) {
             for (int index = 0; index < currentNumTasks; index++) {
                 ConnectorTaskId taskId = new ConnectorTaskId(connName, index);
                 if (!rawTaskProps.get(index).equals(configState.rawTaskConfig(taskId))) {
                     log.debug("Connector {} has change in configuration for task {}-{}", connName, connName, index);
                     result = true;
                 }
+            }
+        }
+        if (!result) {
+            Map<String, String> appliedConnectorConfig = configState.appliedConnectorConfig(connName);
+            Map<String, String> currentConnectorConfig = configState.connectorConfig(connName);
+            if (!Objects.equals(appliedConnectorConfig, currentConnectorConfig)) {
+                log.debug("Forcing task restart for connector {} as its configuration appears to be updated", connName);
+                result = true;
             }
         }
         if (result) {
