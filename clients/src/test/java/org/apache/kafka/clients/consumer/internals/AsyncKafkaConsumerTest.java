@@ -158,7 +158,12 @@ public class AsyncKafkaConsumerTest {
     public void resetAll() {
         backgroundEventQueue.clear();
         if (consumer != null) {
-            consumer.close(Duration.ZERO);
+            try {
+                consumer.close(Duration.ZERO);
+            } catch (Exception e) {
+                // best effort to clean up after each test, but may throw (ex. if callbacks where
+                // throwing errors)
+            }
         }
         consumer = null;
         Mockito.framework().clearInlineMocks();
