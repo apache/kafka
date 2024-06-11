@@ -31,7 +31,13 @@ public class LeastLoadedNode {
         return node;
     }
 
-    public boolean isAtLeastOneConnectionReady() {
-        return atLeastOneConnectionReady;
+    /**
+     * Indicates if the least loaded node is available or at least a ready connection exists.
+     *
+     * <p>There may be no node available while ready connections to live nodes exist. This may happen when
+     * the connections are overloaded with in-flight requests. This function takes this into account.
+     */
+    public boolean hasNodeAvailableOrConnectionReady() {
+        return node() != null || atLeastOneConnectionReady;
     }
 }

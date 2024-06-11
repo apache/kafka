@@ -1144,8 +1144,7 @@ public class NetworkClient implements KafkaClient {
             LeastLoadedNode leastLoadedNode = leastLoadedNode(now);
 
             // Rebootstrap if needed and configured.
-            if (leastLoadedNode.node() == null
-                    && !leastLoadedNode.isAtLeastOneConnectionReady()
+            if (!leastLoadedNode.hasNodeAvailableOrConnectionReady()
                     && metadataRecoveryStrategy == MetadataRecoveryStrategy.REBOOTSTRAP) {
                 for (final Node oldNode : metadata.fetch().nodes()) {
                     NetworkClient.this.close(oldNode.idString());
