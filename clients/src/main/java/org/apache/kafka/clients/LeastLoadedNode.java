@@ -20,18 +20,18 @@ import org.apache.kafka.common.Node;
 
 public class LeastLoadedNode {
     private final Node node;
-    private final boolean atLeastOneConnected;
+    private final boolean atLeastOneConnectionReady;
 
-    public LeastLoadedNode(Node node, boolean atLeastOneConnected) {
+    public LeastLoadedNode(Node node, boolean atLeastOneConnectionReady) {
         this.node = node;
-        this.atLeastOneConnected = atLeastOneConnected;
+        this.atLeastOneConnectionReady = atLeastOneConnectionReady;
     }
 
     public Node node() {
         return node;
     }
 
-    public boolean isAtLeastOneConnected() {
-        return atLeastOneConnected;
+    public boolean isAtLeastOneConnectionReady() {
+        return atLeastOneConnectionReady;
     }
 }

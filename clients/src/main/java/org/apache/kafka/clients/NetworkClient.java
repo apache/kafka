@@ -715,17 +715,17 @@ public class NetworkClient implements KafkaClient {
         Node foundCanConnect = null;
         Node foundReady = null;
 
-        boolean atLeastOneNodeConnected = false;
+        boolean atLeastOneConnectionReady = false;
 
         int offset = this.randOffset.nextInt(nodes.size());
         for (int i = 0; i < nodes.size(); i++) {
             int idx = (offset + i) % nodes.size();
             Node node = nodes.get(idx);
 
-            if (!atLeastOneNodeConnected
+            if (!atLeastOneConnectionReady
                     && connectionStates.isReady(node.idString(), now)
                     && selector.isChannelReady(node.idString())) {
-                atLeastOneNodeConnected = true;
+                atLeastOneConnectionReady = true;
             }
 
             if (canSendRequest(node.idString(), now)) {
@@ -757,16 +757,16 @@ public class NetworkClient implements KafkaClient {
         // which are being established before connecting to new nodes.
         if (foundReady != null) {
             log.trace("Found least loaded node {} with {} inflight requests", foundReady, inflight);
-            return new LeastLoadedNode(foundReady, atLeastOneNodeConnected);
+            return new LeastLoadedNode(foundReady, atLeastOneConnectionReady);
         } else if (foundConnecting != null) {
             log.trace("Found least loaded connecting node {}", foundConnecting);
-            return new LeastLoadedNode(foundConnecting, atLeastOneNodeConnected);
+            return new LeastLoadedNode(foundConnecting, atLeastOneConnectionReady);
         } else if (foundCanConnect != null) {
             log.trace("Found least loaded node {} with no active connection", foundCanConnect);
-            return new LeastLoadedNode(foundCanConnect, atLeastOneNodeConnected);
+            return new LeastLoadedNode(foundCanConnect, atLeastOneConnectionReady);
         } else {
             log.trace("Least loaded node selection failed to find an available node");
-            return new LeastLoadedNode(null, atLeastOneNodeConnected);
+            return new LeastLoadedNode(null, atLeastOneConnectionReady);
         }
     }
 
@@ -1145,7 +1145,7 @@ public class NetworkClient implements KafkaClient {
 
             // Rebootstrap if needed and configured.
             if (leastLoadedNode.node() == null
-                    && !leastLoadedNode.isAtLeastOneConnected()
+                    && !leastLoadedNode.isAtLeastOneConnectionReady()
                     && metadataRecoveryStrategy == MetadataRecoveryStrategy.REBOOTSTRAP) {
                 for (final Node oldNode : metadata.fetch().nodes()) {
                     NetworkClient.this.close(oldNode.idString());
