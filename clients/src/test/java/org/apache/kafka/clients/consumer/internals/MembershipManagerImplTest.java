@@ -714,7 +714,6 @@ public class MembershipManagerImplTest {
         return result;
     }
 
-    // TODO
     /**
      * This is the case where a member is stuck reconciling an assignment A (waiting on metadata, commit or callbacks), and the target
      * assignment changes due to new topics. If the reconciliation of A completes it should be applied (should update the assignment
