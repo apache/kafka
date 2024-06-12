@@ -2245,7 +2245,7 @@ public class KafkaAdminClient extends AdminClient {
                         continue;
                     }
 
-                    TopicDescription currentTopicDescription = getTopicDescriptionFromDescribeTopicsResponseTopic(topic, nodes);
+                    TopicDescription currentTopicDescription = getTopicDescriptionFromDescribeTopicsResponseTopic(topic, nodes, options.includeAuthorizedOperations());
 
                     if (partiallyFinishedTopicDescription != null && partiallyFinishedTopicDescription.name().equals(topicName)) {
                         // Add the partitions for the cursor topic of the previous batch.
@@ -2408,14 +2408,16 @@ public class KafkaAdminClient extends AdminClient {
 
     private TopicDescription getTopicDescriptionFromDescribeTopicsResponseTopic(
         DescribeTopicPartitionsResponseTopic topic,
-        Map<Integer, Node> nodes
+        Map<Integer, Node> nodes,
+        boolean includeAuthorizedOperations
     ) {
         List<DescribeTopicPartitionsResponsePartition> partitionInfos = topic.partitions();
         List<TopicPartitionInfo> partitions = new ArrayList<>(partitionInfos.size());
         for (DescribeTopicPartitionsResponsePartition partitionInfo : partitionInfos) {
             partitions.add(DescribeTopicPartitionsResponse.partitionToTopicPartitionInfo(partitionInfo, nodes));
         }
-        return new TopicDescription(topic.name(), topic.isInternal(), partitions, validAclOperations(topic.topicAuthorizedOperations()), topic.topicId());
+        Set<AclOperation> authorisedOperations = includeAuthorizedOperations ? validAclOperations(topic.topicAuthorizedOperations()) : null;
+        return new TopicDescription(topic.name(), topic.isInternal(), partitions, authorisedOperations, topic.topicId());
     }
 
     private TopicDescription getTopicDescriptionFromCluster(Cluster cluster, String topicName, Uuid topicId,
