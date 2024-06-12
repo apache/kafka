@@ -41,6 +41,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+/**
+ * This benchmark compares the performance of CopyOnWriteMap and ConcurrentHashMap
+ * under a low-write scenario. We use computeIfAbsent as the write operation,
+ * since it is the only CopyOnWriteMap write operation used in the code base and
+ * constitutes 10% of the operations. The benchmark tests the performance of
+ * get, values, and entrySet methods, as these methods are also used in the code.
+ */
 @State(Scope.Benchmark)
 @Fork(value = 1)
 @Warmup(iterations = 3)
