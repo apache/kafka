@@ -504,7 +504,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     private ApplicationState buildApplicationState(final TopologyMetadata topologyMetadata,
                                                    final Map<ProcessId, ClientMetadata> clientMetadataMap,
                                                    final Map<Subtopology, TopicsInfo> topicGroups,
-                                                   final Cluster cluster) {
+                                                   final Cluster cluster,
+                                                   final Set<TaskId> statefulTasks) {
         final Map<Subtopology, Set<String>> sourceTopicsByGroup = new HashMap<>();
         final Map<Subtopology, Set<String>> changelogTopicsByGroup = new HashMap<>();
         for (final Map.Entry<Subtopology, TopicsInfo> entry : topicGroups.entrySet()) {
@@ -569,7 +570,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 final Set<TaskTopicPartition> topicPartitions = topicPartitionsForTask.get(taskId);
                 return new DefaultTaskInfo(
                     taskId,
-                    !stateStoreNames.isEmpty(),
+                    statefulTasks.contains(taskId),
                     stateStoreNames,
                     topicPartitions
                 );
@@ -801,7 +802,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
                 taskManager.topologyMetadata(),
                 clientMetadataMap,
                 topicGroups,
-                fullMetadata
+                fullMetadata,
+                statefulTasks
             );
             final org.apache.kafka.streams.processor.assignment.TaskAssignor assignor = userTaskAssignor.get();
             final TaskAssignment taskAssignment = assignor.assign(applicationState);
