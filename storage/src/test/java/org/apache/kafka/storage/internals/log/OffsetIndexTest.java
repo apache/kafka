@@ -214,7 +214,6 @@ public class OffsetIndexTest {
 
             idx.truncate();
             assertEquals(0, idx.entries(), "Full truncation should leave no entries");
-            idx.append(0, 0);
         }
 
     }
@@ -225,7 +224,7 @@ public class OffsetIndexTest {
         idx.forceUnmap();
         // mmap should be null after unmap causing lookup to throw a NPE
         assertThrows(NullPointerException.class, () -> idx.lookup(1));
-        idx.close();
+        assertThrows(NullPointerException.class, idx::close);
     }
 
     @Test

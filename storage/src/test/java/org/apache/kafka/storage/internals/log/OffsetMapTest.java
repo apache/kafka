@@ -21,8 +21,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.ByteBuffer;
-import java.security.DigestException;
-import java.security.NoSuchAlgorithmException;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -34,43 +32,25 @@ public class OffsetMapTest {
 
     @ParameterizedTest
     @ValueSource(ints = {10, 100, 1000, 5000})
-    public void testBasicValidation(int items) throws NoSuchAlgorithmException {
+    public void testBasicValidation(int items) throws Exception {
         SkimpyOffsetMap map = new SkimpyOffsetMap(items * 48);
-        IntStream.range(0, items).forEach(i -> {
-            try {
-                map.put(key(i), i);
-            } catch (DigestException e) {
-                throw new RuntimeException(e);
-            }
-        });
-        IntStream.range(0, items).forEach(i -> {
-            try {
-                assertEquals(map.get(key(i)), i);
-            } catch (DigestException e) {
-                throw new RuntimeException(e);
-            }
-        });
+        IntStream.range(0, items).forEach(i -> assertDoesNotThrow(() -> map.put(key(i), i)));
+        for (int i = 0; i < items; i++) {
+            assertEquals(map.get(key(i)), i);
+        }
     }
 
     @Test
-    public void testClear() throws NoSuchAlgorithmException {
+    public void testClear() throws Exception {
         SkimpyOffsetMap map = new SkimpyOffsetMap(MEMORY_SIZE);
         IntStream.range(0, 10).forEach(i -> assertDoesNotThrow(() -> map.put(key(i), i)));
-        IntStream.range(0, 10).forEach(i -> {
-            try {
-                assertEquals(i, map.get(key(i)));
-            } catch (DigestException e) {
-                throw new RuntimeException(e);
-            }
-        });
+        for (int i = 0; i < 10; i++) {
+            assertEquals(map.get(key(i)), i);
+        }
         map.clear();
-        IntStream.range(0, 10).forEach(i -> {
-            try {
-                assertEquals(-1, map.get(key(i)));
-            } catch (DigestException e) {
-                throw new RuntimeException(e);
-            }
-        });
+        for (int i = 0; i < 10; i++) {
+            assertEquals(-1, map.get(key(i)));
+        }
     }
 
     @Test
@@ -79,7 +59,7 @@ public class OffsetMapTest {
         int i = 37;
         while (map.size() < map.slots()) {
             map.put(key(i), i);
-            i = i + 1;
+            i++;
         }
         assertEquals(map.get(key(i)), -1);
         assertEquals(map.get(key(i - 1)), i - 1);
@@ -91,7 +71,7 @@ public class OffsetMapTest {
         int i = 37;
         while (map.size() < map.slots()) {
             map.put(key(i), i);
-            i = i + 1;
+            i++;
         }
         int lastOffsets = 40;
         assertEquals(map.get(key(i - 1)), i - 1);
@@ -105,9 +85,21 @@ public class OffsetMapTest {
         int i = 37;
         while (map.size() < map.slots()) {
             map.put(key(i), i);
-            i = i + 1;
+            i++;
         }
         assertEquals(map.latestOffset(), i - 1);
+    }
+    
+    @Test
+    public void testUtilization() throws Exception {
+        SkimpyOffsetMap map = new SkimpyOffsetMap(MEMORY_SIZE);
+        int i = 37;
+        assertEquals(map.utilization(), 0.0);
+        while (map.size() < map.slots()) {
+            map.put(key(i), i);
+            assertEquals(map.utilization(), (double) map.size() / map.slots());
+            i++;
+        }
     }
 
     private ByteBuffer key(Integer key) {
