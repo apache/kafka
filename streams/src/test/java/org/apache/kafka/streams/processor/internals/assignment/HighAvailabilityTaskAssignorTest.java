@@ -28,6 +28,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.hamcrest.Matchers;
@@ -38,7 +39,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import java.util.stream.Collectors;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -65,9 +65,9 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_2_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_2_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_2_2;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_1;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_2;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_3;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_1;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_2;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_3;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.analyzeTaskAssignmentBalance;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertBalancedActiveAssignment;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertBalancedStatefulAssignment;
@@ -156,14 +156,20 @@ public class HighAvailabilityTaskAssignorTest {
     @Test
     public void shouldBeStickyForActiveAndStandbyTasksWhileWarmingUp() {
         final Set<TaskId> allTaskIds = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
-        final ClientState clientState1 = new ClientState(allTaskIds, emptySet(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 0L)), EMPTY_CLIENT_TAGS, 1, UUID_1);
-        final ClientState clientState2 = new ClientState(emptySet(), allTaskIds, allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 10L)), EMPTY_CLIENT_TAGS, 1, UUID_2);
-        final ClientState clientState3 = new ClientState(emptySet(), emptySet(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> Long.MAX_VALUE)), EMPTY_CLIENT_TAGS, 1, UUID_3);
+        final ClientState clientState1 = new ClientState(allTaskIds, emptySet(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 0L)), EMPTY_CLIENT_TAGS, 1,
+            PID_1
+        );
+        final ClientState clientState2 = new ClientState(emptySet(), allTaskIds, allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 10L)), EMPTY_CLIENT_TAGS, 1,
+            PID_2
+        );
+        final ClientState clientState3 = new ClientState(emptySet(), emptySet(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> Long.MAX_VALUE)), EMPTY_CLIENT_TAGS, 1,
+            PID_3
+        );
 
-        final Map<UUID, ClientState> clientStates = mkMap(
-            mkEntry(UUID_1, clientState1),
-            mkEntry(UUID_2, clientState2),
-            mkEntry(UUID_3, clientState3)
+        final Map<ProcessId, ClientState> clientStates = mkMap(
+            mkEntry(PID_1, clientState1),
+            mkEntry(PID_2, clientState2),
+            mkEntry(PID_3, clientState3)
         );
 
         final AssignmentConfigs configs = new AssignmentConfigs(
@@ -205,14 +211,20 @@ public class HighAvailabilityTaskAssignorTest {
     @Test
     public void shouldSkipWarmupsWhenAcceptableLagIsMax() {
         final Set<TaskId> allTaskIds = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
-        final ClientState clientState1 = new ClientState(allTaskIds, emptySet(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 0L)), EMPTY_CLIENT_TAGS, 1, UUID_1);
-        final ClientState clientState2 = new ClientState(emptySet(), emptySet(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> Long.MAX_VALUE)), EMPTY_CLIENT_TAGS, 1, UUID_2);
-        final ClientState clientState3 = new ClientState(emptySet(), emptySet(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> Long.MAX_VALUE)), EMPTY_CLIENT_TAGS, 1, UUID_3);
+        final ClientState clientState1 = new ClientState(allTaskIds, emptySet(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 0L)), EMPTY_CLIENT_TAGS, 1,
+            PID_1
+        );
+        final ClientState clientState2 = new ClientState(emptySet(), emptySet(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> Long.MAX_VALUE)), EMPTY_CLIENT_TAGS, 1,
+            PID_2
+        );
+        final ClientState clientState3 = new ClientState(emptySet(), emptySet(), allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> Long.MAX_VALUE)), EMPTY_CLIENT_TAGS, 1,
+            PID_3
+        );
 
-        final Map<UUID, ClientState> clientStates = mkMap(
-            mkEntry(UUID_1, clientState1),
-            mkEntry(UUID_2, clientState2),
-            mkEntry(UUID_3, clientState3)
+        final Map<ProcessId, ClientState> clientStates = mkMap(
+            mkEntry(PID_1, clientState1),
+            mkEntry(PID_2, clientState2),
+            mkEntry(PID_3, clientState3)
         );
 
         final AssignmentConfigs configs = new AssignmentConfigs(
@@ -252,10 +264,16 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldAssignActiveStatefulTasksEvenlyOverClientsWhereNumberOfClientsIntegralDivisorOfNumberOfTasks() {
         final Set<TaskId> allTaskIds = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
         final Map<TaskId, Long> lags = allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 10L));
-        final ClientState clientState1 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 1, UUID_1);
-        final ClientState clientState2 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 1, UUID_2);
-        final ClientState clientState3 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 1, UUID_3);
-        final Map<UUID, ClientState> clientStates = getClientStatesMap(clientState1, clientState2, clientState3);
+        final ClientState clientState1 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 1,
+            PID_1
+        );
+        final ClientState clientState2 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 1,
+            PID_2
+        );
+        final ClientState clientState3 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 1,
+            PID_3
+        );
+        final Map<ProcessId, ClientState> clientStates = getClientStatesMap(clientState1, clientState2, clientState3);
 
         final AssignmentConfigs configs = new AssignmentConfigs(
             0L,
@@ -298,10 +316,16 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldAssignActiveStatefulTasksEvenlyOverClientsWhereNumberOfThreadsIntegralDivisorOfNumberOfTasks() {
         final Set<TaskId> allTaskIds = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
         final Map<TaskId, Long> lags = allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 10L));
-        final ClientState clientState1 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 3, UUID_1);
-        final ClientState clientState2 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 3, UUID_2);
-        final ClientState clientState3 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 3, UUID_3);
-        final Map<UUID, ClientState> clientStates = getClientStatesMap(clientState1, clientState2, clientState3);
+        final ClientState clientState1 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 3,
+            PID_1
+        );
+        final ClientState clientState2 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 3,
+            PID_2
+        );
+        final ClientState clientState3 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 3,
+            PID_3
+        );
+        final Map<ProcessId, ClientState> clientStates = getClientStatesMap(clientState1, clientState2, clientState3);
 
         final AssignmentConfigs configs = new AssignmentConfigs(
             0L,
@@ -345,9 +369,13 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldAssignActiveStatefulTasksEvenlyOverClientsWhereNumberOfClientsNotIntegralDivisorOfNumberOfTasks() {
         final Set<TaskId> allTaskIds = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
         final Map<TaskId, Long> lags = allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 10L));
-        final ClientState clientState1 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 1, UUID_1);
-        final ClientState clientState2 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 1, UUID_2);
-        final Map<UUID, ClientState> clientStates = getClientStatesMap(clientState1, clientState2);
+        final ClientState clientState1 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 1,
+            PID_1
+        );
+        final ClientState clientState2 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 1,
+            PID_2
+        );
+        final Map<ProcessId, ClientState> clientStates = getClientStatesMap(clientState1, clientState2);
 
         final AssignmentConfigs configs = new AssignmentConfigs(
             0L,
@@ -387,10 +415,16 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldAssignActiveStatefulTasksEvenlyOverUnevenlyDistributedStreamThreads() {
         final Set<TaskId> allTaskIds = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2);
         final Map<TaskId, Long> lags = allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 10L));
-        final ClientState clientState1 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 1, UUID_1);
-        final ClientState clientState2 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 2, UUID_2);
-        final ClientState clientState3 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 3, UUID_3);
-        final Map<UUID, ClientState> clientStates = getClientStatesMap(clientState1, clientState2, clientState3);
+        final ClientState clientState1 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 1,
+            PID_1
+        );
+        final ClientState clientState2 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 2,
+            PID_2
+        );
+        final ClientState clientState3 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 3,
+            PID_3
+        );
+        final Map<ProcessId, ClientState> clientStates = getClientStatesMap(clientState1, clientState2, clientState3);
 
         final AssignmentConfigs configs = new AssignmentConfigs(
             0L,
@@ -436,10 +470,16 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldAssignActiveStatefulTasksEvenlyOverClientsWithMoreClientsThanTasks() {
         final Set<TaskId> allTaskIds = mkSet(TASK_0_0, TASK_0_1);
         final Map<TaskId, Long> lags = allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 10L));
-        final ClientState clientState1 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 1, UUID_1);
-        final ClientState clientState2 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 1, UUID_2);
-        final ClientState clientState3 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 1, UUID_3);
-        final Map<UUID, ClientState> clientStates = getClientStatesMap(clientState1, clientState2, clientState3);
+        final ClientState clientState1 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 1,
+            PID_1
+        );
+        final ClientState clientState2 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 1,
+            PID_2
+        );
+        final ClientState clientState3 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 1,
+            PID_3
+        );
+        final Map<ProcessId, ClientState> clientStates = getClientStatesMap(clientState1, clientState2, clientState3);
 
         final AssignmentConfigs configs = new AssignmentConfigs(
             0L,
@@ -477,10 +517,16 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldAssignActiveStatefulTasksEvenlyOverClientsAndStreamThreadsWithEqualStreamThreadsPerClientAsTasks() {
         final Set<TaskId> allTaskIds = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
         final Map<TaskId, Long> lags = allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 10L));
-        final ClientState clientState1 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 9, UUID_1);
-        final ClientState clientState2 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 9, UUID_2);
-        final ClientState clientState3 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 9, UUID_3);
-        final Map<UUID, ClientState> clientStates = getClientStatesMap(clientState1, clientState2, clientState3);
+        final ClientState clientState1 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 9,
+            PID_1
+        );
+        final ClientState clientState2 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 9,
+            PID_2
+        );
+        final ClientState clientState3 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 9,
+            PID_3
+        );
+        final Map<ProcessId, ClientState> clientStates = getClientStatesMap(clientState1, clientState2, clientState3);
 
         final AssignmentConfigs configs = new AssignmentConfigs(
             0L,
@@ -526,10 +572,16 @@ public class HighAvailabilityTaskAssignorTest {
         final Map<TaskId, Long> lagsForCaughtUpClient = allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 0L));
         final Map<TaskId, Long> lagsForNotCaughtUpClient =
             allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> Long.MAX_VALUE));
-        final ClientState caughtUpClientState = new ClientState(allTaskIds, emptySet(), lagsForCaughtUpClient, EMPTY_CLIENT_TAGS, 5, UUID_1);
-        final ClientState notCaughtUpClientState1 = new ClientState(emptySet(), emptySet(), lagsForNotCaughtUpClient, EMPTY_CLIENT_TAGS, 5, UUID_2);
-        final ClientState notCaughtUpClientState2 = new ClientState(emptySet(), emptySet(), lagsForNotCaughtUpClient, EMPTY_CLIENT_TAGS, 5, UUID_3);
-        final Map<UUID, ClientState> clientStates =
+        final ClientState caughtUpClientState = new ClientState(allTaskIds, emptySet(), lagsForCaughtUpClient, EMPTY_CLIENT_TAGS, 5,
+            PID_1
+        );
+        final ClientState notCaughtUpClientState1 = new ClientState(emptySet(), emptySet(), lagsForNotCaughtUpClient, EMPTY_CLIENT_TAGS, 5,
+            PID_2
+        );
+        final ClientState notCaughtUpClientState2 = new ClientState(emptySet(), emptySet(), lagsForNotCaughtUpClient, EMPTY_CLIENT_TAGS, 5,
+            PID_3
+        );
+        final Map<ProcessId, ClientState> clientStates =
             getClientStatesMap(caughtUpClientState, notCaughtUpClientState1, notCaughtUpClientState2);
 
         final AssignmentConfigs configs = new AssignmentConfigs(
@@ -568,9 +620,9 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldEvenlyAssignActiveStatefulTasksIfClientsAreWarmedUpToBalanceTaskOverClients() {
         final Set<TaskId> allTaskIds = mkSet(TASK_0_0, TASK_0_1, TASK_1_0, TASK_1_1);
 
-        // If RackAwareTaskAssignor is enabled, TASK_1_1 is assigned UUID_2
+        // If RackAwareTaskAssignor is enabled, TASK_1_1 is assigned ProcessId_2
         final TaskId warmupTaskId1 = enableRackAwareTaskAssignor ? TASK_1_1 : TASK_0_1;
-        // If RackAwareTaskAssignor is enabled, TASK_0_1 is assigned UUID_3
+        // If RackAwareTaskAssignor is enabled, TASK_0_1 is assigned ProcessId_3
         final TaskId warmupTaskId2 = enableRackAwareTaskAssignor ? TASK_0_1 : TASK_1_0;
         final Set<TaskId> warmedUpTaskIds1 = mkSet(warmupTaskId1);
         final Set<TaskId> warmedUpTaskIds2 = mkSet(warmupTaskId2);
@@ -582,10 +634,16 @@ public class HighAvailabilityTaskAssignorTest {
             allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> Long.MAX_VALUE));
         lagsForWarmedUpClient2.put(warmupTaskId2, 0L);
 
-        final ClientState caughtUpClientState = new ClientState(allTaskIds, emptySet(), lagsForCaughtUpClient, EMPTY_CLIENT_TAGS, 5, UUID_1);
-        final ClientState warmedUpClientState1 = new ClientState(emptySet(), warmedUpTaskIds1, lagsForWarmedUpClient1, EMPTY_CLIENT_TAGS, 5, UUID_2);
-        final ClientState warmedUpClientState2 = new ClientState(emptySet(), warmedUpTaskIds2, lagsForWarmedUpClient2, EMPTY_CLIENT_TAGS, 5, UUID_3);
-        final Map<UUID, ClientState> clientStates =
+        final ClientState caughtUpClientState = new ClientState(allTaskIds, emptySet(), lagsForCaughtUpClient, EMPTY_CLIENT_TAGS, 5,
+            PID_1
+        );
+        final ClientState warmedUpClientState1 = new ClientState(emptySet(), warmedUpTaskIds1, lagsForWarmedUpClient1, EMPTY_CLIENT_TAGS, 5,
+            PID_2
+        );
+        final ClientState warmedUpClientState2 = new ClientState(emptySet(), warmedUpTaskIds2, lagsForWarmedUpClient2, EMPTY_CLIENT_TAGS, 5,
+            PID_3
+        );
+        final Map<ProcessId, ClientState> clientStates =
             getClientStatesMap(caughtUpClientState, warmedUpClientState1, warmedUpClientState2);
 
         final AssignmentConfigs configs = new AssignmentConfigs(
@@ -625,9 +683,13 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldAssignActiveStatefulTasksEvenlyOverStreamThreadsButBestEffortOverClients() {
         final Set<TaskId> allTaskIds = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_1_0, TASK_1_1, TASK_1_2, TASK_2_0, TASK_2_1, TASK_2_2);
         final Map<TaskId, Long> lags = allTaskIds.stream().collect(Collectors.toMap(k -> k, k -> 10L));
-        final ClientState clientState1 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 6, UUID_1);
-        final ClientState clientState2 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 3, UUID_2);
-        final Map<UUID, ClientState> clientStates = getClientStatesMap(clientState1, clientState2);
+        final ClientState clientState1 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 6,
+            PID_1
+        );
+        final ClientState clientState2 = new ClientState(emptySet(), emptySet(), lags, EMPTY_CLIENT_TAGS, 3,
+            PID_2
+        );
+        final Map<ProcessId, ClientState> clientStates = getClientStatesMap(clientState1, clientState2);
 
         final AssignmentConfigs configs = new AssignmentConfigs(
             0L,
@@ -667,8 +729,10 @@ public class HighAvailabilityTaskAssignorTest {
     @Test
     public void shouldComputeNewAssignmentIfThereAreUnassignedActiveTasks() {
         final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1);
-        final ClientState client1 = new ClientState(singleton(TASK_0_0), emptySet(), singletonMap(TASK_0_0, 0L), EMPTY_CLIENT_TAGS, 1, UUID_1);
-        final Map<UUID, ClientState> clientStates = singletonMap(UUID_1, client1);
+        final ClientState client1 = new ClientState(singleton(TASK_0_0), emptySet(), singletonMap(TASK_0_0, 0L), EMPTY_CLIENT_TAGS, 1,
+            PID_1
+        );
+        final Map<ProcessId, ClientState> clientStates = singletonMap(PID_1, client1);
 
         final AssignmentConfigs configs = getConfigWithoutStandbys();
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
@@ -698,9 +762,13 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldComputeNewAssignmentIfThereAreUnassignedStandbyTasks() {
         final Set<TaskId> allTasks = mkSet(TASK_0_0);
         final Set<TaskId> statefulTasks = mkSet(TASK_0_0);
-        final ClientState client1 = new ClientState(singleton(TASK_0_0), emptySet(), singletonMap(TASK_0_0, 0L), EMPTY_CLIENT_TAGS, 1, UUID_1);
-        final ClientState client2 = new ClientState(emptySet(), emptySet(), singletonMap(TASK_0_0, 0L), EMPTY_CLIENT_TAGS, 1, UUID_2);
-        final Map<UUID, ClientState> clientStates = mkMap(mkEntry(UUID_1, client1), mkEntry(UUID_2, client2));
+        final ClientState client1 = new ClientState(singleton(TASK_0_0), emptySet(), singletonMap(TASK_0_0, 0L), EMPTY_CLIENT_TAGS, 1,
+            PID_1
+        );
+        final ClientState client2 = new ClientState(emptySet(), emptySet(), singletonMap(TASK_0_0, 0L), EMPTY_CLIENT_TAGS, 1,
+            PID_2
+        );
+        final Map<ProcessId, ClientState> clientStates = mkMap(mkEntry(PID_1, client1), mkEntry(PID_2, client2));
 
         final AssignmentConfigs configs = getConfigWithStandbys();
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
@@ -714,7 +782,7 @@ public class HighAvailabilityTaskAssignorTest {
                                                                                          rackAwareTaskAssignor,
                                                                                          configs);
 
-        assertThat(clientStates.get(UUID_2).standbyTasks(), not(empty()));
+        assertThat(clientStates.get(PID_2).standbyTasks(), not(empty()));
         assertThat(probingRebalanceNeeded, is(false));
         assertValidAssignment(1, allTasks, emptySet(), clientStates, new StringBuilder());
         assertBalancedActiveAssignment(clientStates, new StringBuilder());
@@ -728,11 +796,15 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldComputeNewAssignmentIfActiveTasksWasNotOnCaughtUpClient() {
         final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1);
         final Set<TaskId> statefulTasks = mkSet(TASK_0_0);
-        final ClientState client1 = new ClientState(singleton(TASK_0_0), emptySet(), singletonMap(TASK_0_0, 500L), EMPTY_CLIENT_TAGS, 1, UUID_1);
-        final ClientState client2 = new ClientState(singleton(TASK_0_1), emptySet(), singletonMap(TASK_0_0, 0L), EMPTY_CLIENT_TAGS, 1, UUID_2);
-        final Map<UUID, ClientState> clientStates = mkMap(
-            mkEntry(UUID_1, client1),
-            mkEntry(UUID_2, client2)
+        final ClientState client1 = new ClientState(singleton(TASK_0_0), emptySet(), singletonMap(TASK_0_0, 500L), EMPTY_CLIENT_TAGS, 1,
+            PID_1
+        );
+        final ClientState client2 = new ClientState(singleton(TASK_0_1), emptySet(), singletonMap(TASK_0_0, 0L), EMPTY_CLIENT_TAGS, 1,
+            PID_2
+        );
+        final Map<ProcessId, ClientState> clientStates = mkMap(
+            mkEntry(PID_1, client1),
+            mkEntry(PID_2, client2)
         );
 
         final AssignmentConfigs configs = getConfigWithoutStandbys();
@@ -744,8 +816,8 @@ public class HighAvailabilityTaskAssignorTest {
         final boolean probingRebalanceNeeded =
             new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, rackAwareTaskAssignor, configs);
 
-        assertThat(clientStates.get(UUID_1).activeTasks(), is(singleton(TASK_0_1)));
-        assertThat(clientStates.get(UUID_2).activeTasks(), is(singleton(TASK_0_0)));
+        assertThat(clientStates.get(PID_1).activeTasks(), is(singleton(TASK_0_1)));
+        assertThat(clientStates.get(PID_2).activeTasks(), is(singleton(TASK_0_0)));
         // we'll warm up task 0_0 on client1 because it's first in sorted order,
         // although this isn't an optimal convergence
         assertThat(probingRebalanceNeeded, is(true));
@@ -761,13 +833,19 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldAssignToMostCaughtUpIfActiveTasksWasNotOnCaughtUpClient() {
         final Set<TaskId> allTasks = mkSet(TASK_0_0);
         final Set<TaskId> statefulTasks = mkSet(TASK_0_0);
-        final ClientState client1 = new ClientState(emptySet(), emptySet(), singletonMap(TASK_0_0, Long.MAX_VALUE), EMPTY_CLIENT_TAGS, 1, UUID_1);
-        final ClientState client2 = new ClientState(emptySet(), emptySet(), singletonMap(TASK_0_0, 1000L), EMPTY_CLIENT_TAGS, 1, UUID_2);
-        final ClientState client3 = new ClientState(emptySet(), emptySet(), singletonMap(TASK_0_0, 500L), EMPTY_CLIENT_TAGS, 1, UUID_3);
-        final Map<UUID, ClientState> clientStates = mkMap(
-                mkEntry(UUID_1, client1),
-                mkEntry(UUID_2, client2),
-                mkEntry(UUID_3, client3)
+        final ClientState client1 = new ClientState(emptySet(), emptySet(), singletonMap(TASK_0_0, Long.MAX_VALUE), EMPTY_CLIENT_TAGS, 1,
+            PID_1
+        );
+        final ClientState client2 = new ClientState(emptySet(), emptySet(), singletonMap(TASK_0_0, 1000L), EMPTY_CLIENT_TAGS, 1,
+            PID_2
+        );
+        final ClientState client3 = new ClientState(emptySet(), emptySet(), singletonMap(TASK_0_0, 500L), EMPTY_CLIENT_TAGS, 1,
+            PID_3
+        );
+        final Map<ProcessId, ClientState> clientStates = mkMap(
+                mkEntry(PID_1, client1),
+                mkEntry(PID_2, client2),
+                mkEntry(PID_3, client3)
         );
 
         final AssignmentConfigs configs = getConfigWithStandbys();
@@ -779,13 +857,13 @@ public class HighAvailabilityTaskAssignorTest {
         final boolean probingRebalanceNeeded =
                 new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, rackAwareTaskAssignor, configs);
 
-        assertThat(clientStates.get(UUID_1).activeTasks(), is(emptySet()));
-        assertThat(clientStates.get(UUID_2).activeTasks(), is(emptySet()));
-        assertThat(clientStates.get(UUID_3).activeTasks(), is(singleton(TASK_0_0)));
+        assertThat(clientStates.get(PID_1).activeTasks(), is(emptySet()));
+        assertThat(clientStates.get(PID_2).activeTasks(), is(emptySet()));
+        assertThat(clientStates.get(PID_3).activeTasks(), is(singleton(TASK_0_0)));
 
-        assertThat(clientStates.get(UUID_1).standbyTasks(), is(singleton(TASK_0_0))); // warm up
-        assertThat(clientStates.get(UUID_2).standbyTasks(), is(singleton(TASK_0_0))); // standby
-        assertThat(clientStates.get(UUID_3).standbyTasks(), is(emptySet()));
+        assertThat(clientStates.get(PID_1).standbyTasks(), is(singleton(TASK_0_0))); // warm up
+        assertThat(clientStates.get(PID_2).standbyTasks(), is(singleton(TASK_0_0))); // standby
+        assertThat(clientStates.get(PID_3).standbyTasks(), is(emptySet()));
 
         assertThat(probingRebalanceNeeded, is(true));
         assertValidAssignment(1, 1, allTasks, emptySet(), clientStates, new StringBuilder());
@@ -801,8 +879,12 @@ public class HighAvailabilityTaskAssignorTest {
         final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1);
         final Set<TaskId> statefulTasks = mkSet(TASK_0_0, TASK_0_1);
 
-        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0), statefulTasks, UUID_1);
-        final ClientState client2 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_1), statefulTasks, UUID_2);
+        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0), statefulTasks,
+            PID_1
+        );
+        final ClientState client2 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_1), statefulTasks,
+            PID_2
+        );
 
         final AssignmentConfigs configs = getConfigWithStandbys();
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
@@ -810,7 +892,7 @@ public class HighAvailabilityTaskAssignorTest {
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
-        final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2);
+        final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1, client2);
         final boolean probingRebalanceNeeded =
             new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, rackAwareTaskAssignor, configs);
 
@@ -829,10 +911,14 @@ public class HighAvailabilityTaskAssignorTest {
         final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1);
         final Set<TaskId> statefulTasks = EMPTY_TASKS;
 
-        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks, UUID_1);
-        final ClientState client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks, UUID_2);
+        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks,
+            PID_1
+        );
+        final ClientState client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks,
+            PID_2
+        );
 
-        final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2);
+        final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1, client2);
 
         final AssignmentConfigs configs = getConfigWithStandbys();
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
@@ -856,10 +942,14 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldAssignWarmupReplicasEvenIfNoStandbyReplicasConfigured() {
         final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1);
         final Set<TaskId> statefulTasks = mkSet(TASK_0_0, TASK_0_1);
-        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0, TASK_0_1), statefulTasks, UUID_1);
-        final ClientState client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks, UUID_2);
+        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0, TASK_0_1), statefulTasks,
+            PID_1
+        );
+        final ClientState client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks,
+            PID_2
+        );
 
-        final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2);
+        final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1, client2);
 
         final AssignmentConfigs configs = getConfigWithoutStandbys();
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
@@ -885,10 +975,14 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldNotAssignMoreThanMaxWarmupReplicas() {
         final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
         final Set<TaskId> statefulTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
-        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3), statefulTasks, UUID_1);
-        final ClientState client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks, UUID_2);
+        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3), statefulTasks,
+            PID_1
+        );
+        final ClientState client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks,
+            PID_2
+        );
 
-        final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2);
+        final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1, client2);
 
         final AssignmentConfigs configs = new AssignmentConfigs(
             /*acceptableRecoveryLag*/ 100L,
@@ -927,10 +1021,14 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldNotAssignWarmupAndStandbyToTheSameClient() {
         final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
         final Set<TaskId> statefulTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
-        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3), statefulTasks, UUID_1);
-        final ClientState client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks, UUID_2);
+        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3), statefulTasks,
+            PID_1
+        );
+        final ClientState client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks,
+            PID_2
+        );
 
-        final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2);
+        final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1, client2);
 
         final AssignmentConfigs configs = new AssignmentConfigs(
             /*acceptableRecoveryLag*/ 100L,
@@ -968,9 +1066,11 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldNotAssignAnyStandbysWithInsufficientCapacity() {
         final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1);
         final Set<TaskId> statefulTasks = mkSet(TASK_0_0, TASK_0_1);
-        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0, TASK_0_1), statefulTasks, UUID_1);
+        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(mkSet(TASK_0_0, TASK_0_1), statefulTasks,
+            PID_1
+        );
 
-        final Map<UUID, ClientState> clientStates = getClientStatesMap(client1);
+        final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1);
 
         final AssignmentConfigs configs = getConfigWithStandbys();
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
@@ -992,9 +1092,11 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldAssignActiveTasksToNotCaughtUpClientIfNoneExist() {
         final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1);
         final Set<TaskId> statefulTasks = mkSet(TASK_0_0, TASK_0_1);
-        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks, UUID_1);
+        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks,
+            PID_1
+        );
 
-        final Map<UUID, ClientState> clientStates = getClientStatesMap(client1);
+        final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1);
 
         final AssignmentConfigs configs = getConfigWithStandbys();
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
@@ -1015,11 +1117,17 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldNotAssignMoreThanMaxWarmupReplicasWithStandbys() {
         final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
         final Set<TaskId> statefulTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
-        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(statefulTasks, statefulTasks, UUID_1);
-        final ClientState client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks, UUID_2);
-        final ClientState client3 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks, UUID_3);
+        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(statefulTasks, statefulTasks,
+            PID_1
+        );
+        final ClientState client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks,
+            PID_2
+        );
+        final ClientState client3 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks,
+            PID_3
+        );
 
-        final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
+        final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
 
         final AssignmentConfigs configs = getConfigWithStandbys();
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
@@ -1049,10 +1157,14 @@ public class HighAvailabilityTaskAssignorTest {
         final Set<TaskId> statefulTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
         final Set<TaskId> statelessTasks = mkSet(TASK_1_0, TASK_1_1, TASK_1_2);
 
-        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(statefulTasks, statefulTasks, UUID_1);
-        final ClientState client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks, UUID_2);
+        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(statefulTasks, statefulTasks,
+            PID_1
+        );
+        final ClientState client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks,
+            PID_2
+        );
 
-        final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2);
+        final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1, client2);
 
         final AssignmentConfigs configs = getConfigWithStandbys();
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
@@ -1094,7 +1206,7 @@ public class HighAvailabilityTaskAssignorTest {
         final ClientState client2 = new ClientState(emptySet(), emptySet(), allTaskLags, EMPTY_CLIENT_TAGS, 50);
         final ClientState client3 = new ClientState(emptySet(), emptySet(), allTaskLags, EMPTY_CLIENT_TAGS, 1);
 
-        final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
+        final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
 
         final AssignmentConfigs configs = getConfigWithoutStandbys();
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
@@ -1121,10 +1233,14 @@ public class HighAvailabilityTaskAssignorTest {
         final Set<TaskId> statefulTasks = new HashSet<>(allTasks);
         final Set<TaskId> caughtUpTasks1 = enableRackAwareTaskAssignor ? mkSet(TASK_0_0, TASK_0_3) : mkSet(TASK_0_0, TASK_0_2);
         final Set<TaskId> caughtUpTasks2 = enableRackAwareTaskAssignor ? mkSet(TASK_0_1, TASK_0_2) : mkSet(TASK_0_1, TASK_0_3);
-        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(caughtUpTasks1, statefulTasks, UUID_1);
-        final ClientState client2 = getMockClientWithPreviousCaughtUpTasks(caughtUpTasks2, statefulTasks, UUID_2);
+        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(caughtUpTasks1, statefulTasks,
+            PID_1
+        );
+        final ClientState client2 = getMockClientWithPreviousCaughtUpTasks(caughtUpTasks2, statefulTasks,
+            PID_2
+        );
 
-        final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2);
+        final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1, client2);
 
         final AssignmentConfigs configs = getConfigWithoutStandbys();
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
@@ -1146,10 +1262,14 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldReturnFalseIfNoWarmupTasksAreAssigned() {
         final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
         final Set<TaskId> statefulTasks = EMPTY_TASKS;
-        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks, UUID_1);
-        final ClientState client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks, UUID_2);
+        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks,
+            PID_1
+        );
+        final ClientState client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks,
+            PID_2
+        );
 
-        final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2);
+        final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1, client2);
 
         final AssignmentConfigs configs = getConfigWithoutStandbys();
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
@@ -1169,8 +1289,12 @@ public class HighAvailabilityTaskAssignorTest {
     public void shouldReturnTrueIfWarmupTasksAreAssigned() {
         final Set<TaskId> allTasks = mkSet(TASK_0_0, TASK_0_1);
         final Set<TaskId> statefulTasks = mkSet(TASK_0_0, TASK_0_1);
-        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(allTasks, statefulTasks, UUID_1);
-        final ClientState client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks, UUID_2);
+        final ClientState client1 = getMockClientWithPreviousCaughtUpTasks(allTasks, statefulTasks,
+            PID_1
+        );
+        final ClientState client2 = getMockClientWithPreviousCaughtUpTasks(EMPTY_TASKS, statefulTasks,
+            PID_2
+        );
 
         final AssignmentConfigs configs = getConfigWithoutStandbys();
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
@@ -1178,7 +1302,7 @@ public class HighAvailabilityTaskAssignorTest {
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
-        final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2);
+        final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1, client2);
         final boolean probingRebalanceNeeded =
             new HighAvailabilityTaskAssignor().assign(clientStates, allTasks, statefulTasks, rackAwareTaskAssignor, configs);
         assertThat(probingRebalanceNeeded, is(true));
@@ -1198,7 +1322,7 @@ public class HighAvailabilityTaskAssignorTest {
         final ClientState client2 = new ClientState(emptySet(), emptySet(), taskLags, EMPTY_CLIENT_TAGS, 7);
         final ClientState client3 = new ClientState(emptySet(), emptySet(), taskLags, EMPTY_CLIENT_TAGS, 7);
 
-        final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
+        final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
 
         final AssignmentConfigs configs = new AssignmentConfigs(
             0L,
@@ -1248,7 +1372,7 @@ public class HighAvailabilityTaskAssignorTest {
         final ClientState client2 = new ClientState(emptySet(), emptySet(), taskLags, EMPTY_CLIENT_TAGS, 2);
         final ClientState client3 = new ClientState(emptySet(), emptySet(), taskLags, EMPTY_CLIENT_TAGS, 2);
 
-        final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
+        final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
 
         final AssignmentConfigs configs = new AssignmentConfigs(
             0L,
@@ -1298,7 +1422,7 @@ public class HighAvailabilityTaskAssignorTest {
         final ClientState client2 = new ClientState(emptySet(), emptySet(), taskLags, EMPTY_CLIENT_TAGS, 2);
         final ClientState client3 = new ClientState(emptySet(), emptySet(), taskLags, EMPTY_CLIENT_TAGS, 3);
 
-        final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
+        final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
 
         final AssignmentConfigs configs = new AssignmentConfigs(
             0L,
@@ -1348,7 +1472,7 @@ public class HighAvailabilityTaskAssignorTest {
         final ClientState client2 = new ClientState(emptySet(), emptySet(), taskLags, EMPTY_CLIENT_TAGS, 3);
         final ClientState client3 = new ClientState(emptySet(), emptySet(), taskLags, EMPTY_CLIENT_TAGS, 3);
 
-        final Map<UUID, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
+        final Map<ProcessId, ClientState> clientStates = getClientStatesMap(client1, client2, client3);
 
         final AssignmentConfigs configs = new AssignmentConfigs(
             0L,
@@ -1414,7 +1538,7 @@ public class HighAvailabilityTaskAssignorTest {
         final List<Set<TaskId>> statefulAndStatelessTasks = getRandomSubset(taskIds, 2);
         final Set<TaskId> statefulTasks = statefulAndStatelessTasks.get(0);
         final Set<TaskId> statelessTasks = statefulAndStatelessTasks.get(1);
-        final SortedMap<UUID, ClientState> clientStateMap = getRandomClientState(clientSize,
+        final SortedMap<ProcessId, ClientState> clientStateMap = getRandomClientState(clientSize,
             tpSize, partitionSize, maxCapacity, false, statefulTasks);
 
 
@@ -1456,7 +1580,7 @@ public class HighAvailabilityTaskAssignorTest {
         final Cluster cluster = getRandomCluster(nodeSize, tpSize, partitionSize);
         final Map<TaskId, Set<TopicPartition>> taskChangelogTopicPartitionMap = getTaskTopicPartitionMap(tpSize, partitionSize, true);
         final Map<Subtopology, Set<TaskId>> subtopologySetMap = getTasksForTopicGroup(tpSize, partitionSize);
-        final Map<UUID, Map<String, Optional<String>>> processRackMap = getRandomProcessRacks(clientSize, nodeSize);
+        final Map<ProcessId, Map<String, Optional<String>>> processRackMap = getRandomProcessRacks(clientSize, nodeSize);
         final InternalTopicManager mockInternalTopicManager = mockInternalTopicManagerForRandomChangelog(nodeSize, tpSize, partitionSize);
 
         AssignmentConfigs configs = new AssignmentConfigs(
@@ -1485,7 +1609,7 @@ public class HighAvailabilityTaskAssignorTest {
         final List<Set<TaskId>> statefulAndStatelessTasks = getRandomSubset(taskIds, 2);
         final Set<TaskId> statefulTasks = statefulAndStatelessTasks.get(0);
         final Set<TaskId> statelessTasks = statefulAndStatelessTasks.get(1);
-        final SortedMap<UUID, ClientState> clientStateMap = getRandomClientState(clientSize,
+        final SortedMap<ProcessId, ClientState> clientStateMap = getRandomClientState(clientSize,
             tpSize, partitionSize, maxCapacity, false, statefulTasks);
 
         new HighAvailabilityTaskAssignor().assign(
@@ -1507,7 +1631,7 @@ public class HighAvailabilityTaskAssignorTest {
             return;
         }
 
-        final SortedMap<UUID, ClientState> clientStateMapCopy = copyClientStateMap(clientStateMap);
+        final SortedMap<ProcessId, ClientState> clientStateMapCopy = copyClientStateMap(clientStateMap);
         configs = new AssignmentConfigs(
             0L,
             1,
@@ -1538,7 +1662,7 @@ public class HighAvailabilityTaskAssignorTest {
             configs
         );
 
-        for (final Map.Entry<UUID, ClientState> entry : clientStateMap.entrySet()) {
+        for (final Map.Entry<ProcessId, ClientState> entry : clientStateMap.entrySet()) {
             assertThat(entry.getValue().statefulActiveTasks(), Matchers.equalTo(clientStateMapCopy.get(entry.getKey()).statefulActiveTasks()));
             assertThat(entry.getValue().standbyTasks(), Matchers.equalTo(clientStateMapCopy.get(entry.getKey()).standbyTasks()));
         }
@@ -1558,7 +1682,7 @@ public class HighAvailabilityTaskAssignorTest {
 
     private static ClientState getMockClientWithPreviousCaughtUpTasks(final Set<TaskId> statefulActiveTasks,
                                                                       final Set<TaskId> statefulTasks,
-                                                                      final UUID processId) {
+                                                                      final ProcessId processId) {
         if (!statefulTasks.containsAll(statefulActiveTasks)) {
             throw new IllegalArgumentException("Need to initialize stateful tasks set before creating mock clients");
         }

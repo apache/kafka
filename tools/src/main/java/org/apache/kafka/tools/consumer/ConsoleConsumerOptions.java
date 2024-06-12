@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.tools.consumer;
 
-import joptsimple.OptionException;
-import joptsimple.OptionSpec;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.MessageFormatter;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
@@ -40,6 +38,9 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import joptsimple.OptionException;
+import joptsimple.OptionSpec;
 
 public final class ConsoleConsumerOptions extends CommandDefaultOptions {
 
