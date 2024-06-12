@@ -1655,6 +1655,16 @@ public final class Utils {
     }
 
     /**
+     * Checks requirement. Throw {@link IllegalArgumentException} if {@code requirement} failed.
+     * @param requirement Requirement to check.
+     * @param message String to include in the failure message
+     */
+    public static void require(boolean requirement, String message) {
+        if (!requirement)
+            throw new IllegalArgumentException("requirement failed: " + message);
+    }
+
+    /**
      * A runnable that can throw checked exception.
      */
     @FunctionalInterface

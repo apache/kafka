@@ -158,7 +158,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
         public Optional<ListenerName> controllerListenerName() {
             return controllers().values().stream()
                     .findAny()
-                    .flatMap(s -> OptionConverters.toJava(s.config().controllerListenerNames().headOption()))
+                    .flatMap(s -> Optional.ofNullable(s.config().controllerListenerNames().get(0)))
                     .map(ListenerName::new);
         }
 

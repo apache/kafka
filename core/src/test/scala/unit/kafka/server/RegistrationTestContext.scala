@@ -64,11 +64,13 @@ class RegistrationTestContext(
   val clusterId = "x4AJGXQSRnephtTZzujw4w"
   val advertisedListeners = new ListenerCollection()
   val controllerEpoch = new AtomicInteger(123)
-  config.effectiveAdvertisedListeners.foreach { ep =>
-    advertisedListeners.add(new Listener().setHost(ep.host).
-      setName(ep.listenerName.value()).
+  config.effectiveAdvertisedListeners.stream().forEach { ep =>
+    val listener = new Listener().setHost(ep.host).
       setPort(ep.port.shortValue()).
-      setSecurityProtocol(ep.securityProtocol.id))
+      setSecurityProtocol(ep.securityProtocol.id)
+    ep.listenerName.map(listener.setName)
+
+    advertisedListeners.add(listener)
   }
 
   def poll(): Unit = {

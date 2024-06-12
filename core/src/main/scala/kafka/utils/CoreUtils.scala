@@ -26,7 +26,6 @@ import com.typesafe.scalalogging.Logger
 
 import javax.management._
 import scala.collection._
-import scala.collection.Seq
 import kafka.cluster.EndPoint
 import org.apache.commons.validator.routines.InetAddressValidator
 import org.apache.kafka.common.network.ListenerName
@@ -81,7 +80,7 @@ object CoreUtils {
    * Recursively delete the list of files/directories and any subfiles (if any exist)
    * @param files sequence of files to be deleted
    */
-  def delete(files: Seq[String]): Unit = files.foreach(f => Utils.delete(new File(f)))
+  def delete(files: util.List[String]): Unit = files.forEach(f => Utils.delete(new File(f)))
 
   /**
    * Register the given mbean with the platform mbean server,

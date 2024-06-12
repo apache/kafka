@@ -137,7 +137,7 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
 
         @Override
         public Optional<ListenerName> controlPlaneListenerName() {
-            return OptionConverters.toJava(clusterReference.get().servers().head().config().controlPlaneListenerName());
+            return clusterReference.get().servers().head().config().controlPlaneListenerName();
         }
 
         @Override
