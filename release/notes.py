@@ -13,7 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Usage: release_notes.py <version> > RELEASE_NOTES.html
+"""
+Usage: python notes.py <version> > RELEASE_NOTES.html
 
 Generates release notes for a release in HTML format containing
 introductory information about the release with links to the
