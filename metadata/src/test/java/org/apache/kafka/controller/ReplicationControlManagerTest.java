@@ -165,6 +165,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class ReplicationControlManagerTest {
     private final static Logger log = LoggerFactory.getLogger(ReplicationControlManagerTest.class);
     private final static int BROKER_SESSION_TIMEOUT_MS = 1000;
+    private final static int CONTROLLER_ID = 3000;
 
     private static class ReplicationControlTestContext {
         private static class Builder {
@@ -172,7 +173,6 @@ public class ReplicationControlManagerTest {
             private MetadataVersion metadataVersion = MetadataVersion.latestTesting();
             private MockTime mockTime = new MockTime();
             private boolean isElrEnabled = false;
-
             Builder setCreateTopicPolicy(CreateTopicPolicy createTopicPolicy) {
                 this.createTopicPolicy = Optional.of(createTopicPolicy);
                 return this;
@@ -247,6 +247,7 @@ public class ReplicationControlManagerTest {
                 setReplicaPlacer(new StripedReplicaPlacer(random)).
                 setFeatureControlManager(featureControl).
                 setBrokerUncleanShutdownHandler(this::handleUncleanBrokerShutdown).
+                setNodeId(CONTROLLER_ID).
                 build();
 
             this.replicationControl = new ReplicationControlManager.Builder().
@@ -3117,6 +3118,18 @@ public class ReplicationControlManagerTest {
                 setName(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG).
                 setValue("true"), (short) 2);
 
+        ApiMessageAndVersion enableUncleanLeaderElectionOnController = new ApiMessageAndVersion(new ConfigRecord().
+                setResourceType(ConfigResource.Type.BROKER.id()).
+                setResourceName(String.valueOf(CONTROLLER_ID)).
+                setName(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG).
+                setValue("true"), (short) 2);
+
+        ApiMessageAndVersion enableUncleanLeaderElectionOnDefaultBroker = new ApiMessageAndVersion(new ConfigRecord().
+                setResourceType(ConfigResource.Type.BROKER.id()).
+                setResourceName("").
+                setName(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG).
+                setValue("true"), (short) 2);
+
         // unclean leader election record for test2-0
         ApiMessageAndVersion uncleanElection2 = new ApiMessageAndVersion(new PartitionChangeRecord()
                 .setPartitionId(0)
@@ -3158,6 +3171,26 @@ public class ReplicationControlManagerTest {
         oriResults = ControllerResult.of(Arrays.asList(disableUncleanLeaderElection, enableUncleanLeaderElection2, unrelatedChange), Collections.emptyMap());
         expectedResults = ControllerResult.of(Arrays.asList(disableUncleanLeaderElection, enableUncleanLeaderElection2, unrelatedChange, uncleanElection2), Collections.emptyMap());
         assertEquals(expectedResults, ctx.replicationControl.maybeTriggerUncleanLeaderElection(oriResults));
+
+        // enable unclean leader election for controller, the end result should add leader election record for [test1-0, test2-0] partition
+        // Note: the order of partition election records can't guarantee, so convert to set to do comparison
+        oriResults = ControllerResult.of(Arrays.asList(enableUncleanLeaderElectionOnController), Collections.emptyMap());
+        expectedResults = ControllerResult.of(Arrays.asList(enableUncleanLeaderElectionOnController, uncleanElection2, uncleanElection1), Collections.emptyMap());
+        ControllerResult<Map<ConfigResource, ApiError>> actualResults = ctx.replicationControl.maybeTriggerUncleanLeaderElection(oriResults);
+        verifyControllerResult(actualResults, expectedResults);
+
+        // enable unclean leader election for default broker, the end result should add leader election record for [test1-0, test2-0] partition
+        // Note: the order of partition election records can't guarantee, so convert to set to do comparison
+        oriResults = ControllerResult.of(Arrays.asList(enableUncleanLeaderElectionOnDefaultBroker), Collections.emptyMap());
+        expectedResults = ControllerResult.of(Arrays.asList(enableUncleanLeaderElectionOnDefaultBroker, uncleanElection2, uncleanElection1), Collections.emptyMap());
+        actualResults = ctx.replicationControl.maybeTriggerUncleanLeaderElection(oriResults);
+        verifyControllerResult(actualResults, expectedResults);
+    }
+
+    private void verifyControllerResult(ControllerResult<Map<ConfigResource, ApiError>> actualResults,
+                                   ControllerResult<Map<ConfigResource, ApiError>> expectedResults) {
+        assertEquals(new HashSet<>(expectedResults.records()), new HashSet<>(actualResults.records()));
+        assertEquals(expectedResults.response(), actualResults.response());
     }
 
     /**

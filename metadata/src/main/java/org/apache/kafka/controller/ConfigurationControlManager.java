@@ -511,6 +511,19 @@ public class ConfigurationControlManager {
         return false;
     }
 
+    /**
+     * Check if this node or default cluster has "unclean.leader.election.enable" set to true.
+     *
+     * @return true if uncleanLeaderElection is enabled
+     */
+    boolean uncleanLeaderElectionEnabled() {
+        Map<String, ConfigEntry> effectiveConfigMap = computeEffectiveTopicConfigs(Collections.emptyMap());
+        if (!effectiveConfigMap.containsKey(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG)) {
+            return false;
+        }
+        return Boolean.parseBoolean(effectiveConfigMap.get(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG).value());
+    }
+
     Map<String, ConfigEntry> computeEffectiveTopicConfigs(Map<String, String> creationConfigs) {
         return configSchema.resolveEffectiveTopicConfigs(staticConfig, clusterConfig(),
             currentControllerConfig(), creationConfigs);

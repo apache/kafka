@@ -93,6 +93,7 @@ public class ClusterControlManager {
         private FeatureControlManager featureControl = null;
         private boolean zkMigrationEnabled = false;
         private BrokerUncleanShutdownHandler brokerUncleanShutdownHandler = null;
+        private int nodeId = -1;
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -139,6 +140,11 @@ public class ClusterControlManager {
             return this;
         }
 
+        Builder setNodeId(int nodeId) {
+            this.nodeId = nodeId;
+            return this;
+        }
+
         ClusterControlManager build() {
             if (logContext == null) {
                 logContext = new LogContext();
@@ -158,6 +164,9 @@ public class ClusterControlManager {
             if (brokerUncleanShutdownHandler == null) {
                 throw new RuntimeException("You must specify BrokerUncleanShutdownHandler");
             }
+            if (nodeId == -1) {
+                throw new RuntimeException("nodeId must be set");
+            }
             return new ClusterControlManager(logContext,
                 clusterId,
                 time,
@@ -166,7 +175,8 @@ public class ClusterControlManager {
                 replicaPlacer,
                 featureControl,
                 zkMigrationEnabled,
-                brokerUncleanShutdownHandler
+                brokerUncleanShutdownHandler,
+                nodeId
             );
         }
     }
@@ -265,6 +275,8 @@ public class ClusterControlManager {
      */
     private final TimelineHashMap<Integer, ControllerRegistration> controllerRegistrations;
 
+    private final int nodeId;
+
     /**
      * Maps directories to their respective brokers.
      */
@@ -279,7 +291,8 @@ public class ClusterControlManager {
         ReplicaPlacer replicaPlacer,
         FeatureControlManager featureControl,
         boolean zkMigrationEnabled,
-        BrokerUncleanShutdownHandler brokerUncleanShutdownHandler
+        BrokerUncleanShutdownHandler brokerUncleanShutdownHandler,
+        int nodeId
     ) {
         this.logContext = logContext;
         this.clusterId = clusterId;
@@ -296,10 +309,15 @@ public class ClusterControlManager {
         this.controllerRegistrations = new TimelineHashMap<>(snapshotRegistry, 0);
         this.directoryToBroker = new TimelineHashMap<>(snapshotRegistry, 0);
         this.brokerUncleanShutdownHandler = brokerUncleanShutdownHandler;
+        this.nodeId = nodeId;
     }
 
     ReplicaPlacer replicaPlacer() {
         return replicaPlacer;
+    }
+
+    public int nodeId() {
+        return nodeId;
     }
 
     /**

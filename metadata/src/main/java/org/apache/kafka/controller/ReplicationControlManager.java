@@ -140,6 +140,7 @@ import static org.apache.kafka.common.protocol.Errors.OPERATION_NOT_ATTEMPTED;
 import static org.apache.kafka.common.protocol.Errors.TOPIC_AUTHORIZATION_FAILED;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_ID;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION;
+import static org.apache.kafka.controller.ConfigurationControlManager.DEFAULT_NODE;
 import static org.apache.kafka.controller.PartitionReassignmentReplicas.isReassignmentInProgress;
 import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
@@ -1680,6 +1681,12 @@ public class ReplicationControlManager {
                 .build().ifPresent(records::add);
         }
 
+        // Since there might be some partitions didn't trigger unclean leader election after config change due to multiple records in one metadata transaction,
+        // try to elect leaders for them here periodically.
+        if (configurationControl.uncleanLeaderElectionEnabled()) {
+            triggerUncleanLeaderElectionForNoLeaderPartitions(records);
+        }
+
         return ControllerResult.of(records, rescheduleImmediately);
     }
 
@@ -2116,6 +2123,31 @@ public class ReplicationControlManager {
     }
 
     /**
+     * Trigger unclean leader election for partitions without leader
+     *
+     * @param records  The record list to append to.
+     */
+    private void triggerUncleanLeaderElectionForNoLeaderPartitions(List<ApiMessageAndVersion> records) {
+        Iterator<TopicIdPartition> iterator = brokersToIsrs.partitionsWithNoLeader();
+        while (iterator.hasNext()) {
+            TopicIdPartition topicIdPartition = iterator.next();
+            TopicControlInfo topic = topics.get(topicIdPartition.topicId());
+            if (topic == null) {
+                throw new RuntimeException("Topic ID " + topicIdPartition.topicId() + " existed in " +
+                        "isrMembers, but not in the topics map.");
+            }
+            PartitionRegistration partition = topic.parts.get(topicIdPartition.partitionId());
+            if (partition == null) {
+                throw new RuntimeException("Partition " + topicIdPartition +
+                        " existed in isrMembers, but not in the partitions map.");
+            }
+            if (electLeader(topic.name, topicIdPartition.partitionId(), ElectionType.UNCLEAN, records).equals(ApiError.NONE)) {
+                log.debug("Triggering unclean leader election for topic: {}, partition: {}", topic.name, topicIdPartition.partitionId());
+            }
+        }
+    }
+
+    /**
      * If "unclean.leader.election.enable" configurations was enabled dynamically, generating unclean leader election
      * records for all the partitions in this topic if necessary.
      */
@@ -2125,14 +2157,22 @@ public class ReplicationControlManager {
         for (ApiMessageAndVersion messageAndVersion : result.records()) {
             ConfigRecord record = (ConfigRecord) messageAndVersion.message();
             if (record.name().equals(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG) && "true".equals(record.value())) {
-                String topicName = record.resourceName();
-                Uuid topicId = topicsByName.get(topicName);
-                TopicControlInfo topicInfo = this.topics.get(topicId);
-                for (int partitionIndex : topicInfo.parts.keySet()) {
-                    if (electLeader(topicName, partitionIndex, ElectionType.UNCLEAN, records).equals(ApiError.NONE)) {
-                        log.debug("Triggering unclean leader election for topic: {}, partition: {}", topicName, partitionIndex);
+                if (record.resourceType() == TOPIC.id()) {
+                    String topicName = record.resourceName();
+                    Uuid topicId = topicsByName.get(topicName);
+                    TopicControlInfo topicInfo = this.topics.get(topicId);
+                    for (int partitionIndex : topicInfo.parts.keySet()) {
+                        if (electLeader(topicName, partitionIndex, ElectionType.UNCLEAN, records).equals(ApiError.NONE)) {
+                            log.debug("Triggering unclean leader election for topic: {}, partition: {}", topicName, partitionIndex);
+                        }
+                    }
+                } else if (record.resourceType() == ConfigResource.Type.BROKER.id()) {
+                    if (record.resourceName().equals(String.valueOf(clusterControl.nodeId())) ||
+                            DEFAULT_NODE.name().equals(record.resourceName())) {
+                        triggerUncleanLeaderElectionForNoLeaderPartitions(records);
                     }
                 }
+
             }
         }
 
