@@ -26,6 +26,7 @@ import java.util.Arrays;
 
 import org.junit.jupiter.api.Test;
 
+import static org.apache.kafka.connect.mirror.MirrorClientConfig.REPLICATION_POLICY_TOPICS_MAP;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -47,7 +48,7 @@ public class MirrorClientTest {
 
         FakeMirrorClient() {
             this(Collections.emptyList());
-        } 
+        }
 
         @Override
         protected Set<String> listTopics() {
@@ -115,7 +116,7 @@ public class MirrorClientTest {
         MirrorClient client = new FakeMirrorClient(Arrays.asList("topic1", "topic2", "heartbeats",
             "source1.heartbeats", "source1.source2.heartbeats", "source3.heartbeats"));
         assertEquals(1, client.replicationHops("source1"));
-        assertEquals(2, client.replicationHops("source2")); 
+        assertEquals(2, client.replicationHops("source2"));
         assertEquals(1, client.replicationHops("source3"));
         assertEquals(-1, client.replicationHops("source4"));
     }
@@ -209,10 +210,28 @@ public class MirrorClientTest {
             .topicSource("backup.heartbeats"));
     }
 
+    @Test
+    public void testRenameTopicReplication() {
+        MirrorClient client = new FakeMirrorClient(
+            renameTopicReplicationPolicy("heartbeats,source_heartbeats;"), Collections.emptyList());
+        // Case when mapping is not contain topic it should behave as DefaultReplicationPolicy
+        assertEquals("primary.topic2", client.replicationPolicy()
+            .formatRemoteTopic("primary", "topic2"));
+        // Heartbeats are handled as a special case as it is mentioned in the maping
+        assertEquals("backup.source_heartbeats", client.replicationPolicy()
+            .formatRemoteTopic("backup", "heartbeats"));
+    }
+
     private ReplicationPolicy identityReplicationPolicy(String source) {
         IdentityReplicationPolicy policy = new IdentityReplicationPolicy();
         policy.configure(Collections.singletonMap(
             IdentityReplicationPolicy.SOURCE_CLUSTER_ALIAS_CONFIG, source));
+        return policy;
+    }
+
+    private ReplicationPolicy renameTopicReplicationPolicy(String map) {
+        RenameTopicReplicationPolicy policy = new RenameTopicReplicationPolicy();
+        policy.configure(Collections.singletonMap(REPLICATION_POLICY_TOPICS_MAP, map));
         return policy;
     }
 }
