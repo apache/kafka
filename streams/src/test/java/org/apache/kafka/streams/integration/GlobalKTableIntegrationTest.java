@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.streams.integration;
 
-import kafka.utils.MockTime;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyValue;
@@ -100,9 +100,9 @@ public class GlobalKTableIntegrationTest {
     @BeforeEach
     public void before(final TestInfo testInfo) throws Exception {
         builder = new StreamsBuilder();
-        createTopics(testInfo);
+        final String safeTestName = safeUniqueTestName(testInfo);
+        createTopics(safeTestName);
         streamsConfiguration = new Properties();
-        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
@@ -341,8 +341,7 @@ public class GlobalKTableIntegrationTest {
         kafkaStreams.close();
     }
 
-    private void createTopics(final TestInfo testInfo) throws Exception {
-        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
+    private void createTopics(final String safeTestName) throws Exception {
         streamTopic = "stream-" + safeTestName;
         globalTableTopic = "globalTable-" + safeTestName;
         CLUSTER.createTopics(streamTopic);

@@ -19,6 +19,7 @@ package org.apache.kafka.image;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.TopicRecord;
+import org.apache.kafka.image.node.TopicImageNode;
 import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.PartitionRegistration;
@@ -26,7 +27,6 @@ import org.apache.kafka.metadata.PartitionRegistration;
 import java.util.Map.Entry;
 import java.util.Map;
 import java.util.Objects;
-import java.util.stream.Collectors;
 
 
 /**
@@ -68,7 +68,7 @@ public final class TopicImage {
         for (Entry<Integer, PartitionRegistration> entry : partitions.entrySet()) {
             int partitionId = entry.getKey();
             PartitionRegistration partition = entry.getValue();
-            writer.write(partition.toRecord(id, partitionId));
+            writer.write(partition.toRecord(id, partitionId, options));
         }
     }
 
@@ -88,9 +88,6 @@ public final class TopicImage {
 
     @Override
     public String toString() {
-        return "TopicImage(name=" + name + ", id=" + id + ", partitions=" +
-            partitions.entrySet().stream().
-                map(e -> e.getKey() + ":" + e.getValue()).
-                collect(Collectors.joining(", ")) + ")";
+        return new TopicImageNode(this).stringify();
     }
 }

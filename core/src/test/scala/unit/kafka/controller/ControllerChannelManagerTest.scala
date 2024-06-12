@@ -34,6 +34,7 @@ import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_0_IV1, IBP_0_10_2_IV0, IBP_0_9_0, IBP_1_0_IV0, IBP_2_2_IV0, IBP_2_4_IV0, IBP_2_4_IV1, IBP_2_6_IV0, IBP_2_8_IV1, IBP_3_2_IV0, IBP_3_4_IV0}
+import org.apache.kafka.server.config.{ServerConfigs, ZkConfigs}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -74,7 +75,7 @@ class ControllerChannelManagerTest {
     assertEquals(1, updateMetadataRequests.size)
 
     val leaderAndIsrRequest = leaderAndIsrRequests.head
-    val topicIds = leaderAndIsrRequest.topicIds();
+    val topicIds = leaderAndIsrRequest.topicIds()
     val topicNames = topicIds.asScala.map { case (k, v) => (v, k) }
     assertEquals(controllerId, leaderAndIsrRequest.controllerId)
     assertEquals(controllerEpoch, leaderAndIsrRequest.controllerEpoch)
@@ -160,7 +161,7 @@ class ControllerChannelManagerTest {
 
   @Test
   def testLeaderAndIsrInterBrokerProtocolVersion(): Unit = {
-    testLeaderAndIsrRequestFollowsInterBrokerProtocolVersion(MetadataVersion.latest, ApiKeys.LEADER_AND_ISR.latestVersion)
+    testLeaderAndIsrRequestFollowsInterBrokerProtocolVersion(MetadataVersion.latestTesting, ApiKeys.LEADER_AND_ISR.latestVersion)
 
     for (metadataVersion <- MetadataVersion.VERSIONS) {
       val leaderAndIsrRequestVersion: Short = {
@@ -379,7 +380,7 @@ class ControllerChannelManagerTest {
 
   @Test
   def testUpdateMetadataInterBrokerProtocolVersion(): Unit = {
-    testUpdateMetadataFollowsInterBrokerProtocolVersion(MetadataVersion.latest, ApiKeys.UPDATE_METADATA.latestVersion)
+    testUpdateMetadataFollowsInterBrokerProtocolVersion(MetadataVersion.latestTesting, ApiKeys.UPDATE_METADATA.latestVersion)
 
     for (metadataVersion <- MetadataVersion.VERSIONS) {
       val updateMetadataRequestVersion: Short =
@@ -625,7 +626,7 @@ class ControllerChannelManagerTest {
 
   @Test
   def testMixedDeleteAndNotDeleteStopReplicaRequests(): Unit = {
-    testMixedDeleteAndNotDeleteStopReplicaRequests(MetadataVersion.latest,
+    testMixedDeleteAndNotDeleteStopReplicaRequests(MetadataVersion.latestTesting,
       ApiKeys.STOP_REPLICA.latestVersion)
 
     for (metadataVersion <- MetadataVersion.VERSIONS) {
@@ -775,7 +776,7 @@ class ControllerChannelManagerTest {
 
   @Test
   def testStopReplicaInterBrokerProtocolVersion(): Unit = {
-    testStopReplicaFollowsInterBrokerProtocolVersion(MetadataVersion.latest, ApiKeys.STOP_REPLICA.latestVersion)
+    testStopReplicaFollowsInterBrokerProtocolVersion(MetadataVersion.latestTesting, ApiKeys.STOP_REPLICA.latestVersion)
 
     for (metadataVersion <- MetadataVersion.VERSIONS) {
       if (metadataVersion.isLessThan(IBP_2_2_IV0))
@@ -894,8 +895,8 @@ class ControllerChannelManagerTest {
 
   private def createConfig(interBrokerVersion: MetadataVersion): KafkaConfig = {
     val props = new Properties()
-    props.put(KafkaConfig.BrokerIdProp, controllerId.toString)
-    props.put(KafkaConfig.ZkConnectProp, "zkConnect")
+    props.put(ServerConfigs.BROKER_ID_CONFIG, controllerId.toString)
+    props.put(ZkConfigs.ZK_CONNECT_CONFIG, "zkConnect")
     TestUtils.setIbpAndMessageFormatVersions(props, interBrokerVersion)
     KafkaConfig.fromProps(props)
   }

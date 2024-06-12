@@ -75,7 +75,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -783,7 +782,7 @@ public class EosV2UpgradeIntegrationTest {
             commitRequested.set(0);
             stateTransitions1.clear();
             stateTransitions2.clear();
-            streams2V2 = getKafkaStreams(APP_DIR_1, StreamsConfig.EXACTLY_ONCE_V2);
+            streams2V2 = getKafkaStreams(APP_DIR_2, StreamsConfig.EXACTLY_ONCE_V2);
             streams2V2.setStateListener(
                 (newState, oldState) -> stateTransitions2.add(KeyValue.pair(oldState, newState))
             );
@@ -940,7 +939,7 @@ public class EosV2UpgradeIntegrationTest {
         final Properties properties = new Properties();
         properties.put(StreamsConfig.CLIENT_ID_CONFIG, appDir);
         properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, processingGuarantee);
-        final long commitInterval = Duration.ofMinutes(1L).toMillis();
+        final long commitInterval = Duration.ofMinutes(5L).toMillis();
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, commitInterval);
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.METADATA_MAX_AGE_CONFIG), Duration.ofSeconds(1L).toMillis());
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "earliest");
@@ -1067,7 +1066,7 @@ public class EosV2UpgradeIntegrationTest {
                     LongDeserializer.class,
                     Utils.mkProperties(Collections.singletonMap(
                         ConsumerConfig.ISOLATION_LEVEL_CONFIG,
-                        IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT))
+                        IsolationLevel.READ_COMMITTED.toString())
                     )
                 ),
                 MULTI_PARTITION_OUTPUT_TOPIC,
@@ -1149,7 +1148,6 @@ public class EosV2UpgradeIntegrationTest {
                         keys.add(row.key);
                     }
                 }
-
                 return true;
             },
             MAX_WAIT_TIME_MS,

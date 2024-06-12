@@ -17,6 +17,11 @@
 
 package org.apache.kafka.timeline;
 
+import org.apache.kafka.common.utils.LogContext;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
@@ -24,17 +29,13 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import org.apache.kafka.common.utils.LogContext;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 
 @Timeout(value = 40)
 public class SnapshottableHashTableTest {
@@ -275,6 +276,21 @@ public class SnapshottableHashTableTest {
         assertIteratorYields(table.snapshottableIterator(Long.MAX_VALUE));
     }
 
+    @Test
+    public void testIteratorAtOlderEpoch() {
+        SnapshotRegistry registry = new SnapshotRegistry(new LogContext());
+        SnapshottableHashTable<TestElement> table =
+                new SnapshottableHashTable<>(registry, 4);
+        assertNull(table.snapshottableAddOrReplace(E_3B));
+        registry.getOrCreateSnapshot(0);
+        assertNull(table.snapshottableAddOrReplace(E_1A));
+        registry.getOrCreateSnapshot(1);
+        assertEquals(E_1A, table.snapshottableAddOrReplace(E_1B));
+        registry.getOrCreateSnapshot(2);
+        assertEquals(E_1B, table.snapshottableRemove(E_1B));
+        assertIteratorYields(table.snapshottableIterator(1), E_3B, E_1A);
+    }
+
     /**
      * Assert that the given iterator contains the given elements, in any order.
      * We compare using reference equality here, rather than object equality.
@@ -286,7 +302,6 @@ public class SnapshottableHashTableTest {
             remaining.put(object, true);
         }
         List<Object> extraObjects = new ArrayList<>();
-        int i = 0;
         while (iter.hasNext()) {
             Object object = iter.next();
             assertNotNull(object);
@@ -295,10 +310,8 @@ public class SnapshottableHashTableTest {
             }
         }
         if (!extraObjects.isEmpty() || !remaining.isEmpty()) {
-            throw new RuntimeException("Found extra object(s): [" + String.join(", ",
-                extraObjects.stream().map(e -> e.toString()).collect(Collectors.toList())) +
-                "] and didn't find object(s): [" + String.join(", ",
-                remaining.keySet().stream().map(e -> e.toString()).collect(Collectors.toList())) + "]");
+            throw new RuntimeException("Found extra object(s): [" + extraObjects.stream().map(Object::toString).collect(Collectors.joining(", ")) +
+                "] and didn't find object(s): [" + remaining.keySet().stream().map(Object::toString).collect(Collectors.joining(", ")) + "]");
         }
     }
 }

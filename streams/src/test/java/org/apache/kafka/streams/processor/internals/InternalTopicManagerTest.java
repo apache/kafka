@@ -280,6 +280,26 @@ public class InternalTopicManagerTest {
     }
 
     @Test
+    public void shouldThrowTimeoutExceptionInGetPartitionInfo() {
+        setupTopicInMockAdminClient(topic1, Collections.emptyMap());
+        final MockTime time = new MockTime(5);
+        mockAdminClient.timeoutNextRequest(Integer.MAX_VALUE);
+
+        final InternalTopicManager internalTopicManager =
+            new InternalTopicManager(time, mockAdminClient, new StreamsConfig(config));
+
+        final TimeoutException exception = assertThrows(
+            TimeoutException.class,
+            () -> internalTopicManager.getTopicPartitionInfo(Collections.singleton(topic1))
+        );
+
+        assertThat(
+            exception.getMessage(),
+            is("Could not create topics within 50 milliseconds. This can happen if the Kafka cluster is temporarily not available.")
+        );
+    }
+
+    @Test
     public void shouldThrowTimeoutExceptionIfTopicExistsDuringSetup() {
         setupTopicInMockAdminClient(topic1, Collections.emptyMap());
         final MockTime time = new MockTime(
@@ -303,6 +323,31 @@ public class InternalTopicManagerTest {
                     " The last errors seen per topic are:" +
                     " {" + topic1 + "=org.apache.kafka.common.errors.TopicExistsException: Topic test_topic exists already.}")
         );
+    }
+
+    @Test
+    public void shouldThrowTimeoutExceptionIfGetPartitionInfoHasTopicDescriptionTimeout() {
+        mockAdminClient.timeoutNextRequest(1);
+
+        final InternalTopicManager internalTopicManager =
+                new InternalTopicManager(time, mockAdminClient, new StreamsConfig(config));
+        try {
+            final Set<String> topic1set = new HashSet<>(Collections.singletonList(topic1));
+            internalTopicManager.getTopicPartitionInfo(topic1set, null);
+
+        } catch (final TimeoutException expected) {
+            assertEquals(TimeoutException.class, expected.getCause().getClass());
+        }
+
+        mockAdminClient.timeoutNextRequest(1);
+
+        try {
+            final Set<String> topic2set = new HashSet<>(Collections.singletonList(topic2));
+            internalTopicManager.getTopicPartitionInfo(topic2set, null);
+
+        } catch (final TimeoutException expected) {
+            assertEquals(TimeoutException.class, expected.getCause().getClass());
+        }
     }
 
     @Test
@@ -632,6 +677,19 @@ public class InternalTopicManagerTest {
     }
 
     @Test
+    public void shouldReturnCorrectPartitionInfo() {
+        final TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList());
+        mockAdminClient.addTopic(
+            false,
+            topic1,
+            Collections.singletonList(topicPartitionInfo),
+            null);
+
+        final Map<String, List<TopicPartitionInfo>> ret = internalTopicManager.getTopicPartitionInfo(Collections.singleton(topic1));
+        assertEquals(Collections.singletonMap(topic1, Collections.singletonList(topicPartitionInfo)), ret);
+    }
+
+    @Test
     public void shouldCreateRequiredTopics() throws Exception {
         final InternalTopicConfig topicConfig = new RepartitionTopicConfig(topic1, Collections.emptyMap());
         topicConfig.setNumberOfPartitions(1);
@@ -650,22 +708,22 @@ public class InternalTopicManagerTest {
         assertEquals(mkSet(topic1, topic2, topic3, topic4), mockAdminClient.listTopics().names().get());
         assertEquals(new TopicDescription(topic1, false, new ArrayList<TopicPartitionInfo>() {
             {
-                add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList()));
+                add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList(), Collections.emptyList(), Collections.emptyList()));
             }
         }), mockAdminClient.describeTopics(Collections.singleton(topic1)).topicNameValues().get(topic1).get());
         assertEquals(new TopicDescription(topic2, false, new ArrayList<TopicPartitionInfo>() {
             {
-                add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList()));
+                add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList(), Collections.emptyList(), Collections.emptyList()));
             }
         }), mockAdminClient.describeTopics(Collections.singleton(topic2)).topicNameValues().get(topic2).get());
         assertEquals(new TopicDescription(topic3, false, new ArrayList<TopicPartitionInfo>() {
             {
-                add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList()));
+                add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList(), Collections.emptyList(), Collections.emptyList()));
             }
         }), mockAdminClient.describeTopics(Collections.singleton(topic3)).topicNameValues().get(topic3).get());
         assertEquals(new TopicDescription(topic4, false, new ArrayList<TopicPartitionInfo>() {
             {
-                add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList()));
+                add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList(), Collections.emptyList(), Collections.emptyList()));
             }
         }), mockAdminClient.describeTopics(Collections.singleton(topic4)).topicNameValues().get(topic4).get());
 
@@ -822,8 +880,8 @@ public class InternalTopicManagerTest {
         topicConfigMap.put(topic1, internalTopicConfig);
         topicConfigMap.put("internal-topic", internalTopicConfigII);
 
-        LogCaptureAppender.setClassLoggerToDebug(InternalTopicManager.class);
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(InternalTopicManager.class)) {
+            appender.setClassLoggerToDebug(InternalTopicManager.class);
             internalTopicManager.makeReady(topicConfigMap);
 
             assertThat(

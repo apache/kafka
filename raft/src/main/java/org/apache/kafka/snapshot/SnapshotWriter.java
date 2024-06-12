@@ -71,8 +71,10 @@ public interface SnapshotWriter<T> extends AutoCloseable {
      * Freezes the snapshot by flushing all pending writes and marking it as immutable.
      *
      * Also adds a {@link SnapshotFooterRecord} to the end of the snapshot
+     *
+     * @return  The size of the snapshot in bytes.
      */
-    void freeze();
+    long freeze();
 
     /**
      * Closes the snapshot writer.

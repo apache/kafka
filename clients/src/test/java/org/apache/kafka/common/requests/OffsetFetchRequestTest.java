@@ -52,7 +52,7 @@ public class OffsetFetchRequestTest {
     private final String group3 = "group3";
     private final String group4 = "group4";
     private final String group5 = "group5";
-    private List<String> groups = Arrays.asList(group1, group2, group3, group4, group5);
+    private final List<String> groups = Arrays.asList(group1, group2, group3, group4, group5);
 
     private final List<Integer> listOfVersionsNonBatchOffsetFetch = Arrays.asList(0, 1, 2, 3, 4, 5, 6, 7);
 
@@ -83,7 +83,6 @@ public class OffsetFetchRequestTest {
                     false,
                     partitions,
                     false);
-                assertFalse(builder.isAllTopicPartitions());
                 OffsetFetchRequest request = builder.build(version);
                 assertFalse(request.isAllPartitions());
                 assertEquals(group1, request.groupId());

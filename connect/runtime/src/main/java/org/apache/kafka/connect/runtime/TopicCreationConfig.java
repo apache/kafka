@@ -98,7 +98,7 @@ public class TopicCreationConfig {
         }
     }
 
-    public static ConfigDef configDef(String group, short defaultReplicationFactor, int defaultParitionCount) {
+    public static ConfigDef configDef(String group, short defaultReplicationFactor, int defaultPartitionCount) {
         int orderInGroup = 0;
         ConfigDef configDef = new ConfigDef();
         configDef
@@ -115,7 +115,7 @@ public class TopicCreationConfig {
                         ConfigDef.Importance.LOW, REPLICATION_FACTOR_DOC, group, ++orderInGroup,
                         ConfigDef.Width.LONG, "Replication Factor for Topics in " + group)
                 .define(PARTITIONS_CONFIG, ConfigDef.Type.INT,
-                        defaultParitionCount, PARTITIONS_VALIDATOR,
+                        defaultPartitionCount, PARTITIONS_VALIDATOR,
                         ConfigDef.Importance.LOW, PARTITIONS_DOC, group, ++orderInGroup,
                         ConfigDef.Width.LONG, "Partition Count for Topics in " + group);
         return configDef;

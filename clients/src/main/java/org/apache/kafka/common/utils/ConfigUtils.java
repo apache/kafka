@@ -105,7 +105,7 @@ public class ConfigUtils {
                 newConfigs.put(target, configs.get(target));
             } else if (deprecated.size() > 1) {
                 log.error("The configuration keys " + aliasString + " are deprecated and may be " +
-                          "removed in the future.  Additionally, this configuration is ambigous because " +
+                          "removed in the future.  Additionally, this configuration is ambiguous because " +
                           "these configuration keys are all aliases for " + target + ".  Please update " +
                           "your configuration to have only " + target + " set.");
                 newConfigs.put(target, configs.get(deprecated.get(0)));
@@ -143,5 +143,26 @@ public class ConfigUtils {
         }
         bld.append("}");
         return bld.toString();
+    }
+
+    /**
+     * Finds and returns a boolean configuration option from the configuration map or the default value if the option is
+     * not set.
+     *
+     * @param configs Map with the configuration options
+     * @param key Configuration option for which the boolean value will be returned
+     * @param defaultValue The default value that will be used when the key is not present
+     * @return A boolean value of the configuration option of the default value
+     */
+    public static boolean getBoolean(final Map<String, Object> configs, final String key, final boolean defaultValue) {
+        final Object value = configs.getOrDefault(key, defaultValue);
+        if (value instanceof Boolean) {
+            return (boolean) value;
+        } else if (value instanceof String) {
+            return Boolean.parseBoolean((String) value);
+        } else {
+            log.error("Invalid value (" + value + ") on configuration '" + key + "'. The default value '" + defaultValue + "' will be used instead. Please specify a true/false value.");
+            return defaultValue;
+        }
     }
 }

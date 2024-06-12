@@ -20,7 +20,6 @@ import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDir
 import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.ElectionType;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
@@ -67,6 +66,7 @@ import java.util.stream.Collectors;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
+import org.apache.kafka.common.utils.Time;
 
 public class MockAdminClient extends AdminClient {
     public static final String DEFAULT_CLUSTER_ID = "I4ZmrWqfT2e-upky_4fdPA";
@@ -90,15 +90,19 @@ public class MockAdminClient extends AdminClient {
     private final String clusterId;
     private final List<List<String>> brokerLogDirs;
     private final List<Map<String, String>> brokerConfigs;
+    private final Map<String, Map<String, String>> clientMetricsConfigs;
 
     private Node controller;
     private int timeoutNextRequests = 0;
     private final int defaultPartitions;
     private final int defaultReplicationFactor;
+    private boolean telemetryDisabled = false;
+    private Uuid clientInstanceId;
+    private int injectTimeoutExceptionCounter;
+    private Time mockTime;
+    private long blockingTimeMs;
 
-    private KafkaException listConsumerGroupOffsetsException;
-
-    private Map<MetricName, Metric> mockMetrics = new HashMap<>();
+    private final Map<MetricName, Metric> mockMetrics = new HashMap<>();
 
     private final List<DelegationToken> allTokens = new ArrayList<>();
 
@@ -118,6 +122,7 @@ public class MockAdminClient extends AdminClient {
         private Map<String, Short> minSupportedFeatureLevels = Collections.emptyMap();
         private Map<String, Short> maxSupportedFeatureLevels = Collections.emptyMap();
 
+        @SuppressWarnings("this-escape")
         public Builder() {
             numBrokers(1);
         }
@@ -217,6 +222,7 @@ public class MockAdminClient extends AdminClient {
             Collections.emptyMap());
     }
 
+    @SuppressWarnings("this-escape")
     private MockAdminClient(
         List<Node> brokers,
         Node controller,
@@ -236,6 +242,7 @@ public class MockAdminClient extends AdminClient {
         this.defaultReplicationFactor = defaultReplicationFactor;
         this.brokerLogDirs = brokerLogDirs;
         this.brokerConfigs = new ArrayList<>();
+        this.clientMetricsConfigs = new HashMap<>();
         for (int i = 0; i < brokers.size(); i++) {
             final Map<String, String> config = new HashMap<>();
             config.put("default.replication.factor", String.valueOf(defaultReplicationFactor));
@@ -250,7 +257,7 @@ public class MockAdminClient extends AdminClient {
         this.maxSupportedFeatureLevels = new HashMap<>(maxSupportedFeatureLevels);
     }
 
-    synchronized public void controller(Node controller) {
+    public synchronized void controller(Node controller) {
         if (!brokers.contains(controller))
             throw new IllegalArgumentException("The controller node must be in the list of brokers");
         this.controller = controller;
@@ -384,18 +391,28 @@ public class MockAdminClient extends AdminClient {
             // Partitions start off on the first log directory of each broker, for now.
             List<String> logDirs = new ArrayList<>(numberOfPartitions);
             for (int i = 0; i < numberOfPartitions; i++) {
-                partitions.add(new TopicPartitionInfo(i, brokers.get(0), replicas, Collections.emptyList()));
+                partitions.add(new TopicPartitionInfo(i, brokers.get(0), replicas, Collections.emptyList(), Collections.emptyList(), Collections.emptyList()));
                 logDirs.add(brokerLogDirs.get(partitions.get(i).leader().id()).get(0));
             }
             Uuid topicId = Uuid.randomUuid();
             topicIds.put(topicName, topicId);
             topicNames.put(topicId, topicName);
             allTopics.put(topicName, new TopicMetadata(topicId, false, partitions, logDirs, newTopic.configs()));
-            future.complete(null);
+            future.complete(new CreateTopicsResult.TopicMetadataAndConfig(topicId, numberOfPartitions, replicationFactor, config(newTopic)));
             createTopicResult.put(topicName, future);
         }
 
         return new CreateTopicsResult(createTopicResult);
+    }
+
+    private static Config config(NewTopic newTopic) {
+        Collection<ConfigEntry> configEntries = new ArrayList<>();
+        if (newTopic.configs() != null) {
+            for (Map.Entry<String, String> entry : newTopic.configs().entrySet()) {
+                configEntries.add(new ConfigEntry(entry.getKey(), entry.getValue()));
+            }
+        }
+        return new Config(configEntries);
     }
 
     @Override
@@ -626,8 +643,8 @@ public class MockAdminClient extends AdminClient {
     synchronized public RenewDelegationTokenResult renewDelegationToken(byte[] hmac, RenewDelegationTokenOptions options) {
         KafkaFutureImpl<Long> future = new KafkaFutureImpl<>();
 
-        Boolean tokenFound = false;
-        Long expiryTimestamp = options.renewTimePeriodMs();
+        boolean tokenFound = false;
+        long expiryTimestamp = options.renewTimePeriodMs();
         for (DelegationToken token : allTokens) {
             if (Arrays.equals(token.hmac(), hmac)) {
                 token.tokenInfo().setExpiryTimestamp(expiryTimestamp);
@@ -648,9 +665,9 @@ public class MockAdminClient extends AdminClient {
     synchronized public ExpireDelegationTokenResult expireDelegationToken(byte[] hmac, ExpireDelegationTokenOptions options) {
         KafkaFutureImpl<Long> future = new KafkaFutureImpl<>();
 
-        Long expiryTimestamp = options.expiryTimePeriodMs();
+        long expiryTimestamp = options.expiryTimePeriodMs();
         List<DelegationToken> tokensToRemove = new ArrayList<>();
-        Boolean tokenFound = false;
+        boolean tokenFound = false;
         for (DelegationToken token : allTokens) {
             if (Arrays.equals(token.hmac(), hmac)) {
                 if (expiryTimestamp == -1 || expiryTimestamp < System.currentTimeMillis()) {
@@ -708,20 +725,9 @@ public class MockAdminClient extends AdminClient {
         String group = groupSpecs.keySet().iterator().next();
         Collection<TopicPartition> topicPartitions = groupSpecs.get(group).topicPartitions();
         final KafkaFutureImpl<Map<TopicPartition, OffsetAndMetadata>> future = new KafkaFutureImpl<>();
-
-        if (listConsumerGroupOffsetsException != null) {
-            future.completeExceptionally(listConsumerGroupOffsetsException);
-        } else {
-            if (topicPartitions.isEmpty()) {
-                future.complete(committedOffsets.entrySet().stream()
-                        .collect(Collectors.toMap(Map.Entry::getKey, entry -> new OffsetAndMetadata(entry.getValue()))));
-            } else {
-                future.complete(committedOffsets.entrySet().stream()
-                        .filter(entry -> topicPartitions.contains(entry.getKey()))
-                        .collect(Collectors.toMap(Map.Entry::getKey, entry -> new OffsetAndMetadata(entry.getValue()))));
-            }
-        }
-
+        future.complete(committedOffsets.entrySet().stream()
+                .filter(entry -> topicPartitions.isEmpty() || topicPartitions.contains(entry.getKey()))
+                .collect(Collectors.toMap(Map.Entry::getKey, entry -> new OffsetAndMetadata(entry.getValue()))));
         return new ListConsumerGroupOffsetsResult(Collections.singletonMap(CoordinatorKey.byGroupId(group), future));
     }
 
@@ -810,6 +816,13 @@ public class MockAdminClient extends AdminClient {
 
                 }
                 throw new UnknownTopicOrPartitionException("Resource " + resource + " not found.");
+            }
+            case CLIENT_METRICS: {
+                String resourceName = resource.name();
+                if (resourceName.isEmpty()) {
+                    throw new InvalidRequestException("Empty resource name");
+                }
+                return toConfigObject(clientMetricsConfigs.get(resourceName));
             }
             default:
                 throw new UnsupportedOperationException("Not implemented yet");
@@ -904,6 +917,34 @@ public class MockAdminClient extends AdminClient {
                 topicMetadata.configs = newMap;
                 return null;
             }
+            case CLIENT_METRICS: {
+                String resourceName = resource.name();
+
+                if (resourceName.isEmpty()) {
+                    return new InvalidRequestException("Empty resource name");
+                }
+
+                if (!clientMetricsConfigs.containsKey(resourceName)) {
+                    clientMetricsConfigs.put(resourceName, new HashMap<>());
+                }
+
+                HashMap<String, String> newMap = new HashMap<>(clientMetricsConfigs.get(resourceName));
+                for (AlterConfigOp op : ops) {
+                    switch (op.opType()) {
+                        case SET:
+                            newMap.put(op.configEntry().name(), op.configEntry().value());
+                            break;
+                        case DELETE:
+                            newMap.remove(op.configEntry().name());
+                            break;
+                        default:
+                            return new InvalidRequestException(
+                                "Unsupported op type " + op.opType());
+                    }
+                }
+                clientMetricsConfigs.put(resourceName, newMap);
+                return null;
+            }
             default:
                 return new UnsupportedOperationException();
         }
@@ -962,7 +1003,13 @@ public class MockAdminClient extends AdminClient {
                 for (Node node : nodes) {
                     Map<String, LogDirDescription> logDirDescriptionMap = unwrappedResults.get(node.id());
                     LogDirDescription logDirDescription = logDirDescriptionMap.getOrDefault(partitionLogDirs.get(0), new LogDirDescription(null, new HashMap<>()));
-                    logDirDescription.replicaInfos().put(new TopicPartition(topicName, topicPartitionInfo.partition()), new ReplicaInfo(0, 0, false));
+                    Map<TopicPartition, ReplicaInfo> topicPartitionReplicaInfoMap = new HashMap<>(logDirDescription.replicaInfos());
+                    topicPartitionReplicaInfoMap.put(new TopicPartition(topicName, topicPartitionInfo.partition()), new ReplicaInfo(0, 0, false));
+                    logDirDescriptionMap.put(partitionLogDirs.get(0), new LogDirDescription(
+                        logDirDescription.error(),
+                        topicPartitionReplicaInfoMap,
+                        logDirDescription.totalBytes().orElse(DescribeLogDirsResponse.UNKNOWN_VOLUME_BYTES),
+                        logDirDescription.usableBytes().orElse(DescribeLogDirsResponse.UNKNOWN_VOLUME_BYTES)));
                 }
             }
         }
@@ -1253,6 +1300,23 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
+    public ListClientMetricsResourcesResult listClientMetricsResources(ListClientMetricsResourcesOptions options) {
+        KafkaFutureImpl<Collection<ClientMetricsResourceListing>> future = new KafkaFutureImpl<>();
+        future.complete(clientMetricsConfigs.keySet().stream().map(ClientMetricsResourceListing::new).collect(Collectors.toList()));
+        return new ListClientMetricsResourcesResult(future);
+    }
+
+    @Override
+    public AddRaftVoterResult addRaftVoter(int voterId, Uuid voterDirectoryId, Set<RaftVoterEndpoint> endpoints, AddRaftVoterOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public RemoveRaftVoterResult removeRaftVoter(int voterId, Uuid voterDirectoryId, RemoveRaftVoterOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
     synchronized public void close(Duration timeout) {}
 
     public synchronized void updateBeginningOffsets(Map<TopicPartition, Long> newOffsets) {
@@ -1265,10 +1329,6 @@ public class MockAdminClient extends AdminClient {
 
     public synchronized void updateConsumerGroupOffsets(final Map<TopicPartition, Long> newOffsets) {
         committedOffsets.putAll(newOffsets);
-    }
-
-    public synchronized void throwOnListConsumerGroupOffsets(final KafkaException exception) {
-        listConsumerGroupOffsetsException = exception;
     }
 
     private final static class TopicMetadata {
@@ -1298,6 +1358,49 @@ public class MockAdminClient extends AdminClient {
 
     synchronized public void setMockMetrics(MetricName name, Metric metric) {
         mockMetrics.put(name, metric);
+    }
+
+    public void disableTelemetry() {
+        telemetryDisabled = true;
+    }
+
+    /**
+     * @param injectTimeoutExceptionCounter use -1 for infinite
+     */
+    public void injectTimeoutException(final int injectTimeoutExceptionCounter) {
+        this.injectTimeoutExceptionCounter = injectTimeoutExceptionCounter;
+    }
+
+    public void advanceTimeOnClientInstanceId(final Time mockTime, final long blockingTimeMs) {
+        this.mockTime = mockTime;
+        this.blockingTimeMs = blockingTimeMs;
+    }
+
+    public void setClientInstanceId(final Uuid instanceId) {
+        clientInstanceId = instanceId;
+    }
+
+    @Override
+    public Uuid clientInstanceId(Duration timeout) {
+        if (telemetryDisabled) {
+            throw new IllegalStateException();
+        }
+        if (clientInstanceId == null) {
+            throw new UnsupportedOperationException("clientInstanceId not set");
+        }
+        if (injectTimeoutExceptionCounter != 0) {
+            // -1 is used as "infinite"
+            if (injectTimeoutExceptionCounter > 0) {
+                --injectTimeoutExceptionCounter;
+            }
+            throw new TimeoutException();
+        }
+
+        if (mockTime != null) {
+            mockTime.sleep(blockingTimeMs);
+        }
+
+        return clientInstanceId;
     }
 
     @Override

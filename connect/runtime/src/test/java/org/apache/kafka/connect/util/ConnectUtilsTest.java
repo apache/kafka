@@ -21,6 +21,8 @@ import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -33,6 +35,7 @@ import static org.junit.Assert.assertNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class ConnectUtilsTest {
 
     @Test
@@ -153,6 +156,9 @@ public class ConnectUtilsTest {
 
         expectedClientIdBase = "connect-" + userSpecifiedClientId + "-";
         assertClientIdBase(null, userSpecifiedClientId, expectedClientIdBase);
+
+        expectedClientIdBase = "connect-";
+        assertClientIdBase(null, "", expectedClientIdBase);
     }
 
     private void assertClientIdBase(String groupId, String userSpecifiedClientId, String expectedClientIdBase) {
@@ -163,4 +169,24 @@ public class ConnectUtilsTest {
         assertEquals(expectedClientIdBase, actualClientIdBase);
     }
 
+    @Test
+    public void testPatchConfig() {
+        HashMap<String, String> config = new HashMap<>();
+        config.put("unaffected-key", "unaffected-value");
+        config.put("to-be-changed-key", "to-be-changed-value-old");
+        config.put("to-be-deleted-key", "to-be-deleted-value");
+
+        HashMap<String, String> patch = new HashMap<>();
+        patch.put("to-be-changed-key", "to-be-changed-value-new");
+        patch.put("to-be-deleted-key", null);
+        patch.put("to-be-added-key", "to-be-added-value");
+
+        HashMap<String, String> expectedResult = new HashMap<>();
+        expectedResult.put("unaffected-key", "unaffected-value");
+        expectedResult.put("to-be-changed-key", "to-be-changed-value-new");
+        expectedResult.put("to-be-added-key", "to-be-added-value");
+
+        Map<String, String> result = ConnectUtils.patchConfig(config, patch);
+        assertEquals(expectedResult, result);
+    }
 }

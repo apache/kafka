@@ -17,20 +17,21 @@
 
 package kafka.server
 
-import java.util.Collections
 import kafka.testkit.KafkaClusterTestKit
 import kafka.testkit.TestKitNodes
 import kafka.utils.TestUtils
-import kafka.server.KafkaConfig.{MetadataMaxIdleIntervalMsProp, MetadataSnapshotMaxNewRecordBytesProp}
 import org.apache.kafka.common.utils.BufferSupplier
 import org.apache.kafka.metadata.MetadataRecordSerde
+import org.apache.kafka.server.config.KRaftConfigs
 import org.apache.kafka.snapshot.RecordsSnapshotReader
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Timeout
+
 import scala.jdk.CollectionConverters._
+import scala.util.Using
 
 @Timeout(120)
 class RaftClusterSnapshotTest {
@@ -40,7 +41,7 @@ class RaftClusterSnapshotTest {
     val numberOfBrokers = 3
     val numberOfControllers = 3
 
-    TestUtils.resource(
+    Using(
       new KafkaClusterTestKit
         .Builder(
           new TestKitNodes.Builder()
@@ -48,8 +49,8 @@ class RaftClusterSnapshotTest {
             .setNumControllerNodes(numberOfControllers)
             .build()
         )
-        .setConfigProp(MetadataSnapshotMaxNewRecordBytesProp, "10")
-        .setConfigProp(MetadataMaxIdleIntervalMsProp, "0")
+        .setConfigProp(KRaftConfigs.METADATA_SNAPSHOT_MAX_NEW_RECORD_BYTES_CONFIG, "10")
+        .setConfigProp(KRaftConfigs.METADATA_MAX_IDLE_INTERVAL_MS_CONFIG, "0")
         .build()
     ) { cluster =>
       cluster.format()
@@ -71,9 +72,9 @@ class RaftClusterSnapshotTest {
 
       assertEquals(numberOfControllers + numberOfBrokers, cluster.raftManagers.size())
 
-      // For every controller and broker perform some sanity checks against the lastest snapshot
+      // For every controller and broker perform some sanity checks against the latest snapshot
       for ((_, raftManager) <- cluster.raftManagers().asScala) {
-        TestUtils.resource(
+        Using(
           RecordsSnapshotReader.of(
             raftManager.replicatedLog.latestSnapshot.get(),
             new MetadataRecordSerde(),
@@ -87,9 +88,14 @@ class RaftClusterSnapshotTest {
 
           // Check that we can read the entire snapshot
           while (snapshot.hasNext) {
-            val batch = snapshot.next()
+            val batch = snapshot.next
             assertTrue(batch.sizeInBytes > 0)
-            assertNotEquals(Collections.emptyList(), batch.records())
+            // A batch must have at least one control records or at least one data records, but not both
+            assertNotEquals(
+              batch.records.isEmpty,
+              batch.controlRecords.isEmpty,
+              s"data records = ${batch.records}; control records = ${batch.controlRecords}"
+            )
           }
         }
       }

@@ -32,6 +32,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.CountDownLatch;
 
 /**
  * This class provides an in-memory cache of remote log segment metadata. This maintains the lineage of segments
@@ -104,6 +105,16 @@ public class RemoteLogMetadataCache {
     // https://issues.apache.org/jira/browse/KAFKA-12641
     protected final ConcurrentMap<Integer, RemoteLogLeaderEpochState> leaderEpochEntries = new ConcurrentHashMap<>();
 
+    private final CountDownLatch initializedLatch = new CountDownLatch(1);
+
+    public void markInitialized() {
+        initializedLatch.countDown();
+    }
+
+    public boolean isInitialized() {
+        return initializedLatch.getCount() == 0;
+    }
+
     /**
      * Returns {@link RemoteLogSegmentMetadata} if it exists for the given leader-epoch containing the offset and with
      * {@link RemoteLogSegmentState#COPY_SEGMENT_FINISHED} state, else returns {@link Optional#empty()}.
@@ -146,13 +157,20 @@ public class RemoteLogMetadataCache {
         RemoteLogSegmentState targetState = metadataUpdate.state();
         RemoteLogSegmentId remoteLogSegmentId = metadataUpdate.remoteLogSegmentId();
         RemoteLogSegmentMetadata existingMetadata = idToSegmentMetadata.get(remoteLogSegmentId);
+        if (!isInitialized() && existingMetadata == null) {
+            log.debug("Dropping the event: {} as the base-metadata about the segment was already removed", metadataUpdate);
+            return;
+        }
         if (existingMetadata == null) {
             throw new RemoteResourceNotFoundException("No remote log segment metadata found for :" +
                                                       remoteLogSegmentId);
         }
 
         // Check the state transition.
-        checkStateTransition(existingMetadata.state(), targetState);
+        boolean isValid = checkStateTransition(existingMetadata.state(), targetState, metadataUpdate.remoteLogSegmentId());
+        if (!isValid) {
+            return;
+        }
 
         switch (targetState) {
             case COPY_SEGMENT_STARTED:
@@ -176,13 +194,11 @@ public class RemoteLogMetadataCache {
 
     protected final void handleSegmentWithCopySegmentFinishedState(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
         doHandleSegmentStateTransitionForLeaderEpochs(remoteLogSegmentMetadata,
-                                                      (leaderEpoch, remoteLogLeaderEpochState, startOffset, segmentId) -> {
-                                                          long leaderEpochEndOffset = highestOffsetForEpoch(leaderEpoch,
-                                                                                                            remoteLogSegmentMetadata);
-                                                          remoteLogLeaderEpochState.handleSegmentWithCopySegmentFinishedState(startOffset,
-                                                                                                                              segmentId,
-                                                                                                                              leaderEpochEndOffset);
-                                                      });
+            (leaderEpoch, remoteLogLeaderEpochState, startOffset, segmentId) -> {
+                long leaderEpochEndOffset = highestOffsetForEpoch(leaderEpoch, remoteLogSegmentMetadata);
+                remoteLogLeaderEpochState
+                        .handleSegmentWithCopySegmentFinishedState(startOffset, segmentId, leaderEpochEndOffset);
+            });
 
         // Put the entry with the updated metadata.
         idToSegmentMetadata.put(remoteLogSegmentMetadata.remoteLogSegmentId(), remoteLogSegmentMetadata);
@@ -192,8 +208,8 @@ public class RemoteLogMetadataCache {
         log.debug("Cleaning up the state for : [{}]", remoteLogSegmentMetadata);
 
         doHandleSegmentStateTransitionForLeaderEpochs(remoteLogSegmentMetadata,
-                                                      (leaderEpoch, remoteLogLeaderEpochState, startOffset, segmentId) ->
-                                                              remoteLogLeaderEpochState.handleSegmentWithDeleteSegmentStartedState(startOffset, segmentId));
+            (leaderEpoch, remoteLogLeaderEpochState, startOffset, segmentId) ->
+                    remoteLogLeaderEpochState.handleSegmentWithDeleteSegmentStartedState(startOffset, segmentId));
 
         // Put the entry with the updated metadata.
         idToSegmentMetadata.put(remoteLogSegmentMetadata.remoteLogSegmentId(), remoteLogSegmentMetadata);
@@ -203,8 +219,8 @@ public class RemoteLogMetadataCache {
         log.debug("Removing the entry as it reached the terminal state: [{}]", remoteLogSegmentMetadata);
 
         doHandleSegmentStateTransitionForLeaderEpochs(remoteLogSegmentMetadata,
-                                                      (leaderEpoch, remoteLogLeaderEpochState, startOffset, segmentId) ->
-                                                              remoteLogLeaderEpochState.handleSegmentWithDeleteSegmentFinishedState(segmentId));
+            (leaderEpoch, remoteLogLeaderEpochState, startOffset, segmentId) ->
+                    remoteLogLeaderEpochState.handleSegmentWithDeleteSegmentFinishedState(segmentId));
 
         // Remove the segment's id to metadata mapping because this segment is considered as deleted and it cleared all
         // the state of this segment in the cache.
@@ -291,22 +307,26 @@ public class RemoteLogMetadataCache {
 
         RemoteLogSegmentId remoteLogSegmentId = remoteLogSegmentMetadata.remoteLogSegmentId();
         RemoteLogSegmentMetadata existingMetadata = idToSegmentMetadata.get(remoteLogSegmentId);
-        checkStateTransition(existingMetadata != null ? existingMetadata.state() : null,
-                remoteLogSegmentMetadata.state());
-
+        boolean isValid = checkStateTransition(existingMetadata != null ? existingMetadata.state() : null,
+                remoteLogSegmentMetadata.state(), remoteLogSegmentMetadata.remoteLogSegmentId());
+        if (!isValid) {
+            return;
+        }
         for (Integer epoch : remoteLogSegmentMetadata.segmentLeaderEpochs().keySet()) {
             leaderEpochEntries.computeIfAbsent(epoch, leaderEpoch -> new RemoteLogLeaderEpochState())
                     .handleSegmentWithCopySegmentStartedState(remoteLogSegmentId);
         }
-
         idToSegmentMetadata.put(remoteLogSegmentId, remoteLogSegmentMetadata);
     }
 
-    private void checkStateTransition(RemoteLogSegmentState existingState, RemoteLogSegmentState targetState) {
-        if (!RemoteLogSegmentState.isValidTransition(existingState, targetState)) {
-            throw new IllegalStateException(
-                    "Current state: " + existingState + " can not be transitioned to target state: " + targetState);
+    private boolean checkStateTransition(RemoteLogSegmentState existingState,
+                                         RemoteLogSegmentState targetState,
+                                         RemoteLogSegmentId segmentId) {
+        boolean isValid = RemoteLogSegmentState.isValidTransition(existingState, targetState);
+        if (!isValid) {
+            log.error("Current state: {} can not be transitioned to target state: {}, segmentId: {}. Dropping the event",
+                    existingState, targetState, segmentId);
         }
+        return isValid;
     }
-
 }

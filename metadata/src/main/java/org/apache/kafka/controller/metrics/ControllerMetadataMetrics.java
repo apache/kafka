@@ -39,6 +39,8 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
         "KafkaController", "FencedBrokerCount");
     private final static MetricName ACTIVE_BROKER_COUNT = getMetricName(
         "KafkaController", "ActiveBrokerCount");
+    private final static MetricName MIGRATING_ZK_BROKER_COUNT = getMetricName(
+        "KafkaController", "MigratingZkBrokerCount");
     private final static MetricName GLOBAL_TOPIC_COUNT = getMetricName(
         "KafkaController", "GlobalTopicCount");
     private final static MetricName GLOBAL_PARTITION_COUNT = getMetricName(
@@ -55,6 +57,7 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
     private final Optional<MetricsRegistry> registry;
     private final AtomicInteger fencedBrokerCount = new AtomicInteger(0);
     private final AtomicInteger activeBrokerCount = new AtomicInteger(0);
+    private final AtomicInteger migratingZkBrokerCount = new AtomicInteger(0);
     private final AtomicInteger globalTopicCount = new AtomicInteger(0);
     private final AtomicInteger globalPartitionCount = new AtomicInteger(0);
     private final AtomicInteger offlinePartitionCount = new AtomicInteger(0);
@@ -65,7 +68,7 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
     /**
      * Create a new ControllerMetadataMetrics object.
      *
-     * @param registry  The metrics registry, or Optional.empty if this is a test and we don't have one.
+     * @param registry The metrics registry, or Optional.empty if this is a test and we don't have one.
      */
     public ControllerMetadataMetrics(Optional<MetricsRegistry> registry) {
         this.registry = registry;
@@ -117,6 +120,14 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
                 return (int) zkMigrationState();
             }
         }));
+
+        registry.ifPresent(r -> r.newGauge(MIGRATING_ZK_BROKER_COUNT, new Gauge<Integer>() {
+            @Override
+            public Integer value() {
+                return migratingZkBrokerCount();
+            }
+        }));
+
     }
 
     public void setFencedBrokerCount(int brokerCount) {
@@ -141,6 +152,18 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
 
     public int activeBrokerCount() {
         return this.activeBrokerCount.get();
+    }
+
+    public void setMigratingZkBrokerCount(int brokerCount) {
+        this.migratingZkBrokerCount.set(brokerCount);
+    }
+
+    public void addToMigratingZkBrokerCount(int brokerCountDelta) {
+        this.migratingZkBrokerCount.addAndGet(brokerCountDelta);
+    }
+
+    public int migratingZkBrokerCount() {
+        return this.migratingZkBrokerCount.get();
     }
 
     public void setGlobalTopicCount(int topicCount) {
@@ -212,6 +235,7 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
         registry.ifPresent(r -> Arrays.asList(
             FENCED_BROKER_COUNT,
             ACTIVE_BROKER_COUNT,
+            MIGRATING_ZK_BROKER_COUNT,
             GLOBAL_TOPIC_COUNT,
             GLOBAL_PARTITION_COUNT,
             OFFLINE_PARTITION_COUNT,

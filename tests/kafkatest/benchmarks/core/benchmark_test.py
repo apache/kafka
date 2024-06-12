@@ -145,7 +145,7 @@ class Benchmark(Test):
 
         for i in range(nblocks):
             subset = self.producer.stats[0][i*block_size:min((i+1)*block_size, len(self.producer.stats[0]))]
-            if len(subset) == 0:
+            if not subset:
                 summary.append(" Time block %d: (empty)" % i)
                 data[i] = None
             else:

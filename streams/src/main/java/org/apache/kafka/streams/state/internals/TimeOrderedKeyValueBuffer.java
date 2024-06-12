@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
@@ -27,14 +26,20 @@ import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-public interface TimeOrderedKeyValueBuffer<K, V> extends StateStore {
+/** An interface for a time ordered buffer.
+ *
+ * @param <K> Key type
+ * @param <V> Value type
+ * @param <T> Store type
+ */
+public interface TimeOrderedKeyValueBuffer<K, V, T> extends StateStore {
 
-    final class Eviction<K, V> {
+    final class Eviction<K, T> {
         private final K key;
-        private final Change<V> value;
+        private final T value;
         private final ProcessorRecordContext recordContext;
 
-        Eviction(final K key, final Change<V> value, final ProcessorRecordContext recordContext) {
+        Eviction(final K key, final T value, final ProcessorRecordContext recordContext) {
             this.key = key;
             this.value = value;
             this.recordContext = recordContext;
@@ -44,11 +49,11 @@ public interface TimeOrderedKeyValueBuffer<K, V> extends StateStore {
             return key;
         }
 
-        public Change<V> value() {
+        public T value() {
             return value;
         }
 
-        public Record<K, Change<V>> record() {
+        public Record<K, T> record() {
             return new Record<>(key, value, recordContext.timestamp());
         }
 
@@ -80,11 +85,11 @@ public interface TimeOrderedKeyValueBuffer<K, V> extends StateStore {
 
     void setSerdesIfNull(final SerdeGetter getter);
 
-    void evictWhile(final Supplier<Boolean> predicate, final Consumer<Eviction<K, V>> callback);
+    void evictWhile(final Supplier<Boolean> predicate, final Consumer<Eviction<K, T>> callback);
 
     Maybe<ValueAndTimestamp<V>> priorValueForBuffered(K key);
 
-    void put(long time, Record<K, Change<V>> record, ProcessorRecordContext recordContext);
+    boolean put(long time, Record<K, T> record, ProcessorRecordContext recordContext);
 
     int numRecords();
 

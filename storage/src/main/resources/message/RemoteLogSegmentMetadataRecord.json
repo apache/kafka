@@ -117,6 +117,14 @@
       "about": "Segment size in bytes."
     },
     {
+      "name": "CustomMetadata",
+      "type": "bytes",
+      "default": "null",
+      "versions": "0+",
+      "nullableVersions": "0+",
+      "about": "Custom metadata."
+    },
+    {
       "name": "RemoteLogSegmentState",
       "type": "int8",
       "versions": "0+",

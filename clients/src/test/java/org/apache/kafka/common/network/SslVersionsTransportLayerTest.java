@@ -117,6 +117,8 @@ public class SslVersionsTransportLayerTest {
             NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.State.AUTHENTICATION_FAILED);
             server.verifyAuthenticationMetrics(0, 1);
         }
+        server.close();
+        selector.close();
     }
 
     /**
@@ -130,7 +132,7 @@ public class SslVersionsTransportLayerTest {
      * > supported_versions: Lists which versions of TLS the client supports. In particular, if the client
      * > requests TLS 1.3, then the client version field has the value TLSv1.2 and this extension
      * > contains the value TLSv1.3; if the client requests TLS 1.2, then the client version field has the
-     * > value TLSv1.2 and this extension either doesn’t exist or contains the value TLSv1.2 but not the value TLSv1.3.
+     * > value TLSv1.2 and this extension either doesn't exist or contains the value TLSv1.2 but not the value TLSv1.3.
      * <p>
      *
      * This mean that TLSv1.3 client can fallback to TLSv1.2 but TLSv1.2 client can't change protocol to TLSv1.3.

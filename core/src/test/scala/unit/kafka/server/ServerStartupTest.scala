@@ -18,10 +18,17 @@
 package kafka.server
 
 import kafka.utils.TestUtils
+import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.metadata.BrokerState
+import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.server.config.KRaftConfigs
+import org.apache.kafka.network.SocketServerConfigs
+import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig}
 import org.apache.zookeeper.KeeperException.NodeExistsException
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 class ServerStartupTest extends QuorumTestHarness {
 
@@ -59,6 +66,33 @@ class ServerStartupTest extends QuorumTestHarness {
     val brokerId2 = 1
     val props2 = TestUtils.createBrokerConfig(brokerId2, zkConnect, port = port)
     assertThrows(classOf[IllegalArgumentException], () => TestUtils.createServer(KafkaConfig.fromProps(props2)))
+  }
+
+  @Test
+  def testRemoteStorageEnabled(): Unit = {
+    // Create and start first broker
+    val brokerId1 = 0
+    val props1 = TestUtils.createBrokerConfig(brokerId1, zkConnect)
+    props1.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true")
+    props1.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, classOf[NoOpRemoteStorageManager].getName)
+    props1.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, classOf[NoOpRemoteLogMetadataManager].getName)
+    props1.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP, "badListenerName")
+    assertThrows(classOf[ConfigException], () => TestUtils.createServer(KafkaConfig.fromProps(props1)))
+    // should not throw exception after adding a correct value for "remote.log.metadata.manager.listener.name"
+    props1.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP, "PLAINTEXT")
+    server = TestUtils.createServer(KafkaConfig.fromProps(props1))
+  }
+
+  @Test
+  def testRemoteStorageEnabledWithoutSettingListener(): Unit = {
+    // Create and start first broker
+    val brokerId1 = 0
+    val props1 = TestUtils.createBrokerConfig(brokerId1, zkConnect)
+    props1.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true")
+    props1.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, classOf[NoOpRemoteStorageManager].getName)
+    props1.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, classOf[NoOpRemoteLogMetadataManager].getName)
+    // should not throw exception if "remote.log.metadata.manager.listener.name" is unconfigured
+    server = TestUtils.createServer(KafkaConfig.fromProps(props1))
   }
 
   @Test
@@ -103,4 +137,23 @@ class ServerStartupTest extends QuorumTestHarness {
     assertEquals(1, brokers.size)
     assertEquals(brokerId, brokers.head.id)
   }
+
+ @ParameterizedTest
+ @ValueSource(booleans = Array(false, true))
+ def testDirectoryIdsCreatedOnlyForMigration(migrationEnabled: Boolean): Unit = {
+   val props = TestUtils.createBrokerConfig(1, zkConnect)
+   props.setProperty(KRaftConfigs.MIGRATION_ENABLED_CONFIG, migrationEnabled.toString)
+   if (migrationEnabled) {
+     // Create Controller properties needed when migration is enabled
+     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "3000@localhost:9093")
+     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+     props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG,
+       "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+   }
+   server = new KafkaServer(KafkaConfig.fromProps(props))
+   server.startup()
+   assertEquals(!migrationEnabled, server.logManager.directoryIdsSet.isEmpty)
+   server.shutdown()
+ }
+
 }

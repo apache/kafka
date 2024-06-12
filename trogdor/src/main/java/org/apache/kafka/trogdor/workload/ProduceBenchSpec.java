@@ -17,11 +17,12 @@
 
 package org.apache.kafka.trogdor.workload;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.kafka.trogdor.task.TaskController;
 import org.apache.kafka.trogdor.task.TaskSpec;
 import org.apache.kafka.trogdor.task.TaskWorker;
+
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.Collections;
 import java.util.Map;
@@ -74,6 +75,7 @@ public class ProduceBenchSpec extends TaskSpec {
     private final boolean useConfiguredPartitioner;
     private final boolean skipFlush;
 
+    @SuppressWarnings("this-escape")
     @JsonCreator
     public ProduceBenchSpec(@JsonProperty("startMs") long startMs,
                          @JsonProperty("durationMs") long durationMs,

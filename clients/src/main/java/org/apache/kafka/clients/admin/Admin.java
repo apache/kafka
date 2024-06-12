@@ -19,17 +19,20 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.ElectionType;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicCollection;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionReplica;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.FeatureUpdateFailedException;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.quota.ClientQuotaAlteration;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
@@ -751,7 +754,7 @@ public interface Admin extends AutoCloseable {
      * </ul>
      *
      * @param options The options to use when creating delegation token.
-     * @return The DeleteRecordsResult.
+     * @return The CreateDelegationTokenResult.
      */
     CreateDelegationTokenResult createDelegationToken(CreateDelegationTokenOptions options);
 
@@ -898,7 +901,7 @@ public interface Admin extends AutoCloseable {
      * List the consumer groups available in the cluster.
      *
      * @param options The options to use when listing the consumer groups.
-     * @return The ListGroupsResult.
+     * @return The ListConsumerGroupsResult.
      */
     ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options);
 
@@ -908,7 +911,7 @@ public interface Admin extends AutoCloseable {
      * This is a convenience method for {@link #listConsumerGroups(ListConsumerGroupsOptions)} with default options.
      * See the overload for more details.
      *
-     * @return The ListGroupsResult.
+     * @return The ListConsumerGroupsResult.
      */
     default ListConsumerGroupsResult listConsumerGroups() {
         return listConsumerGroups(new ListConsumerGroupsOptions());
@@ -918,7 +921,7 @@ public interface Admin extends AutoCloseable {
      * List the consumer group offsets available in the cluster.
      *
      * @param options The options to use when listing the consumer group offsets.
-     * @return The ListGroupOffsetsResult
+     * @return The ListConsumerGroupOffsetsResult
      */
     default ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId, ListConsumerGroupOffsetsOptions options) {
         @SuppressWarnings("deprecation")
@@ -936,7 +939,7 @@ public interface Admin extends AutoCloseable {
      * This is a convenience method for {@link #listConsumerGroupOffsets(Map, ListConsumerGroupOffsetsOptions)}
      * to list offsets of all partitions of one group with default options.
      *
-     * @return The ListGroupOffsetsResult.
+     * @return The ListConsumerGroupOffsetsResult.
      */
     default ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId) {
         return listConsumerGroupOffsets(groupId, new ListConsumerGroupOffsetsOptions());
@@ -969,7 +972,7 @@ public interface Admin extends AutoCloseable {
      * Delete consumer groups from the cluster.
      *
      * @param options The options to use when deleting a consumer group.
-     * @return The DeletConsumerGroupResult.
+     * @return The DeleteConsumerGroupsResult.
      */
     DeleteConsumerGroupsResult deleteConsumerGroups(Collection<String> groupIds, DeleteConsumerGroupsOptions options);
 
@@ -1630,7 +1633,8 @@ public interface Admin extends AutoCloseable {
      * coordinators in the cluster and collect the state of all transactions. Users
      * should typically attempt to reduce the size of the result set using
      * {@link ListTransactionsOptions#filterProducerIds(Collection)} or
-     * {@link ListTransactionsOptions#filterStates(Collection)}
+     * {@link ListTransactionsOptions#filterStates(Collection)} or
+     * {@link ListTransactionsOptions#filterOnDuration(long)}.
      *
      * @param options Options to control the method behavior (including filters)
      * @return The result
@@ -1659,6 +1663,109 @@ public interface Admin extends AutoCloseable {
      */
     FenceProducersResult fenceProducers(Collection<String> transactionalIds,
                                         FenceProducersOptions options);
+
+    /**
+     * List the client metrics configuration resources available in the cluster.
+     *
+     * @param options The options to use when listing the client metrics resources.
+     * @return The ListClientMetricsResourcesResult.
+     */
+    ListClientMetricsResourcesResult listClientMetricsResources(ListClientMetricsResourcesOptions options);
+
+    /**
+     * List the client metrics configuration resources available in the cluster with the default options.
+     * <p>
+     * This is a convenience method for {@link #listClientMetricsResources(ListClientMetricsResourcesOptions)}
+     * with default options. See the overload for more details.
+     *
+     * @return The ListClientMetricsResourcesResult.
+     */
+    default ListClientMetricsResourcesResult listClientMetricsResources() {
+        return listClientMetricsResources(new ListClientMetricsResourcesOptions());
+    }
+
+    /**
+     * Determines the client's unique client instance ID used for telemetry. This ID is unique to
+     * this specific client instance and will not change after it is initially generated.
+     * The ID is useful for correlating client operations with telemetry sent to the broker and
+     * to its eventual monitoring destinations.
+     * <p>
+     * If telemetry is enabled, this will first require a connection to the cluster to generate
+     * the unique client instance ID. This method waits up to {@code timeout} for the admin
+     * client to complete the request.
+     * <p>
+     * Client telemetry is controlled by the {@link AdminClientConfig#ENABLE_METRICS_PUSH_CONFIG}
+     * configuration option.
+     *
+     * @param timeout The maximum time to wait for admin client to determine its client instance ID.
+     *                The value must be non-negative. Specifying a timeout of zero means do not
+     *                wait for the initial request to complete if it hasn't already.
+     * @throws InterruptException If the thread is interrupted while blocked.
+     * @throws KafkaException If an unexpected error occurs while trying to determine the client
+     *                        instance ID, though this error does not necessarily imply the
+     *                        admin client is otherwise unusable.
+     * @throws IllegalArgumentException If the {@code timeout} is negative.
+     * @throws IllegalStateException If telemetry is not enabled ie, config `{@code enable.metrics.push}`
+     *                               is set to `{@code false}`.
+     * @return The client's assigned instance id used for metrics collection.
+     */
+    Uuid clientInstanceId(Duration timeout);
+
+    /**
+     * Add a new voter node to the KRaft metadata quorum.
+     *
+     * @param voterId           The node ID of the voter.
+     * @param voterDirectoryId  The directory ID of the voter.
+     * @param endpoints         The endpoints that the new voter has.
+     */
+    default AddRaftVoterResult addRaftVoter(
+        int voterId,
+        Uuid voterDirectoryId,
+        Set<RaftVoterEndpoint> endpoints
+    ) {
+        return addRaftVoter(voterId, voterDirectoryId, endpoints, new AddRaftVoterOptions());
+    }
+
+    /**
+     * Add a new voter node to the KRaft metadata quorum.
+     *
+     * @param voterId           The node ID of the voter.
+     * @param voterDirectoryId  The directory ID of the voter.
+     * @param endpoints         The endpoints that the new voter has.
+     * @param options           The options to use when adding the new voter node.
+     */
+    AddRaftVoterResult addRaftVoter(
+        int voterId,
+        Uuid voterDirectoryId,
+        Set<RaftVoterEndpoint> endpoints,
+        AddRaftVoterOptions options
+    );
+
+    /**
+     * Remove a voter node from the KRaft metadata quorum.
+     *
+     * @param voterId           The node ID of the voter.
+     * @param voterDirectoryId  The directory ID of the voter.
+     */
+    default RemoveRaftVoterResult removeRaftVoter(
+        int voterId,
+        Uuid voterDirectoryId
+    ) {
+        return removeRaftVoter(voterId, voterDirectoryId, new RemoveRaftVoterOptions());
+    }
+
+    /**
+     * Remove a voter node from the KRaft metadata quorum.
+     *
+     * @param voterId           The node ID of the voter.
+     * @param voterDirectoryId  The directory ID of the voter.
+     * @param options           The options to use when removing the voter node.
+     */
+    RemoveRaftVoterResult removeRaftVoter(
+        int voterId,
+        Uuid voterDirectoryId,
+        RemoveRaftVoterOptions options
+    );
 
     /**
      * Get the metrics kept by the adminClient

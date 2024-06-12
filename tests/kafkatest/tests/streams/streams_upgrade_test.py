@@ -26,7 +26,8 @@ from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.tests.streams.utils import extract_generation_from_logs, extract_generation_id
 from kafkatest.version import LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, \
     LATEST_2_0, LATEST_2_1, LATEST_2_2, LATEST_2_3, LATEST_2_4, LATEST_2_5, LATEST_2_6, LATEST_2_7, LATEST_2_8, \
-    LATEST_3_0, LATEST_3_1, LATEST_3_2, LATEST_3_3, DEV_BRANCH, DEV_VERSION, KafkaVersion
+    LATEST_3_0, LATEST_3_1, LATEST_3_2, LATEST_3_3, LATEST_3_4, LATEST_3_5, LATEST_3_6, LATEST_3_7, DEV_BRANCH, DEV_VERSION, \
+    KafkaVersion
 
 # broker 0.10.0 is not compatible with newer Kafka Streams versions
 # broker 0.10.1 and 0.10.2 do not support headers, as required by suppress() (since v2.2.1)
@@ -34,17 +35,19 @@ broker_upgrade_versions = [str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1),
                            str(LATEST_2_0), str(LATEST_2_1), str(LATEST_2_2), str(LATEST_2_3),
                            str(LATEST_2_4), str(LATEST_2_5), str(LATEST_2_6), str(LATEST_2_7),
                            str(LATEST_2_8), str(LATEST_3_0), str(LATEST_3_1), str(LATEST_3_2),
-                           str(LATEST_3_3),
-                           str(DEV_BRANCH)]
+                           str(LATEST_3_3), str(LATEST_3_4), str(LATEST_3_5), str(LATEST_3_6),
+                           str(LATEST_3_7), str(DEV_BRANCH)]
 
 metadata_1_versions = [str(LATEST_0_10_0)]
 metadata_2_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1),
                        str(LATEST_2_4), str(LATEST_2_5), str(LATEST_2_6), str(LATEST_2_7), str(LATEST_2_8),
-                       str(LATEST_3_0)]
-# upgrading from version (2.4...3.0) is broken and only fixed later in 3.1
-# we cannot test two bounce rolling upgrade because we know it's broken
-# instead we add version 2.4...3.0 to the `metadata_2_versions` upgrade list
-fk_join_versions = [str(LATEST_3_1), str(LATEST_3_2), str(LATEST_3_3)]
+                       str(LATEST_3_0), str(LATEST_3_1), str(LATEST_3_2), str(LATEST_3_3)]
+# upgrading from version (2.4...3.3) is broken and only fixed later in 3.3.3 (unreleased) and 3.4.0
+# -> https://issues.apache.org/jira/browse/KAFKA-14646
+# thus, we cannot test two bounce rolling upgrade because we know it's broken
+# instead we add version 2.4...3.3 to the `metadata_2_versions` upgrade list
+fk_join_versions = [str(LATEST_3_4), str(LATEST_3_5), str(LATEST_3_6), str(LATEST_3_7)]
+
 
 """
 After each release one should first check that the released version has been uploaded to 
@@ -200,16 +203,17 @@ class StreamsUpgradeTest(Test):
         processor.node.account.ssh_capture("grep SMOKE-TEST-CLIENT-CLOSED %s" % processor.STDOUT_FILE, allow_fail=False)
 
     @cluster(num_nodes=6)
-    @matrix(from_version=metadata_1_versions, to_version=[str(DEV_VERSION)])
-    @matrix(from_version=metadata_2_versions, to_version=[str(DEV_VERSION)])
-    @matrix(from_version=fk_join_versions, to_version=[str(DEV_VERSION)])
-    def test_rolling_upgrade_with_2_bounces(self, from_version, to_version):
+    @matrix(from_version=metadata_1_versions)
+    @matrix(from_version=metadata_2_versions)
+    @matrix(from_version=fk_join_versions)
+    def test_rolling_upgrade_with_2_bounces(self, from_version):
         """
         This test verifies that the cluster successfully upgrades despite changes in the metadata and FK
         join protocols.
         
         Starts 3 KafkaStreams instances with version <from_version> and upgrades one-by-one to <to_version>
         """
+        to_version = str(DEV_VERSION)
 
         if KafkaVersion(from_version).supports_fk_joins() and KafkaVersion(to_version).supports_fk_joins():
             extra_properties = {'test.run_fk_join': 'true'}
@@ -268,8 +272,8 @@ class StreamsUpgradeTest(Test):
         self.stop_and_await()
 
     @cluster(num_nodes=6)
-    @matrix(from_version=[str(LATEST_3_2), str(DEV_VERSION)], to_version=[str(DEV_VERSION)], upgrade=[True, False])
-    def test_upgrade_downgrade_state_updater(self, from_version, to_version, upgrade):
+    @matrix(from_version=[str(LATEST_3_2), str(DEV_VERSION)],  upgrade=[True, False])
+    def test_upgrade_downgrade_state_updater(self, from_version, upgrade):
         """
         Starts 3 KafkaStreams instances, and enables / disables state restoration
         for the instances in a rolling bounce.
@@ -277,6 +281,8 @@ class StreamsUpgradeTest(Test):
         Once same-thread state restoration is removed from the code, this test
         should use different versions of the code.
         """
+        to_version=str(DEV_VERSION)
+
         if upgrade:
             extra_properties_first = { '__state.updater.enabled__': 'false' }
             first_version = from_version

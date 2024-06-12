@@ -37,15 +37,20 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.TargetState;
+import org.apache.kafka.connect.storage.AppliedConnectorConfig;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.KafkaConfigBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
+import org.mockito.quality.Strictness;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -57,6 +62,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.COMPATIBLE;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.EAGER;
@@ -74,6 +80,9 @@ import static org.mockito.Mockito.when;
 @RunWith(value = Parameterized.class)
 public class WorkerCoordinatorTest {
 
+    @Rule
+    public MockitoRule rule = MockitoJUnit.rule().strictness(Strictness.STRICT_STUBS);
+
     private static final String LEADER_URL = "leaderUrl:8083";
     private static final String MEMBER_URL = "memberUrl:8083";
 
@@ -90,6 +99,7 @@ public class WorkerCoordinatorTest {
     private final int rebalanceTimeoutMs = 60;
     private final int heartbeatIntervalMs = 2;
     private final long retryBackoffMs = 100;
+    private final long retryBackoffMaxMs = 1000;
     private MockTime time;
     private MockClient client;
     private Node node;
@@ -126,7 +136,7 @@ public class WorkerCoordinatorTest {
         LogContext logContext = new LogContext();
 
         this.time = new MockTime();
-        this.metadata = new Metadata(0, Long.MAX_VALUE, logContext, new ClusterResourceListeners());
+        this.metadata = new Metadata(0, 0, Long.MAX_VALUE, logContext, new ClusterResourceListeners());
         this.client = new MockClient(time, metadata);
         this.client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)));
         this.node = metadata.fetch().nodes().get(0);
@@ -140,6 +150,7 @@ public class WorkerCoordinatorTest {
                                                         groupId,
                                                         Optional.empty(),
                                                         retryBackoffMs,
+                                                        retryBackoffMaxMs,
                                                         true);
         this.coordinator = new WorkerCoordinator(rebalanceConfig,
                                                  logContext,
@@ -160,6 +171,7 @@ public class WorkerCoordinatorTest {
                 Collections.singletonMap(connectorId1, new HashMap<>()),
                 Collections.singletonMap(connectorId1, TargetState.STARTED),
                 Collections.singletonMap(taskId1x0, new HashMap<>()),
+                Collections.emptyMap(),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
                 Collections.emptySet(),
@@ -188,6 +200,7 @@ public class WorkerCoordinatorTest {
                 configState2TaskConfigs,
                 Collections.emptyMap(),
                 Collections.emptyMap(),
+                Collections.emptyMap(),
                 Collections.emptySet(),
                 Collections.emptySet()
         );
@@ -208,6 +221,11 @@ public class WorkerCoordinatorTest {
         configStateSingleTaskConnectorsTaskConfigs.put(taskId1x0, new HashMap<>());
         configStateSingleTaskConnectorsTaskConfigs.put(taskId2x0, new HashMap<>());
         configStateSingleTaskConnectorsTaskConfigs.put(taskId3x0, new HashMap<>());
+        Map<String, AppliedConnectorConfig> appliedConnectorConfigs = configStateSingleTaskConnectorsConnectorConfigs.entrySet().stream()
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        e -> new AppliedConnectorConfig(e.getValue())
+                ));
         configStateSingleTaskConnectors = new ClusterConfigState(
                 12L,
                 null,
@@ -217,6 +235,7 @@ public class WorkerCoordinatorTest {
                 configStateSingleTaskConnectorsTaskConfigs,
                 Collections.emptyMap(),
                 Collections.emptyMap(),
+                appliedConnectorConfigs,
                 Collections.emptySet(),
                 Collections.emptySet()
         );
@@ -597,5 +616,8 @@ public class WorkerCoordinatorTest {
             this.revokedTasks = tasks;
             revokedCount++;
         }
+
+        @Override
+        public void onPollTimeoutExpiry() {}
     }
 }

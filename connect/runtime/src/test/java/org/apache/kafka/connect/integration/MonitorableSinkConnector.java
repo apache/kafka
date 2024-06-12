@@ -43,6 +43,9 @@ public class MonitorableSinkConnector extends SampleSinkConnector {
 
     private static final Logger log = LoggerFactory.getLogger(MonitorableSinkConnector.class);
 
+    // Boolean valued configuration that determines whether MonitorableSinkConnector::alterOffsets should return true or false
+    public static final String ALTER_OFFSETS_RESULT = "alter.offsets.result";
+
     private String connectorName;
     private Map<String, String> commonConfigs;
     private ConnectorHandle connectorHandle;
@@ -84,9 +87,13 @@ public class MonitorableSinkConnector extends SampleSinkConnector {
         return new ConfigDef();
     }
 
+    @Override
+    public boolean alterOffsets(Map<String, String> connectorConfig, Map<TopicPartition, Long> offsets) {
+        return Boolean.parseBoolean(connectorConfig.get(ALTER_OFFSETS_RESULT));
+    }
+
     public static class MonitorableSinkTask extends SinkTask {
 
-        private String connectorName;
         private String taskId;
         TaskHandle taskHandle;
         Map<TopicPartition, Integer> committedOffsets;
@@ -105,7 +112,7 @@ public class MonitorableSinkConnector extends SampleSinkConnector {
         @Override
         public void start(Map<String, String> props) {
             taskId = props.get("task.id");
-            connectorName = props.get("connector.name");
+            String connectorName = props.get("connector.name");
             taskHandle = RuntimeHandles.get().connectorHandle(connectorName).taskHandle(taskId);
             log.debug("Starting task {}", taskId);
             taskHandle.recordTaskStart();

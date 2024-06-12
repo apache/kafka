@@ -47,32 +47,31 @@ import java.util.concurrent.CountDownLatch;
  * using specific data types (here: JSON POJO; but can also be Avro specific bindings, etc.) for serdes
  * in Kafka Streams.
  *
- * In this example, we join a stream of pageviews (aka clickstreams) that reads from a topic named "streams-pageview-input"
+ * <p>In this example, we join a stream of pageviews (aka clickstreams) that reads from a topic named "streams-pageview-input"
  * with a user profile table that reads from a topic named "streams-userprofile-input", where the data format
  * is JSON string representing a record in the stream or table, to compute the number of pageviews per user region.
  *
- * Before running this example you must create the input topics and the output topic (e.g. via
+ * <p>Before running this example you must create the input topics and the output topic (e.g. via
  * bin/kafka-topics --create ...), and write some data to the input topics (e.g. via
  * bin/kafka-console-producer). Otherwise you won't see any data arriving in the output topic.
  *
- * The inputs for this example are:
+ * <p>The inputs for this example are:
  * - Topic: streams-pageview-input
  *   Key Format: (String) USER_ID
  *   Value Format: (JSON) {"_t": "pv", "user": (String USER_ID), "page": (String PAGE_ID), "timestamp": (long ms TIMESTAMP)}
- *
+ * <p>
  * - Topic: streams-userprofile-input
  *   Key Format: (String) USER_ID
  *   Value Format: (JSON) {"_t": "up", "region": (String REGION), "timestamp": (long ms TIMESTAMP)}
  *
- * To observe the results, read the output topic (e.g., via bin/kafka-console-consumer)
+ * <p>To observe the results, read the output topic (e.g., via bin/kafka-console-consumer)
  * - Topic: streams-pageviewstats-typed-output
  *   Key Format: (JSON) {"_t": "wpvbr", "windowStart": (long ms WINDOW_TIMESTAMP), "region": (String REGION)}
  *   Value Format: (JSON) {"_t": "rc", "count": (long REGION_COUNT), "region": (String REGION)}
  *
- * Note, the "_t" field is necessary to help Jackson identify the correct class for deserialization in the
+ * <p>Note, the "_t" field is necessary to help Jackson identify the correct class for deserialization in the
  * generic {@link JSONSerde}. If you instead specify a specific serde per class, you won't need the extra "_t" field.
  */
-@SuppressWarnings({"WeakerAccess", "unused"})
 public class PageViewTypedDemo {
 
     /**

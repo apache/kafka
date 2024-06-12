@@ -30,7 +30,7 @@ public class DefaultRecordsSend<T extends TransferableRecords> extends RecordsSe
     }
 
     @Override
-    protected long writeTo(TransferableChannel channel, long previouslyWritten, int remaining) throws IOException {
+    protected int writeTo(TransferableChannel channel, int previouslyWritten, int remaining) throws IOException {
         return records().writeTo(channel, previouslyWritten, remaining);
     }
 }

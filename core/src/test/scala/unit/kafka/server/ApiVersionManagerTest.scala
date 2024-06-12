@@ -30,8 +30,8 @@ import org.mockito.Mockito
 import scala.jdk.CollectionConverters._
 
 class ApiVersionManagerTest {
-  private val brokerFeatures = BrokerFeatures.createDefault()
-  private val metadataCache = new ZkMetadataCache(1, MetadataVersion.latest(), brokerFeatures)
+  private val brokerFeatures = BrokerFeatures.createDefault(true)
+  private val metadataCache = new ZkMetadataCache(1, MetadataVersion.latestTesting(), brokerFeatures)
 
   @ParameterizedTest
   @EnumSource(classOf[ListenerType])
@@ -39,7 +39,7 @@ class ApiVersionManagerTest {
     val versionManager = new DefaultApiVersionManager(
       listenerType = apiScope,
       forwardingManager = None,
-      features = brokerFeatures,
+      brokerFeatures = brokerFeatures,
       metadataCache = metadataCache,
       enableUnstableLastVersion = true
     )
@@ -57,7 +57,7 @@ class ApiVersionManagerTest {
     val versionManager = new DefaultApiVersionManager(
       listenerType = apiScope,
       forwardingManager = None,
-      features = brokerFeatures,
+      brokerFeatures = brokerFeatures,
       metadataCache = metadataCache,
       enableUnstableLastVersion = false
     )
@@ -86,7 +86,7 @@ class ApiVersionManagerTest {
     val versionManager = new DefaultApiVersionManager(
       listenerType = ListenerType.ZK_BROKER,
       forwardingManager = Some(forwardingManager),
-      features = brokerFeatures,
+      brokerFeatures = brokerFeatures,
       metadataCache = metadataCache,
       enableUnstableLastVersion = true
     )
@@ -107,7 +107,7 @@ class ApiVersionManagerTest {
       val versionManager = new DefaultApiVersionManager(
         listenerType = ListenerType.BROKER,
         forwardingManager = forwardingManagerOpt,
-        features = brokerFeatures,
+        brokerFeatures = brokerFeatures,
         metadataCache = metadataCache,
         enableUnstableLastVersion = true
       )
@@ -129,7 +129,7 @@ class ApiVersionManagerTest {
     val versionManager = new DefaultApiVersionManager(
       listenerType = ListenerType.ZK_BROKER,
       forwardingManager = Some(forwardingManager),
-      features = brokerFeatures,
+      brokerFeatures = brokerFeatures,
       metadataCache = metadataCache,
       enableUnstableLastVersion = true
     )
@@ -148,7 +148,7 @@ class ApiVersionManagerTest {
     val versionManager = new DefaultApiVersionManager(
       listenerType = ListenerType.ZK_BROKER,
       forwardingManager = None,
-      features = brokerFeatures,
+      brokerFeatures = brokerFeatures,
       metadataCache = metadataCache,
       enableUnstableLastVersion = true
     )

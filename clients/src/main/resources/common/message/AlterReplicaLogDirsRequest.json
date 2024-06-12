@@ -21,6 +21,7 @@
   // Version 1 is the same as version 0.
   // Version 2 enables flexible versions.
   "validVersions": "0-2",
+  "deprecatedVersions": "0",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "Dirs", "type": "[]AlterReplicaLogDir", "versions": "0+", 

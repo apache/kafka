@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.raft.internals;
 
-import java.io.DataInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -208,17 +208,19 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
             throw new IllegalStateException("Expected a record count for the records batch");
         }
 
-        DataInputStream input = new DataInputStream(batch.recordInputStream(bufferSupplier));
-
+        InputStream input = batch.recordInputStream(bufferSupplier);
         final Batch<T> result;
         try {
             if (batch.isControlBatch()) {
                 List<ControlRecord> records = new ArrayList<>(numRecords);
                 for (int i = 0; i < numRecords; i++) {
-                    ControlRecord record = readRecord(input, batch.sizeInBytes(), RecordsIterator::decodeControlRecord);
+                    ControlRecord record = readRecord(
+                        input,
+                        batch.sizeInBytes(),
+                        RecordsIterator::decodeControlRecord
+                    );
                     records.add(record);
                 }
-
                 result = Batch.control(
                     batch.baseOffset(),
                     batch.partitionLeaderEpoch(),
@@ -242,14 +244,14 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
                 );
             }
         } finally {
-            Utils.closeQuietly(input, "DataInputStream");
+            Utils.closeQuietly(input, "BytesStream for input containing records");
         }
 
         return result;
     }
 
     private <U> U readRecord(
-        DataInputStream stream,
+        InputStream stream,
         int totalBatchSize,
         BiFunction<Optional<ByteBuffer>, Optional<ByteBuffer>, U> decoder
     ) {
@@ -367,6 +369,12 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
                 break;
             case SNAPSHOT_FOOTER:
                 message = ControlRecordUtils.deserializeSnapshotFooterRecord(value.get());
+                break;
+            case KRAFT_VERSION:
+                message = ControlRecordUtils.deserializeKRaftVersionRecord(value.get());
+                break;
+            case KRAFT_VOTERS:
+                message = ControlRecordUtils.deserializeVotersRecord(value.get());
                 break;
             default:
                 throw new IllegalArgumentException(String.format("Unknown control record type %s", type));

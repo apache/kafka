@@ -38,6 +38,7 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorAdapter;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
+import org.apache.kafka.streams.processor.internals.StoreBuilderWrapper;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -49,7 +50,7 @@ import java.util.Properties;
 import java.util.regex.Pattern;
 
 /**
- * {@code StreamsBuilder} provide the high-level Kafka Streams DSL to specify a Kafka Streams topology.
+ * {@code StreamsBuilder} provides the high-level Kafka Streams DSL to specify a Kafka Streams topology.
  *
  * <p>
  * It is a requirement that the processing logic ({@link Topology}) be defined in a deterministic way,
@@ -85,13 +86,14 @@ public class StreamsBuilder {
      *
      * @param topologyConfigs    the streams configs that apply at the topology level. Please refer to {@link TopologyConfig} for more detail
      */
+    @SuppressWarnings("this-escape")
     public StreamsBuilder(final TopologyConfig topologyConfigs) {
-        topology = getNewTopology(topologyConfigs);
+        topology = newTopology(topologyConfigs);
         internalTopologyBuilder = topology.internalTopologyBuilder;
         internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder);
     }
 
-    protected Topology getNewTopology(final TopologyConfig topologyConfigs) {
+    protected Topology newTopology(final TopologyConfig topologyConfigs) {
         return new Topology(topologyConfigs);
     }
 
@@ -243,7 +245,8 @@ public class StreamsBuilder {
      * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, ValueAndTimestamp<V>>timestampedKeyValueStore());
+     * StoreQueryParameters<ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>>> storeQueryParams = StoreQueryParameters.fromNameAndType(queryableStoreName, QueryableStoreTypes.timestampedKeyValueStore());
+     * ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> localStore = streams.store(storeQueryParams);
      * K key = "some-key";
      * ValueAndTimestamp<V> valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -414,7 +417,7 @@ public class StreamsBuilder {
 
     /**
      * Create a {@link GlobalKTable} for the specified topic.
-     *
+     * <p>
      * Input {@link KeyValue} pairs with {@code null} key will be dropped.
      * <p>
      * The resulting {@link GlobalKTable} will be materialized in a local {@link KeyValueStore} configured with
@@ -432,7 +435,8 @@ public class StreamsBuilder {
      * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, ValueAndTimestamp<V>>timestampedKeyValueStore());
+     * StoreQueryParameters<ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>>> storeQueryParams = StoreQueryParameters.fromNameAndType(queryableStoreName, QueryableStoreTypes.timestampedKeyValueStore());
+     * ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> localStore = streams.store(storeQueryParams);
      * K key = "some-key";
      * ValueAndTimestamp<V> valueForKey = localStore.get(key);
      * }</pre>
@@ -464,7 +468,7 @@ public class StreamsBuilder {
 
     /**
      * Create a {@link GlobalKTable} for the specified topic.
-     *
+     * <p>
      * Input {@link KeyValue} pairs with {@code null} key will be dropped.
      * <p>
      * The resulting {@link GlobalKTable} will be materialized in a local {@link KeyValueStore} configured with
@@ -476,7 +480,8 @@ public class StreamsBuilder {
      * {@link KafkaStreams#store(StoreQueryParameters) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, ValueAndTimestamp<V>>timestampedKeyValueStore());
+     * StoreQueryParameters<ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>>> storeQueryParams = StoreQueryParameters.fromNameAndType(queryableStoreName, QueryableStoreTypes.timestampedKeyValueStore());
+     * ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> localStore = streams.store(storeQueryParams);
      * K key = "some-key";
      * ValueAndTimestamp<V> valueForKey = localStore.get(key);
      * }</pre>
@@ -516,7 +521,7 @@ public class StreamsBuilder {
      */
     public synchronized StreamsBuilder addStateStore(final StoreBuilder<?> builder) {
         Objects.requireNonNull(builder, "builder can't be null");
-        internalStreamsBuilder.addStateStore(builder);
+        internalStreamsBuilder.addStateStore(new StoreBuilderWrapper(builder));
         return this;
     }
 
@@ -529,9 +534,7 @@ public class StreamsBuilder {
      * of the input topic.
      * <p>
      * The provided {@link org.apache.kafka.streams.processor.ProcessorSupplier} will be used to create an {@link ProcessorNode} that will receive all
-     * records forwarded from the {@link SourceNode}. NOTE: you should not use the {@code Processor} to insert transformed records into
-     * the global state store. This store uses the source topic as changelog and during restore will insert records directly
-     * from the source.
+     * records forwarded from the {@link SourceNode}.
      * This {@link ProcessorNode} should be used to keep the {@link StateStore} up-to-date.
      * The default {@link TimestampExtractor} as specified in the {@link StreamsConfig config} is used.
      * <p>
@@ -559,10 +562,11 @@ public class StreamsBuilder {
         Objects.requireNonNull(storeBuilder, "storeBuilder can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
         internalStreamsBuilder.addGlobalStore(
-            storeBuilder,
+            new StoreBuilderWrapper(storeBuilder),
             topic,
             new ConsumedInternal<>(consumed),
-            () -> ProcessorAdapter.adapt(stateUpdateSupplier.get())
+            () -> ProcessorAdapter.adapt(stateUpdateSupplier.get()),
+            true
         );
         return this;
     }
@@ -575,14 +579,11 @@ public class StreamsBuilder {
      * A {@link SourceNode} with the provided sourceName will be added to consume the data arriving from the partitions
      * of the input topic.
      * <p>
-     * The provided {@link ProcessorSupplier}} will be used to create an
+     * The provided {@link ProcessorSupplier} will be used to create an
      * {@link Processor} that will receive all records forwarded from the {@link SourceNode}.
      * The supplier should always generate a new instance. Creating a single {@link Processor} object
      * and returning the same object reference in {@link ProcessorSupplier#get()} is a
      * violation of the supplier pattern and leads to runtime exceptions.
-     * NOTE: you should not use the {@link Processor} to insert transformed records into
-     * the global state store. This store uses the source topic as changelog and during restore will insert records directly
-     * from the source.
      * This {@link Processor} should be used to keep the {@link StateStore} up-to-date.
      * The default {@link TimestampExtractor} as specified in the {@link StreamsConfig config} is used.
      * <p>
@@ -603,10 +604,11 @@ public class StreamsBuilder {
         Objects.requireNonNull(storeBuilder, "storeBuilder can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
         internalStreamsBuilder.addGlobalStore(
-            storeBuilder,
+            new StoreBuilderWrapper(storeBuilder),
             topic,
             new ConsumedInternal<>(consumed),
-            stateUpdateSupplier
+            stateUpdateSupplier,
+            true
         );
         return this;
     }

@@ -18,6 +18,7 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.image.node.TopicsImageByNameNode;
 import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.PartitionRegistration;
@@ -26,7 +27,6 @@ import org.apache.kafka.server.util.TranslatedValueMapView;
 
 import java.util.Map;
 import java.util.Objects;
-import java.util.stream.Collectors;
 
 /**
  * Represents the topics in the metadata image.
@@ -39,8 +39,10 @@ public final class TopicsImage {
     private final ImmutableMap<Uuid, TopicImage> topicsById;
     private final ImmutableMap<String, TopicImage> topicsByName;
 
-    public TopicsImage(ImmutableMap<Uuid, TopicImage> topicsById,
-                       ImmutableMap<String, TopicImage> topicsByName) {
+    public TopicsImage(
+        ImmutableMap<Uuid, TopicImage> topicsById,
+        ImmutableMap<String, TopicImage> topicsByName
+    ) {
         this.topicsById = topicsById;
         this.topicsByName = topicsByName;
     }
@@ -116,10 +118,6 @@ public final class TopicsImage {
 
     @Override
     public String toString() {
-        return "TopicsImage(topicsById=" + topicsById.entrySet().stream().
-            map(e -> e.getKey() + ":" + e.getValue()).collect(Collectors.joining(", ")) +
-            ", topicsByName=" + topicsByName.entrySet().stream().
-            map(e -> e.getKey() + ":" + e.getValue()).collect(Collectors.joining(", ")) +
-            ")";
+        return new TopicsImageByNameNode(this).stringify();
     }
 }

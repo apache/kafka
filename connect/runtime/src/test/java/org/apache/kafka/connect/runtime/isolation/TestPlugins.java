@@ -19,14 +19,13 @@ package org.apache.kafka.connect.runtime.isolation;
 
 import java.io.BufferedInputStream;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringWriter;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
@@ -34,6 +33,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Predicate;
 import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
@@ -69,7 +69,7 @@ public class TestPlugins {
         /**
          * A plugin which will always throw an exception during loading
          */
-        ALWAYS_THROW_EXCEPTION("always-throw-exception", "test.plugins.AlwaysThrowException"),
+        ALWAYS_THROW_EXCEPTION("always-throw-exception", "test.plugins.AlwaysThrowException", false),
         /**
          * A plugin which samples information about its initialization.
          */
@@ -95,6 +95,11 @@ public class TestPlugins {
          */
         SAMPLING_CONFIG_PROVIDER("sampling-config-provider", "test.plugins.SamplingConfigProvider"),
         /**
+         * A {@link org.apache.kafka.connect.sink.SinkConnector}
+         * which samples information about its method calls.
+         */
+        SAMPLING_CONNECTOR("sampling-connector", "test.plugins.SamplingConnector"),
+        /**
          * A plugin which uses a {@link java.util.ServiceLoader}
          * to load internal classes, and samples information about their initialization.
          */
@@ -119,7 +124,7 @@ public class TestPlugins {
         /**
          * A plugin which is incorrectly packaged, and is missing a superclass definition.
          */
-        BAD_PACKAGING_MISSING_SUPERCLASS("bad-packaging", "test.plugins.MissingSuperclass", false, REMOVE_CLASS_FILTER),
+        BAD_PACKAGING_MISSING_SUPERCLASS("bad-packaging", "test.plugins.MissingSuperclassConverter", false, REMOVE_CLASS_FILTER),
         /**
          * A plugin which is packaged with other incorrectly packaged plugins, but itself has no issues loading.
          */
@@ -131,7 +136,7 @@ public class TestPlugins {
         /**
          * A plugin which is incorrectly packaged, which throws an exception from the {@link Versioned#version()} method.
          */
-        BAD_PACKAGING_VERSION_METHOD_THROWS_CONNECTOR("bad-packaging", "test.plugins.VersionMethodThrowsConnector", false, REMOVE_CLASS_FILTER),
+        BAD_PACKAGING_VERSION_METHOD_THROWS_CONNECTOR("bad-packaging", "test.plugins.VersionMethodThrowsConnector", true, REMOVE_CLASS_FILTER),
         /**
          * A plugin which is incorrectly packaged, which throws an exception from default constructor.
          */
@@ -141,9 +146,17 @@ public class TestPlugins {
          */
         BAD_PACKAGING_DEFAULT_CONSTRUCTOR_PRIVATE_CONNECTOR("bad-packaging", "test.plugins.DefaultConstructorPrivateConnector", false, REMOVE_CLASS_FILTER),
         /**
-         * A plugin which is incorrectly packaged, which has a private default constructor.
+         * A plugin which is incorrectly packaged, which has a constructor which takes arguments.
          */
         BAD_PACKAGING_NO_DEFAULT_CONSTRUCTOR_CONNECTOR("bad-packaging", "test.plugins.NoDefaultConstructorConnector", false, REMOVE_CLASS_FILTER),
+        /**
+         * A plugin which is incorrectly packaged, which has a constructor which takes arguments.
+         */
+        BAD_PACKAGING_NO_DEFAULT_CONSTRUCTOR_CONVERTER("bad-packaging", "test.plugins.NoDefaultConstructorConverter", false, REMOVE_CLASS_FILTER),
+        /**
+         * A plugin which is incorrectly packaged, which has a constructor which takes arguments.
+         */
+        BAD_PACKAGING_NO_DEFAULT_CONSTRUCTOR_OVERRIDE_POLICY("bad-packaging", "test.plugins.NoDefaultConstructorOverridePolicy", false, REMOVE_CLASS_FILTER),
         /**
          * A plugin which is incorrectly packaged, which throws an exception from the {@link Versioned#version()} method.
          */
@@ -151,7 +164,43 @@ public class TestPlugins {
         /**
          * A plugin which is incorrectly packaged, which throws an exception from the {@link Versioned#version()} method.
          */
-        BAD_PACKAGING_STATIC_INITIALIZER_THROWS_REST_EXTENSION("bad-packaging", "test.plugins.StaticInitializerThrowsRestExtension", false, REMOVE_CLASS_FILTER);
+        BAD_PACKAGING_STATIC_INITIALIZER_THROWS_REST_EXTENSION("bad-packaging", "test.plugins.StaticInitializerThrowsRestExtension", false, REMOVE_CLASS_FILTER),
+        /**
+         * A reflectively discovered plugin which subclasses another plugin which is present on the classpath
+         */
+        SUBCLASS_OF_CLASSPATH_CONVERTER("subclass-of-classpath", "test.plugins.SubclassOfClasspathConverter"),
+        /**
+         * A ServiceLoader discovered plugin which subclasses another plugin which is present on the classpath
+         */
+        SUBCLASS_OF_CLASSPATH_OVERRIDE_POLICY("subclass-of-classpath", "test.plugins.SubclassOfClasspathOverridePolicy"),
+        /**
+         * A converter which does not have a corresponding ServiceLoader manifest
+         */
+        NON_MIGRATED_CONVERTER("non-migrated", "test.plugins.NonMigratedConverter", false),
+        /**
+         * A header converter which does not have a corresponding ServiceLoader manifest
+         */
+        NON_MIGRATED_HEADER_CONVERTER("non-migrated", "test.plugins.NonMigratedHeaderConverter", false),
+        /**
+         * A plugin which implements multiple interfaces, and has ServiceLoader manifests for some interfaces and not others.
+         */
+        NON_MIGRATED_MULTI_PLUGIN("non-migrated", "test.plugins.NonMigratedMultiPlugin", false),
+        /**
+         * A predicate which does not have a corresponding ServiceLoader manifest
+         */
+        NON_MIGRATED_PREDICATE("non-migrated", "test.plugins.NonMigratedPredicate", false),
+        /**
+         * A sink connector which does not have a corresponding ServiceLoader manifest
+         */
+        NON_MIGRATED_SINK_CONNECTOR("non-migrated", "test.plugins.NonMigratedSinkConnector", false),
+        /**
+         * A source connector which does not have a corresponding ServiceLoader manifest
+         */
+        NON_MIGRATED_SOURCE_CONNECTOR("non-migrated", "test.plugins.NonMigratedSourceConnector", false),
+        /**
+         * A transformation which does not have a corresponding ServiceLoader manifest
+         */
+        NON_MIGRATED_TRANSFORMATION("non-migrated", "test.plugins.NonMigratedTransformation", false);
 
         private final String resourceDir;
         private final String className;
@@ -191,12 +240,12 @@ public class TestPlugins {
     }
 
     private static final Logger log = LoggerFactory.getLogger(TestPlugins.class);
-    private static final Map<String, File> PLUGIN_JARS;
+    private static final Map<String, Path> PLUGIN_JARS;
     private static final Throwable INITIALIZATION_EXCEPTION;
 
     static {
         Throwable err = null;
-        Map<String, File> pluginJars = new HashMap<>();
+        Map<String, Path> pluginJars = new HashMap<>();
         try {
             for (TestPlugin testPlugin : TestPlugin.values()) {
                 if (pluginJars.containsKey(testPlugin.resourceDir())) {
@@ -227,8 +276,12 @@ public class TestPlugins {
      * @return A list of plugin jar filenames
      * @throws AssertionError if any plugin failed to load, or no plugins were loaded.
      */
-    public static List<String> pluginPath() {
+    public static Set<Path> pluginPath() {
         return pluginPath(defaultPlugins());
+    }
+
+    public static String pluginPathJoined() {
+        return pluginPath().stream().map(Path::toString).collect(Collectors.joining(","));
     }
 
     /**
@@ -237,15 +290,18 @@ public class TestPlugins {
      * @return A list of plugin jar filenames containing the specified test plugins
      * @throws AssertionError if any plugin failed to load, or no plugins were loaded.
      */
-    public static List<String> pluginPath(TestPlugin... plugins) {
+    public static Set<Path> pluginPath(TestPlugin... plugins) {
         assertAvailable();
         return Arrays.stream(plugins)
                 .filter(Objects::nonNull)
                 .map(TestPlugin::resourceDir)
                 .distinct()
                 .map(PLUGIN_JARS::get)
-                .map(File::getPath)
-                .collect(Collectors.toList());
+                .collect(Collectors.toSet());
+    }
+
+    public static String pluginPathJoined(TestPlugin... plugins) {
+        return pluginPath(plugins).stream().map(Path::toString).collect(Collectors.joining(","));
     }
 
     /**
@@ -278,17 +334,17 @@ public class TestPlugins {
                 .toArray(TestPlugin[]::new);
     }
 
-    private static File createPluginJar(String resourceDir, Predicate<String> removeRuntimeClasses) throws IOException {
+    private static Path createPluginJar(String resourceDir, Predicate<String> removeRuntimeClasses) throws IOException {
         Path inputDir = resourceDirectoryPath("test-plugins/" + resourceDir);
         Path binDir = Files.createTempDirectory(resourceDir + ".bin.");
         compileJavaSources(inputDir, binDir);
-        File jarFile = Files.createTempFile(resourceDir + ".", ".jar").toFile();
+        Path jarFile = Files.createTempFile(resourceDir + ".", ".jar");
         try (JarOutputStream jar = openJarFile(jarFile)) {
             writeJar(jar, inputDir, removeRuntimeClasses);
             writeJar(jar, binDir, removeRuntimeClasses);
         }
         removeDirectory(binDir);
-        jarFile.deleteOnExit();
+        jarFile.toFile().deleteOnExit();
         return jarFile;
     }
 
@@ -299,29 +355,28 @@ public class TestPlugins {
         if (resource == null) {
             throw new IOException("Could not find test plugin resource: " + resourceDir);
         }
-        File file = new File(resource.getFile());
-        if (!file.isDirectory()) {
+        Path file = Paths.get(resource.getFile());
+        if (!Files.isDirectory(file)) {
             throw new IOException("Resource is not a directory: " + resourceDir);
         }
-        if (!file.canRead()) {
+        if (!Files.isReadable(file)) {
             throw new IOException("Resource directory is not readable: " + resourceDir);
         }
-        return file.toPath();
+        return file;
     }
 
-    private static JarOutputStream openJarFile(File jarFile) throws IOException {
+    private static JarOutputStream openJarFile(Path jarFile) throws IOException {
         Manifest manifest = new Manifest();
         manifest.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0");
-        return new JarOutputStream(new FileOutputStream(jarFile), manifest);
+        return new JarOutputStream(Files.newOutputStream(jarFile), manifest);
     }
 
     private static void removeDirectory(Path binDir) throws IOException {
-        List<File> classFiles = Files.walk(binDir)
+        List<Path> classFiles = Files.walk(binDir)
             .sorted(Comparator.reverseOrder())
-            .map(Path::toFile)
             .collect(Collectors.toList());
-        for (File classFile : classFiles) {
-            if (!classFile.delete()) {
+        for (Path classFile : classFiles) {
+            if (!Files.deleteIfExists(classFile)) {
                 throw new IOException("Could not delete: " + classFile);
             }
         }
@@ -372,7 +427,7 @@ public class TestPlugins {
             .filter(path -> !removeRuntimeClasses.test(path.toFile().getName()))
             .collect(Collectors.toList());
         for (Path path : paths) {
-            try (InputStream in = new BufferedInputStream(new FileInputStream(path.toFile()))) {
+            try (InputStream in = new BufferedInputStream(Files.newInputStream(path))) {
                 jar.putNextEntry(new JarEntry(
                     inputDir.relativize(path)
                         .toFile()

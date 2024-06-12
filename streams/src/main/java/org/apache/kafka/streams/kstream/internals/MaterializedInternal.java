@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import java.util.Optional;
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.TopologyConfig;
+import org.apache.kafka.streams.state.DslStoreSuppliers;
 import org.apache.kafka.streams.state.StoreSupplier;
 
 import java.time.Duration;
@@ -33,6 +36,7 @@ public class MaterializedInternal<K, V, S extends StateStore> extends Materializ
         this(materialized, null, null);
     }
 
+    @SuppressWarnings("this-escape")
     public MaterializedInternal(final Materialized<K, V, S> materialized,
                                 final InternalNameProvider nameProvider,
                                 final String generatedStorePrefix) {
@@ -46,15 +50,27 @@ public class MaterializedInternal<K, V, S extends StateStore> extends Materializ
         }
 
         // if store type is not configured during creating Materialized, then try to get the topologyConfigs from nameProvider
-        // otherwise, set to default rocksDB
-        if (storeType == null) {
-            storeType = StoreType.ROCKS_DB;
+        // otherwise, leave it as null so that it resolves when the KafkaStreams application
+        // is configured with the main StreamsConfig
+        if (dslStoreSuppliers == null) {
             if (nameProvider instanceof InternalStreamsBuilder) {
                 final TopologyConfig topologyConfig = ((InternalStreamsBuilder) nameProvider).internalTopologyBuilder.topologyConfigs();
                 if (topologyConfig != null) {
-                    storeType = topologyConfig.parseStoreType();
+                    dslStoreSuppliers = topologyConfig.resolveDslStoreSuppliers().orElse(null);
                 }
             }
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    public static StoreType parse(final String storeType) {
+        switch (storeType) {
+            case StreamsConfig.IN_MEMORY:
+                return StoreType.IN_MEMORY;
+            case StreamsConfig.ROCKS_DB:
+                return StoreType.ROCKS_DB;
+            default:
+                throw new IllegalStateException("Unexpected storeType: " + storeType);
         }
     }
 
@@ -69,8 +85,8 @@ public class MaterializedInternal<K, V, S extends StateStore> extends Materializ
         return storeName;
     }
 
-    public StoreType storeType() {
-        return storeType;
+    public Optional<DslStoreSuppliers> dslStoreSuppliers() {
+        return Optional.ofNullable(dslStoreSuppliers);
     }
 
     public StoreSupplier<S> storeSupplier() {
@@ -89,7 +105,7 @@ public class MaterializedInternal<K, V, S extends StateStore> extends Materializ
         return loggingEnabled;
     }
 
-    Map<String, String> logConfig() {
+    public Map<String, String> logConfig() {
         return topicConfig;
     }
 

@@ -1091,7 +1091,7 @@ public class CachingPersistentWindowStoreTest {
     }
 
     private int addItemsToCache() {
-        int cachedSize = 0;
+        long cachedSize = 0;
         int i = 0;
         while (cachedSize < MAX_CACHE_SIZE_BYTES) {
             final String kv = String.valueOf(i++);

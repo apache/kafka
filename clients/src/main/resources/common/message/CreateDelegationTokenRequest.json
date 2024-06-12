@@ -16,7 +16,7 @@
 {
   "apiKey": 38,
   "type": "request",
-  "listeners": ["zkBroker"],
+  "listeners": ["zkBroker", "broker", "controller"],
   "name": "CreateDelegationTokenRequest",
   // Version 1 is the same as version 0.
   //
@@ -24,6 +24,7 @@
   //
   // Version 3 adds owner principal
   "validVersions": "0-3",
+  "deprecatedVersions": "0",
   "flexibleVersions": "2+",
   "fields": [
     { "name": "OwnerPrincipalType", "type": "string", "versions": "3+", "nullableVersions": "3+",

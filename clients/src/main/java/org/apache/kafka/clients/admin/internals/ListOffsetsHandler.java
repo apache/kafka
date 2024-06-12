@@ -61,7 +61,7 @@ public final class ListOffsetsHandler extends Batched<TopicPartition, ListOffset
         this.offsetTimestampsByPartition = offsetTimestampsByPartition;
         this.options = options;
         this.log = logContext.logger(ListOffsetsHandler.class);
-        this.lookupStrategy = new PartitionLeaderStrategy(logContext);
+        this.lookupStrategy = new PartitionLeaderStrategy(logContext, false);
     }
 
     @Override

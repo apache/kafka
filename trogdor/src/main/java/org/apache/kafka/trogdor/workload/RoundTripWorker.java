@@ -17,9 +17,6 @@
 
 package org.apache.kafka.trogdor.workload;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.node.TextNode;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -43,6 +40,11 @@ import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.common.WorkerUtils;
 import org.apache.kafka.trogdor.task.TaskWorker;
 import org.apache.kafka.trogdor.task.WorkerStatusTracker;
+
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.node.TextNode;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,6 +66,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Collectors;
+
 
 public class RoundTripWorker implements TaskWorker {
     private static final int THROTTLE_PERIOD_MS = 100;
@@ -318,15 +322,14 @@ public class RoundTripWorker implements TaskWorker {
                 }
             }
             log.info("{}: consumer waiting for {} message(s), starting with: {}",
-                id, numToReceive, Utils.join(list, ", "));
+                id, numToReceive, list.stream().map(Object::toString).collect(Collectors.joining(", ")));
         }
     }
 
     class ConsumerRunnable implements Runnable {
-        private final Properties props;
 
         ConsumerRunnable(HashSet<TopicPartition> partitions) {
-            this.props = new Properties();
+            Properties props = new Properties();
             props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, spec.bootstrapServers());
             props.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer." + id);
             props.put(ConsumerConfig.GROUP_ID_CONFIG, "round-trip-consumer-group-" + id);
@@ -352,8 +355,7 @@ public class RoundTripWorker implements TaskWorker {
                     try {
                         pollInvoked++;
                         ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(50));
-                        for (Iterator<ConsumerRecord<byte[], byte[]>> iter = records.iterator(); iter.hasNext(); ) {
-                            ConsumerRecord<byte[], byte[]> record = iter.next();
+                        for (ConsumerRecord<byte[], byte[]> record : records) {
                             int messageIndex = ByteBuffer.wrap(record.key()).order(ByteOrder.LITTLE_ENDIAN).getInt();
                             messagesReceived++;
                             if (toReceiveTracker.removePending(messageIndex)) {
@@ -362,7 +364,7 @@ public class RoundTripWorker implements TaskWorker {
                                     lock.lock();
                                     try {
                                         log.info("{}: Consumer received the full count of {} unique messages.  " +
-                                            "Waiting for all {} sends to be acked...", id, spec.maxMessages(), unackedSends);
+                                                "Waiting for all {} sends to be acked...", id, spec.maxMessages(), unackedSends);
                                         while (unackedSends > 0)
                                             unackedSendsAreZero.await();
                                     } finally {

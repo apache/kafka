@@ -31,18 +31,35 @@ public interface TaskExecutor {
 
     /**
      * Starts the task executor.
+     * Idempotent operation - will have no effect if thread is already started.
      */
     void start();
 
     /**
-     * Shuts down the task processor updater.
-     *
-     * @param timeout duration how long to wait until the state updater is shut down
+     * Returns true if the task executor thread is running.
+     */
+    boolean isRunning();
+
+    /**
+     * Asks the task executor to shut down.
+     * Idempotent operation - will have no effect if thread was already asked to shut down
      *
      * @throws
      *     org.apache.kafka.streams.errors.StreamsException if the state updater thread cannot shutdown within the timeout
      */
-    void shutdown(final Duration timeout);
+    void requestShutdown();
+
+    /**
+     * Shuts down the task processor updater.
+     * Idempotent operation - will have no effect if thread is already shut down.
+     * Must call `requestShutdown` first.
+     *
+     * @param timeout duration how long to wait until the state updater is shut down
+     *
+     * @throws
+     *     org.apache.kafka.streams.errors.StreamsException if the state updater thread does not shutdown within the timeout
+     */
+    void awaitShutdown(final Duration timeout);
 
     /**
      * Get the current assigned processing task. The task returned is read-only and cannot be modified.

@@ -84,7 +84,7 @@ final public class FetchSnapshotResponse extends AbstractResponse {
     /**
      * Creates a FetchSnapshotResponseData with a single PartitionSnapshot for the topic partition.
      *
-     * The partition index will already by populated when calling operator.
+     * The partition index will already be populated when calling operator.
      *
      * @param topicPartition the topic partition to include
      * @param operator unary operator responsible for populating all of the appropriate fields
@@ -124,7 +124,7 @@ final public class FetchSnapshotResponse extends AbstractResponse {
             .stream()
             .filter(topic -> topic.name().equals(topicPartition.topic()))
             .flatMap(topic -> topic.partitions().stream())
-            .filter(parition -> parition.index() == topicPartition.partition())
+            .filter(partition -> partition.index() == topicPartition.partition())
             .findAny();
     }
 

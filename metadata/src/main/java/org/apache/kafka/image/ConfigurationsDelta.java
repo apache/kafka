@@ -23,6 +23,7 @@ import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.server.common.MetadataVersion;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -60,8 +61,8 @@ public final class ConfigurationsDelta {
     public void replay(ConfigRecord record) {
         ConfigResource resource =
             new ConfigResource(Type.forId(record.resourceType()), record.resourceName());
-        ConfigurationImage configImage =
-            image.resourceData().getOrDefault(resource, ConfigurationImage.EMPTY);
+        ConfigurationImage configImage = image.resourceData().getOrDefault(resource,
+                new ConfigurationImage(resource, Collections.emptyMap()));
         ConfigurationDelta delta = changes.computeIfAbsent(resource,
             __ -> new ConfigurationDelta(configImage));
         delta.replay(record);
@@ -70,11 +71,12 @@ public final class ConfigurationsDelta {
     public void replay(RemoveTopicRecord record, String topicName) {
         ConfigResource resource =
             new ConfigResource(Type.TOPIC, topicName);
-        ConfigurationImage configImage =
-            image.resourceData().getOrDefault(resource, ConfigurationImage.EMPTY);
-        ConfigurationDelta delta = changes.computeIfAbsent(resource,
-            __ -> new ConfigurationDelta(configImage));
-        delta.deleteAll();
+        if (image.resourceData().containsKey(resource)) {
+            ConfigurationImage configImage = image.resourceData().get(resource);
+            ConfigurationDelta delta = changes.computeIfAbsent(resource,
+                __ -> new ConfigurationDelta(configImage));
+            delta.deleteAll();
+        }
     }
 
     public ConfigurationsImage apply() {

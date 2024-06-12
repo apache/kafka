@@ -18,13 +18,13 @@
 package kafka.server
 
 import java.nio.ByteBuffer
-
 import kafka.network.RequestChannel
 import kafka.utils.Logging
 import org.apache.kafka.clients.{ClientResponse, NodeApiVersions}
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, EnvelopeRequest, EnvelopeResponse, RequestContext, RequestHeader}
+import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 
 import scala.compat.java8.OptionConverters._
 
@@ -63,7 +63,7 @@ trait ForwardingManager {
    *                            byte buffer from the envelope request, since we will be mutating
    *                            the position and limit fields. It should be a copy.
    * @param requestBody         The AbstractRequest we are sending.
-   * @param requestToString     A callback which can be invoked to produce a human-readable decription
+   * @param requestToString     A callback which can be invoked to produce a human-readable description
    *                            of the request.
    * @param responseCallback    A callback which takes in an `Option[AbstractResponse]`.
    *                            We will call this function with Some(x) after the controller responds with x.
@@ -83,7 +83,7 @@ trait ForwardingManager {
 
 object ForwardingManager {
   def apply(
-    channelManager: BrokerToControllerChannelManager
+    channelManager: NodeToControllerChannelManager
   ): ForwardingManager = {
     new ForwardingManagerImpl(channelManager)
   }
@@ -104,7 +104,7 @@ object ForwardingManager {
 }
 
 class ForwardingManagerImpl(
-  channelManager: BrokerToControllerChannelManager
+  channelManager: NodeToControllerChannelManager
 ) extends ForwardingManager with Logging {
 
   override def forwardRequest(
@@ -165,7 +165,7 @@ class ForwardingManagerImpl(
   }
 
   override def controllerApiVersions: Option[NodeApiVersions] =
-    channelManager.controllerApiVersions()
+    channelManager.controllerApiVersions.asScala
 
   private def parseResponse(
     buffer: ByteBuffer,

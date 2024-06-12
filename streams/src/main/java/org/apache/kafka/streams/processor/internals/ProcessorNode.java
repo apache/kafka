@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.utils.SystemTime;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.api.FixedKeyProcessor;
@@ -40,7 +38,6 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
     private final Processor<KIn, VIn, KOut, VOut> processor;
     private final FixedKeyProcessor<KIn, VIn, VOut> fixedKeyProcessor;
     private final String name;
-    private final Time time;
 
     public final Set<String> stateStores;
 
@@ -63,7 +60,6 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
         this.children = new ArrayList<>();
         this.childByName = new HashMap<>();
         this.stateStores = stateStores;
-        this.time = new SystemTime();
     }
 
     public ProcessorNode(final String name,
@@ -76,7 +72,6 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
         this.children = new ArrayList<>();
         this.childByName = new HashMap<>();
         this.stateStores = stateStores;
-        this.time = new SystemTime();
     }
 
     public final String name() {

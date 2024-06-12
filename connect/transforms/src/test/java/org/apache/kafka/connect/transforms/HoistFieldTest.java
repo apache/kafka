@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.connect.transforms;
 
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.sink.SinkRecord;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -75,6 +77,11 @@ public class HoistFieldTest {
         expectedKey.put("k", "v");
         expectedKey.put("magic", 420);
         assertEquals(expectedKey, actualKey);
+    }
+
+    @Test
+    public void testHoistFieldVersionRetrievedFromAppInfoParser() {
+        assertEquals(AppInfoParser.getVersion(), xform.version());
     }
 
 }

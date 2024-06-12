@@ -17,11 +17,12 @@
 
 package org.apache.kafka.trogdor.fault;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.kafka.trogdor.task.TaskController;
 import org.apache.kafka.trogdor.task.TaskSpec;
 import org.apache.kafka.trogdor.task.TaskWorker;
+
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.HashSet;
 import java.util.List;
@@ -40,7 +41,7 @@ public class ProcessStopFaultSpec extends TaskSpec {
                         @JsonProperty("nodeNames") List<String> nodeNames,
                         @JsonProperty("javaProcessName") String javaProcessName) {
         super(startMs, durationMs);
-        this.nodeNames = nodeNames == null ? new HashSet<String>() : new HashSet<>(nodeNames);
+        this.nodeNames = nodeNames == null ? new HashSet<>() : new HashSet<>(nodeNames);
         this.javaProcessName = javaProcessName == null ? "" : javaProcessName;
     }
 

@@ -207,7 +207,7 @@ public abstract class RestServerConfig extends AbstractConfig {
                 ).define(
                         BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG,
                         ConfigDef.Type.STRING,
-                        SslClientAuth.NONE.toString(),
+                        BrokerSecurityConfigs.SSL_CLIENT_AUTH_DEFAULT,
                         in(Utils.enumOptions(SslClientAuth.class)),
                         ConfigDef.Importance.LOW,
                         BrokerSecurityConfigs.SSL_CLIENT_AUTH_DOC);
@@ -258,7 +258,7 @@ public abstract class RestServerConfig extends AbstractConfig {
     }
 
     protected RestServerConfig(ConfigDef configDef, Map<?, ?> props) {
-        super(configDef, props);
+        super(configDef, props, Utils.castToStringObjectMap(props), true);
     }
 
     // Visible for testing

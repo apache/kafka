@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.connect.json;
 
-import java.util.Locale;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.Width;
 import org.apache.kafka.connect.storage.ConverterConfig;
 
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -87,6 +87,7 @@ public class JsonConverterConfig extends ConverterConfig {
     private final DecimalFormat decimalFormat;
     private final boolean replaceNullWithDefault;
 
+    @SuppressWarnings("this-escape")
     public JsonConverterConfig(Map<String, ?> props) {
         super(CONFIG, props);
         this.schemasEnabled = getBoolean(SCHEMAS_ENABLE_CONFIG);

@@ -16,25 +16,26 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.ForwardingAdmin;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
-import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.MetricsContext;
-import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
-import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
-import java.util.Map;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
-import java.time.Duration;
+import java.util.Map;
+
+import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG;
+import static org.apache.kafka.common.config.ConfigDef.CaseInsensitiveValidString.in;
 
 /** Shared config properties used by {@link MirrorSourceConnector}, {@link MirrorCheckpointConnector}, and {@link MirrorHeartbeatConnector}.
  *  <p>
@@ -84,6 +85,11 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
     public static final String REPLICATION_POLICY_SEPARATOR_DEFAULT =
             MirrorClientConfig.REPLICATION_POLICY_SEPARATOR_DEFAULT;
 
+    private static final String INTERNAL_TOPIC_SEPARATOR_ENABLED =  MirrorClientConfig.INTERNAL_TOPIC_SEPARATOR_ENABLED;
+    private static final String INTERNAL_TOPIC_SEPARATOR_ENABLED_DOC = MirrorClientConfig.INTERNAL_TOPIC_SEPARATOR_ENABLED_DOC;
+    public static final Boolean INTERNAL_TOPIC_SEPARATOR_ENABLED_DEFAULT =
+        DefaultReplicationPolicy.INTERNAL_TOPIC_SEPARATOR_ENABLED_DEFAULT;
+
     public static final String ADMIN_TASK_TIMEOUT_MILLIS = "admin.timeout.ms";
     private static final String ADMIN_TASK_TIMEOUT_MILLIS_DOC = "Timeout for administrative tasks, e.g. detecting new topics.";
     public static final long ADMIN_TASK_TIMEOUT_MILLIS_DEFAULT = 60000L;
@@ -111,6 +117,7 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
 
     private final ReplicationPolicy replicationPolicy;
 
+    @SuppressWarnings("this-escape")
     protected MirrorConnectorConfig(ConfigDef configDef, Map<String, String> props) {
         super(configDef, props, true);
         replicationPolicy = getConfiguredInstance(REPLICATION_POLICY_CLASS, ReplicationPolicy.class);
@@ -158,7 +165,7 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
 
     static Map<String, Object> sourceConsumerConfig(Map<String, ?> props) {
         Map<String, Object> result = new HashMap<>();
-        result.putAll(Utils.entriesWithPrefix(props, SOURCE_PREFIX));
+        result.putAll(Utils.entriesWithPrefix(props, SOURCE_CLUSTER_PREFIX));
         result.keySet().retainAll(MirrorClientConfig.CLIENT_CONFIG_DEF.names());
         result.putAll(Utils.entriesWithPrefix(props, CONSUMER_CLIENT_PREFIX));
         result.putAll(Utils.entriesWithPrefix(props, SOURCE_PREFIX + CONSUMER_CLIENT_PREFIX));
@@ -279,6 +286,12 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
                     ConfigDef.Importance.LOW,
                     REPLICATION_POLICY_SEPARATOR_DOC)
             .define(
+                INTERNAL_TOPIC_SEPARATOR_ENABLED,
+                ConfigDef.Type.BOOLEAN,
+                INTERNAL_TOPIC_SEPARATOR_ENABLED_DEFAULT,
+                ConfigDef.Importance.LOW,
+                INTERNAL_TOPIC_SEPARATOR_ENABLED_DOC)
+            .define(
                     FORWARDING_ADMIN_CLASS,
                     ConfigDef.Type.CLASS,
                     FORWARDING_ADMIN_CLASS_DEFAULT,
@@ -306,4 +319,8 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
             )
             .withClientSslSupport()
             .withClientSaslSupport();
+
+    public static void main(String[] args) {
+        System.out.println(BASE_CONNECTOR_CONFIG_DEF.toHtml(4, config -> "mirror_connector_" + config));
+    }
 }

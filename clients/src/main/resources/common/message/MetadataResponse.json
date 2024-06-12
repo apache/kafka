@@ -48,7 +48,7 @@
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "3+", "ignorable": true,
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
     { "name": "Brokers", "type": "[]MetadataResponseBroker", "versions": "0+",
-      "about": "Each broker in the response.", "fields": [
+      "about": "A list of brokers present in the cluster.", "fields": [
       { "name": "NodeId", "type": "int32", "versions": "0+", "mapKey": true, "entityType": "brokerId",
         "about": "The broker ID." },
       { "name": "Host", "type": "string", "versions": "0+",
@@ -67,8 +67,9 @@
       { "name": "ErrorCode", "type": "int16", "versions": "0+",
         "about": "The topic error, or 0 if there was no error." },
       { "name": "Name", "type": "string", "versions": "0+", "mapKey": true, "entityType": "topicName", "nullableVersions": "12+",
-        "about": "The topic name." },
-      { "name": "TopicId", "type": "uuid", "versions": "10+", "ignorable": true, "about": "The topic id." },
+        "about": "The topic name. Null for non-existing topics queried by ID. This is never null when ErrorCode is zero. One of Name and TopicId is always populated." },
+      { "name": "TopicId", "type": "uuid", "versions": "10+", "ignorable": true,
+        "about": "The topic id. Zero for non-existing topics queried by name. This is never zero when ErrorCode is zero. One of Name and TopicId is always populated." },
       { "name": "IsInternal", "type": "bool", "versions": "1+", "default": "false", "ignorable": true,
         "about": "True if the topic is internal." },
       { "name": "Partitions", "type": "[]MetadataResponsePartition", "versions": "0+",

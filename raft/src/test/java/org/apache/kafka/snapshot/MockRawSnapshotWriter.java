@@ -46,7 +46,7 @@ public final class MockRawSnapshotWriter implements RawSnapshotWriter {
 
     @Override
     public long sizeInBytes() {
-        ensureNotFrozenOrClosed();
+        ensureOpen();
         return data.position();
     }
 

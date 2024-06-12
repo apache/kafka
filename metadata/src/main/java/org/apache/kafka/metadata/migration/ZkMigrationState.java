@@ -62,7 +62,14 @@ public enum ZkMigrationState {
      * will persist indefinitely after the migration. In operational terms, this is the same as the NONE
      * state.
      */
-    POST_MIGRATION((byte) 3);
+    POST_MIGRATION((byte) 3),
+
+    /**
+     * The controller is a ZK controller. No migration has been performed. This state is never persisted
+     * and is only used by KafkaController in order to have a unified metric that indicates what kind of
+     * metadata state the controller is in.
+     */
+    ZK((byte) 4);
 
     private final byte value;
 

@@ -18,6 +18,7 @@
 package org.apache.kafka.connect.transforms;
 
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.data.Date;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
@@ -25,6 +26,7 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.source.SourceRecord;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -36,10 +38,10 @@ import java.util.Map;
 import java.util.TimeZone;
 
 import static org.apache.kafka.connect.transforms.util.Requirements.requireStruct;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 public class TimestampConverterTest {
     private static final TimeZone UTC = TimeZone.getTimeZone("UTC");
@@ -96,7 +98,7 @@ public class TimestampConverterTest {
 
     @Test
     public void testConfigNoTargetType() {
-        assertThrows(ConfigException.class, () -> xformValue.configure(Collections.<String, String>emptyMap()));
+        assertThrows(ConfigException.class, () -> xformValue.configure(Collections.emptyMap()));
     }
 
     @Test
@@ -679,6 +681,13 @@ public class TimestampConverterTest {
 
         assertNull(transformed.keySchema());
         assertEquals(DATE_PLUS_TIME.getTime(), transformed.key());
+    }
+
+    @Test
+    public void testTimestampConverterVersionRetrievedFromAppInfoParser() {
+        assertEquals(AppInfoParser.getVersion(), xformKey.version());
+        assertEquals(AppInfoParser.getVersion(), xformValue.version());
+        assertEquals(xformKey.version(), xformValue.version());
     }
 
     private SourceRecord createRecordWithSchema(Schema schema, Object value) {

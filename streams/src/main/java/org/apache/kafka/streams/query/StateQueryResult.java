@@ -69,6 +69,7 @@ public class StateQueryResult<R> {
             partitionResults
                 .values()
                 .stream()
+                .filter(QueryResult::isSuccess)
                 .filter(r -> r.getResult() != null)
                 .collect(Collectors.toList());
 

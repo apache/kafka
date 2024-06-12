@@ -16,6 +16,7 @@ package kafka.api
 
 import kafka.server._
 import kafka.utils.TestUtils
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.Sanitizer
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
@@ -30,7 +31,7 @@ class UserClientIdQuotaTest extends BaseQuotaTest {
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
-    this.serverConfig.setProperty(KafkaConfig.SslClientAuthProp, "required")
+    this.serverConfig.setProperty(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required")
     super.setUp(testInfo)
     quotaTestClients.alterClientQuotas(
       quotaTestClients.clientQuotaAlteration(

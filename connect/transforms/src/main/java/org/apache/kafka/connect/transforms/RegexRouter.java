@@ -17,9 +17,12 @@
 package org.apache.kafka.connect.transforms;
 
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.transforms.util.RegexValidator;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -27,7 +30,7 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class RegexRouter<R extends ConnectRecord<R>> implements Transformation<R> {
+public class RegexRouter<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
 
     private static final Logger log = LoggerFactory.getLogger(RegexRouter.class);
 
@@ -48,6 +51,11 @@ public class RegexRouter<R extends ConnectRecord<R>> implements Transformation<R
 
     private Pattern regex;
     private String replacement;
+
+    @Override
+    public String version() {
+        return AppInfoParser.getVersion();
+    }
 
     @Override
     public void configure(Map<String, ?> props) {

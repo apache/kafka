@@ -21,23 +21,34 @@ import kafka.server.metadata.ZkMetadataCache
 import kafka.utils.TestUtils
 import kafka.zk.{FeatureZNode, FeatureZNodeStatus, ZkVersion}
 import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
+import org.apache.kafka.server.common.{FinalizedFeatures => JFeatures}
 import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.IBP_3_2_IV0
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.{AfterEach, Test}
 
 import java.util.concurrent.{CountDownLatch, TimeoutException}
 import scala.jdk.CollectionConverters._
 
 class FinalizedFeatureChangeListenerTest extends QuorumTestHarness {
+  var listener: FinalizedFeatureChangeListener = _
+  case class FinalizedFeaturesAndEpoch(features: Map[String, Short], epoch: Long) {
+    override def toString: String = {
+      s"FinalizedFeaturesAndEpoch(features=$features, epoch=$epoch)"
+    }
+  }
+
+  def asJava(input: Map[String, Short]): java.util.Map[String, java.lang.Short] = {
+    input.map(kv => kv._1 -> kv._2.asInstanceOf[java.lang.Short]).asJava
+  }
 
   private def createBrokerFeatures(): BrokerFeatures = {
     val supportedFeaturesMap = Map[String, SupportedVersionRange](
       "feature_1" -> new SupportedVersionRange(1, 4),
       "feature_2" -> new SupportedVersionRange(1, 3))
-    val brokerFeatures = BrokerFeatures.createDefault()
+    val brokerFeatures = BrokerFeatures.createDefault(true)
     brokerFeatures.setSupportedFeatures(Features.supportedFeatures(supportedFeaturesMap.asJava))
     brokerFeatures
   }
@@ -64,13 +75,20 @@ class FinalizedFeatureChangeListenerTest extends QuorumTestHarness {
       val mayBeNewCacheContent = cache.getFeatureOption
       assertFalse(mayBeNewCacheContent.isEmpty)
       val newCacheContent = mayBeNewCacheContent.get
-      assertEquals(expectedCacheContent.get.features, newCacheContent.features)
-      assertEquals(expectedCacheContent.get.epoch, newCacheContent.epoch)
+      assertEquals(asJava(expectedCacheContent.get.features), newCacheContent.finalizedFeatures())
+      assertEquals(expectedCacheContent.get.epoch, newCacheContent.finalizedFeaturesEpoch())
     } else {
       val mayBeNewCacheContent = cache.getFeatureOption
       assertTrue(mayBeNewCacheContent.isEmpty)
     }
     listener
+  }
+
+  @AfterEach
+  def testTearDown(): Unit = {
+    if (listener != null) {
+      listener.close()
+    }
   }
 
   /**
@@ -84,7 +102,7 @@ class FinalizedFeatureChangeListenerTest extends QuorumTestHarness {
     val initialFinalizedFeatures = createFinalizedFeatures()
     val brokerFeatures = createBrokerFeatures()
     val cache = new ZkMetadataCache(1, MetadataVersion.IBP_2_8_IV1, brokerFeatures)
-    val listener = createListener(cache, Some(initialFinalizedFeatures))
+    listener = createListener(cache, Some(initialFinalizedFeatures))
 
     def updateAndCheckCache(finalizedFeatures: Map[String, Short]): Unit = {
       zkClient.updateFeatureZNode(FeatureZNode(IBP_3_2_IV0, FeatureZNodeStatus.Enabled, finalizedFeatures))
@@ -94,7 +112,9 @@ class FinalizedFeatureChangeListenerTest extends QuorumTestHarness {
       assertTrue(updatedVersion > initialFinalizedFeatures.epoch)
 
       cache.waitUntilFeatureEpochOrThrow(updatedVersion, JTestUtils.DEFAULT_MAX_WAIT_MS)
-      assertEquals(FinalizedFeaturesAndEpoch(finalizedFeatures, updatedVersion), cache.getFeatureOption.get)
+      assertEquals(new JFeatures(MetadataVersion.IBP_2_8_IV1,
+        asJava(finalizedFeatures), updatedVersion, false),
+          cache.getFeatureOption.get)
       assertTrue(listener.isListenerInitiated)
     }
 
@@ -119,7 +139,7 @@ class FinalizedFeatureChangeListenerTest extends QuorumTestHarness {
     val brokerFeatures = createBrokerFeatures()
     val cache = new ZkMetadataCache(1, MetadataVersion.IBP_2_8_IV1, brokerFeatures)
     val initialFinalizedFeatures = createFinalizedFeatures()
-    val listener = createListener(cache, Some(initialFinalizedFeatures))
+    listener = createListener(cache, Some(initialFinalizedFeatures))
 
     zkClient.deleteFeatureZNode()
     val (mayBeFeatureZNodeDeletedBytes, deletedVersion) = zkClient.getDataAndVersion(FeatureZNode.path)
@@ -159,7 +179,7 @@ class FinalizedFeatureChangeListenerTest extends QuorumTestHarness {
   def testCacheUpdateWaitFailsForUnreachableVersion(): Unit = {
     val initialFinalizedFeatures = createFinalizedFeatures()
     val cache = new ZkMetadataCache(1, MetadataVersion.IBP_2_8_IV1, createBrokerFeatures())
-    val listener = createListener(cache, Some(initialFinalizedFeatures))
+    listener = createListener(cache, Some(initialFinalizedFeatures))
 
     assertThrows(classOf[TimeoutException], () => cache.waitUntilFeatureEpochOrThrow(initialFinalizedFeatures.epoch + 1, JTestUtils.DEFAULT_MAX_WAIT_MS))
 
@@ -192,7 +212,7 @@ class FinalizedFeatureChangeListenerTest extends QuorumTestHarness {
     val exitLatch = new CountDownLatch(1)
     Exit.setExitProcedure((_, _) => exitLatch.countDown())
     try {
-      val listener = new FinalizedFeatureChangeListener(cache, zkClient)
+      listener = new FinalizedFeatureChangeListener(cache, zkClient)
       assertFalse(listener.isListenerInitiated)
       assertTrue(cache.getFeatureOption.isEmpty)
       assertThrows(classOf[TimeoutException], () => listener.initOrThrow(5000))
@@ -212,7 +232,7 @@ class FinalizedFeatureChangeListenerTest extends QuorumTestHarness {
   def testInitFailureDueToInvalidWaitTime(): Unit = {
     val brokerFeatures = createBrokerFeatures()
     val cache = new ZkMetadataCache(1, MetadataVersion.IBP_2_8_IV1, brokerFeatures)
-    val listener = new FinalizedFeatureChangeListener(cache, zkClient)
+    listener = new FinalizedFeatureChangeListener(cache, zkClient)
     assertThrows(classOf[IllegalArgumentException], () => listener.initOrThrow(0))
     assertThrows(classOf[IllegalArgumentException], () => listener.initOrThrow(-1))
   }
@@ -226,7 +246,7 @@ class FinalizedFeatureChangeListenerTest extends QuorumTestHarness {
     val brokerFeatures = createBrokerFeatures()
     val cache = new ZkMetadataCache(1, MetadataVersion.IBP_2_8_IV1, brokerFeatures)
     val initialFinalizedFeatures = createFinalizedFeatures()
-    val listener = createListener(cache, Some(initialFinalizedFeatures))
+    listener = createListener(cache, Some(initialFinalizedFeatures))
 
     val exitLatch = new CountDownLatch(1)
     Exit.setExitProcedure((_, _) => exitLatch.countDown())
@@ -248,7 +268,8 @@ class FinalizedFeatureChangeListenerTest extends QuorumTestHarness {
         listener.isListenerDead &&
         // Make sure the cache contents are as expected, and, the incompatible features were not
         // applied.
-        cache.getFeatureOption.get.equals(initialFinalizedFeatures)
+          cache.getFeatureOption.get.equals(new JFeatures(MetadataVersion.IBP_2_8_IV1,
+            asJava(initialFinalizedFeatures.features), initialFinalizedFeatures.epoch, false))
       }, "Timed out waiting for listener death and FinalizedFeatureCache to be updated")
     } finally {
       Exit.resetExitProcedure()

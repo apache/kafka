@@ -41,7 +41,7 @@ public class SensorBuilder {
 
     private final Sensor sensor;
 
-    private final boolean prexisting;
+    private final boolean preexisting;
 
     private final Map<String, String> tags;
 
@@ -56,44 +56,44 @@ public class SensorBuilder {
         if (s != null) {
             sensor = s;
             tags = Collections.emptyMap();
-            prexisting = true;
+            preexisting = true;
         } else {
             sensor = metrics.sensor(name);
             tags = tagsSupplier.get();
-            prexisting = false;
+            preexisting = false;
         }
     }
 
     SensorBuilder withAvg(MetricNameTemplate name) {
-        if (!prexisting)
+        if (!preexisting)
             sensor.add(metrics.metricInstance(name, tags), new Avg());
 
         return this;
     }
 
     SensorBuilder withMin(MetricNameTemplate name) {
-        if (!prexisting)
+        if (!preexisting)
             sensor.add(metrics.metricInstance(name, tags), new Min());
 
         return this;
     }
 
     SensorBuilder withMax(MetricNameTemplate name) {
-        if (!prexisting)
+        if (!preexisting)
             sensor.add(metrics.metricInstance(name, tags), new Max());
 
         return this;
     }
 
     SensorBuilder withValue(MetricNameTemplate name) {
-        if (!prexisting)
+        if (!preexisting)
             sensor.add(metrics.metricInstance(name, tags), new Value());
 
         return this;
     }
 
     SensorBuilder withMeter(MetricNameTemplate rateName, MetricNameTemplate totalName) {
-        if (!prexisting) {
+        if (!preexisting) {
             sensor.add(new Meter(metrics.metricInstance(rateName, tags), metrics.metricInstance(totalName, tags)));
         }
 
@@ -101,7 +101,7 @@ public class SensorBuilder {
     }
 
     SensorBuilder withMeter(SampledStat sampledStat, MetricNameTemplate rateName, MetricNameTemplate totalName) {
-        if (!prexisting) {
+        if (!preexisting) {
             sensor.add(new Meter(sampledStat, metrics.metricInstance(rateName, tags), metrics.metricInstance(totalName, tags)));
         }
 

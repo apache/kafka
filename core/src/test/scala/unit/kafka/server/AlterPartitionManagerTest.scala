@@ -20,7 +20,6 @@ package kafka.server
 import java.util.Collections
 import java.util.stream.{Stream => JStream}
 import kafka.api.LeaderAndIsr
-import kafka.utils.MockTime
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.TopicIdPartition
@@ -34,9 +33,10 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.requests.{AbstractRequest, AlterPartitionRequest, AlterPartitionResponse}
 import org.apache.kafka.metadata.LeaderRecoveryState
+import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_2_7_IV2, IBP_3_2_IV0, IBP_3_5_IV1}
-import org.apache.kafka.server.util.MockScheduler
+import org.apache.kafka.server.util.{MockScheduler, MockTime}
 import org.apache.kafka.test.TestUtils.assertFutureThrows
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.BeforeEach
@@ -61,7 +61,7 @@ class AlterPartitionManagerTest {
   val metrics = new Metrics
   val brokerId = 1
 
-  var brokerToController: BrokerToControllerChannelManager = _
+  var brokerToController: NodeToControllerChannelManager = _
 
   val tp0 = new TopicIdPartition(topicId, 0, topic)
   val tp1 = new TopicIdPartition(topicId, 1, topic)
@@ -69,7 +69,7 @@ class AlterPartitionManagerTest {
 
   @BeforeEach
   def setup(): Unit = {
-    brokerToController = mock(classOf[BrokerToControllerChannelManager])
+    brokerToController = mock(classOf[NodeToControllerChannelManager])
   }
 
   @ParameterizedTest
@@ -102,7 +102,7 @@ class AlterPartitionManagerTest {
       .setTopicName(topic)
       .setTopicId(topicId)
 
-    if (metadataVersion.isTopicIdsSupported()) {
+    if (metadataVersion.isTopicIdsSupported) {
       val newIsrWithBrokerEpoch = new ListBuffer[BrokerState]()
       newIsrWithBrokerEpoch.append(new BrokerState().setBrokerId(1).setBrokerEpoch(101))
       newIsrWithBrokerEpoch.append(new BrokerState().setBrokerId(2).setBrokerEpoch(102))
@@ -434,7 +434,7 @@ class AlterPartitionManagerTest {
     val controlledEpoch = 0
     val brokerEpoch = 2
     val scheduler = new MockScheduler(time)
-    val brokerToController = Mockito.mock(classOf[BrokerToControllerChannelManager])
+    val brokerToController = Mockito.mock(classOf[NodeToControllerChannelManager])
     val alterPartitionManager = new DefaultAlterPartitionManager(
       brokerToController,
       scheduler,
@@ -501,7 +501,7 @@ class AlterPartitionManagerTest {
     val controlledEpoch = 0
     val brokerEpoch = 2
     val scheduler = new MockScheduler(time)
-    val brokerToController = Mockito.mock(classOf[BrokerToControllerChannelManager])
+    val brokerToController = Mockito.mock(classOf[NodeToControllerChannelManager])
     val alterPartitionManager = new DefaultAlterPartitionManager(
       brokerToController,
       scheduler,
@@ -558,7 +558,7 @@ class AlterPartitionManagerTest {
   }
 
   private def verifySendRequest(
-    brokerToController: BrokerToControllerChannelManager,
+    brokerToController: NodeToControllerChannelManager,
     expectedRequest: ArgumentMatcher[AbstractRequest.Builder[_ <: AbstractRequest]]
   ): ControllerRequestCompletionHandler = {
     val callbackCapture = ArgumentCaptor.forClass(classOf[ControllerRequestCompletionHandler])

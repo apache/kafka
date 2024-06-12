@@ -22,7 +22,9 @@ import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.ConfigUtils;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
@@ -33,13 +35,15 @@ import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.apache.kafka.connect.transforms.util.Requirements.requireMap;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireStruct;
 
-public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transformation<R> {
+public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
 
     public static final String OVERVIEW_DOC = "Filter or rename fields."
             + "<p/>Use the concrete transformation type designed for the record key (<code>" + Key.class.getName() + "</code>) "
@@ -48,10 +52,6 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
     interface ConfigName {
         String EXCLUDE = "exclude";
         String INCLUDE = "include";
-
-        // for backwards compatibility
-        String INCLUDE_ALIAS = "whitelist";
-        String EXCLUDE_ALIAS = "blacklist";
 
         String RENAME = "renames";
     }
@@ -80,12 +80,17 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
 
     private static final String PURPOSE = "field replacement";
 
-    private List<String> exclude;
-    private List<String> include;
+    private Set<String> exclude;
+    private Set<String> include;
     private Map<String, String> renames;
     private Map<String, String> reverseRenames;
 
     private Cache<Schema, Schema> schemaUpdateCache;
+
+    @Override
+    public String version() {
+        return AppInfoParser.getVersion();
+    }
 
     @Override
     public void configure(Map<String, ?> configs) {
@@ -94,8 +99,8 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
             {ConfigName.EXCLUDE, "blacklist"},
         }));
 
-        exclude = config.getList(ConfigName.EXCLUDE);
-        include = config.getList(ConfigName.INCLUDE);
+        exclude = new HashSet<>(config.getList(ConfigName.EXCLUDE));
+        include = new HashSet<>(config.getList(ConfigName.INCLUDE));
         renames = parseRenameMappings(config.getList(ConfigName.RENAME));
         reverseRenames = invert(renames);
 

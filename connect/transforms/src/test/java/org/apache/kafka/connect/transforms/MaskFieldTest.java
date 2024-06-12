@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.transforms;
 
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
@@ -26,6 +27,7 @@ import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.sink.SinkRecord;
+
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -264,5 +266,11 @@ public class MaskFieldTest {
         assertEquals(Collections.emptyMap(), actualMap);
         actualMap.put("k", "v");
         assertEquals(Collections.singletonMap("k", "v"), actualMap);
+    }
+
+    @Test
+    public void testMaskFieldReturnsVersionFromAppInfoParser() {
+        final MaskField<SinkRecord> xform = new MaskField.Value<>();
+        assertEquals(AppInfoParser.getVersion(), xform.version());
     }
 }

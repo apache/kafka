@@ -30,7 +30,6 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.FlattenedIterator;
-import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -38,30 +37,38 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static java.util.Collections.singletonList;
 
-public class UpdateMetadataRequest extends AbstractControlRequest {
+public final class UpdateMetadataRequest extends AbstractControlRequest {
 
     public static class Builder extends AbstractControlRequest.Builder<UpdateMetadataRequest> {
         private final List<UpdateMetadataPartitionState> partitionStates;
         private final List<UpdateMetadataBroker> liveBrokers;
         private final Map<String, Uuid> topicIds;
+        private final Type updateType;
 
         public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
                        List<UpdateMetadataPartitionState> partitionStates, List<UpdateMetadataBroker> liveBrokers,
                        Map<String, Uuid> topicIds) {
             this(version, controllerId, controllerEpoch, brokerEpoch, partitionStates,
-                liveBrokers, topicIds, false);
+                liveBrokers, topicIds, false, Type.UNKNOWN);
         }
 
         public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
                        List<UpdateMetadataPartitionState> partitionStates, List<UpdateMetadataBroker> liveBrokers,
-                       Map<String, Uuid> topicIds, boolean kraftController) {
+                       Map<String, Uuid> topicIds, boolean kraftController, Type updateType) {
             super(ApiKeys.UPDATE_METADATA, version, controllerId, controllerEpoch, brokerEpoch, kraftController);
             this.partitionStates = partitionStates;
             this.liveBrokers = liveBrokers;
             this.topicIds = topicIds;
+
+            if (version >= 8) {
+                this.updateType = updateType;
+            } else {
+                this.updateType = Type.UNKNOWN;
+            }
         }
 
         @Override
@@ -95,6 +102,7 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
 
             if (version >= 8) {
                 data.setIsKRaftController(kraftController);
+                data.setType(updateType.toByte());
             }
 
             if (version >= 5) {
@@ -125,21 +133,21 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
 
         @Override
         public String toString() {
-            StringBuilder bld = new StringBuilder();
-            bld.append("(type: UpdateMetadataRequest=").
-                append(", controllerId=").append(controllerId).
-                append(", controllerEpoch=").append(controllerEpoch).
-                append(", brokerEpoch=").append(brokerEpoch).
-                append(", partitionStates=").append(partitionStates).
-                append(", liveBrokers=").append(Utils.join(liveBrokers, ", ")).
-                append(")");
-            return bld.toString();
+            return "(type: UpdateMetadataRequest=" +
+                    ", controllerId=" + controllerId +
+                    ", controllerEpoch=" + controllerEpoch +
+                    ", kraftController=" + kraftController +
+                    ", type=" + updateType +
+                    ", brokerEpoch=" + brokerEpoch +
+                    ", partitionStates=" + partitionStates +
+                    ", liveBrokers=" + liveBrokers.stream().map(UpdateMetadataBroker::toString).collect(Collectors.joining(", ")) +
+                    ")";
         }
     }
 
     private final UpdateMetadataRequestData data;
 
-    UpdateMetadataRequest(UpdateMetadataRequestData data, short version) {
+    public UpdateMetadataRequest(UpdateMetadataRequestData data, short version) {
         super(ApiKeys.UPDATE_METADATA, version);
         this.data = data;
         // Do this from the constructor to make it thread-safe (even though it's only needed when some methods are called)
@@ -194,6 +202,10 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
     @Override
     public boolean isKRaftController() {
         return data.isKRaftController();
+    }
+
+    public Type updateType() {
+        return Type.fromByte(data.type());
     }
 
     @Override

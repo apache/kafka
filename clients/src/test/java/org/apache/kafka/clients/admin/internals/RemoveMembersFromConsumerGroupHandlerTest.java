@@ -21,7 +21,7 @@ import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -90,7 +90,7 @@ public class RemoveMembersFromConsumerGroupHandlerTest {
     }
 
     private LeaveGroupResponse buildResponse(Errors error) {
-        LeaveGroupResponse response = new LeaveGroupResponse(
+        return new LeaveGroupResponse(
             new LeaveGroupResponseData()
                 .setErrorCode(error.code())
                 .setMembers(singletonList(
@@ -98,11 +98,10 @@ public class RemoveMembersFromConsumerGroupHandlerTest {
                         .setErrorCode(Errors.NONE.code())
                         .setMemberId("m1")
                         .setGroupInstanceId("m1-gii"))));
-        return response;
     }
 
     private LeaveGroupResponse buildResponseWithMemberError(Errors error) {
-        LeaveGroupResponse response = new LeaveGroupResponse(
+        return new LeaveGroupResponse(
             new LeaveGroupResponseData()
                 .setErrorCode(Errors.NONE.code())
                 .setMembers(singletonList(
@@ -110,7 +109,6 @@ public class RemoveMembersFromConsumerGroupHandlerTest {
                         .setErrorCode(error.code())
                         .setMemberId("m1")
                         .setGroupInstanceId("m1-gii"))));
-        return response;
     }
 
     private AdminApiHandler.ApiResult<CoordinatorKey, Map<MemberIdentity, Errors>> handleWithGroupError(
@@ -164,7 +162,7 @@ public class RemoveMembersFromConsumerGroupHandlerTest {
         assertEquals(emptySet(), result.completedKeys.keySet());
         assertEquals(emptyList(), result.unmappedKeys);
         assertEquals(singleton(key), result.failedKeys.keySet());
-        assertTrue(expectedExceptionType.isInstance(result.failedKeys.get(key)));
+        assertInstanceOf(expectedExceptionType, result.failedKeys.get(key));
     }
 
     private void assertMemberFailed(

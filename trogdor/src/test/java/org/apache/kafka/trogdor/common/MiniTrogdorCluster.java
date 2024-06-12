@@ -19,7 +19,6 @@ package org.apache.kafka.trogdor.common;
 
 import org.apache.kafka.common.utils.Scheduler;
 import org.apache.kafka.common.utils.ThreadUtils;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.trogdor.agent.Agent;
 import org.apache.kafka.trogdor.agent.AgentClient;
 import org.apache.kafka.trogdor.agent.AgentRestResource;
@@ -27,10 +26,10 @@ import org.apache.kafka.trogdor.basic.BasicNode;
 import org.apache.kafka.trogdor.basic.BasicPlatform;
 import org.apache.kafka.trogdor.basic.BasicTopology;
 import org.apache.kafka.trogdor.coordinator.Coordinator;
-
 import org.apache.kafka.trogdor.coordinator.CoordinatorClient;
 import org.apache.kafka.trogdor.coordinator.CoordinatorRestResource;
 import org.apache.kafka.trogdor.rest.JsonRestServer;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -134,7 +133,7 @@ public class MiniTrogdorCluster implements AutoCloseable {
          */
         public MiniTrogdorCluster build() throws Exception {
             log.info("Creating MiniTrogdorCluster with agents: {} and coordinator: {}",
-                Utils.join(agentNames, ", "), coordinatorName);
+                String.join(", ", agentNames), coordinatorName);
             TreeMap<String, NodeData> nodes = new TreeMap<>();
             for (String agentName : agentNames) {
                 NodeData node = getOrCreate(agentName, nodes);
@@ -162,7 +161,7 @@ public class MiniTrogdorCluster implements AutoCloseable {
                         Integer.toString(node.coordinatorPort));
                 }
                 node.node = new BasicNode(entry.getKey(), node.hostname, config,
-                    Collections.<String>emptySet());
+                    Collections.emptySet());
             }
             TreeMap<String, Node> topologyNodes = new TreeMap<>();
             for (Map.Entry<String, NodeData> entry : nodes.entrySet()) {
@@ -171,7 +170,7 @@ public class MiniTrogdorCluster implements AutoCloseable {
             final BasicTopology topology = new BasicTopology(topologyNodes);
             ScheduledExecutorService executor = Executors.newScheduledThreadPool(1,
                 ThreadUtils.createThreadFactory("MiniTrogdorClusterStartupThread%d", false));
-            final AtomicReference<Exception> failure = new AtomicReference<Exception>(null);
+            final AtomicReference<Exception> failure = new AtomicReference<>(null);
             for (final Map.Entry<String, NodeData> entry : nodes.entrySet()) {
                 executor.submit((Callable<Void>) () -> {
                     String nodeName = entry.getKey();

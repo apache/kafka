@@ -28,7 +28,6 @@ import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopi
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -112,7 +111,7 @@ public class MetadataResponse extends AbstractResponse {
     public Map<Uuid, Errors> errorsByTopicId() {
         Map<Uuid, Errors> errors = new HashMap<>();
         for (MetadataResponseTopic metadata : data.topics()) {
-            if (metadata.topicId() == Uuid.ZERO_UUID) {
+            if (metadata.topicId().equals(Uuid.ZERO_UUID)) {
                 throw new IllegalStateException("Use errors() when managing topic using topic name");
             }
             if (metadata.errorCode() != Errors.NONE.code())
@@ -172,9 +171,9 @@ public class MetadataResponse extends AbstractResponse {
         return new PartitionInfo(metadata.topic(),
                 metadata.partition(),
                 metadata.leaderId.map(nodesById::get).orElse(null),
-                convertToNodeArray(metadata.replicaIds, nodesById),
-                convertToNodeArray(metadata.inSyncReplicaIds, nodesById),
-                convertToNodeArray(metadata.offlineReplicaIds, nodesById));
+                (metadata.replicaIds == null) ? null : convertToNodeArray(metadata.replicaIds, nodesById),
+                (metadata.inSyncReplicaIds == null) ? null : convertToNodeArray(metadata.inSyncReplicaIds, nodesById),
+                (metadata.offlineReplicaIds == null) ? null : convertToNodeArray(metadata.offlineReplicaIds, nodesById));
     }
 
     private static Node[] convertToNodeArray(List<Integer> replicaIds, Map<Integer, Node> nodesById) {
@@ -416,9 +415,9 @@ public class MetadataResponse extends AbstractResponse {
                     ", partition=" + topicPartition +
                     ", leader=" + leaderId +
                     ", leaderEpoch=" + leaderEpoch +
-                    ", replicas=" + Utils.join(replicaIds, ",") +
-                    ", isr=" + Utils.join(inSyncReplicaIds, ",") +
-                    ", offlineReplicas=" + Utils.join(offlineReplicaIds, ",") + ')';
+                    ", replicas=" + replicaIds.stream().map(Object::toString).collect(Collectors.joining(",")) +
+                    ", isr=" + inSyncReplicaIds.stream().map(Object::toString).collect(Collectors.joining(",")) +
+                    ", offlineReplicas=" + offlineReplicaIds.stream().map(Object::toString).collect(Collectors.joining(",")) + ')';
         }
     }
 

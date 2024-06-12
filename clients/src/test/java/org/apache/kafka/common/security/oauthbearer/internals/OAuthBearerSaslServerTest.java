@@ -181,14 +181,14 @@ public class OAuthBearerSaslServerTest {
     }
 
     @Test
-    public void authorizatonIdEqualsAuthenticationId() throws Exception {
+    public void authorizationIdEqualsAuthenticationId() throws Exception {
         byte[] nextChallenge = saslServer
                 .evaluateResponse(clientInitialResponse(USER));
         assertEquals(0, nextChallenge.length, "Next challenge is not empty");
     }
 
     @Test
-    public void authorizatonIdNotEqualsAuthenticationId() {
+    public void authorizationIdNotEqualsAuthenticationId() {
         assertThrows(SaslAuthenticationException.class,
             () -> saslServer.evaluateResponse(clientInitialResponse(USER + "x")));
     }
@@ -201,11 +201,6 @@ public class OAuthBearerSaslServerTest {
     }
 
     private byte[] clientInitialResponse(String authorizationId)
-            throws OAuthBearerConfigException, IOException, UnsupportedCallbackException {
-        return clientInitialResponse(authorizationId, false);
-    }
-
-    private byte[] clientInitialResponse(String authorizationId, boolean illegalToken)
             throws OAuthBearerConfigException, IOException, UnsupportedCallbackException {
         return clientInitialResponse(authorizationId, false, Collections.emptyMap());
     }

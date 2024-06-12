@@ -16,9 +16,9 @@
  */
 package kafka.zk
 
-import kafka.utils.{Logging, PasswordEncoder}
+import kafka.utils.Logging
 import kafka.zk.ZkMigrationClient.wrapZkException
-import kafka.zk.migration.{ZkAclMigrationClient, ZkConfigMigrationClient, ZkTopicMigrationClient}
+import kafka.zk.migration.{ZkAclMigrationClient, ZkConfigMigrationClient, ZkDelegationTokenMigrationClient, ZkTopicMigrationClient}
 import kafka.zookeeper._
 import org.apache.kafka.clients.admin.ScramMechanism
 import org.apache.kafka.common.acl.AccessControlEntry
@@ -28,23 +28,25 @@ import org.apache.kafka.common.metadata._
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.{TopicIdPartition, Uuid}
+import org.apache.kafka.metadata.DelegationTokenData
 import org.apache.kafka.metadata.PartitionRegistration
 import org.apache.kafka.metadata.migration.ConfigMigrationClient.ClientQuotaVisitor
 import org.apache.kafka.metadata.migration.TopicMigrationClient.{TopicVisitor, TopicVisitorInterest}
 import org.apache.kafka.metadata.migration._
+import org.apache.kafka.security.PasswordEncoder
 import org.apache.kafka.server.common.{ApiMessageAndVersion, ProducerIdsBlock}
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.{AuthFailedException, NoAuthException, SessionClosedRequireAuthException}
 
 import java.{lang, util}
-import java.util.Properties
 import java.util.function.Consumer
 import scala.collection.Seq
+import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
 object ZkMigrationClient {
 
-  val MaxBatchSize = 100
+  private val MaxBatchSize = 100
 
   def apply(
     zkClient: KafkaZkClient,
@@ -53,7 +55,8 @@ object ZkMigrationClient {
     val topicClient = new ZkTopicMigrationClient(zkClient)
     val configClient = new ZkConfigMigrationClient(zkClient, zkConfigEncoder)
     val aclClient = new ZkAclMigrationClient(zkClient)
-    new ZkMigrationClient(zkClient, topicClient, configClient, aclClient)
+    val delegationTokenClient = new ZkDelegationTokenMigrationClient(zkClient)
+    new ZkMigrationClient(zkClient, topicClient, configClient, aclClient, delegationTokenClient)
   }
 
   /**
@@ -96,7 +99,8 @@ class ZkMigrationClient(
   zkClient: KafkaZkClient,
   topicClient: TopicMigrationClient,
   configClient: ConfigMigrationClient,
-  aclClient: AclMigrationClient
+  aclClient: AclMigrationClient,
+  delegationTokenClient: DelegationTokenMigrationClient
 ) extends MigrationClient with Logging {
 
   override def getOrCreateMigrationRecoveryState(
@@ -145,44 +149,47 @@ class ZkMigrationClient(
     topicClient.iterateTopics(
       util.EnumSet.allOf(classOf[TopicVisitorInterest]),
       new TopicVisitor() {
-      override def visitTopic(topicName: String, topicId: Uuid, assignments: util.Map[Integer, util.List[Integer]]): Unit = {
-        if (!topicBatch.isEmpty) {
-          recordConsumer.accept(topicBatch)
-          topicBatch = new util.ArrayList[ApiMessageAndVersion]()
+        override def visitTopic(topicName: String, topicId: Uuid, assignments: util.Map[Integer, util.List[Integer]]): Unit = {
+          if (!topicBatch.isEmpty) {
+            recordConsumer.accept(topicBatch)
+            topicBatch = new util.ArrayList[ApiMessageAndVersion]()
+          }
+
+          topicBatch.add(new ApiMessageAndVersion(new TopicRecord()
+            .setName(topicName)
+            .setTopicId(topicId), 0.toShort))
+
+          // This breaks the abstraction a bit, but the topic configs belong in the topic batch
+          // when migrating topics and the logic for reading configs lives elsewhere
+          configClient.readTopicConfigs(topicName, (topicConfigs: util.Map[String, String]) => {
+            topicConfigs.forEach((key: Any, value: Any) => {
+              topicBatch.add(new ApiMessageAndVersion(new ConfigRecord()
+                .setResourceType(ConfigResource.Type.TOPIC.id)
+                .setResourceName(topicName)
+                .setName(key.toString)
+                .setValue(value.toString), 0.toShort))
+            })
+          })
         }
 
-        topicBatch.add(new ApiMessageAndVersion(new TopicRecord()
-          .setName(topicName)
-          .setTopicId(topicId), 0.toShort))
+        override def visitPartition(topicIdPartition: TopicIdPartition, partitionRegistration: PartitionRegistration): Unit = {
+          val record = new PartitionRecord()
+            .setTopicId(topicIdPartition.topicId())
+            .setPartitionId(topicIdPartition.partition())
+            .setReplicas(partitionRegistration.replicas.map(Integer.valueOf).toList.asJava)
+            .setAddingReplicas(partitionRegistration.addingReplicas.map(Integer.valueOf).toList.asJava)
+            .setRemovingReplicas(partitionRegistration.removingReplicas.map(Integer.valueOf).toList.asJava)
+            .setIsr(partitionRegistration.isr.map(Integer.valueOf).toList.asJava)
+            .setLeader(partitionRegistration.leader)
+            .setLeaderEpoch(partitionRegistration.leaderEpoch)
+            .setPartitionEpoch(partitionRegistration.partitionEpoch)
+            .setLeaderRecoveryState(partitionRegistration.leaderRecoveryState.value())
+          partitionRegistration.replicas.foreach(brokerIdConsumer.accept(_))
+          partitionRegistration.addingReplicas.foreach(brokerIdConsumer.accept(_))
+          topicBatch.add(new ApiMessageAndVersion(record, 0.toShort))
+        }
       }
-
-      override def visitPartition(topicIdPartition: TopicIdPartition, partitionRegistration: PartitionRegistration): Unit = {
-        val record = new PartitionRecord()
-          .setTopicId(topicIdPartition.topicId())
-          .setPartitionId(topicIdPartition.partition())
-          .setReplicas(partitionRegistration.replicas.map(Integer.valueOf).toList.asJava)
-          .setAddingReplicas(partitionRegistration.addingReplicas.map(Integer.valueOf).toList.asJava)
-          .setRemovingReplicas(partitionRegistration.removingReplicas.map(Integer.valueOf).toList.asJava)
-          .setIsr(partitionRegistration.isr.map(Integer.valueOf).toList.asJava)
-          .setLeader(partitionRegistration.leader)
-          .setLeaderEpoch(partitionRegistration.leaderEpoch)
-          .setPartitionEpoch(partitionRegistration.partitionEpoch)
-          .setLeaderRecoveryState(partitionRegistration.leaderRecoveryState.value())
-        partitionRegistration.replicas.foreach(brokerIdConsumer.accept(_))
-        partitionRegistration.addingReplicas.foreach(brokerIdConsumer.accept(_))
-        topicBatch.add(new ApiMessageAndVersion(record, 0.toShort))
-      }
-
-      override def visitConfigs(topicName: String, topicProps: Properties): Unit = {
-        topicProps.forEach((key: Any, value: Any) => {
-          topicBatch.add(new ApiMessageAndVersion(new ConfigRecord()
-            .setResourceType(ConfigResource.Type.TOPIC.id)
-            .setResourceName(topicName)
-            .setName(key.toString)
-            .setValue(value.toString), 0.toShort))
-        })
-      }
-    })
+    )
 
     if (!topicBatch.isEmpty) {
       recordConsumer.accept(topicBatch)
@@ -194,7 +201,9 @@ class ZkMigrationClient(
     brokerIdConsumer: Consumer[Integer]
   ): Unit = wrapZkException {
     configClient.iterateBrokerConfigs((broker, props) => {
-      brokerIdConsumer.accept(Integer.valueOf(broker))
+      if (broker.nonEmpty) {
+        brokerIdConsumer.accept(Integer.valueOf(broker))
+      }
       val batch = new util.ArrayList[ApiMessageAndVersion]()
       props.forEach((key, value) => {
         batch.add(new ApiMessageAndVersion(new ConfigRecord()
@@ -255,7 +264,7 @@ class ZkMigrationClient(
         recordConsumer.accept(List(new ApiMessageAndVersion(new ProducerIdsRecord()
           .setBrokerEpoch(-1)
           .setBrokerId(producerIdBlock.assignedBrokerId)
-          .setNextProducerId(producerIdBlock.firstProducerId()), 0.toShort)).asJava)
+          .setNextProducerId(producerIdBlock.nextBlockFirstId()), 0.toShort)).asJava)
       case None => // Nothing to migrate
     }
   }
@@ -286,6 +295,24 @@ class ZkMigrationClient(
     })
   }
 
+  private def migrateDelegationTokens(
+    recordConsumer: Consumer[util.List[ApiMessageAndVersion]]
+  ): Unit = wrapZkException {
+    val batch = new util.ArrayList[ApiMessageAndVersion]()
+    val tokens = zkClient.getChildren(DelegationTokensZNode.path)
+    for (tokenId <- tokens) {
+      zkClient.getDelegationTokenInfo(tokenId) match {
+        case Some(tokenInformation) =>
+          val newDelegationTokenData = new DelegationTokenData(tokenInformation)
+          batch.add(new ApiMessageAndVersion(newDelegationTokenData.toRecord, 0.toShort))
+        case None =>
+      }
+    }
+    if (!batch.isEmpty) {
+      recordConsumer.accept(batch)
+    }
+  }
+
   override def readAllMetadata(
     batchConsumer: Consumer[util.List[ApiMessageAndVersion]],
     brokerIdConsumer: Consumer[Integer]
@@ -295,10 +322,16 @@ class ZkMigrationClient(
     migrateClientQuotas(batchConsumer)
     migrateProducerId(batchConsumer)
     migrateAcls(batchConsumer)
+    migrateDelegationTokens(batchConsumer)
   }
 
   override def readBrokerIds(): util.Set[Integer] = wrapZkException {
     new util.HashSet[Integer](zkClient.getSortedBrokerList.map(Integer.valueOf).toSet.asJava)
+  }
+
+  override def readProducerId(): util.Optional[ProducerIdsBlock] = {
+    val (dataOpt, _) = zkClient.getDataAndVersion(ProducerIdBlockZNode.path)
+    dataOpt.map(ProducerIdBlockZNode.parseProducerIdBlockData).asJava
   }
 
   override def writeProducerId(
@@ -318,4 +351,6 @@ class ZkMigrationClient(
   override def configClient(): ConfigMigrationClient = configClient
 
   override def aclClient(): AclMigrationClient = aclClient
+
+  override def delegationTokenClient(): DelegationTokenMigrationClient = delegationTokenClient
 }

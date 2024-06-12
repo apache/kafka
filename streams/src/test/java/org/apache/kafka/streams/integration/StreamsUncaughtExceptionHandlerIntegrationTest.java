@@ -80,7 +80,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
     @Rule
     public Timeout globalTimeout = Timeout.seconds(600);
 
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1, new Properties(), 0L, 0L);
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1, new Properties(), Collections.emptyList(), 0L, 0L);
 
     @BeforeClass
     public static void startCluster() throws IOException {
@@ -97,7 +97,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
     @Rule
     public final TestName testName = new TestName();
 
-    private final String testId = safeUniqueTestName(getClass(), testName);
+    private final String testId = safeUniqueTestName(testName);
     private final String appId = "appId_" + testId;
     private final String inputTopic = "input" + testId;
     private final String inputTopic2 = "input2" + testId;

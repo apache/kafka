@@ -23,11 +23,14 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.ConnectorsAndTasks;
+import org.apache.kafka.connect.storage.AppliedConnectorConfig;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -55,6 +58,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class IncrementalCooperativeAssignorTest {
 
     // Offset isn't used in most tests but is required for creating a config snapshot object,
@@ -656,7 +660,7 @@ public class IncrementalCooperativeAssignorTest {
                 .collect(Collectors.toList());
         expectedAssignment.get(0).connectors().addAll(Arrays.asList("connector6", "connector9"));
         expectedAssignment.get(1).connectors().addAll(Arrays.asList("connector7", "connector10"));
-        expectedAssignment.get(2).connectors().addAll(Arrays.asList("connector8"));
+        expectedAssignment.get(2).connectors().add("connector8");
 
         List<String> newConnectors = newConnectors(6, 11);
         assignor.assignConnectors(existingAssignment, newConnectors);
@@ -676,11 +680,11 @@ public class IncrementalCooperativeAssignorTest {
 
         expectedAssignment.get(0).connectors().addAll(Arrays.asList("connector6", "connector9"));
         expectedAssignment.get(1).connectors().addAll(Arrays.asList("connector7", "connector10"));
-        expectedAssignment.get(2).connectors().addAll(Arrays.asList("connector8"));
+        expectedAssignment.get(2).connectors().add("connector8");
 
         expectedAssignment.get(0).tasks().addAll(Arrays.asList(new ConnectorTaskId("task", 6), new ConnectorTaskId("task", 9)));
         expectedAssignment.get(1).tasks().addAll(Arrays.asList(new ConnectorTaskId("task", 7), new ConnectorTaskId("task", 10)));
-        expectedAssignment.get(2).tasks().addAll(Arrays.asList(new ConnectorTaskId("task", 8)));
+        expectedAssignment.get(2).tasks().add(new ConnectorTaskId("task", 8));
 
         List<String> newConnectors = newConnectors(6, 11);
         assignor.assignConnectors(existingAssignment, newConnectors);
@@ -1035,6 +1039,83 @@ public class IncrementalCooperativeAssignorTest {
     }
 
     @Test
+    public void testLostAssignmentHandlingWhenScheduledDelayIsDisabled() {
+        // Customize assignor for this test case
+        rebalanceDelay = 0;
+        time = new MockTime();
+        initAssignor();
+
+        assertTrue(assignor.candidateWorkersForReassignment.isEmpty());
+        assertEquals(0, assignor.scheduledRebalance);
+        assertEquals(0, assignor.delay);
+
+        Map<String, WorkerLoad> configuredAssignment = new HashMap<>();
+        configuredAssignment.put("worker0", workerLoad("worker0", 0, 2, 0, 4));
+        configuredAssignment.put("worker1", workerLoad("worker1", 2, 2, 4, 4));
+        configuredAssignment.put("worker2", workerLoad("worker2", 4, 2, 8, 4));
+
+        // No lost assignments
+        assignor.handleLostAssignments(new ConnectorsAndTasks.Builder().build(),
+                new ConnectorsAndTasks.Builder(),
+                new ArrayList<>(configuredAssignment.values()));
+
+        assertEquals("Wrong set of workers for reassignments",
+                Collections.emptySet(),
+                assignor.candidateWorkersForReassignment);
+        assertEquals(0, assignor.scheduledRebalance);
+        assertEquals(0, assignor.delay);
+
+        assignor.previousMembers = new HashSet<>(configuredAssignment.keySet());
+
+        String veryFlakyWorker = "worker1";
+        WorkerLoad lostLoad = configuredAssignment.remove(veryFlakyWorker);
+        ConnectorsAndTasks lostAssignments = new ConnectorsAndTasks.Builder()
+                .with(lostLoad.connectors(), lostLoad.tasks()).build();
+
+        // Lost assignments detected - Immediately reassigned
+        ConnectorsAndTasks.Builder lostAssignmentsToReassign = new ConnectorsAndTasks.Builder();
+        assignor.handleLostAssignments(lostAssignments, lostAssignmentsToReassign,
+                new ArrayList<>(configuredAssignment.values()));
+
+        assertEquals("Wrong set of workers for reassignments",
+                Collections.emptySet(),
+                assignor.candidateWorkersForReassignment);
+        assertEquals(0, assignor.scheduledRebalance);
+        assertEquals(0, assignor.delay);
+        assertEquals("Wrong assignment of lost connectors",
+                lostAssignments.connectors(), lostAssignmentsToReassign.build().connectors());
+        assertEquals("Wrong assignment of lost tasks",
+                lostAssignments.tasks(), lostAssignmentsToReassign.build().tasks());
+    }
+
+    @Test
+    public void testScheduledDelayIsDisabled() {
+        // Customize assignor for this test case
+        rebalanceDelay = 0;
+        time = new MockTime();
+        initAssignor();
+
+        // First assignment with 2 workers and 2 connectors configured but not yet assigned
+        addNewEmptyWorkers("worker2");
+        performStandardRebalance();
+        assertDelay(0);
+        assertWorkers("worker1", "worker2");
+        assertConnectorAllocations(1, 1);
+        assertTaskAllocations(4, 4);
+        assertBalancedAndCompleteAllocation();
+
+        // Second assignment with only one worker remaining in the group. The worker that left the
+        // group was a follower. Re-assignments take place immediately
+        removeWorkers("worker2");
+        performStandardRebalance();
+        assertDelay(rebalanceDelay);
+        assertWorkers("worker1");
+        assertConnectorAllocations(2);
+        assertTaskAllocations(8);
+        assertBalancedAndCompleteAllocation();
+    }
+
+    @Test
     public void testTaskAssignmentWhenTasksDuplicatedInWorkerAssignment() {
         // First assignment with 1 worker and 2 connectors configured but not yet assigned
         performStandardRebalance();
@@ -1316,6 +1397,11 @@ public class IncrementalCooperativeAssignorTest {
                         Function.identity(),
                         connectorTaskId -> Collections.emptyMap()
                 ));
+        Map<String, AppliedConnectorConfig> appliedConnectorConfigs = connectorConfigs.entrySet().stream()
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        e -> new AppliedConnectorConfig(e.getValue())
+                ));
         return new ClusterConfigState(
                 CONFIG_OFFSET,
                 null,
@@ -1325,6 +1411,7 @@ public class IncrementalCooperativeAssignorTest {
                 taskConfigs,
                 Collections.emptyMap(),
                 Collections.emptyMap(),
+                appliedConnectorConfigs,
                 Collections.emptySet(),
                 Collections.emptySet());
     }

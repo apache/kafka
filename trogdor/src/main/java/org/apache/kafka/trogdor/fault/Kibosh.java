@@ -17,11 +17,12 @@
 
 package org.apache.kafka.trogdor.fault;
 
+import org.apache.kafka.trogdor.common.JsonUtil;
+
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
-import org.apache.kafka.trogdor.common.JsonUtil;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -38,9 +39,7 @@ public final class Kibosh {
 
     public final static String KIBOSH_CONTROL = "kibosh_control";
 
-    @JsonTypeInfo(use = JsonTypeInfo.Id.NAME,
-        include = JsonTypeInfo.As.PROPERTY,
-        property = "type")
+    @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
     @JsonSubTypes({
             @JsonSubTypes.Type(value = KiboshFilesUnreadableFaultSpec.class, name = "unreadable"),
         })

@@ -49,7 +49,7 @@ public final class RecordRedactor {
             case USER_SCRAM_CREDENTIAL_RECORD: {
                 UserScramCredentialRecord record = (UserScramCredentialRecord) message;
                 return "UserScramCredentialRecord("
-                        + "name=" + ((record.name() == null) ? "null" : "'" + record.name().toString() + "'")
+                        + "name=" + ((record.name() == null) ? "null" : "'" + record.name() + "'")
                         + ", mechanism=" + record.mechanism()
                         + ", salt=(redacted)"
                         + ", storedKey=(redacted)"

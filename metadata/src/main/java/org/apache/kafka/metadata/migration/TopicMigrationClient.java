@@ -24,14 +24,13 @@ import org.apache.kafka.metadata.PartitionRegistration;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
+import java.util.Set;
 
 public interface TopicMigrationClient {
 
     enum TopicVisitorInterest {
         TOPICS,
-        PARTITIONS,
-        CONFIGS
+        PARTITIONS
     }
 
     interface TopicVisitor {
@@ -39,12 +38,16 @@ public interface TopicMigrationClient {
         default void visitPartition(TopicIdPartition topicIdPartition, PartitionRegistration partitionRegistration) {
 
         }
-        default void visitConfigs(String topicName, Properties topicProps) {
-
-        }
     }
 
     void iterateTopics(EnumSet<TopicVisitorInterest> interests, TopicVisitor visitor);
+
+    Set<String> readPendingTopicDeletions();
+
+    ZkMigrationLeadershipState clearPendingTopicDeletions(
+        Set<String> pendingTopicDeletions,
+        ZkMigrationLeadershipState state
+    );
 
     ZkMigrationLeadershipState deleteTopic(
         String topicName,
@@ -58,8 +61,25 @@ public interface TopicMigrationClient {
         ZkMigrationLeadershipState state
     );
 
+    ZkMigrationLeadershipState updateTopic(
+        String topicName,
+        Uuid topicId,
+        Map<Integer, PartitionRegistration> topicPartitions,
+        ZkMigrationLeadershipState state
+    );
+
+    ZkMigrationLeadershipState createTopicPartitions(
+        Map<String, Map<Integer, PartitionRegistration>> topicPartitions,
+        ZkMigrationLeadershipState state
+    );
+
     ZkMigrationLeadershipState updateTopicPartitions(
         Map<String, Map<Integer, PartitionRegistration>> topicPartitions,
+        ZkMigrationLeadershipState state
+    );
+
+    ZkMigrationLeadershipState deleteTopicPartitions(
+        Map<String, Set<Integer>> topicPartitions,
         ZkMigrationLeadershipState state
     );
 }

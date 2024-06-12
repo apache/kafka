@@ -182,7 +182,7 @@ public class SaslServerAuthenticator implements Authenticator {
                 throw new IllegalArgumentException("Callback handler not specified for SASL mechanism " + mechanism);
             if (!subjects.containsKey(mechanism))
                 throw new IllegalArgumentException("Subject cannot be null for SASL mechanism " + mechanism);
-            LOG.trace("{} for mechanism={}: {}", BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS, mechanism,
+            LOG.trace("{} for mechanism={}: {}", BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS_CONFIG, mechanism,
                     connectionsMaxReauthMsByMechanism.get(mechanism));
         }
 
@@ -416,6 +416,10 @@ public class SaslServerAuthenticator implements Authenticator {
         return transportLayer.socketChannel().socket().getInetAddress();
     }
 
+    private int clientPort() {
+        return transportLayer.socketChannel().socket().getPort();
+    }
+
     private void handleSaslToken(byte[] clientToken) throws IOException {
         if (!enableKafkaSaslAuthenticateHeaders) {
             byte[] response = saslServer.evaluateResponse(clientToken);
@@ -433,7 +437,7 @@ public class SaslServerAuthenticator implements Authenticator {
             RequestHeader header = RequestHeader.parse(requestBuffer);
             ApiKeys apiKey = header.apiKey();
             short version = header.apiVersion();
-            RequestContext requestContext = new RequestContext(header, connectionId, clientAddress(),
+            RequestContext requestContext = new RequestContext(header, connectionId, clientAddress(), Optional.of(clientPort()),
                     KafkaPrincipal.ANONYMOUS, listenerName, securityProtocol, ClientInformation.EMPTY, false);
             RequestAndSize requestAndSize = requestContext.parseRequest(requestBuffer);
             if (apiKey != ApiKeys.SASL_AUTHENTICATE) {
@@ -519,7 +523,7 @@ public class SaslServerAuthenticator implements Authenticator {
             LOG.debug("Handling Kafka request {} during {}", apiKey, reauthInfo.authenticationOrReauthenticationText());
 
 
-            RequestContext requestContext = new RequestContext(header, connectionId, clientAddress(),
+            RequestContext requestContext = new RequestContext(header, connectionId, clientAddress(), Optional.of(clientPort()),
                     KafkaPrincipal.ANONYMOUS, listenerName, securityProtocol, ClientInformation.EMPTY, false);
             RequestAndSize requestAndSize = requestContext.parseRequest(requestBuffer);
             if (apiKey == ApiKeys.API_VERSIONS)

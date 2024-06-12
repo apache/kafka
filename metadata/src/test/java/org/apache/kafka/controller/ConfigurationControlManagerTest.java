@@ -33,7 +33,6 @@ import org.apache.kafka.server.policy.AlterConfigPolicy;
 import org.apache.kafka.server.policy.AlterConfigPolicy.RequestMetadata;
 
 import java.util.AbstractMap.SimpleImmutableEntry;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -57,6 +56,7 @@ import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
 import static org.apache.kafka.common.metadata.MetadataRecordType.CONFIG_RECORD;
 import static org.apache.kafka.server.config.ConfigSynonym.HOURS_TO_MILLISECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 
 @Timeout(value = 40)
@@ -79,9 +79,9 @@ public class ConfigurationControlManagerTest {
     public static final Map<String, List<ConfigSynonym>> SYNONYMS = new HashMap<>();
 
     static {
-        SYNONYMS.put("abc", Arrays.asList(new ConfigSynonym("foo.bar")));
-        SYNONYMS.put("def", Arrays.asList(new ConfigSynonym("baz")));
-        SYNONYMS.put("quuux", Arrays.asList(new ConfigSynonym("quux", HOURS_TO_MILLISECONDS)));
+        SYNONYMS.put("abc", Collections.singletonList(new ConfigSynonym("foo.bar")));
+        SYNONYMS.put("def", Collections.singletonList(new ConfigSynonym("baz")));
+        SYNONYMS.put("quuux", Collections.singletonList(new ConfigSynonym("quux", HOURS_TO_MILLISECONDS)));
     }
 
     static final KafkaConfigSchema SCHEMA = new KafkaConfigSchema(CONFIGS, SYNONYMS);
@@ -136,6 +136,8 @@ public class ConfigurationControlManagerTest {
             setName("def").setValue("blah"));
         assertEquals(toMap(entry("abc", "x,y,z"), entry("def", "blah")),
             manager.getConfigs(MYTOPIC));
+        assertEquals("x,y,z", manager.getTopicConfig(MYTOPIC.name(), "abc"));
+        assertNull(manager.getTopicConfig(MYTOPIC.name(), "none-exists"));
     }
 
     @Test
@@ -379,7 +381,7 @@ public class ConfigurationControlManagerTest {
         for (ApiMessageAndVersion message : expectedRecords1) {
             manager.replay((ConfigRecord) message.message());
         }
-        assertEquals(ControllerResult.atomicOf(asList(
+        assertEquals(ControllerResult.atomicOf(Collections.singletonList(
             new ApiMessageAndVersion(
                 new ConfigRecord()
                     .setResourceType(TOPIC.id())

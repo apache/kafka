@@ -17,10 +17,12 @@
 package org.apache.kafka.connect.transforms;
 
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.connect.header.Headers;
 import org.apache.kafka.connect.source.SourceRecord;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
@@ -116,5 +118,9 @@ public class InsertHeaderTest {
         return new SourceRecord(sourcePartition, sourceOffset, topic, partition,
                 keySchema, key, valueSchema, value, timestamp, headers);
     }
-}
 
+    @Test
+    public void testInsertHeaderVersionRetrievedFromAppInfoParser() {
+        assertEquals(AppInfoParser.getVersion(), xform.version());
+    }
+}

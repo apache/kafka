@@ -21,7 +21,11 @@ import org.apache.kafka.clients.MetadataUpdater;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.MismatchedEndpointTypeException;
+import org.apache.kafka.common.errors.UnsupportedEndpointTypeException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.LogContext;
@@ -53,6 +57,11 @@ public class AdminMetadataManager {
     private final long metadataExpireMs;
 
     /**
+     * True if we are communicating directly with the controller quorum as specified by KIP-919.
+     */
+    private final boolean usingBootstrapControllers;
+
+    /**
      * Used to update the NetworkClient metadata.
      */
     private final AdminMetadataUpdater updater;
@@ -79,10 +88,9 @@ public class AdminMetadataManager {
     private Cluster cluster = Cluster.empty();
 
     /**
-     * If we got an authorization exception when we last attempted to fetch
-     * metadata, this is it; null, otherwise.
+     * If this is non-null, it is a fatal exception that will terminate all attempts at communication.
      */
-    private AuthenticationException authException = null;
+    private ApiException fatalException = null;
 
     public class AdminMetadataUpdater implements MetadataUpdater {
         @Override
@@ -130,11 +138,21 @@ public class AdminMetadataManager {
         UPDATE_PENDING
     }
 
-    public AdminMetadataManager(LogContext logContext, long refreshBackoffMs, long metadataExpireMs) {
+    public AdminMetadataManager(
+        LogContext logContext,
+        long refreshBackoffMs,
+        long metadataExpireMs,
+        boolean usingBootstrapControllers
+    ) {
         this.log = logContext.logger(AdminMetadataManager.class);
         this.refreshBackoffMs = refreshBackoffMs;
         this.metadataExpireMs = metadataExpireMs;
+        this.usingBootstrapControllers = usingBootstrapControllers;
         this.updater = new AdminMetadataUpdater();
+    }
+
+    public boolean usingBootstrapControllers() {
+        return usingBootstrapControllers;
     }
 
     public AdminMetadataUpdater updater() {
@@ -142,9 +160,9 @@ public class AdminMetadataManager {
     }
 
     public boolean isReady() {
-        if (authException != null) {
-            log.debug("Metadata is not usable: failed to get metadata.", authException);
-            throw authException;
+        if (fatalException != null) {
+            log.debug("Metadata is not usable: failed to get metadata.", fatalException);
+            throw fatalException;
         }
         if (cluster.nodes().isEmpty()) {
             log.trace("Metadata is not ready: bootstrap nodes have not been " +
@@ -230,7 +248,21 @@ public class AdminMetadataManager {
 
         if (exception instanceof AuthenticationException) {
             log.warn("Metadata update failed due to authentication error", exception);
-            this.authException = (AuthenticationException) exception;
+            this.fatalException = (ApiException) exception;
+        } else if (exception instanceof MismatchedEndpointTypeException) {
+            log.warn("Metadata update failed due to mismatched endpoint type error", exception);
+            this.fatalException = (ApiException) exception;
+        } else if (exception instanceof UnsupportedEndpointTypeException) {
+            log.warn("Metadata update failed due to unsupported endpoint type error", exception);
+            this.fatalException = (ApiException) exception;
+        } else if (exception instanceof UnsupportedVersionException) {
+            if (usingBootstrapControllers) {
+                log.warn("The remote node is not a CONTROLLER that supports the KIP-919 " +
+                    "DESCRIBE_CLUSTER api.", exception);
+            } else {
+                log.warn("The remote node is not a BROKER that supports the METADATA api.", exception);
+            }
+            this.fatalException = (ApiException) exception;
         } else {
             log.info("Metadata update failed", exception);
         }
@@ -249,7 +281,7 @@ public class AdminMetadataManager {
         }
 
         this.state = State.QUIESCENT;
-        this.authException = null;
+        this.fatalException = null;
 
         if (!cluster.nodes().isEmpty()) {
             this.cluster = cluster;
