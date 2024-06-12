@@ -925,10 +925,9 @@ public class GroupMetadataManager {
 
         // Create the session timeouts for the new members. If the conversion fails, the group will remain a
         // classic group, thus these timers will fail the group type check and do nothing.
-        consumerGroup.members().forEach((memberId, member) -> {
-            scheduleConsumerGroupSessionTimeout(consumerGroup.groupId(), memberId, member.classicProtocolSessionTimeout().get());
-            scheduleConsumerGroupJoinTimeoutIfAbsent(consumerGroup.groupId(), memberId, member.rebalanceTimeoutMs());
-        });
+        consumerGroup.members().forEach((memberId, __) ->
+            scheduleConsumerGroupSessionTimeout(consumerGroup.groupId(), memberId)
+        );
 
         return consumerGroup;
     }
