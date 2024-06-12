@@ -568,7 +568,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
         }
         byte[] keyBytes = keySerializer.serialize(topic, record.headers(), record.key());
         byte[] valueBytes = valueSerializer.serialize(topic, record.headers(), record.value());
-        return this.partitioner.partition(topic, record.key(), keyBytes, record.value(), valueBytes, cluster);
+        return this.partitioner.partition(topic, record.key(), keyBytes, record.value(), valueBytes, cluster, record.headers());
     }
 
     private static class Completion {
