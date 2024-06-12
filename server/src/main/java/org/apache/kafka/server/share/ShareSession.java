@@ -70,63 +70,45 @@ public class ShareSession {
         return key;
     }
 
-    public int cachedSize() {
-        synchronized (this) {
-            return cachedSize;
-        }
+    synchronized public int cachedSize() {
+        return cachedSize;
     }
 
-    public void cachedSize(int size) {
-        synchronized (this) {
-            cachedSize = size;
-        }
+    synchronized public void cachedSize(int size) {
+        cachedSize = size;
     }
 
-    public long lastUsedMs() {
-        synchronized (this) {
-            return lastUsedMs;
-        }
+    synchronized public long lastUsedMs() {
+        return lastUsedMs;
     }
 
-    public void lastUsedMs(long ts) {
-        synchronized (this) {
-            lastUsedMs = ts;
-        }
+    synchronized public void lastUsedMs(long ts) {
+        lastUsedMs = ts;
     }
 
-    public ImplicitLinkedHashCollection<CachedSharePartition> partitionMap() {
-        synchronized (this) {
-            return partitionMap;
-        }
+    synchronized public ImplicitLinkedHashCollection<CachedSharePartition> partitionMap() {
+        return partitionMap;
     }
 
     // Visible for testing
-    public int epoch() {
-        synchronized (this) {
-            return epoch;
-        }
+    synchronized public int epoch() {
+        return epoch;
     }
 
-    public int size() {
-        synchronized (this) {
-            return partitionMap.size();
-        }
+    synchronized public int size() {
+        return partitionMap.size();
     }
 
-    public Boolean isEmpty() {
-        synchronized (this) {
-            return partitionMap.isEmpty();
-        }
+    synchronized public Boolean isEmpty() {
+        return partitionMap.isEmpty();
     }
 
-    public LastUsedKey lastUsedKey() {
-        synchronized (this) {
-            return new LastUsedKey(key, lastUsedMs);
-        }
+    synchronized public LastUsedKey lastUsedKey() {
+        return new LastUsedKey(key, lastUsedMs);
     }
 
     // Visible for testing
-    public long creationMs() {
+    synchronized public long creationMs() {
         return creationMs;
     }
 
