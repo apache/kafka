@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.tiered.storage.actions;
 
-import org.apache.kafka.tiered.storage.TieredStorageTestAction;
-import org.apache.kafka.tiered.storage.TieredStorageTestContext;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.storage.internals.log.EpochEntry;
+import org.apache.kafka.tiered.storage.TieredStorageTestAction;
+import org.apache.kafka.tiered.storage.TieredStorageTestContext;
 
 import java.io.PrintStream;
 import java.util.Collections;

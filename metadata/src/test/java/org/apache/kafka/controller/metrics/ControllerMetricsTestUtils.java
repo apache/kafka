@@ -17,13 +17,14 @@
 
 package org.apache.kafka.controller.metrics;
 
-import com.yammer.metrics.core.MetricsRegistry;
 import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
+
+import com.yammer.metrics.core.MetricsRegistry;
 
 import java.util.HashMap;
 import java.util.Map;

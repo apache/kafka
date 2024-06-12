@@ -33,6 +33,7 @@ import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

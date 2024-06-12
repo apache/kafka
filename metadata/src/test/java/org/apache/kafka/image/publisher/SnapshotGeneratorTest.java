@@ -27,6 +27,7 @@ import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.server.fault.FaultHandlerException;
 import org.apache.kafka.server.fault.MockFaultHandler;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 

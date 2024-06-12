@@ -17,7 +17,6 @@
 
 package org.apache.kafka.server;
 
-import com.yammer.metrics.core.Gauge;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.AssignReplicasToDirsRequestData;
@@ -36,6 +35,9 @@ import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.server.common.TopicIdPartition;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
+
+import com.yammer.metrics.core.Gauge;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

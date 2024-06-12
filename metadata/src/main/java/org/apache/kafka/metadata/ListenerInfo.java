@@ -23,6 +23,7 @@ import org.apache.kafka.common.message.ControllerRegistrationRequestData;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RegisterControllerRecord;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

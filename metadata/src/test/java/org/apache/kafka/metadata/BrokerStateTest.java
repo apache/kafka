@@ -17,10 +17,10 @@
 
 package org.apache.kafka.metadata;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(value = 40)
 public class BrokerStateTest {

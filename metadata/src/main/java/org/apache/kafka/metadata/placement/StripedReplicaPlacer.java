@@ -17,6 +17,9 @@
 
 package org.apache.kafka.metadata.placement;
 
+import org.apache.kafka.common.errors.InvalidReplicationFactorException;
+import org.apache.kafka.metadata.OptionalStringComparator;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -26,9 +29,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.stream.Collectors;
-
-import org.apache.kafka.common.errors.InvalidReplicationFactorException;
-import org.apache.kafka.metadata.OptionalStringComparator;
 
 
 /**

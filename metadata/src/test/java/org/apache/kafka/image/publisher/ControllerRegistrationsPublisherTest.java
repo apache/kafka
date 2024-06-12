@@ -26,6 +26,7 @@ import org.apache.kafka.image.loader.SnapshotManifest;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.server.common.MetadataVersion;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;

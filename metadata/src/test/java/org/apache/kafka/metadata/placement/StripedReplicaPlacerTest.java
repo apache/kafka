@@ -23,6 +23,7 @@ import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer.BrokerList;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer.RackList;
 import org.apache.kafka.server.util.MockRandom;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 

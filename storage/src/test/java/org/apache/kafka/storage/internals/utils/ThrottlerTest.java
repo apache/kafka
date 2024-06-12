@@ -18,10 +18,11 @@ package org.apache.kafka.storage.internals.utils;
 
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.util.MockTime;
+
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 class ThrottlerTest {

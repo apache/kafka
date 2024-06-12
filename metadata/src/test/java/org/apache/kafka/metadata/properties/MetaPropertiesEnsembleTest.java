@@ -17,6 +17,11 @@
 
 package org.apache.kafka.metadata.properties;
 
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.test.TestUtils;
+
+import org.junit.jupiter.api.Test;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -35,10 +40,6 @@ import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import org.apache.kafka.common.Uuid;
-import org.apache.kafka.test.TestUtils;
-import org.junit.jupiter.api.Test;
 
 import static org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.EMPTY;
 import static org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.META_PROPERTIES_NAME;

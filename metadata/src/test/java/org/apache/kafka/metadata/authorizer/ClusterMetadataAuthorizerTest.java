@@ -34,6 +34,7 @@ import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.apache.kafka.server.authorizer.AuthorizerServerInfo;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 

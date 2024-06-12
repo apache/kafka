@@ -23,6 +23,7 @@ import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.Resource;
 import org.apache.kafka.common.resource.ResourceType;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 

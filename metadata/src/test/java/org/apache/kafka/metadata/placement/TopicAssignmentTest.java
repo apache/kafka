@@ -17,16 +17,17 @@
 
 package org.apache.kafka.metadata.placement;
 
-import static org.apache.kafka.metadata.placement.PartitionAssignmentTest.partitionAssignment;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-
 import org.apache.kafka.common.Uuid;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+
+import static org.apache.kafka.metadata.placement.PartitionAssignmentTest.partitionAssignment;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 public class TopicAssignmentTest {
 

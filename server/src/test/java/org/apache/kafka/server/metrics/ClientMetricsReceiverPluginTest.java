@@ -19,6 +19,7 @@ package org.apache.kafka.server.metrics;
 import org.apache.kafka.common.message.PushTelemetryRequestData;
 import org.apache.kafka.common.requests.PushTelemetryRequest;
 import org.apache.kafka.server.metrics.ClientMetricsTestUtils.TestClientMetricsReceiver;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

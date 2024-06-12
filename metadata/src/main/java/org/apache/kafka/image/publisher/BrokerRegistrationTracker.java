@@ -23,6 +23,7 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.loader.LoaderManifest;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.server.common.MetadataVersion;
+
 import org.slf4j.Logger;
 
 /**

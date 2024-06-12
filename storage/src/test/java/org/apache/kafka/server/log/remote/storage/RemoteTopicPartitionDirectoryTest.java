@@ -17,15 +17,16 @@
 package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.Uuid;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.List;
 
-import static org.apache.kafka.server.log.remote.storage.RemoteTopicPartitionDirectory.substr;
-import static org.apache.kafka.server.log.remote.storage.RemoteTopicPartitionDirectory.GROUP_UUID;
 import static org.apache.kafka.server.log.remote.storage.RemoteTopicPartitionDirectory.GROUP_PARTITION;
 import static org.apache.kafka.server.log.remote.storage.RemoteTopicPartitionDirectory.GROUP_TOPIC;
+import static org.apache.kafka.server.log.remote.storage.RemoteTopicPartitionDirectory.GROUP_UUID;
+import static org.apache.kafka.server.log.remote.storage.RemoteTopicPartitionDirectory.substr;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class RemoteTopicPartitionDirectoryTest {

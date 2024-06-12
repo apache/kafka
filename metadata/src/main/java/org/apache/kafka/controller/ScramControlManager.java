@@ -46,9 +46,9 @@ import java.util.Objects;
 import static org.apache.kafka.common.protocol.Errors.DUPLICATE_RESOURCE;
 import static org.apache.kafka.common.protocol.Errors.NONE;
 import static org.apache.kafka.common.protocol.Errors.RESOURCE_NOT_FOUND;
-import static org.apache.kafka.common.protocol.Errors.UNSUPPORTED_VERSION;
 import static org.apache.kafka.common.protocol.Errors.UNACCEPTABLE_CREDENTIAL;
 import static org.apache.kafka.common.protocol.Errors.UNSUPPORTED_SASL_MECHANISM;
+import static org.apache.kafka.common.protocol.Errors.UNSUPPORTED_VERSION;
 
 
 /**

@@ -17,11 +17,12 @@
 
 package org.apache.kafka.metadata;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.DelegationTokenRecord;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 

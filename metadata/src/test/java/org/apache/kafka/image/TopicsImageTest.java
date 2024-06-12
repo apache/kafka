@@ -29,8 +29,9 @@ import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
-import org.apache.kafka.server.immutable.ImmutableMap;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.immutable.ImmutableMap;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 

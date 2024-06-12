@@ -28,6 +28,7 @@ import org.apache.kafka.image.writer.RaftSnapshotWriter;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.snapshot.SnapshotWriter;
+
 import org.slf4j.Logger;
 
 import java.util.Optional;

@@ -21,6 +21,7 @@ import org.apache.kafka.image.node.printer.MetadataNodeRedactionCriteria.Disable
 import org.apache.kafka.image.node.printer.NodeStringifier;
 import org.apache.kafka.metadata.ScramCredentialData;
 import org.apache.kafka.server.util.MockRandom;
+
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

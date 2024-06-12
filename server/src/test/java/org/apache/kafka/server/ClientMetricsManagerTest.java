@@ -37,6 +37,7 @@ import org.apache.kafka.server.metrics.ClientMetricsReceiverPlugin;
 import org.apache.kafka.server.metrics.ClientMetricsTestUtils;
 import org.apache.kafka.server.util.timer.SystemTimer;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

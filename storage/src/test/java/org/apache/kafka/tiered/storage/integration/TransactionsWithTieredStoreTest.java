@@ -19,12 +19,13 @@ package org.apache.kafka.tiered.storage.integration;
 import kafka.api.TransactionsTest;
 import kafka.server.HostedPartition;
 import kafka.server.KafkaBroker;
+
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tiered.storage.utils.BrokerLocalStorage;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
-import scala.collection.JavaConverters;
 
 import java.util.HashMap;
 import java.util.List;
@@ -34,9 +35,11 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
+import scala.collection.JavaConverters;
+
+import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.STORAGE_WAIT_TIMEOUT_SEC;
 import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.createPropsForRemoteStorage;
 import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.createTopicConfigForRemoteStorage;
-import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.STORAGE_WAIT_TIMEOUT_SEC;
 
 public class TransactionsWithTieredStoreTest extends TransactionsTest {
 

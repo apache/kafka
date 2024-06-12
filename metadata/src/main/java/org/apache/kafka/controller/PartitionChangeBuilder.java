@@ -17,6 +17,20 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.common.DirectoryId;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState;
+import org.apache.kafka.common.metadata.PartitionChangeRecord;
+import org.apache.kafka.metadata.LeaderRecoveryState;
+import org.apache.kafka.metadata.PartitionRegistration;
+import org.apache.kafka.metadata.Replicas;
+import org.apache.kafka.metadata.placement.DefaultDirProvider;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -28,18 +42,6 @@ import java.util.Set;
 import java.util.function.IntPredicate;
 import java.util.stream.Collectors;
 
-import org.apache.kafka.common.DirectoryId;
-import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState;
-import org.apache.kafka.common.metadata.PartitionChangeRecord;
-import org.apache.kafka.metadata.LeaderRecoveryState;
-import org.apache.kafka.metadata.PartitionRegistration;
-import org.apache.kafka.metadata.Replicas;
-import org.apache.kafka.metadata.placement.DefaultDirProvider;
-import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.MetadataVersion;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
 

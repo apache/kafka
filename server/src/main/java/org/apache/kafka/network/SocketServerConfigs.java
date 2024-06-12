@@ -19,6 +19,7 @@ package org.apache.kafka.network;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.server.config.ReplicationConfigs;
+
 import java.util.Arrays;
 import java.util.stream.Collectors;
 

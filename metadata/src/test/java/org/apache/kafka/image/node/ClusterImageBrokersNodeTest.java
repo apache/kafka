@@ -22,6 +22,7 @@ import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.server.common.MetadataVersion;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 

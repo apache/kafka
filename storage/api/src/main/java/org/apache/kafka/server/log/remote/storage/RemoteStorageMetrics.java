@@ -16,8 +16,9 @@
  */
 package org.apache.kafka.server.log.remote.storage;
 
-import com.yammer.metrics.core.MetricName;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
+
+import com.yammer.metrics.core.MetricName;
 
 import java.util.Arrays;
 import java.util.Collections;

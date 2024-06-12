@@ -26,6 +26,7 @@ import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.image.loader.LogDeltaManifest;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.server.common.MetadataVersion;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;

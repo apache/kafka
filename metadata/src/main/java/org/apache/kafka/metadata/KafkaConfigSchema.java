@@ -24,13 +24,13 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
+import org.apache.kafka.server.config.ConfigSynonym;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
-import org.apache.kafka.server.config.ConfigSynonym;
 
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;

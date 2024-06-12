@@ -23,6 +23,7 @@ import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;

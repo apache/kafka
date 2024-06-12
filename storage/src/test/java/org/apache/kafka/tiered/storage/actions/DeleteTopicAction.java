@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.tiered.storage.actions;
 
+import org.apache.kafka.server.log.remote.storage.LocalTieredStorage;
+import org.apache.kafka.server.log.remote.storage.LocalTieredStorageCondition;
 import org.apache.kafka.tiered.storage.TieredStorageTestAction;
 import org.apache.kafka.tiered.storage.TieredStorageTestContext;
 import org.apache.kafka.tiered.storage.specs.RemoteDeleteSegmentSpec;
-import org.apache.kafka.server.log.remote.storage.LocalTieredStorage;
-import org.apache.kafka.server.log.remote.storage.LocalTieredStorageCondition;
 
 import java.io.PrintStream;
 import java.util.List;
@@ -30,8 +30,8 @@ import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageCondition.expectEvent;
-import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.DELETE_SEGMENT;
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.DELETE_PARTITION;
+import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.DELETE_SEGMENT;
 
 public final class DeleteTopicAction implements TieredStorageTestAction {
 
