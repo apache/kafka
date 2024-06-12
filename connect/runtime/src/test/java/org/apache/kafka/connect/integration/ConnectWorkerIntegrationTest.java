@@ -172,9 +172,6 @@ public class ConnectWorkerIntegrationTest {
         // set up props for the source connector
         Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
 
-        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
-                "Initial group of workers did not start in time.");
-
         // start a source connector
         connect.configureConnector(CONNECTOR_NAME, props);
 

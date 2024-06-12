@@ -189,7 +189,7 @@ public class SourceConnectorsIntegrationTest {
         workerProps.put(TOPIC_CREATION_ENABLE_CONFIG, String.valueOf(true));
 
         IntStream.range(0, 3).forEach(i -> connect.addWorker());
-        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS, "Initial group of workers did not start in time.");
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS, "Workers did not start in time after cluster was rolled.");
 
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(FOO_CONNECTOR, NUM_TASKS,
                 "Connector tasks did not start in time.");

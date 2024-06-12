@@ -122,23 +122,6 @@ abstract class EmbeddedConnect {
      * and wait for the Kafka and Connect clusters to become healthy.
      */
     public void start() {
-        start(true);
-    }
-
-    /**
-     * Start the Connect cluster and the embedded Kafka and Zookeeper cluster.
-     * <p>
-     * Note that in most cases, {@link #start()} is preferable. This method should only
-     * be used if it is expected that either Connect or the underlying Kafka cluster will
-     * not be able to complete startup successfully.
-     *
-     * @param awaitStartupCompletion whether to
-     *                               {@link ConnectAssertions#assertExactlyNumBrokersAreUp(int, String) await}
-     *                               the successful startup of each broker in the Kafka cluster, and
-     *                               {@link ConnectAssertions#assertExactlyNumWorkersAreUp(int, String) await}
-     *                               the successful startup of each worker in the Connect cluster
-     */
-    public void start(boolean awaitStartupCompletion) {
         if (maskExitProcedures) {
             Exit.setExitProcedure(exitProcedure);
             Exit.setHaltProcedure(haltProcedure);
@@ -151,27 +134,25 @@ abstract class EmbeddedConnect {
             throw new ConnectException("Failed to start HTTP client", e);
         }
 
-        if (awaitStartupCompletion) {
-            try {
-                if (numBrokers > 0) {
-                    assertions().assertExactlyNumBrokersAreUp(
-                            numBrokers,
-                            "Kafka cluster did not start in time"
-                    );
-                    log.info("Completed startup of {} Kafka brokers", numBrokers);
-                }
-
-                int numWorkers = workers().size();
-                if (numWorkers > 0) {
-                    assertions().assertExactlyNumWorkersAreUp(
-                            numWorkers,
-                            "Connect cluster did not start in time"
-                    );
-                    log.info("Completed startup of {} Connect workers", numWorkers);
-                }
-            } catch (InterruptedException e) {
-                throw new RuntimeException("Interrupted while awaiting cluster startup", e);
+        try {
+            if (numBrokers > 0) {
+                assertions().assertExactlyNumBrokersAreUp(
+                        numBrokers,
+                        "Kafka cluster did not start in time"
+                );
+                log.info("Completed startup of {} Kafka brokers", numBrokers);
             }
+
+            int numWorkers = workers().size();
+            if (numWorkers > 0) {
+                assertions().assertExactlyNumWorkersAreUp(
+                        numWorkers,
+                        "Connect cluster did not start in time"
+                );
+                log.info("Completed startup of {} Connect workers", numWorkers);
+            }
+        } catch (InterruptedException e) {
+            throw new RuntimeException("Interrupted while awaiting cluster startup", e);
         }
     }
 
