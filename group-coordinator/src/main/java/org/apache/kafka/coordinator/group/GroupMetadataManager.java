@@ -38,6 +38,7 @@ import org.apache.kafka.common.errors.UnreleasedInstanceIdException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.ConsumerProtocolSubscription;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
@@ -1288,13 +1289,13 @@ public class GroupMetadataManager {
      * All the protocols have the same subscription, so the method picks a random one.
      *
      * @param protocols The JoinGroupRequestProtocolCollection.
-     * @return The Subscription.
+     * @return The ConsumerProtocolSubscription.
      */
-    private static ConsumerPartitionAssignor.Subscription deserializeSubscription(
+    private static ConsumerProtocolSubscription deserializeSubscription(
         JoinGroupRequestProtocolCollection protocols
     ) {
         try {
-            return ConsumerProtocol.deserializeSubscription(
+            return ConsumerProtocol.deserializeConsumerProtocolSubscription(
                 ByteBuffer.wrap(protocols.iterator().next().metadata())
             );
         } catch (SchemaException e) {
@@ -1303,23 +1304,24 @@ public class GroupMetadataManager {
     }
 
     /**
-     * @return The ConsumerGroupHeartbeatRequestData.TopicPartitions list converted from the TopicPartitions list.
+     * @return The ConsumerGroupHeartbeatRequestData.TopicPartitions list converted from the TopicPartitions collection.
      */
     private static List<ConsumerGroupHeartbeatRequestData.TopicPartitions> toTopicPartitions(
-        List<TopicPartition> partitions,
+        ConsumerProtocolSubscription.TopicPartitionCollection topicPartitionCollection,
         TopicsImage topicsImage
     ) {
-        Map<Uuid, ConsumerGroupHeartbeatRequestData.TopicPartitions> topicPartitionMap = new HashMap<>();
-        partitions.forEach(topicPartition -> {
-            TopicImage topicImage = topicsImage.getTopic(topicPartition.topic());
+        List<ConsumerGroupHeartbeatRequestData.TopicPartitions> res = new ArrayList<>();
+        for (ConsumerProtocolSubscription.TopicPartition tp : topicPartitionCollection) {
+            TopicImage topicImage = topicsImage.getTopic(tp.topic());
             if (topicImage != null) {
-                topicPartitionMap
-                    .computeIfAbsent(topicImage.id(), __ -> new ConsumerGroupHeartbeatRequestData.TopicPartitions().setTopicId(topicImage.id()))
-                    .partitions()
-                    .add(topicPartition.partition());
+                res.add(
+                    new ConsumerGroupHeartbeatRequestData.TopicPartitions()
+                        .setTopicId(topicImage.id())
+                        .setPartitions(tp.partitions())
+                );
             }
-        });
-        return new ArrayList<>(topicPartitionMap.values());
+        }
+        return res;
     }
 
     /**
@@ -1648,9 +1650,11 @@ public class GroupMetadataManager {
         Map<String, TopicMetadata> subscriptionMetadata = group.subscriptionMetadata();
         Map<String, Integer> subscribedTopicNamesMap = group.subscribedTopicNames();
         SubscriptionType subscriptionType = group.subscriptionType();
-        final ConsumerPartitionAssignor.Subscription subscription = deserializeSubscription(protocols);
+        final ConsumerProtocolSubscription subscription = deserializeSubscription(protocols);
         final List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions =
             toTopicPartitions(subscription.ownedPartitions(), metadataImage.topics());
+        final Optional<String> rackId = subscription.rackId() == null || subscription.rackId().isEmpty() ?
+            Optional.empty() : Optional.of(subscription.rackId());
 
         // 1. Create or update the member. If the member is new or has changed, a ConsumerGroupMemberMetadataValue
         // record is written to the __consumer_offsets partition to persist the change. If the subscriptions have
@@ -1659,7 +1663,7 @@ public class GroupMetadataManager {
         // changed, and persisted by writing a ConsumerGroupMetadataValue record to the partition.
         ConsumerGroupMember updatedMember = updatedMemberBuilder
             .maybeUpdateInstanceId(Optional.ofNullable(instanceId))
-            .maybeUpdateRackId(subscription.rackId())
+            .maybeUpdateRackId(rackId)
             .maybeUpdateRebalanceTimeoutMs(ofSentinel(request.rebalanceTimeoutMs()))
             .maybeUpdateServerAssignorName(Optional.empty())
             .maybeUpdateSubscribedTopicNames(Optional.ofNullable(subscription.topics()))

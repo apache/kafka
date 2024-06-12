@@ -125,6 +125,25 @@ public class ConsumerProtocol {
         return deserializeSubscription(buffer, deserializeVersion(buffer));
     }
 
+    public static ConsumerProtocolSubscription deserializeConsumerProtocolSubscription(
+        final ByteBuffer buffer,
+        short version
+    ) {
+        version = checkSubscriptionVersion(version);
+
+        try {
+            return new ConsumerProtocolSubscription(new ByteBufferAccessor(buffer), version);
+        } catch (BufferUnderflowException e) {
+            throw new SchemaException("Buffer underflow while parsing consumer protocol's subscription", e);
+        }
+    }
+
+    public static ConsumerProtocolSubscription deserializeConsumerProtocolSubscription(
+        final ByteBuffer buffer
+    ) {
+        return deserializeConsumerProtocolSubscription(buffer, deserializeVersion(buffer));
+    }
+
     public static ByteBuffer serializeAssignment(final Assignment assignment) {
         return serializeAssignment(assignment, ConsumerProtocolAssignment.HIGHEST_SUPPORTED_VERSION);
     }
