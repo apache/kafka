@@ -34,6 +34,7 @@ import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Quota;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
@@ -247,6 +248,16 @@ public class RemoteLogManager implements Closeable {
 
     public void resizeCacheSize(long remoteLogIndexFileCacheSize) {
         indexCache.resizeCacheSize(remoteLogIndexFileCacheSize);
+    }
+
+    public void updateCopyQuota(long quota) {
+        LOGGER.info("Updating remote copy quota to {} bytes per second", quota);
+        rlmCopyQuotaManager.updateQuota(new Quota(quota, true));
+    }
+
+    public void updateFetchQuota(long quota) {
+        LOGGER.info("Updating remote fetch quota to {} bytes per second", quota);
+        rlmFetchQuotaManager.updateQuota(new Quota(quota, true));
     }
 
     private void removeMetrics() {
