@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.tools.reassign;
 
-import com.fasterxml.jackson.core.JsonParseException;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonMappingException;
-import joptsimple.OptionSpec;
 import org.apache.kafka.admin.AdminUtils;
 import org.apache.kafka.admin.BrokerMetadata;
 import org.apache.kafka.clients.admin.Admin;
@@ -51,6 +47,10 @@ import org.apache.kafka.server.util.json.JsonValue;
 import org.apache.kafka.tools.TerseException;
 import org.apache.kafka.tools.ToolsUtils;
 
+import com.fasterxml.jackson.core.JsonParseException;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonMappingException;
+
 import java.io.IOException;
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
@@ -71,6 +71,8 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
+
+import joptsimple.OptionSpec;
 
 @SuppressWarnings("ClassDataAbstractionCoupling")
 public class ReassignPartitionsCommand {
@@ -488,12 +490,12 @@ public class ReassignPartitionsCommand {
         targetParts.forEach(t -> brokers.addAll(t.getValue()));
 
         System.out.printf("Clearing broker-level throttles on broker%s %s%n",
-            brokers.size() == 1 ? "" : "s", Utils.join(brokers, ","));
+            brokers.size() == 1 ? "" : "s", brokers.stream().map(Object::toString).collect(Collectors.joining(",")));
         clearBrokerLevelThrottles(adminClient, brokers);
 
         Set<String> topics = targetParts.stream().map(t -> t.getKey().topic()).collect(Collectors.toSet());
         System.out.printf("Clearing topic-level throttles on topic%s %s%n",
-            topics.size() == 1 ? "" : "s", Utils.join(topics, ","));
+            topics.size() == 1 ? "" : "s", String.join(",", topics));
         clearTopicLevelThrottles(adminClient, topics);
     }
 

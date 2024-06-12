@@ -65,15 +65,13 @@ class KafkaRaftServer(
     metaPropsEnsemble.clusterId().get()
   )
 
-  private val controllerQuorumVotersFuture = CompletableFuture.completedFuture(
-    QuorumConfig.parseVoterConnections(config.quorumVoters))
-
   private val sharedServer = new SharedServer(
     config,
     metaPropsEnsemble,
     time,
     metrics,
-    controllerQuorumVotersFuture,
+    CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumVoters)),
+    QuorumConfig.parseBootstrapServers(config.quorumBootstrapServers),
     new StandardFaultHandlerFactory(),
   )
 
@@ -122,7 +120,7 @@ object KafkaRaftServer {
   val MetadataTopicId = Uuid.METADATA_TOPIC_ID
 
   /**
-   * Initialize the configured log directories, including both [[KafkaConfig.MetadataLogDirProp]]
+   * Initialize the configured log directories, including both [[KRaftConfigs.MetadataLogDirProp]]
    * and [[KafkaConfig.LOG_DIR_PROP]]. This method performs basic validation to ensure that all
    * directories are accessible and have been initialized with consistent `meta.properties`.
    *

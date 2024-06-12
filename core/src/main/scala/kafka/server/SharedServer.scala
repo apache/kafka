@@ -31,16 +31,18 @@ import org.apache.kafka.image.publisher.{SnapshotEmitter, SnapshotGenerator}
 import org.apache.kafka.image.publisher.metrics.SnapshotEmitterMetrics
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble
-import org.apache.kafka.raft.QuorumConfig.AddressSpec
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.fault.{FaultHandler, LoggingFaultHandler, ProcessTerminatingFaultHandler}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 
-import java.util
+import java.net.InetSocketAddress
+import java.util.Arrays
 import java.util.Optional
-import java.util.concurrent.{CompletableFuture, TimeUnit}
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.{CompletableFuture, TimeUnit}
+import java.util.{Collection => JCollection}
+import java.util.{Map => JMap}
 
 
 /**
@@ -92,7 +94,8 @@ class SharedServer(
   val metaPropsEnsemble: MetaPropertiesEnsemble,
   val time: Time,
   private val _metrics: Metrics,
-  val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
+  val controllerQuorumVotersFuture: CompletableFuture[JMap[Integer, InetSocketAddress]],
+  val bootstrapServers: JCollection[InetSocketAddress],
   val faultHandlerFactory: FaultHandlerFactory
 ) extends Logging {
   private val logContext: LogContext = new LogContext(s"[SharedServer id=${sharedServerConfig.nodeId}] ")
@@ -256,6 +259,7 @@ class SharedServer(
         val _raftManager = new KafkaRaftManager[ApiMessageAndVersion](
           clusterId,
           sharedServerConfig,
+          metaPropsEnsemble.logDirProps.get(metaPropsEnsemble.metadataLogDir.get).directoryId.get,
           new MetadataRecordSerde,
           KafkaRaftServer.MetadataPartition,
           KafkaRaftServer.MetadataTopicId,
@@ -263,6 +267,7 @@ class SharedServer(
           metrics,
           Some(s"kafka-${sharedServerConfig.nodeId}-raft"), // No dash expected at the end
           controllerQuorumVotersFuture,
+          bootstrapServers,
           raftManagerFaultHandler
         )
         raftManager = _raftManager
@@ -303,7 +308,7 @@ class SharedServer(
           setThreadNamePrefix(s"kafka-${sharedServerConfig.nodeId}-").
           build()
         try {
-          loader.installPublishers(util.Arrays.asList(snapshotGenerator)).get()
+          loader.installPublishers(Arrays.asList(snapshotGenerator)).get()
         } catch {
           case t: Throwable => {
             error("Unable to install metadata publishers", t)

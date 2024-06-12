@@ -17,14 +17,15 @@
 
 package org.apache.kafka.timeline;
 
+import org.apache.kafka.common.utils.LogContext;
+
+import org.slf4j.Logger;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.stream.Collectors;
-
-import org.apache.kafka.common.utils.LogContext;
-import org.slf4j.Logger;
 
 
 /**

@@ -105,7 +105,7 @@ public class OffsetsRequestManagerTest {
     public void setup() {
         LogContext logContext = new LogContext();
         backgroundEventQueue = new LinkedBlockingQueue<>();
-        BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(logContext, backgroundEventQueue);
+        BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
         metadata = mock(ConsumerMetadata.class);
         subscriptionState = mock(SubscriptionState.class);
         time = new MockTime(0);

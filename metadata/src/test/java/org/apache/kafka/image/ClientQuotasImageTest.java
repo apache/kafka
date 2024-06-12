@@ -73,13 +73,13 @@ public class ClientQuotasImageTest {
                 setRemove(true), CLIENT_QUOTA_RECORD.highestSupportedVersion()));
         // alter quota
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new ClientQuotaRecord().
-            setEntity(Arrays.asList(
+            setEntity(Collections.singletonList(
                 new EntityData().setEntityType(ClientQuotaEntity.USER).setEntityName("foo"))).
             setKey(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG).
             setValue(234.0), CLIENT_QUOTA_RECORD.highestSupportedVersion()));
         // add quota to entity with existing quota
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new ClientQuotaRecord().
-            setEntity(Arrays.asList(
+            setEntity(Collections.singletonList(
                 new EntityData().setEntityType(ClientQuotaEntity.USER).setEntityName("foo"))).
             setKey(QuotaConfigs.CONSUMER_BYTE_RATE_OVERRIDE_CONFIG).
             setValue(999.0), CLIENT_QUOTA_RECORD.highestSupportedVersion()));

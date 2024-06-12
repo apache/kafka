@@ -39,8 +39,8 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
-import org.apache.kafka.coordinator.group.Record;
-import org.apache.kafka.coordinator.group.RecordHelpers;
+import org.apache.kafka.coordinator.group.CoordinatorRecord;
+import org.apache.kafka.coordinator.group.CoordinatorRecordHelpers;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.image.MetadataImage;
@@ -824,13 +824,15 @@ public class ClassicGroup implements Group {
      * @param groupInstanceId   The group instance id.
      * @param generationId      The generation id.
      * @param isTransactional   Whether the offset commit is transactional or not.
+     * @param apiVersion        The api version.
      */
     @Override
     public void validateOffsetCommit(
         String memberId,
         String groupInstanceId,
         int generationId,
-        boolean isTransactional
+        boolean isTransactional,
+        short apiVersion
     ) throws CoordinatorNotAvailableException, UnknownMemberIdException, IllegalGenerationException, FencedInstanceIdException {
         if (isInState(DEAD)) {
             throw Errors.COORDINATOR_NOT_AVAILABLE.exception();
@@ -927,8 +929,8 @@ public class ClassicGroup implements Group {
      * @param records The list of records.
      */
     @Override
-    public void createGroupTombstoneRecords(List<Record> records) {
-        records.add(RecordHelpers.newGroupMetadataTombstoneRecord(groupId()));
+    public void createGroupTombstoneRecords(List<CoordinatorRecord> records) {
+        records.add(CoordinatorRecordHelpers.newGroupMetadataTombstoneRecord(groupId()));
     }
 
     @Override
@@ -1366,7 +1368,6 @@ public class ClassicGroup implements Group {
      * @param leavingMemberId               The member that will not be converted in the ClassicGroup.
      * @param logContext                    The logContext to create the ClassicGroup.
      * @param time                          The time to create the ClassicGroup.
-     * @param consumerGroupSessionTimeoutMs The consumerGroupSessionTimeoutMs.
      * @param metadataImage                 The MetadataImage.
      * @return  The created ClassicGroup.
      */
@@ -1376,7 +1377,6 @@ public class ClassicGroup implements Group {
         LogContext logContext,
         Time time,
         GroupCoordinatorMetricsShard metrics,
-        int consumerGroupSessionTimeoutMs,
         MetadataImage metadataImage
     ) {
         ClassicGroup classicGroup = new ClassicGroup(
@@ -1401,7 +1401,7 @@ public class ClassicGroup implements Group {
                         member.clientId(),
                         member.clientHost(),
                         member.rebalanceTimeoutMs(),
-                        consumerGroupSessionTimeoutMs,
+                        member.classicProtocolSessionTimeout().get(),
                         ConsumerProtocol.PROTOCOL_TYPE,
                         member.supportedJoinGroupRequestProtocols(),
                         null
@@ -1440,14 +1440,14 @@ public class ClassicGroup implements Group {
      */
     public void createClassicGroupRecords(
         MetadataVersion metadataVersion,
-        List<Record> records
+        List<CoordinatorRecord> records
     ) {
         Map<String, byte[]> assignments = new HashMap<>();
         allMembers().forEach(classicGroupMember ->
             assignments.put(classicGroupMember.memberId(), classicGroupMember.assignment())
         );
 
-        records.add(RecordHelpers.newGroupMetadataRecord(this, assignments, metadataVersion));
+        records.add(CoordinatorRecordHelpers.newGroupMetadataRecord(this, assignments, metadataVersion));
     }
 
     /**

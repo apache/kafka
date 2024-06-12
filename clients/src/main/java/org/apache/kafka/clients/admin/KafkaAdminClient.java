@@ -97,6 +97,7 @@ import org.apache.kafka.common.errors.UnsupportedEndpointTypeException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.message.AddRaftVoterRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.ReassignableTopic;
 import org.apache.kafka.common.message.AlterReplicaLogDirsRequestData;
@@ -154,6 +155,7 @@ import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.MetadataRequestData;
+import org.apache.kafka.common.message.RemoveRaftVoterRequestData;
 import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
 import org.apache.kafka.common.message.UnregisterBrokerRequestData;
 import org.apache.kafka.common.message.UpdateFeaturesRequestData;
@@ -170,6 +172,8 @@ import org.apache.kafka.common.quota.ClientQuotaEntity;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
+import org.apache.kafka.common.requests.AddRaftVoterRequest;
+import org.apache.kafka.common.requests.AddRaftVoterResponse;
 import org.apache.kafka.common.requests.AlterClientQuotasRequest;
 import org.apache.kafka.common.requests.AlterClientQuotasResponse;
 import org.apache.kafka.common.requests.AlterConfigsRequest;
@@ -232,6 +236,7 @@ import org.apache.kafka.common.requests.ListPartitionReassignmentsRequest;
 import org.apache.kafka.common.requests.ListPartitionReassignmentsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.RemoveRaftVoterRequest;
 import org.apache.kafka.common.requests.RenewDelegationTokenRequest;
 import org.apache.kafka.common.requests.RenewDelegationTokenResponse;
 import org.apache.kafka.common.requests.UnregisterBrokerRequest;
@@ -271,7 +276,6 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.TreeMap;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -2124,7 +2128,7 @@ public class KafkaAdminClient extends AdminClient {
             throw new IllegalArgumentException("The TopicCollection: " + topics + " provided did not match any supported classes for describeTopics.");
     }
 
-    Call generateDescribeTopicsCallWithMetadataApi(
+    private Call generateDescribeTopicsCallWithMetadataApi(
         List<String> topicNamesList,
         Map<String, KafkaFutureImpl<TopicDescription>> topicFutures,
         DescribeTopicsOptions options,
@@ -2187,7 +2191,7 @@ public class KafkaAdminClient extends AdminClient {
         };
     }
 
-    Call generateDescribeTopicsCallWithDescribeTopicPartitionsApi(
+    private Call generateDescribeTopicsCallWithDescribeTopicPartitionsApi(
         List<String> topicNamesList,
         Map<String, KafkaFutureImpl<TopicDescription>> topicFutures,
         Map<Integer, Node> nodes,
@@ -2195,9 +2199,9 @@ public class KafkaAdminClient extends AdminClient {
         long now
     ) {
         final Map<String, TopicRequest> topicsRequests = new LinkedHashMap<>();
-        topicNamesList.stream().sorted().forEach(topic -> {
-            topicsRequests.put(topic, new TopicRequest().setName(topic));
-        });
+        topicNamesList.stream().sorted().forEach(topic ->
+            topicsRequests.put(topic, new TopicRequest().setName(topic))
+        );
         return new Call("describeTopicPartitions", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
             TopicDescription partiallyFinishedTopicDescription = null;
@@ -2314,27 +2318,27 @@ public class KafkaAdminClient extends AdminClient {
         }
 
         if (topicNamesList.isEmpty()) {
-            return new HashMap<>(topicFutures);
+            return Collections.unmodifiableMap(topicFutures);
         }
 
         // First, we need to retrieve the node info.
         DescribeClusterResult clusterResult = describeCluster();
-        Map<Integer, Node> nodes;
-        try {
-            nodes = clusterResult.nodes().get().stream().collect(Collectors.toMap(Node::id, node -> node));
-        } catch (InterruptedException | ExecutionException e) {
-            completeAllExceptionally(topicFutures.values(), e.getCause());
-            return new HashMap<>(topicFutures);
-        }
+        clusterResult.nodes().whenComplete(
+            (nodes, exception) -> {
+                if (exception != null) {
+                    completeAllExceptionally(topicFutures.values(), exception);
+                    return;
+                }
 
-        final long now = time.milliseconds();
+                final long now = time.milliseconds();
+                Map<Integer, Node> nodeIdMap = nodes.stream().collect(Collectors.toMap(Node::id, node -> node));
+                runnable.call(
+                    generateDescribeTopicsCallWithDescribeTopicPartitionsApi(topicNamesList, topicFutures, nodeIdMap, options, now),
+                    now
+                );
+            });
 
-        runnable.call(
-            generateDescribeTopicsCallWithDescribeTopicPartitionsApi(topicNamesList, topicFutures, nodes, options, now),
-            now
-        );
-
-        return new HashMap<>(topicFutures);
+        return Collections.unmodifiableMap(topicFutures);
     }
 
     private Map<Uuid, KafkaFuture<TopicDescription>> handleDescribeTopicsByIds(Collection<Uuid> topicIds, DescribeTopicsOptions options) {
@@ -3043,7 +3047,7 @@ public class KafkaAdminClient extends AdminClient {
                 public void handleResponse(AbstractResponse abstractResponse) {
                     DescribeLogDirsResponse response = (DescribeLogDirsResponse) abstractResponse;
                     Map<String, LogDirDescription> descriptions = logDirDescriptions(response);
-                    if (descriptions.size() > 0) {
+                    if (!descriptions.isEmpty()) {
                         future.complete(descriptions);
                     } else {
                         // Up to v3 DescribeLogDirsResponse did not have an error code field, hence it defaults to None
@@ -3555,10 +3559,10 @@ public class KafkaAdminClient extends AdminClient {
                             String protocolType = group.protocolType();
                             if (protocolType.equals(ConsumerProtocol.PROTOCOL_TYPE) || protocolType.isEmpty()) {
                                 final String groupId = group.groupId();
-                                final Optional<ConsumerGroupState> state = group.groupState().equals("")
+                                final Optional<ConsumerGroupState> state = group.groupState().isEmpty()
                                         ? Optional.empty()
                                         : Optional.of(ConsumerGroupState.parse(group.groupState()));
-                                final Optional<GroupType> type = group.groupType().equals("")
+                                final Optional<GroupType> type = group.groupType().isEmpty()
                                         ? Optional.empty()
                                         : Optional.of(GroupType.parse(group.groupType()));
                                 final ConsumerGroupListing groupListing = new ConsumerGroupListing(
@@ -4210,9 +4214,9 @@ public class KafkaAdminClient extends AdminClient {
                  * Be sure to do this after the NOT_CONTROLLER error check above
                  * so that all errors are consistent in that case.
                  */
-                userIllegalAlterationExceptions.entrySet().stream().forEach(entry -> {
-                    futures.get(entry.getKey()).completeExceptionally(entry.getValue());
-                });
+                userIllegalAlterationExceptions.entrySet().stream().forEach(entry ->
+                    futures.get(entry.getKey()).completeExceptionally(entry.getValue())
+                );
                 response.data().results().forEach(result -> {
                     KafkaFutureImpl<Void> future = futures.get(result.user());
                     if (future == null) {
@@ -4569,7 +4573,7 @@ public class KafkaAdminClient extends AdminClient {
     public FenceProducersResult fenceProducers(Collection<String> transactionalIds, FenceProducersOptions options) {
         AdminApiFuture.SimpleAdminApiFuture<CoordinatorKey, ProducerIdAndEpoch> future =
             FenceProducersHandler.newFuture(transactionalIds);
-        FenceProducersHandler handler = new FenceProducersHandler(logContext);
+        FenceProducersHandler handler = new FenceProducersHandler(options, logContext, requestTimeoutMs);
         invokeDriver(handler, future, options.timeoutMs);
         return new FenceProducersResult(future.all());
     }
@@ -4602,6 +4606,101 @@ public class KafkaAdminClient extends AdminClient {
             }
         }, now);
         return new ListClientMetricsResourcesResult(future);
+    }
+
+    @Override
+    public AddRaftVoterResult addRaftVoter(
+        int voterId,
+        Uuid voterDirectoryId,
+        Set<RaftVoterEndpoint> endpoints,
+        AddRaftVoterOptions options
+    ) {
+        NodeProvider provider = new LeastLoadedBrokerOrActiveKController();
+
+        final KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+        final long now = time.milliseconds();
+        final Call call = new Call(
+                "addRaftVoter", calcDeadlineMs(now, options.timeoutMs()), provider) {
+
+            @Override
+            AddRaftVoterRequest.Builder createRequest(int timeoutMs) {
+                AddRaftVoterRequestData.ListenerCollection listeners =
+                    new AddRaftVoterRequestData.ListenerCollection();
+                endpoints.forEach(endpoint ->
+                    listeners.add(new AddRaftVoterRequestData.Listener().
+                        setName(endpoint.name()).
+                        setHost(endpoint.host()).
+                        setPort(endpoint.port())));
+                return new AddRaftVoterRequest.Builder(
+                   new AddRaftVoterRequestData().
+                       setVoterId(voterId) .
+                       setVoterDirectoryId(voterDirectoryId).
+                       setListeners(listeners));
+            }
+
+            @Override
+            void handleResponse(AbstractResponse response) {
+                AddRaftVoterResponse addResponse = (AddRaftVoterResponse) response;
+                if (addResponse.data().errorCode() != Errors.NONE.code()) {
+                    ApiError error = new ApiError(
+                        addResponse.data().errorCode(),
+                        addResponse.data().errorMessage());
+                    future.completeExceptionally(error.exception());
+                } else {
+                    future.complete(null);
+                }
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                future.completeExceptionally(throwable);
+            }
+        };
+        runnable.call(call, now);
+        return new AddRaftVoterResult(future);
+    }
+
+    @Override
+    public RemoveRaftVoterResult removeRaftVoter(
+        int voterId,
+        Uuid voterDirectoryId,
+        RemoveRaftVoterOptions options
+    ) {
+        NodeProvider provider = new LeastLoadedBrokerOrActiveKController();
+
+        final KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
+        final long now = time.milliseconds();
+        final Call call = new Call(
+                "removeRaftVoter", calcDeadlineMs(now, options.timeoutMs()), provider) {
+
+            @Override
+            RemoveRaftVoterRequest.Builder createRequest(int timeoutMs) {
+                return new RemoveRaftVoterRequest.Builder(
+                    new RemoveRaftVoterRequestData().
+                        setVoterId(voterId) .
+                        setVoterDirectoryId(voterDirectoryId));
+            }
+
+            @Override
+            void handleResponse(AbstractResponse response) {
+                AddRaftVoterResponse addResponse = (AddRaftVoterResponse) response;
+                if (addResponse.data().errorCode() != Errors.NONE.code()) {
+                    ApiError error = new ApiError(
+                            addResponse.data().errorCode(),
+                            addResponse.data().errorMessage());
+                    future.completeExceptionally(error.exception());
+                } else {
+                    future.complete(null);
+                }
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                future.completeExceptionally(throwable);
+            }
+        };
+        runnable.call(call, now);
+        return new RemoveRaftVoterResult(future);
     }
 
     @Override

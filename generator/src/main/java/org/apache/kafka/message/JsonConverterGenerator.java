@@ -108,7 +108,7 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
             VersionConditional.forVersions(mandatoryVersions, curVersions).
                 ifMember(__ -> {
                     buffer.printf("throw new RuntimeException(\"%s: unable to locate " +
-                            "field \'%s\', which is mandatory in version \" + _version);%n",
+                            "field '%s', which is mandatory in version \" + _version);%n",
                         className, field.camelCaseName());
                 }).
                 ifNotMember(__ -> {
@@ -127,7 +127,7 @@ public final class JsonConverterGenerator implements MessageClassGenerator {
                         input -> String.format("_object.%s = %s", field.camelCaseName(), input)),
                         curVersions);
                 }).ifNotMember(__ -> {
-                    buffer.printf("throw new RuntimeException(\"%s: field \'%s\' is not " +
+                    buffer.printf("throw new RuntimeException(\"%s: field '%s' is not " +
                         "supported in version \" + _version);%n",
                         className, field.camelCaseName());
                 }).generate(buffer);

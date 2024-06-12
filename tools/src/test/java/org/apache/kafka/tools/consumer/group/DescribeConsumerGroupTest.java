@@ -19,12 +19,14 @@ package org.apache.kafka.tools.consumer.group;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.RangeAssignor;
 import org.apache.kafka.clients.consumer.RoundRobinAssignor;
+import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ToolsTestUtils;
+
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -152,8 +154,8 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", group};
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
-        Entry<Optional<String>, Optional<Collection<PartitionAssignmentState>>> res = service.collectGroupOffsets(group);
-        assertTrue(res.getKey().map(s -> s.contains("Dead")).orElse(false) && res.getValue().map(Collection::isEmpty).orElse(false),
+        Entry<Optional<ConsumerGroupState>, Optional<Collection<PartitionAssignmentState>>> res = service.collectGroupOffsets(group);
+        assertTrue(res.getKey().map(s -> s.equals(ConsumerGroupState.DEAD)).orElse(false) && res.getValue().map(Collection::isEmpty).orElse(false),
             "Expected the state to be 'Dead', with no members in the group '" + group + "'.");
     }
 
@@ -169,12 +171,12 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServers(listenerName()), "--describe", "--group", group};
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
-        Entry<Optional<String>, Optional<Collection<MemberAssignmentState>>> res = service.collectGroupMembers(group, false);
-        assertTrue(res.getKey().map(s -> s.contains("Dead")).orElse(false) && res.getValue().map(Collection::isEmpty).orElse(false),
+        Entry<Optional<ConsumerGroupState>, Optional<Collection<MemberAssignmentState>>> res = service.collectGroupMembers(group, false);
+        assertTrue(res.getKey().map(s -> s.equals(ConsumerGroupState.DEAD)).orElse(false) && res.getValue().map(Collection::isEmpty).orElse(false),
             "Expected the state to be 'Dead', with no members in the group '" + group + "'.");
 
-        Entry<Optional<String>, Optional<Collection<MemberAssignmentState>>> res2 = service.collectGroupMembers(group, true);
-        assertTrue(res2.getKey().map(s -> s.contains("Dead")).orElse(false) && res2.getValue().map(Collection::isEmpty).orElse(false),
+        Entry<Optional<ConsumerGroupState>, Optional<Collection<MemberAssignmentState>>> res2 = service.collectGroupMembers(group, true);
+        assertTrue(res2.getKey().map(s -> s.equals(ConsumerGroupState.DEAD)).orElse(false) && res2.getValue().map(Collection::isEmpty).orElse(false),
             "Expected the state to be 'Dead', with no members in the group '" + group + "' (verbose option).");
     }
 
@@ -191,7 +193,7 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         GroupState state = service.collectGroupState(group);
-        assertTrue(Objects.equals(state.state, "Dead") && state.numMembers == 0 &&
+        assertTrue(Objects.equals(state.state, ConsumerGroupState.DEAD) && state.numMembers == 0 &&
                 state.coordinator != null && !brokers().filter(s -> s.config().brokerId() == state.coordinator.id()).isEmpty(),
             "Expected the state to be 'Dead', with no members in the group '" + group + "'."
         );
@@ -285,13 +287,13 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(() -> {
-            Entry<Optional<String>, Optional<Collection<PartitionAssignmentState>>> groupOffsets = service.collectGroupOffsets(GROUP);
-            Optional<String> state = groupOffsets.getKey();
+            Entry<Optional<ConsumerGroupState>, Optional<Collection<PartitionAssignmentState>>> groupOffsets = service.collectGroupOffsets(GROUP);
+            Optional<ConsumerGroupState> state = groupOffsets.getKey();
             Optional<Collection<PartitionAssignmentState>> assignments = groupOffsets.getValue();
 
             Predicate<PartitionAssignmentState> isGrp = s -> Objects.equals(s.group, GROUP);
 
-            boolean res = state.map(s -> s.contains("Stable")).orElse(false) &&
+            boolean res = state.map(s -> s.equals(ConsumerGroupState.STABLE)).orElse(false) &&
                 assignments.isPresent() &&
                 assignments.get().stream().filter(isGrp).count() == 1;
 
@@ -321,13 +323,13 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(() -> {
-            Entry<Optional<String>, Optional<Collection<MemberAssignmentState>>> groupMembers = service.collectGroupMembers(GROUP, false);
-            Optional<String> state = groupMembers.getKey();
+            Entry<Optional<ConsumerGroupState>, Optional<Collection<MemberAssignmentState>>> groupMembers = service.collectGroupMembers(GROUP, false);
+            Optional<ConsumerGroupState> state = groupMembers.getKey();
             Optional<Collection<MemberAssignmentState>> assignments = groupMembers.getValue();
 
             Predicate<MemberAssignmentState> isGrp = s -> Objects.equals(s.group, GROUP);
 
-            boolean res = state.map(s -> s.contains("Stable")).orElse(false) &&
+            boolean res = state.map(s -> s.equals(ConsumerGroupState.STABLE)).orElse(false) &&
                 assignments.isPresent() &&
                 assignments.get().stream().filter(s -> Objects.equals(s.group, GROUP)).count() == 1;
 
@@ -345,7 +347,7 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
                 !Objects.equals(assignmentState.host, ConsumerGroupCommand.MISSING_COLUMN_VALUE);
         }, "Expected a 'Stable' group status, rows and valid member information for group " + GROUP + ".");
 
-        Entry<Optional<String>, Optional<Collection<MemberAssignmentState>>> res = service.collectGroupMembers(GROUP, true);
+        Entry<Optional<ConsumerGroupState>, Optional<Collection<MemberAssignmentState>>> res = service.collectGroupMembers(GROUP, true);
 
         if (res.getValue().isPresent()) {
             assertTrue(res.getValue().get().size() == 1 && res.getValue().get().iterator().next().assignment.size() == 1,
@@ -372,7 +374,7 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
 
         TestUtils.waitForCondition(() -> {
             GroupState state = service.collectGroupState(GROUP);
-            return Objects.equals(state.state, "Stable") &&
+            return Objects.equals(state.state, ConsumerGroupState.STABLE) &&
                 state.numMembers == 1 &&
                 Objects.equals(state.assignmentStrategy, "range") &&
                 state.coordinator != null &&
@@ -399,7 +401,7 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
 
         TestUtils.waitForCondition(() -> {
             GroupState state = service.collectGroupState(GROUP);
-            return Objects.equals(state.state, "Stable") &&
+            return Objects.equals(state.state, ConsumerGroupState.STABLE) &&
                 state.numMembers == 1 &&
                 Objects.equals(state.assignmentStrategy, expectedName) &&
                 state.coordinator != null &&
@@ -445,8 +447,8 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(() -> {
-            Entry<Optional<String>, Optional<Collection<PartitionAssignmentState>>> res = service.collectGroupOffsets(GROUP);
-            return res.getKey().map(s -> s.contains("Stable")).orElse(false)
+            Entry<Optional<ConsumerGroupState>, Optional<Collection<PartitionAssignmentState>>> res = service.collectGroupOffsets(GROUP);
+            return res.getKey().map(s -> s.equals(ConsumerGroupState.STABLE)).orElse(false)
                 && res.getValue().map(c -> c.stream().anyMatch(assignment -> Objects.equals(assignment.group, GROUP) && assignment.offset.isPresent())).orElse(false);
         }, "Expected the group to initially become stable, and to find group in assignments after initial offset commit.");
 
@@ -454,12 +456,12 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         executor.shutdown();
 
         TestUtils.waitForCondition(() -> {
-            Entry<Optional<String>, Optional<Collection<PartitionAssignmentState>>> offsets = service.collectGroupOffsets(GROUP);
-            Optional<String> state = offsets.getKey();
+            Entry<Optional<ConsumerGroupState>, Optional<Collection<PartitionAssignmentState>>> offsets = service.collectGroupOffsets(GROUP);
+            Optional<ConsumerGroupState> state = offsets.getKey();
             Optional<Collection<PartitionAssignmentState>> assignments = offsets.getValue();
             List<PartitionAssignmentState> testGroupAssignments = assignments.get().stream().filter(a -> Objects.equals(a.group, GROUP)).collect(Collectors.toList());
             PartitionAssignmentState assignment = testGroupAssignments.get(0);
-            return state.map(s -> s.contains("Empty")).orElse(false) &&
+            return state.map(s -> s.equals(ConsumerGroupState.EMPTY)).orElse(false) &&
                 testGroupAssignments.size() == 1 &&
                 assignment.consumerId.map(c -> c.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE)).orElse(false) && // the member should be gone
                 assignment.clientId.map(c -> c.trim().equals(ConsumerGroupCommand.MISSING_COLUMN_VALUE)).orElse(false) &&
@@ -479,8 +481,8 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(() -> {
-            Entry<Optional<String>, Optional<Collection<MemberAssignmentState>>> res = service.collectGroupMembers(GROUP, false);
-            return res.getKey().map(s -> s.contains("Stable")).orElse(false)
+            Entry<Optional<ConsumerGroupState>, Optional<Collection<MemberAssignmentState>>> res = service.collectGroupMembers(GROUP, false);
+            return res.getKey().map(s -> s.equals(ConsumerGroupState.STABLE)).orElse(false)
                 && res.getValue().map(c -> c.stream().anyMatch(m -> Objects.equals(m.group, GROUP))).orElse(false);
         }, "Expected the group to initially become stable, and to find group in assignments after initial offset commit.");
 
@@ -488,8 +490,8 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         executor.shutdown();
 
         TestUtils.waitForCondition(() -> {
-            Entry<Optional<String>, Optional<Collection<MemberAssignmentState>>> res = service.collectGroupMembers(GROUP, false);
-            return res.getKey().map(s -> s.contains("Empty")).orElse(false) && res.getValue().isPresent() && res.getValue().get().isEmpty();
+            Entry<Optional<ConsumerGroupState>, Optional<Collection<MemberAssignmentState>>> res = service.collectGroupMembers(GROUP, false);
+            return res.getKey().map(s -> s.equals(ConsumerGroupState.EMPTY)).orElse(false) && res.getValue().isPresent() && res.getValue().get().isEmpty();
         }, "Expected no member in describe group members results for group '" + GROUP + "'");
     }
 
@@ -506,7 +508,7 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
 
         TestUtils.waitForCondition(() -> {
             GroupState state = service.collectGroupState(GROUP);
-            return Objects.equals(state.state, "Stable") &&
+            return Objects.equals(state.state, ConsumerGroupState.STABLE) &&
                 state.numMembers == 1 &&
                 state.coordinator != null &&
                 brokers().count(s -> s.config().brokerId() == state.coordinator.id()) > 0;
@@ -517,7 +519,7 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
 
         TestUtils.waitForCondition(() -> {
             GroupState state = service.collectGroupState(GROUP);
-            return Objects.equals(state.state, "Empty") && state.numMembers == 0;
+            return Objects.equals(state.state, ConsumerGroupState.EMPTY) && state.numMembers == 0;
         }, "Expected the group '" + GROUP + "' to become empty after the only member leaving.");
     }
 
@@ -554,8 +556,8 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(() -> {
-            Entry<Optional<String>, Optional<Collection<PartitionAssignmentState>>> res = service.collectGroupOffsets(GROUP);
-            return res.getKey().map(s -> s.contains("Stable")).isPresent() &&
+            Entry<Optional<ConsumerGroupState>, Optional<Collection<PartitionAssignmentState>>> res = service.collectGroupOffsets(GROUP);
+            return res.getKey().map(s -> s.equals(ConsumerGroupState.STABLE)).isPresent() &&
                 res.getValue().isPresent() &&
                 res.getValue().get().stream().filter(s -> Objects.equals(s.group, GROUP)).count() == 1 &&
                 res.getValue().get().stream().filter(x -> Objects.equals(x.group, GROUP) && x.partition.isPresent()).count() == 1;
@@ -574,8 +576,8 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(() -> {
-            Entry<Optional<String>, Optional<Collection<MemberAssignmentState>>> res = service.collectGroupMembers(GROUP, false);
-            return res.getKey().map(s -> s.contains("Stable")).orElse(false) &&
+            Entry<Optional<ConsumerGroupState>, Optional<Collection<MemberAssignmentState>>> res = service.collectGroupMembers(GROUP, false);
+            return res.getKey().map(s -> s.equals(ConsumerGroupState.STABLE)).orElse(false) &&
                 res.getValue().isPresent() &&
                 res.getValue().get().stream().filter(s -> Objects.equals(s.group, GROUP)).count() == 2 &&
                 res.getValue().get().stream().filter(x -> Objects.equals(x.group, GROUP) && x.numPartitions == 1).count() == 1 &&
@@ -583,8 +585,8 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
                 res.getValue().get().stream().allMatch(s -> s.assignment.isEmpty());
         }, "Expected rows for consumers with no assigned partitions in describe group results");
 
-        Entry<Optional<String>, Optional<Collection<MemberAssignmentState>>> res = service.collectGroupMembers(GROUP, true);
-        assertTrue(res.getKey().map(s -> s.contains("Stable")).orElse(false)
+        Entry<Optional<ConsumerGroupState>, Optional<Collection<MemberAssignmentState>>> res = service.collectGroupMembers(GROUP, true);
+        assertTrue(res.getKey().map(s -> s.equals(ConsumerGroupState.STABLE)).orElse(false)
                 && res.getValue().map(c -> c.stream().anyMatch(s -> !s.assignment.isEmpty())).orElse(false),
             "Expected additional columns in verbose version of describe members");
     }
@@ -602,7 +604,7 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
 
         TestUtils.waitForCondition(() -> {
             GroupState state = service.collectGroupState(GROUP);
-            return Objects.equals(state.state, "Stable") && state.numMembers == 2;
+            return Objects.equals(state.state, ConsumerGroupState.STABLE) && state.numMembers == 2;
         }, "Expected two consumers in describe group results");
     }
 
@@ -643,8 +645,8 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(() -> {
-            Entry<Optional<String>, Optional<Collection<PartitionAssignmentState>>> res = service.collectGroupOffsets(GROUP);
-            return res.getKey().map(s -> s.contains("Stable")).orElse(false) &&
+            Entry<Optional<ConsumerGroupState>, Optional<Collection<PartitionAssignmentState>>> res = service.collectGroupOffsets(GROUP);
+            return res.getKey().map(s -> s.equals(ConsumerGroupState.STABLE)).orElse(false) &&
                 res.getValue().isPresent() &&
                 res.getValue().get().stream().filter(s -> Objects.equals(s.group, GROUP)).count() == 2 &&
                 res.getValue().get().stream().filter(x -> Objects.equals(x.group, GROUP) && x.partition.isPresent()).count() == 2 &&
@@ -666,16 +668,16 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(() -> {
-            Entry<Optional<String>, Optional<Collection<MemberAssignmentState>>> res = service.collectGroupMembers(GROUP, false);
-            return res.getKey().map(s -> s.contains("Stable")).orElse(false) &&
+            Entry<Optional<ConsumerGroupState>, Optional<Collection<MemberAssignmentState>>> res = service.collectGroupMembers(GROUP, false);
+            return res.getKey().map(s -> s.equals(ConsumerGroupState.STABLE)).orElse(false) &&
                 res.getValue().isPresent() &&
                 res.getValue().get().stream().filter(s -> Objects.equals(s.group, GROUP)).count() == 2 &&
                 res.getValue().get().stream().filter(x -> Objects.equals(x.group, GROUP) && x.numPartitions == 1).count() == 2 &&
                 res.getValue().get().stream().noneMatch(x -> Objects.equals(x.group, GROUP) && x.numPartitions == 0);
         }, "Expected two rows (one row per consumer) in describe group members results.");
 
-        Entry<Optional<String>, Optional<Collection<MemberAssignmentState>>> res = service.collectGroupMembers(GROUP, true);
-        assertTrue(res.getKey().map(s -> s.contains("Stable")).orElse(false) && res.getValue().map(s -> s.stream().filter(x -> x.assignment.isEmpty()).count()).orElse(0L) == 0,
+        Entry<Optional<ConsumerGroupState>, Optional<Collection<MemberAssignmentState>>> res = service.collectGroupMembers(GROUP, true);
+        assertTrue(res.getKey().map(s -> s.equals(ConsumerGroupState.STABLE)).orElse(false) && res.getValue().map(s -> s.stream().filter(x -> x.assignment.isEmpty()).count()).orElse(0L) == 0,
             "Expected additional columns in verbose version of describe members");
     }
 
@@ -694,7 +696,7 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
 
         TestUtils.waitForCondition(() -> {
             GroupState state = service.collectGroupState(GROUP);
-            return Objects.equals(state.state, "Stable") && Objects.equals(state.group, GROUP) && state.numMembers == 2;
+            return Objects.equals(state.state, ConsumerGroupState.STABLE) && Objects.equals(state.group, GROUP) && state.numMembers == 2;
         }, "Expected a stable group with two members in describe group state result.");
     }
 
@@ -712,8 +714,8 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(() -> {
-            Entry<Optional<String>, Optional<Collection<PartitionAssignmentState>>> res = service.collectGroupOffsets(GROUP);
-            return res.getKey().map(s -> s.contains("Empty")).orElse(false)
+            Entry<Optional<ConsumerGroupState>, Optional<Collection<PartitionAssignmentState>>> res = service.collectGroupOffsets(GROUP);
+            return res.getKey().map(s -> s.equals(ConsumerGroupState.EMPTY)).orElse(false)
                 && res.getValue().isPresent() && res.getValue().get().stream().filter(s -> Objects.equals(s.group, GROUP)).count() == 2;
         }, "Expected a stable group with two members in describe group state result.");
     }
@@ -812,11 +814,11 @@ public class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs);
 
         TestUtils.waitForCondition(() -> {
-            Entry<Optional<String>, Optional<Collection<PartitionAssignmentState>>> groupOffsets = service.collectGroupOffsets(GROUP);
+            Entry<Optional<ConsumerGroupState>, Optional<Collection<PartitionAssignmentState>>> groupOffsets = service.collectGroupOffsets(GROUP);
 
             Predicate<PartitionAssignmentState> isGrp = s -> Objects.equals(s.group, GROUP);
 
-            boolean res = groupOffsets.getKey().map(s -> s.contains("Stable")).orElse(false) &&
+            boolean res = groupOffsets.getKey().map(s -> s.equals(ConsumerGroupState.STABLE)).orElse(false) &&
                 groupOffsets.getValue().isPresent() &&
                 groupOffsets.getValue().get().stream().filter(isGrp).count() == 1;
 

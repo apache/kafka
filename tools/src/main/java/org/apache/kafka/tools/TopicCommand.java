@@ -17,9 +17,6 @@
 
 package org.apache.kafka.tools;
 
-import joptsimple.ArgumentAcceptingOptionSpec;
-import joptsimple.OptionSpec;
-import joptsimple.OptionSpecBuilder;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.Config;
@@ -55,6 +52,7 @@ import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
 import org.apache.kafka.server.util.TopicFilter.IncludeList;
 import org.apache.kafka.storage.internals.log.LogConfig;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -75,6 +73,10 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
+
+import joptsimple.ArgumentAcceptingOptionSpec;
+import joptsimple.OptionSpec;
+import joptsimple.OptionSpecBuilder;
 
 public abstract class TopicCommand {
     private static final Logger LOG = LoggerFactory.getLogger(TopicCommand.class);

@@ -64,6 +64,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.stream.Collectors;
+
 
 public class RoundTripWorker implements TaskWorker {
     private static final int THROTTLE_PERIOD_MS = 100;
@@ -318,7 +320,7 @@ public class RoundTripWorker implements TaskWorker {
                 }
             }
             log.info("{}: consumer waiting for {} message(s), starting with: {}",
-                id, numToReceive, Utils.join(list, ", "));
+                id, numToReceive, list.stream().map(Object::toString).collect(Collectors.joining(", ")));
         }
     }
 

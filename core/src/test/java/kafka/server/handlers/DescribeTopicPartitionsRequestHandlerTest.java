@@ -58,10 +58,13 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.metadata.LeaderRecoveryState;
+import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.config.KRaftConfigs;
+
 import org.junit.jupiter.api.Test;
 
 import java.net.InetAddress;
@@ -122,7 +125,6 @@ class DescribeTopicPartitionsRequestHandlerTest {
         Action expectedActions2 = new Action(AclOperation.DESCRIBE, new ResourcePattern(ResourceType.TOPIC, authorizedTopic, PatternType.LITERAL), 1, true, true);
         Action expectedActions3 = new Action(AclOperation.DESCRIBE, new ResourcePattern(ResourceType.TOPIC, authorizedNonExistTopic, PatternType.LITERAL), 1, true, true);
 
-        // Here we need to use AuthHelperTest.matchSameElements instead of EasyMock.eq since the order of the request is unknown
         when(authorizer.authorize(any(RequestContext.class), argThat(t ->
             t.contains(expectedActions1) || t.contains(expectedActions2) || t.contains(expectedActions3))))
             .thenAnswer(invocation -> {
@@ -325,7 +327,6 @@ class DescribeTopicPartitionsRequestHandlerTest {
         Action expectedActions1 = new Action(AclOperation.DESCRIBE, new ResourcePattern(ResourceType.TOPIC, authorizedTopic, PatternType.LITERAL), 1, true, true);
         Action expectedActions2 = new Action(AclOperation.DESCRIBE, new ResourcePattern(ResourceType.TOPIC, authorizedTopic2, PatternType.LITERAL), 1, true, true);
 
-        // Here we need to use AuthHelperTest.matchSameElements instead of EasyMock.eq since the order of the request is unknown
         when(authorizer.authorize(any(RequestContext.class), argThat(t ->
             t.contains(expectedActions1) || t.contains(expectedActions2))))
             .thenAnswer(invocation -> {
@@ -550,11 +551,11 @@ class DescribeTopicPartitionsRequestHandlerTest {
             1,
             (short) 1,
             false);
-        properties.put(KafkaConfig.NodeIdProp(), Integer.toString(brokerId));
-        properties.put(KafkaConfig.ProcessRolesProp(), "broker");
+        properties.put(KRaftConfigs.NODE_ID_CONFIG, Integer.toString(brokerId));
+        properties.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker");
         int voterId = brokerId + 1;
-        properties.put(KafkaConfig.QuorumVotersProp(), voterId + "@localhost:9093");
-        properties.put(KafkaConfig.ControllerListenerNamesProp(), "SSL");
+        properties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, voterId + "@localhost:9093");
+        properties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL");
         TestUtils.setIbpAndMessageFormatVersions(properties, MetadataVersion.latestProduction());
         return new KafkaConfig(properties);
     }

@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.tools;
 
-import joptsimple.OptionException;
-import joptsimple.OptionSpec;
-import joptsimple.OptionSpecBuilder;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DeleteTopicsResult;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsOptions;
@@ -57,6 +54,10 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+
+import joptsimple.OptionException;
+import joptsimple.OptionSpec;
+import joptsimple.OptionSpecBuilder;
 
 /**
  * {@link StreamsResetter} resets the processing state of a Kafka Streams application so that, for example,

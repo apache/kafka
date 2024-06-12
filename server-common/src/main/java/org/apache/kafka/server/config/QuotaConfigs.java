@@ -18,6 +18,7 @@ package org.apache.kafka.server.config;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -119,6 +120,20 @@ public class QuotaConfigs {
         configDef.define(CONTROLLER_MUTATION_RATE_OVERRIDE_CONFIG, ConfigDef.Type.DOUBLE,
                 Integer.valueOf(Integer.MAX_VALUE).doubleValue(),
                 ConfigDef.Importance.MEDIUM, CONTROLLER_MUTATION_RATE_DOC);
+    }
+
+    public static ConfigDef brokerQuotaConfigs() {
+        return new ConfigDef()
+                // Round minimum value down, to make it easier for users.
+                .define(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG, ConfigDef.Type.LONG,
+                        QuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT, ConfigDef.Range.atLeast(0),
+                        ConfigDef.Importance.MEDIUM, QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_DOC)
+                .define(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_CONFIG, ConfigDef.Type.LONG,
+                        QuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT, ConfigDef.Range.atLeast(0),
+                        ConfigDef.Importance.MEDIUM, QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_RATE_DOC)
+                .define(QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_CONFIG, ConfigDef.Type.LONG,
+                        QuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT, ConfigDef.Range.atLeast(0),
+                        ConfigDef.Importance.MEDIUM, QuotaConfigs.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_DOC);
     }
 
     public static ConfigDef userAndClientQuotaConfigs() {

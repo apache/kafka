@@ -1398,6 +1398,7 @@ $ bin/kafka-acls.sh \
     <li>commit=num_secs: This tunes the frequency with which ext4 commits to its metadata journal. Setting this to a lower value reduces the loss of unflushed data during a crash. Setting this to a higher value will improve throughput.
     <li>nobh: This setting controls additional ordering guarantees when using data=writeback mode. This should be safe with Kafka as we do not depend on write ordering and improves throughput and latency.
     <li>delalloc: Delayed allocation means that the filesystem avoid allocating any blocks until the physical write occurs. This allows ext4 to allocate a large extent instead of smaller pages and helps ensure the data is written sequentially. This feature is great for throughput. It does seem to involve some locking in the filesystem which adds a bit of latency variance.
+    <li>fast_commit: Added in Linux 5.10, <a href="https://lwn.net/Articles/842385/">fast_commit</a> is a lighter-weight journaling method which can be used with data=ordered journaling mode. Enabling it seems to significantly reduce latency.
   </ul>
 
   <h4 class="anchor-heading"><a id="replace_disk" class="anchor-link"></a><a href="#replace_disk">Replace KRaft Controller Disk</a></h4>
@@ -3244,22 +3245,32 @@ for built-in state stores, currently we have:
       </tr>
       <tr>
         <td>all-latency-avg</td>
-        <td>The average all operation execution time in ns.</td>
+        <td>The average execution time in ns, from iterator create to close time.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
-        <td>all-latency-max</td>
+        <td>all-latency-max, from iterator create to close time.</td>
         <td>The maximum all operation execution time in ns.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
-        <td>range-latency-avg</td>
-        <td>The average range execution time in ns.</td>
+        <td>range-latency-avg, from iterator create to close time.</td>
+        <td>The average range execution time in ns, from iterator create to close time.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
-        <td>range-latency-max</td>
+        <td>range-latency-max, from iterator create to close time.</td>
         <td>The maximum range execution time in ns.</td>
+        <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>prefix-scan-latency-avg</td>
+        <td>The average prefix-scan execution time in ns, from iterator create to close time.</td>
+        <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>prefix-scan-latency-max</td>
+        <td>The maximum prefix-scan execution time in ns, from iterator create to close time.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
        <tr>
@@ -3315,6 +3326,11 @@ for built-in state stores, currently we have:
       <tr>
         <td>range-rate</td>
         <td>The average range rate for this store.</td>
+        <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>prefix-scan-rate</td>
+        <td>The average prefix-scan rate for this store.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>

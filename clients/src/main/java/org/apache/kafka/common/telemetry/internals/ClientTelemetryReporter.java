@@ -492,6 +492,14 @@ public class ClientTelemetryReporter implements MetricsReporter {
 
             lock.writeLock().lock();
             try {
+                /*
+                 This is the case when client began termination sometime after the last push request
+                 was issued. Just getting the callback, hence need to ignore it.
+                */
+                if (isTerminatingState()) {
+                    return;
+                }
+
                 Optional<Integer> errorIntervalMsOpt = ClientTelemetryUtils.maybeFetchErrorIntervalMs(data.errorCode(),
                     subscription.pushIntervalMs());
                 /*
@@ -500,14 +508,6 @@ public class ClientTelemetryReporter implements MetricsReporter {
                  and the push retried.
                 */
                 if (errorIntervalMsOpt.isPresent()) {
-                    /*
-                     This is the case when client began termination sometime after the last push request
-                     was issued. Just getting the callback, hence need to ignore it.
-                    */
-                    if (isTerminatingState()) {
-                        return;
-                    }
-
                     if (!maybeSetState(ClientTelemetryState.SUBSCRIPTION_NEEDED)) {
                         log.warn("Unable to transition state after failed push telemetry from state {}", state);
                     }

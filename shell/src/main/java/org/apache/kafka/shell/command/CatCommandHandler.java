@@ -121,7 +121,6 @@ public final class CatCommandHandler implements Commands.Handler {
     public boolean equals(Object other) {
         if (!(other instanceof CatCommandHandler)) return false;
         CatCommandHandler o = (CatCommandHandler) other;
-        if (!Objects.equals(o.targets, targets)) return false;
-        return true;
+        return Objects.equals(o.targets, targets);
     }
 }

@@ -82,6 +82,8 @@
       <property name="file" value="${config_loc}/${importControlFile}"/>
     </module>
 
+    <!--   don't define any import order here! Import order check/format is addressed by spotless.-->
+
     <!-- whitespace -->
     <module name="GenericWhitespace"/>
     <module name="NoWhitespaceBefore"/>

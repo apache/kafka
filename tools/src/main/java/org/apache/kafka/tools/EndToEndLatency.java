@@ -35,10 +35,10 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Properties;
 import java.util.List;
-import java.util.Random;
 import java.util.Optional;
+import java.util.Properties;
+import java.util.Random;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 

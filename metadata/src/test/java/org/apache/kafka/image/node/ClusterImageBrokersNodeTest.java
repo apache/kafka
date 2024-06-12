@@ -53,7 +53,7 @@ public class ClusterImageBrokersNodeTest {
 
     @Test
     public void testChildNames() {
-        assertEquals(Arrays.asList("1"), NODE.childNames());
+        assertEquals(Collections.singletonList("1"), NODE.childNames());
     }
 
     @Test

@@ -51,15 +51,13 @@ import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
 import org.mockito.internal.util.collections.Sets;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -73,17 +71,16 @@ import static java.time.Duration.ofMillis;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 @SuppressWarnings("deprecation")
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@Timeout(600)
+@ExtendWith(MockitoExtension.class)
 public class TopologyTest {
-    @Rule
-    public Timeout globalTimeout = Timeout.seconds(600);
 
     @Mock
     private StoreBuilder<MockKeyValueStore> storeBuilder;
@@ -93,7 +90,7 @@ public class TopologyTest {
     private final InternalTopologyBuilder.TopologyDescription expectedDescription = new InternalTopologyBuilder.TopologyDescription();
     private StreamsConfig streamsConfig;
 
-    @Before
+    @BeforeEach
     public void setUp() {
         final HashMap<String, Object> configs = new HashMap<>();
         configs.put(StreamsConfig.APPLICATION_ID_CONFIG, "applicationId");
@@ -330,8 +327,6 @@ public class TopologyTest {
 
     private void mockStoreBuilder() {
         when(storeBuilder.name()).thenReturn("store");
-        when(storeBuilder.logConfig()).thenReturn(Collections.emptyMap());
-        when(storeBuilder.loggingEnabled()).thenReturn(false);
     }
 
     @Test
@@ -341,8 +336,6 @@ public class TopologyTest {
 
         final StoreBuilder<?> otherStoreBuilder = mock(StoreBuilder.class);
         when(otherStoreBuilder.name()).thenReturn("store");
-        when(otherStoreBuilder.logConfig()).thenReturn(Collections.emptyMap());
-        when(otherStoreBuilder.loggingEnabled()).thenReturn(false);
         try {
             topology.addStateStore(otherStoreBuilder);
             fail("Should have thrown TopologyException for same store name with different StoreBuilder");
@@ -2098,18 +2091,16 @@ public class TopologyTest {
         final KTable<Object, Object> table = builder.table("input-topic");
         table.mapValues((readOnlyKey, value) -> null);
         final TopologyDescription describe = builder.build().describe();
-        Assert.assertEquals(
-            "Topologies:\n" +
-                "   Sub-topology: 0\n" +
-                "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic])\n" +
-                "      --> KTABLE-SOURCE-0000000002\n" +
-                "    Processor: KTABLE-SOURCE-0000000002 (stores: [])\n" +
-                "      --> KTABLE-MAPVALUES-0000000003\n" +
-                "      <-- KSTREAM-SOURCE-0000000001\n" +
-                "    Processor: KTABLE-MAPVALUES-0000000003 (stores: [])\n" +
-                "      --> none\n" +
-                "      <-- KTABLE-SOURCE-0000000002\n\n",
-            describe.toString());
+        assertEquals("Topologies:\n" +
+            "   Sub-topology: 0\n" +
+            "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic])\n" +
+            "      --> KTABLE-SOURCE-0000000002\n" +
+            "    Processor: KTABLE-SOURCE-0000000002 (stores: [])\n" +
+            "      --> KTABLE-MAPVALUES-0000000003\n" +
+            "      <-- KSTREAM-SOURCE-0000000001\n" +
+            "    Processor: KTABLE-MAPVALUES-0000000003 (stores: [])\n" +
+            "      --> none\n" +
+            "      <-- KTABLE-SOURCE-0000000002\n\n", describe.toString());
     }
 
     @Test
@@ -2121,7 +2112,7 @@ public class TopologyTest {
             Materialized.<Object, Object, KeyValueStore<Bytes, byte[]>>with(null, null)
                 .withStoreType(Materialized.StoreType.IN_MEMORY));
         final TopologyDescription describe = builder.build().describe();
-        Assert.assertEquals(
+        assertEquals(
             "Topologies:\n" +
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic])\n" +
@@ -2147,7 +2138,7 @@ public class TopologyTest {
             (readOnlyKey, value) -> null,
             Materialized.<Object, Object, KeyValueStore<Bytes, byte[]>>as("store-name").withKeySerde(null).withValueSerde(null));
         final TopologyDescription describe = builder.build().describe();
-        Assert.assertEquals(
+        assertEquals(
             "Topologies:\n" +
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic])\n" +
@@ -2168,7 +2159,7 @@ public class TopologyTest {
         final KTable<Object, Object> table = builder.table("input-topic");
         table.filter((key, value) -> false);
         final TopologyDescription describe = builder.build().describe();
-        Assert.assertEquals(
+        assertEquals(
             "Topologies:\n" +
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic])\n" +
@@ -2188,7 +2179,7 @@ public class TopologyTest {
         final KTable<Object, Object> table = builder.table("input-topic");
         table.filter((key, value) -> false, Materialized.with(null, null));
         final TopologyDescription describe = builder.build().describe();
-        Assert.assertEquals(
+        assertEquals(
             "Topologies:\n" +
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic])\n" +
@@ -2213,7 +2204,7 @@ public class TopologyTest {
         table.filter((key, value) -> false, Materialized.as("store-name"));
         final TopologyDescription describe = builder.build().describe();
 
-        Assert.assertEquals(
+        assertEquals(
             "Topologies:\n" +
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic])\n" +

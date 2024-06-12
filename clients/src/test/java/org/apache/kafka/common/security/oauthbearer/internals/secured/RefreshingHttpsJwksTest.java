@@ -236,7 +236,7 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
      * A mock ScheduledExecutorService just for the test. Note that this is not a generally reusable mock as it does not
      * implement some interfaces like scheduleWithFixedDelay, etc. And it does not return ScheduledFuture correctly.
      */
-    private class MockExecutorService implements MockTime.Listener {
+    private static class MockExecutorService implements MockTime.Listener {
         private final MockTime time;
 
         private final TreeMap<Long, List<AbstractMap.SimpleEntry<Long, KafkaFutureImpl<Long>>>> waiters = new TreeMap<>();

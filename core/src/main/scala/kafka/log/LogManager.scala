@@ -1135,7 +1135,7 @@ class LogManager(logDirs: Seq[File],
    *  has elapsed after the delete was scheduled. Logs for which this interval has not yet elapsed will be
    *  considered for deletion in the next iteration of `deleteLogs`. The next iteration will be executed
    *  after the remaining time for the first log that is not deleted. If there are no more `logsToBeDeleted`,
-   *  `deleteLogs` will be executed after `currentDefaultConfig.fileDeleteDelayMs`.
+   *  `deleteLogs` will be executed after `max(currentDefaultConfig.fileDeleteDelayMs, 1)`.
    */
   private def deleteLogs(): Unit = {
     var nextDelayMs = 0L
@@ -1145,8 +1145,11 @@ class LogManager(logDirs: Seq[File],
         if (!logsToBeDeleted.isEmpty) {
           val (_, scheduleTimeMs) = logsToBeDeleted.peek()
           scheduleTimeMs + fileDeleteDelayMs - time.milliseconds()
-        } else
-          fileDeleteDelayMs
+        } else {
+          // avoid the case: fileDeleteDelayMs is 0 with empty logsToBeDeleted
+          // in this case, logsToBeDeleted.take() will block forever
+          Math.max(fileDeleteDelayMs, 1)
+        }
       }
 
       while ({nextDelayMs = nextDeleteDelayMs; nextDelayMs <= 0}) {
@@ -1559,7 +1562,7 @@ object LogManager {
             keepPartitionMetadataFile: Boolean): LogManager = {
     val defaultProps = config.extractLogConfigMap
 
-    LogConfig.validateBrokerLogConfigValues(defaultProps, config.isRemoteLogStorageSystemEnabled)
+    LogConfig.validateBrokerLogConfigValues(defaultProps, config.remoteLogManagerConfig.isRemoteStorageSystemEnabled())
     val defaultLogConfig = new LogConfig(defaultProps)
 
     val cleanerConfig = LogCleaner.cleanerConfig(config)
@@ -1583,7 +1586,7 @@ object LogManager {
       time = time,
       keepPartitionMetadataFile = keepPartitionMetadataFile,
       interBrokerProtocolVersion = config.interBrokerProtocolVersion,
-      remoteStorageSystemEnable = config.remoteLogManagerConfig.enableRemoteStorageSystem(),
+      remoteStorageSystemEnable = config.remoteLogManagerConfig.isRemoteStorageSystemEnabled(),
       initialTaskDelayMs = config.logInitialTaskDelayMs)
   }
 
@@ -1601,11 +1604,16 @@ object LogManager {
    newTopicsImage: TopicsImage,
    log: UnifiedLog
   ): Boolean = {
-    val topicId = log.topicId.getOrElse {
-      throw new RuntimeException(s"The log dir $log does not have a topic ID, " +
-        "which is not allowed when running in KRaft mode.")
+    if (log.topicId.isEmpty) {
+      // Missing topic ID could result from storage failure or unclean shutdown after topic creation but before flushing
+      // data to the `partition.metadata` file. And before appending data to the log, the `partition.metadata` is always
+      // flushed to disk. So if the topic ID is missing, it mostly means no data was appended, and we can treat this as
+      // a stray log.
+      info(s"The topicId does not exist in $log, treat it as a stray log")
+      return true
     }
 
+    val topicId = log.topicId.get
     val partitionId = log.topicPartition.partition()
     Option(newTopicsImage.getPartition(topicId, partitionId)) match {
       case Some(partition) =>

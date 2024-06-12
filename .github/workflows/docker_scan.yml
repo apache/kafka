@@ -21,6 +21,7 @@ on:
   workflow_dispatch:
 jobs:
   scan_jvm:
+    if: github.repository == 'apache/kafka'
     runs-on: ubuntu-latest
     strategy:
       matrix:

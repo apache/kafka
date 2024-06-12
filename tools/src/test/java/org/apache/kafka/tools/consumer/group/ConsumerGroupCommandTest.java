@@ -19,6 +19,7 @@ package org.apache.kafka.tools.consumer.group;
 import kafka.api.BaseConsumerTest;
 import kafka.server.KafkaConfig;
 import kafka.utils.TestUtils;
+
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -29,16 +30,14 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.params.provider.Arguments;
-import scala.collection.JavaConverters;
-import scala.collection.Seq;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -53,6 +52,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
+
+import scala.collection.JavaConverters;
+import scala.collection.Seq;
 
 public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestHarness {
     public static final String TOPIC = "foo";
@@ -86,7 +88,10 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
             0,
             false
         ).foreach(props -> {
-            props.setProperty(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, isNewGroupCoordinatorEnabled() + "");
+            if (isNewGroupCoordinatorEnabled()) {
+                props.setProperty(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, "true");
+                props.setProperty(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer");
+            }
             cfgs.add(KafkaConfig.fromProps(props));
             return null;
         });
@@ -139,20 +144,12 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
         return service;
     }
 
-    ConsumerGroupExecutor addConsumerGroupExecutor(int numConsumers) {
-        return addConsumerGroupExecutor(numConsumers, TOPIC, GROUP, RangeAssignor.class.getName(), Optional.empty(), Optional.empty(), false, GroupProtocol.CLASSIC.name);
-    }
-
     ConsumerGroupExecutor addConsumerGroupExecutor(int numConsumers, String groupProtocol) {
         return addConsumerGroupExecutor(numConsumers, TOPIC, GROUP, RangeAssignor.class.getName(), Optional.empty(), Optional.empty(), false, groupProtocol);
     }
 
     ConsumerGroupExecutor addConsumerGroupExecutor(int numConsumers, String groupProtocol, Optional<String> remoteAssignor) {
         return addConsumerGroupExecutor(numConsumers, TOPIC, GROUP, RangeAssignor.class.getName(), remoteAssignor, Optional.empty(), false, groupProtocol);
-    }
-
-    ConsumerGroupExecutor addConsumerGroupExecutor(int numConsumers, String group, String groupProtocol) {
-        return addConsumerGroupExecutor(numConsumers, TOPIC, group, RangeAssignor.class.getName(), Optional.empty(), Optional.empty(), false, groupProtocol);
     }
 
     ConsumerGroupExecutor addConsumerGroupExecutor(int numConsumers, String topic, String group, String groupProtocol) {
@@ -165,10 +162,6 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
             topic, strategy, remoteAssignor, customPropsOpt, syncCommit);
         addExecutor(executor);
         return executor;
-    }
-
-    SimpleConsumerGroupExecutor addSimpleGroupExecutor(String group) {
-        return addSimpleGroupExecutor(Arrays.asList(new TopicPartition(TOPIC, 0)), group);
     }
 
     SimpleConsumerGroupExecutor addSimpleGroupExecutor(Collection<TopicPartition> partitions, String group) {
@@ -337,14 +330,6 @@ public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestH
 
     public static Stream<Arguments> getTestQuorumAndGroupProtocolParametersAll() {
         return BaseConsumerTest.getTestQuorumAndGroupProtocolParametersAll();
-    }
-
-    public static Stream<Arguments> getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly() {
-        return BaseConsumerTest.getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly();
-    }
-
-    public static Stream<Arguments> getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly() {
-        return BaseConsumerTest.getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly();
     }
 
     @SuppressWarnings({"deprecation"})

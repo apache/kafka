@@ -21,10 +21,12 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.opentest4j.AssertionFailedError;
@@ -101,15 +103,15 @@ public class Assertions {
     }
 
     public static void assertRecordsEquals(
-        List<Record> expectedRecords,
-        List<Record> actualRecords
+        List<CoordinatorRecord> expectedRecords,
+        List<CoordinatorRecord> actualRecords
     ) {
         try {
             assertEquals(expectedRecords.size(), actualRecords.size());
 
             for (int i = 0; i < expectedRecords.size(); i++) {
-                Record expectedRecord = expectedRecords.get(i);
-                Record actualRecord = actualRecords.get(i);
+                CoordinatorRecord expectedRecord = expectedRecords.get(i);
+                CoordinatorRecord actualRecord = actualRecords.get(i);
                 assertRecordEquals(expectedRecord, actualRecord);
             }
         } catch (AssertionFailedError e) {
@@ -121,8 +123,8 @@ public class Assertions {
     }
 
     public static void assertRecordEquals(
-        Record expected,
-        Record actual
+        CoordinatorRecord expected,
+        CoordinatorRecord actual
     ) {
         try {
             assertApiMessageAndVersionEquals(expected.key(), actual.key());
@@ -163,9 +165,9 @@ public class Assertions {
             // The order of the racks stored in the PartitionMetadata of the ConsumerGroupPartitionMetadataValue
             // is not always guaranteed. Therefore, we need a special comparator.
             ConsumerGroupPartitionMetadataValue expectedValue =
-                (ConsumerGroupPartitionMetadataValue) expected.message();
+                (ConsumerGroupPartitionMetadataValue) expected.message().duplicate();
             ConsumerGroupPartitionMetadataValue actualValue =
-                (ConsumerGroupPartitionMetadataValue) actual.message();
+                (ConsumerGroupPartitionMetadataValue) actual.message().duplicate();
 
             List<ConsumerGroupPartitionMetadataValue.TopicMetadata> expectedTopicMetadataList =
                 expectedValue.topics();
@@ -175,6 +177,9 @@ public class Assertions {
             if (expectedTopicMetadataList.size() != actualTopicMetadataList.size()) {
                 fail("Topic metadata lists have different sizes");
             }
+
+            expectedTopicMetadataList.sort(Comparator.comparing(ConsumerGroupPartitionMetadataValue.TopicMetadata::topicId));
+            actualTopicMetadataList.sort(Comparator.comparing(ConsumerGroupPartitionMetadataValue.TopicMetadata::topicId));
 
             for (int i = 0; i < expectedTopicMetadataList.size(); i++) {
                 ConsumerGroupPartitionMetadataValue.TopicMetadata expectedTopicMetadata =
@@ -211,8 +216,10 @@ public class Assertions {
             GroupMetadataValue expectedValue = (GroupMetadataValue) expected.message().duplicate();
             GroupMetadataValue actualValue = (GroupMetadataValue) actual.message().duplicate();
 
-            expectedValue.members().sort(Comparator.comparing(GroupMetadataValue.MemberMetadata::memberId));
-            actualValue.members().sort(Comparator.comparing(GroupMetadataValue.MemberMetadata::memberId));
+            Comparator<GroupMetadataValue.MemberMetadata> comparator =
+                Comparator.comparing(GroupMetadataValue.MemberMetadata::memberId);
+            expectedValue.members().sort(comparator);
+            actualValue.members().sort(comparator);
             try {
                 Arrays.asList(expectedValue, actualValue).forEach(value ->
                     value.members().forEach(memberMetadata -> {
@@ -244,6 +251,18 @@ public class Assertions {
                 fail("Failed deserialization: " + ex.getMessage());
             }
             assertEquals(expectedValue, actualValue);
+        } else if (actual.message() instanceof ConsumerGroupTargetAssignmentMemberValue) {
+            ConsumerGroupTargetAssignmentMemberValue expectedValue =
+                (ConsumerGroupTargetAssignmentMemberValue) expected.message().duplicate();
+            ConsumerGroupTargetAssignmentMemberValue actualValue =
+                (ConsumerGroupTargetAssignmentMemberValue) actual.message().duplicate();
+
+            Comparator<ConsumerGroupTargetAssignmentMemberValue.TopicPartition> comparator =
+                Comparator.comparing(ConsumerGroupTargetAssignmentMemberValue.TopicPartition::topicId);
+            expectedValue.topicPartitions().sort(comparator);
+            actualValue.topicPartitions().sort(comparator);
+
+            assertEquals(expectedValue, actualValue);
         } else {
             assertEquals(expected.message(), actual.message());
         }
@@ -257,5 +276,30 @@ public class Assertions {
             assignmentMap.put(topicPartitions.topicId(), new HashSet<>(topicPartitions.partitions()))
         );
         return assignmentMap;
+    }
+
+    public static void assertSyncGroupResponseEquals(
+        SyncGroupResponseData expected,
+        SyncGroupResponseData actual
+    ) {
+        SyncGroupResponseData expectedDuplicate = expected.duplicate();
+        SyncGroupResponseData actualDuplicate = actual.duplicate();
+
+        Arrays.asList(expectedDuplicate, actualDuplicate).forEach(duplicate -> {
+            try {
+                ConsumerPartitionAssignor.Assignment assignment =
+                    ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(duplicate.assignment()));
+                assignment.partitions().sort(
+                    Comparator.comparing(TopicPartition::topic).thenComparing(TopicPartition::partition)
+                );
+                duplicate.setAssignment(Utils.toArray(ConsumerProtocol.serializeAssignment(
+                    assignment,
+                    ConsumerProtocol.deserializeVersion(ByteBuffer.wrap(duplicate.assignment()))
+                )));
+            } catch (SchemaException ex) {
+                fail("Failed deserialization: " + ex.getMessage());
+            }
+        });
+        assertEquals(expectedDuplicate, actualDuplicate);
     }
 }

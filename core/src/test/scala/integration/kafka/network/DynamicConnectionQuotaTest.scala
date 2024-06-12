@@ -18,18 +18,15 @@
 
 package kafka.network
 
-import java.io.IOException
-import java.net.{InetAddress, Socket}
-import java.util.concurrent._
-import java.util.{Collections, Properties}
 import kafka.server.BaseRequestTest
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.admin.Admin
+import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasResult}
+import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.message.ProduceRequestData
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.quota.ClientQuotaEntity
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
+import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.{KafkaException, requests}
@@ -40,6 +37,11 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
+import java.io.IOException
+import java.net.{InetAddress, Socket}
+import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
+import java.util.{Collections, Properties}
+import scala.collection.Map
 import scala.jdk.CollectionConverters._
 
 class DynamicConnectionQuotaTest extends BaseRequestTest {
@@ -273,7 +275,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     val initialConnectionCount = connectionCount
     val entity = new ClientQuotaEntity(Map(ClientQuotaEntity.IP -> ip.orNull).asJava)
     val request = Map(entity -> Map(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG -> Some(updatedRate.toDouble)))
-    TestUtils.alterClientQuotas(admin, request).all.get()
+    alterClientQuotas(admin, request).all.get()
     // use a random throwaway address if ip isn't specified to get the default value
     TestUtils.waitUntilTrue(() => brokers.head.socketServer.connectionQuotas.
       connectionRateForIp(InetAddress.getByName(ip.getOrElse(unknownHost))) == updatedRate,
@@ -307,7 +309,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
           .setName(topic)
           .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
             .setIndex(0)
-            .setRecords(MemoryRecords.withRecords(CompressionType.NONE,
+            .setRecords(MemoryRecords.withRecords(Compression.NONE,
               new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "value".getBytes))))))
         .iterator))
       .setAcks((-1).toShort)
@@ -406,5 +408,15 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     val rateCap = if (maxConnectionRate < Int.MaxValue) 1.2 * maxConnectionRate.toDouble else Int.MaxValue.toDouble
     assertTrue(actualRate <= rateCap, s"Listener $listener connection rate $actualRate must be below $rateCap")
     assertTrue(actualRate >= minConnectionRate, s"Listener $listener connection rate $actualRate must be above $minConnectionRate")
+  }
+
+  private def alterClientQuotas(adminClient: Admin, request: Map[ClientQuotaEntity, Map[String, Option[Double]]]): AlterClientQuotasResult = {
+    val entries = request.map { case (entity, alter) =>
+      val ops = alter.map { case (key, value) =>
+        new ClientQuotaAlteration.Op(key, value.map(Double.box).orNull)
+      }.asJavaCollection
+      new ClientQuotaAlteration(entity, ops)
+    }.asJavaCollection
+    adminClient.alterClientQuotas(entries)
   }
 }

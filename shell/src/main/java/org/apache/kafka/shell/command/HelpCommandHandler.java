@@ -89,7 +89,6 @@ public final class HelpCommandHandler implements Commands.Handler {
 
     @Override
     public boolean equals(Object other) {
-        if (!(other instanceof HelpCommandHandler)) return false;
-        return true;
+        return other instanceof HelpCommandHandler;
     }
 }

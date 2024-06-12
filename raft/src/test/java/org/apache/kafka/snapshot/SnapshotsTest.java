@@ -108,7 +108,7 @@ public final class SnapshotsTest {
         );
 
         Path logDirPath = TestUtils.tempDirectory().toPath();
-        try (FileRawSnapshotWriter snapshot = FileRawSnapshotWriter.create(logDirPath, snapshotId, Optional.empty())) {
+        try (FileRawSnapshotWriter snapshot = FileRawSnapshotWriter.create(logDirPath, snapshotId)) {
             snapshot.freeze();
 
             Path snapshotPath = Snapshots.snapshotPath(logDirPath, snapshotId);

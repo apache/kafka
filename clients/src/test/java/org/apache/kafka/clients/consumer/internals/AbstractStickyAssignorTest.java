@@ -30,6 +30,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
+import org.apache.kafka.clients.consumer.CooperativeStickyAssignor;
 import org.apache.kafka.clients.consumer.StickyAssignor;
 import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignorTest.RackConfig;
 import org.apache.kafka.common.PartitionInfo;
@@ -1297,14 +1298,26 @@ public abstract class AbstractStickyAssignorTest {
         assignment = asList("t1-0, t1-3, t2-0, t2-3, t2-6", "t1-1, t1-4, t2-1, t2-4, t3-0", "t1-2, t1-5, t2-2, t2-5, t3-1");
         verifyUniformSubscription(assignor, topics, 3, racks(2), racks(3), consumerTopics, assignment, 5);
 
-        // Verify that rack-awareness is improved if already owned partitions are misaligned
-        assignment = asList("t1-0, t1-3, t2-0, t2-3, t2-6", "t1-1, t1-4, t2-1, t2-4, t3-0", "t1-2, t1-5, t2-2, t2-5, t3-1");
-        List<String> owned = asList("t1-0, t1-1, t1-2, t1-3, t1-4", "t1-5, t2-0, t2-1, t2-2, t2-3", "t2-4, t2-5, t2-6, t3-0, t3-1");
-        verifyRackAssignment(assignor, topics, 1, racks(3), racks(3), consumerTopics, owned, assignment, 0);
+        if (assignor instanceof CooperativeStickyAssignor) {
+            // Verify that rack-awareness is improved if already owned partitions are misaligned
+            assignment = asList("t1-0, t1-3", "t2-1", "t2-5, t3-1");
+            List<String> owned = asList("t1-0, t1-1, t1-2, t1-3, t1-4", "t1-5, t2-0, t2-1, t2-2, t2-3", "t2-4, t2-5, t2-6, t3-0, t3-1");
+            verifyRackAssignment(assignor, topics, 1, racks(3), racks(3), consumerTopics, owned, assignment, 0);
 
-        // Verify that stickiness is retained when racks match
-        AbstractPartitionAssignorTest.preferRackAwareLogic(assignor, true);
-        verifyRackAssignment(assignor, topics, 3, racks(3), racks(3), consumerTopics, assignment, assignment, 0);
+            // Verify that stickiness is retained when racks match
+            assignment = asList("t1-0, t1-3, t2-0, t2-3, t2-6", "t1-1, t1-4, t2-1, t2-4, t3-0", "t1-2, t1-5, t2-2, t2-5, t3-1");
+            AbstractPartitionAssignorTest.preferRackAwareLogic(assignor, true);
+            verifyRackAssignment(assignor, topics, 3, racks(3), racks(3), consumerTopics, assignment, assignment, 0);
+        } else {
+            // Verify that rack-awareness is improved if already owned partitions are misaligned
+            assignment = asList("t1-0, t1-3, t2-0, t2-3, t2-6", "t1-1, t1-4, t2-1, t2-4, t3-0", "t1-2, t1-5, t2-2, t2-5, t3-1");
+            List<String> owned = asList("t1-0, t1-1, t1-2, t1-3, t1-4", "t1-5, t2-0, t2-1, t2-2, t2-3", "t2-4, t2-5, t2-6, t3-0, t3-1");
+            verifyRackAssignment(assignor, topics, 1, racks(3), racks(3), consumerTopics, owned, assignment, 0);
+
+            // Verify that stickiness is retained when racks match
+            AbstractPartitionAssignorTest.preferRackAwareLogic(assignor, true);
+            verifyRackAssignment(assignor, topics, 3, racks(3), racks(3), consumerTopics, assignment, assignment, 0);
+        }
     }
 
     private void verifyUniformSubscription(AbstractStickyAssignor assignor,

@@ -29,6 +29,7 @@ import org.junit.jupiter.api.Timeout;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -99,11 +100,11 @@ public class GlobVisitorTest {
     }
 
     static class InfoConsumer implements Consumer<Optional<MetadataNodeInfo>> {
-        private Optional<List<MetadataNodeInfo>> infos = null;
+        private Optional<List<MetadataNodeInfo>> infos = Optional.empty();
 
         @Override
         public void accept(Optional<MetadataNodeInfo> info) {
-            if (infos == null) {
+            if (!infos.isPresent()) {
                 if (info.isPresent()) {
                     infos = Optional.of(new ArrayList<>());
                     infos.get().add(info.get());
@@ -137,7 +138,7 @@ public class GlobVisitorTest {
         InfoConsumer consumer = new InfoConsumer();
         GlobVisitor visitor = new GlobVisitor("..", consumer);
         visitor.accept(DATA);
-        assertEquals(Optional.of(Arrays.asList(
+        assertEquals(Optional.of(Collections.singletonList(
             new MetadataNodeInfo(new String[0], DATA.root()))), consumer.infos);
     }
 
@@ -146,7 +147,7 @@ public class GlobVisitorTest {
         InfoConsumer consumer = new InfoConsumer();
         GlobVisitor visitor = new GlobVisitor("../..", consumer);
         visitor.accept(DATA);
-        assertEquals(Optional.of(Arrays.asList(
+        assertEquals(Optional.of(Collections.singletonList(
             new MetadataNodeInfo(new String[0], DATA.root()))), consumer.infos);
     }
 
@@ -189,8 +190,8 @@ public class GlobVisitorTest {
         InfoConsumer consumer = new InfoConsumer();
         GlobVisitor visitor = new GlobVisitor("/a?pha", consumer);
         visitor.accept(DATA);
-        assertEquals(Optional.of(Arrays.asList(
-            new MetadataNodeInfo(new String[] {"alpha"},
+        assertEquals(Optional.of(Collections.singletonList(
+            new MetadataNodeInfo(new String[]{"alpha"},
                 DATA.root().child("alpha")))), consumer.infos);
     }
 }
