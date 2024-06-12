@@ -26,11 +26,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class TimeTest {
+public abstract class TimeTest {
 
-    protected Time createTime() {
-        return Time.SYSTEM;
-    }
+    protected abstract Time createTime();
 
     @Test
     public void testWaitObjectTimeout() throws InterruptedException {
@@ -81,12 +79,5 @@ public class TimeTest {
 
         assertTrue(time.milliseconds() < deadlineMs);
         assertNull(caughtException.get());
-    }
-
-    @Test
-    public void testOnlyOneSystemTime() {
-        Time systemTime1 = Time.SYSTEM;
-        Time systemTime2 = Time.SYSTEM;
-        assertTrue(systemTime1 == systemTime2);
     }
 }

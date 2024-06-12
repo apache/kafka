@@ -30,40 +30,7 @@ import java.util.function.Supplier;
  */
 public interface Time {
 
-    //  A time implementation that uses the system clock and sleep call.
-    //  Use inline implementation to ensure that only one Time#SYSTEM exists in a program
-    Time SYSTEM = new Time() {
-        @Override
-        public long milliseconds() {
-            return System.currentTimeMillis();
-        }
-
-        @Override
-        public long nanoseconds() {
-            return System.nanoTime();
-        }
-
-        @Override
-        public void sleep(long ms) {
-            Utils.sleep(ms);
-        }
-
-        @Override
-        public void waitObject(Object obj, Supplier<Boolean> condition, long deadlineMs) throws InterruptedException {
-            synchronized (obj) {
-                while (true) {
-                    if (condition.get())
-                        return;
-
-                    long currentTimeMs = milliseconds();
-                    if (currentTimeMs >= deadlineMs)
-                        throw new org.apache.kafka.common.errors.TimeoutException("Condition not satisfied before deadline");
-
-                    obj.wait(deadlineMs - currentTimeMs);
-                }
-            }
-        }
-    };
+    Time SYSTEM = SystemTime.getSystemTime();
 
     /**
      * Returns the current time in milliseconds.
