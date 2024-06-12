@@ -1847,19 +1847,15 @@ public class GroupMetadataManager {
                 groupId, updatedMember.memberId(), updatedMember.memberEpoch(), updatedMember.previousMemberEpoch(), updatedMember.state(),
                 assignmentToString(updatedMember.assignedPartitions()), assignmentToString(updatedMember.partitionsPendingRevocation()));
 
-            // Schedule/cancel the rebalance timeout if the member uses the consumer protocol.
-            // The members using classic protocol only have join timer and sync timer.
-            if (!updatedMember.useClassicProtocol()) {
-                if (updatedMember.state() == MemberState.UNREVOKED_PARTITIONS) {
-                    scheduleConsumerGroupRebalanceTimeout(
-                        groupId,
-                        updatedMember.memberId(),
-                        updatedMember.memberEpoch(),
-                        updatedMember.rebalanceTimeoutMs()
-                    );
-                } else {
-                    cancelConsumerGroupRebalanceTimeout(groupId, updatedMember.memberId());
-                }
+            if (updatedMember.state() == MemberState.UNREVOKED_PARTITIONS) {
+                scheduleConsumerGroupRebalanceTimeout(
+                    groupId,
+                    updatedMember.memberId(),
+                    updatedMember.memberEpoch(),
+                    updatedMember.rebalanceTimeoutMs()
+                );
+            } else {
+                cancelConsumerGroupRebalanceTimeout(groupId, updatedMember.memberId());
             }
         }
 

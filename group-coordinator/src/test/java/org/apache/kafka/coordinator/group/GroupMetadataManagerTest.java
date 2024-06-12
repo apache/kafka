@@ -11950,6 +11950,7 @@ public class GroupMetadataManagerTest {
                 .setProtocolName("range"),
             joinResponse1
         );
+        context.assertRebalanceTimeout(groupId, memberId1, request1.rebalanceTimeoutMs());
         context.assertSessionTimeout(groupId, memberId1, request1.sessionTimeoutMs());
         context.assertSyncTimeout(groupId, memberId1, request1.rebalanceTimeoutMs());
 
@@ -12015,6 +12016,7 @@ public class GroupMetadataManagerTest {
         assertEquals(expectedMember2.state(), group.getOrMaybeCreateMember(memberId1, false).state());
 
         joinResult2.appendFuture.complete(null);
+        context.assertNoRebalanceTimeout(groupId, memberId1);
         context.assertNoJoinTimeout(groupId, memberId1);
         JoinGroupResponseData joinResponse2 = joinResult2.joinFuture.get();
         assertEquals(
