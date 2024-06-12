@@ -71,7 +71,7 @@ import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
  * Any code depends on kafka.server.KafkaConfig will keep for using kafka.server.KafkaConfig for the time being until we move it out of core
  * For more details check KAFKA-15853
  */
-abstract public class KafkaConfig extends AbstractConfig {
+public abstract class KafkaConfig extends AbstractConfig {
     @SuppressWarnings("deprecation")
     public final static ConfigDef CONFIG_DEF =  new ConfigDef(RemoteLogManagerConfig.configDef())
         /** ********* Zookeeper Configuration ***********/
