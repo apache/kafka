@@ -17,11 +17,12 @@
 
 package org.apache.kafka.trogdor.rest;
 
+import org.apache.kafka.common.utils.ThreadUtils;
+import org.apache.kafka.trogdor.common.JsonUtil;
+
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;
 
-import org.apache.kafka.common.utils.ThreadUtils;
-import org.apache.kafka.trogdor.common.JsonUtil;
 import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.CustomRequestLog;
 import org.eclipse.jetty.server.Handler;
