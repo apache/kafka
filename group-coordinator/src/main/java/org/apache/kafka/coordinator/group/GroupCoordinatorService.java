@@ -182,12 +182,12 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     .withPartitionWriter(writer)
                     .withLoader(loader)
                     .withCoordinatorShardBuilderSupplier(supplier)
-                    .withTime(time)
                     .withDefaultWriteTimeOut(Duration.ofMillis(config.offsetCommitTimeoutMs))
                     .withCoordinatorRuntimeMetrics(coordinatorRuntimeMetrics)
                     .withCoordinatorMetrics(groupCoordinatorMetrics)
                     .withSerializer(new CoordinatorRecordSerde())
                     .withCompression(Compression.of(config.compressionType).build())
+                    .withAppendLingerMs(config.appendLingerMs)
                     .build();
 
             return new GroupCoordinatorService(
