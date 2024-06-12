@@ -43,8 +43,7 @@ object DynamicConfig {
         configs
       }
 
-    // Non-dynamic properties are determined by subtracting dynamic broker config names from all config names.
-    // This is to avoid circular reference issues during initialization.
+    // In order to avoid circular reference, all DynamicBrokerConfig's variables which are initialized by `DynamicConfig.Broker` should be moved to `DynamicConfig.Broker`. Otherwise, those variables of DynamicBrokerConfig will see intermediate state of `DynamicConfig.Broker`, because `brokerConfigs` is created by `DynamicBrokerConfig.AllDynamicConfigs`
     val nonDynamicProps: Set[String] = KafkaConfig.configNames.toSet -- brokerConfigs.names.asScala
 
     def configKeys: util.Map[String, ConfigDef.ConfigKey] = brokerConfigs.configKeys
