@@ -638,7 +638,6 @@ public class CommitRequestManagerTest {
             time.sleep(defaultApiTimeoutMs);
             assertFalse(commitRequestManager.pendingRequests.unsentOffsetFetches.isEmpty());
             commitRequestManager.poll(time.milliseconds());
-            futures.forEach(f -> assertTrue(f.isDone()));
             futures.forEach(f -> assertFutureThrows(f, TimeoutException.class));
             assertTrue(commitRequestManager.pendingRequests.unsentOffsetFetches.isEmpty());
         } else {
@@ -1284,9 +1283,11 @@ public class CommitRequestManagerTest {
     public void testOffsetFetchTimeoutStoresResult() {
         CommitRequestManager commitRequestManager = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
-        Map<TopicPartition, OffsetAndMetadata> expectedResults = offsetFetchResults(
-            new TopicPartition("test-topic", 0),
-            123L
+        TopicPartition tp = new TopicPartition("test-topic", 0);
+        long offset = 123;
+        Map<TopicPartition, OffsetAndMetadata> expectedResults = Collections.singletonMap(
+            tp,
+            new OffsetAndMetadata(offset, Optional.of(1), "metadata")
         );
 
         // Fetch offset request #1. This request expired, but its results should be cached for the next request.
@@ -1313,9 +1314,11 @@ public class CommitRequestManagerTest {
     public void testOffsetFetchDeletesCachedResult() {
         CommitRequestManager commitRequestManager = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
-        Map<TopicPartition, OffsetAndMetadata> expectedResults = offsetFetchResults(
-            new TopicPartition("test-topic", 0),
-            123L
+        TopicPartition tp = new TopicPartition("test-topic", 0);
+        long offset = 123;
+        Map<TopicPartition, OffsetAndMetadata> expectedResults = Collections.singletonMap(
+            tp,
+            new OffsetAndMetadata(offset, Optional.of(1), "metadata")
         );
 
         // Fetch offset request #1. This request expired, but its results should be cached for the next request.
@@ -1328,7 +1331,12 @@ public class CommitRequestManagerTest {
         );
 
         // Update the requested partition set so the cache from request #1 can't be used for request #2.
-        expectedResults = offsetFetchResults(new TopicPartition("test-topic", 1), 456L);
+        tp = new TopicPartition("test-topic", 1);
+        offset = 456;
+        expectedResults = Collections.singletonMap(
+            tp,
+            new OffsetAndMetadata(offset, Optional.of(1), "metadata")
+        );
 
         // Fetch offset request #2. This request uses a different set of partitions, so it can't use the cache.
         // However, it also expires, so its results should be cached for request #3.
@@ -1352,11 +1360,15 @@ public class CommitRequestManagerTest {
     }
 
     @Test
-    public void testOffsetFetchAndCommitsInterwoven() {
+    public void testOffsetFetchWithCommitInbetween() {
         CommitRequestManager commitRequestManager = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
         TopicPartition tp = new TopicPartition("test-topic", 0);
-        Map<TopicPartition, OffsetAndMetadata> expectedResults = offsetFetchResults(tp, 10L);
+        long offset = 10;
+        Map<TopicPartition, OffsetAndMetadata> expectedResults = Collections.singletonMap(
+            tp,
+            new OffsetAndMetadata(offset, Optional.of(1), "metadata")
+        );
 
         // Fetch offset request #1. This request expired, but its results should be cached for the next request.
         offsetFetchRequest(
@@ -1368,7 +1380,11 @@ public class CommitRequestManagerTest {
         );
 
         // Commit offset request #1. Note that the offset moves from 10 to 20.
-        expectedResults = offsetFetchResults(tp, 20L);
+        offset = 20;
+        expectedResults = Collections.singletonMap(
+            tp,
+            new OffsetAndMetadata(offset, Optional.of(1), "metadata")
+        );
         completeOffsetCommitRequest(commitRequestManager, tp, expectedResults, 10);
 
         // Fetch offset request #2. This request should not use the cache from request #1 as the cache should be
@@ -1381,19 +1397,14 @@ public class CommitRequestManagerTest {
             true
         );
 
+        // Fetch offset request #3. This request uses the same partitions as fetch offset request #2 above, so
+        // it is able to use the cached results. Request #3 doesn't expire, and should thus clear the cache.
         offsetFetchRequest(
             commitRequestManager,
             expectedResults,
             10,
             true,
             false
-        );
-    }
-
-    private Map<TopicPartition, OffsetAndMetadata> offsetFetchResults(TopicPartition tp, long offset) {
-        return Collections.singletonMap(
-            tp,
-            new OffsetAndMetadata(offset, Optional.of(1), "metadata")
         );
     }
 
