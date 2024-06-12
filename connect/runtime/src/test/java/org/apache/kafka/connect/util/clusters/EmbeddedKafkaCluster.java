@@ -97,6 +97,7 @@ import static org.apache.kafka.server.config.ReplicationConfigs.INTER_BROKER_LIS
 import static org.apache.kafka.server.config.ReplicationConfigs.INTER_BROKER_SECURITY_PROTOCOL_CONFIG;
 import static org.apache.kafka.server.config.ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG;
 import static org.apache.kafka.server.config.ServerLogConfigs.LOG_DIR_CONFIG;
+import static org.apache.kafka.test.TestUtils.waitForCondition;
 
 /**
  * Setup an embedded Kafka cluster with specified number of brokers and specified broker properties. To be used for
@@ -106,6 +107,7 @@ public class EmbeddedKafkaCluster {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddedKafkaCluster.class);
 
+    private static final long CLUSTER_STARTUP_TIMEOUT_MS = TimeUnit.MINUTES.toMillis(5);
     private static final long DEFAULT_PRODUCE_SEND_DURATION_MS = TimeUnit.SECONDS.toMillis(120); 
 
     // Kafka Config
@@ -158,6 +160,8 @@ public class EmbeddedKafkaCluster {
         Arrays.fill(currentBrokerPorts, 0);
         Arrays.fill(currentBrokerLogDirs, null);
         doStart();
+        awaitStartup();
+        warmUpCluster();
     }
 
     private void doStart() {
@@ -195,6 +199,50 @@ public class EmbeddedKafkaCluster {
             producerProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL");
         }
         producer = new KafkaProducer<>(producerProps, new ByteArraySerializer(), new ByteArraySerializer());
+    }
+
+    private void awaitStartup() {
+        try {
+            waitForCondition(
+                    () -> Arrays.stream(brokers).allMatch(b -> b.brokerState() == BrokerState.RUNNING),
+                    CLUSTER_STARTUP_TIMEOUT_MS,
+                    "Kafka cluster did not complete startup in time"
+            );
+        } catch (InterruptedException e) {
+            throw new RuntimeException("Interrupted while awaiting Kafka cluster startup", e);
+        }
+        log.info("Completed startup of {} Kafka brokers", brokers.length);
+    }
+
+    /**
+     * Create a single topic, send a single message to that topic, create a consumer group
+     * that reads that message and commits offsets, and then delete the topic.
+     * <p>
+     * This serves as a rudimentary readiness check for the cluster, guaranteeing that
+     * some potentially-delayed initialization operations (such as creating the consumer
+     * offsets topic) take place now rather than later, which can disrupt tests that
+     * perform operations with bounded timeouts.
+     */
+    private void warmUpCluster() {
+        String warmupTopic = "cluster-warmup-topic-" + UUID.randomUUID();
+        createTopic(warmupTopic);
+        produce(warmupTopic, "key", "value");
+
+        String groupId = "cluster-warmup-consumer-" + UUID.randomUUID();
+        try (Consumer<byte[], byte[]> consumer = createConsumer(Collections.singletonMap(GROUP_ID_CONFIG, groupId))) {
+            consumer.subscribe(Collections.singleton(warmupTopic));
+            waitForCondition(
+                    () -> !consumer.poll(Duration.ofSeconds(1)).isEmpty(),
+                    TimeUnit.MINUTES.toMillis(2),
+                    "Kafka cluster did not complete warmup in time"
+            );
+            consumer.commitSync(Duration.ofMinutes(1));
+        } catch (InterruptedException e) {
+            throw new RuntimeException("Interrupted while awaiting Kafka cluster warmup", e);
+        }
+
+        deleteTopic(warmupTopic);
+        log.info("Completed warmup of Kafka cluster");
     }
 
     public void stopOnlyKafka() {

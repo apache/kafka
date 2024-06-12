@@ -135,14 +135,6 @@ abstract class EmbeddedConnect {
         }
 
         try {
-            if (numBrokers > 0) {
-                assertions().assertExactlyNumBrokersAreUp(
-                        numBrokers,
-                        "Kafka cluster did not start in time"
-                );
-                log.info("Completed startup of {} Kafka brokers", numBrokers);
-            }
-
             int numWorkers = workers().size();
             if (numWorkers > 0) {
                 assertions().assertExactlyNumWorkersAreUp(
@@ -152,7 +144,7 @@ abstract class EmbeddedConnect {
                 log.info("Completed startup of {} Connect workers", numWorkers);
             }
         } catch (InterruptedException e) {
-            throw new RuntimeException("Interrupted while awaiting cluster startup", e);
+            throw new RuntimeException("Interrupted while awaiting Connect cluster startup", e);
         }
     }
 
