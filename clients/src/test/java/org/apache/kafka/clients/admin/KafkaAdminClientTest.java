@@ -283,7 +283,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * A unit test for KafkaAdminClient.
@@ -1611,19 +1610,19 @@ public class KafkaAdminClientTest {
                 return cursor != null && cursor.topicName().equals(topicName2) && cursor.partitionIndex() == 1;
             }, new DescribeTopicPartitionsResponse(dataThirdPart));
 
-                DescribeTopicsResult result = env.adminClient().describeTopics(
-                    asList(topicName1, topicName0, topicName2), new DescribeTopicsOptions()
-                );
-                Map<String, TopicDescription> topicDescriptions = result.allTopicNames().get();
-                assertEquals(3, topicDescriptions.size());
-                TopicDescription topicDescription = topicDescriptions.get(topicName0);
-                assertEquals(1, topicDescription.partitions().size());
-                assertEquals(0, topicDescription.partitions().get(0).partition());
-                topicDescription = topicDescriptions.get(topicName1);
-                assertEquals(2, topicDescription.partitions().size());
-                topicDescription = topicDescriptions.get(topicName2);
-                assertEquals(2, topicDescription.partitions().size());
-                assertNull(topicDescription.authorizedOperations());
+            DescribeTopicsResult result = env.adminClient().describeTopics(
+                asList(topicName1, topicName0, topicName2), new DescribeTopicsOptions()
+            );
+            Map<String, TopicDescription> topicDescriptions = result.allTopicNames().get();
+            assertEquals(3, topicDescriptions.size());
+            TopicDescription topicDescription = topicDescriptions.get(topicName0);
+            assertEquals(1, topicDescription.partitions().size());
+            assertEquals(0, topicDescription.partitions().get(0).partition());
+            topicDescription = topicDescriptions.get(topicName1);
+            assertEquals(2, topicDescription.partitions().size());
+            topicDescription = topicDescriptions.get(topicName2);
+            assertEquals(2, topicDescription.partitions().size());
+            assertNull(topicDescription.authorizedOperations());
         }
     }
 
@@ -2753,29 +2752,18 @@ public class KafkaAdminClientTest {
                             env.cluster().clusterResource().clusterId(),
                             env.cluster().controller().id(),
                             emptyList()));
-            try {
-                DescribeTopicsResult result = env.adminClient().describeTopics(
-                        TopicCollection.ofTopicIds(singletonList(nonExistID)));
-                TestUtils.assertFutureError(result.allTopicIds(), UnknownTopicIdException.class);
-                result.allTopicIds().get();
-                fail("describe with non-exist topic ID should throw exception");
-            } catch (Exception e) {
-                assertEquals(
-                        String.format("org.apache.kafka.common.errors.UnknownTopicIdException: TopicId %s not found.", nonExistID),
-                        e.getMessage());
-            }
 
-            // Invalid ID
-            try {
-                DescribeTopicsResult result = env.adminClient().describeTopics(
-                        TopicCollection.ofTopicIds(singletonList(Uuid.ZERO_UUID)));
-                TestUtils.assertFutureError(result.allTopicIds(), InvalidTopicException.class);
-                result.allTopicIds().get();
-                fail("describe with Uuid.ZERO_UUID should throw exception");
-            } catch (Exception e) {
-                assertEquals("The given topic id 'AAAAAAAAAAAAAAAAAAAAAA' cannot be represented in a request.",
-                        e.getCause().getMessage());
-            }
+            DescribeTopicsResult result1 = env.adminClient().describeTopics(
+                    TopicCollection.ofTopicIds(singletonList(nonExistID)));
+            TestUtils.assertFutureError(result1.allTopicIds(), UnknownTopicIdException.class);
+            Exception e = assertThrows(Exception.class, () -> result1.allTopicIds().get(), "describe with non-exist topic ID should throw exception");
+            assertEquals(String.format("org.apache.kafka.common.errors.UnknownTopicIdException: TopicId %s not found.", nonExistID), e.getMessage());
+
+            DescribeTopicsResult result2 = env.adminClient().describeTopics(
+                    TopicCollection.ofTopicIds(singletonList(Uuid.ZERO_UUID)));
+            TestUtils.assertFutureError(result2.allTopicIds(), InvalidTopicException.class);
+            e = assertThrows(Exception.class, () -> result2.allTopicIds().get(), "describe with non-exist topic ID should throw exception");
+            assertEquals("The given topic id 'AAAAAAAAAAAAAAAAAAAAAA' cannot be represented in a request.", e.getCause().getMessage());
 
         }
     }
@@ -5498,10 +5486,7 @@ public class KafkaAdminClientTest {
             assertEquals(offsets.get(tp1), result.partitionResult(tp1).get());
             assertEquals(offsets.get(tp2), result.partitionResult(tp2).get());
             assertEquals(offsets.get(tp3), result.partitionResult(tp3).get());
-            try {
-                result.partitionResult(new TopicPartition("unknown", 0)).get();
-                fail("should have thrown IllegalArgumentException");
-            } catch (IllegalArgumentException expected) { }
+            assertThrows(IllegalArgumentException.class, () -> result.partitionResult(new TopicPartition("unknown", 0)).get());
         }
     }
 
@@ -6844,7 +6829,7 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testAlterUserScramCredentialsUnknownMechanism() {
+    public void testAlterUserScramCredentialsUnknownMechanism() throws ExecutionException, InterruptedException {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
@@ -6871,25 +6856,12 @@ public class KafkaAdminClientTest {
             assertEquals(3, resultData.size());
             Stream.of(user0Name, user1Name).forEach(u -> {
                 assertTrue(resultData.containsKey(u));
-                try {
-                    resultData.get(u).get();
-                    fail("Expected request for user " + u + " to complete exceptionally, but it did not");
-                } catch (Exception expected) {
-                    // ignore
-                }
+                assertThrows(Exception.class, () -> resultData.get(u).get(), "Expected request for user " + u + " to complete exceptionally, but it did not");
             });
             assertTrue(resultData.containsKey(user2Name));
-            try {
-                resultData.get(user2Name).get();
-            } catch (Exception e) {
-                fail("Expected request for user " + user2Name + " to NOT complete excdptionally, but it did");
-            }
-            try {
-                result.all().get();
-                fail("Expected 'result.all().get()' to throw an exception since at least one user failed, but it did not");
-            } catch (final Exception expected) {
-                // ignore, expected
-            }
+            resultData.get(user2Name).get();
+
+            assertThrows(Exception.class, () -> result.all().get(), "Expected 'result.all().get()' to throw an exception since at least one user failed, but it did not");
         }
     }
 
