@@ -1754,13 +1754,13 @@ public class AsyncKafkaConsumerTest {
         if (committedOffsetsEnabled) {
             // Verify there was an FetchCommittedOffsets event and no ResetPositions event
             verify(applicationEventHandler, atLeast(1))
-                .addAndGet(ArgumentMatchers.isA(FetchCommittedOffsetsEvent.class));
+                .add(ArgumentMatchers.isA(FetchCommittedOffsetsEvent.class));
             verify(applicationEventHandler, never())
                 .addAndGet(ArgumentMatchers.isA(ResetPositionsEvent.class));
         } else {
             // Verify there was not any FetchCommittedOffsets event but there should be a ResetPositions
             verify(applicationEventHandler, never())
-                .addAndGet(ArgumentMatchers.isA(FetchCommittedOffsetsEvent.class));
+                .add(ArgumentMatchers.isA(FetchCommittedOffsetsEvent.class));
             verify(applicationEventHandler, atLeast(1))
                 .addAndGet(ArgumentMatchers.isA(ResetPositionsEvent.class));
         }
@@ -1779,7 +1779,7 @@ public class AsyncKafkaConsumerTest {
         verify(applicationEventHandler, atLeast(1))
             .addAndGet(ArgumentMatchers.isA(ValidatePositionsEvent.class));
         verify(applicationEventHandler, atLeast(1))
-            .addAndGet(ArgumentMatchers.isA(FetchCommittedOffsetsEvent.class));
+            .add(ArgumentMatchers.isA(FetchCommittedOffsetsEvent.class));
         verify(applicationEventHandler, atLeast(1))
             .addAndGet(ArgumentMatchers.isA(ResetPositionsEvent.class));
     }
@@ -2005,6 +2005,12 @@ public class AsyncKafkaConsumerTest {
         doReturn(committedOffsets)
             .when(applicationEventHandler)
             .addAndGet(any(FetchCommittedOffsetsEvent.class));
+
+        doAnswer(invocation -> {
+            FetchCommittedOffsetsEvent event = invocation.getArgument(0);
+            event.future().complete(committedOffsets);
+            return null;
+        }).when(applicationEventHandler).add(ArgumentMatchers.isA(FetchCommittedOffsetsEvent.class));
     }
 
     private void completeFetchedCommittedOffsetApplicationEventExceptionally(Exception ex) {
