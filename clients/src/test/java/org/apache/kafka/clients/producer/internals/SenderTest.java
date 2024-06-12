@@ -154,12 +154,10 @@ public class SenderTest {
 
     private static final String TOPIC_NAME = "test";
     private static final Uuid TOPIC_ID = Uuid.fromString("MKXx1fIkQy2J9jXHhK8m1w");
+    private static final Map<String, Uuid> TOPIC_IDS = Collections.singletonMap(TOPIC_NAME, TOPIC_ID);
     private TopicPartition tp0 = new TopicPartition(TOPIC_NAME, 0);
     private TopicPartition tp1 = new TopicPartition(TOPIC_NAME, 1);
     private TopicPartition tp2 = new TopicPartition(TOPIC_NAME, 2);
-    private TopicIdPartition topicIdPartition0 = new TopicIdPartition(TOPIC_ID, tp0);
-    private TopicIdPartition topicIdPartition1 = new TopicIdPartition(TOPIC_ID, tp0);
-    private TopicIdPartition topicIdPartition2 = new TopicIdPartition(TOPIC_ID, tp0);
     private MockTime time = new MockTime();
     private final int batchSize = 16 * 1024;
     private final ProducerMetadata metadata = new ProducerMetadata(0, 0, Long.MAX_VALUE, TOPIC_IDLE_MS,
@@ -176,6 +174,10 @@ public class SenderTest {
     public void setup() {
         setupWithTransactionState(null);
         apiVersions.update("0", NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 0, (short) 12));
+        this.client.updateMetadata(
+                RequestTestUtils.metadataUpdateWithIds(1,
+                        Collections.singletonMap(TOPIC_NAME, 3),
+                        TOPIC_IDS));
     }
 
     @AfterEach
@@ -186,7 +188,13 @@ public class SenderTest {
     private static Map<TopicPartition, MemoryRecords> partitionRecords(ProduceRequest request) {
         Map<TopicPartition, MemoryRecords> partitionRecords = new HashMap<>();
         request.data().topicData().forEach(tpData -> tpData.partitionData().forEach(p -> {
-            TopicPartition tp = new TopicPartition(tpData.name(), p.index());
+            String topicName = tpData.name();
+
+            if (request.version() >= 12) {
+                topicName = TOPIC_IDS.entrySet().stream().filter(e -> e.getValue() == tpData.topicId()).map(Map.Entry::getKey).findFirst().get();
+            }
+
+            TopicPartition tp = new TopicPartition(topicName, p.index());
             partitionRecords.put(tp, (MemoryRecords) p.records());
         }));
         return Collections.unmodifiableMap(partitionRecords);
@@ -442,7 +450,7 @@ public class SenderTest {
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
                     senderMetrics, time, REQUEST_TIMEOUT, RETRY_BACKOFF_MS, null, apiVersions);
             // Create a two broker cluster, with partition 0 on broker 0 and partition 1 on broker 1
-            MetadataResponse metadataUpdate1 = RequestTestUtils.metadataUpdateWith(2, Collections.singletonMap(TOPIC_NAME, 2));
+            MetadataResponse metadataUpdate1 = RequestTestUtils.metadataUpdateWithIds(2, Collections.singletonMap(TOPIC_NAME, 2), TOPIC_IDS);
             client.prepareMetadataUpdate(metadataUpdate1);
 
             // Send the first message.
@@ -463,7 +471,7 @@ public class SenderTest {
             appendToAccumulator(tp2, 0L, "key2", "value2");
 
             // Update metadata before sender receives response from broker 0. Now partition 2 moves to broker 0
-            MetadataResponse metadataUpdate2 = RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap(TOPIC_NAME, 2));
+            MetadataResponse metadataUpdate2 = RequestTestUtils.metadataUpdateWithIds(1, Collections.singletonMap(TOPIC_NAME, 2), TOPIC_IDS);
             client.prepareMetadataUpdate(metadataUpdate2);
             // Sender should not send the second message to node 0.
             assertEquals(1, sender.inFlightBatches(tp2).size());
@@ -538,12 +546,12 @@ public class SenderTest {
     @Test
     public void testMetadataTopicExpiry() throws Exception {
         long offset = 0;
-        client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap(TOPIC_NAME, 2)));
+        client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(1, Collections.singletonMap(TOPIC_NAME, 2), TOPIC_IDS));
 
         Future<RecordMetadata> future = appendToAccumulator(tp0);
         sender.runOnce();
         assertTrue(metadata.containsTopic(tp0.topic()), "Topic not added to metadata");
-        client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap(TOPIC_NAME, 2)));
+        client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(1, Collections.singletonMap(TOPIC_NAME, 2), TOPIC_IDS));
         sender.runOnce();  // send produce request
         client.respond(produceResponse(tp0, offset, Errors.NONE, 0));
         sender.runOnce();
@@ -555,12 +563,12 @@ public class SenderTest {
 
         assertTrue(metadata.containsTopic(tp0.topic()), "Topic not retained in metadata list");
         time.sleep(TOPIC_IDLE_MS);
-        client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap(TOPIC_NAME, 2)));
+        client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(1, Collections.singletonMap(TOPIC_NAME, 2), TOPIC_IDS));
         assertFalse(metadata.containsTopic(tp0.topic()), "Unused topic has not been expired");
         future = appendToAccumulator(tp0);
         sender.runOnce();
         assertTrue(metadata.containsTopic(tp0.topic()), "Topic not added to metadata");
-        client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap(TOPIC_NAME, 2)));
+        client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(1, Collections.singletonMap(TOPIC_NAME, 2), TOPIC_IDS));
         sender.runOnce();  // send produce request
         client.respond(produceResponse(tp0, offset + 1, Errors.NONE, 0));
         sender.runOnce();
@@ -676,7 +684,7 @@ public class SenderTest {
 
         // Process metadata response, prepare FindCoordinator and InitProducerId responses.
         // Verify producerId after the sender is run to process responses.
-        MetadataResponse metadataUpdate = RequestTestUtils.metadataUpdateWith(1, Collections.emptyMap());
+        MetadataResponse metadataUpdate = RequestTestUtils.metadataUpdateWithIds(1, Collections.emptyMap(), Collections.emptyMap());
         client.respond(metadataUpdate);
         prepareFindCoordinatorResponse(Errors.NONE, "testInitProducerIdWithPendingMetadataRequest");
         prepareInitProducerResponse(Errors.NONE, producerIdAndEpoch.producerId, producerIdAndEpoch.epoch);
@@ -701,7 +709,7 @@ public class SenderTest {
 
         // Process metadata and InitProducerId responses.
         // Verify producerId after the sender is run to process responses.
-        MetadataResponse metadataUpdate = RequestTestUtils.metadataUpdateWith(1, Collections.emptyMap());
+        MetadataResponse metadataUpdate = RequestTestUtils.metadataUpdateWithIds(1, Collections.emptyMap(), Collections.emptyMap());
         client.respond(metadataUpdate);
         sender.runOnce();
         sender.runOnce();
@@ -2438,7 +2446,7 @@ public class SenderTest {
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
                     senderMetrics, time, REQUEST_TIMEOUT, 1000L, txnManager, apiVersions);
             // Create a two broker cluster, with partition 0 on broker 0 and partition 1 on broker 1
-            MetadataResponse metadataUpdate1 = RequestTestUtils.metadataUpdateWith(2, Collections.singletonMap(topic, 2));
+            MetadataResponse metadataUpdate1 = RequestTestUtils.metadataUpdateWithIds(2, Collections.singletonMap(topic, 2), TOPIC_IDS);
             client.prepareMetadataUpdate(metadataUpdate1);
             metadataUpdate1.brokers().stream().forEach(node ->
                     apiVersions.update(node.idString(), NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 0, (short) 12))
@@ -3228,7 +3236,8 @@ public class SenderTest {
             int tp0LeaderEpoch = 100;
             int epoch = tp0LeaderEpoch;
             this.client.updateMetadata(
-                RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap(TOPIC_NAME, 2),
+                RequestTestUtils.metadataUpdateWithIds(1, new HashSet<>(Arrays.asList(new TopicIdPartition(TOPIC_ID, tp0),
+                                new TopicIdPartition(TOPIC_ID, tp1))),
                     tp -> {
                         if (tp0.equals(tp)) {
                             return epoch;
@@ -3255,7 +3264,8 @@ public class SenderTest {
             // Update leader epoch for tp0
             int newEpoch = ++tp0LeaderEpoch;
             this.client.updateMetadata(
-                RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap(TOPIC_NAME, 2),
+                RequestTestUtils.metadataUpdateWithIds(1, new HashSet<>(Arrays.asList(new TopicIdPartition(TOPIC_ID, tp0),
+                                new TopicIdPartition(TOPIC_ID, tp1))),
                     tp -> {
                         if (tp0.equals(tp)) {
                             return newEpoch;
@@ -3343,7 +3353,8 @@ public class SenderTest {
             int tp1LeaderEpoch = 200;
             int tp2LeaderEpoch = 300;
             this.client.updateMetadata(
-                RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap(TOPIC_NAME, 3),
+                RequestTestUtils.metadataUpdateWithIds(1, new HashSet<>(Arrays.asList(new TopicIdPartition(TOPIC_ID, tp0),
+                                new TopicIdPartition(TOPIC_ID, tp1), new TopicIdPartition(TOPIC_ID, tp2))),
                     tp -> {
                         if (tp0.equals(tp)) {
                             return tp0LeaderEpoch;
@@ -3423,7 +3434,8 @@ public class SenderTest {
             int tp1LeaderEpoch = 200;
             int tp2LeaderEpoch = 300;
             this.client.updateMetadata(
-                RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap(TOPIC_NAME, 3),
+                RequestTestUtils.metadataUpdateWithIds(1, new HashSet<>(Arrays.asList(new TopicIdPartition(TOPIC_ID, tp0),
+                        new TopicIdPartition(TOPIC_ID, tp1), new TopicIdPartition(TOPIC_ID, tp2))),
                     tp -> {
                         if (tp0.equals(tp)) {
                             return tp0LeaderEpoch;
@@ -3727,7 +3739,7 @@ public class SenderTest {
 
         metadata.add(TOPIC_NAME, time.milliseconds());
         if (updateMetadata)
-            this.client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap(TOPIC_NAME, 2)));
+            this.client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(1, Collections.singletonMap(TOPIC_NAME, 2), TOPIC_IDS));
     }
 
     private void assertSuccessfulSend() throws InterruptedException {

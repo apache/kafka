@@ -882,7 +882,9 @@ public class Sender implements Runnable {
                 minUsedMagic = batch.magic();
         }
         Map<String, Uuid> topicIds = getTopicIdsFromBatches(batches);
-        boolean canUseTopicId = apiVersions.maxSupportedProduceVersion() >= 12;
+        // Use topic id if the max supported producer request version >= 12 and metadata has topic ids for all topics
+        // Otherwise send the request with topic name and the broker
+        boolean canUseTopicId = apiVersions.maxSupportedProduceVersion() >= 12 && topicIds.values().stream().anyMatch(id -> id != Uuid.ZERO_UUID);
 
         ProduceRequestData.TopicProduceDataCollection tpd = new ProduceRequestData.TopicProduceDataCollection();
         for (ProducerBatch batch : batches) {

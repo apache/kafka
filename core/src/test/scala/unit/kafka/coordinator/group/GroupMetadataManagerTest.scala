@@ -1692,7 +1692,7 @@ class GroupMetadataManagerTest {
     val topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), 0, "foo")
     val validTopicIdPartition = new TopicIdPartition(topicIdPartition.topicId, 1, "foo")
     val offset = 37
-    val requireStable = true;
+    val requireStable = true
 
     groupMetadataManager.addOwnedPartition(groupPartitionId)
     val group = new GroupMetadata(groupId, Empty, time)
@@ -1703,6 +1703,8 @@ class GroupMetadataManagerTest {
       topicIdPartition -> OffsetAndMetadata(offset, "s" * (offsetConfig.maxMetadataSize + 1) , time.milliseconds()),
       validTopicIdPartition -> OffsetAndMetadata(offset, "", time.milliseconds())
     )
+
+    when(replicaManager.getTopicIdPartition(offsetTopicPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, offsetTopicPartition))
 
     expectAppendMessage(Errors.NONE)
 
@@ -1764,6 +1766,8 @@ class GroupMetadataManagerTest {
     val capturedResponseCallback: ArgumentCaptor[Map[TopicIdPartition, PartitionResponse] => Unit] =
       ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, PartitionResponse] => Unit])
     when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
+    when(replicaManager.getTopicIdPartition(offsetTopicPartition)).thenReturn(new TopicIdPartition(groupMetadataTopicId, offsetTopicPartition))
+
     var commitErrors: Option[immutable.Map[TopicIdPartition, Errors]] = None
 
     def callback(errors: immutable.Map[TopicIdPartition, Errors]): Unit = {
