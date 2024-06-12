@@ -19,6 +19,7 @@ package org.apache.kafka.tools.consumer.group;
 import kafka.api.BaseConsumerTest;
 import kafka.server.KafkaConfig;
 import kafka.utils.TestUtils;
+
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -29,12 +30,11 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.params.provider.Arguments;
-import scala.collection.JavaConverters;
-import scala.collection.Seq;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -52,6 +52,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
+
+import scala.collection.JavaConverters;
+import scala.collection.Seq;
 
 public class ConsumerGroupCommandTest extends kafka.integration.KafkaServerTestHarness {
     public static final String TOPIC = "foo";

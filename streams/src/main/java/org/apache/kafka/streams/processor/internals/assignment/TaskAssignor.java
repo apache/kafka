@@ -20,14 +20,14 @@ import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
 
 public interface TaskAssignor {
     /**
      * @return whether the generated assignment requires a followup probing rebalance to satisfy all conditions
      */
-    boolean assign(final Map<UUID, ClientState> clients,
+    boolean assign(final Map<ProcessId, ClientState> clients,
                    final Set<TaskId> allTaskIds,
                    final Set<TaskId> statefulTaskIds,
                    final RackAwareTaskAssignor rackAwareTaskAssignor,

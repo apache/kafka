@@ -20,8 +20,8 @@ import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
 
 /**
  * A special task assignor implementation to be used as a fallback in case the
@@ -39,7 +39,7 @@ public class FallbackPriorTaskAssignor implements TaskAssignor {
     }
 
     @Override
-    public boolean assign(final Map<UUID, ClientState> clients,
+    public boolean assign(final Map<ProcessId, ClientState> clients,
                           final Set<TaskId> allTaskIds,
                           final Set<TaskId> statefulTaskIds,
                           final RackAwareTaskAssignor rackAwareTaskAssignor,
