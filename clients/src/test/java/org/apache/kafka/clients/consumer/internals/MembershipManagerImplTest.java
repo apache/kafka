@@ -98,7 +98,7 @@ public class MembershipManagerImplTest {
     private static final int REBALANCE_TIMEOUT = 100;
     private static final int MEMBER_EPOCH = 1;
 
-    private final LogContext logContext = new LogContext();
+    private LogContext logContext;
     private SubscriptionState subscriptionState;
     private ConsumerMetadata metadata;
     private CommitRequestManager commitRequestManager;
@@ -116,6 +116,7 @@ public class MembershipManagerImplTest {
         commitRequestManager = mock(CommitRequestManager.class);
         backgroundEventHandler = mock(BackgroundEventHandler.class);
         backgroundEventQueue = mock(BlockingQueue.class);
+        logContext = new LogContext();
         time = new MockTime(0);
         metrics = new Metrics(time);
         rebalanceMetricsManager = new RebalanceMetricsManager(metrics);
