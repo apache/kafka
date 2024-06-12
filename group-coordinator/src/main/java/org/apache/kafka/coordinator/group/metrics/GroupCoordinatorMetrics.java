@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.coordinator.group.metrics;
 
-import com.yammer.metrics.core.MetricsRegistry;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Gauge;
@@ -25,10 +24,12 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.Group;
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
+import org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.timeline.SnapshotRegistry;
+
+import com.yammer.metrics.core.MetricsRegistry;
 
 import java.util.Arrays;
 import java.util.Collections;

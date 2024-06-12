@@ -21,6 +21,7 @@ import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
 import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
 import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

@@ -24,6 +24,7 @@ import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorExceptio
 import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.coordinator.group.consumer.MemberAssignmentImpl;
 import org.apache.kafka.server.common.TopicIdPartition;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

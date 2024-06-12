@@ -214,8 +214,6 @@ def excludedSpotlessModules = [':clients',
                                ':core',
                                ':examples',
                                ':generator',
-                               ':group-coordinator:group-coordinator-api', // https://github.com/apache/kafka/pull/16198
-                               ':group-coordinator',
                                ':jmh-benchmarks',
                                ':log4j-appender',
                                ':metadata',
