@@ -167,6 +167,11 @@ public class SingleFieldPath {
      * If object is not found, then {@code null} is returned.
      */
     public Object valueFrom(Struct struct) {
+
+        return valueFrom(struct, true);
+    }
+
+    public Object valueFrom(Struct struct, boolean withDefault) {
         if (struct == null) return null;
 
         Struct current = struct;
@@ -181,7 +186,7 @@ public class SingleFieldPath {
         }
 
         if (current.schema().field(lastStep()) != null) {
-            return current.get(lastStep());
+            return withDefault ? current.get(lastStep()) : current.getWithoutDefault(lastStep());
         } else {
             return null;
         }

@@ -60,11 +60,11 @@ public class ExtractFieldTest {
         Map<String, String> configs = new HashMap<>();
         configs.put(FieldSyntaxVersion.FIELD_SYNTAX_VERSION_CONFIG, FieldSyntaxVersion.V2.name());
         configs.put("field", "magic.foo");
-        xform.configure(configs);
+        xformKey.configure(configs);
 
         final Map<String, Object> key = Collections.singletonMap("magic", Collections.singletonMap("foo", 42));
         final SinkRecord record = new SinkRecord("test", 0, null, key, null, null, 0);
-        final SinkRecord transformedRecord = xform.apply(record);
+        final SinkRecord transformedRecord = xformKey.apply(record);
 
         assertNull(transformedRecord.keySchema());
         assertEquals(42, transformedRecord.key());
@@ -100,13 +100,13 @@ public class ExtractFieldTest {
         Map<String, String> configs = new HashMap<>();
         configs.put(FieldSyntaxVersion.FIELD_SYNTAX_VERSION_CONFIG, FieldSyntaxVersion.V2.name());
         configs.put("field", "magic.foo");
-        xform.configure(configs);
+        xformKey.configure(configs);
 
         final Schema fooSchema = SchemaBuilder.struct().field("foo", Schema.INT32_SCHEMA).build();
         final Schema keySchema = SchemaBuilder.struct().field("magic", fooSchema).build();
         final Struct key = new Struct(keySchema).put("magic", new Struct(fooSchema).put("foo", 42));
         final SinkRecord record = new SinkRecord("test", 0, keySchema, key, null, null, 0);
-        final SinkRecord transformedRecord = xform.apply(record);
+        final SinkRecord transformedRecord = xformKey.apply(record);
 
         assertEquals(Schema.INT32_SCHEMA, transformedRecord.keySchema());
         assertEquals(42, transformedRecord.key());
@@ -141,11 +141,11 @@ public class ExtractFieldTest {
         Map<String, String> configs = new HashMap<>();
         configs.put(FieldSyntaxVersion.FIELD_SYNTAX_VERSION_CONFIG, FieldSyntaxVersion.V2.name());
         configs.put("field", "magic.nonexistent");
-        xform.configure(configs);
+        xformKey.configure(configs);
 
         final Map<String, Object> key = Collections.singletonMap("magic", Collections.singletonMap("foo", 42));
         final SinkRecord record = new SinkRecord("test", 0, null, key, null, null, 0);
-        final SinkRecord transformedRecord = xform.apply(record);
+        final SinkRecord transformedRecord = xformKey.apply(record);
 
         assertNull(transformedRecord.keySchema());
         assertNull(transformedRecord.key());
@@ -172,7 +172,7 @@ public class ExtractFieldTest {
         Map<String, String> configs = new HashMap<>();
         configs.put(FieldSyntaxVersion.FIELD_SYNTAX_VERSION_CONFIG, FieldSyntaxVersion.V2.name());
         configs.put("field", "magic.nonexistent");
-        xform.configure(configs);
+        xformKey.configure(configs);
 
         final Schema fooSchema = SchemaBuilder.struct().field("foo", Schema.INT32_SCHEMA).build();
         final Schema keySchema = SchemaBuilder.struct().field("magic", fooSchema).build();
@@ -180,7 +180,7 @@ public class ExtractFieldTest {
         final SinkRecord record = new SinkRecord("test", 0, keySchema, key, null, null, 0);
 
         try {
-            xform.apply(record);
+            xformKey.apply(record);
             fail("Expected exception wasn't raised");
         } catch (IllegalArgumentException iae) {
             assertEquals("Unknown field: magic.nonexistent", iae.getMessage());
