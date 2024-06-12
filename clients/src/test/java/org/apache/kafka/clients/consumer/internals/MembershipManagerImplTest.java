@@ -91,6 +91,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@SuppressWarnings("ClassDataAbstractionCoupling")
 public class MembershipManagerImplTest {
 
     private static final String GROUP_ID = "test-group";
