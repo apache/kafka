@@ -1471,12 +1471,16 @@ public class MembershipManagerImplTest {
     // TODO
     @Test
     public void testReconcilePartitionsRevokedWithFailedAutoCommitCompletesRevocationAnyway() {
+        when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(CompletableFuture.completedFuture(null));
         MembershipManagerImpl membershipManager = createMemberInStableState();
         mockOwnedPartition(membershipManager, Uuid.randomUuid(), "topic1");
 
-        CompletableFuture<Void> commitResult = mockRevocationNoCallbacks(true);
-
+        mockRevocationNoCallbacks(true);
         receiveEmptyAssignment(membershipManager);
+
+        CompletableFuture<Void> commitResult = new CompletableFuture<>();
+        when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(commitResult);
+        mockEmptyAssignmentAndRevocationStuckOnCommit(membershipManager);
 
         membershipManager.poll(time.milliseconds());
 
@@ -1831,9 +1835,10 @@ public class MembershipManagerImplTest {
         assertEquals(0, listener.lostCount());
     }
 
-    // TODO
     @Test
     public void testAddedPartitionsTemporarilyDisabledAwaitingOnPartitionsAssignedCallback() {
+        backgroundEventQueue = new LinkedBlockingQueue<>();
+        backgroundEventHandler = new BackgroundEventHandler(backgroundEventQueue);
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
         String topicName = "topic1";
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
@@ -1845,6 +1850,7 @@ public class MembershipManagerImplTest {
         mockPartitionOwnedAndNewPartitionAdded(topicName, partitionOwned, partitionAdded,
             new CounterConsumerRebalanceListener(), membershipManager);
 
+        when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(CompletableFuture.completedFuture(null));
         membershipManager.poll(time.milliseconds());
 
         verify(subscriptionState).assignFromSubscribedAwaitingCallback(assignedPartitions, addedPartitions);
