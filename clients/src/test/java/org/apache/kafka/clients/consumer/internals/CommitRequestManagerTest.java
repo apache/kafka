@@ -126,7 +126,6 @@ public class CommitRequestManagerTest {
     @Test
     public void testOffsetFetchRequestStateToStringBase() {
         ConsumerConfig config = mock(ConsumerConfig.class);
-        CommitRequestManager.MemberInfo memberInfo = new CommitRequestManager.MemberInfo();
 
         CommitRequestManager commitRequestManager = new CommitRequestManager(
                 time,
@@ -135,30 +134,30 @@ public class CommitRequestManagerTest {
                 config,
                 coordinatorRequestManager,
                 offsetCommitCallbackInvoker,
-                "groupId",
-                Optional.of("groupInstanceId"),
+                DEFAULT_GROUP_ID,
+                Optional.of(DEFAULT_GROUP_INSTANCE_ID),
+                retryBackoffMs,
+                retryBackoffMaxMs,
+                OptionalDouble.of(0),
                 metrics);
 
         commitRequestManager.onMemberEpochUpdated(Optional.of(1), Optional.empty());
         Set<TopicPartition> requestedPartitions = Collections.singleton(new TopicPartition("topic-1", 1));
 
-        CommitRequestManager.OffsetFetchRequestState offsetFetchRequestState = commitRequestManager.new OffsetFetchRequestState(
-                requestedPartitions,
-                retryBackoffMs,
-                retryBackoffMaxMs,
-                1000,
-                memberInfo);
+        CommitRequestManager.OffsetFetchRequestState offsetFetchRequestState = commitRequestManager.createOffsetFetchRequest(requestedPartitions, 0);
 
         TimedRequestState timedRequestState = new TimedRequestState(
                 logContext,
-                "CommitRequestManager",
+                CommitRequestManager.class.getSimpleName(),
                 retryBackoffMs,
+                2,
                 retryBackoffMaxMs,
+                0,
                 TimedRequestState.deadlineTimer(time, 0)
         );
 
         String target = timedRequestState.toStringBase() +
-                ", " + memberInfo +
+                ", " + offsetFetchRequestState.memberInfo +
                 ", requestedPartitions=" + offsetFetchRequestState.requestedPartitions;
 
         assertDoesNotThrow(timedRequestState::toString);
