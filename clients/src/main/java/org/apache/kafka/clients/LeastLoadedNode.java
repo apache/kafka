@@ -38,6 +38,6 @@ public class LeastLoadedNode {
      * the connections are overloaded with in-flight requests. This function takes this into account.
      */
     public boolean hasNodeAvailableOrConnectionReady() {
-        return node() != null || atLeastOneConnectionReady;
+        return node != null || atLeastOneConnectionReady;
     }
 }
