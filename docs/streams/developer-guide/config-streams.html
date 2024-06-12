@@ -1028,7 +1028,7 @@ streamsConfig.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, CustomRocksD
         <div>A task assignor class or class name implementing the
           <code>org.apache.kafka.streams.processor.assignment.TaskAssignor</code> interface". Defaults to the default
           high-availability task assignor class. One possible alternative implementation provided in Apache Kafka is
-          <code>org.apache.kafka.streams.processor.assignm\\ent.StickyTaskAssignor</code>, which was the default behavior
+          <code>org.apache.kafka.streams.processor.assignment.StickyTaskAssignor</code>, which was the default behavior
           of the task assignor before KIP-441 and prioritizes stickiness over task availability.
           Alternative implementations of the task assignment algorithm can be provided in the classpath of the Kafka
           Streams application. This configuration will then be set to the fully qualified class name of the desired
