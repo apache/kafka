@@ -19,8 +19,8 @@ package org.apache.kafka.connect.cli;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.FileWriter;
@@ -30,8 +30,8 @@ import java.util.Map;
 import java.util.Properties;
 
 import static org.apache.kafka.connect.runtime.ConnectorConfig.NAME_CONFIG;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class ConnectStandaloneTest {
 
@@ -46,7 +46,7 @@ public class ConnectStandaloneTest {
     private final ConnectStandalone connectStandalone = new ConnectStandalone();
     private File connectorConfigurationFile;
 
-    @Before
+    @BeforeEach
     public void setUp() throws IOException {
         connectorConfigurationFile = TestUtils.tempFile();
     }
@@ -81,9 +81,9 @@ public class ConnectStandaloneTest {
     @Test
     public void testParseJsonFileWithCreateConnectorRequest() throws Exception {
         CreateConnectorRequest requestToWrite = new CreateConnectorRequest(
-            CONNECTOR_NAME,
-            CONNECTOR_CONFIG,
-            CreateConnectorRequest.InitialState.STOPPED
+                CONNECTOR_NAME,
+                CONNECTOR_CONFIG,
+                CreateConnectorRequest.InitialState.STOPPED
         );
 
         try (FileWriter writer = new FileWriter(connectorConfigurationFile)) {

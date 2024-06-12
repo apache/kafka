@@ -17,12 +17,12 @@
 
 package org.apache.kafka.connect.converters;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
@@ -30,8 +30,8 @@ import java.util.Collections;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.DataException;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 public class BooleanConverterTest {
     private static final String TOPIC = "topic";
@@ -39,7 +39,7 @@ public class BooleanConverterTest {
     private static final byte[] FALSE = new byte[] {0x00};
     private final BooleanConverter converter = new BooleanConverter();
 
-    @Before
+    @BeforeEach
     public void setUp() {
         converter.configure(Collections.emptyMap(), false);
     }
@@ -51,20 +51,20 @@ public class BooleanConverterTest {
                 converter.fromConnectData(TOPIC, Schema.BOOLEAN_SCHEMA, Boolean.TRUE)
         );
         assertArrayEquals(
-            FALSE,
-            converter.fromConnectData(TOPIC, Schema.BOOLEAN_SCHEMA, Boolean.FALSE)
+                FALSE,
+                converter.fromConnectData(TOPIC, Schema.BOOLEAN_SCHEMA, Boolean.FALSE)
         );
     }
 
     @Test
     public void testFromConnectNullSchema() {
         assertArrayEquals(
-            TRUE,
-            converter.fromConnectData(TOPIC, null, Boolean.TRUE)
+                TRUE,
+                converter.fromConnectData(TOPIC, null, Boolean.TRUE)
         );
         assertArrayEquals(
-            FALSE,
-            converter.fromConnectData(TOPIC, null, Boolean.FALSE)
+                FALSE,
+                converter.fromConnectData(TOPIC, null, Boolean.FALSE)
         );
     }
 
@@ -72,13 +72,13 @@ public class BooleanConverterTest {
     @Test
     public void testFromConnectWrongSchema() {
         assertThrows(DataException.class,
-            () -> converter.fromConnectData(TOPIC, Schema.INT32_SCHEMA, Boolean.FALSE));
+                () -> converter.fromConnectData(TOPIC, Schema.INT32_SCHEMA, Boolean.FALSE));
     }
 
     @Test
     public void testFromConnectInvalidValue() {
         assertThrows(DataException.class,
-            () -> converter.fromConnectData(TOPIC, Schema.BOOLEAN_SCHEMA, "true"));
+                () -> converter.fromConnectData(TOPIC, Schema.BOOLEAN_SCHEMA, "true"));
     }
 
     @Test
