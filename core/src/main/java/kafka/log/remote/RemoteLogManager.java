@@ -110,6 +110,7 @@ import java.util.Objects;
 import java.util.NavigableMap;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
@@ -946,8 +947,10 @@ public class RemoteLogManager implements Closeable {
 
             private final Optional<RetentionSizeData> retentionSizeData;
             private final Optional<RetentionTimeData> retentionTimeData;
+
             private long remainingBreachedSize;
-            private Optional<Long> logStartOffset = Optional.empty();
+
+            private OptionalLong logStartOffset = OptionalLong.empty();
 
             public RemoteLogRetentionHandler(Optional<RetentionSizeData> retentionSizeData, Optional<RetentionTimeData> retentionTimeData) {
                 this.retentionSizeData = retentionSizeData;
@@ -969,8 +972,8 @@ public class RemoteLogManager implements Closeable {
                     }
                 }
                 if (shouldDeleteSegment) {
-                    if (!logStartOffset.isPresent() || logStartOffset.get() < metadata.endOffset() + 1) {
-                        logStartOffset = Optional.of(metadata.endOffset() + 1);
+                    if (!logStartOffset.isPresent() || logStartOffset.getAsLong() < metadata.endOffset() + 1) {
+                        logStartOffset = OptionalLong.of(metadata.endOffset() + 1);
                     }
                     logger.info("About to delete remote log segment {} due to retention size {} breach. Log size after deletion will be {}.",
                             metadata.remoteLogSegmentId(), retentionSizeData.get().retentionSize, remainingBreachedSize + retentionSizeData.get().retentionSize);
@@ -988,8 +991,8 @@ public class RemoteLogManager implements Closeable {
                     remainingBreachedSize = Math.max(0, remainingBreachedSize - metadata.segmentSizeInBytes());
                     // It is fine to have logStartOffset as `metadata.endOffset() + 1` as the segment offset intervals
                     // are ascending with in an epoch.
-                    if (!logStartOffset.isPresent() || logStartOffset.get() < metadata.endOffset() + 1) {
-                        logStartOffset = Optional.of(metadata.endOffset() + 1);
+                    if (!logStartOffset.isPresent() || logStartOffset.getAsLong() < metadata.endOffset() + 1) {
+                        logStartOffset = OptionalLong.of(metadata.endOffset() + 1);
                     }
                     logger.info("About to delete remote log segment {} due to retention time {}ms breach based on the largest record timestamp in the segment",
                             metadata.remoteLogSegmentId(), retentionTimeData.get().retentionMs);

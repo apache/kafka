@@ -2083,6 +2083,12 @@ public class RemoteLogManagerTest {
                 metadata1.brokerId() + 1, metadata1.eventTimestampMs(), metadata1.segmentSizeInBytes() + 128,
                 metadata1.customMetadata(), metadata1.state(), metadata1.segmentLeaderEpochs());
 
+        // When there are overlapping/duplicate segments, the RemoteLogMetadataManager#listRemoteLogSegments
+        // returns the segments in order of (valid ++ unreferenced) segments:
+        // (eg) B0 uploaded segment S0 with offsets 0-100 and B1 uploaded segment S1 with offsets 0-200.
+        //      We will mark the segment S0 as duplicate and add it to unreferencedSegmentIds.
+        //      The order of segments returned by listRemoteLogSegments will be S1, S0.
+        // While computing the next-log-start-offset, taking the max of deleted segment's end-offset + 1.
         List<RemoteLogSegmentMetadata> metadataList = new ArrayList<>();
         metadataList.add(metadata2);
         metadataList.add(metadata1);
