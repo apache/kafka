@@ -17,14 +17,14 @@
 
 package org.apache.kafka.trogdor.common;
 
-import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.time.ZoneOffset;
 import java.util.Arrays;
 
-import static org.apache.kafka.trogdor.common.StringFormatter.durationString;
 import static org.apache.kafka.trogdor.common.StringFormatter.dateString;
+import static org.apache.kafka.trogdor.common.StringFormatter.durationString;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(value = 120)
