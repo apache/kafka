@@ -441,8 +441,8 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
           </tr>
           <tr class="row-even"><td>task.assignor.class</td>
             <td>Medium</td>
-            <td colspan="2">A task assignor class or class name implementing the <code>org.apache.kafka.streams.processor.assignment.TaskAssignor</code> interface.</td>
-            <td>The default high-availability task assignor.</td>
+            <td colspan="2">A task assignor class or class name implementing the <code>TaskAssignor</code> interface.</td>
+            <td>The high-availability task assignor.</td>
           </tr>
           <tr class="row-odd"><td>task.timeout.ms</td>
             <td>Medium</td>
@@ -1026,12 +1026,12 @@ streamsConfig.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, CustomRocksD
       <h4><a class="toc-backref" href="#id39">task.assignor.class</a><a class="headerlink" href="#task-assignor-class" title="Permalink to this headline"></a></h4>
       <blockquote>
         <div>A task assignor class or class name implementing the
-          <code>org.apache.kafka.streams.processor.assignment.TaskAssignor</code> interface". Defaults to the default
-          high-availability task assignor class. One possible alternative implementation provided in Apache Kafka is
-          <code>org.apache.kafka.streams.processor.assignment.StickyTaskAssignor</code>, which was the default behavior
-          of the task assignor before KIP-441 and prioritizes stickiness over task availability.
-          Alternative implementations of the task assignment algorithm can be provided in the classpath of the Kafka
-          Streams application. This configuration will then be set to the fully qualified class name of the desired
+          <code>org.apache.kafka.streams.processor.assignment.TaskAssignor</code> interface. Defaults to the
+          high-availability task assignor. One possible alternative implementation provided in Apache Kafka is
+          <code>org.apache.kafka.streams.processor.assignment.StickyTaskAssignor</code>, which was the default task
+          assignor before KIP-441 and prioritizes stickiness over task availability. Alternative implementations of
+          the task assignment algorithm can be provided in the classpath of the Kafka Streams application. This
+          configuration will then be set to the fully qualified class name of the desired
           <code>TaskAssignor</code> implementation.
         </div>
       </blockquote>
