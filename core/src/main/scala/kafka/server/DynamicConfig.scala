@@ -35,13 +35,17 @@ object DynamicConfig {
     object Broker {
       private val brokerConfigs = {
         val configs = QuotaConfigs.brokerQuotaConfigs()
+
+        // Filter and define all dynamic configurations
         KafkaConfig.configKeys
           .filter { case (configName, _) => AllDynamicConfigs.contains(configName) }
           .foreach { case (_, config) => configs.define(config) }
         configs
       }
 
-      val nonDynamicProps: Set[String] = KafkaConfig.configNames.toSet -- brokerConfigs.names.asScala
+    // Non-dynamic properties are determined by subtracting dynamic broker config names from all config names.
+    // This is to avoid circular reference issues during initialization.
+    val nonDynamicProps: Set[String] = KafkaConfig.configNames.toSet -- brokerConfigs.names.asScala
 
     def configKeys: util.Map[String, ConfigDef.ConfigKey] = brokerConfigs.configKeys
 
