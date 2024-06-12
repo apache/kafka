@@ -128,7 +128,7 @@ class LogLoaderTest {
         logDirFailureChannel = logDirFailureChannel,
         time = time,
         keepPartitionMetadataFile = config.usesTopicId,
-        remoteStorageSystemEnable = config.remoteLogManagerConfig.enableRemoteStorageSystem(),
+        remoteStorageSystemEnable = config.remoteLogManagerConfig.isRemoteStorageSystemEnabled(),
         initialTaskDelayMs = config.logInitialTaskDelayMs) {
 
         override def loadLog(logDir: File, hadCleanShutdown: Boolean, recoveryPoints: Map[TopicPartition, Long],

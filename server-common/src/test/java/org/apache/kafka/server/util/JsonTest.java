@@ -17,12 +17,14 @@
 
 package org.apache.kafka.server.util;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonMappingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.server.util.json.DecodeJson;
 import org.apache.kafka.server.util.json.JsonObject;
 import org.apache.kafka.server.util.json.JsonValue;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonMappingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.AbstractMap;

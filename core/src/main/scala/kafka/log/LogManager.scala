@@ -1562,7 +1562,7 @@ object LogManager {
             keepPartitionMetadataFile: Boolean): LogManager = {
     val defaultProps = config.extractLogConfigMap
 
-    LogConfig.validateBrokerLogConfigValues(defaultProps, config.remoteLogManagerConfig.enableRemoteStorageSystem())
+    LogConfig.validateBrokerLogConfigValues(defaultProps, config.remoteLogManagerConfig.isRemoteStorageSystemEnabled())
     val defaultLogConfig = new LogConfig(defaultProps)
 
     val cleanerConfig = LogCleaner.cleanerConfig(config)
@@ -1586,7 +1586,7 @@ object LogManager {
       time = time,
       keepPartitionMetadataFile = keepPartitionMetadataFile,
       interBrokerProtocolVersion = config.interBrokerProtocolVersion,
-      remoteStorageSystemEnable = config.remoteLogManagerConfig.enableRemoteStorageSystem(),
+      remoteStorageSystemEnable = config.remoteLogManagerConfig.isRemoteStorageSystemEnabled(),
       initialTaskDelayMs = config.logInitialTaskDelayMs)
   }
 
