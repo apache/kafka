@@ -173,14 +173,14 @@ class LogLoader(
       }
     }
 
-    leaderEpochCache.ifPresent(_.truncateFromEnd(nextOffset))
+    leaderEpochCache.ifPresent(_.truncateFromEndAsyncFlush(nextOffset))
     val newLogStartOffset = if (isRemoteLogEnabled) {
       logStartOffsetCheckpoint
     } else {
       math.max(logStartOffsetCheckpoint, segments.firstSegment.get.baseOffset)
     }
     // The earliest leader epoch may not be flushed during a hard failure. Recover it here.
-    leaderEpochCache.ifPresent(_.truncateFromStart(logStartOffsetCheckpoint))
+    leaderEpochCache.ifPresent(_.truncateFromStartAsyncFlush(logStartOffsetCheckpoint))
 
     // Any segment loading or recovery code must not use producerStateManager, so that we can build the full state here
     // from scratch.

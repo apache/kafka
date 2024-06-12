@@ -150,7 +150,7 @@ public class MockConnectMetrics extends ConnectMetrics {
     }
 
     public static class MockMetricsReporter implements MetricsReporter {
-        private Map<MetricName, KafkaMetric> metricsByName = new HashMap<>();
+        private final Map<MetricName, KafkaMetric> metricsByName = new HashMap<>();
 
         private MetricsContext metricsContext;
 

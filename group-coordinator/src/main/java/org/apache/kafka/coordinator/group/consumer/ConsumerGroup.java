@@ -21,8 +21,10 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.protocol.Errors;
@@ -31,7 +33,7 @@ import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.CoordinatorRecordHelpers;
-import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
+import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
@@ -54,8 +56,8 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 
-import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HETEROGENEOUS;
-import static org.apache.kafka.coordinator.group.assignor.SubscriptionType.HOMOGENEOUS;
+import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
+import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
 import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.ASSIGNING;
 import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.EMPTY;
 import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.RECONCILING;
@@ -171,6 +173,12 @@ public class ConsumerGroup implements Group {
     private final TimelineHashMap<String, Assignment> targetAssignment;
 
     /**
+     * Reverse lookup map representing topic partitions with
+     * their current member assignments.
+     */
+    private final TimelineHashMap<Uuid, TimelineHashMap<Integer, String>> invertedTargetAssignment;
+
+    /**
      * The current partition epoch maps each topic-partitions to their current epoch where
      * the epoch is the epoch of their owners. When a member revokes a partition, it removes
      * its epochs from this map. When a member gets a partition, it adds its epochs to this map.
@@ -221,6 +229,7 @@ public class ConsumerGroup implements Group {
         this.subscriptionType = new TimelineObject<>(snapshotRegistry, HOMOGENEOUS);
         this.targetAssignmentEpoch = new TimelineInteger(snapshotRegistry);
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.invertedTargetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentPartitionEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
         this.metrics = Objects.requireNonNull(metrics);
         this.numClassicProtocolMembers = new TimelineInteger(snapshotRegistry);
@@ -517,13 +526,76 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * Updates target assignment of a member.
+     * @return An immutable map containing all the topic partitions
+     *         with their current member assignments.
+     */
+    public Map<Uuid, Map<Integer, String>> invertedTargetAssignment() {
+        return Collections.unmodifiableMap(invertedTargetAssignment);
+    }
+
+    /**
+     * Updates the target assignment of a member.
      *
      * @param memberId              The member id.
      * @param newTargetAssignment   The new target assignment.
      */
     public void updateTargetAssignment(String memberId, Assignment newTargetAssignment) {
+        updateInvertedTargetAssignment(
+            memberId,
+            targetAssignment.getOrDefault(memberId, new Assignment(Collections.emptyMap())),
+            newTargetAssignment
+        );
         targetAssignment.put(memberId, newTargetAssignment);
+    }
+
+    /**
+     * Updates the reverse lookup map of the target assignment.
+     *
+     * @param memberId              The member Id.
+     * @param oldTargetAssignment   The old target assignment.
+     * @param newTargetAssignment   The new target assignment.
+     */
+    private void updateInvertedTargetAssignment(
+        String memberId,
+        Assignment oldTargetAssignment,
+        Assignment newTargetAssignment
+    ) {
+        // Combine keys from both old and new assignments.
+        Set<Uuid> allTopicIds = new HashSet<>();
+        allTopicIds.addAll(oldTargetAssignment.partitions().keySet());
+        allTopicIds.addAll(newTargetAssignment.partitions().keySet());
+
+        for (Uuid topicId : allTopicIds) {
+            Set<Integer> oldPartitions = oldTargetAssignment.partitions().getOrDefault(topicId, Collections.emptySet());
+            Set<Integer> newPartitions = newTargetAssignment.partitions().getOrDefault(topicId, Collections.emptySet());
+
+            TimelineHashMap<Integer, String> topicPartitionAssignment = invertedTargetAssignment.computeIfAbsent(
+                topicId, k -> new TimelineHashMap<>(snapshotRegistry, Math.max(oldPartitions.size(), newPartitions.size()))
+            );
+
+            // Remove partitions that aren't present in the new assignment only if the partition is currently
+            // still assigned to the member in question.
+            // If p0 was moved from A to B, and the target assignment map was updated for B first, we don't want to
+            // remove the key p0 from the inverted map and undo the action when A eventually tries to update its assignment.
+            for (Integer partition : oldPartitions) {
+                if (!newPartitions.contains(partition) && memberId.equals(topicPartitionAssignment.get(partition))) {
+                    topicPartitionAssignment.remove(partition);
+                }
+            }
+
+            // Add partitions that are in the new assignment but not in the old assignment.
+            for (Integer partition : newPartitions) {
+                if (!oldPartitions.contains(partition)) {
+                    topicPartitionAssignment.put(partition, memberId);
+                }
+            }
+
+            if (topicPartitionAssignment.isEmpty()) {
+                invertedTargetAssignment.remove(topicId);
+            } else {
+                invertedTargetAssignment.put(topicId, topicPartitionAssignment);
+            }
+        }
     }
 
     /**
@@ -532,6 +604,11 @@ public class ConsumerGroup implements Group {
      * @param memberId The member id.
      */
     public void removeTargetAssignment(String memberId) {
+        updateInvertedTargetAssignment(
+            memberId,
+            targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
+            Assignment.EMPTY
+        );
         targetAssignment.remove(memberId);
     }
 
@@ -717,21 +794,36 @@ public class ConsumerGroup implements Group {
      * @param memberEpoch       The member epoch.
      * @param isTransactional   Whether the offset commit is transactional or not. It has no
      *                          impact when a consumer group is used.
+     * @param apiVersion        The api version.
+     * @throws UnknownMemberIdException     If the member is not found.
+     * @throws StaleMemberEpochException    If the member uses the consumer protocol and the provided
+     *                                      member epoch doesn't match the actual member epoch.
+     * @throws IllegalGenerationException   If the member uses the classic protocol and the provided
+     *                                      generation id is not equal to the member epoch.
      */
     @Override
     public void validateOffsetCommit(
         String memberId,
         String groupInstanceId,
         int memberEpoch,
-        boolean isTransactional
-    ) throws UnknownMemberIdException, StaleMemberEpochException {
+        boolean isTransactional,
+        short apiVersion
+    ) throws UnknownMemberIdException, StaleMemberEpochException, IllegalGenerationException {
         // When the member epoch is -1, the request comes from either the admin client
         // or a consumer which does not use the group management facility. In this case,
         // the request can commit offsets if the group is empty.
         if (memberEpoch < 0 && members().isEmpty()) return;
 
         final ConsumerGroupMember member = getOrMaybeCreateMember(memberId, false);
-        validateMemberEpoch(memberEpoch, member.memberEpoch());
+
+        // If the commit is not transactional and the member uses the new consumer protocol (KIP-848),
+        // the member should be using the OffsetCommit API version >= 9.
+        if (!isTransactional && !member.useClassicProtocol() && apiVersion < 9) {
+            throw new UnsupportedVersionException("OffsetCommit version 9 or above must be used " +
+                "by members using the consumer group protocol");
+        }
+
+        validateMemberEpoch(memberEpoch, member.memberEpoch(), member.useClassicProtocol());
     }
 
     /**
@@ -740,13 +832,18 @@ public class ConsumerGroup implements Group {
      * @param memberId              The member id for consumer groups.
      * @param memberEpoch           The member epoch for consumer groups.
      * @param lastCommittedOffset   The last committed offsets in the timeline.
+     * @throws UnknownMemberIdException     If the member is not found.
+     * @throws StaleMemberEpochException    If the member uses the consumer protocol and the provided
+     *                                      member epoch doesn't match the actual member epoch.
+     * @throws IllegalGenerationException   If the member uses the classic protocol and the provided
+     *                                      generation id is not equal to the member epoch.
      */
     @Override
     public void validateOffsetFetch(
         String memberId,
         int memberEpoch,
         long lastCommittedOffset
-    ) throws UnknownMemberIdException, StaleMemberEpochException {
+    ) throws UnknownMemberIdException, StaleMemberEpochException, IllegalGenerationException {
         // When the member id is null and the member epoch is -1, the request either comes
         // from the admin client or from a client which does not provide them. In this case,
         // the fetch request is accepted.
@@ -757,7 +854,7 @@ public class ConsumerGroup implements Group {
             throw new UnknownMemberIdException(String.format("Member %s is not a member of group %s.",
                 memberId, groupId));
         }
-        validateMemberEpoch(memberEpoch, member.memberEpoch());
+        validateMemberEpoch(memberEpoch, member.memberEpoch(), member.useClassicProtocol());
     }
 
     /**
@@ -821,16 +918,27 @@ public class ConsumerGroup implements Group {
     }
 
     /**
-     * Throws a StaleMemberEpochException if the received member epoch does not match
-     * the expected member epoch.
+     * Throws an exception if the received member epoch does not match the expected member epoch.
+     *
+     * @param receivedMemberEpoch   The received member epoch or generation id.
+     * @param expectedMemberEpoch   The expected member epoch.
+     * @param useClassicProtocol    The boolean indicating whether the checked member uses the classic protocol.
+     * @throws StaleMemberEpochException    if the member with unmatched member epoch uses the consumer protocol.
+     * @throws IllegalGenerationException   if the member with unmatched generation id uses the classic protocol.
      */
     private void validateMemberEpoch(
         int receivedMemberEpoch,
-        int expectedMemberEpoch
-    ) throws StaleMemberEpochException {
+        int expectedMemberEpoch,
+        boolean useClassicProtocol
+    ) throws StaleMemberEpochException, IllegalGenerationException {
         if (receivedMemberEpoch != expectedMemberEpoch) {
-            throw new StaleMemberEpochException(String.format("The received member epoch %d does not match "
-                + "the expected member epoch %d.", receivedMemberEpoch, expectedMemberEpoch));
+            if (useClassicProtocol) {
+                throw new IllegalGenerationException(String.format("The received generation id %d does not match " +
+                    "the expected member epoch %d.", receivedMemberEpoch, expectedMemberEpoch));
+            } else {
+                throw new StaleMemberEpochException(String.format("The received member epoch %d does not match "
+                    + "the expected member epoch %d.", receivedMemberEpoch, expectedMemberEpoch));
+            }
         }
     }
 
@@ -998,6 +1106,29 @@ public class ConsumerGroup implements Group {
             oldMember,
             newMember
         );
+        return subscribedTopicNames;
+    }
+
+    /**
+     * Updates the subscription count with a set of members removed.
+     *
+     * @param removedMembers        The set of removed members.
+     *
+     * @return Copy of the map of topics to the count of number of subscribers.
+     */
+    public Map<String, Integer> computeSubscribedTopicNames(
+        Set<ConsumerGroupMember> removedMembers
+    ) {
+        Map<String, Integer> subscribedTopicNames = new HashMap<>(this.subscribedTopicNames);
+        if (removedMembers != null) {
+            removedMembers.forEach(removedMember ->
+                maybeUpdateSubscribedTopicNames(
+                    subscribedTopicNames,
+                    removedMember,
+                    null
+                )
+            );
+        }
         return subscribedTopicNames;
     }
 
@@ -1299,5 +1430,28 @@ public class ConsumerGroup implements Group {
     public boolean allMembersUseClassicProtocolExcept(String memberId) {
         return numClassicProtocolMembers() == members().size() - 1 &&
             !getOrMaybeCreateMember(memberId, false).useClassicProtocol();
+    }
+
+    /**
+     * Checks whether the member has any unreleased partition.
+     *
+     * @param member The member to check.
+     * @return A boolean indicating whether the member has partitions in the target
+     *         assignment that hasn't been revoked by other members.
+     */
+    public boolean waitingOnUnreleasedPartition(ConsumerGroupMember member) {
+        if (member.state() == MemberState.UNRELEASED_PARTITIONS) {
+            for (Map.Entry<Uuid, Set<Integer>> entry : targetAssignment().get(member.memberId()).partitions().entrySet()) {
+                Uuid topicId = entry.getKey();
+                Set<Integer> assignedPartitions = member.assignedPartitions().getOrDefault(topicId, Collections.emptySet());
+
+                for (int partition : entry.getValue()) {
+                    if (!assignedPartitions.contains(partition) && currentPartitionEpoch(topicId, partition) != -1) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 }

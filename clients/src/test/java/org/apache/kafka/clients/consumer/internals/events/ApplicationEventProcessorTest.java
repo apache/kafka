@@ -29,16 +29,15 @@ import org.apache.kafka.clients.consumer.internals.TopicMetadataRequestManager;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Timer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 
+import static org.apache.kafka.clients.consumer.internals.events.CompletableEvent.calculateDeadlineMs;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -47,7 +46,6 @@ import static org.mockito.Mockito.when;
 
 public class ApplicationEventProcessorTest {
     private final Time time = new MockTime(1);
-    private final BlockingQueue applicationEventQueue = mock(BlockingQueue.class);
     private final ConsumerMetadata metadata = mock(ConsumerMetadata.class);
     private ApplicationEventProcessor processor;
     private CommitRequestManager commitRequestManager;
@@ -55,7 +53,6 @@ public class ApplicationEventProcessorTest {
     private MembershipManager membershipManager;
 
     @BeforeEach
-    @SuppressWarnings("unchecked")
     public void setup() {
         LogContext logContext = new LogContext();
         OffsetsRequestManager offsetsRequestManager = mock(OffsetsRequestManager.class);
@@ -77,7 +74,6 @@ public class ApplicationEventProcessorTest {
         );
         processor = new ApplicationEventProcessor(
             new LogContext(),
-            applicationEventQueue,
             requestManagers,
             metadata
         );
@@ -93,8 +89,7 @@ public class ApplicationEventProcessorTest {
 
     @Test
     public void testPrepClosingLeaveGroupEvent() {
-        Timer timer = time.timer(100);
-        LeaveOnCloseEvent event = new LeaveOnCloseEvent(timer);
+        LeaveOnCloseEvent event = new LeaveOnCloseEvent(calculateDeadlineMs(time, 100));
         when(heartbeatRequestManager.membershipManager()).thenReturn(membershipManager);
         when(membershipManager.leaveGroup()).thenReturn(CompletableFuture.completedFuture(null));
         processor.process(event);

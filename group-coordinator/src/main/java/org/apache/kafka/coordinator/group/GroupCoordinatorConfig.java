@@ -17,7 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
+import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.assignor.UniformAssignor;
 
@@ -57,6 +57,10 @@ public class GroupCoordinatorConfig {
             Arrays.stream(Group.GroupType.values()).map(Group.GroupType::toString).collect(Collectors.joining(",")) + ". " +
             "The " + Group.GroupType.CONSUMER + " rebalance protocol is in early access and therefore must not be used in production.";
     public static final List<String> GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DEFAULT = Collections.singletonList(Group.GroupType.CLASSIC.toString());
+    public final static String GROUP_COORDINATOR_APPEND_LINGER_MS_CONFIG = "group.coordinator.append.linger.ms";
+    public final static String GROUP_COORDINATOR_APPEND_LINGER_MS_DOC = "The duration in milliseconds that the coordinator will " +
+        "wait for writes to accumulate before flushing them to disk. Transactional writes are not accumulated.";
+    public final static int GROUP_COORDINATOR_APPEND_LINGER_MS_DEFAULT = 10;
 
     public final static String GROUP_COORDINATOR_NUM_THREADS_CONFIG = "group.coordinator.threads";
     public final static String GROUP_COORDINATOR_NUM_THREADS_DOC = "The number of threads used by the group coordinator.";
@@ -165,6 +169,12 @@ public class GroupCoordinatorConfig {
     public final int numThreads;
 
     /**
+     * The duration in milliseconds that the coordinator will wait for writes to
+     * accumulate before flushing them to disk.
+     */
+    public final int appendLingerMs;
+
+    /**
      * The consumer group session timeout in milliseconds.
      */
     public final int consumerGroupSessionTimeoutMs;
@@ -182,7 +192,7 @@ public class GroupCoordinatorConfig {
     /**
      * The consumer group assignors.
      */
-    public final List<PartitionAssignor> consumerGroupAssignors;
+    public final List<ConsumerGroupPartitionAssignor> consumerGroupAssignors;
 
     /**
      * The offsets topic segment bytes should be kept relatively small to facilitate faster
@@ -259,10 +269,11 @@ public class GroupCoordinatorConfig {
 
     public GroupCoordinatorConfig(
         int numThreads,
+        int appendLingerMs,
         int consumerGroupSessionTimeoutMs,
         int consumerGroupHeartbeatIntervalMs,
         int consumerGroupMaxSize,
-        List<PartitionAssignor> consumerGroupAssignors,
+        List<ConsumerGroupPartitionAssignor> consumerGroupAssignors,
         int offsetsTopicSegmentBytes,
         int offsetMetadataMaxSize,
         int classicGroupMaxSize,
@@ -277,6 +288,7 @@ public class GroupCoordinatorConfig {
         CompressionType compressionType
     ) {
         this.numThreads = numThreads;
+        this.appendLingerMs = appendLingerMs;
         this.consumerGroupSessionTimeoutMs = consumerGroupSessionTimeoutMs;
         this.consumerGroupHeartbeatIntervalMs = consumerGroupHeartbeatIntervalMs;
         this.consumerGroupMaxSize = consumerGroupMaxSize;

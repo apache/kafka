@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -162,43 +163,31 @@ public class EventAccumulator<K, T extends EventAccumulator.Event<K>> implements
     }
 
     /**
-     * Returns the next {{@link Event}} available or null if no event is
-     * available.
+     * Immediately returns the next {{@link Event}} available or null
+     * if the accumulator is empty.
      *
      * @return The next event available or null.
      */
     public T poll() {
-        lock.lock();
-        try {
-            K key = randomKey();
-            if (key == null) return null;
-
-            Deque<T> queue = queues.get(key);
-            T event = queue.poll();
-
-            if (queue.isEmpty()) queues.remove(key);
-            inflightKeys.add(key);
-            size--;
-
-            return event;
-        } finally {
-            lock.unlock();
-        }
+        return poll(0, TimeUnit.MILLISECONDS);
     }
 
     /**
-     * Returns the next {{@link Event}} available. This method blocks until an
-     * event is available or accumulator is closed.
+     * Returns the next {{@link Event}} available. This method blocks for the provided
+     * time and returns null of no event is available.
      *
+     * @param timeout   The timeout.
+     * @param unit      The timeout unit.
      * @return The next event available or null.
      */
-    public T take() {
+    public T poll(long timeout, TimeUnit unit) {
         lock.lock();
         try {
             K key = randomKey();
-            while (key == null && !closed) {
+            long nanos = unit.toNanos(timeout);
+            while (key == null && !closed && nanos > 0) {
                 try {
-                    condition.await();
+                    nanos = condition.awaitNanos(nanos);
                 } catch (InterruptedException e) {
                     // Ignore.
                 }

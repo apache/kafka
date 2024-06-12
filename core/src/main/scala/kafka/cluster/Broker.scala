@@ -43,6 +43,10 @@ object Broker {
     new Broker(id, endPoints, rack, emptySupportedFeatures)
   }
 
+  def apply(id: Int, endPoint: EndPoint, rack: Option[String]): Broker = {
+    new Broker(id, Seq(endPoint), rack, emptySupportedFeatures)
+  }
+
   private def supportedFeatures(features: java.util.Map[String, VersionRange]): java.util
   .Map[String, SupportedVersionRange] = {
     features.asScala.map { case (name, range) =>

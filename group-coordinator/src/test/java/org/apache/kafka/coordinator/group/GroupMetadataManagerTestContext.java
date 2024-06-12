@@ -46,7 +46,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
+import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupBuilder;
@@ -89,6 +89,7 @@ import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_I
 import static org.apache.kafka.coordinator.group.Assertions.assertSyncGroupResponseEquals;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.EMPTY_RESULT;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.classicGroupHeartbeatKey;
+import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupJoinKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupRebalanceTimeoutKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupSessionTimeoutKey;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.consumerGroupSyncKey;
@@ -376,7 +377,7 @@ public class GroupMetadataManagerTestContext {
         final private LogContext logContext = new LogContext();
         final private SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
         private MetadataImage metadataImage;
-        private List<PartitionAssignor> consumerGroupAssignors = Collections.singletonList(new MockPartitionAssignor("range"));
+        private List<ConsumerGroupPartitionAssignor> consumerGroupAssignors = Collections.singletonList(new MockPartitionAssignor("range"));
         final private List<ConsumerGroupBuilder> consumerGroupBuilders = new ArrayList<>();
         private int consumerGroupMaxSize = Integer.MAX_VALUE;
         private int consumerGroupMetadataRefreshIntervalMs = Integer.MAX_VALUE;
@@ -393,7 +394,7 @@ public class GroupMetadataManagerTestContext {
             return this;
         }
 
-        public Builder withAssignors(List<PartitionAssignor> assignors) {
+        public Builder withConsumerGroupAssignors(List<ConsumerGroupPartitionAssignor> assignors) {
             this.consumerGroupAssignors = assignors;
             return this;
         }
@@ -616,6 +617,27 @@ public class GroupMetadataManagerTestContext {
     ) {
         MockCoordinatorTimer.ScheduledTimeout<Void, CoordinatorRecord> timeout =
             timer.timeout(consumerGroupRebalanceTimeoutKey(groupId, memberId));
+        assertNull(timeout);
+    }
+
+    public MockCoordinatorTimer.ScheduledTimeout<Void, CoordinatorRecord> assertJoinTimeout(
+        String groupId,
+        String memberId,
+        long delayMs
+    ) {
+        MockCoordinatorTimer.ScheduledTimeout<Void, CoordinatorRecord> timeout =
+            timer.timeout(consumerGroupJoinKey(groupId, memberId));
+        assertNotNull(timeout);
+        assertEquals(time.milliseconds() + delayMs, timeout.deadlineMs);
+        return timeout;
+    }
+
+    public void assertNoJoinTimeout(
+        String groupId,
+        String memberId
+    ) {
+        MockCoordinatorTimer.ScheduledTimeout<Void, CoordinatorRecord> timeout =
+            timer.timeout(consumerGroupJoinKey(groupId, memberId));
         assertNull(timeout);
     }
 
@@ -1112,7 +1134,7 @@ public class GroupMetadataManagerTestContext {
         assertEquals(0, group.size());
     }
 
-    public HeartbeatResponseData sendClassicGroupHeartbeat(
+    public CoordinatorResult<HeartbeatResponseData, CoordinatorRecord> sendClassicGroupHeartbeat(
         HeartbeatRequestData request
     ) {
         RequestContext context = new RequestContext(
@@ -1164,7 +1186,7 @@ public class GroupMetadataManagerTestContext {
         if (expectedError == Errors.UNKNOWN_MEMBER_ID) {
             assertThrows(UnknownMemberIdException.class, () -> sendClassicGroupHeartbeat(request));
         } else {
-            HeartbeatResponseData response = sendClassicGroupHeartbeat(request);
+            HeartbeatResponseData response = sendClassicGroupHeartbeat(request).response();
             assertEquals(expectedError.code(), response.errorCode());
         }
     }

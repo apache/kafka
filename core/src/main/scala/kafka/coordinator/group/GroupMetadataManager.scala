@@ -27,7 +27,7 @@ import java.util.concurrent.ConcurrentHashMap
 import com.yammer.metrics.core.Gauge
 import kafka.common.OffsetAndMetadata
 import kafka.coordinator.group.GroupMetadataManager.maybeConvertOffsetCommitError
-import kafka.server.{LogAppendResult, ReplicaManager, RequestLocal}
+import kafka.server.{ReplicaManager, RequestLocal}
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.Implicits._
 import kafka.utils._
@@ -378,14 +378,13 @@ class GroupMetadataManager(brokerId: Int,
   }
 
   private def createPutCacheCallback(isTxnOffsetCommit: Boolean,
-                             group: GroupMetadata,
-                             consumerId: String,
-                             offsetMetadata: immutable.Map[TopicIdPartition, OffsetAndMetadata],
-                             filteredOffsetMetadata: Map[TopicIdPartition, OffsetAndMetadata],
-                             responseCallback: immutable.Map[TopicIdPartition, Errors] => Unit,
-                             producerId: Long,
-                             records: Map[TopicPartition, MemoryRecords],
-                             preAppendErrors: Map[TopicPartition, LogAppendResult] = Map.empty): Map[TopicIdPartition, PartitionResponse] => Unit = {
+                                     group: GroupMetadata,
+                                     consumerId: String,
+                                     offsetMetadata: immutable.Map[TopicIdPartition, OffsetAndMetadata],
+                                     filteredOffsetMetadata: Map[TopicIdPartition, OffsetAndMetadata],
+                                     responseCallback: immutable.Map[TopicIdPartition, Errors] => Unit,
+                                     producerId: Long,
+                                     records: Map[TopicPartition, MemoryRecords]): Map[TopicIdPartition, PartitionResponse] => Unit = {
     val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partitionFor(group.groupId))
     val offsetTopicIdPartition = replicaManager.getTopicIdPartition(offsetTopicPartition)
     // set the callback function to insert offsets into cache after log append completed
@@ -437,8 +436,6 @@ class GroupMetadataManager(brokerId: Int,
       val commitStatus = offsetMetadata.map { case (topicIdPartition, offsetAndMetadata) =>
         if (!validateOffsetMetadataLength(offsetAndMetadata.metadata))
           (topicIdPartition, Errors.OFFSET_METADATA_TOO_LARGE)
-        else if (preAppendErrors.contains(topicIdPartition.topicPartition))
-          (topicIdPartition, preAppendErrors(topicIdPartition.topicPartition).error)
         else
           (topicIdPartition, responseError)
       }
@@ -496,9 +493,9 @@ class GroupMetadataManager(brokerId: Int,
 
     if (isTxnOffsetCommit) {
       addProducerGroup(producerId, group.groupId)
-      group.prepareTxnOffsetCommit(producerId, offsetMetadata)
+      group.prepareTxnOffsetCommit(producerId, filteredOffsetMetadata)
     } else {
-      group.prepareOffsetCommit(offsetMetadata)
+      group.prepareOffsetCommit(filteredOffsetMetadata)
     }
 
     val topicIdPartitionsToRecords = Utils.convertKeys(records.asJava, replicaManager.getTopicIdPartition).asScala

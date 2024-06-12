@@ -45,6 +45,7 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
+
 /**
  * <p>Manages the request creation and response handling for the heartbeat. The module creates a
  * {@link ConsumerGroupHeartbeatRequest} using the state stored in the {@link MembershipManager} and enqueue it to
@@ -208,7 +209,11 @@ public class HeartbeatRequestManager implements RequestManager {
             return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs, Collections.singletonList(leaveHeartbeat));
         }
 
-        boolean heartbeatNow = membershipManager.shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight();
+        // Case 1: The member is leaving
+        boolean heartbeatNow = membershipManager.state() == MemberState.LEAVING ||
+                // Case 2: The member state indicates it should send a heartbeat without waiting for the interval, and there is no heartbeat request currently in-flight
+                (membershipManager.shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight());
+
         if (!heartbeatRequestState.canSendRequest(currentTimeMs) && !heartbeatNow) {
             return new NetworkClientDelegate.PollResult(heartbeatRequestState.timeToNextHeartbeatMs(currentTimeMs));
         }
@@ -383,7 +388,15 @@ public class HeartbeatRequestManager implements RequestManager {
             case UNRELEASED_INSTANCE_ID:
                 logger.error("GroupHeartbeatRequest failed due to unreleased instance id {}: {}",
                         membershipManager.groupInstanceId().orElse("null"), errorMessage);
-                handleFatalFailure(Errors.UNRELEASED_INSTANCE_ID.exception(errorMessage));
+                handleFatalFailure(error.exception(errorMessage));
+                break;
+
+            case FENCED_INSTANCE_ID:
+                logger.error("GroupHeartbeatRequest failed due to fenced instance id {}: {}. " +
+                        "This is expected in the case that the member was removed from the group " +
+                        "by an admin client, and another member joined using the same group instance id.",
+                    membershipManager.groupInstanceId().orElse("null"), errorMessage);
+                handleFatalFailure(error.exception(errorMessage));
                 break;
 
             case INVALID_REQUEST:
@@ -556,7 +569,7 @@ public class HeartbeatRequestManager implements RequestManager {
                 sentFields.rebalanceTimeoutMs = rebalanceTimeoutMs;
             }
 
-            // SubscribedTopicNames - only sent if has changed since the last heartbeat
+            // SubscribedTopicNames - only sent if it has changed since the last heartbeat
             TreeSet<String> subscribedTopicNames = new TreeSet<>(this.subscriptions.subscription());
             if (sendAllFields || !subscribedTopicNames.equals(sentFields.subscribedTopicNames)) {
                 data.setSubscribedTopicNames(new ArrayList<>(this.subscriptions.subscription()));

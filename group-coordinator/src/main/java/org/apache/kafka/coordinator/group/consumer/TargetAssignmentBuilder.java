@@ -18,23 +18,20 @@ package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.CoordinatorRecord;
-import org.apache.kafka.coordinator.group.assignor.AssignmentMemberSpec;
-import org.apache.kafka.coordinator.group.assignor.AssignmentSpec;
-import org.apache.kafka.coordinator.group.assignor.SubscriptionType;
-import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
-import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
-import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
-import org.apache.kafka.coordinator.group.assignor.PartitionAssignorException;
+import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
+import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.MemberAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignor;
+import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
+import org.apache.kafka.image.TopicsImage;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTargetAssignmentEpochRecord;
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTargetAssignmentRecord;
@@ -65,11 +62,11 @@ public class TargetAssignmentBuilder {
         /**
          * The new target assignment for the group.
          */
-        private final Map<String, Assignment> targetAssignment;
+        private final Map<String, MemberAssignment> targetAssignment;
 
         TargetAssignmentResult(
             List<CoordinatorRecord> records,
-            Map<String, Assignment> targetAssignment
+            Map<String, MemberAssignment> targetAssignment
         ) {
             Objects.requireNonNull(records);
             Objects.requireNonNull(targetAssignment);
@@ -87,7 +84,7 @@ public class TargetAssignmentBuilder {
         /**
          * @return The target assignment.
          */
-        public Map<String, Assignment> targetAssignment() {
+        public Map<String, MemberAssignment> targetAssignment() {
             return targetAssignment;
         }
     }
@@ -126,6 +123,17 @@ public class TargetAssignmentBuilder {
      * The existing target assignment.
      */
     private Map<String, Assignment> targetAssignment = Collections.emptyMap();
+
+    /**
+     * Reverse lookup map representing topic partitions with
+     * their current member assignments.
+     */
+    private Map<Uuid, Map<Integer, String>> invertedTargetAssignment = Collections.emptyMap();
+
+    /**
+     * The topics image.
+     */
+    private TopicsImage topicsImage = TopicsImage.EMPTY;
 
     /**
      * The members which have been updated or deleted. Deleted members
@@ -221,6 +229,32 @@ public class TargetAssignmentBuilder {
     }
 
     /**
+     * Adds the existing topic partition assignments.
+     *
+     * @param invertedTargetAssignment   The reverse lookup map of the current target assignment.
+     * @return This object.
+     */
+    public TargetAssignmentBuilder withInvertedTargetAssignment(
+        Map<Uuid, Map<Integer, String>> invertedTargetAssignment
+    ) {
+        this.invertedTargetAssignment = invertedTargetAssignment;
+        return this;
+    }
+
+    /**
+     * Adds the topics image.
+     *
+     * @param topicsImage    The topics image.
+     * @return This object.
+     */
+    public TargetAssignmentBuilder withTopicsImage(
+        TopicsImage topicsImage
+    ) {
+        this.topicsImage = topicsImage;
+        return this;
+    }
+
+    /**
      * Adds or updates a member. This is useful when the updated member is
      * not yet materialized in memory.
      *
@@ -257,14 +291,16 @@ public class TargetAssignmentBuilder {
      * @throws PartitionAssignorException if the target assignment cannot be computed.
      */
     public TargetAssignmentResult build() throws PartitionAssignorException {
-        Map<String, AssignmentMemberSpec> memberSpecs = new HashMap<>();
+        Map<String, MemberSubscriptionAndAssignmentImpl> memberSpecs = new HashMap<>();
 
         // Prepare the member spec for all members.
-        members.forEach((memberId, member) -> memberSpecs.put(memberId, createAssignmentMemberSpec(
-            member,
-            targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
-            subscriptionMetadata
-        )));
+        members.forEach((memberId, member) ->
+            memberSpecs.put(memberId, createMemberSubscriptionAndAssignment(
+                member,
+                targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
+                topicsImage
+            ))
+        );
 
         // Update the member spec if updated or deleted members.
         updatedMembers.forEach((memberId, updatedMemberOrNull) -> {
@@ -281,10 +317,10 @@ public class TargetAssignmentBuilder {
                     }
                 }
 
-                memberSpecs.put(memberId, createAssignmentMemberSpec(
+                memberSpecs.put(memberId, createMemberSubscriptionAndAssignment(
                     updatedMemberOrNull,
                     assignment,
-                    subscriptionMetadata
+                    topicsImage
                 ));
             }
         });
@@ -300,45 +336,37 @@ public class TargetAssignmentBuilder {
 
         // Compute the assignment.
         GroupAssignment newGroupAssignment = assignor.assign(
-            new AssignmentSpec(Collections.unmodifiableMap(memberSpecs), subscriptionType),
-            new SubscribedTopicMetadata(topicMetadataMap)
+            new GroupSpecImpl(
+                Collections.unmodifiableMap(memberSpecs),
+                subscriptionType,
+                invertedTargetAssignment
+            ),
+            new SubscribedTopicDescriberImpl(topicMetadataMap)
         );
 
         // Compute delta from previous to new target assignment and create the
         // relevant records.
         List<CoordinatorRecord> records = new ArrayList<>();
-        Map<String, Assignment> newTargetAssignment = new HashMap<>();
 
-        memberSpecs.keySet().forEach(memberId -> {
+        for (String memberId : memberSpecs.keySet()) {
             Assignment oldMemberAssignment = targetAssignment.get(memberId);
             Assignment newMemberAssignment = newMemberAssignment(newGroupAssignment, memberId);
 
-            newTargetAssignment.put(memberId, newMemberAssignment);
-
-            if (oldMemberAssignment == null) {
-                // If the member had no assignment, we always create a record for it.
+            if (!newMemberAssignment.equals(oldMemberAssignment)) {
+                // If the member had no assignment or had a different assignment, we
+                // create a record for the new assignment.
                 records.add(newTargetAssignmentRecord(
                     groupId,
                     memberId,
                     newMemberAssignment.partitions()
                 ));
-            } else {
-                // If the member had an assignment, we only create a record if the
-                // new assignment is different.
-                if (!newMemberAssignment.equals(oldMemberAssignment)) {
-                    records.add(newTargetAssignmentRecord(
-                        groupId,
-                        memberId,
-                        newMemberAssignment.partitions()
-                    ));
-                }
             }
-        });
+        }
 
         // Bump the target assignment epoch.
         records.add(newTargetAssignmentEpochRecord(groupId, groupEpoch));
 
-        return new TargetAssignmentResult(records, newTargetAssignment);
+        return new TargetAssignmentResult(records, newGroupAssignment.members());
     }
 
     private Assignment newMemberAssignment(
@@ -347,30 +375,22 @@ public class TargetAssignmentBuilder {
     ) {
         MemberAssignment newMemberAssignment = newGroupAssignment.members().get(memberId);
         if (newMemberAssignment != null) {
-            return new Assignment(newMemberAssignment.targetPartitions());
+            return new Assignment(newMemberAssignment.partitions());
         } else {
             return Assignment.EMPTY;
         }
     }
 
-    public static AssignmentMemberSpec createAssignmentMemberSpec(
+    // private for testing
+    static MemberSubscriptionAndAssignmentImpl createMemberSubscriptionAndAssignment(
         ConsumerGroupMember member,
-        Assignment targetAssignment,
-        Map<String, TopicMetadata> subscriptionMetadata
+        Assignment memberAssignment,
+        TopicsImage topicsImage
     ) {
-        Set<Uuid> subscribedTopics = new HashSet<>();
-        member.subscribedTopicNames().forEach(topicName -> {
-            TopicMetadata topicMetadata = subscriptionMetadata.get(topicName);
-            if (topicMetadata != null) {
-                subscribedTopics.add(topicMetadata.id());
-            }
-        });
-
-        return new AssignmentMemberSpec(
-            Optional.ofNullable(member.instanceId()),
+        return new MemberSubscriptionAndAssignmentImpl(
             Optional.ofNullable(member.rackId()),
-            subscribedTopics,
-            targetAssignment.partitions()
+            new TopicIds(member.subscribedTopicNames(), topicsImage),
+            memberAssignment
         );
     }
 }

@@ -21,6 +21,7 @@ import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.test.MockDeserializer;
 import org.apache.kafka.tools.ToolsTestUtils;
+
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
@@ -644,5 +645,32 @@ public class ConsoleConsumerOptionsTest {
             "--timeout-ms", "100"
         };
         assertEquals(100, new ConsoleConsumerOptions(validTimeoutMs).timeoutMs());
+    }
+
+    @Test
+    public void testParseDeprecatedFormatter() throws Exception {
+        String[] deprecatedDefaultMessageFormatter = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--partition", "0",
+            "--formatter", "kafka.tools.DefaultMessageFormatter",
+        };
+        assertInstanceOf(DefaultMessageFormatter.class, new ConsoleConsumerOptions(deprecatedDefaultMessageFormatter).formatter());
+
+        String[] deprecatedLoggingMessageFormatter = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--partition", "0",
+            "--formatter", "kafka.tools.LoggingMessageFormatter",
+        };
+        assertInstanceOf(LoggingMessageFormatter.class, new ConsoleConsumerOptions(deprecatedLoggingMessageFormatter).formatter());
+
+        String[] deprecatedNoOpMessageFormatter = new String[]{
+            "--bootstrap-server", "localhost:9092",
+            "--topic", "test",
+            "--partition", "0",
+            "--formatter", "kafka.tools.NoOpMessageFormatter",
+        };
+        assertInstanceOf(NoOpMessageFormatter.class, new ConsoleConsumerOptions(deprecatedNoOpMessageFormatter).formatter());
     }
 }
