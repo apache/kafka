@@ -1670,9 +1670,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             final FetchCommittedOffsetsEvent event =
                 new FetchCommittedOffsetsEvent(
                     initializingPartitions,
-                    calculateDeadlineMs(timer));
+                    Long.MAX_VALUE);
             wakeupTrigger.setActiveTask(event.future());
-            final Map<TopicPartition, OffsetAndMetadata> offsets = applicationEventHandler.addAndGet(event);
+            applicationEventHandler.add(event);
+            final Map<TopicPartition, OffsetAndMetadata> offsets = ConsumerUtils.getResult(event.future(), time.timer(1));
             refreshCommittedOffsets(offsets, metadata, subscriptions);
             return true;
         } catch (TimeoutException e) {
