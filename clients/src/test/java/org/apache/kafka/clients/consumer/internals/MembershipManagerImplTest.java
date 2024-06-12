@@ -39,7 +39,6 @@ import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -102,16 +101,14 @@ public class MembershipManagerImplTest {
     private final LogContext logContext = new LogContext();
     private SubscriptionState subscriptionState;
     private ConsumerMetadata metadata;
-
     private CommitRequestManager commitRequestManager;
-
-    private ConsumerTestBuilder testBuilder;
     private BlockingQueue<BackgroundEvent> backgroundEventQueue;
     private BackgroundEventHandler backgroundEventHandler;
     private Time time;
     private Metrics metrics;
     private RebalanceMetricsManager rebalanceMetricsManager;
 
+    @SuppressWarnings("unchecked")
     @BeforeEach
     public void setup() {
         metadata = mock(ConsumerMetadata.class);
@@ -124,13 +121,6 @@ public class MembershipManagerImplTest {
         rebalanceMetricsManager = new RebalanceMetricsManager(metrics);
 
         when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(new CompletableFuture<>());
-    }
-
-    @AfterEach
-    public void tearDown() {
-        if (testBuilder != null) {
-            testBuilder.close();
-        }
     }
 
     private MembershipManagerImpl createMembershipManagerJoiningGroup() {
@@ -782,7 +772,6 @@ public class MembershipManagerImplTest {
         verify(subscriptionState).assignFromSubscribedAwaitingCallback(eq(topicPartitions(topic2Assignment, topic2Metadata)), anyCollection());
     }
 
-    // TODO
     /**
      * This is the case where a member is stuck reconciling an assignment A (waiting on metadata, commit or callbacks), and the target
      * assignment changes due to a new assignment received from broker. If the reconciliation of A completes it should be applied (should
@@ -1219,7 +1208,7 @@ public class MembershipManagerImplTest {
 
         Set<TopicPartition> expectedAssignment = Collections.singleton(new TopicPartition(topicName, 0));
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
-        verify(subscriptionState).assignFromSubscribedAwaitingCallback(eq(new HashSet<>(expectedAssignment)), any(SortedSet.class));
+        verify(subscriptionState).assignFromSubscribedAwaitingCallback(eq(new HashSet<>(expectedAssignment)), any());
 
         // When ack for the reconciled assignment is sent, member should go back to STABLE
         // because the first assignment that was not resolved should have been discarded
@@ -1313,7 +1302,7 @@ public class MembershipManagerImplTest {
 
         // Assignment should have been reconciled.
         Set<TopicPartition> expectedAssignment = Collections.singleton(new TopicPartition(topicName, 1));
-        verify(subscriptionState).assignFromSubscribedAwaitingCallback(eq(new HashSet<>(expectedAssignment)), any(SortedSet.class));
+        verify(subscriptionState).assignFromSubscribedAwaitingCallback(eq(new HashSet<>(expectedAssignment)), any());
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         assertTrue(membershipManager.topicsAwaitingReconciliation().isEmpty());
     }
@@ -1432,7 +1421,6 @@ public class MembershipManagerImplTest {
         assertEquals(0.0d, getMetricValue(metrics, rebalanceMetricsManager.failedRebalanceTotal));
     }
 
-    // TODO
     @Test
     public void testReconcilePartitionsRevokedNoAutoCommitNoCallbacks() {
         createCommitRequestManager(false);
@@ -1448,7 +1436,6 @@ public class MembershipManagerImplTest {
         testRevocationOfAllPartitionsCompleted(membershipManager);
     }
 
-    // TODO
     @Test
     public void testReconcilePartitionsRevokedWithSuccessfulAutoCommitNoCallbacks() {
         when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(CompletableFuture.completedFuture(null));
@@ -1459,7 +1446,6 @@ public class MembershipManagerImplTest {
 
         receiveEmptyAssignment(membershipManager);
 
-        //commitRequestManager = mock(CommitRequestManager.class);
         when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(commitResult);
         membershipManager.poll(time.milliseconds());
 
@@ -1475,7 +1461,6 @@ public class MembershipManagerImplTest {
         testRevocationOfAllPartitionsCompleted(membershipManager);
     }
 
-    // TODO
     @Test
     public void testReconcilePartitionsRevokedWithFailedAutoCommitCompletesRevocationAnyway() {
         when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(CompletableFuture.completedFuture(null));
@@ -1525,7 +1510,7 @@ public class MembershipManagerImplTest {
         assertEquals(topicIdPartitionsMap(topicId, 1, 2), membershipManager.currentAssignment().partitions);
         assertFalse(membershipManager.reconciliationInProgress());
 
-        verify(subscriptionState).assignFromSubscribedAwaitingCallback(anyCollection(), any(SortedSet.class));
+        verify(subscriptionState).assignFromSubscribedAwaitingCallback(anyCollection(), any());
     }
 
     @Test
@@ -2452,7 +2437,6 @@ public class MembershipManagerImplTest {
         when(subscriptionState.assignedPartitions()).thenReturn(Collections.singleton(ownedPartition));
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
         when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
-        //when(commitRequestManager.autoCommitEnabled()).thenReturn(false);
 
         when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
         receiveAssignment(topicId, partitions, membershipManager);
@@ -2483,7 +2467,6 @@ public class MembershipManagerImplTest {
         when(subscriptionState.assignedPartitions()).thenReturn(Collections.emptySet());
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
         when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
-        //when(commitRequestManager.autoCommitEnabled()).thenReturn(false);
 
         when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
         receiveAssignment(topicId, Collections.singletonList(newPartition), membershipManager);
@@ -2518,7 +2501,7 @@ public class MembershipManagerImplTest {
 
         // Assignment applied
         List<TopicPartition> expectedTopicPartitions = buildTopicPartitions(expectedAssignment);
-        verify(subscriptionState).assignFromSubscribedAwaitingCallback(eq(new HashSet<>(expectedTopicPartitions)), any(SortedSet.class));
+        verify(subscriptionState).assignFromSubscribedAwaitingCallback(eq(new HashSet<>(expectedTopicPartitions)), any());
         Map<Uuid, SortedSet<Integer>> assignmentByTopicId = assignmentByTopicId(expectedAssignment);
         assertEquals(assignmentByTopicId, membershipManager.currentAssignment().partitions);
     }
@@ -2543,10 +2526,7 @@ public class MembershipManagerImplTest {
         doNothing().when(subscriptionState).markPendingRevocation(anySet());
         when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty()).thenReturn(Optional.empty());
         if (withAutoCommit) {
-            //when(commitRequestManager.autoCommitEnabled()).thenReturn(true);
-            CompletableFuture<Void> commitResult = new CompletableFuture<>();
-            //when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(commitResult);
-            return commitResult;
+            return new CompletableFuture<>();
         } else {
             return CompletableFuture.completedFuture(null);
         }
@@ -2574,7 +2554,7 @@ public class MembershipManagerImplTest {
         verify(subscriptionState).markPendingRevocation(anySet());
         List<TopicPartition> expectedTopicPartitionAssignment =
                 buildTopicPartitions(expectedCurrentAssignment);
-        if(expectedTopicPartitionAssignment.equals(Collections.emptyList()))
+        if (expectedTopicPartitionAssignment.equals(Collections.emptyList()))
             verify(subscriptionState, times(2)).assignFromSubscribedAwaitingCallback(eq(new HashSet<>(expectedTopicPartitionAssignment)), eq(new HashSet<>()));
         else
             verify(subscriptionState).assignFromSubscribedAwaitingCallback(eq(new HashSet<>(expectedTopicPartitionAssignment)), eq(new HashSet<>()));
@@ -2790,7 +2770,6 @@ public class MembershipManagerImplTest {
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
         when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
         doNothing().when(subscriptionState).markPendingRevocation(anySet());
-        //when(commitRequestManager.autoCommitEnabled()).thenReturn(false);
         membershipManager.leaveGroup();
         return performCallback(
             membershipManager,
@@ -2812,7 +2791,6 @@ public class MembershipManagerImplTest {
         when(subscriptionState.assignedPartitions()).thenReturn(Collections.singleton(ownedPartition));
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
         when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
-        //when(commitRequestManager.autoCommitEnabled()).thenReturn(false);
         membershipManager.transitionToFenced();
         return performCallback(
             membershipManager,
