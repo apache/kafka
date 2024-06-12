@@ -233,6 +233,7 @@ public class KafkaNetworkChannelTest {
         ApiMessage apiRequest = buildTestRequest(apiKey);
         RaftRequest.Outbound request = new RaftRequest.Outbound(
             correlationId,
+            apiRequest.highestSupportedVersion(),
             apiRequest,
             destination,
             createdTimeMs

@@ -138,6 +138,10 @@ final public class VoterSet {
         return voters.keySet();
     }
 
+    public Map<Integer, VoterNode> voters() {
+        return voters;
+    }
+
     /**
      * Adds a voter to the voter set.
      *
@@ -276,7 +280,7 @@ final public class VoterSet {
         private final Map<ListenerName, InetSocketAddress> listeners;
         private final SupportedVersionRange supportedKRaftVersion;
 
-        VoterNode(
+        public VoterNode(
             ReplicaKey voterKey,
             Map<ListenerName, InetSocketAddress> listeners,
             SupportedVersionRange supportedKRaftVersion

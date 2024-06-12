@@ -315,7 +315,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
     ) {
         final LogOffsetMetadata endOffsetMetadata = log.endOffset();
 
-        if (state.updateLocalState(endOffsetMetadata, partitionState.lastVoterSet().voterIds())) {
+        if (state.updateLocalState(endOffsetMetadata, partitionState.lastVoterSet().voters())) {
             onUpdateLeaderHighWatermark(state, currentTimeMs);
         }
 
@@ -1157,7 +1157,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
             if (validOffsetAndEpoch.kind() == ValidOffsetAndEpoch.Kind.VALID) {
                 LogFetchInfo info = log.read(fetchOffset, Isolation.UNCOMMITTED);
 
-                if (state.updateReplicaState(replicaId, currentTimeMs, info.startOffsetMetadata)) {
+                if (state.updateReplicaState(replicaId, Uuid.ZERO_UUID, currentTimeMs, info.startOffsetMetadata)) {
                     onUpdateLeaderHighWatermark(state, currentTimeMs);
                 }
 
@@ -1354,7 +1354,10 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
         LeaderState<T> leaderState = quorum.leaderStateOrThrow();
         return DescribeQuorumResponse.singletonResponse(
             log.topicPartition(),
-            leaderState.describeQuorum(currentTimeMs)
+            leaderState.describeQuorum(currentTimeMs),
+            requestMetadata.apiVersion() < DescribeQuorumResponseData.Node.LOWEST_SUPPORTED_VERSION
+                ? null
+                : leaderState.nodes(currentTimeMs)
         );
     }
 
@@ -1895,6 +1898,7 @@ final public class KafkaRaftClient<T> implements RaftClient<T> {
 
             RaftRequest.Outbound requestMessage = new RaftRequest.Outbound(
                 correlationId,
+                request.highestSupportedVersion(),
                 request,
                 destination,
                 currentTimeMs

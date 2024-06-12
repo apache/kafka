@@ -26,6 +26,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
@@ -45,7 +46,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
@@ -56,15 +56,15 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.createMockAdminClientForAssignor;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_CHANGELOG_END_OFFSETS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_TASKS;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_1;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_2;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_3;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_4;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_5;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_6;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_7;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_8;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_9;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_1;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_2;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_3;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_4;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_5;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_6;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_7;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_8;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_9;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -162,7 +162,7 @@ public class RackAwarenessStreamsPartitionAssignorTest {
     private void createMockTaskManager() {
         taskManager = mock(TaskManager.class);
         when(taskManager.topologyMetadata()).thenReturn(topologyMetadata);
-        when(taskManager.processId()).thenReturn(UUID_1);
+        when(taskManager.processId()).thenReturn(PID_1);
         topologyMetadata.buildAndRewriteTopology();
     }
 
@@ -201,11 +201,11 @@ public class RackAwarenessStreamsPartitionAssignorTest {
         }
 
         final Map<String, Map<String, String>> hostTags = new HashMap<>();
-        subscriptions.put(consumer1, getSubscription(UUID_1, EMPTY_TASKS, clientTags1));
+        subscriptions.put(consumer1, getSubscription(PID_1, EMPTY_TASKS, clientTags1));
         hostTags.put(consumer1, clientTags1);
-        subscriptions.put(consumer2, getSubscription(UUID_2, EMPTY_TASKS, clientTags1));
+        subscriptions.put(consumer2, getSubscription(PID_2, EMPTY_TASKS, clientTags1));
         hostTags.put(consumer2, clientTags1);
-        subscriptions.put(consumer3, getSubscription(UUID_3, EMPTY_TASKS, clientTags2));
+        subscriptions.put(consumer3, getSubscription(PID_3, EMPTY_TASKS, clientTags2));
         hostTags.put(consumer3, clientTags2);
 
         Map<String, ConsumerPartitionAssignor.Assignment> assignments = partitionAssignor
@@ -216,8 +216,8 @@ public class RackAwarenessStreamsPartitionAssignorTest {
 
         // kill the first consumer and rebalance, should still achieve ideal distribution
         subscriptions.clear();
-        subscriptions.put(consumer2, getSubscription(UUID_2, AssignmentInfo.decode(assignments.get(consumer2).userData()).activeTasks(), clientTags1));
-        subscriptions.put(consumer3, getSubscription(UUID_3, AssignmentInfo.decode(assignments.get(consumer3).userData()).activeTasks(), clientTags2));
+        subscriptions.put(consumer2, getSubscription(PID_2, AssignmentInfo.decode(assignments.get(consumer2).userData()).activeTasks(), clientTags1));
+        subscriptions.put(consumer3, getSubscription(PID_3, AssignmentInfo.decode(assignments.get(consumer3).userData()).activeTasks(), clientTags2));
 
         assignments = partitionAssignor.assign(metadata, new ConsumerPartitionAssignor.GroupSubscription(subscriptions))
             .groupAssignment();
@@ -252,17 +252,17 @@ public class RackAwarenessStreamsPartitionAssignorTest {
         final String consumer6 = "consumer6";
 
         final Map<String, Map<String, String>> hostTags = new HashMap<>();
-        subscriptions.put(consumer1, getSubscription(UUID_1, EMPTY_TASKS, clientTags1));
+        subscriptions.put(consumer1, getSubscription(PID_1, EMPTY_TASKS, clientTags1));
         hostTags.put(consumer1, clientTags1);
-        subscriptions.put(consumer2, getSubscription(UUID_2, EMPTY_TASKS, clientTags1));
+        subscriptions.put(consumer2, getSubscription(PID_2, EMPTY_TASKS, clientTags1));
         hostTags.put(consumer2, clientTags1);
-        subscriptions.put(consumer3, getSubscription(UUID_3, EMPTY_TASKS, clientTags1));
+        subscriptions.put(consumer3, getSubscription(PID_3, EMPTY_TASKS, clientTags1));
         hostTags.put(consumer3, clientTags1);
-        subscriptions.put(consumer4, getSubscription(UUID_4, EMPTY_TASKS, clientTags2));
+        subscriptions.put(consumer4, getSubscription(PID_4, EMPTY_TASKS, clientTags2));
         hostTags.put(consumer4, clientTags2);
-        subscriptions.put(consumer5, getSubscription(UUID_5, EMPTY_TASKS, clientTags2));
+        subscriptions.put(consumer5, getSubscription(PID_5, EMPTY_TASKS, clientTags2));
         hostTags.put(consumer5, clientTags2);
-        subscriptions.put(consumer6, getSubscription(UUID_6, EMPTY_TASKS, clientTags2));
+        subscriptions.put(consumer6, getSubscription(PID_6, EMPTY_TASKS, clientTags2));
         hostTags.put(consumer6, clientTags2);
 
         final Map<String, ConsumerPartitionAssignor.Assignment> assignments = partitionAssignor
@@ -311,23 +311,23 @@ public class RackAwarenessStreamsPartitionAssignorTest {
             mkEntry(ALL_TAG_KEYS.get(1), "value-1-3"));
 
         final Map<String, Map<String, String>> hostTags = new HashMap<>();
-        subscriptions.put(consumer1, getSubscription(UUID_1, EMPTY_TASKS, clientTags1));
+        subscriptions.put(consumer1, getSubscription(PID_1, EMPTY_TASKS, clientTags1));
         hostTags.put(consumer1, clientTags1);
-        subscriptions.put(consumer2, getSubscription(UUID_2, EMPTY_TASKS, clientTags2));
+        subscriptions.put(consumer2, getSubscription(PID_2, EMPTY_TASKS, clientTags2));
         hostTags.put(consumer2, clientTags2);
-        subscriptions.put(consumer3, getSubscription(UUID_3, EMPTY_TASKS, clientTags3));
+        subscriptions.put(consumer3, getSubscription(PID_3, EMPTY_TASKS, clientTags3));
         hostTags.put(consumer3, clientTags3);
-        subscriptions.put(consumer4, getSubscription(UUID_4, EMPTY_TASKS, clientTags4));
+        subscriptions.put(consumer4, getSubscription(PID_4, EMPTY_TASKS, clientTags4));
         hostTags.put(consumer4, clientTags4);
-        subscriptions.put(consumer5, getSubscription(UUID_5, EMPTY_TASKS, clientTags5));
+        subscriptions.put(consumer5, getSubscription(PID_5, EMPTY_TASKS, clientTags5));
         hostTags.put(consumer5, clientTags5);
-        subscriptions.put(consumer6, getSubscription(UUID_6, EMPTY_TASKS, clientTags6));
+        subscriptions.put(consumer6, getSubscription(PID_6, EMPTY_TASKS, clientTags6));
         hostTags.put(consumer6, clientTags6);
-        subscriptions.put(consumer7, getSubscription(UUID_7, EMPTY_TASKS, clientTags7));
+        subscriptions.put(consumer7, getSubscription(PID_7, EMPTY_TASKS, clientTags7));
         hostTags.put(consumer7, clientTags7);
-        subscriptions.put(consumer8, getSubscription(UUID_8, EMPTY_TASKS, clientTags8));
+        subscriptions.put(consumer8, getSubscription(PID_8, EMPTY_TASKS, clientTags8));
         hostTags.put(consumer8, clientTags8);
-        subscriptions.put(consumer9, getSubscription(UUID_9, EMPTY_TASKS, clientTags9));
+        subscriptions.put(consumer9, getSubscription(PID_9, EMPTY_TASKS, clientTags9));
         hostTags.put(consumer9, clientTags9);
 
         final Map<String, ConsumerPartitionAssignor.Assignment> assignments = partitionAssignor
@@ -367,17 +367,17 @@ public class RackAwarenessStreamsPartitionAssignorTest {
             mkEntry(ALL_TAG_KEYS.get(1), "value-1-3"));
 
         final Map<String, Map<String, String>> hostTags = new HashMap<>();
-        subscriptions.put(consumer1, getSubscription(UUID_1, EMPTY_TASKS, clientTags1));
+        subscriptions.put(consumer1, getSubscription(PID_1, EMPTY_TASKS, clientTags1));
         hostTags.put(consumer1, clientTags1);
-        subscriptions.put(consumer2, getSubscription(UUID_2, EMPTY_TASKS, clientTags2));
+        subscriptions.put(consumer2, getSubscription(PID_2, EMPTY_TASKS, clientTags2));
         hostTags.put(consumer2, clientTags2);
-        subscriptions.put(consumer3, getSubscription(UUID_3, EMPTY_TASKS, clientTags3));
+        subscriptions.put(consumer3, getSubscription(PID_3, EMPTY_TASKS, clientTags3));
         hostTags.put(consumer3, clientTags3);
-        subscriptions.put(consumer4, getSubscription(UUID_4, EMPTY_TASKS, clientTags4));
+        subscriptions.put(consumer4, getSubscription(PID_4, EMPTY_TASKS, clientTags4));
         hostTags.put(consumer4, clientTags4);
-        subscriptions.put(consumer5, getSubscription(UUID_5, EMPTY_TASKS, clientTags5));
+        subscriptions.put(consumer5, getSubscription(PID_5, EMPTY_TASKS, clientTags5));
         hostTags.put(consumer5, clientTags5);
-        subscriptions.put(consumer6, getSubscription(UUID_6, EMPTY_TASKS, clientTags6));
+        subscriptions.put(consumer6, getSubscription(PID_6, EMPTY_TASKS, clientTags6));
         hostTags.put(consumer6, clientTags6);
 
         final Map<String, ConsumerPartitionAssignor.Assignment> assignments = partitionAssignor
@@ -534,7 +534,7 @@ public class RackAwarenessStreamsPartitionAssignorTest {
         return changelogEndOffsets;
     }
 
-    private static ConsumerPartitionAssignor.Subscription getSubscription(final UUID processId,
+    private static ConsumerPartitionAssignor.Subscription getSubscription(final ProcessId processId,
                                                                           final Collection<TaskId> prevActiveTasks,
                                                                           final Map<String, String> clientTags) {
         return new ConsumerPartitionAssignor.Subscription(
