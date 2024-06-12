@@ -820,11 +820,13 @@ public class MembershipManagerImplTest {
             );
 
         receiveAssignment(newAssignment, membershipManager);
+        when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(commitFuture);
+        membershipManager.markReconciliationCompleted();
         membershipManager.poll(time.milliseconds());
 
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         assertEquals(mkSet(topicId1, topicId2), membershipManager.topicsAwaitingReconciliation());
-        //clearInvocations(membershipManager, commitRequestManager);
+        clearInvocations(commitRequestManager);
 
         // First reconciliation completes. Should trigger follow-up reconciliation to complete the assignment,
         // with membership manager entering ACKNOWLEDGING state.
@@ -832,6 +834,11 @@ public class MembershipManagerImplTest {
         commitFuture.complete(null);
 
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
+        TreeSet<Integer> treeSet = new TreeSet<>();
+        treeSet.add(0);
+        HashMap<Uuid, SortedSet<Integer>> partitions = new HashMap<>();
+        partitions.put(topicId1, treeSet);
+        membershipManager.updateAssignment(partitions);
         assertEquals(mkSet(topicId2), membershipManager.topicsAwaitingReconciliation());
 
         // After acknowledging the assignment, we should be back to RECONCILING, because we have not
