@@ -17,18 +17,27 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StateDirectory.TaskDirectory;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
+import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.TestUtils;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -71,6 +80,7 @@ import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.endsWith;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -84,9 +94,11 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 public class StateDirectoryTest {
 
+    private static final Logger log = LoggerFactory.getLogger(StateDirectoryTest.class);
     private final MockTime time = new MockTime();
     private File stateDir;
     private final String applicationId = "applicationId";
+    private StreamsConfig config;
     private StateDirectory directory;
     private File appDir;
 
@@ -95,15 +107,14 @@ public class StateDirectoryTest {
         if (!createStateDirectory) {
             cleanup();
         }
-        directory = new StateDirectory(
-            new StreamsConfig(new Properties() {
-                {
-                    put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
-                    put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
-                    put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getPath());
-                }
-            }),
-            time, createStateDirectory, hasNamedTopology);
+        config = new StreamsConfig(new Properties() {
+            {
+                put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+                put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+                put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getPath());
+            }
+        });
+        directory = new StateDirectory(config, time, createStateDirectory, hasNamedTopology);
         appDir = new File(stateDir, applicationId);
     }
 
@@ -810,6 +821,133 @@ public class StateDirectoryTest {
         mapper.writeValue(processFile, new FutureStateDirectoryProcessFile(processId, "some random junk"));
 
         assertThat(directory.initializeProcessId(), equalTo(processId));
+    }
+
+    @Test
+    public void shouldNotInitializeStandbyTasksWhenNoLocalState() {
+        initializeTasksForLocalState(new TaskId(0, 0), false);
+        assertFalse(directory.hasInitialTasks());
+    }
+
+    @Test
+    public void shouldInitializeStandbyTasksForLocalState() {
+        initializeTasksForLocalState(new TaskId(0, 0), true);
+        assertTrue(directory.hasInitialTasks());
+    }
+
+    @Test
+    public void shouldNotAssignInitialTasksWeDontHave() {
+        final TaskId taskId = new TaskId(0, 0);
+        initializeTasksForLocalState(taskId, false);
+        final Task task = directory.assignInitialTask(taskId);
+        assertNull(task);
+    }
+
+    private class FakeStreamThread extends Thread {
+        private final TaskId taskId;
+        private final AtomicReference<Task> result;
+
+        private FakeStreamThread(final TaskId taskId, final AtomicReference<Task> result) {
+            this.taskId = taskId;
+            this.result = result;
+        }
+
+        @Override
+        public void run() {
+            result.set(directory.assignInitialTask(taskId));
+        }
+    }
+
+    @Test
+    public void shouldAssignInitialTaskToStreamThread() throws InterruptedException {
+        final TaskId taskId = new TaskId(0, 0);
+
+        initializeTasksForLocalState(taskId, true);
+
+        // main thread owns the newly initialized tasks
+        assertThat(directory.lockOwner(taskId), is(Thread.currentThread()));
+
+        // spawn off a "fake" StreamThread, so we can verify the lock was updated to the correct thread
+        final AtomicReference<Task> result = new AtomicReference<>();
+        final Thread streamThread = new FakeStreamThread(taskId, result);
+        streamThread.start();
+        streamThread.join();
+        final Task task = result.get();
+
+        assertNotNull(task);
+        assertThat(task, instanceOf(StandbyTask.class));
+        assertThat(task.state(), is(Task.State.SUSPENDED));
+
+        // verify the owner of the task directory lock has been shifted over to our assigned StreamThread
+        assertThat(directory.lockOwner(taskId), is(instanceOf(FakeStreamThread.class)));
+    }
+
+    @Test
+    public void shouldCloseInitialTasksOnUserCleanUp() {
+        final StateStore store = initializeTasksForLocalState(new TaskId(0, 0), true);
+
+        assertTrue(directory.hasInitialTasks());
+        assertTrue(store.isOpen());
+
+        directory.clean();
+
+        assertFalse(directory.hasInitialTasks());
+        assertFalse(store.isOpen());
+    }
+
+    @Test
+    public void shouldCloseInitialTasksOnAutoCleanUp() {
+        // we need to set this because the auto-cleanup uses the last-modified time from the filesystem,
+        // which can't be mocked
+        time.setCurrentTimeMs(System.currentTimeMillis());
+
+        final StateStore store = initializeTasksForLocalState(new TaskId(0, 0), true);
+
+        assertTrue(directory.hasInitialTasks());
+        assertTrue(store.isOpen());
+
+        directory.cleanRemovedTasks(1000);
+
+        // should not have been cleaned up yet, not enough time has elapsed
+        assertTrue(directory.hasInitialTasks());
+        assertTrue(store.isOpen());
+
+        time.sleep(10000);
+
+        directory.cleanRemovedTasks(1000);
+
+        assertFalse(directory.hasInitialTasks());
+        assertFalse(store.isOpen());
+    }
+
+    private StateStore initializeTasksForLocalState(final TaskId taskId, final boolean createTaskDir) {
+        final TopologyMetadata metadata = Mockito.mock(TopologyMetadata.class);
+        final TopologyConfig topologyConfig = new TopologyConfig(config);
+
+        final StateStore store = new MockKeyValueStore("test", true);
+
+        if (createTaskDir) {
+            final File taskDir = directory.getOrCreateDirectoryForTask(taskId);
+            final File storeDir = new File(taskDir, store.name());
+            storeDir.mkdir();
+        }
+
+        final ProcessorTopology processorTopology = new ProcessorTopology(
+                Collections.emptyList(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.singletonList(store),
+                Collections.emptyList(),
+                Collections.singletonMap(store.name(), store.name() + "-changelog"),
+                Collections.emptySet(),
+                Collections.emptyMap()
+        );
+        Mockito.when(metadata.buildSubtopology(ArgumentMatchers.any())).thenReturn(processorTopology);
+        Mockito.when(metadata.getTaskConfigFor(ArgumentMatchers.any())).thenReturn(topologyConfig.getTaskConfig());
+
+        directory.initializeTasksForLocalState(metadata, new StreamsMetricsImpl(new Metrics(), "test", "0.1", time));
+
+        return store;
     }
 
     private static class FutureStateDirectoryProcessFile {

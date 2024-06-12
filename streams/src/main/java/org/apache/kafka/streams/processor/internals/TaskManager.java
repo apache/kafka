@@ -324,6 +324,31 @@ public class TaskManager {
         }
     }
 
+    private Map<Task, Set<TopicPartition>> assignInitialTasks(final Map<TaskId, Set<TopicPartition>> tasksToAssign,
+                                                              final String threadLogPrefix,
+                                                              final TopologyMetadata topologyMetadata,
+                                                              final ChangelogRegister changelogReader) {
+        if (stateDirectory.hasInitialTasks()) {
+            final Map<Task, Set<TopicPartition>> assignedTasks = new HashMap<>(tasksToAssign.size());
+            for (final Map.Entry<TaskId, Set<TopicPartition>> entry : tasksToAssign.entrySet()) {
+                final TaskId taskId = entry.getKey();
+                final Set<TopicPartition> inputPartitions = entry.getValue();
+                final Task task = stateDirectory.assignInitialTask(taskId);
+                if (task != null) {
+                    // replace our dummy values with the real ones, now we know our thread and assignment
+                    task.stateManager().assignToStreamThread(new LogContext(threadLogPrefix), changelogReader, inputPartitions);
+                    task.updateInputPartitions(inputPartitions, topologyMetadata.nodeToSourceTopics(taskId));
+
+                    assignedTasks.put(task, inputPartitions);
+                }
+            }
+
+            return assignedTasks;
+        } else {
+            return Collections.emptyMap();
+        }
+    }
+
     /**
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      * @throws StreamsException fatal error while creating / initializing the task
@@ -453,6 +478,24 @@ public class TaskManager {
                                                 final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
                                                 final Map<Task, Set<TopicPartition>> tasksToRecycle,
                                                 final Set<Task> tasksToCloseClean) {
+        final Map<Task, Set<TopicPartition>> initialStandbyTasksToRecycle = assignInitialTasks(activeTasksToCreate, logPrefix, topologyMetadata, changelogReader);
+        final Map<Task, Set<TopicPartition>> initialStandbyTasksToUse = assignInitialTasks(activeTasksToCreate, logPrefix, topologyMetadata, changelogReader);
+        final Set<TaskId> recycledInitialTasks = new HashSet<>(initialStandbyTasksToRecycle.size() + initialStandbyTasksToUse.size());
+
+        // if this was the last local thread to receive its assignment, close all the remaining Tasks, as they are not needed
+        stateDirectory.closeInitialTasksIfLastAssginedThread();
+
+        // recycle the initial standbys to active, and remove them from the set of actives that need to be created
+        tasksToRecycle.putAll(initialStandbyTasksToRecycle);
+        tasks.addStandbyTasks(initialStandbyTasksToRecycle.keySet());
+        initialStandbyTasksToRecycle.keySet().forEach(task -> activeTasksToCreate.remove(task.id()));
+        recycledInitialTasks.addAll(initialStandbyTasksToRecycle.keySet().stream().map(Task::id).collect(Collectors.toSet()));
+
+        // use initial Standbys as real Standby tasks
+        tasks.addStandbyTasks(initialStandbyTasksToUse.keySet());
+        initialStandbyTasksToUse.keySet().forEach(task -> standbyTasksToCreate.remove(task.id()));
+        recycledInitialTasks.addAll(initialStandbyTasksToUse.keySet().stream().map(Task::id).collect(Collectors.toSet()));
+
         for (final Task task : tasks.allTasks()) {
             final TaskId taskId = task.id();
             if (activeTasksToCreate.containsKey(taskId)) {
@@ -474,7 +517,7 @@ public class TaskManager {
                     tasksToRecycle.put(task, standbyTasksToCreate.get(taskId));
                 }
                 standbyTasksToCreate.remove(taskId);
-            } else {
+            } else if (!recycledInitialTasks.contains(taskId)) {
                 tasksToCloseClean.add(task);
             }
         }
@@ -507,6 +550,7 @@ public class TaskManager {
                                              final Set<Task> tasksToCloseClean,
                                              final Map<TaskId, RuntimeException> failedTasks) {
         handleTasksPendingInitialization();
+        handleInitialTaskReuse(activeTasksToCreate, standbyTasksToCreate, failedTasks);
         handleRestoringAndUpdatingTasks(activeTasksToCreate, standbyTasksToCreate, failedTasks);
         handleRunningAndSuspendedTasks(activeTasksToCreate, standbyTasksToCreate, tasksToRecycle, tasksToCloseClean);
     }
@@ -515,6 +559,33 @@ public class TaskManager {
         // All tasks pending initialization are not part of the usual bookkeeping
         for (final Task task : tasks.drainPendingTasksToInit()) {
             closeTaskClean(task, Collections.emptySet(), Collections.emptyMap());
+        }
+    }
+
+    private void handleInitialTaskReuse(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
+                                        final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
+                                        final Map<TaskId, RuntimeException> failedTasks) {
+        final Map<Task, Set<TopicPartition>> initialStandbyTasksToRecycle = assignInitialTasks(activeTasksToCreate, logPrefix, topologyMetadata, changelogReader);
+        final Map<Task, Set<TopicPartition>> initialStandbyTasksToUse = assignInitialTasks(standbyTasksToCreate, logPrefix, topologyMetadata, changelogReader);
+
+        // if this was the last local thread to receive its assignment, close all the remaining Tasks, as they are not needed
+        stateDirectory.closeInitialTasksIfLastAssginedThread();
+
+        // recycle the initial standbys to active, and remove them from the set of actives that need to be created
+        if (!initialStandbyTasksToRecycle.isEmpty()) {
+            final Set<Task> tasksToCloseDirty = new HashSet<>();
+            for (final Map.Entry<Task, Set<TopicPartition>> entry : initialStandbyTasksToRecycle.entrySet()) {
+                final Task task = entry.getKey();
+                final Set<TopicPartition> inputPartitions = entry.getValue();
+                recycleTaskFromStateUpdater(task, inputPartitions, tasksToCloseDirty, failedTasks);
+                activeTasksToCreate.remove(task.id());
+            }
+        }
+
+        // use initial Standbys as real Standby tasks
+        if (!initialStandbyTasksToUse.isEmpty()) {
+            tasks.addPendingTasksToInit(initialStandbyTasksToUse.keySet());
+            initialStandbyTasksToUse.keySet().forEach(task -> standbyTasksToCreate.remove(task.id()));
         }
     }
 

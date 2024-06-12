@@ -166,11 +166,11 @@ public class ProcessorStateManager implements StateManager {
 
     private static final String STATE_CHANGELOG_TOPIC_SUFFIX = "-changelog";
 
-    private final String logPrefix;
+    private String logPrefix;
 
     private final TaskId taskId;
     private final boolean eosEnabled;
-    private final ChangelogRegister changelogReader;
+    private ChangelogRegister changelogReader;
     private final Collection<TopicPartition> sourcePartitions;
     private final Map<String, String> storeToChangelogTopic;
 
@@ -220,6 +220,21 @@ public class ProcessorStateManager implements StateManager {
         this.checkpointFile = new OffsetCheckpoint(stateDirectory.checkpointFileFor(taskId));
 
         log.debug("Created state store manager for task {}", taskId);
+    }
+
+    // standby tasks initialized for local state on-startup need to have their stateManager internals updated for the
+    // corresponding StreamThread context
+    void assignToStreamThread(final LogContext logContext,
+                              final ChangelogRegister changelogReader,
+                              final Collection<TopicPartition> sourcePartitions) {
+        if (this.changelogReader != null) {
+            throw new IllegalStateException("Attempted to replace an existing changelogReader on a StateManager without closing it.");
+        }
+        this.sourcePartitions.clear();
+        this.log = logContext.logger(ProcessorStateManager.class);
+        this.logPrefix = logContext.logPrefix();
+        this.changelogReader = changelogReader;
+        this.sourcePartitions.addAll(sourcePartitions);
     }
 
     void registerStateStores(final List<StateStore> allStores, final InternalProcessorContext processorContext) {
@@ -314,7 +329,7 @@ public class ProcessorStateManager implements StateManager {
     }
 
     private void maybeRegisterStoreWithChangelogReader(final String storeName) {
-        if (isLoggingEnabled(storeName)) {
+        if (isLoggingEnabled(storeName) && changelogReader != null) {
             changelogReader.register(getStorePartition(storeName), this);
         }
     }
@@ -569,7 +584,7 @@ public class ProcessorStateManager implements StateManager {
     public void close() throws ProcessorStateException {
         log.debug("Closing its state manager and all the registered state stores: {}", stores);
 
-        if (!stateUpdaterEnabled) {
+        if (!stateUpdaterEnabled && changelogReader != null) {
             changelogReader.unregister(getAllChangelogTopicPartitions());
         }
 
@@ -610,7 +625,7 @@ public class ProcessorStateManager implements StateManager {
     void recycle() {
         log.debug("Recycling state for {} task {}.", taskType, taskId);
 
-        if (!stateUpdaterEnabled) {
+        if (!stateUpdaterEnabled && changelogReader != null) {
             final List<TopicPartition> allChangelogs = getAllChangelogTopicPartitions();
             changelogReader.unregister(allChangelogs);
         }
