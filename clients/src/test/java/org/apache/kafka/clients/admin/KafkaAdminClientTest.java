@@ -1508,6 +1508,41 @@ public class KafkaAdminClientTest {
         }
     }
 
+    @Test
+    public void testDescribeTopicPartitionsApiWithoutAuthorizedOps() throws ExecutionException, InterruptedException {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            String topicName0 = "test-0";
+            Uuid topicId =  Uuid.randomUuid();
+
+            int authorisedOperations = Utils.to32BitField(Utils.mkSet(AclOperation.DESCRIBE.code(), AclOperation.ALTER.code()));
+            env.kafkaClient().prepareResponse(
+                    prepareDescribeClusterResponse(0,
+                            env.cluster().nodes(),
+                            env.cluster().clusterResource().clusterId(),
+                            2,
+                            authorisedOperations)
+            );
+
+            DescribeTopicPartitionsResponseData responseData = new DescribeTopicPartitionsResponseData();
+            responseData.topics().add(new DescribeTopicPartitionsResponseTopic()
+                    .setErrorCode((short) 0)
+                    .setTopicId(topicId)
+                    .setName(topicName0)
+                    .setIsInternal(false)
+                    .setTopicAuthorizedOperations(authorisedOperations));
+            env.kafkaClient().prepareResponse(new DescribeTopicPartitionsResponse(responseData));
+
+            DescribeTopicsResult result = env.adminClient().describeTopics(
+                    singletonList(topicName0), new DescribeTopicsOptions().includeAuthorizedOperations(false)
+            );
+
+            Map<String, TopicDescription> topicDescriptions = result.allTopicNames().get();
+            TopicDescription topicDescription = topicDescriptions.get(topicName0);
+            assertNull(topicDescription.authorizedOperations());
+        }
+    }
+
     @SuppressWarnings({"NPathComplexity", "CyclomaticComplexity"})
     @Test
     public void testDescribeTopicsWithDescribeTopicPartitionsApiEdgeCase() {
