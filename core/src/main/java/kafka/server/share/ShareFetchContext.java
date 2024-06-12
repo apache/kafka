@@ -79,6 +79,6 @@ public abstract class ShareFetchContext {
     /**
      * @return - The error-prone and valid topic id partitions in the share fetch request.
      */
-    abstract SharePartitionManager.ErroneousAndValidPartitionData getErroneousAndValidTopicIdPartitions();
+    abstract ErroneousAndValidPartitionData getErroneousAndValidTopicIdPartitions();
 
 }

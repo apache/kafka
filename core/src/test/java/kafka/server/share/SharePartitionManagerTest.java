@@ -70,7 +70,7 @@ public class SharePartitionManagerTest {
 
         ShareFetchMetadata newReqMetadata = new ShareFetchMetadata(Uuid.ZERO_UUID, -1);
         ShareFetchContext shareFetchContext = sharePartitionManager.newContext("grp", Collections.emptyMap(), Collections.emptyList(), newReqMetadata);
-        assertEquals(shareFetchContext.getClass(), SharePartitionManager.FinalContext.class);
+        assertEquals(FinalContext.class, shareFetchContext.getClass());
 
         // If the final fetch request has topics to add, it should fail as an invalid request
         Uuid topicId = Uuid.randomUuid();
@@ -85,7 +85,7 @@ public class SharePartitionManagerTest {
         Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> shareFetchData2 = Collections.singletonMap(new TopicIdPartition(topicId, new TopicPartition("foo", 0)),
                 new ShareFetchRequest.SharePartitionData(topicId, 0));
         shareFetchContext = sharePartitionManager.newContext("grp", shareFetchData2, Collections.emptyList(), newReqMetadata);
-        assertEquals(shareFetchContext.getClass(), SharePartitionManager.FinalContext.class);
+        assertEquals(FinalContext.class, shareFetchContext.getClass());
     }
 
     @Test
@@ -109,7 +109,7 @@ public class SharePartitionManagerTest {
         // Verify that final epoch requests get a FinalContext
         ShareFetchContext context1 = sharePartitionManager.newContext(groupId, Collections.emptyMap(), EMPTY_PART_LIST,
                 new ShareFetchMetadata(Uuid.randomUuid(), ShareFetchMetadata.FINAL_EPOCH));
-        assertEquals(SharePartitionManager.FinalContext.class, context1.getClass());
+        assertEquals(FinalContext.class, context1.getClass());
 
         // Create a new share session with an initial share fetch request
         Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> reqData2 = new LinkedHashMap<>();
@@ -181,7 +181,7 @@ public class SharePartitionManagerTest {
         // Close the subsequent share session.
         ShareFetchContext context8 = sharePartitionManager.newContext(groupId, Collections.emptyMap(), EMPTY_PART_LIST,
                 new ShareFetchMetadata(reqMetadata2.memberId(), ShareFetchMetadata.FINAL_EPOCH));
-        assertEquals(context8.getClass(), SharePartitionManager.FinalContext.class);
+        assertEquals(FinalContext.class, context8.getClass());
         assertEquals(0, cache.size());
 
         LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> respData8 = new LinkedHashMap<>();
@@ -576,7 +576,7 @@ public class SharePartitionManagerTest {
         // Close the subsequent share session.
         ShareFetchContext context8 = sharePartitionManager.newContext(groupId, Collections.emptyMap(), EMPTY_PART_LIST,
                 new ShareFetchMetadata(reqMetadata2.memberId(), ShareFetchMetadata.FINAL_EPOCH));
-        assertEquals(context8.getClass(), SharePartitionManager.FinalContext.class);
+        assertEquals(FinalContext.class, context8.getClass());
         assertEquals(0, cache.size());
 
 
@@ -674,7 +674,7 @@ public class SharePartitionManagerTest {
         // Close the subsequent share session.
         ShareFetchContext context8 = sharePartitionManager.newContext(groupId, Collections.emptyMap(), EMPTY_PART_LIST,
                 new ShareFetchMetadata(reqMetadata2.memberId(), ShareFetchMetadata.FINAL_EPOCH));
-        assertEquals(context8.getClass(), SharePartitionManager.FinalContext.class);
+        assertEquals(FinalContext.class, context8.getClass());
         assertEquals(0, cache.size());
 
         LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> respData8 = new LinkedHashMap<>();
@@ -787,7 +787,7 @@ public class SharePartitionManagerTest {
         // Close the first share session.
         ShareFetchContext context5 = sharePartitionManager.newContext(groupId, Collections.emptyMap(), EMPTY_PART_LIST,
                 new ShareFetchMetadata(reqMetadata1.memberId(), ShareFetchMetadata.FINAL_EPOCH));
-        assertEquals(context5.getClass(), SharePartitionManager.FinalContext.class);
+        assertEquals(FinalContext.class, context5.getClass());
 
         LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> respData5 = new LinkedHashMap<>();
         ShareFetchResponse resp5 = context5.updateAndGenerateResponseData(groupId, reqMetadata1.memberId(), respData5);
@@ -854,7 +854,7 @@ public class SharePartitionManagerTest {
         assertEquals(partitionsSet, partitionsInContext);
     }
 
-    private void assertErroneousAndValidTopicIdPartitions(SharePartitionManager.ErroneousAndValidPartitionData erroneousAndValidPartitionData,
+    private void assertErroneousAndValidTopicIdPartitions(ErroneousAndValidPartitionData erroneousAndValidPartitionData,
                                                           List<TopicIdPartition> expectedErroneous, List<TopicIdPartition> expectedValid) {
         Set<TopicIdPartition> expectedErroneousSet = new HashSet<>(expectedErroneous);
         Set<TopicIdPartition> expectedValidSet = new HashSet<>(expectedValid);

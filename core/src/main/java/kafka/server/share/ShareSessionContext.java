@@ -25,7 +25,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
-import kafka.server.share.SharePartitionManager.ErroneousAndValidPartitionData;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -137,19 +136,21 @@ public class ShareSessionContext extends ShareFetchContext {
                 Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData> element = iterator.next();
                 TopicIdPartition topicPart = element.getKey();
                 ShareFetchResponseData.PartitionData respData = element.getValue();
-                CachedSharePartition cachedPart = session.partitionMap().find(new CachedSharePartition(topicPart));
-                boolean mustRespond = cachedPart.maybeUpdateResponseData(respData, updateShareContextAndRemoveUnselected);
-                if (mustRespond) {
-                    nextElement = element;
-                    if (updateShareContextAndRemoveUnselected && ShareFetchResponse.recordsSize(respData) > 0) {
-                        // Session.partitionMap is of type ImplicitLinkedHashCollection<> which tracks the order of insertion of elements.
-                        // Since, we are updating an element in this case, we need to perform a remove and then a mustAdd to maintain the correct order
-                        session.partitionMap().remove(cachedPart);
-                        session.partitionMap().mustAdd(cachedPart);
-                    }
-                } else {
-                    if (updateShareContextAndRemoveUnselected) {
-                        iterator.remove();
+                synchronized (session) {
+                    CachedSharePartition cachedPart = session.partitionMap().find(new CachedSharePartition(topicPart));
+                    boolean mustRespond = cachedPart.maybeUpdateResponseData(respData, updateShareContextAndRemoveUnselected);
+                    if (mustRespond) {
+                        nextElement = element;
+                        if (updateShareContextAndRemoveUnselected && ShareFetchResponse.recordsSize(respData) > 0) {
+                            // Session.partitionMap is of type ImplicitLinkedHashCollection<> which tracks the order of insertion of elements.
+                            // Since, we are updating an element in this case, we need to perform a remove and then a mustAdd to maintain the correct order
+                            session.partitionMap().remove(cachedPart);
+                            session.partitionMap().mustAdd(cachedPart);
+                        }
+                    } else {
+                        if (updateShareContextAndRemoveUnselected) {
+                            iterator.remove();
+                        }
                     }
                 }
             }

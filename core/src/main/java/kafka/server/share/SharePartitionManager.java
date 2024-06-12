@@ -27,7 +27,6 @@ import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ShareFetchMetadata;
 import org.apache.kafka.common.requests.ShareFetchRequest;
-import org.apache.kafka.common.requests.ShareFetchResponse;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.share.CachedSharePartition;
@@ -38,14 +37,11 @@ import org.apache.kafka.server.share.ShareAcknowledgementBatch;
 import org.apache.kafka.storage.internals.log.FetchParams;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import scala.Tuple2;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
@@ -347,70 +343,5 @@ public class SharePartitionManager implements AutoCloseable {
      */
     private static class ShareFetchPartitionData {
         // TODO: Provide Implementation
-    }
-
-    // Helper class to return the erroneous partitions and valid partition data
-    static class ErroneousAndValidPartitionData {
-        private final List<Tuple2<TopicIdPartition, ShareFetchResponseData.PartitionData>> erroneous;
-        private final List<Tuple2<TopicIdPartition, ShareFetchRequest.SharePartitionData>> validTopicIdPartitions;
-
-        public ErroneousAndValidPartitionData(List<Tuple2<TopicIdPartition, ShareFetchResponseData.PartitionData>> erroneous,
-                                              List<Tuple2<TopicIdPartition, ShareFetchRequest.SharePartitionData>> validTopicIdPartitions) {
-            this.erroneous = erroneous;
-            this.validTopicIdPartitions = validTopicIdPartitions;
-        }
-
-        public ErroneousAndValidPartitionData(Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> shareFetchData) {
-            erroneous = new ArrayList<>();
-            validTopicIdPartitions = new ArrayList<>();
-            shareFetchData.forEach((topicIdPartition, sharePartitionData) -> {
-                if (topicIdPartition.topic() == null) {
-                    erroneous.add(new Tuple2<>(topicIdPartition, ShareFetchResponse.partitionResponse(topicIdPartition, Errors.UNKNOWN_TOPIC_ID)));
-                } else {
-                    validTopicIdPartitions.add(new Tuple2<>(topicIdPartition, sharePartitionData));
-                }
-            });
-        }
-
-        public ErroneousAndValidPartitionData() {
-            this.erroneous = new ArrayList<>();
-            this.validTopicIdPartitions = new ArrayList<>();
-        }
-
-        public List<Tuple2<TopicIdPartition, ShareFetchResponseData.PartitionData>> erroneous() {
-            return erroneous;
-        }
-
-        public List<Tuple2<TopicIdPartition, ShareFetchRequest.SharePartitionData>> validTopicIdPartitions() {
-            return validTopicIdPartitions;
-        }
-    }
-
-    /**
-     * The share fetch context for a final share fetch request.
-     */
-    public static class FinalContext extends ShareFetchContext {
-
-        public FinalContext() {
-            this.log = LoggerFactory.getLogger(FinalContext.class);
-        }
-
-        @Override
-        int responseSize(LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> updates, short version) {
-            return ShareFetchResponse.sizeOf(version, updates.entrySet().iterator());
-        }
-
-        @Override
-        ShareFetchResponse updateAndGenerateResponseData(String groupId, Uuid memberId,
-                                                         LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> updates) {
-            log.debug("Final context returning {}", partitionsToLogString(updates.keySet()));
-            return new ShareFetchResponse(ShareFetchResponse.toMessage(Errors.NONE, 0,
-                    updates.entrySet().iterator(), Collections.emptyList()));
-        }
-
-        @Override
-        ErroneousAndValidPartitionData getErroneousAndValidTopicIdPartitions() {
-            return new ErroneousAndValidPartitionData();
-        }
     }
 }
