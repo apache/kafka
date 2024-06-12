@@ -501,7 +501,6 @@ public class MembershipManagerImplTest {
         assertNotEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
     }
 
-    // TODO
     /**
      * This is the case where a member is stuck reconciling an assignment A (waiting for commit
      * to complete), and it rejoins (due to fence or unsubscribe/subscribe). If the
@@ -510,6 +509,7 @@ public class MembershipManagerImplTest {
      */
     @Test
     public void testDelayedReconciliationResultDiscardedAfterCommitIfMemberRejoins() {
+        when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(CompletableFuture.completedFuture(null));
         MembershipManagerImpl membershipManager = createMemberInStableState();
         Uuid topicId1 = Uuid.randomUuid();
         String topic1 = "topic1";
@@ -518,9 +518,10 @@ public class MembershipManagerImplTest {
         mockOwnedPartitionAndAssignmentReceived(membershipManager, topicId1, topic1, owned);
 
         // Reconciliation that does not complete stuck on revocation commit.
-        CompletableFuture<Void> commitResult =
-                mockNewAssignmentAndRevocationStuckOnCommit(membershipManager, topicId1, topic1,
-                        Arrays.asList(1, 2), true);
+        CompletableFuture<Void> commitResult = new CompletableFuture<>();
+        when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(commitResult);
+        mockEmptyAssignmentAndRevocationStuckOnCommit(membershipManager);
+        mockNewAssignmentAndRevocationStuckOnCommit(membershipManager, topicId1, topic1, Arrays.asList(1, 2), true);
         Map<Uuid, SortedSet<Integer>> assignment1 = topicIdPartitionsMap(topicId1,  1, 2);
         assertEquals(assignment1, membershipManager.topicPartitionsAwaitingReconciliation());
 
