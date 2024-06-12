@@ -81,9 +81,9 @@ public class ConnectStandaloneTest {
     @Test
     public void testParseJsonFileWithCreateConnectorRequest() throws Exception {
         CreateConnectorRequest requestToWrite = new CreateConnectorRequest(
-                CONNECTOR_NAME,
-                CONNECTOR_CONFIG,
-                CreateConnectorRequest.InitialState.STOPPED
+            CONNECTOR_NAME,
+            CONNECTOR_CONFIG,
+            CreateConnectorRequest.InitialState.STOPPED
         );
 
         try (FileWriter writer = new FileWriter(connectorConfigurationFile)) {

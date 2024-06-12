@@ -42,11 +42,11 @@ public abstract class BaseConnectorClientConfigOverridePolicyTest {
 
     private List<ConfigValue> configValues(Map<String, Object> clientConfig) {
         ConnectorClientConfigRequest connectorClientConfigRequest = new ConnectorClientConfigRequest(
-                "test",
-                ConnectorType.SOURCE,
-                SampleSourceConnector.class,
-                clientConfig,
-                ConnectorClientConfigRequest.ClientType.PRODUCER);
+            "test",
+            ConnectorType.SOURCE,
+            SampleSourceConnector.class,
+            clientConfig,
+            ConnectorClientConfigRequest.ClientType.PRODUCER);
         return policyToTest().validate(connectorClientConfigRequest);
     }
 

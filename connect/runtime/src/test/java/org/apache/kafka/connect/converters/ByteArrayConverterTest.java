@@ -63,13 +63,13 @@ public class ByteArrayConverterTest {
     @Test
     public void testFromConnectBadSchema() {
         assertThrows(DataException.class,
-                () -> converter.fromConnectData(TOPIC, Schema.INT32_SCHEMA, SAMPLE_BYTES));
+            () -> converter.fromConnectData(TOPIC, Schema.INT32_SCHEMA, SAMPLE_BYTES));
     }
 
     @Test
     public void testFromConnectInvalidValue() {
         assertThrows(DataException.class,
-                () -> converter.fromConnectData(TOPIC, Schema.BYTES_SCHEMA, 12));
+            () -> converter.fromConnectData(TOPIC, Schema.BYTES_SCHEMA, 12));
     }
 
     @Test

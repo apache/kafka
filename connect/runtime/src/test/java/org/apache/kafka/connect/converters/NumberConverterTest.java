@@ -91,7 +91,7 @@ public abstract class NumberConverterTest<T extends Number> {
     @Test
     public void testSerializingIncorrectHeader() {
         assertThrows(DataException.class,
-                () -> converter.fromConnectHeader(TOPIC, HEADER_NAME, schema, "not a valid number"));
+            () -> converter.fromConnectHeader(TOPIC, HEADER_NAME, schema, "not a valid number"));
     }
 
     @Test
