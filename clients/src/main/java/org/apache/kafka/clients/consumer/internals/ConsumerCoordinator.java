@@ -67,6 +67,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -85,6 +86,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ASSIGN_FROM_SUBSCRIBED_ASSIGNORS;
@@ -183,7 +185,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
               time,
               clientTelemetryReporter);
         this.rebalanceConfig = rebalanceConfig;
-        this.log = logContext.logger(ConsumerCoordinator.class);
+        final Supplier<String> dynamicPrefix =
+            () -> logContext.logPrefix() + "[generationId=" + generation().generationId + "] ";
+        this.log = new DynamicPrefixLogger(
+            dynamicPrefix,
+            LoggerFactory.getLogger(ConsumerCoordinator.class)
+        );
         this.metadata = metadata;
         this.rackId = rackId == null || rackId.isEmpty() ? Optional.empty() : Optional.of(rackId);
         this.metadataSnapshot = new MetadataSnapshot(this.rackId, subscriptions, metadata.fetch(), metadata.updateVersion());
@@ -191,6 +198,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.defaultOffsetCommitCallback = new DefaultOffsetCommitCallback();
         this.autoCommitEnabled = autoCommitEnabled;
         this.autoCommitIntervalMs = autoCommitIntervalMs;
+        for (final ConsumerPartitionAssignor assignor : assignors) {
+            if (assignor instanceof ContextualLogging) {
+                ((ContextualLogging) assignor).setLoggingContext(dynamicPrefix);
+            }
+        }
         this.assignors = assignors;
         this.completedOffsetCommits = new ConcurrentLinkedQueue<>();
         this.coordinatorMetrics = new ConsumerCoordinatorMetrics(metrics, metricGrpPrefix);
@@ -638,8 +650,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         isLeader = true;
 
         if (skipAssignment) {
-            log.info("Skipped assignment for returning static leader at generation {}. The static leader " +
-                "will continue with its existing assignment.", generation().generationId);
+            log.info("Skipped assignment for returning static leader. The static leader " +
+                "will continue with its existing assignment.");
             assignmentSnapshot = metadataSnapshot;
             return Collections.emptyMap();
         }
@@ -660,7 +672,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // we must take the assignment snapshot after.
         assignmentSnapshot = metadataSnapshot;
 
-        log.info("Finished assignment for group at generation {}: {}", generation().generationId, assignments);
+        log.info("Finished assignment for group: {}", assignments);
 
         Map<String, ByteBuffer> groupAssignment = new HashMap<>();
         for (Map.Entry<String, Assignment> assignmentEntry : assignments.entrySet()) {
