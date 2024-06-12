@@ -1670,15 +1670,16 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         log.debug("Refreshing committed offsets for partitions {}", initializingPartitions);
 
         // The shorter the timeout the user provided to poll(), the less likely the offsets fetch will
-        // be retrieved in time. This code creates a new FetchCommittedOffsetsEvent that can be reused if the
-        // first attempt at retrieving the associated Future's value times out.
+        // be retrieved before it times out. Creates a FetchCommittedOffsetsEvent that can be reused by follow-up
+        // attempts if the first attempt at retrieving the associated Future's value times out.
         if (pendingOffsetFetch == null || !pendingOffsetFetch.partitions().equals(initializingPartitions)) {
             pendingOffsetFetch = new FetchCommittedOffsetsEvent(initializingPartitions, Long.MAX_VALUE);
             applicationEventHandler.add(pendingOffsetFetch);
         }
 
+        final CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = pendingOffsetFetch.future();
+
         try {
-            final CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = pendingOffsetFetch.future();
             wakeupTrigger.setActiveTask(future);
             final Map<TopicPartition, OffsetAndMetadata> offsets = ConsumerUtils.getResult(future, timer);
 
