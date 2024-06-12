@@ -723,10 +723,10 @@ public class MembershipManagerImplTest {
      */
     @Test
     public void testDelayedReconciliationResultAppliedWhenTargetChangedWithMetadataUpdate() {
-        createCommitRequestManager(false);
         // Member receives and reconciles topic1-partition0
         Uuid topicId1 = Uuid.randomUuid();
         String topic1 = "topic1";
+        when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(CompletableFuture.completedFuture(null));
         MembershipManagerImpl membershipManager =
                 mockMemberSuccessfullyReceivesAndAcksAssignment(topicId1, topic1, Collections.singletonList(0));
         membershipManager.onHeartbeatRequestSent();
@@ -740,9 +740,9 @@ public class MembershipManagerImplTest {
         // for metadata.
         Uuid topicId2 = Uuid.randomUuid();
         String topic2 = "topic2";
-        CompletableFuture<Void> commitResult =
-                mockNewAssignmentAndRevocationStuckOnCommit(membershipManager, topicId2, topic2,
-                        Arrays.asList(1, 2), false);
+        CompletableFuture<Void> commitResult = new CompletableFuture<>();
+        when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(commitResult);
+        mockNewAssignmentAndRevocationStuckOnCommit(membershipManager, topicId2, topic2, Arrays.asList(1, 2), false);
         verify(metadata).requestUpdate(anyBoolean());
         assertEquals(Collections.singleton(topicId2), membershipManager.topicsAwaitingReconciliation());
 
@@ -758,7 +758,7 @@ public class MembershipManagerImplTest {
 
         // Member should update the subscription and send ack when the delayed reconciliation
         // completes.
-        verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
+        verify(subscriptionState).assignFromSubscribedAwaitingCallback(eq(Collections.emptySet()), anyCollection());
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
 
         // Pending assignment that was discovered in metadata should be ready to reconcile in the
@@ -777,7 +777,7 @@ public class MembershipManagerImplTest {
         membershipManager.poll(time.milliseconds());
 
         assertEquals(Collections.emptySet(), membershipManager.topicsAwaitingReconciliation());
-        verify(subscriptionState).assignFromSubscribed(topicPartitions(topic2Assignment, topic2Metadata));
+        verify(subscriptionState).assignFromSubscribedAwaitingCallback(eq(topicPartitions(topic2Assignment, topic2Metadata)), anyCollection());
     }
 
     // TODO
