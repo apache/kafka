@@ -19,7 +19,7 @@ package org.apache.kafka.streams.processor.assignment;
 import java.util.UUID;
 
 /** A simple wrapper around UUID that abstracts a Process ID */
-public class ProcessId {
+public class ProcessId implements Comparable<ProcessId> {
 
     private final UUID id;
 
@@ -35,9 +35,17 @@ public class ProcessId {
         return id;
     }
 
+    /**
+     *
+     * @return a randomly generated process id
+     */
+    public static ProcessId randomProcessId() {
+        return new ProcessId(UUID.randomUUID());
+    }
+
     @Override
     public String toString() {
-        return "ProcessId{id=" + id + "}";
+        return id.toString();
     }
 
     @Override
@@ -55,5 +63,10 @@ public class ProcessId {
             return false;
         final ProcessId other = (ProcessId) obj;
         return this.id.equals(other.id());
+    }
+
+    @Override
+    public int compareTo(final ProcessId o) {
+        return this.id.compareTo(o.id);
     }
 }

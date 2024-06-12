@@ -21,9 +21,11 @@ import kafka.test.annotation.ClusterTest;
 import kafka.test.annotation.ClusterTests;
 import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
+
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 
@@ -34,13 +36,12 @@ import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import static java.util.Arrays.stream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import static java.util.Arrays.stream;
 
 @ExtendWith(value = ClusterTestExtensions.class)
 @Tag("integration")

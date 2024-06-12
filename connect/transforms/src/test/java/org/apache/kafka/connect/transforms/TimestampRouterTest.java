@@ -18,6 +18,7 @@ package org.apache.kafka.connect.transforms;
 
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.source.SourceRecord;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
