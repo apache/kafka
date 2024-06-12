@@ -106,6 +106,7 @@ public class KafkaRaftClientDriver<T> extends ShutdownableThread {
     ) {
         RaftRequest.Inbound inboundRequest = new RaftRequest.Inbound(
             header.correlationId(),
+            header.apiVersion(),
             request,
             createdTimeMs
         );

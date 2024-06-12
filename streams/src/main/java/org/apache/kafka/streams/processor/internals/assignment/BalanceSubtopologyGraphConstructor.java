@@ -20,16 +20,15 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
-import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.BiPredicate;
 import java.util.stream.Collectors;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor.CostFunction;
 
 public class BalanceSubtopologyGraphConstructor<T> implements RackAwareGraphConstructor<T> {
@@ -43,7 +42,7 @@ public class BalanceSubtopologyGraphConstructor<T> implements RackAwareGraphCons
     @Override
     public int getSinkNodeID(
         final List<TaskId> taskIdList,
-        final List<UUID> clientList,
+        final List<ProcessId> clientList,
         final Collection<Set<TaskId>> taskSetsPerTopicGroup
     ) {
         return clientList.size() + taskIdList.size() + clientList.size() * taskSetsPerTopicGroup.size();
@@ -51,26 +50,26 @@ public class BalanceSubtopologyGraphConstructor<T> implements RackAwareGraphCons
 
 
     @Override
-    public int getClientNodeId(final int clientIndex, final List<TaskId> taskIdList, final List<UUID> clientList, final int topicGroupIndex) {
+    public int getClientNodeId(final int clientIndex, final List<TaskId> taskIdList, final List<ProcessId> clientList, final int topicGroupIndex) {
         return taskIdList.size() + clientList.size() * topicGroupIndex + clientIndex;
     }
 
     @Override
-    public int getClientIndex(final int clientNodeId, final List<TaskId> taskIdList, final List<UUID> clientList, final int topicGroupIndex) {
+    public int getClientIndex(final int clientNodeId, final List<TaskId> taskIdList, final List<ProcessId> clientList, final int topicGroupIndex) {
         return clientNodeId - taskIdList.size() - clientList.size() * topicGroupIndex;
     }
 
-    private static int getSecondStageClientNodeId(final List<TaskId> taskIdList, final List<UUID> clientList, final Collection<Set<TaskId>> tasksForTopicGroup, final int clientIndex) {
+    private static int getSecondStageClientNodeId(final List<TaskId> taskIdList, final List<ProcessId> clientList, final Collection<Set<TaskId>> tasksForTopicGroup, final int clientIndex) {
         return taskIdList.size() + clientList.size() * tasksForTopicGroup.size() + clientIndex;
     }
 
     @Override
     public Graph<Integer> constructTaskGraph(
-        final List<UUID> clientList,
+        final List<ProcessId> clientList,
         final List<TaskId> taskIdList,
-        final Map<UUID, T> clientStates,
-        final Map<TaskId, UUID> taskClientMap,
-        final Map<UUID, Integer> originalAssignedTaskNumber,
+        final Map<ProcessId, T> clientStates,
+        final Map<TaskId, ProcessId> taskClientMap,
+        final Map<ProcessId, Integer> originalAssignedTaskNumber,
         final BiPredicate<T, TaskId> hasAssignedTask,
         final CostFunction costFunction,
         final int trafficCost,
@@ -83,7 +82,7 @@ public class BalanceSubtopologyGraphConstructor<T> implements RackAwareGraphCons
         final Graph<Integer> graph = new Graph<>();
 
         for (final TaskId taskId : taskIdList) {
-            for (final Entry<UUID, T> clientState : clientStates.entrySet()) {
+            for (final Map.Entry<ProcessId, T> clientState : clientStates.entrySet()) {
                 if (hasAssignedTask.test(clientState.getValue(), taskId)) {
                     originalAssignedTaskNumber.merge(clientState.getKey(), 1, Integer::sum);
                 }
@@ -117,11 +116,11 @@ public class BalanceSubtopologyGraphConstructor<T> implements RackAwareGraphCons
     @Override
     public boolean assignTaskFromMinCostFlow(
         final Graph<Integer> graph,
-        final List<UUID> clientList,
+        final List<ProcessId> clientList,
         final List<TaskId> taskIdList,
-        final Map<UUID, T> clientStates,
-        final Map<UUID, Integer> originalAssignedTaskNumber,
-        final Map<TaskId, UUID> taskClientMap,
+        final Map<ProcessId, T> clientStates,
+        final Map<ProcessId, Integer> originalAssignedTaskNumber,
+        final Map<TaskId, ProcessId> taskClientMap,
         final BiConsumer<T, TaskId> assignTask,
         final BiConsumer<T, TaskId> unAssignTask,
         final BiPredicate<T, TaskId> hasAssignedTask
@@ -165,10 +164,10 @@ public class BalanceSubtopologyGraphConstructor<T> implements RackAwareGraphCons
     private void constructEdges(
         final Graph<Integer> graph,
         final List<TaskId> taskIdList,
-        final List<UUID> clientList,
-        final Map<UUID, T> clientStates,
-        final Map<TaskId, UUID> taskClientMap,
-        final Map<UUID, Integer> originalAssignedTaskNumber,
+        final List<ProcessId> clientList,
+        final Map<ProcessId, T> clientStates,
+        final Map<TaskId, ProcessId> taskClientMap,
+        final Map<ProcessId, Integer> originalAssignedTaskNumber,
         final BiPredicate<T, TaskId> hasAssignedTask,
         final CostFunction costFunction,
         final int trafficCost,
@@ -184,7 +183,7 @@ public class BalanceSubtopologyGraphConstructor<T> implements RackAwareGraphCons
         for (final Set<TaskId> unorderedTaskIds : taskSetsPerTopicGroup) {
             final SortedSet<TaskId> taskIds = new TreeSet<>(unorderedTaskIds);
             for (int clientIndex = 0; clientIndex < clientList.size(); clientIndex++) {
-                final UUID processId = clientList.get(clientIndex);
+                final ProcessId processId = clientList.get(clientIndex);
                 final int clientNodeId = getClientNodeId(clientIndex, taskIdList, clientList, topicGroupIndex);
                 int startingTaskNodeId = taskNodeId;
                 int validTaskCount = 0;
@@ -236,7 +235,7 @@ public class BalanceSubtopologyGraphConstructor<T> implements RackAwareGraphCons
 
         // Add sink
         for (int clientIndex = 0; clientIndex < clientList.size(); clientIndex++) {
-            final UUID processId = clientList.get(clientIndex);
+            final ProcessId processId = clientList.get(clientIndex);
             final int capacity = originalAssignedTaskNumber.getOrDefault(processId, 0);
             final int secondStageClientNodeId = getSecondStageClientNodeId(taskIdList, clientList,
                 taskSetsPerTopicGroup, clientIndex);

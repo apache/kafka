@@ -269,6 +269,7 @@ import static java.util.Collections.emptyList;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
+import static java.util.Collections.singletonMap;
 import static org.apache.kafka.clients.admin.KafkaAdminClient.DEFAULT_LEAVE_GROUP_REASON;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse;
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
@@ -294,6 +295,7 @@ public class KafkaAdminClientTest {
     private static final Logger log = LoggerFactory.getLogger(KafkaAdminClientTest.class);
     private static final String GROUP_ID = "group-0";
     private static final int THROTTLE = 10;
+    public static final Uuid REPLICA_DIRECTORY_ID = Uuid.randomUuid();
 
     @Test
     public void testDefaultApiTimeoutAndRequestTimeoutConflicts() {
@@ -732,12 +734,17 @@ public class KafkaAdminClientTest {
 
     private static QuorumInfo defaultQuorumInfo(boolean emptyOptionals) {
         return new QuorumInfo(1, 1, 1L,
-                singletonList(new QuorumInfo.ReplicaState(1, 100,
+                singletonList(new QuorumInfo.ReplicaState(1,
+                        emptyOptionals ? Uuid.ZERO_UUID : REPLICA_DIRECTORY_ID,
+                        100,
                         emptyOptionals ? OptionalLong.empty() : OptionalLong.of(1000),
                         emptyOptionals ? OptionalLong.empty() : OptionalLong.of(1000))),
-                singletonList(new QuorumInfo.ReplicaState(1, 100,
+                singletonList(new QuorumInfo.ReplicaState(1,
+                        emptyOptionals ? Uuid.ZERO_UUID : REPLICA_DIRECTORY_ID,
+                        100,
                         emptyOptionals ? OptionalLong.empty() : OptionalLong.of(1000),
-                        emptyOptionals ? OptionalLong.empty() : OptionalLong.of(1000))));
+                        emptyOptionals ? OptionalLong.empty() : OptionalLong.of(1000))),
+                singletonMap(1, new QuorumInfo.Node(1, Collections.emptyList())));
     }
 
     private static DescribeQuorumResponse prepareDescribeQuorumResponse(
@@ -755,6 +762,7 @@ public class KafkaAdminClientTest {
         for (int i = 0; i < (partitionCountError ? 2 : 1); i++) {
             DescribeQuorumResponseData.ReplicaState replica = new DescribeQuorumResponseData.ReplicaState()
                     .setReplicaId(1)
+                    .setReplicaDirectoryId(emptyOptionals ? Uuid.ZERO_UUID : REPLICA_DIRECTORY_ID)
                     .setLogEndOffset(100);
             replica.setLastFetchTimestamp(emptyOptionals ? -1 : 1000);
             replica.setLastCaughtUpTimestamp(emptyOptionals ? -1 : 1000);
@@ -764,12 +772,17 @@ public class KafkaAdminClientTest {
                     .setHighWatermark(1)
                     .setCurrentVoters(singletonList(replica))
                     .setObservers(singletonList(replica))
-                    .setErrorCode(partitionLevelError.code()));
+                    .setErrorCode(partitionLevelError.code())
+                    .setErrorMessage(partitionLevelError.message()));
         }
         for (int i = 0; i < (topicCountError ? 2 : 1); i++) {
             topics.add(new DescribeQuorumResponseData.TopicData().setTopicName(topicName).setPartitions(partitions));
         }
-        return new DescribeQuorumResponse(new DescribeQuorumResponseData().setTopics(topics).setErrorCode(topLevelError.code()));
+        return new DescribeQuorumResponse(new DescribeQuorumResponseData()
+            .setTopics(topics)
+            .setErrorCode(topLevelError.code())
+            .setErrorMessage(topLevelError.message())
+            .setNodes(new DescribeQuorumResponseData.NodeCollection(Collections.singleton(new DescribeQuorumResponseData.Node().setNodeId(1)).iterator())));
     }
 
     /**

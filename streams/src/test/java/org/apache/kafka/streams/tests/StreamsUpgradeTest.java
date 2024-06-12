@@ -201,7 +201,7 @@ public class StreamsUpgradeTest {
             } else {
                 return new FutureSubscriptionInfo(
                     usedSubscriptionMetadataVersion,
-                    taskManager.processId(),
+                    taskManager.processId().id(),
                     SubscriptionInfo.getActiveTasksFromTaskOffsetSumMap(taskManager.getTaskOffsetSums()),
                     SubscriptionInfo.getStandbyTasksFromTaskOffsetSumMap(taskManager.getTaskOffsetSums()),
                     userEndPoint())
