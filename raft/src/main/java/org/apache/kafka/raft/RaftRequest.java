@@ -46,7 +46,7 @@ public abstract class RaftRequest implements RaftMessage {
         return createdTimeMs;
     }
 
-    public final static class Inbound extends RaftRequest {
+    public static final class Inbound extends RaftRequest {
         public final CompletableFuture<RaftResponse.Outbound> completion = new CompletableFuture<>();
 
         public Inbound(int correlationId, ApiMessage data, long createdTimeMs) {
@@ -64,7 +64,7 @@ public abstract class RaftRequest implements RaftMessage {
         }
     }
 
-    public final static class Outbound extends RaftRequest {
+    public static final class Outbound extends RaftRequest {
         private final Node destination;
         public final CompletableFuture<RaftResponse.Inbound> completion = new CompletableFuture<>();
 
