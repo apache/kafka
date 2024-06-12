@@ -162,6 +162,7 @@ public class CommitRequestManagerTest {
                 ", requestedPartitions=" + offsetFetchRequestState.requestedPartitions;
 
         assertDoesNotThrow(timedRequestState::toString);
+        assertFalse(target.contains("Optional"));
         assertEquals(target, offsetFetchRequestState.toStringBase());
     }
 
