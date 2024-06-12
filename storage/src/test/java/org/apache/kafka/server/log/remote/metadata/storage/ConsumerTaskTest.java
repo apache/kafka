@@ -33,8 +33,6 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadataUpdate;
 import org.apache.kafka.server.log.remote.storage.RemotePartitionDeleteMetadata;
-import org.apache.kafka.test.TestCondition;
-import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -56,6 +54,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -84,7 +83,6 @@ public class ConsumerTaskTest {
 
     private ConsumerTask consumerTask;
     private MockConsumer<byte[], byte[]> consumer;
-    private Thread thread;
 
     @BeforeEach
     public void beforeEach() {
@@ -93,31 +91,25 @@ public class ConsumerTaskTest {
         consumer = spy(new MockConsumer<>(OffsetResetStrategy.EARLIEST));
         consumer.updateBeginningOffsets(offsets);
         consumerTask = new ConsumerTask(handler, partitioner, consumer, 10L, 300_000L, new SystemTime());
-        thread = new Thread(consumerTask);
     }
 
     @AfterEach
-    public void afterEach() throws InterruptedException {
-        if (thread != null) {
-            assertDoesNotThrow(() -> consumerTask.close(), "Close method threw exception");
-            thread.join(10_000);
-            assertFalse(thread.isAlive(), "Consumer task thread is still alive");
-        }
+    public void afterEach() {
+        assertDoesNotThrow(() -> consumerTask.close(), "Close method threw exception");
+        consumerTask.ingestRecords();
+        assertTrue(consumer.closed());
     }
 
     /**
      * Tests that the consumer task shuts down gracefully when there were no assignments.
      */
     @Test
-    public void testCloseOnNoAssignment() throws InterruptedException {
-        thread.start();
-        Thread.sleep(10);
+    public void testCloseOnNoAssignment() {
         assertDoesNotThrow(() -> consumerTask.close(), "Close method threw exception");
     }
 
     @Test
     public void testIdempotentClose() {
-        thread.start();
         consumerTask.close();
         consumerTask.close();
     }
@@ -136,46 +128,46 @@ public class ConsumerTaskTest {
     }
 
     @Test
-    public void testAddAssignmentsForPartitions() throws InterruptedException {
+    public void testAddAssignmentsForPartitions() {
         final List<TopicIdPartition> idPartitions = getIdPartitions("sample", 3);
         final Map<TopicPartition, Long> endOffsets = idPartitions.stream()
             .map(idp -> toRemoteLogPartition(partitioner.metadataPartition(idp)))
             .collect(Collectors.toMap(Function.identity(), e -> 0L, (a, b) -> b));
         consumer.updateEndOffsets(endOffsets);
         consumerTask.addAssignmentsForPartitions(new HashSet<>(idPartitions));
-        thread.start();
+        consumerTask.ingestRecords();
         for (final TopicIdPartition idPartition : idPartitions) {
-            TestUtils.waitForCondition(() -> consumerTask.isUserPartitionAssigned(idPartition), "Timed out waiting for " + idPartition + " to be assigned");
             assertTrue(consumerTask.isMetadataPartitionAssigned(partitioner.metadataPartition(idPartition)));
             assertTrue(handler.isPartitionLoaded.get(idPartition));
         }
     }
 
     @Test
-    public void testRemoveAssignmentsForPartitions() throws InterruptedException {
+    public void testRemoveAssignmentsForPartitions() {
         final List<TopicIdPartition> allPartitions = getIdPartitions("sample", 3);
         final Map<TopicPartition, Long> endOffsets = allPartitions.stream()
             .map(idp -> toRemoteLogPartition(partitioner.metadataPartition(idp)))
             .collect(Collectors.toMap(Function.identity(), e -> 0L, (a, b) -> b));
         consumer.updateEndOffsets(endOffsets);
         consumerTask.addAssignmentsForPartitions(new HashSet<>(allPartitions));
-        thread.start();
+        consumerTask.ingestRecords();
 
         final TopicIdPartition tpId = allPartitions.get(0);
-        TestUtils.waitForCondition(() -> consumerTask.isUserPartitionAssigned(tpId), "Timed out waiting for " + tpId + " to be assigned");
         addRecord(consumer, partitioner.metadataPartition(tpId), tpId, 0);
-        TestUtils.waitForCondition(() -> consumerTask.readOffsetForMetadataPartition(partitioner.metadataPartition(tpId)).isPresent(),
-            "Couldn't read record");
+        consumerTask.ingestRecords();
+        assertTrue(() -> consumerTask.readOffsetForMetadataPartition(partitioner.metadataPartition(tpId)).isPresent(),
+                "Couldn't read record");
 
         final Set<TopicIdPartition> removePartitions = Collections.singleton(tpId);
         consumerTask.removeAssignmentsForPartitions(removePartitions);
+        consumerTask.ingestRecords();
         for (final TopicIdPartition idPartition : allPartitions) {
-            final TestCondition condition = () -> removePartitions.contains(idPartition) == !consumerTask.isUserPartitionAssigned(idPartition);
-            TestUtils.waitForCondition(condition, "Timed out waiting for " + idPartition + " to be removed");
+            final BooleanSupplier condition = () -> removePartitions.contains(idPartition) == !consumerTask.isUserPartitionAssigned(idPartition);
+            assertTrue(condition, "Partition " + idPartition + " has not been removed");
         }
         for (TopicIdPartition removePartition : removePartitions) {
-            TestUtils.waitForCondition(() -> handler.isPartitionCleared.containsKey(removePartition),
-                "Timed out waiting for " + removePartition + " to be cleared");
+            assertTrue(() -> handler.isPartitionCleared.containsKey(removePartition),
+                    "Partition " + removePartition + " has not been cleared");
         }
     }
 
@@ -226,7 +218,7 @@ public class ConsumerTaskTest {
     }
 
     @Test
-    public void testCanProcessRecord() throws InterruptedException {
+    public void testCanProcessRecord() {
         final Uuid topicId = Uuid.fromString("Bp9TDduJRGa9Q5rlvCJOxg");
         final TopicIdPartition tpId0 = new TopicIdPartition(topicId, new TopicPartition("sample", 0));
         final TopicIdPartition tpId1 = new TopicIdPartition(topicId, new TopicPartition("sample", 1));
@@ -238,29 +230,32 @@ public class ConsumerTaskTest {
         consumer.updateEndOffsets(Collections.singletonMap(toRemoteLogPartition(metadataPartition), 0L));
         final Set<TopicIdPartition> assignments = Collections.singleton(tpId0);
         consumerTask.addAssignmentsForPartitions(assignments);
-        thread.start();
-        TestUtils.waitForCondition(() -> consumerTask.isUserPartitionAssigned(tpId0), "Timed out waiting for " + tpId0 + " to be assigned");
+        consumerTask.ingestRecords();
 
         addRecord(consumer, metadataPartition, tpId0, 0);
         addRecord(consumer, metadataPartition, tpId0, 1);
-        TestUtils.waitForCondition(() -> consumerTask.readOffsetForMetadataPartition(metadataPartition).equals(Optional.of(1L)), "Couldn't read record");
+        consumerTask.ingestRecords();
+        assertTrue(() -> consumerTask.readOffsetForMetadataPartition(metadataPartition).equals(Optional.of(1L)), "Couldn't read record");
         assertEquals(2, handler.metadataCounter);
 
         // should only read the tpId1 records
         consumerTask.addAssignmentsForPartitions(Collections.singleton(tpId1));
-        TestUtils.waitForCondition(() -> consumerTask.isUserPartitionAssigned(tpId1), "Timed out waiting for " + tpId1 + " to be assigned");
+        consumerTask.ingestRecords();
+
         addRecord(consumer, metadataPartition, tpId1, 2);
-        TestUtils.waitForCondition(() -> consumerTask.readOffsetForMetadataPartition(metadataPartition).equals(Optional.of(2L)), "Couldn't read record");
+        consumerTask.ingestRecords();
+        assertTrue(() -> consumerTask.readOffsetForMetadataPartition(metadataPartition).equals(Optional.of(2L)), "Couldn't read record");
         assertEquals(3, handler.metadataCounter);
 
         // shouldn't read tpId2 records because it's not assigned
         addRecord(consumer, metadataPartition, tpId2, 3);
-        TestUtils.waitForCondition(() -> consumerTask.readOffsetForMetadataPartition(metadataPartition).equals(Optional.of(3L)), "Couldn't read record");
+        consumerTask.ingestRecords();
+        assertTrue(() -> consumerTask.readOffsetForMetadataPartition(metadataPartition).equals(Optional.of(3L)), "Couldn't read record");
         assertEquals(3, handler.metadataCounter);
     }
 
     @Test
-    public void testCanReprocessSkippedRecords() throws InterruptedException {
+    public void testCanReprocessSkippedRecords() {
         final Uuid topicId = Uuid.fromString("Bp9TDduJRGa9Q5rlvCJOxg");
         final TopicIdPartition tpId0 = new TopicIdPartition(topicId, new TopicPartition("sample", 0));
         final TopicIdPartition tpId1 = new TopicIdPartition(topicId, new TopicPartition("sample", 1));
@@ -284,20 +279,19 @@ public class ConsumerTaskTest {
         consumer.updateEndOffsets(Collections.singletonMap(toRemoteLogPartition(anotherMetadataPartition), 0L));
         final Set<TopicIdPartition> assignments = Collections.singleton(tpId0);
         consumerTask.addAssignmentsForPartitions(assignments);
-        thread.start();
-        TestUtils.waitForCondition(() -> consumerTask.isUserPartitionAssigned(tpId0), "Timed out waiting for " + tpId0 + " to be assigned");
+        consumerTask.ingestRecords();
 
         // Adding metadata records in the order opposite to the order of assignments
         addRecord(consumer, metadataPartition, tpId1, 0);
         addRecord(consumer, metadataPartition, tpId0, 1);
-        TestUtils.waitForCondition(() -> consumerTask.readOffsetForMetadataPartition(metadataPartition).equals(Optional.of(1L)), "Couldn't read record");
+        consumerTask.ingestRecords();
+        assertTrue(() -> consumerTask.readOffsetForMetadataPartition(metadataPartition).equals(Optional.of(1L)), "Couldn't read record");
         // Only one record is processed, tpId1 record is skipped as unassigned
         // but read offset is 1 e.g., record for tpId1 has been read by consumer
         assertEquals(1, handler.metadataCounter);
 
         // Adding assignment for tpId1 after related metadata records have already been read
         consumerTask.addAssignmentsForPartitions(Collections.singleton(tpId1));
-        TestUtils.waitForCondition(() -> consumerTask.isUserPartitionAssigned(tpId1), "Timed out waiting for " + tpId1 + " to be assigned");
 
         // Adding assignment for tpId0 to trigger the reset to last read offset
         // and assignment for tpId3 that has different metadata partition to trigger the update of metadata snapshot
@@ -308,49 +302,48 @@ public class ConsumerTaskTest {
         // explicitly re-adding the records since MockConsumer drops them on poll.
         addRecord(consumer, metadataPartition, tpId1, 0);
         addRecord(consumer, metadataPartition, tpId0, 1);
+        consumerTask.ingestRecords();
         // Waiting for all metadata records to be re-read from the first metadata partition number
-        TestUtils.waitForCondition(() -> consumerTask.readOffsetForMetadataPartition(metadataPartition).equals(Optional.of(1L)), "Couldn't read record");
+        assertTrue(() -> consumerTask.readOffsetForMetadataPartition(metadataPartition).equals(Optional.of(1L)), "Couldn't read record");
         // Verifying that all the metadata records from the first metadata partition were processed properly.
-        TestUtils.waitForCondition(() -> handler.metadataCounter == 2, "Couldn't read record");
+        assertTrue(() -> handler.metadataCounter == 2, "Couldn't read record");
     }
 
     @Test
-    public void testMaybeMarkUserPartitionsAsReady() throws InterruptedException {
+    public void testMaybeMarkUserPartitionsAsReady() {
         final TopicIdPartition tpId = getIdPartitions("hello", 1).get(0);
         final int metadataPartition = partitioner.metadataPartition(tpId);
         consumer.updateEndOffsets(Collections.singletonMap(toRemoteLogPartition(metadataPartition), 2L));
         consumerTask.addAssignmentsForPartitions(Collections.singleton(tpId));
-        thread.start();
+        consumerTask.ingestRecords();
 
-        TestUtils.waitForCondition(() -> consumerTask.isUserPartitionAssigned(tpId), "Waiting for " + tpId + " to be assigned");
         assertTrue(consumerTask.isMetadataPartitionAssigned(metadataPartition));
         assertFalse(handler.isPartitionInitialized.containsKey(tpId));
         IntStream.range(0, 5).forEach(offset -> addRecord(consumer, metadataPartition, tpId, offset));
-        TestUtils.waitForCondition(() -> consumerTask.readOffsetForMetadataPartition(metadataPartition).equals(Optional.of(4L)), "Couldn't read record");
+        consumerTask.ingestRecords();
+        assertTrue(() -> consumerTask.readOffsetForMetadataPartition(metadataPartition).equals(Optional.of(4L)), "Couldn't read record");
         assertTrue(handler.isPartitionInitialized.get(tpId));
     }
 
     @ParameterizedTest
     @CsvSource(value = {"0, 0", "500, 500"})
     public void testMaybeMarkUserPartitionAsReadyWhenTopicIsEmpty(long beginOffset,
-                                                                  long endOffset) throws InterruptedException {
+                                                                  long endOffset) {
         final TopicIdPartition tpId = getIdPartitions("world", 1).get(0);
         final int metadataPartition = partitioner.metadataPartition(tpId);
         consumer.updateBeginningOffsets(Collections.singletonMap(toRemoteLogPartition(metadataPartition), beginOffset));
         consumer.updateEndOffsets(Collections.singletonMap(toRemoteLogPartition(metadataPartition), endOffset));
         consumerTask.addAssignmentsForPartitions(Collections.singleton(tpId));
-        thread.start();
+        consumerTask.ingestRecords();
 
-        TestUtils.waitForCondition(() -> consumerTask.isUserPartitionAssigned(tpId), "Waiting for " + tpId + " to be assigned");
         assertTrue(consumerTask.isMetadataPartitionAssigned(metadataPartition));
-        TestUtils.waitForCondition(() -> handler.isPartitionInitialized.containsKey(tpId),
+        assertTrue(() -> handler.isPartitionInitialized.containsKey(tpId),
             "should have initialized the partition");
         assertFalse(consumerTask.readOffsetForMetadataPartition(metadataPartition).isPresent());
     }
 
     @Test
     public void testConcurrentAccess() throws InterruptedException {
-        thread.start();
         final CountDownLatch latch = new CountDownLatch(1);
         final TopicIdPartition tpId = getIdPartitions("concurrent", 1).get(0);
         consumer.updateEndOffsets(Collections.singletonMap(toRemoteLogPartition(partitioner.metadataPartition(tpId)), 0L));
@@ -358,6 +351,7 @@ public class ConsumerTaskTest {
             try {
                 latch.await();
                 consumerTask.addAssignmentsForPartitions(Collections.singleton(tpId));
+                consumerTask.ingestRecords();
             } catch (final InterruptedException e) {
                 fail("Shouldn't have thrown an exception");
             }
@@ -365,6 +359,7 @@ public class ConsumerTaskTest {
         final Thread closeThread = new Thread(() -> {
             try {
                 latch.await();
+                consumerTask.ingestRecords();
                 consumerTask.close();
             } catch (final InterruptedException e) {
                 fail("Shouldn't have thrown an exception");
@@ -379,38 +374,41 @@ public class ConsumerTaskTest {
     }
 
     @Test
-    public void testConsumerShouldNotCloseOnRetriableError() throws InterruptedException {
+    public void testConsumerShouldNotCloseOnRetriableError() {
         final TopicIdPartition tpId = getIdPartitions("world", 1).get(0);
         final int metadataPartition = partitioner.metadataPartition(tpId);
         consumer.updateEndOffsets(Collections.singletonMap(toRemoteLogPartition(metadataPartition), 1L));
         consumerTask.addAssignmentsForPartitions(Collections.singleton(tpId));
-        thread.start();
+        consumerTask.ingestRecords();
 
-        TestUtils.waitForCondition(() -> consumerTask.isUserPartitionAssigned(tpId), "Waiting for " + tpId + " to be assigned");
         assertTrue(consumerTask.isMetadataPartitionAssigned(metadataPartition));
 
         consumer.setPollException(new LeaderNotAvailableException("leader not available!"));
+        consumerTask.ingestRecords();
         addRecord(consumer, metadataPartition, tpId, 0);
+        consumerTask.ingestRecords();
         consumer.setPollException(new TimeoutException("Not able to complete the operation within the timeout"));
+        consumerTask.ingestRecords();
         addRecord(consumer, metadataPartition, tpId, 1);
+        consumerTask.ingestRecords();
 
-        TestUtils.waitForCondition(() -> consumerTask.readOffsetForMetadataPartition(metadataPartition).equals(Optional.of(1L)), "Couldn't read record");
+        assertTrue(() -> consumerTask.readOffsetForMetadataPartition(metadataPartition).equals(Optional.of(1L)), "Couldn't read record");
         assertEquals(2, handler.metadataCounter);
     }
 
     @Test
-    public void testConsumerShouldCloseOnNonRetriableError() throws InterruptedException {
+    public void testConsumerShouldCloseOnNonRetriableError() {
         final TopicIdPartition tpId = getIdPartitions("world", 1).get(0);
         final int metadataPartition = partitioner.metadataPartition(tpId);
         consumer.updateEndOffsets(Collections.singletonMap(toRemoteLogPartition(metadataPartition), 1L));
         consumerTask.addAssignmentsForPartitions(Collections.singleton(tpId));
-        thread.start();
+        consumerTask.ingestRecords();
 
-        TestUtils.waitForCondition(() -> consumerTask.isUserPartitionAssigned(tpId), "Waiting for " + tpId + " to be assigned");
         assertTrue(consumerTask.isMetadataPartitionAssigned(metadataPartition));
 
         consumer.setPollException(new AuthorizationException("Unauthorized to read the topic!"));
-        TestUtils.waitForCondition(() -> consumer.closed(), "Should close the consume on non-retriable error");
+        consumerTask.ingestRecords();
+        assertTrue(() -> consumer.closed(), "Should close the consume on non-retriable error");
     }
 
     private void addRecord(final MockConsumer<byte[], byte[]> consumer,

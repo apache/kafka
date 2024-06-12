@@ -122,33 +122,41 @@ class ConsumerTask implements Runnable, Closeable {
     public void run() {
         log.info("Starting consumer task thread.");
         while (!isClosed) {
-            try {
-                if (hasAssignmentChanged) {
-                    maybeWaitForPartitionAssignments();
-                }
-
-                log.trace("Polling consumer to receive remote log metadata topic records");
-                final ConsumerRecords<byte[], byte[]> consumerRecords = consumer.poll(Duration.ofMillis(pollTimeoutMs));
-                for (ConsumerRecord<byte[], byte[]> record : consumerRecords) {
-                    processConsumerRecord(record);
-                }
-                maybeMarkUserPartitionsAsReady();
-            } catch (final WakeupException ex) {
-                // ignore logging the error
-                isClosed = true;
-            } catch (final RetriableException ex) {
-                log.warn("Retriable error occurred while processing the records. Retrying...", ex);
-            } catch (final Exception ex) {
-                isClosed = true;
-                log.error("Error occurred while processing the records", ex);
-            }
+            ingestRecords();
         }
+        log.info("Exited from consumer task thread");
+    }
+
+    public void ingestRecords() {
+        try {
+            if (hasAssignmentChanged) {
+                maybeWaitForPartitionAssignments();
+            }
+
+            log.trace("Polling consumer to receive remote log metadata topic records");
+            final ConsumerRecords<byte[], byte[]> consumerRecords = consumer.poll(Duration.ofMillis(pollTimeoutMs));
+            for (ConsumerRecord<byte[], byte[]> record : consumerRecords) {
+                processConsumerRecord(record);
+            }
+            maybeMarkUserPartitionsAsReady();
+        } catch (final WakeupException ex) {
+            // ignore logging the error
+            closeConsumer();
+        } catch (final RetriableException ex) {
+            log.warn("Retriable error occurred while processing the records. Retrying...", ex);
+        } catch (final Exception ex) {
+            log.error("Error occurred while processing the records", ex);
+            closeConsumer();
+        }
+    }
+
+    private void closeConsumer() {
+        isClosed = true;
         try {
             consumer.close(Duration.ofSeconds(30));
         } catch (final Exception e) {
             log.error("Error encountered while closing the consumer", e);
         }
-        log.info("Exited from consumer task thread");
     }
 
     private void processConsumerRecord(ConsumerRecord<byte[], byte[]> record) {
