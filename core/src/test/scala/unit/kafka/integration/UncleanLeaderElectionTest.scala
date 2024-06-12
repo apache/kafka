@@ -224,7 +224,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     followerBroker.startup()
 
     // wait until new leader is (uncleanly) elected
-    awaitLeaderChange(brokers, topicPartition, expectedLeaderOpt = Some(followerId), timeout = 5000)
+    awaitLeaderChange(brokers, topicPartition, expectedLeaderOpt = Some(followerId), timeout = 30000)
     uncleanLeaderElectionsPerSec = uncleanLeaderElectionsPerSecGauge.count()
     assertEquals(1, uncleanLeaderElectionsPerSec)
 

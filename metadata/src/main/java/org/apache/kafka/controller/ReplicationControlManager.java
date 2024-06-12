@@ -81,7 +81,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AlterPartitionRequest;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.controller.metrics.QuorumControllerMetrics;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistration;
@@ -168,12 +167,6 @@ public class ReplicationControlManager {
         private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
         private FeatureControlManager featureControl = null;
         private boolean eligibleLeaderReplicasEnabled = false;
-        private Optional<QuorumControllerMetrics> metrics = Optional.empty();
-
-        Builder setMetrics(QuorumControllerMetrics metrics) {
-            this.metrics = Optional.of(metrics);
-            return this;
-        }
 
         Builder setSnapshotRegistry(SnapshotRegistry snapshotRegistry) {
             this.snapshotRegistry = snapshotRegistry;
@@ -241,9 +234,6 @@ public class ReplicationControlManager {
             if (featureControl == null) {
                 throw new IllegalStateException("FeatureControlManager must not be null");
             }
-            if (!metrics.isPresent()) {
-                throw new IllegalStateException("QuorumControllerMetrics must not be null");
-            }
             return new ReplicationControlManager(snapshotRegistry,
                 logContext,
                 defaultReplicationFactor,
@@ -254,8 +244,7 @@ public class ReplicationControlManager {
                 configurationControl,
                 clusterControl,
                 createTopicPolicy,
-                featureControl,
-                metrics);
+                featureControl);
         }
     }
 
@@ -416,8 +405,6 @@ public class ReplicationControlManager {
      */
     final KRaftClusterDescriber clusterDescriber = new KRaftClusterDescriber();
 
-    final Optional<QuorumControllerMetrics> metrics;
-
     private ReplicationControlManager(
         SnapshotRegistry snapshotRegistry,
         LogContext logContext,
@@ -429,8 +416,7 @@ public class ReplicationControlManager {
         ConfigurationControlManager configurationControl,
         ClusterControlManager clusterControl,
         Optional<CreateTopicPolicy> createTopicPolicy,
-        FeatureControlManager featureControl,
-        Optional<QuorumControllerMetrics> metrics
+        FeatureControlManager featureControl
     ) {
         this.snapshotRegistry = snapshotRegistry;
         this.log = logContext.logger(ReplicationControlManager.class);
@@ -451,7 +437,6 @@ public class ReplicationControlManager {
         this.reassigningTopics = new TimelineHashMap<>(snapshotRegistry, 0);
         this.imbalancedPartitions = new TimelineHashSet<>(snapshotRegistry, 0);
         this.directoriesToPartitions = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.metrics = metrics;
     }
 
     public void replay(TopicRecord record) {
@@ -1098,8 +1083,7 @@ public class ReplicationControlManager {
                     partitionId,
                     new LeaderAcceptor(clusterControl, partition),
                     featureControl.metadataVersion(),
-                    getTopicEffectiveMinIsr(topic.name),
-                    metrics
+                    getTopicEffectiveMinIsr(topic.name)
                 )
                     .setZkMigrationEnabled(clusterControl.zkRegistrationAllowed())
                     .setEligibleLeaderReplicasEnabled(isElrEnabled());
@@ -1545,8 +1529,7 @@ public class ReplicationControlManager {
             partitionId,
             new LeaderAcceptor(clusterControl, partition),
             featureControl.metadataVersion(),
-            getTopicEffectiveMinIsr(topic),
-            metrics
+            getTopicEffectiveMinIsr(topic)
         )
             .setElection(election)
             .setZkMigrationEnabled(clusterControl.zkRegistrationAllowed())
@@ -1688,8 +1671,7 @@ public class ReplicationControlManager {
                 topicPartition.partitionId(),
                 new LeaderAcceptor(clusterControl, partition),
                 featureControl.metadataVersion(),
-                getTopicEffectiveMinIsr(topic.name),
-                metrics
+                getTopicEffectiveMinIsr(topic.name)
             )
                 .setElection(PartitionChangeBuilder.Election.PREFERRED)
                 .setZkMigrationEnabled(clusterControl.zkRegistrationAllowed())
@@ -1916,8 +1898,7 @@ public class ReplicationControlManager {
                 topicIdPart.partitionId(),
                 new LeaderAcceptor(clusterControl, partition, isAcceptableLeader),
                 featureControl.metadataVersion(),
-                getTopicEffectiveMinIsr(topic.name),
-                metrics
+                getTopicEffectiveMinIsr(topic.name)
             );
             builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
             builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
@@ -2036,8 +2017,7 @@ public class ReplicationControlManager {
             tp.partitionId(),
             new LeaderAcceptor(clusterControl, part),
             featureControl.metadataVersion(),
-            getTopicEffectiveMinIsr(topicName),
-            metrics
+            getTopicEffectiveMinIsr(topicName)
         );
         builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
         builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
@@ -2099,8 +2079,7 @@ public class ReplicationControlManager {
             tp.partitionId(),
             new LeaderAcceptor(clusterControl, part),
             featureControl.metadataVersion(),
-            getTopicEffectiveMinIsr(topics.get(tp.topicId()).name.toString()),
-            metrics
+            getTopicEffectiveMinIsr(topics.get(tp.topicId()).name.toString())
         );
         builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
         builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
@@ -2228,8 +2207,7 @@ public class ReplicationControlManager {
                                     partitionIndex,
                                     new LeaderAcceptor(clusterControl, partitionRegistration),
                                     featureControl.metadataVersion(),
-                                    getTopicEffectiveMinIsr(topicName),
-                                    metrics
+                                    getTopicEffectiveMinIsr(topicName)
                             )
                                     .setDirectory(brokerId, dirId)
                                     .setDefaultDirProvider(clusterDescriber)

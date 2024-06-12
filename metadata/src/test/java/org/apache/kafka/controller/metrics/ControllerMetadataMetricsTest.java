@@ -18,6 +18,7 @@
 package org.apache.kafka.controller.metrics;
 
 import com.yammer.metrics.core.Gauge;
+import com.yammer.metrics.core.Meter;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
 
@@ -28,6 +29,7 @@ import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
+import org.apache.kafka.common.utils.MockTime;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -47,7 +49,8 @@ public class ControllerMetadataMetricsTest {
                         "kafka.controller:type=KafkaController,name=MetadataErrorCount",
                         "kafka.controller:type=KafkaController,name=OfflinePartitionsCount",
                         "kafka.controller:type=KafkaController,name=PreferredReplicaImbalanceCount",
-                        "kafka.controller:type=KafkaController,name=ZkMigrationState"
+                        "kafka.controller:type=KafkaController,name=ZkMigrationState",
+                        "kafka.controller:type=ControllerStats,name=UncleanLeaderElectionsPerSec"
                     )));
             }
             ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "KafkaController",
@@ -172,5 +175,22 @@ public class ControllerMetadataMetricsTest {
             (m, v) -> m.setPreferredReplicaImbalanceCount(v),
             (m, v) -> m.addToPreferredReplicaImbalanceCount(v)
         );
+    }
+
+    @SuppressWarnings("LocalVariableName")
+    @Test
+    public void testUpdateUncleanLeaderElection() {
+        MetricsRegistry registry = new MetricsRegistry();
+        MockTime time = new MockTime();
+        try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry))) {
+            Meter UncleanLeaderElectionsPerSec = (Meter) registry
+                    .allMetrics()
+                    .get(metricName("ControllerStats", "UncleanLeaderElectionsPerSec"));
+            assertEquals(0, UncleanLeaderElectionsPerSec.count());
+            metrics.updateUncleanLeaderElection(2);
+            assertEquals(2, UncleanLeaderElectionsPerSec.count());
+        } finally {
+            registry.shutdown();
+        }
     }
 }

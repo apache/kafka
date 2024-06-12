@@ -19,7 +19,6 @@ package org.apache.kafka.controller.metrics;
 
 import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.Histogram;
-import com.yammer.metrics.core.Meter;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
 
@@ -57,8 +56,7 @@ public class QuorumControllerMetricsTest {
                     "kafka.controller:type=KafkaController,name=LastAppliedRecordTimestamp",
                     "kafka.controller:type=KafkaController,name=LastCommittedRecordOffset",
                     "kafka.controller:type=KafkaController,name=NewActiveControllersCount",
-                    "kafka.controller:type=KafkaController,name=TimedOutBrokerHeartbeatCount",
-                    "kafka.controller:type=ControllerStats,name=UncleanLeaderElectionsPerSec"
+                    "kafka.controller:type=KafkaController,name=TimedOutBrokerHeartbeatCount"
                 ));
                 if (inMigration) {
                     expected.add("kafka.controller:type=KafkaController,name=ZkWriteBehindLag");
@@ -69,23 +67,6 @@ public class QuorumControllerMetricsTest {
             }
             ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.controller",
                     Collections.emptySet());
-        } finally {
-            registry.shutdown();
-        }
-    }
-
-    @SuppressWarnings("LocalVariableName")
-    @Test
-    public void testUpdateUncleanLeaderElection() {
-        MetricsRegistry registry = new MetricsRegistry();
-        MockTime time = new MockTime();
-        try (QuorumControllerMetrics metrics = new QuorumControllerMetrics(Optional.of(registry), time, false)) {
-            Meter UncleanLeaderElectionsPerSec = (Meter) registry
-                    .allMetrics()
-                    .get(metricName("ControllerStats", "UncleanLeaderElectionsPerSec"));
-            assertEquals(0, UncleanLeaderElectionsPerSec.count());
-            metrics.updateUncleanLeaderElection();
-            assertEquals(1, UncleanLeaderElectionsPerSec.count());
         } finally {
             registry.shutdown();
         }

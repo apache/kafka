@@ -18,12 +18,14 @@
 package org.apache.kafka.controller.metrics;
 
 import com.yammer.metrics.core.Gauge;
+import com.yammer.metrics.core.Meter;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 
 import java.util.Arrays;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -53,6 +55,8 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
         "KafkaController", "MetadataErrorCount");
     private final static MetricName ZK_MIGRATION_STATE = getMetricName(
         "KafkaController", "ZkMigrationState");
+    private final static MetricName UNCLEAN_LEADER_ELECTIONS_PER_SEC = getMetricName(
+            "ControllerStats", "UncleanLeaderElectionsPerSec");
 
     private final Optional<MetricsRegistry> registry;
     private final AtomicInteger fencedBrokerCount = new AtomicInteger(0);
@@ -64,6 +68,8 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
     private final AtomicInteger preferredReplicaImbalanceCount = new AtomicInteger(0);
     private final AtomicInteger metadataErrorCount = new AtomicInteger(0);
     private final AtomicInteger zkMigrationState = new AtomicInteger(-1);
+    private Optional<Meter> uncleanLeaderElectionMeter = Optional.empty();
+
 
     /**
      * Create a new ControllerMetadataMetrics object.
@@ -128,6 +134,8 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
             }
         }));
 
+        registry.ifPresent(r -> uncleanLeaderElectionMeter =
+                Optional.of(registry.get().newMeter(UNCLEAN_LEADER_ELECTIONS_PER_SEC, "elections", TimeUnit.SECONDS)));
     }
 
     public void setFencedBrokerCount(int brokerCount) {
@@ -230,6 +238,10 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
         return zkMigrationState.byteValue();
     }
 
+    public void updateUncleanLeaderElection(int count) {
+        this.uncleanLeaderElectionMeter.ifPresent(m -> m.mark(count));
+    }
+
     @Override
     public void close() {
         registry.ifPresent(r -> Arrays.asList(
@@ -241,7 +253,8 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
             OFFLINE_PARTITION_COUNT,
             PREFERRED_REPLICA_IMBALANCE_COUNT,
             METADATA_ERROR_COUNT,
-            ZK_MIGRATION_STATE
+            ZK_MIGRATION_STATE,
+            UNCLEAN_LEADER_ELECTIONS_PER_SEC
         ).forEach(r::removeMetric));
     }
 
