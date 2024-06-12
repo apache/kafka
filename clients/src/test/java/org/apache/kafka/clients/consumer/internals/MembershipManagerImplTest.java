@@ -848,9 +848,16 @@ public class MembershipManagerImplTest {
         membershipManager.onHeartbeatRequestSent();
 
         assertEquals(MemberState.RECONCILING, membershipManager.state());
-        //clearInvocations(membershipManager, commitRequestManager);
 
         // Next poll should trigger final reconciliation
+        //when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(new CompletableFuture<>());
+        Map<Uuid, SortedSet<Integer>> map = new HashMap<>();
+        TreeSet<Integer> set1 = new TreeSet<>();
+        set1.add(0);
+        map.put(topicId1, set1);
+        map.put(topicId2, set1);
+
+        membershipManager.updateAssignment(map);
         membershipManager.poll(time.milliseconds());
 
         verifyReconciliationTriggeredAndCompleted(membershipManager, Arrays.asList(topicId1Partition0, topicId2Partition0));
@@ -2514,9 +2521,6 @@ public class MembershipManagerImplTest {
         verify(subscriptionState).assignFromSubscribedAwaitingCallback(eq(new HashSet<>(expectedTopicPartitions)), any(SortedSet.class));
         Map<Uuid, SortedSet<Integer>> assignmentByTopicId = assignmentByTopicId(expectedAssignment);
         assertEquals(assignmentByTopicId, membershipManager.currentAssignment().partitions);
-
-        // The auto-commit interval should be reset (only once), when the reconciliation completes
-        //verify(commitRequestManager).resetAutoCommitTimer();
     }
 
     private List<TopicPartition> buildTopicPartitions(List<TopicIdPartition> topicIdPartitions) {
@@ -2570,7 +2574,10 @@ public class MembershipManagerImplTest {
         verify(subscriptionState).markPendingRevocation(anySet());
         List<TopicPartition> expectedTopicPartitionAssignment =
                 buildTopicPartitions(expectedCurrentAssignment);
-        verify(subscriptionState).assignFromSubscribedAwaitingCallback(eq(new HashSet<>(expectedTopicPartitionAssignment)), any(SortedSet.class));
+        if(expectedTopicPartitionAssignment.equals(Collections.emptyList()))
+            verify(subscriptionState, times(2)).assignFromSubscribedAwaitingCallback(eq(new HashSet<>(expectedTopicPartitionAssignment)), eq(new HashSet<>()));
+        else
+            verify(subscriptionState).assignFromSubscribedAwaitingCallback(eq(new HashSet<>(expectedTopicPartitionAssignment)), eq(new HashSet<>()));
     }
 
     private Map<Uuid, SortedSet<Integer>> assignmentByTopicId(List<TopicIdPartition> topicIdPartitions) {
