@@ -491,7 +491,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     }
 
     // Visible for testing
-    protected OffsetFetchRequestState createOffsetFetchRequest(final Set<TopicPartition> partitions,
+    OffsetFetchRequestState createOffsetFetchRequest(final Set<TopicPartition> partitions,
                                                              final long deadlineMs) {
         return jitter.isPresent() ?
             new OffsetFetchRequestState(
