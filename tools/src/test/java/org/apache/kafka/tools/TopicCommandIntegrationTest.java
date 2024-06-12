@@ -23,6 +23,7 @@ import kafka.server.KafkaBroker;
 import kafka.server.KafkaConfig;
 import kafka.utils.Logging;
 import kafka.utils.TestUtils;
+
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientTestUtils;
@@ -45,15 +46,13 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import scala.collection.JavaConverters;
-import scala.collection.Seq;
-import scala.collection.mutable.Buffer;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -70,6 +69,10 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import scala.collection.JavaConverters;
+import scala.collection.Seq;
+import scala.collection.mutable.Buffer;
 
 import static org.apache.kafka.server.config.ReplicationConfigs.REPLICA_FETCH_MAX_BYTES_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;

@@ -17,6 +17,7 @@
 package org.apache.kafka.tools;
 
 import org.apache.kafka.common.KafkaException;
+
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
