@@ -9630,7 +9630,7 @@ public class GroupMetadataManagerTest {
 
         assertRecordsEquals(expectedRecords, result.records());
 
-        context.assertSessionTimeout(groupId, memberId1, 45000);
+        context.assertSessionTimeout(groupId, memberId1, expectedMember1.classicProtocolSessionTimeout().get());
         context.assertSessionTimeout(groupId, memberId2, 45000);
 
         // Simulate a failed replay. The context is rolled back and the group is converted back to the classic group.
@@ -9876,8 +9876,8 @@ public class GroupMetadataManagerTest {
         assertTrue(joinResult.joinFuture.isDone());
         assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), joinResult.joinFuture.get().errorCode());
 
-        context.assertSessionTimeout(groupId, memberId1, 45000);
-        context.assertSessionTimeout(groupId, memberId2, 45000);
+        context.assertSessionTimeout(groupId, memberId1, expectedMember1.classicProtocolSessionTimeout().get());
+        context.assertSessionTimeout(groupId, memberId2, expectedMember2.classicProtocolSessionTimeout().get());
         context.assertSessionTimeout(groupId, memberId3, 45000);
 
         // Simulate a failed replay. The context is rolled back and the group is converted back to the classic group.
@@ -10141,8 +10141,8 @@ public class GroupMetadataManagerTest {
         assertTrue(syncResult.syncFuture.isDone());
         assertEquals(Errors.REBALANCE_IN_PROGRESS.code(), syncResult.syncFuture.get().errorCode());
 
-        context.assertSessionTimeout(groupId, memberId1, 45000);
-        context.assertSessionTimeout(groupId, memberId2, 45000);
+        context.assertSessionTimeout(groupId, memberId1, expectedMember1.classicProtocolSessionTimeout().get());
+        context.assertSessionTimeout(groupId, memberId2, expectedMember2.classicProtocolSessionTimeout().get());
         context.assertSessionTimeout(groupId, memberId3, 45000);
 
         // Simulate a failed replay. The context is rolled back and the group is converted back to the classic group.
