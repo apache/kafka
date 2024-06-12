@@ -40,8 +40,8 @@ public class CachedSharePartition implements ImplicitLinkedHashCollection.Elemen
     private final String topic;
     private final Uuid topicId;
     private final int partition;
-    private int maxBytes;
     private final Optional<Integer> leaderEpoch;
+    private int maxBytes;
     private boolean requiresUpdateInResponse;
 
     private int cachedNext = ImplicitLinkedHashCollection.INVALID_INDEX;

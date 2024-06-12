@@ -221,9 +221,10 @@ public class SharePartitionManager implements AutoCloseable {
         shareFetchData.forEach((tp, sharePartitionData) -> {
             if (sharePartitionData.maxBytes > 0) shareFetchDataWithMaxBytes.put(tp, sharePartitionData);
         });
+        // If the request's epoch is FINAL_EPOCH or INITIAL_EPOCH, we should remove the existing sessions. Also, start a
+        // new session in case it is INITIAL_EPOCH. Hence, we need to treat them as special cases.
         if (reqMetadata.isFull()) {
             ShareSessionKey key = shareSessionKey(groupId, reqMetadata.memberId());
-            String removedFetchSessionStr;
             if (reqMetadata.epoch() == ShareFetchMetadata.FINAL_EPOCH) {
                 // If the epoch is FINAL_EPOCH, don't try to create a new session.
                 if (!shareFetchDataWithMaxBytes.isEmpty()) {
@@ -232,14 +233,12 @@ public class SharePartitionManager implements AutoCloseable {
                 context = new FinalContext();
                 synchronized (cache) {
                     if (cache.remove(key) != null) {
-                        removedFetchSessionStr = "Removed share session with key " + key;
-                        log.debug(removedFetchSessionStr);
+                        log.debug("Removed share session with key {}", key);
                     }
                 }
             } else {
                 if (cache.remove(key) != null) {
-                    removedFetchSessionStr = "Removed share session with key " + key;
-                    log.debug(removedFetchSessionStr);
+                    log.debug("Removed share session with key {}", key);
                 }
                 ImplicitLinkedHashCollection<CachedSharePartition> cachedSharePartitions = new
                         ImplicitLinkedHashCollection<>(shareFetchDataWithMaxBytes.size());
@@ -247,40 +246,38 @@ public class SharePartitionManager implements AutoCloseable {
                     cachedSharePartitions.mustAdd(new CachedSharePartition(topicIdPartition, reqData, false)));
                 ShareSessionKey responseShareSessionKey = cache.maybeCreateSession(groupId, reqMetadata.memberId(),
                         time.milliseconds(), cachedSharePartitions);
-                log.debug("Share session context with key {} isSubsequent {} returning {}", responseShareSessionKey,
-                        false, partitionsToLogString(shareFetchDataWithMaxBytes.keySet()));
 
                 context = new ShareSessionContext(reqMetadata, shareFetchDataWithMaxBytes);
-                log.debug("Created a new ShareSessionContext with {}. A new share session will be started.",
+                log.debug("Created a new ShareSessionContext with key {} isSubsequent {} returning {}. A new share " +
+                        "session will be started.", responseShareSessionKey, false,
                         partitionsToLogString(shareFetchDataWithMaxBytes.keySet()));
             }
         } else {
+            // We update the already existing share session.
             synchronized (cache) {
                 ShareSessionKey key = shareSessionKey(groupId, reqMetadata.memberId());
                 ShareSession shareSession = cache.get(key);
                 if (shareSession == null) {
-                    log.debug("Share session error for {}: no such share session found", key);
+                    log.error("Share session error for {}: no such share session found", key);
                     throw Errors.SHARE_SESSION_NOT_FOUND.exception();
-                } else {
-                    if (shareSession.epoch != reqMetadata.epoch()) {
-                        log.debug("Share session error for {}: expected epoch {}, but got {} instead", key,
-                                shareSession.epoch, reqMetadata.epoch());
-                        throw Errors.INVALID_SHARE_SESSION_EPOCH.exception();
-                    } else {
-                        Map<ShareSession.ModifiedTopicIdPartitionType, List<TopicIdPartition>> modifiedTopicIdPartitions = shareSession.update(
-                                shareFetchDataWithMaxBytes, toForget);
-                        cache.touch(shareSession, time.milliseconds());
-                        shareSession.epoch = ShareFetchMetadata.nextEpoch(shareSession.epoch);
-                        log.debug("Created a new ShareSessionContext for session key {}, epoch {}: " +
-                                        "added {}, updated {}, removed {}", shareSession.key(), shareSession.epoch,
-                                partitionsToLogString(modifiedTopicIdPartitions.get(
-                                        ShareSession.ModifiedTopicIdPartitionType.ADDED)),
-                                partitionsToLogString(modifiedTopicIdPartitions.get(ShareSession.ModifiedTopicIdPartitionType.UPDATED)),
-                                partitionsToLogString(modifiedTopicIdPartitions.get(ShareSession.ModifiedTopicIdPartitionType.REMOVED))
-                        );
-                        context = new ShareSessionContext(reqMetadata, shareSession);
-                    }
                 }
+                if (shareSession.epoch != reqMetadata.epoch()) {
+                    log.debug("Share session error for {}: expected epoch {}, but got {} instead", key,
+                            shareSession.epoch, reqMetadata.epoch());
+                    throw Errors.INVALID_SHARE_SESSION_EPOCH.exception();
+                }
+                Map<ShareSession.ModifiedTopicIdPartitionType, List<TopicIdPartition>> modifiedTopicIdPartitions = shareSession.update(
+                        shareFetchDataWithMaxBytes, toForget);
+                cache.touch(shareSession, time.milliseconds());
+                shareSession.epoch = ShareFetchMetadata.nextEpoch(shareSession.epoch);
+                log.debug("Created a new ShareSessionContext for session key {}, epoch {}: " +
+                                "added {}, updated {}, removed {}", shareSession.key(), shareSession.epoch,
+                        partitionsToLogString(modifiedTopicIdPartitions.get(
+                                ShareSession.ModifiedTopicIdPartitionType.ADDED)),
+                        partitionsToLogString(modifiedTopicIdPartitions.get(ShareSession.ModifiedTopicIdPartitionType.UPDATED)),
+                        partitionsToLogString(modifiedTopicIdPartitions.get(ShareSession.ModifiedTopicIdPartitionType.REMOVED))
+                );
+                context = new ShareSessionContext(reqMetadata, shareSession);
             }
         }
         return context;
@@ -353,7 +350,7 @@ public class SharePartitionManager implements AutoCloseable {
     }
 
     // Helper class to return the erroneous partitions and valid partition data
-    public static class ErroneousAndValidPartitionData {
+    static class ErroneousAndValidPartitionData {
         private final List<Tuple2<TopicIdPartition, ShareFetchResponseData.PartitionData>> erroneous;
         private final List<Tuple2<TopicIdPartition, ShareFetchRequest.SharePartitionData>> validTopicIdPartitions;
 

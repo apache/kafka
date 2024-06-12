@@ -46,7 +46,7 @@ public class ShareSessionCache {
     private TreeMap<LastUsedKey, ShareSession> lastUsed = new TreeMap<>();
 
     // Visible for testing
-    public TreeMap<LastUsedKey, ShareSession> lastUsed() {
+    synchronized public TreeMap<LastUsedKey, ShareSession> lastUsed() {
         return lastUsed;
     }
 

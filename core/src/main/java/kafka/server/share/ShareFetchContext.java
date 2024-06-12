@@ -29,16 +29,27 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 
+/**
+ * The context for every share fetch request. The context is responsible for tracking the topic partitions present in
+ * the share fetch request and generating the response data.
+ */
 public abstract class ShareFetchContext {
 
     protected Logger log = LoggerFactory.getLogger(ShareFetchContext.class);
 
+    /**
+     *
+     * @param partitions - The partitions requested in the fetch request.
+     * @return - A string representation of the partitions requested.
+     */
     String partitionsToLogString(Collection<TopicIdPartition> partitions) {
         return FetchSession.partitionsToLogString(partitions, log.isTraceEnabled());
     }
 
     /**
      * Return an empty throttled response due to quota violation.
+     * @param throttleTimeMs - The time to throttle the response.
+     * @return - An empty throttled response.
      */
     ShareFetchResponse throttleResponse(int throttleTimeMs) {
         return new ShareFetchResponse(ShareFetchResponse.toMessage(Errors.NONE, throttleTimeMs,
@@ -48,6 +59,9 @@ public abstract class ShareFetchContext {
     /**
      * Get the response size to be used for quota computation. Since we are returning an empty response in case of
      * throttling, we are not supposed to update the context until we know that we are not going to throttle.
+     * @param updates - The updates to be sent in the response.
+     * @param version - The version of the share fetch request.
+     * @return - The size of the response.
      */
     abstract int responseSize(LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> updates,
                               short version);
@@ -55,9 +69,16 @@ public abstract class ShareFetchContext {
     /**
      * Updates the share fetch context with new partition information. Generates response data.
      * The response data may require subsequent down-conversion.
+     * @param groupId - The group id.
+     * @param memberId - The member id.
+     * @param updates - The updates to be sent in the response.
+     * @return - The share fetch response.
      */
     abstract ShareFetchResponse updateAndGenerateResponseData(String groupId, Uuid memberId, LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> updates);
 
+    /**
+     * @return - The error-prone and valid topic id partitions in the share fetch request.
+     */
     abstract SharePartitionManager.ErroneousAndValidPartitionData getErroneousAndValidTopicIdPartitions();
 
 }

@@ -47,12 +47,12 @@ import scala.Tuple2;
  */
 public class ShareSessionContext extends ShareFetchContext {
 
-    private final ShareFetchMetadata reqMetadata;
-    private Map<TopicIdPartition, SharePartitionData> shareFetchData;
-    private final boolean isSubsequent;
-    private ShareSession session;
+    private final static Logger log = LoggerFactory.getLogger(ShareSessionContext.class);
 
-    private final Logger log = LoggerFactory.getLogger(ShareSessionContext.class);
+    private final ShareFetchMetadata reqMetadata;
+    private final boolean isSubsequent;
+    private Map<TopicIdPartition, SharePartitionData> shareFetchData;
+    private ShareSession session;
 
     /**
      * The share fetch context for the first request that starts a share session.
@@ -79,14 +79,17 @@ public class ShareSessionContext extends ShareFetchContext {
         this.isSubsequent = true;
     }
 
+    // Visible for testing
     public Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> shareFetchData() {
         return shareFetchData;
     }
 
+    // Visible for testing
     public boolean isSubsequent() {
         return isSubsequent;
     }
 
+    // Visible for testing
     public ShareSession session() {
         return session;
     }
@@ -96,28 +99,28 @@ public class ShareSessionContext extends ShareFetchContext {
         if (!isSubsequent) {
             return new ShareFetchResponse(ShareFetchResponse.toMessage(Errors.NONE, throttleTimeMs,
                     Collections.emptyIterator(), Collections.emptyList()));
-        } else {
-            int expectedEpoch = ShareFetchMetadata.nextEpoch(reqMetadata.epoch());
-            int sessionEpoch;
-            synchronized (session) {
-                sessionEpoch = session.epoch;
-            }
-            if (sessionEpoch != expectedEpoch) {
-                log.debug("Subsequent share session {} expected epoch {}, but got {}. " +
-                        "Possible duplicate request.", session.key(), expectedEpoch, sessionEpoch);
-                return new ShareFetchResponse(ShareFetchResponse.toMessage(Errors.INVALID_SHARE_SESSION_EPOCH,
-                        throttleTimeMs, Collections.emptyIterator(), Collections.emptyList()));
-            } else
-                return new ShareFetchResponse(ShareFetchResponse.toMessage(Errors.NONE, throttleTimeMs,
-                        Collections.emptyIterator(), Collections.emptyList()));
         }
+        int expectedEpoch = ShareFetchMetadata.nextEpoch(reqMetadata.epoch());
+        int sessionEpoch;
+        synchronized (session) {
+            sessionEpoch = session.epoch;
+        }
+        if (sessionEpoch != expectedEpoch) {
+            log.debug("Subsequent share session {} expected epoch {}, but got {}. " +
+                    "Possible duplicate request.", session.key(), expectedEpoch, sessionEpoch);
+            return new ShareFetchResponse(ShareFetchResponse.toMessage(Errors.INVALID_SHARE_SESSION_EPOCH,
+                    throttleTimeMs, Collections.emptyIterator(), Collections.emptyList()));
+        }
+        return new ShareFetchResponse(ShareFetchResponse.toMessage(Errors.NONE, throttleTimeMs,
+                Collections.emptyIterator(), Collections.emptyList()));
     }
 
-    // Iterator that goes over the given partition map and selects partitions that need to be included in the response.
-    // If updateShareContextAndRemoveUnselected is set to true, the share context will be updated for the selected
-    // partitions and also remove unselected ones as they are encountered.
-    private class PartitionIterator implements
-            Iterator<Entry<TopicIdPartition, PartitionData>> {
+    /**
+     * Iterator that goes over the given partition map and selects partitions that need to be included in the response.
+     * If updateShareContextAndRemoveUnselected is set to true, the share context will be updated for the selected
+     * partitions and also remove unselected ones as they are encountered.
+     */
+    private class PartitionIterator implements Iterator<Entry<TopicIdPartition, PartitionData>> {
         private final Iterator<Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData>> iterator;
         private final boolean updateShareContextAndRemoveUnselected;
         private Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData> nextElement;
@@ -168,20 +171,16 @@ public class ShareSessionContext extends ShareFetchContext {
     }
 
     @Override
-    int responseSize(LinkedHashMap<TopicIdPartition, PartitionData> updates,
-                     short version) {
+    int responseSize(LinkedHashMap<TopicIdPartition, PartitionData> updates, short version) {
         if (!isSubsequent)
             return ShareFetchResponse.sizeOf(version, updates.entrySet().iterator());
-        else {
-            synchronized (session) {
-                int expectedEpoch = ShareFetchMetadata.nextEpoch(reqMetadata.epoch());
-                if (session.epoch != expectedEpoch) {
-                    return ShareFetchResponse.sizeOf(version, Collections.emptyIterator());
-                } else {
-                    // Pass the partition iterator which updates neither the share fetch context nor the partition map.
-                    return ShareFetchResponse.sizeOf(version, new PartitionIterator(updates.entrySet().iterator(), false));
-                }
+        synchronized (session) {
+            int expectedEpoch = ShareFetchMetadata.nextEpoch(reqMetadata.epoch());
+            if (session.epoch != expectedEpoch) {
+                return ShareFetchResponse.sizeOf(version, Collections.emptyIterator());
             }
+            // Pass the partition iterator which updates neither the share fetch context nor the partition map.
+            return ShareFetchResponse.sizeOf(version, new PartitionIterator(updates.entrySet().iterator(), false));
         }
     }
 

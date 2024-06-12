@@ -61,7 +61,6 @@ public class LastUsedKey implements Comparable<LastUsedKey> {
         int res = Long.compare(lastUsedMs, other.lastUsedMs);
         if (res != 0)
             return res;
-        else
-            return Integer.compare(key.hashCode(), other.key.hashCode());
+        return Integer.compare(key.hashCode(), other.key.hashCode());
     }
 }
