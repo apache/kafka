@@ -182,16 +182,6 @@ object DynamicBrokerConfig {
     DynamicConfig.Broker.validate(baseProps)
   }
 
-  private[server] def addDynamicConfigs(configDef: ConfigDef): Unit = {
-    KafkaConfig.configKeys.forKeyValue { (configName, config) =>
-      if (AllDynamicConfigs.contains(configName)) {
-        configDef.define(config.name, config.`type`, config.defaultValue, config.validator,
-          config.importance, config.documentation, config.group, config.orderInGroup, config.width,
-          config.displayName, config.dependents, config.recommender)
-      }
-    }
-  }
-
   private[server] def dynamicConfigUpdateModes: util.Map[String, String] = {
     AllDynamicConfigs.map { name =>
       val mode = if (PerBrokerConfigs.contains(name)) "per-broker" else "cluster-wide"
