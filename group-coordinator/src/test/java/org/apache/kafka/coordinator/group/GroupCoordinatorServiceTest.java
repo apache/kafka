@@ -118,6 +118,7 @@ public class GroupCoordinatorServiceTest {
     private GroupCoordinatorConfig createConfig() {
         return new GroupCoordinatorConfig(
             1,
+            10,
             45,
             5,
             Integer.MAX_VALUE,
