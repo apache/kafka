@@ -256,6 +256,47 @@ public class ConsumerProtocolTest {
         assertEquals(toSet(Collections.singletonList(tp1)), toSet(assignment.partitions()));
     }
 
+    @Test
+    public void serializeDeserializeConsumerProtocolSubscriptionAllVersions() {
+        List<TopicPartition> ownedPartitions = Arrays.asList(
+            new TopicPartition("foo", 0),
+            new TopicPartition("bar", 0));
+        Subscription subscription = new Subscription(Arrays.asList("foo", "bar"),
+            ByteBuffer.wrap("hello".getBytes()), ownedPartitions, generationId, rackId);
+
+        for (short version = ConsumerProtocolSubscription.LOWEST_SUPPORTED_VERSION; version <= ConsumerProtocolSubscription.HIGHEST_SUPPORTED_VERSION; version++) {
+            ByteBuffer buffer = ConsumerProtocol.serializeSubscription(subscription, version);
+            ConsumerProtocolSubscription parsedSubscription = ConsumerProtocol.deserializeConsumerProtocolSubscription(buffer);
+
+            assertEquals(toSet(subscription.topics()), toSet(parsedSubscription.topics()));
+            assertEquals(subscription.userData(), parsedSubscription.userData());
+
+            if (version >= 1) {
+                assertEquals(
+                    toSet(Arrays.asList(
+                        new ConsumerProtocolSubscription.TopicPartition().setTopic("foo").setPartitions(Collections.singletonList(0)),
+                        new ConsumerProtocolSubscription.TopicPartition().setTopic("bar").setPartitions(Collections.singletonList(0))
+                    )),
+                    toSet(parsedSubscription.ownedPartitions())
+                );
+            } else {
+                assertEquals(new ConsumerProtocolSubscription.TopicPartitionCollection(), parsedSubscription.ownedPartitions());
+            }
+
+            if (version >= 2) {
+                assertEquals(generationId, parsedSubscription.generationId());
+            } else {
+                assertEquals(DEFAULT_GENERATION, parsedSubscription.generationId());
+            }
+
+            if (version >= 3) {
+                assertEquals(rackId.get(), parsedSubscription.rackId());
+            } else {
+                assertNull(parsedSubscription.rackId());
+            }
+        }
+    }
+
     private ByteBuffer generateFutureSubscriptionVersionData() {
         // verify that a new version which adds a field is still parseable
         short version = 100;
