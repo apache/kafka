@@ -40,7 +40,6 @@ import java.util.OptionalInt;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.apache.kafka.common.TopicPartition;
@@ -385,7 +384,7 @@ public class TaskAssignmentUtilsTest {
                     )
                 )),
                 KafkaStreamsAssignment.of(processId(2), mkSet()),
-                KafkaStreamsAssignment.of(new ProcessId(UUID.randomUUID()), mkSet())
+                KafkaStreamsAssignment.of(ProcessId.randomProcessId(), mkSet())
             )
         );
         error = TaskAssignmentUtils.validateTaskAssignment(applicationState, unknownProcessId);
