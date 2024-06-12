@@ -1617,6 +1617,15 @@ public class MembershipManagerImplTest {
     }
 
     @Test
+    public void testOnSubscriptionUpdatedTransitionsToJoiningOnlyIfNotInGroup() {
+        createCommitRequestManager(false);
+        MembershipManagerImpl membershipManager = createMemberInStableState();
+        membershipManager.onSubscriptionUpdated();
+        assertNotEquals(membershipManager.state(), MemberState.FATAL);
+        assertNotEquals(membershipManager.state(), MemberState.JOINING);
+    }
+
+    @Test
     public void testListenerCallbacksBasic() {
         createCommitRequestManager(false);
         backgroundEventQueue = new LinkedBlockingQueue<>();
