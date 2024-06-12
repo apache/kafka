@@ -560,18 +560,16 @@ public class TestUtils {
     public static <T extends Throwable> T assertFutureThrows(Future<?> future, Class<T> exceptionCauseClass) {
         try {
             future.get(5, TimeUnit.SECONDS);
-            fail("expected to throw ExecutionException...");
-        } catch (TimeoutException e) {
-            fail("timeout waiting");
-            return null;
-        } catch (ExecutionException e) {
             ExecutionException exception = assertThrows(ExecutionException.class, future::get);
             assertInstanceOf(exceptionCauseClass, exception.getCause(),
                     "Unexpected exception cause " + exception.getCause());
             return exceptionCauseClass.cast(exception.getCause());
+        } catch (TimeoutException e) {
+            assertInstanceOf(exceptionCauseClass, e.getCause(), "Expected a" + exceptionCauseClass.getSimpleName() + "but got" + e.getCause());
+        } catch (ExecutionException e) {
+            assertInstanceOf(exceptionCauseClass, e.getCause(), "Expected a" + exceptionCauseClass.getSimpleName() + "but got" + e.getCause());
         } catch (InterruptedException e) {
-            fail("Unexpected exception cause" + e.getCause());
-            return null;
+            assertInstanceOf(exceptionCauseClass, e.getCause(), "Expected a" + exceptionCauseClass.getSimpleName() + "but got" + e.getCause());
         }
         return null;
     }
@@ -596,7 +594,7 @@ public class TestUtils {
                 "Expected a " + exceptionClass.getSimpleName() + " exception, but got " +
                     cause.getClass().getSimpleName());
         } catch (TimeoutException e) {
-            fail("timeout waiting");
+            assertInstanceOf(exceptionClass, e.getCause(), "Expected a" + exceptionClass.getSimpleName() + "but got" + e.getCause());
         }
     }
 
