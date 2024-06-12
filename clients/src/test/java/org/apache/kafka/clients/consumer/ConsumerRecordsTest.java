@@ -32,14 +32,14 @@ import org.apache.kafka.common.record.TimestampType;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class ConsumerRecordsTest {
 
     @Test
-    public void testIterator() throws Exception {
+    public void testIterator() {
         String topic = "topic";
         int recordSize = 10;
         int partitionSize = 15;
@@ -168,9 +168,7 @@ public class ConsumerRecordsTest {
     }
 
     private void validateEmptyPartition(ConsumerRecord<Integer, String> record, int emptyPartitionIndex) {
-        if (record.partition() == emptyPartitionIndex) {
-            fail("Partition " + emptyPartitionIndex + " is not empty");
-        }
+        assertNotEquals(emptyPartitionIndex, record.partition(), "Partition " + record.partition() + " is not empty");
     }
 
     private void validateRecordPayload(String topic, ConsumerRecord<Integer, String> record, int currentPartition, int recordCount, int recordSize) {
