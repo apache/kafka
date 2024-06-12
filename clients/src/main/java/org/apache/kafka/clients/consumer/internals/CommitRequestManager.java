@@ -1122,6 +1122,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         OffsetCommitRequestState addOffsetCommitRequest(OffsetCommitRequestState request) {
             log.debug("Enqueuing OffsetCommit request for offsets: {}", request.offsets);
             unsentOffsetCommits.add(request);
+            offsetFetchResultCache.clear();
             return request;
         }
 
@@ -1332,7 +1333,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 log.debug("A new offset fetch result was cached: {}", newValue);
                 cache.set(newValue);
             } else {
-                cache.set(null);
+                clear();
             }
         }
 
@@ -1342,7 +1343,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          * cache reference as it's either been used, or is now irrelevant.
          */
         boolean maybeCompleteRequest(final OffsetFetchRequestState request) {
-            OffsetFetchResultDetail oldValue = cache.getAndSet(null);
+            OffsetFetchResultDetail oldValue = clear();
 
             if (oldValue != null) {
                 if (oldValue.sameRequest(request.requestedPartitions)) {
@@ -1369,6 +1370,10 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          */
         OffsetFetchResultDetail get() {
             return cache.get();
+        }
+
+        OffsetFetchResultDetail clear() {
+            return cache.getAndSet(null);
         }
     }
 
