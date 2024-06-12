@@ -103,6 +103,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -572,6 +573,62 @@ public class AsyncKafkaConsumerTest {
         Exception e = assertThrows(UnsupportedOperationException.class, () -> consumer.poll(0L));
         assertEquals("Consumer.poll(long) is not supported when \"group.protocol\" is \"consumer\". " +
             "This method is deprecated and will be removed in the next major release.", e.getMessage());
+    }
+
+    @Test
+    public void testOffsetFetchStoresPendingEvent() {
+        consumer = newConsumer();
+        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
+
+        Map<TopicPartition, OffsetAndMetadata> results = Collections.emptyMap();
+        AtomicInteger eventCounter = new AtomicInteger();
+
+        doAnswerFetchCommittedOffsetsEvent(eventCounter, null);
+
+        consumer.assign(Collections.singleton(new TopicPartition("topic1", 0)));
+        assertEquals(0, eventCounter.get());
+
+        consumer.poll(Duration.ZERO);
+        assertEquals(1, eventCounter.get());
+
+        doAnswerFetchCommittedOffsetsEvent(eventCounter, results);
+
+        consumer.poll(Duration.ZERO);
+        assertEquals(1, eventCounter.get());
+    }
+
+    @Test
+    public void testOffsetFetchDoesNotReuseMismatchedPendingEvent() {
+        consumer = newConsumer();
+        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
+
+        Map<TopicPartition, OffsetAndMetadata> results = Collections.emptyMap();
+        AtomicInteger eventCounter = new AtomicInteger();
+
+        doAnswerFetchCommittedOffsetsEvent(eventCounter, results);
+
+        consumer.assign(Collections.singleton(new TopicPartition("topic1", 0)));
+        consumer.poll(Duration.ZERO);
+        assertEquals(1, eventCounter.get());
+
+        consumer.assign(Collections.singleton(new TopicPartition("topic1", 1)));
+        consumer.poll(Duration.ZERO);
+        assertEquals(2, eventCounter.get());
+    }
+
+    private void doAnswerFetchCommittedOffsetsEvent(AtomicInteger eventCounter, Map<TopicPartition, OffsetAndMetadata> results) {
+        doAnswer(invocation -> {
+            eventCounter.incrementAndGet();
+
+            if (results != null) {
+                FetchCommittedOffsetsEvent event = invocation.getArgument(0);
+                event.future().complete(results);
+            }
+
+            return results;
+        })
+            .when(applicationEventHandler)
+            .add(any(FetchCommittedOffsetsEvent.class));
     }
 
     @Test

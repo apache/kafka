@@ -256,6 +256,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private final AtomicLong currentThread = new AtomicLong(NO_CURRENT_THREAD);
     private final AtomicInteger refCount = new AtomicInteger(0);
 
+    private FetchCommittedOffsetsEvent pendingOffsetFetch;
+
     AsyncKafkaConsumer(final ConsumerConfig config,
                        final Deserializer<K> keyDeserializer,
                        final Deserializer<V> valueDeserializer) {
@@ -1666,14 +1668,23 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             return true;
 
         log.debug("Refreshing committed offsets for partitions {}", initializingPartitions);
+
+        // The shorter the timeout the user provided to poll(), the less likely the offsets fetch will
+        // be retrieved in time. This code creates a new FetchCommittedOffsetsEvent that can be reused if the
+        // first attempt at retrieving the associated Future's value times out.
+        if (pendingOffsetFetch == null || !pendingOffsetFetch.partitions().equals(initializingPartitions)) {
+            pendingOffsetFetch = new FetchCommittedOffsetsEvent(initializingPartitions, Long.MAX_VALUE);
+            applicationEventHandler.add(pendingOffsetFetch);
+        }
+
         try {
-            final FetchCommittedOffsetsEvent event =
-                new FetchCommittedOffsetsEvent(
-                    initializingPartitions,
-                    Long.MAX_VALUE);
-            wakeupTrigger.setActiveTask(event.future());
-            applicationEventHandler.add(event);
-            final Map<TopicPartition, OffsetAndMetadata> offsets = ConsumerUtils.getResult(event.future(), time.timer(1));
+            final CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = pendingOffsetFetch.future();
+            wakeupTrigger.setActiveTask(future);
+            final Map<TopicPartition, OffsetAndMetadata> offsets = ConsumerUtils.getResult(future, timer);
+
+            // Clear the stored event once its result is successfully retrieved.
+            pendingOffsetFetch = null;
+
             refreshCommittedOffsets(offsets, metadata, subscriptions);
             return true;
         } catch (TimeoutException e) {
