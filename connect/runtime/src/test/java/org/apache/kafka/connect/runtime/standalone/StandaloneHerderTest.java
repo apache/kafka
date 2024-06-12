@@ -42,6 +42,7 @@ import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.runtime.distributed.SampleConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
 import org.apache.kafka.connect.runtime.rest.entities.Message;
+import org.apache.kafka.connect.storage.AppliedConnectorConfig;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
@@ -387,6 +388,7 @@ public class StandaloneHerderTest {
                 Collections.singletonMap(taskId, taskConfig(SourceSink.SOURCE)),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
+                Collections.singletonMap(CONNECTOR_NAME, new AppliedConnectorConfig(connectorConfig)),
                 new HashSet<>(),
                 new HashSet<>(),
                 transformer);
@@ -420,6 +422,7 @@ public class StandaloneHerderTest {
                 Collections.singletonMap(new ConnectorTaskId(CONNECTOR_NAME, 0), taskConfig(SourceSink.SOURCE)),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
+                Collections.singletonMap(CONNECTOR_NAME, new AppliedConnectorConfig(connectorConfig)),
                 new HashSet<>(),
                 new HashSet<>(),
                 transformer);
@@ -555,6 +558,7 @@ public class StandaloneHerderTest {
                 Collections.singletonMap(taskId, taskConfig(SourceSink.SINK)),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
+                Collections.singletonMap(CONNECTOR_NAME, new AppliedConnectorConfig(connectorConfig)),
                 new HashSet<>(),
                 new HashSet<>(),
                 transformer);
@@ -609,6 +613,7 @@ public class StandaloneHerderTest {
                 Collections.singletonMap(taskId, taskConfig(SourceSink.SINK)),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
+                Collections.singletonMap(CONNECTOR_NAME, new AppliedConnectorConfig(connectorConfig)),
                 new HashSet<>(),
                 new HashSet<>(),
                 transformer);
@@ -729,10 +734,14 @@ public class StandaloneHerderTest {
             return true;
         }).when(worker).startConnector(eq(CONNECTOR_NAME), capturedConfig.capture(), any(),
                 eq(herder), eq(TargetState.STARTED), onStart.capture());
-        // Generate same task config, which should result in no additional action to restart tasks
+        ConnectorTaskId taskId = new ConnectorTaskId(CONNECTOR_NAME, 0);
+        // Generate same task config, but from different connector config, resulting
+        // in task restarts
         when(worker.connectorTaskConfigs(CONNECTOR_NAME, new SourceConnectorConfig(plugins, newConnConfig, true)))
                 .thenReturn(singletonList(taskConfig(SourceSink.SOURCE)));
-
+        doNothing().when(worker).stopAndAwaitTasks(Collections.singletonList(taskId));
+        doNothing().when(statusBackingStore).put(new TaskStatus(taskId, TaskStatus.State.DESTROYED, WORKER_ID, 0));
+        when(worker.startSourceTask(eq(taskId), any(), eq(newConnConfig), eq(taskConfig(SourceSink.SOURCE)), eq(herder), eq(TargetState.STARTED))).thenReturn(true);
 
         herder.putConnectorConfig(CONNECTOR_NAME, connConfig, false, createCallback);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
@@ -928,6 +937,8 @@ public class StandaloneHerderTest {
 
     @Test
     public void testModifyConnectorOffsetsConnectorNotInStoppedState() {
+        Map<String, String> connectorConfig = connectorConfig(SourceSink.SOURCE);
+
         herder.configState = new ClusterConfigState(
                 10,
                 null,
@@ -937,6 +948,7 @@ public class StandaloneHerderTest {
                 Collections.emptyMap(),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
+                Collections.singletonMap(CONNECTOR_NAME, new AppliedConnectorConfig(connectorConfig)),
                 Collections.emptySet(),
                 Collections.emptySet()
         );
@@ -963,6 +975,8 @@ public class StandaloneHerderTest {
             return null;
         }).when(worker).modifyConnectorOffsets(eq(CONNECTOR_NAME), eq(connectorConfig(SourceSink.SOURCE)), any(Map.class), workerCallbackCapture.capture());
 
+        Map<String, String> connectorConfig = connectorConfig(SourceSink.SOURCE);
+
         herder.configState = new ClusterConfigState(
                 10,
                 null,
@@ -972,6 +986,7 @@ public class StandaloneHerderTest {
                 Collections.emptyMap(),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
+                Collections.singletonMap(CONNECTOR_NAME, new AppliedConnectorConfig(connectorConfig)),
                 Collections.emptySet(),
                 Collections.emptySet()
         );
@@ -992,6 +1007,8 @@ public class StandaloneHerderTest {
             return null;
         }).when(worker).modifyConnectorOffsets(eq(CONNECTOR_NAME), eq(connectorConfig(SourceSink.SOURCE)), isNull(), workerCallbackCapture.capture());
 
+        Map<String, String> connectorConfig = connectorConfig(SourceSink.SOURCE);
+
         herder.configState = new ClusterConfigState(
                 10,
                 null,
@@ -1001,6 +1018,7 @@ public class StandaloneHerderTest {
                 Collections.emptyMap(),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
+                Collections.singletonMap(CONNECTOR_NAME, new AppliedConnectorConfig(connectorConfig)),
                 Collections.emptySet(),
                 Collections.emptySet()
         );
@@ -1071,6 +1089,7 @@ public class StandaloneHerderTest {
 
         // And we should instantiate the tasks. For a sink task, we should see added properties for the input topic partitions
 
+        Map<String, String> connectorConfig = connectorConfig(sourceSink);
         Map<String, String> generatedTaskProps = taskConfig(sourceSink);
 
         when(worker.connectorTaskConfigs(CONNECTOR_NAME, connConfig))
@@ -1080,11 +1099,12 @@ public class StandaloneHerderTest {
                 -1,
                 null,
                 Collections.singletonMap(CONNECTOR_NAME, 1),
-                Collections.singletonMap(CONNECTOR_NAME, connectorConfig(sourceSink)),
+                Collections.singletonMap(CONNECTOR_NAME, connectorConfig),
                 Collections.singletonMap(CONNECTOR_NAME, TargetState.STARTED),
                 Collections.singletonMap(new ConnectorTaskId(CONNECTOR_NAME, 0), generatedTaskProps),
                 Collections.emptyMap(),
                 Collections.emptyMap(),
+                Collections.singletonMap(CONNECTOR_NAME, new AppliedConnectorConfig(connectorConfig)),
                 new HashSet<>(),
                 new HashSet<>(),
                 transformer);

@@ -17,13 +17,13 @@
 
 package org.apache.kafka.connect.mirror;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.TopicPartition;
 
+import java.time.Duration;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeoutException;
-import java.time.Duration;
 
 
 /** Convenience methods for multi-cluster environments. Wraps {@link MirrorClient}

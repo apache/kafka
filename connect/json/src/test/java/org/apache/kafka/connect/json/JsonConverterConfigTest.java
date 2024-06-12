@@ -18,6 +18,7 @@ package org.apache.kafka.connect.json;
 
 import org.apache.kafka.connect.storage.ConverterConfig;
 import org.apache.kafka.connect.storage.ConverterType;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;

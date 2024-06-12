@@ -24,6 +24,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
+
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -76,7 +77,7 @@ public class ClientSideAssignorBenchmark {
     /**
      * The subscription pattern followed by the members of the group.
      *
-     * A subscription model is considered homogenous if all the members of the group
+     * A subscription model is considered homogeneous if all the members of the group
      * are subscribed to the same set of topics, it is heterogeneous otherwise.
      */
     public enum SubscriptionModel {

@@ -35,6 +35,7 @@ import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.util.FutureCallback;
 import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
 import org.apache.kafka.test.NoRetryException;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
