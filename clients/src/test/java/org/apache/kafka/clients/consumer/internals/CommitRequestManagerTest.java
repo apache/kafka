@@ -1280,7 +1280,7 @@ public class CommitRequestManagerTest {
     }
 
     @Test
-    public void testOffsetFetchTimeoutStoresResult() {
+    public void testOffsetFetchTimeoutStoresCache() {
         CommitRequestManager commitRequestManager = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
         TopicPartition tp = new TopicPartition("test-topic", 0);
@@ -1311,7 +1311,7 @@ public class CommitRequestManagerTest {
     }
 
     @Test
-    public void testOffsetFetchDeletesCachedResult() {
+    public void testOffsetFetchClearsCache() {
         CommitRequestManager commitRequestManager = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
         TopicPartition tp = new TopicPartition("test-topic", 0);
@@ -1360,7 +1360,7 @@ public class CommitRequestManagerTest {
     }
 
     @Test
-    public void testOffsetFetchWithCommitInbetween() {
+    public void testOffsetFetchWithCommitClearsCache() {
         CommitRequestManager commitRequestManager = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
         TopicPartition tp = new TopicPartition("test-topic", 0);
