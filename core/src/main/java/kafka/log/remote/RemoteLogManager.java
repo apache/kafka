@@ -175,6 +175,7 @@ public class RemoteLogManager implements Closeable {
     private final RLMQuotaManager rlmCopyQuotaManager;
     private final RLMQuotaManager rlmFetchQuotaManager;
     private final Sensor fetchThrottleTimeSensor;
+    private final Sensor copyThrottleTimeSensor;
 
     private final RemoteIndexCache indexCache;
     private final RemoteStorageThreadPool remoteStorageReaderThreadPool;
@@ -235,6 +236,8 @@ public class RemoteLogManager implements Closeable {
 
         fetchThrottleTimeSensor = new RLMQuotaMetrics(metrics, "remote-fetch-throttle-time", RemoteLogManager.class.getSimpleName(),
             "The %s time in millis remote fetches was throttled by a broker", INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS).sensor();
+        copyThrottleTimeSensor = new RLMQuotaMetrics(metrics, "remote-copy-throttle-time", RemoteLogManager.class.getSimpleName(),
+            "The %s time in millis remote copies was throttled by a broker", INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS).sensor();
 
         indexCache = new RemoteIndexCache(rlmConfig.remoteLogIndexFileCacheTotalSizeBytes(), remoteLogStorageManager, logDir);
         delayInMs = rlmConfig.remoteLogManagerTaskIntervalMs();
@@ -815,13 +818,16 @@ public class RemoteLogManager implements Closeable {
 
                             copyQuotaManagerLock.lock();
                             try {
-                                while (rlmCopyQuotaManager.getThrottleTimeMs() > 0) {
+                                long throttleTimeMs = rlmCopyQuotaManager.getThrottleTimeMs();
+                                while (throttleTimeMs > 0) {
+                                    copyThrottleTimeSensor.record(throttleTimeMs, time.milliseconds());
                                     logger.debug("Quota exceeded for copying log segments, waiting for the quota to be available.");
                                     // If the thread gets interrupted while waiting, the InterruptedException is thrown
                                     // back to the caller. It's important to note that the task being executed is already
                                     // cancelled before the executing thread is interrupted. The caller is responsible
                                     // for handling the exception gracefully by checking if the task is already cancelled.
                                     boolean ignored = copyQuotaManagerLockCondition.await(quotaTimeout().toMillis(), TimeUnit.MILLISECONDS);
+                                    throttleTimeMs = rlmCopyQuotaManager.getThrottleTimeMs();
                                 }
                                 rlmCopyQuotaManager.record(candidateLogSegment.logSegment.log().sizeInBytes());
                                 // Signal waiting threads to check the quota again
