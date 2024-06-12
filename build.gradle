@@ -35,6 +35,7 @@ plugins {
   id 'idea'
   id 'jacoco'
   id 'java-library'
+  id 'jvm-test-suite'
   id 'org.owasp.dependencycheck' version '8.2.1'
   id 'org.nosphere.apache.rat' version "0.8.1"
   id "io.swagger.core.v3.swagger-gradle-plugin" version "${swaggerVersion}"
@@ -49,6 +50,14 @@ plugins {
   //  We are going to drop JDK8 support. Hence, the spotless is upgrade to newest version and be applied only if the build env is compatible with JDK 11.
   //  spotless 6.15.0+ has issue in runtime with JDK8 even through we define it with `apply:false`. see https://github.com/diffplug/spotless/issues/2156 for more details
   id 'com.diffplug.spotless' version "6.14.0" apply false
+}
+
+testing {
+  suites {
+    test {
+      useJUnitJupiter()
+    }
+  }
 }
 
 ext {
