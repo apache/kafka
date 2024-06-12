@@ -42,6 +42,7 @@ import java.math.BigInteger;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collections;
@@ -976,6 +977,43 @@ public class JsonConverterTest {
         assertEquals(AppInfoParser.getVersion(), converter.version());
     }
 
+    @Test
+    public void shouldUseExternalSchemaForFromConnectionData() throws IOException {
+        // Create temporary external file
+        File schemaFile = File.createTempFile("schema", ".json");
+        schemaFile.deleteOnExit();
+        Files.write(schemaFile.toPath(), "{\"type\":\"string\"}".getBytes());
+
+        // Configure the converter with the external schema file
+        Map<String, Object> props = new HashMap<>();
+        props.put(JsonConverterConfig.SCHEMAS_FILE_LOCATION_CONFIG, schemaFile.getAbsolutePath());
+        converter.configure(props, false);
+
+        // Test the fromConnectData method with the external schema
+        byte[] converted = converter.fromConnectData(TOPIC, Schema.STRING_SCHEMA, "test");
+        JsonNode jsonNode = objectMapper.readTree(converted);
+        assertEquals("test", jsonNode.textValue());
+    }
+
+    @Test
+    public void shouldUseExternalSchemaForToConnectionData() throws IOException {
+        // Create a temporary external schema file
+        File schemaFile = File.createTempFile("schema", ".json");
+        schemaFile.deleteOnExit();
+        Files.write(schemaFile.toPath(), "{\"type\":\"string\"}".getBytes());
+
+        // Configure the converter with the external schema file
+        Map<String, Object> props = new HashMap<>();
+        props.put(JsonConverterConfig.SCHEMAS_FILE_LOCATION_CONFIG, schemaFile.getAbsolutePath());
+        converter.configure(props, false);
+
+        // Test the toConnectData method with the external schema
+        String jsonData = "{\"payload\":\"test\"}";
+        SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, jsonData.getBytes());
+        assertEquals(Schema.STRING_SCHEMA, schemaAndValue.schema());
+        assertEquals("test", schemaAndValue.value());
+    }
+
     private JsonNode parse(byte[] json) {
         try {
             return objectMapper.readTree(json);
@@ -1016,4 +1054,6 @@ public class JsonConverterTest {
         converter.fromConnectData(TOPIC, schema, struct);
         assertEquals(schema, struct.schema());
     }
+
+
 }

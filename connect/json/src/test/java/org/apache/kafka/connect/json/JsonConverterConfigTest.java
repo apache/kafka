@@ -24,6 +24,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class JsonConverterConfigTest {
 
@@ -37,4 +38,10 @@ public class JsonConverterConfigTest {
         assertEquals(config.decimalFormat(), DecimalFormat.NUMERIC);
     }
 
+    @Test
+    public void shouldReturnNullForSchemaFileLocationIfNotSet() {
+        final Map<String, Object> configValues = new HashMap<>();
+        final JsonConverterConfig config = new JsonConverterConfig(configValues);
+        assertNull(config.getSchemaFileLocation());
+    }
 }
