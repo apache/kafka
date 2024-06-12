@@ -466,7 +466,6 @@ public class MembershipManagerImplTest {
                 membershipManager.memberEpoch());
     }
 
-    // TODO
     /**
      * This is the case where a member is stuck reconciling and transitions out of the RECONCILING
      * state (due to failure). When the reconciliation completes it should not be applied because
@@ -474,6 +473,7 @@ public class MembershipManagerImplTest {
      */
     @Test
     public void testDelayedReconciliationResultDiscardedIfMemberNotInReconcilingStateAnymore() {
+        when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(CompletableFuture.completedFuture(null));
         MembershipManagerImpl membershipManager = createMemberInStableState();
         Uuid topicId1 = Uuid.randomUuid();
         String topic1 = "topic1";
@@ -482,7 +482,9 @@ public class MembershipManagerImplTest {
         mockOwnedPartitionAndAssignmentReceived(membershipManager, topicId1, topic1, owned);
 
         // Reconciliation that does not complete stuck on revocation commit.
-        CompletableFuture<Void> commitResult = mockEmptyAssignmentAndRevocationStuckOnCommit(membershipManager);
+        CompletableFuture<Void> commitResult = new CompletableFuture<>();
+        when(commitRequestManager.maybeAutoCommitSyncBeforeRevocation(anyLong())).thenReturn(commitResult);
+        mockEmptyAssignmentAndRevocationStuckOnCommit(membershipManager);
 
         // Member received fatal error while reconciling.
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
