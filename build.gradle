@@ -202,15 +202,7 @@ def determineCommitId() {
 }
 
 def excludedSpotlessModules = [':clients',
-                               ':connect:api',
-                               ':connect:basic-auth-extension',
-                               ':connect:file',
-                               ':connect:json',
-                               ':connect:mirror',
-                               ':connect:mirror-client',
                                ':connect:runtime',
-                               ':connect:test-plugins',
-                               ':connect:transforms',
                                ':core',
                                ':examples',
                                ':generator',
