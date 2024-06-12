@@ -2768,6 +2768,7 @@ public class KafkaAdminClient extends AdminClient {
                     Map.Entry::getKey,
                     Map.Entry::getValue,
                     (oldValue, newValue) -> {
+                        // Duplicate keys should not occur, throw an exception to signal this issue
                         throw new IllegalStateException(String.format("Duplicate key for values: %s and %s", oldValue, newValue));
                     },
                     HashMap::new

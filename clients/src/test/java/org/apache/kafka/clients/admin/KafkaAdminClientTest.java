@@ -274,6 +274,7 @@ import static org.apache.kafka.common.message.AlterPartitionReassignmentsRespons
 import static org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
 import static org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingPartitionReassignment;
 import static org.apache.kafka.common.message.ListPartitionReassignmentsResponseData.OngoingTopicReassignment;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -1985,6 +1986,15 @@ public class KafkaAdminClientTest {
             assertEquals(new HashSet<>(asList(resource, resource1)), result.keySet());
             assertNotNull(result.get(resource).get());
             assertNotNull(result.get(resource1).get());
+        }
+    }
+
+    @Test
+    public void testCreateDescribeConfigsByDuplicateResources() {
+        ConfigResource resource = new ConfigResource(ConfigResource.Type.BROKER, "1");
+        ConfigResource duplicateResource = new ConfigResource(ConfigResource.Type.BROKER, "1");
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            assertDoesNotThrow(() -> env.adminClient().describeConfigs(asList(resource, duplicateResource)));
         }
     }
 
