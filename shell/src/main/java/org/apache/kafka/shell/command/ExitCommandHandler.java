@@ -17,11 +17,13 @@
 
 package org.apache.kafka.shell.command;
 
-import net.sourceforge.argparse4j.inf.ArgumentParser;
-import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.shell.InteractiveShell;
 import org.apache.kafka.shell.state.MetadataShellState;
+
+import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.Namespace;
+
 import org.jline.reader.Candidate;
 
 import java.io.PrintWriter;

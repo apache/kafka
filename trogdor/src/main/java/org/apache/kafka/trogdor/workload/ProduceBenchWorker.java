@@ -17,9 +17,6 @@
 
 package org.apache.kafka.trogdor.workload;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.node.TextNode;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -37,6 +34,11 @@ import org.apache.kafka.trogdor.common.WorkerUtils;
 import org.apache.kafka.trogdor.task.TaskWorker;
 import org.apache.kafka.trogdor.task.WorkerStatusTracker;
 import org.apache.kafka.trogdor.workload.TransactionGenerator.TransactionAction;
+
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.node.TextNode;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

@@ -19,6 +19,7 @@ package org.apache.kafka.connect.rest.basic.auth.extension;
 
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

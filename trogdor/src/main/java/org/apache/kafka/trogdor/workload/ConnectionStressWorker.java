@@ -17,9 +17,6 @@
 
 package org.apache.kafka.trogdor.workload;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.JsonNode;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.ManualMetadataUpdater;
@@ -43,6 +40,11 @@ import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.common.WorkerUtils;
 import org.apache.kafka.trogdor.task.TaskWorker;
 import org.apache.kafka.trogdor.task.WorkerStatusTracker;
+
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.JsonNode;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

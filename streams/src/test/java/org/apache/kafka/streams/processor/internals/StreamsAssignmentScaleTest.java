@@ -63,7 +63,7 @@ import static org.apache.kafka.clients.consumer.internals.AbstractStickyAssignor
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_TASKS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.createMockAdminClientForAssignor;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getInfo;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.uuidForInt;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.processIdForInt;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.mockito.ArgumentMatchers.anySet;
@@ -239,7 +239,7 @@ public class StreamsAssignmentScaleTest {
                     getConsumerName(i, client),
                     new Subscription(
                         topic,
-                        getInfo(uuidForInt(client), EMPTY_TASKS, EMPTY_TASKS).encode(),
+                        getInfo(processIdForInt(client), EMPTY_TASKS, EMPTY_TASKS).encode(),
                         Collections.emptyList(),
                         DEFAULT_GENERATION,
                         Optional.of(String.format("rack-%d", client % 31))
@@ -270,7 +270,7 @@ public class StreamsAssignmentScaleTest {
                     consumer,
                     new Subscription(
                         topic,
-                        getInfo(uuidForInt(client), new HashSet<>(info.activeTasks()), info.standbyTasks().keySet()).encode(),
+                        getInfo(processIdForInt(client), new HashSet<>(info.activeTasks()), info.standbyTasks().keySet()).encode(),
                         assignment.partitions())
                 );
             }

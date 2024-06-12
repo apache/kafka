@@ -200,7 +200,7 @@
               files="StreamThread.java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(InternalTopologyBuilder|KafkaStreams|KStreamImpl|KTableImpl).java"/>
+              files="(InternalTopologyBuilder|KafkaStreams|KStreamImpl|KTableImpl|StreamsPartitionAssignor).java"/>
 
     <suppress checks="CyclomaticComplexity"
               files="(KafkaStreams|StreamsPartitionAssignor|StreamThread|TaskManager|PartitionGroup|SubscriptionWrapperSerde|AssignorConfiguration).java"/>

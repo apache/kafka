@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.connect.mirror;
 
-import java.util.Map;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Map;
 
 /** IdentityReplicationPolicy does not rename remote topics. This is useful for migrating
   * from legacy MM1, or for any use-case involving one-way replication.
