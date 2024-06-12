@@ -50,6 +50,7 @@ import org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment.Assi
 import org.apache.kafka.streams.processor.assignment.KafkaStreamsState;
 import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.assignment.TaskAssignmentUtils;
+import org.apache.kafka.streams.processor.assignment.TaskAssignmentUtils.RackAwareOptimizationParams;
 import org.apache.kafka.streams.processor.assignment.TaskInfo;
 import org.apache.kafka.streams.processor.assignment.TaskTopicPartition;
 import org.junit.Rule;
@@ -88,14 +89,14 @@ public class TaskAssignmentUtilsTest {
         );
 
         TaskAssignmentUtils.optimizeRackAwareActiveTasks(
-            applicationState, assignments, new TreeSet<>(tasks.keySet()));
+            RackAwareOptimizationParams.of(applicationState), assignments);
         assertThat(assignments.size(), equalTo(2));
         assertThat(assignments.get(processId(1)).tasks().keySet(), equalTo(mkSet(TASK_0_1)));
         assertThat(assignments.get(processId(2)).tasks().keySet(), equalTo(mkSet(TASK_0_0)));
 
         // Repeated to make sure nothing gets shifted around after the first round of optimization.
         TaskAssignmentUtils.optimizeRackAwareActiveTasks(
-            applicationState, assignments, new TreeSet<>(tasks.keySet()));
+            RackAwareOptimizationParams.of(applicationState), assignments);
         assertThat(assignments.size(), equalTo(2));
         assertThat(assignments.get(processId(1)).tasks().keySet(), equalTo(mkSet(TASK_0_1)));
         assertThat(assignments.get(processId(2)).tasks().keySet(), equalTo(mkSet(TASK_0_0)));
@@ -127,7 +128,7 @@ public class TaskAssignmentUtilsTest {
             mkAssignment(AssignedTask.Type.STANDBY, 3, TASK_0_0)
         );
 
-        TaskAssignmentUtils.optimizeRackAwareStandbyTasks(applicationState, assignments);
+        TaskAssignmentUtils.optimizeRackAwareStandbyTasks(RackAwareOptimizationParams.of(applicationState), assignments);
         assertThat(assignments.size(), equalTo(3));
         assertThat(assignments.get(processId(1)).tasks().keySet(), equalTo(mkSet(TASK_0_0, TASK_0_1)));
         assertThat(assignments.get(processId(2)).tasks().keySet(), equalTo(mkSet(TASK_0_0)));
