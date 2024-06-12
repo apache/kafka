@@ -2760,10 +2760,19 @@ public class KafkaAdminClient extends AdminClient {
             }, now);
         }
 
-        return new DescribeConfigsResult(nodeFutures.entrySet()
-            .stream()
-            .flatMap(x -> x.getValue().entrySet().stream())
-            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
+        return new DescribeConfigsResult(
+            nodeFutures.entrySet()
+                .stream()
+                .flatMap(x -> x.getValue().entrySet().stream())
+                .collect(Collectors.toMap(
+                    Map.Entry::getKey,
+                    Map.Entry::getValue,
+                    (oldValue, newValue) -> {
+                        throw new IllegalStateException(String.format("Duplicate key for values: %s and %s", oldValue, newValue));
+                    },
+                    HashMap::new
+                ))
+        );
     }
 
     private Config describeConfigResult(DescribeConfigsResponseData.DescribeConfigsResult describeConfigsResult) {
