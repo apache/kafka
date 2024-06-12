@@ -1364,9 +1364,9 @@ public class RecordAccumulatorTest {
                 3200, config, metrics, "producer-metrics", time, new ApiVersions(), null,
                 new BufferPool(totalSize, batchSize, metrics, time, "producer-internal-metrics")) {
             @Override
-            protected BuiltInPartitioner createBuiltInPartitioner(LogContext logContext, String topic,
+            BuiltInPartitioner createBuiltInPartitioner(LogContext logContext, String topic,
                                                                   int stickyBatchSize) {
-                return new MockRandomBuiltInPartitioner(logContext, topic, stickyBatchSize);
+                return new SequentialPartitioner(logContext, topic, stickyBatchSize);
             }
         };
 
@@ -1493,9 +1493,9 @@ public class RecordAccumulatorTest {
         long totalSize = 10 * 1024;
         String metricGrpName = "producer-metrics";
         final RecordAccumulator accum = new RecordAccumulator(logContext, batchSize,
-                Compression.NONE, lingerMs, retryBackoffMs, retryBackoffMaxMs,
-                deliveryTimeoutMs, metrics, metricGrpName, time, new ApiVersions(), null,
-                new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
+            Compression.NONE, lingerMs, retryBackoffMs, retryBackoffMaxMs,
+            deliveryTimeoutMs, metrics, metricGrpName, time, new ApiVersions(), null,
+            new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
 
         // Create 1 batch(batchA) to be produced to partition1.
         long now = time.milliseconds();
@@ -1508,7 +1508,7 @@ public class RecordAccumulatorTest {
             assertTrue(result.readyNodes.contains(node1), "Node1 is ready");
 
             Map<Integer, List<ProducerBatch>> batches = accum.drain(metadataCache,
-                    result.readyNodes, 999999 /* maxSize */, now);
+                result.readyNodes, 999999 /* maxSize */, now);
             assertTrue(batches.containsKey(node1.id()) && batches.get(node1.id()).size() == 1, "Node1 has 1 batch ready & drained");
             ProducerBatch batch = batches.get(node1.id()).get(0);
             assertEquals(OptionalInt.of(part1LeaderEpoch), batch.currentLeaderEpoch());
@@ -1760,21 +1760,21 @@ public class RecordAccumulatorTest {
             txnManager,
             new BufferPool(totalSize, batchSize, metrics, time, metricGrpName)) {
             @Override
-            protected BuiltInPartitioner createBuiltInPartitioner(LogContext logContext, String topic,
-                                                                  int stickyBatchSize) {
-                return new MockRandomBuiltInPartitioner(logContext, topic, stickyBatchSize);
+            BuiltInPartitioner createBuiltInPartitioner(LogContext logContext, String topic,
+                                                        int stickyBatchSize) {
+                return new SequentialPartitioner(logContext, topic, stickyBatchSize);
             }
         };
     }
 
-    private class MockRandomBuiltInPartitioner extends BuiltInPartitioner {
+    private class SequentialPartitioner extends BuiltInPartitioner {
 
-        public MockRandomBuiltInPartitioner(LogContext logContext, String topic, int stickyBatchSize) {
+        public SequentialPartitioner(LogContext logContext, String topic, int stickyBatchSize) {
             super(logContext, topic, stickyBatchSize);
         }
 
         @Override
-        protected int randomPartition() {
+        int randomPartition() {
             return mockRandom == null ? super.randomPartition() : mockRandom.getAndIncrement();
         }
     }

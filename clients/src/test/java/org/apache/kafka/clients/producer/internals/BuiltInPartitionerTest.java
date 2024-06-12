@@ -189,18 +189,18 @@ public class BuiltInPartitionerTest {
         assertThrows(IllegalArgumentException.class, () -> new BuiltInPartitioner(logContext, TOPIC_A, 0));
         assertDoesNotThrow(() -> new BuiltInPartitioner(logContext, TOPIC_A, 1));
     }
-    
-    
-    static class SequentialPartitioner extends BuiltInPartitioner {
+
+
+    private static class SequentialPartitioner extends BuiltInPartitioner {
 
         AtomicInteger mockRandom = new AtomicInteger();
-        
+
         public SequentialPartitioner(LogContext logContext, String topic, int stickyBatchSize) {
             super(logContext, topic, stickyBatchSize);
         }
 
         @Override
-        protected int randomPartition() {
+        int randomPartition() {
             return mockRandom.getAndAdd(1);
         }
     }

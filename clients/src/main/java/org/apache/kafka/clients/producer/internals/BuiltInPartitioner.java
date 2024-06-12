@@ -110,7 +110,7 @@ public class BuiltInPartitioner {
         return partition;
     }
 
-    protected int randomPartition() {
+    int randomPartition() {
         return Utils.toPositive(ThreadLocalRandom.current().nextInt());
     }
 
