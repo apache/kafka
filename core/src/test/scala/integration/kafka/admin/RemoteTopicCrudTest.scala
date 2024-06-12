@@ -385,13 +385,13 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
 
   private def overrideProps(): Properties = {
     val props = new Properties()
-    props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, sysRemoteStorageEnabled.toString)
-    props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, storageManagerClassName)
-    props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, metadataManagerClassName)
+    props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_CONFIG, sysRemoteStorageEnabled.toString)
+    props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_CONFIG, storageManagerClassName)
+    props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_CONFIG, metadataManagerClassName)
     props.put(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, "2000")
-    props.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, "1000")
+    props.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_CONFIG, "1000")
     props.put(ServerLogConfigs.LOG_RETENTION_BYTES_CONFIG, "2048")
-    props.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, "1024")
+    props.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_CONFIG, "1024")
     props
   }
 }

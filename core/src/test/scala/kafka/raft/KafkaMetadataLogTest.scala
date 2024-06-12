@@ -1006,7 +1006,7 @@ final class KafkaMetadataLogTest {
     }
 
     // Sleep long enough to trigger a possible segment delete because of the default retention
-    val defaultLogRetentionMs = LogConfig.DEFAULT_RETENTION_MS * 2
+    val defaultLogRetentionMs = LogConfig.RETENTION_MS_DEFAULT * 2
     mockTime.sleep(defaultLogRetentionMs)
 
     assertTrue(log.maybeClean())

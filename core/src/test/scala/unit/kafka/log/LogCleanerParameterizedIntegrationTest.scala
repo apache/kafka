@@ -256,13 +256,13 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
 
     def kafkaConfigWithCleanerConfig(cleanerConfig: CleanerConfig): KafkaConfig = {
       val props = TestUtils.createBrokerConfig(0, "localhost:2181")
-      props.put(CleanerConfig.LOG_CLEANER_THREADS_PROP, cleanerConfig.numThreads.toString)
-      props.put(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, cleanerConfig.dedupeBufferSize.toString)
-      props.put(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_LOAD_FACTOR_PROP, cleanerConfig.dedupeBufferLoadFactor.toString)
-      props.put(CleanerConfig.LOG_CLEANER_IO_BUFFER_SIZE_PROP, cleanerConfig.ioBufferSize.toString)
+      props.put(CleanerConfig.LOG_CLEANER_THREADS_CONFIG, cleanerConfig.numThreads.toString)
+      props.put(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_CONFIG, cleanerConfig.dedupeBufferSize.toString)
+      props.put(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_LOAD_FACTOR_CONFIG, cleanerConfig.dedupeBufferLoadFactor.toString)
+      props.put(CleanerConfig.LOG_CLEANER_IO_BUFFER_SIZE_CONFIG, cleanerConfig.ioBufferSize.toString)
       props.put(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG, cleanerConfig.maxMessageSize.toString)
-      props.put(CleanerConfig.LOG_CLEANER_BACKOFF_MS_PROP, cleanerConfig.backoffMs.toString)
-      props.put(CleanerConfig.LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP, cleanerConfig.maxIoBytesPerSecond.toString)
+      props.put(CleanerConfig.LOG_CLEANER_BACKOFF_MS_CONFIG, cleanerConfig.backoffMs.toString)
+      props.put(CleanerConfig.LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_CONFIG, cleanerConfig.maxIoBytesPerSecond.toString)
       KafkaConfig.fromProps(props)
     }
 
