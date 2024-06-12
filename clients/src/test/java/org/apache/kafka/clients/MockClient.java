@@ -319,7 +319,7 @@ public class MockClient implements KafkaClient {
         checkTimeoutOfPendingRequests(now);
 
         // We skip metadata updates if all nodes are currently blacked out
-        if (metadataUpdater.isUpdateNeeded() && leastLoadedNode(now) != null) {
+        if (metadataUpdater.isUpdateNeeded() && leastLoadedNode(now).node() != null) {
             MetadataUpdate metadataUpdate = metadataUpdates.poll();
             if (metadataUpdate != null) {
                 metadataUpdater.update(time, metadataUpdate);
