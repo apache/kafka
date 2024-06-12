@@ -43,7 +43,6 @@ public class ShareSessionCache {
     private Map<ShareSessionKey, ShareSession> sessions = new HashMap<>();
 
     // Maps last used times to sessions.
-
     private TreeMap<LastUsedKey, ShareSession> lastUsed = new TreeMap<>();
 
     // Visible for testing
@@ -62,34 +61,26 @@ public class ShareSessionCache {
      * @param key The share session key.
      * @return The session, or None if no such session was found.
      */
-    public ShareSession get(ShareSessionKey key) {
-        synchronized (this) {
-            return sessions.getOrDefault(key, null);
-        }
+    synchronized public ShareSession get(ShareSessionKey key) {
+        return sessions.getOrDefault(key, null);
     }
 
     /**
      * Get the number of entries currently in the share session cache.
      */
-    public int size() {
-        synchronized (this) {
-            return sessions.size();
-        }
+    synchronized public int size() {
+        return sessions.size();
     }
 
-    public long totalPartitions() {
-        synchronized (this) {
-            return numPartitions;
-        }
+    synchronized public long totalPartitions() {
+        return numPartitions;
     }
 
-    public ShareSession remove(ShareSessionKey key) {
-        synchronized (this) {
-            ShareSession session = get(key);
-            if (session != null)
-                return remove(session);
-            return null;
-        }
+    synchronized public ShareSession remove(ShareSessionKey key) {
+        ShareSession session = get(key);
+        if (session != null)
+            return remove(session);
+        return null;
     }
 
     /**
@@ -98,17 +89,15 @@ public class ShareSessionCache {
      * @param session The session.
      * @return The removed session, or None if there was no such session.
      */
-    public ShareSession remove(ShareSession session) {
-        synchronized (this) {
-            synchronized (session) {
-                lastUsed.remove(session.lastUsedKey());
-            }
-            ShareSession removeResult = sessions.remove(session.key());
-            if (removeResult != null) {
-                numPartitions = numPartitions - session.cachedSize();
-            }
-            return removeResult;
+    synchronized public ShareSession remove(ShareSession session) {
+        synchronized (session) {
+            lastUsed.remove(session.lastUsedKey());
         }
+        ShareSession removeResult = sessions.remove(session.key());
+        if (removeResult != null) {
+            numPartitions = numPartitions - session.cachedSize();
+        }
+        return removeResult;
     }
 
     /**
@@ -117,21 +106,19 @@ public class ShareSessionCache {
      * @param session  The session.
      * @param now      The current time in milliseconds.
      */
-    public void touch(ShareSession session, long now) {
-        synchronized (this) {
-            synchronized (session) {
-                // Update the lastUsed map.
-                lastUsed.remove(session.lastUsedKey());
-                session.lastUsedMs(now);
-                lastUsed.put(session.lastUsedKey(), session);
+    synchronized public void touch(ShareSession session, long now) {
+        synchronized (session) {
+            // Update the lastUsed map.
+            lastUsed.remove(session.lastUsedKey());
+            session.lastUsedMs(now);
+            lastUsed.put(session.lastUsedKey(), session);
 
-                int oldSize = session.cachedSize();
-                if (oldSize != -1) {
-                    numPartitions = numPartitions - oldSize;
-                }
-                session.cachedSize(session.size());
-                numPartitions = numPartitions + session.cachedSize();
+            int oldSize = session.cachedSize();
+            if (oldSize != -1) {
+                numPartitions = numPartitions - oldSize;
             }
+            session.cachedSize(session.size());
+            numPartitions = numPartitions + session.cachedSize();
         }
     }
 
@@ -144,31 +131,27 @@ public class ShareSessionCache {
      * @param now        The current time in milliseconds.
      * @return           True if an entry was evicted; false otherwise.
      */
-    public boolean tryEvict(long now) {
-        synchronized (this) {
-            // Try to evict an entry which is stale.
-            Map.Entry<LastUsedKey, ShareSession> lastUsedEntry = lastUsed.firstEntry();
-            if (lastUsedEntry == null) {
-                return false;
-            } else if (now - lastUsedEntry.getKey().lastUsedMs() > evictionMs) {
-                ShareSession session = lastUsedEntry.getValue();
-                remove(session);
-                return true;
-            }
+    synchronized public boolean tryEvict(long now) {
+        // Try to evict an entry which is stale.
+        Map.Entry<LastUsedKey, ShareSession> lastUsedEntry = lastUsed.firstEntry();
+        if (lastUsedEntry == null) {
             return false;
+        } else if (now - lastUsedEntry.getKey().lastUsedMs() > evictionMs) {
+            ShareSession session = lastUsedEntry.getValue();
+            remove(session);
+            return true;
         }
+        return false;
     }
 
-    public ShareSessionKey maybeCreateSession(String groupId, Uuid memberId, long now, int size, ImplicitLinkedHashCollection<CachedSharePartition> partitionMap) {
-        synchronized (this) {
-            if (sessions.size() < maxEntries || tryEvict(now)) {
-                ShareSession session = new ShareSession(new ShareSessionKey(groupId, memberId), partitionMap,
-                        now, now, ShareFetchMetadata.nextEpoch(ShareFetchMetadata.INITIAL_EPOCH));
-                sessions.put(session.key(), session);
-                touch(session, now);
-                return session.key();
-            }
-            return null;
+    synchronized public ShareSessionKey maybeCreateSession(String groupId, Uuid memberId, long now, ImplicitLinkedHashCollection<CachedSharePartition> partitionMap) {
+        if (sessions.size() < maxEntries || tryEvict(now)) {
+            ShareSession session = new ShareSession(new ShareSessionKey(groupId, memberId), partitionMap,
+                    now, now, ShareFetchMetadata.nextEpoch(ShareFetchMetadata.INITIAL_EPOCH));
+            sessions.put(session.key(), session);
+            touch(session, now);
+            return session.key();
         }
+        return null;
     }
 }

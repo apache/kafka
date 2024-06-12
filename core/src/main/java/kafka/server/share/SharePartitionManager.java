@@ -246,7 +246,7 @@ public class SharePartitionManager implements AutoCloseable {
                 shareFetchDataWithMaxBytes.forEach((topicIdPartition, reqData) ->
                     cachedSharePartitions.mustAdd(new CachedSharePartition(topicIdPartition, reqData, false)));
                 ShareSessionKey responseShareSessionKey = cache.maybeCreateSession(groupId, reqMetadata.memberId(),
-                        time.milliseconds(), shareFetchDataWithMaxBytes.size(), cachedSharePartitions);
+                        time.milliseconds(), cachedSharePartitions);
                 log.debug("Share session context with key {} isSubsequent {} returning {}", responseShareSessionKey,
                         false, partitionsToLogString(shareFetchDataWithMaxBytes.keySet()));
 
