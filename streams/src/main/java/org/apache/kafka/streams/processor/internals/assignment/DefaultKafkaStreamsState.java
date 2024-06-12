@@ -104,7 +104,7 @@ public class DefaultKafkaStreamsState implements KafkaStreamsState {
 
         final Long totalLag = taskLagTotals.get().get(task);
         if (totalLag == null) {
-            LOG.error("Task lag lookup failed: {} not in {}", task,
+            LOG.error("Task lag lookup failed for client {}: {} not in {}", processId, task,
                 Arrays.toString(taskLagTotals.get().keySet().toArray()));
             throw new IllegalStateException("Tried to lookup lag for unknown task " + task);
         }
