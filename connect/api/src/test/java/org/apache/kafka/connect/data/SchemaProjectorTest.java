@@ -19,6 +19,7 @@ package org.apache.kafka.connect.data;
 import org.apache.kafka.connect.data.Schema.Type;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.errors.SchemaProjectorException;
+
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
