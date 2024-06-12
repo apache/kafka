@@ -46,12 +46,12 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TP_1_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TP_1_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TP_1_2;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_1;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_2;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_3;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_1;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_2;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_3;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.hasActiveTasks;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.hasStandbyTasks;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.uuidForInt;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.processIdForInt;
 import static org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo.UNKNOWN_OFFSET_SUM;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -552,15 +552,15 @@ public class ClientStateTest {
 
     @Test
     public void shouldSetProcessId() {
-        assertEquals(UUID_1, new ClientState(UUID_1, 1).processId());
-        assertEquals(UUID_2, new ClientState(UUID_2, mkMap()).processId());
-        assertEquals(UUID_3, new ClientState(UUID_3, 1, mkMap()).processId());
+        assertEquals(PID_1, new ClientState(PID_1, 1).processId());
+        assertEquals(PID_2, new ClientState(PID_2, mkMap()).processId());
+        assertEquals(PID_3, new ClientState(PID_3, 1, mkMap()).processId());
         assertNull(new ClientState().processId());
     }
 
     @Test
     public void shouldCopyState() {
-        final ClientState clientState = new ClientState(mkSet(new TaskId(0, 0)), mkSet(new TaskId(0, 1)), Collections.emptyMap(), EMPTY_CLIENT_TAGS, 1, uuidForInt(1));
+        final ClientState clientState = new ClientState(mkSet(new TaskId(0, 0)), mkSet(new TaskId(0, 1)), Collections.emptyMap(), EMPTY_CLIENT_TAGS, 1, processIdForInt(1));
         final ClientState clientStateCopy = new ClientState(clientState);
 
         assertEquals(clientStateCopy.processId(), clientState.processId());

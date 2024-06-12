@@ -2245,7 +2245,7 @@ public class KafkaAdminClient extends AdminClient {
                         continue;
                     }
 
-                    TopicDescription currentTopicDescription = getTopicDescriptionFromDescribeTopicsResponseTopic(topic, nodes);
+                    TopicDescription currentTopicDescription = getTopicDescriptionFromDescribeTopicsResponseTopic(topic, nodes, options.includeAuthorizedOperations());
 
                     if (partiallyFinishedTopicDescription != null && partiallyFinishedTopicDescription.name().equals(topicName)) {
                         // Add the partitions for the cursor topic of the previous batch.
@@ -2408,14 +2408,16 @@ public class KafkaAdminClient extends AdminClient {
 
     private TopicDescription getTopicDescriptionFromDescribeTopicsResponseTopic(
         DescribeTopicPartitionsResponseTopic topic,
-        Map<Integer, Node> nodes
+        Map<Integer, Node> nodes,
+        boolean includeAuthorizedOperations
     ) {
         List<DescribeTopicPartitionsResponsePartition> partitionInfos = topic.partitions();
         List<TopicPartitionInfo> partitions = new ArrayList<>(partitionInfos.size());
         for (DescribeTopicPartitionsResponsePartition partitionInfo : partitionInfos) {
             partitions.add(DescribeTopicPartitionsResponse.partitionToTopicPartitionInfo(partitionInfo, nodes));
         }
-        return new TopicDescription(topic.name(), topic.isInternal(), partitions, validAclOperations(topic.topicAuthorizedOperations()), topic.topicId());
+        Set<AclOperation> authorisedOperations = includeAuthorizedOperations ? validAclOperations(topic.topicAuthorizedOperations()) : null;
+        return new TopicDescription(topic.name(), topic.isInternal(), partitions, authorisedOperations, topic.topicId());
     }
 
     private TopicDescription getTopicDescriptionFromCluster(Cluster cluster, String topicName, Uuid topicId,
@@ -4414,12 +4416,13 @@ public class KafkaAdminClient extends AdminClient {
             private QuorumInfo.ReplicaState translateReplicaState(DescribeQuorumResponseData.ReplicaState replica) {
                 return new QuorumInfo.ReplicaState(
                         replica.replicaId(),
+                        replica.replicaDirectoryId() == null ? Uuid.ZERO_UUID : replica.replicaDirectoryId(),
                         replica.logEndOffset(),
                         replica.lastFetchTimestamp() == -1 ? OptionalLong.empty() : OptionalLong.of(replica.lastFetchTimestamp()),
                         replica.lastCaughtUpTimestamp() == -1 ? OptionalLong.empty() : OptionalLong.of(replica.lastCaughtUpTimestamp()));
             }
 
-            private QuorumInfo createQuorumResult(final DescribeQuorumResponseData.PartitionData partition) {
+            private QuorumInfo createQuorumResult(final DescribeQuorumResponseData.PartitionData partition, DescribeQuorumResponseData.NodeCollection nodeCollection) {
                 List<QuorumInfo.ReplicaState> voters = partition.currentVoters().stream()
                     .map(this::translateReplicaState)
                     .collect(Collectors.toList());
@@ -4428,12 +4431,21 @@ public class KafkaAdminClient extends AdminClient {
                     .map(this::translateReplicaState)
                     .collect(Collectors.toList());
 
+                Map<Integer, QuorumInfo.Node> nodes = nodeCollection.stream().map(n -> {
+                    List<RaftVoterEndpoint> endpoints = n.listeners().stream()
+                        .map(l -> new RaftVoterEndpoint(l.name(), l.host(), l.port()))
+                        .collect(Collectors.toList());
+
+                    return new QuorumInfo.Node(n.nodeId(), endpoints);
+                }).collect(Collectors.toMap(QuorumInfo.Node::nodeId, Function.identity()));
+
                 return new QuorumInfo(
                     partition.leaderId(),
                     partition.leaderEpoch(),
                     partition.highWatermark(),
                     voters,
-                    observers
+                    observers,
+                    nodes
                 );
             }
 
@@ -4447,7 +4459,7 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse response) {
                 final DescribeQuorumResponse quorumResponse = (DescribeQuorumResponse) response;
                 if (quorumResponse.data().errorCode() != Errors.NONE.code()) {
-                    throw Errors.forCode(quorumResponse.data().errorCode()).exception();
+                    throw Errors.forCode(quorumResponse.data().errorCode()).exception(quorumResponse.data().errorMessage());
                 }
                 if (quorumResponse.data().topics().size() != 1) {
                     String msg = String.format("DescribeMetadataQuorum received %d topics when 1 was expected",
@@ -4476,9 +4488,9 @@ public class KafkaAdminClient extends AdminClient {
                     throw new UnknownServerException(msg);
                 }
                 if (partition.errorCode() != Errors.NONE.code()) {
-                    throw Errors.forCode(partition.errorCode()).exception();
+                    throw Errors.forCode(partition.errorCode()).exception(partition.errorMessage());
                 }
-                future.complete(createQuorumResult(partition));
+                future.complete(createQuorumResult(partition, quorumResponse.data().nodes()));
             }
 
             @Override

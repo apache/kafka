@@ -570,6 +570,7 @@ class BrokerServer(
       val serde = new CoordinatorRecordSerde
       val groupCoordinatorConfig = new GroupCoordinatorConfig(
         config.groupCoordinatorNumThreads,
+        config.groupCoordinatorAppendLingerMs,
         config.consumerGroupSessionTimeoutMs,
         config.consumerGroupHeartbeatIntervalMs,
         config.consumerGroupMaxSize,

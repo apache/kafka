@@ -94,6 +94,7 @@ public class FenceProducersHandlerTest {
         assertRetriableError(handler, transactionalId, Errors.COORDINATOR_LOAD_IN_PROGRESS);
         assertUnmappedKey(handler, transactionalId, Errors.NOT_COORDINATOR);
         assertUnmappedKey(handler, transactionalId, Errors.COORDINATOR_NOT_AVAILABLE);
+        assertRetriableError(handler, transactionalId, Errors.CONCURRENT_TRANSACTIONS);
     }
 
     private void assertFatalError(

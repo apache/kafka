@@ -46,4 +46,3 @@ public class RandomComponent {
         return component;
     }
 }
-
