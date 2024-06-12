@@ -16,16 +16,21 @@
  */
 package org.apache.kafka.connect.transforms.field;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 
 import static org.apache.kafka.connect.transforms.util.Requirements.requireMapOrNull;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireStructOrNull;
@@ -39,6 +44,7 @@ import static org.apache.kafka.connect.transforms.util.Requirements.requireStruc
  * @see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-821%3A+Connect+Transforms+support+for+nested+structures">KIP-821</a>
  * @see FieldSyntaxVersion
  */
+@InterfaceStability.Evolving
 public class SingleFieldPath {
     // Invariants:
     // - A field path can contain one or more steps
@@ -200,6 +206,161 @@ public class SingleFieldPath {
             if (current == null) return null;
         }
         return current.get(lastStep());
+    }
+
+    /**
+     * Updates the matching field value if found
+     * @param map original root value
+     * @param update function to apply to existing value
+     * @return the original value with the matching field updated if found
+     */
+    public Map<String, Object> updateMap(
+        Map<String, Object> map,
+        Function<Object, Object> update
+    ) {
+        if (map == null) return null;
+        Map<String, Object> result = new HashMap<>(map);
+
+        Map<String, Object> parent = result;
+        Map<String, Object> child;
+        for (String step : stepsWithoutLast()) {
+            child = requireMapOrNull(parent.get(step), "nested field access");
+            if (child == null) return map;
+            child = new HashMap<>(child);
+            parent.put(step, child);
+            parent = child;
+        }
+
+        Object original = parent.get(lastStep());
+        Object updated = update.apply(original);
+        if (updated != null) {
+            parent.put(lastStep(), updated);
+        }
+        return result;
+    }
+
+    /**
+     * Updates the matching field value if found
+     * @param struct original root value
+     * @param update function to apply to existing value, input may be null
+     * @return the original value with the matching field updated if found
+     */
+    public Struct updateStruct(
+        Struct struct,
+        Schema updatedSchema,
+        BiFunction<Object, Schema, Object> update
+    ) {
+        return updateStruct(
+            struct,
+            updatedSchema,
+            update,
+            steps.get(0),
+            steps.subList(1, steps.size())
+        );
+    }
+
+    private static Struct updateStruct(
+        Struct original,
+        Schema updatedSchema,
+        BiFunction<Object, Schema, Object> update,
+        String currentStep,
+        List<String> nextSteps
+    ) {
+        if (original == null)
+            return null;
+
+        Struct result = new Struct(updatedSchema);
+        for (Field field : updatedSchema.fields()) {
+            String fieldName = field.name();
+
+            if (fieldName.equals(currentStep)) {
+                final Object updatedField;
+
+                // Modify this field
+                if (nextSteps.isEmpty()) {
+                    // This is a leaf node
+                    Object originalField = original.get(fieldName);
+                    updatedField = update.apply(
+                        originalField,
+                        original.schema().field(fieldName).schema()
+                    );
+                } else {
+                    // We have to go deeper
+                    Struct originalField = requireStructOrNull(original.get(fieldName), "nested field access");
+                    updatedField = updateStruct(
+                        originalField,
+                        field.schema(),
+                        update,
+                        nextSteps.get(0),
+                        nextSteps.subList(1, nextSteps.size())
+                    );
+                }
+
+                result.put(fieldName, updatedField);
+            } else {
+                // Copy over all other fields from the original to the result
+                result.put(fieldName, original.get(fieldName));
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Updates the matching field schema if found
+     * @param originalSchema original schema
+     * @param baselineSchemaBuilder baseline schema to build
+     * @param update function to apply to existing field, input may be null
+     * @return the original schema with the matching field updated if found
+     */
+    public Schema updateSchema(
+        Schema originalSchema,
+        SchemaBuilder baselineSchemaBuilder,
+        Function<Field, Schema> update
+    ) {
+        return updateSchema(originalSchema, baselineSchemaBuilder, update, steps.get(0), steps.subList(1, steps.size()));
+    }
+
+    // Recursive implementation to update schema at different steps.
+    // Consider that resulting schemas are usually cached.
+    private Schema updateSchema(
+        Schema operatingSchema,
+        SchemaBuilder builder,
+        Function<Field, Schema> update,
+        String currentStep,
+        List<String> nextSteps
+    ) {
+        if (operatingSchema.isOptional()) {
+            builder.optional();
+        }
+        for (Field field : operatingSchema.fields()) {
+            if (field.name().equals(currentStep)) {
+                final Schema updatedSchema;
+                if (nextSteps.isEmpty()) {
+                    // This is a leaf node
+                    updatedSchema = update.apply(field);
+                } else {
+                    updatedSchema = updateSchema(
+                        field.schema(),
+                        SchemaBuilder.struct(),
+                        update,
+                        nextSteps.get(0),
+                        nextSteps.subList(1, nextSteps.size()));
+                }
+                builder.field(field.name(), updatedSchema);
+            } else {
+                // Copy over all other fields from the original to the result
+                builder.field(field.name(), field.schema());
+            }
+        }
+        return builder.build();
+    }
+
+    public boolean isEmpty() {
+        for (String step: steps) {
+            if (!step.isEmpty()) return false;
+        }
+        return true;
     }
 
     // For testing
