@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.server;
+package kafka.server.share;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -25,7 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
-import kafka.server.SharePartitionManager.ErroneousAndValidPartitionData;
+import kafka.server.share.SharePartitionManager.ErroneousAndValidPartitionData;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;

@@ -16,6 +16,7 @@
  */
 package kafka.server.share;
 
+import kafka.server.FetchSession;
 import kafka.server.ReplicaManager;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
