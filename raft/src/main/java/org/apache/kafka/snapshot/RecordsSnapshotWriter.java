@@ -33,11 +33,11 @@ import java.util.List;
 import java.util.OptionalLong;
 import java.util.function.Supplier;
 
-final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
-    final private RawSnapshotWriter snapshot;
-    final private BatchAccumulator<T> accumulator;
-    final private Time time;
-    final private long lastContainedLogTimestamp;
+public final class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
+    private final RawSnapshotWriter snapshot;
+    private final BatchAccumulator<T> accumulator;
+    private final Time time;
+    private final long lastContainedLogTimestamp;
 
     private RecordsSnapshotWriter(
         RawSnapshotWriter snapshot,

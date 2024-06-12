@@ -42,16 +42,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TasksTest {
 
-    private final static TopicPartition TOPIC_PARTITION_A_0 = new TopicPartition("topicA", 0);
-    private final static TopicPartition TOPIC_PARTITION_A_1 = new TopicPartition("topicA", 1);
-    private final static TopicPartition TOPIC_PARTITION_B_0 = new TopicPartition("topicB", 0);
-    private final static TopicPartition TOPIC_PARTITION_B_1 = new TopicPartition("topicB", 1);
-    private final static TaskId TASK_0_0 = new TaskId(0, 0);
-    private final static TaskId TASK_0_1 = new TaskId(0, 1);
-    private final static TaskId TASK_0_2 = new TaskId(0, 2);
-    private final static TaskId TASK_1_0 = new TaskId(1, 0);
-    private final static TaskId TASK_1_1 = new TaskId(1, 1);
-    private final static TaskId TASK_1_2 = new TaskId(1, 2);
+    private static final TopicPartition TOPIC_PARTITION_A_0 = new TopicPartition("topicA", 0);
+    private static final TopicPartition TOPIC_PARTITION_A_1 = new TopicPartition("topicA", 1);
+    private static final TopicPartition TOPIC_PARTITION_B_0 = new TopicPartition("topicB", 0);
+    private static final TopicPartition TOPIC_PARTITION_B_1 = new TopicPartition("topicB", 1);
+    private static final TaskId TASK_0_0 = new TaskId(0, 0);
+    private static final TaskId TASK_0_1 = new TaskId(0, 1);
+    private static final TaskId TASK_0_2 = new TaskId(0, 2);
+    private static final TaskId TASK_1_0 = new TaskId(1, 0);
+    private static final TaskId TASK_1_1 = new TaskId(1, 1);
+    private static final TaskId TASK_1_2 = new TaskId(1, 2);
 
     private final Tasks tasks = new Tasks(new LogContext());
 

@@ -32,9 +32,9 @@ import org.junit.jupiter.api.Timeout;
 @Timeout(value = 120)
 public class TopicsSpecTest {
 
-    private final static TopicsSpec FOO;
-    private final static PartitionsSpec PARTSA;
-    private final static PartitionsSpec PARTSB;
+    private static final TopicsSpec FOO;
+    private static final PartitionsSpec PARTSA;
+    private static final PartitionsSpec PARTSB;
 
     static {
         FOO = new TopicsSpec();

@@ -32,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 @Timeout(value = 40)
 public class TopicImageNodeTest {
-    private final static TopicImageNode NODE = new TopicImageNode(new TopicImage("topic-image-node-test-topic", Uuid.ZERO_UUID, Collections.emptyMap()));
+    private static final TopicImageNode NODE = new TopicImageNode(new TopicImage("topic-image-node-test-topic", Uuid.ZERO_UUID, Collections.emptyMap()));
 
     @Test
     public void testChildNames() {

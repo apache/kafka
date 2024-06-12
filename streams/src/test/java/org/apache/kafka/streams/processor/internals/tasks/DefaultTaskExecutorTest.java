@@ -49,7 +49,7 @@ import static org.apache.kafka.test.TestUtils.waitForCondition;
 
 public class DefaultTaskExecutorTest {
 
-    private final static long VERIFICATION_TIMEOUT = 15000;
+    private static final long VERIFICATION_TIMEOUT = 15000;
 
     private final Time time = new MockTime(1L);
     private final StreamTask task = mock(StreamTask.class);

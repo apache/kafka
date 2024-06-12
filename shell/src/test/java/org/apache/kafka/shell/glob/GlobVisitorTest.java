@@ -37,7 +37,7 @@ import java.util.function.Consumer;
 
 @Timeout(value = 5, unit = MINUTES)
 public class GlobVisitorTest {
-    static private final MetadataShellState DATA;
+    private static final MetadataShellState DATA;
 
     static class TestNode implements MetadataNode {
         private final String name;

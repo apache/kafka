@@ -85,7 +85,7 @@ public class SubscriptionInfoTest {
         );
     private static final Map<String, String> CLIENT_TAGS = mkMap(mkEntry("t1", "v1"), mkEntry("t2", "v2"));
 
-    private final static String IGNORED_USER_ENDPOINT = "ignoredUserEndpoint:80";
+    private static final String IGNORED_USER_ENDPOINT = "ignoredUserEndpoint:80";
     private static final byte IGNORED_UNIQUE_FIELD = (byte) 0;
     private static final int IGNORED_ERROR_CODE = 0;
 

@@ -44,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class KafkaLZ4Test {
 
-    private final static Random RANDOM = new Random(0);
+    private static final Random RANDOM = new Random(0);
 
     private static class Payload {
         String name;

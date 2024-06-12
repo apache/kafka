@@ -413,7 +413,7 @@ public class ConnectorValidationIntegrationTest {
         );
     }
 
-    public static abstract class TestConverter implements Converter, HeaderConverter {
+    public abstract static class TestConverter implements Converter, HeaderConverter {
 
         // Defined by both Converter and HeaderConverter interfaces
         @Override
@@ -456,7 +456,7 @@ public class ConnectorValidationIntegrationTest {
         }
     }
 
-    public static abstract class AbstractTestConverter extends TestConverter {
+    public abstract static class AbstractTestConverter extends TestConverter {
     }
 
     public static class TestConverterWithPrivateConstructor extends TestConverter {

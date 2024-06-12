@@ -41,7 +41,7 @@ public class PartitionRegistration {
     /**
      * A builder class which creates a PartitionRegistration.
      */
-    static public class Builder {
+    public static class Builder {
         private int[] replicas;
         private Uuid[] directories;
         private int[] isr;

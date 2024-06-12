@@ -24,7 +24,7 @@ import java.util.Iterator;
  * Generates Kafka MessageData classes.
  */
 public final class JsonConverterGenerator implements MessageClassGenerator {
-    private final static String SUFFIX = "JsonConverter";
+    private static final String SUFFIX = "JsonConverter";
     private final String packageName;
     private final StructRegistry structRegistry;
     private final HeaderGenerator headerGenerator;
