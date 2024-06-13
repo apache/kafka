@@ -435,6 +435,9 @@ public class RemoteLogManager implements Closeable {
             remoteLogMetadataManager.onPartitionLeadershipChanges(leaderPartitions, followerPartitions);
             followerPartitions.forEach(topicIdPartition ->
                     doHandleLeaderOrFollowerPartitions(topicIdPartition, RLMTask::convertToFollower));
+
+            // If this node was the previous leader for the partition, then the RLMTask might be running in the
+            // background thread and might emit metrics. So, removing the metrics after marking this node as follower.
             followerPartitions.forEach(this::removeRemoteTopicPartitionMetrics);
 
             leaderPartitionsWithLeaderEpoch.forEach((topicIdPartition, leaderEpoch) ->
