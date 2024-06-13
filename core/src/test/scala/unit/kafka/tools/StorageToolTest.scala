@@ -137,7 +137,7 @@ Found problem:
           "version=1",
           "node.id=1",
           "cluster.id=XcZZOzUqS4yHOjhMQB6JLQ")).
-          getBytes(StandardCharsets.UTF_8))
+            getBytes(StandardCharsets.UTF_8))
       assertEquals(1, StorageTool.
         infoCommand(new PrintStream(stream), false, Seq(tempDir.toString)))
       assertEquals(s"""Found log directory:
@@ -310,8 +310,8 @@ Found problem:
     val config = new KafkaConfig(newSelfManagedProperties())
     assertEquals("Cluster ID string invalid does not appear to be a valid UUID: " +
       "Input string `invalid` decoded as 5 bytes, which is not equal to the expected " +
-      "16 bytes of a base64-encoded UUID", assertThrows(classOf[TerseFailure],
-      () => StorageTool.buildMetadataProperties("invalid", config)).getMessage)
+        "16 bytes of a base64-encoded UUID", assertThrows(classOf[TerseFailure],
+          () => StorageTool.buildMetadataProperties("invalid", config)).getMessage)
   }
 
   @Test
@@ -523,9 +523,9 @@ Found problem:
 
     // Validate we can add multiple SCRAM creds.
     scramRecords = parseAddScram("-S",
-      "SCRAM-SHA-256=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",saltedpassword=\"mT0yyUUxnlJaC99HXgRTSYlbuqa4FSGtJCJfTMvjYCE=\",iterations=8192]",
-      "-S",
-      "SCRAM-SHA-256=[name=george,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",saltedpassword=\"mT0yyUUxnlJaC99HXgRTSYlbuqa4FSGtJCJfTMvjYCE=\",iterations=8192]")
+    "SCRAM-SHA-256=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",saltedpassword=\"mT0yyUUxnlJaC99HXgRTSYlbuqa4FSGtJCJfTMvjYCE=\",iterations=8192]",
+    "-S",
+    "SCRAM-SHA-256=[name=george,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\",saltedpassword=\"mT0yyUUxnlJaC99HXgRTSYlbuqa4FSGtJCJfTMvjYCE=\",iterations=8192]")
 
     assertEquals(2, scramRecords.get.size)
 
@@ -638,7 +638,7 @@ Found problem:
       StorageTool.main(args)
     } catch {
       case e: StorageToolTestException => assertEquals("", exitString)
-        assertEquals(0, exitStatus)
+      assertEquals(0, exitStatus)
     } finally {
       Exit.resetExitProcedure()
     }
@@ -663,7 +663,7 @@ Found problem:
       assertTrue(metaPropertiesFile.exists())
       val metaProps = new MetaProperties.Builder(
         PropertiesUtils.readPropertiesFile(metaPropertiesFile.getAbsolutePath())).
-        build()
+          build()
       assertTrue(metaProps.directoryId().isPresent())
       assertFalse(DirectoryId.reserved(metaProps.directoryId().get()))
     } finally Utils.delete(tempDir)
