@@ -58,7 +58,7 @@
     <suppress checks="ClassFanOutComplexity"
               files="(SaslServerAuthenticator|SaslAuthenticatorTest).java"/>
     <suppress checks="NPath"
-              files="(Microbenchmarks|SaslServerAuthenticator).java"/>
+              files="(SaslServerAuthenticator).java"/>
     <suppress checks="ClassFanOutComplexity"
               files="Errors.java"/>
     <suppress checks="ClassFanOutComplexity"
