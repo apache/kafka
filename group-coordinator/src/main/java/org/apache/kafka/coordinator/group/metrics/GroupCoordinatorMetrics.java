@@ -47,25 +47,25 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     /**
      * Old classic group count metric. To be deprecated.
      */
-    public final static com.yammer.metrics.core.MetricName NUM_CLASSIC_GROUPS = getMetricName(
+    public static final com.yammer.metrics.core.MetricName NUM_CLASSIC_GROUPS = getMetricName(
         "GroupMetadataManager", "NumGroups");
-    public final static com.yammer.metrics.core.MetricName NUM_OFFSETS = getMetricName(
+    public static final com.yammer.metrics.core.MetricName NUM_OFFSETS = getMetricName(
         "GroupMetadataManager", "NumOffsets");
-    public final static com.yammer.metrics.core.MetricName NUM_CLASSIC_GROUPS_PREPARING_REBALANCE = getMetricName(
+    public static final com.yammer.metrics.core.MetricName NUM_CLASSIC_GROUPS_PREPARING_REBALANCE = getMetricName(
         "GroupMetadataManager", "NumGroupsPreparingRebalance");
-    public final static com.yammer.metrics.core.MetricName NUM_CLASSIC_GROUPS_COMPLETING_REBALANCE = getMetricName(
+    public static final com.yammer.metrics.core.MetricName NUM_CLASSIC_GROUPS_COMPLETING_REBALANCE = getMetricName(
         "GroupMetadataManager", "NumGroupsCompletingRebalance");
-    public final static com.yammer.metrics.core.MetricName NUM_CLASSIC_GROUPS_STABLE = getMetricName(
+    public static final com.yammer.metrics.core.MetricName NUM_CLASSIC_GROUPS_STABLE = getMetricName(
         "GroupMetadataManager", "NumGroupsStable");
-    public final static com.yammer.metrics.core.MetricName NUM_CLASSIC_GROUPS_DEAD = getMetricName(
+    public static final com.yammer.metrics.core.MetricName NUM_CLASSIC_GROUPS_DEAD = getMetricName(
         "GroupMetadataManager", "NumGroupsDead");
-    public final static com.yammer.metrics.core.MetricName NUM_CLASSIC_GROUPS_EMPTY = getMetricName(
+    public static final com.yammer.metrics.core.MetricName NUM_CLASSIC_GROUPS_EMPTY = getMetricName(
         "GroupMetadataManager", "NumGroupsEmpty");
 
-    public final static String GROUP_COUNT_METRIC_NAME = "group-count";
-    public final static String GROUP_COUNT_PROTOCOL_TAG = "protocol";
-    public final static String CONSUMER_GROUP_COUNT_METRIC_NAME = "consumer-group-count";
-    public final static String CONSUMER_GROUP_COUNT_STATE_TAG = "state";
+    public static final String GROUP_COUNT_METRIC_NAME = "group-count";
+    public static final String GROUP_COUNT_PROTOCOL_TAG = "protocol";
+    public static final String CONSUMER_GROUP_COUNT_METRIC_NAME = "consumer-group-count";
+    public static final String CONSUMER_GROUP_COUNT_STATE_TAG = "state";
 
     public static final String OFFSET_COMMITS_SENSOR_NAME = "OffsetCommits";
     public static final String OFFSET_EXPIRED_SENSOR_NAME = "OffsetExpired";

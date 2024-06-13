@@ -30,7 +30,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-final public class PropertiesUtilsTest {
+public final class PropertiesUtilsTest {
     @Test
     public void testReadPropertiesFile() throws IOException {
         File tempFile = TestUtils.tempFile();

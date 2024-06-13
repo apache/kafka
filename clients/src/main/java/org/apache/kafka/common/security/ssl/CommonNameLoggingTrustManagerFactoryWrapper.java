@@ -112,9 +112,9 @@ class CommonNameLoggingTrustManagerFactoryWrapper {
      */
     static class CommonNameLoggingTrustManager implements X509TrustManager {
 
-        final private X509TrustManager origTm;
+        private final X509TrustManager origTm;
         final int nrOfRememberedBadCerts;
-        final private LinkedHashMap<ByteBuffer, String> previouslyRejectedClientCertChains;
+        private final LinkedHashMap<ByteBuffer, String> previouslyRejectedClientCertChains;
 
         public CommonNameLoggingTrustManager(X509TrustManager originalTrustManager, int nrOfRememberedBadCerts) {
             this.origTm = originalTrustManager;

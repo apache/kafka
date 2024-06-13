@@ -25,7 +25,6 @@ import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.Arrays;
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -46,11 +45,11 @@ public class ClusterImageControllersNodeTest {
                     setListeners(Collections.emptyMap()).
                         build()));
 
-    private final static ClusterImageControllersNode NODE = new ClusterImageControllersNode(TEST_IMAGE);
+    private static final ClusterImageControllersNode NODE = new ClusterImageControllersNode(TEST_IMAGE);
 
     @Test
     public void testChildNames() {
-        assertEquals(Arrays.asList("2"), NODE.childNames());
+        assertEquals(Collections.singletonList("2"), NODE.childNames());
     }
 
     @Test

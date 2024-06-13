@@ -17,13 +17,15 @@
 
 package org.apache.kafka.shell.command;
 
-import net.sourceforge.argparse4j.inf.ArgumentParser;
-import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.image.node.MetadataNode;
 import org.apache.kafka.shell.InteractiveShell;
 import org.apache.kafka.shell.glob.GlobVisitor;
 import org.apache.kafka.shell.node.printer.ShellNodePrinter;
 import org.apache.kafka.shell.state.MetadataShellState;
+
+import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.Namespace;
+
 import org.jline.reader.Candidate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,7 +41,7 @@ import java.util.Optional;
 public final class CatCommandHandler implements Commands.Handler {
     private static final Logger log = LoggerFactory.getLogger(CatCommandHandler.class);
 
-    public final static Commands.Type TYPE = new CatCommandType();
+    public static final Commands.Type TYPE = new CatCommandType();
 
     public static class CatCommandType implements Commands.Type {
         private CatCommandType() {

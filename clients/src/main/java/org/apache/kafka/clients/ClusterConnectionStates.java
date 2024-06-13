@@ -37,10 +37,10 @@ import java.util.Map;
  *
  */
 final class ClusterConnectionStates {
-    final static int RECONNECT_BACKOFF_EXP_BASE = 2;
-    final static double RECONNECT_BACKOFF_JITTER = 0.2;
-    final static int CONNECTION_SETUP_TIMEOUT_EXP_BASE = 2;
-    final static double CONNECTION_SETUP_TIMEOUT_JITTER = 0.2;
+    static final int RECONNECT_BACKOFF_EXP_BASE = 2;
+    static final double RECONNECT_BACKOFF_JITTER = 0.2;
+    static final int CONNECTION_SETUP_TIMEOUT_EXP_BASE = 2;
+    static final double CONNECTION_SETUP_TIMEOUT_JITTER = 0.2;
     private final Map<String, NodeConnectionState> nodeState;
     private final Logger log;
     private final HostResolver hostResolver;

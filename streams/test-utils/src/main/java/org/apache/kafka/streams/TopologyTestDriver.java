@@ -221,8 +221,8 @@ public class TopologyTestDriver implements Closeable {
     private final Time mockWallClockTime;
     private InternalTopologyBuilder internalTopologyBuilder;
 
-    private final static int PARTITION_ID = 0;
-    private final static TaskId TASK_ID = new TaskId(0, PARTITION_ID);
+    private static final int PARTITION_ID = 0;
+    private static final TaskId TASK_ID = new TaskId(0, PARTITION_ID);
     StreamTask task;
     private GlobalStateUpdateTask globalStateTask;
     private GlobalStateManager globalStateManager;

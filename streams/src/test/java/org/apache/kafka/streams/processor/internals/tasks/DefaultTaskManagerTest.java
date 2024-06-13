@@ -51,7 +51,7 @@ import static org.mockito.Mockito.when;
 
 public class DefaultTaskManagerTest {
 
-    private final static long VERIFICATION_TIMEOUT = 15000;
+    private static final long VERIFICATION_TIMEOUT = 15000;
 
     private final Time time = new MockTime(1L);
     private final TaskId taskId = new TaskId(0, 0, "A");

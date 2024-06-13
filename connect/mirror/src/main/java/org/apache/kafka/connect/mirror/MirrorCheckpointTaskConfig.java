@@ -18,11 +18,11 @@ package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.common.config.ConfigDef;
 
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.List;
-import java.util.HashSet;
-import java.util.Collections;
 
 public class MirrorCheckpointTaskConfig extends MirrorCheckpointConfig {
 
@@ -64,4 +64,3 @@ public class MirrorCheckpointTaskConfig extends MirrorCheckpointConfig {
                     ConfigDef.Importance.LOW,
                     "The index of the task");
 }
-

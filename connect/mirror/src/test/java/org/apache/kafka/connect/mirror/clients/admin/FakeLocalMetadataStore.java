@@ -20,6 +20,7 @@ package org.apache.kafka.connect.mirror.clients.admin;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.acl.AclBinding;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

@@ -75,7 +75,7 @@ class NamedCache {
         );
     }
 
-    synchronized final String name() {
+    final synchronized String name() {
         return name;
     }
 

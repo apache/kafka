@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.coordinator.group;
 
-import org.apache.kafka.coordinator.group.assignor.ConsumerGroupPartitionAssignor;
-import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
-import org.apache.kafka.coordinator.group.assignor.GroupSpec;
-import org.apache.kafka.coordinator.group.assignor.MemberAssignment;
-import org.apache.kafka.coordinator.group.assignor.SubscribedTopicDescriber;
+import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
+import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
+import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 public class NoOpPartitionAssignor implements ConsumerGroupPartitionAssignor {
@@ -36,9 +36,6 @@ public class NoOpPartitionAssignor implements ConsumerGroupPartitionAssignor {
     public GroupAssignment assign(GroupSpec groupSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
         return new GroupAssignment(groupSpec.memberIds()
             .stream()
-            .collect(Collectors.toMap(
-                memberId -> memberId,
-                memberId -> new MemberAssignment(groupSpec.memberAssignment(memberId))
-            )));
+            .collect(Collectors.toMap(Function.identity(), groupSpec::memberAssignment)));
     }
 }

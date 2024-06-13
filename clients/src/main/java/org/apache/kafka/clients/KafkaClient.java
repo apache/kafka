@@ -130,7 +130,7 @@ public interface KafkaClient extends Closeable {
      * @param now The current time in ms
      * @return The node with the fewest in-flight requests.
      */
-    Node leastLoadedNode(long now);
+    LeastLoadedNode leastLoadedNode(long now);
 
     /**
      * The number of currently in-flight requests for which we have not yet returned a response

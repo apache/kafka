@@ -202,7 +202,7 @@ public class PartitionReassignmentReplicasTest {
             partitionAssignment(Arrays.asList(0, 1, 2)), partitionAssignment(Arrays.asList(0, 1, 3)));
         assertTrue(replicas.isReassignmentInProgress());
         Optional<PartitionReassignmentReplicas.CompletedReassignment> reassignmentOptional =
-            replicas.maybeCompleteReassignment(Arrays.asList(3));
+            replicas.maybeCompleteReassignment(Collections.singletonList(3));
         assertFalse(reassignmentOptional.isPresent());
     }
 
