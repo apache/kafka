@@ -351,7 +351,7 @@
     </p>
 
     <p>
-        The Kafka Streams DSL may insert so-called repartition topic for certain DSL operators to ensure correct partitioning
+        The Kafka Streams DSL may insert so-called repartition topics for certain DSL operators to ensure correct partitioning
         of data. These topics are configured with infinite retention time and Kafka Streams purges old data explicitly
         via "delete record" requests, when commiting input topic offsets.
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-811%3A+Add+config+repartition.purge.interval.ms+to+Kafka+Streams">KIP-811</a>
