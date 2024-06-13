@@ -242,7 +242,9 @@ object StorageTool extends Logging {
       help(s"A KRaft release version to use for the initial metadata.version. The minimum is ${MetadataVersion.IBP_3_0_IV0}, the default is ${MetadataVersion.LATEST_PRODUCTION}")
     formatParser.addArgument("--feature", "-f").
       help("A feature upgrade we should perform, in feature=level format. For example: `metadata.version=5`.").
-      action(append());
+      action(append())
+    formatParser.addArgument("--standalone", "-s").
+      action(storeTrue());
 
     parser.parseArgsOrFail(args)
   }
