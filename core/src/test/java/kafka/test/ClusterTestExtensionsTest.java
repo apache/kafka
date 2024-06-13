@@ -232,4 +232,17 @@ public class ClusterTestExtensionsTest {
         Assertions.assertTrue(clusterInstance.supportedGroupProtocols().contains(CLASSIC));
         Assertions.assertEquals(1, clusterInstance.supportedGroupProtocols().size());
     }
+
+    @ClusterTest(brokers = 4)
+    public void testClusterAliveBrokers(ClusterInstance clusterInstance) throws Exception {
+        clusterInstance.waitForReadyBrokers();
+        clusterInstance.shutdownBroker(0);
+        List<Integer> aliveBrokerAfterShutdown = Arrays.asList(1, 2, 3);
+
+        Assertions.assertEquals(3, clusterInstance.aliveBrokers().size());
+
+        clusterInstance.aliveBrokers().forEach(s -> Assertions.assertTrue(
+                aliveBrokerAfterShutdown.contains(s.config().brokerId()))
+        );
+    }
 }
