@@ -817,7 +817,7 @@ public class AsyncKafkaConsumerTest {
         assertDoesNotThrow(() -> consumer.commitSync(Collections.singletonMap(tp, new OffsetAndMetadata(20)), Duration.ofMillis(100)));
     }
 
-    private <T> CompletableFuture<T> setUpConsumerWithIncompleteAsyncCommit(TopicPartition tp) {
+    private CompletableFuture<Void> setUpConsumerWithIncompleteAsyncCommit(TopicPartition tp) {
         time = new MockTime(1);
         consumer = newConsumer();
 
@@ -827,14 +827,8 @@ public class AsyncKafkaConsumerTest {
         consumer.seek(tp, 20);
         consumer.commitAsync();
 
-        return getLastEnqueuedEventFuture();
-    }
-
-    // ArgumentCaptor's type-matching does not work reliably with Java 8, so we cannot directly capture the AsyncCommitEvent
-    // Instead, we capture the super-class CompletableApplicationEvent and fetch the last captured event.
-    private <T> CompletableFuture<T> getLastEnqueuedEventFuture() {
-        final CompletableApplicationEvent<T> lastEvent = getLastEnqueuedEvent();
-        return lastEvent.future();
+        CompletableApplicationEvent<Void> event = getLastEnqueuedEvent();
+        return event.future();
     }
 
     // ArgumentCaptor's type-matching does not work reliably with Java 8, so we cannot directly capture the AsyncCommitEvent
