@@ -145,6 +145,14 @@ public class ShareSessionCache {
         return false;
     }
 
+    /**
+     * Maybe create a new session and add it to the cache.
+     * @param groupId - The group id in the share fetch request.
+     * @param memberId - The member id in the share fetch request.
+     * @param now - The current time in milliseconds.
+     * @param partitionMap - The topic partitions to be added to the session.
+     * @return - The session key if the session was created, or null if the session was not created.
+     */
     public synchronized ShareSessionKey maybeCreateSession(String groupId, Uuid memberId, long now, ImplicitLinkedHashCollection<CachedSharePartition> partitionMap) {
         if (sessions.size() < maxEntries || tryEvict(now)) {
             ShareSession session = new ShareSession(new ShareSessionKey(groupId, memberId), partitionMap,

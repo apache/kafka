@@ -31,6 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class ShareSessionCacheTest {
+
     @Test
     public void testShareSessionCache() {
         ShareSessionCache cache = new ShareSessionCache(3, 100);
