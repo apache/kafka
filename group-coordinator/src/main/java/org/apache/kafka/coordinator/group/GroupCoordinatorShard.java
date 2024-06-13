@@ -35,6 +35,8 @@ import org.apache.kafka.common.message.OffsetDeleteRequestData;
 import org.apache.kafka.common.message.OffsetDeleteResponseData;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.message.OffsetFetchResponseData;
+import org.apache.kafka.common.message.StreamsHeartbeatRequestData;
+import org.apache.kafka.common.message.StreamsHeartbeatResponseData;
 import org.apache.kafka.common.message.StreamsInitializeRequestData;
 import org.apache.kafka.common.message.StreamsInitializeResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
@@ -323,6 +325,22 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         StreamsInitializeRequestData request
     ) {
         return groupMetadataManager.streamsInitialize(context, request);
+    }
+
+    /**
+     * Handles a StreamsHeartbeat request.
+     *
+     * @param context The request context.
+     * @param request The actual StreamsHeartbeat request.
+     *
+     * @return A Result containing the StreamsHeartbeat response and
+     *         a list of records to update the state machine.
+     */
+    public CoordinatorResult<StreamsHeartbeatResponseData, CoordinatorRecord> streamsHeartbeat(
+        RequestContext context,
+        StreamsHeartbeatRequestData request
+    ) {
+        return groupMetadataManager.streamsHeartbeat(context, request);
     }
 
     /**
