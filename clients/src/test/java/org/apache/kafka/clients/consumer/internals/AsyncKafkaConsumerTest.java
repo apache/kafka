@@ -620,6 +620,7 @@ public class AsyncKafkaConsumerTest {
         consumer.poll(Duration.ofMillis(timeoutMs));
         verify(applicationEventHandler, times(2)).add(any(FetchCommittedOffsetsEvent.class));
         CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> event2 = getLastEnqueuedEvent();
+        assertNotEquals(event1, event2);
         assertThrows(TimeoutException.class, () -> ConsumerUtils.getResult(event2.future(), time.timer(timeoutMs)));
         assertTrue(consumer.hasPendingOffsetFetchEvent());
 
@@ -629,6 +630,8 @@ public class AsyncKafkaConsumerTest {
         event2.future().complete(Collections.emptyMap());
         consumer.poll(Duration.ofMillis(timeoutMs));
         verify(applicationEventHandler, times(2)).add(any(FetchCommittedOffsetsEvent.class));
+        CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> event2Still = getLastEnqueuedEvent();
+        assertEquals(event2, event2Still);
         assertDoesNotThrow(() -> ConsumerUtils.getResult(event2.future(), time.timer(timeoutMs)));
         assertFalse(consumer.hasPendingOffsetFetchEvent());
     }
@@ -654,7 +657,7 @@ public class AsyncKafkaConsumerTest {
         consumer.poll(Duration.ofMillis(timeoutMs));
         verify(applicationEventHandler, times(2)).add(any(FetchCommittedOffsetsEvent.class));
         CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> event2 = getLastEnqueuedEvent();
-        assertNotEquals(event1.id(), event2.id());
+        assertNotEquals(event1, event2);
         assertThrows(TimeoutException.class, () -> ConsumerUtils.getResult(event2.future(), time.timer(timeoutMs)));
         assertTrue(consumer.hasPendingOffsetFetchEvent());
     }
