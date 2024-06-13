@@ -337,7 +337,7 @@
       <code>suppress()</code> operator. However, <code>suppress()</code> uses an in-memory implementation and does not
       support RocksDB. To close this gap,
       <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-825%3A+introduce+a+new+API+to+control+when+aggregated+results+are+produced">KIP-825</a>
-      introduces "emit strategies" which are built into the aggregation operator directly to use the already existing
+      introduces "emit strategies", which are built into the aggregation operator directly to use the already existing
       RocksDB store. <code>TimeWindowedKStream.emitStrategy(EmitStrategy)</code> and
       <code>SessionWindowedKStream.emitStrategy(EmitStrategy)</code> allow to pick between "emit on window update" (default)
       and "emit on window close" strategies. Additionally, a few new emit metrics are added, as well as a necessary
