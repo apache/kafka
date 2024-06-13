@@ -437,11 +437,17 @@ public class ConfigurationControlManager {
     }
 
     /**
-     * Get the config value for the give topic and give config key.
+     * Get the config value for the given topic and given config key.
+     * The check order is:
+     *   1. dynamic topic overridden configs
+     *   2. dynamic node overridden configs
+     *   3. dynamic cluster overridden configs
+     *   4. static configs
      * If the config value is not found, return null.
      *
      * @param topicName            The topic name for the config.
      * @param configKey            The key for the config.
+     * @return the config value for the provided config key in the topic
      */
     String getTopicConfig(String topicName, String configKey) throws NoSuchElementException {
         Map<String, String> map = configData.get(new ConfigResource(Type.TOPIC, topicName));
@@ -509,19 +515,6 @@ public class ConfigurationControlManager {
         }
 
         return false;
-    }
-
-    /**
-     * Check if this node or default cluster has "unclean.leader.election.enable" set to true.
-     *
-     * @return true if uncleanLeaderElection is enabled
-     */
-    boolean uncleanLeaderElectionEnabled() {
-        Map<String, ConfigEntry> effectiveConfigMap = computeEffectiveTopicConfigs(Collections.emptyMap());
-        if (!effectiveConfigMap.containsKey(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG)) {
-            return false;
-        }
-        return Boolean.parseBoolean(effectiveConfigMap.get(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG).value());
     }
 
     Map<String, ConfigEntry> computeEffectiveTopicConfigs(Map<String, String> creationConfigs) {

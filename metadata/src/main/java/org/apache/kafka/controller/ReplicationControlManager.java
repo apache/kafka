@@ -1681,11 +1681,12 @@ public class ReplicationControlManager {
                 .build().ifPresent(records::add);
         }
 
-        // Since there might be some partitions didn't trigger unclean leader election after config change due to multiple records in one metadata transaction,
+        // There might be some partitions not triggering unclean leader election after config change due to multiple records in one metadata transaction,
         // try to elect leaders for them here periodically.
-        if (configurationControl.uncleanLeaderElectionEnabled()) {
-            triggerUncleanLeaderElectionForNoLeaderPartitions(records);
-        }
+        // Note: We don't have to worry about overlapping with imbalanced partitions preferred leader election above because
+        // the partition will be considered as imbalanced when leader is not NO_LEADER and not the 1st replica.
+        // But unclean leader election will only be triggered when leader is NO_LEADER.
+        triggerUncleanLeaderElectionForNoLeaderPartitions(records, true);
 
         return ControllerResult.of(records, rescheduleImmediately);
     }
@@ -2123,11 +2124,12 @@ public class ReplicationControlManager {
     }
 
     /**
-     * Trigger unclean leader election for partitions without leader
+     * Trigger unclean leader election for partitions without leader (visiable for testing)
      *
      * @param records  The record list to append to.
+     * @param shouldCheckTopicConfig  should check topic config or not before triggering unclean leader election.
      */
-    private void triggerUncleanLeaderElectionForNoLeaderPartitions(List<ApiMessageAndVersion> records) {
+    void triggerUncleanLeaderElectionForNoLeaderPartitions(List<ApiMessageAndVersion> records, boolean shouldCheckTopicConfig) {
         Iterator<TopicIdPartition> iterator = brokersToIsrs.partitionsWithNoLeader();
         while (iterator.hasNext()) {
             TopicIdPartition topicIdPartition = iterator.next();
@@ -2140,6 +2142,11 @@ public class ReplicationControlManager {
             if (partition == null) {
                 throw new RuntimeException("Partition " + topicIdPartition +
                         " existed in isrMembers, but not in the partitions map.");
+            }
+            // if this topic doesn't enable unclean leader election config, skip it when shouldCheckTopicConfig is true
+            if (shouldCheckTopicConfig &&
+                    !configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name)) {
+                continue;
             }
             if (electLeader(topic.name, topicIdPartition.partitionId(), ElectionType.UNCLEAN, records).equals(ApiError.NONE)) {
                 log.debug("Triggering unclean leader election for topic: {}, partition: {}", topic.name, topicIdPartition.partitionId());
@@ -2169,7 +2176,7 @@ public class ReplicationControlManager {
                 } else if (record.resourceType() == ConfigResource.Type.BROKER.id()) {
                     if (record.resourceName().equals(String.valueOf(clusterControl.nodeId())) ||
                             DEFAULT_NODE.name().equals(record.resourceName())) {
-                        triggerUncleanLeaderElectionForNoLeaderPartitions(records);
+                        triggerUncleanLeaderElectionForNoLeaderPartitions(records, false);
                     }
                 }
 

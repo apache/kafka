@@ -145,6 +145,7 @@ import static org.apache.kafka.common.protocol.Errors.PREFERRED_LEADER_NOT_AVAIL
 import static org.apache.kafka.common.protocol.Errors.THROTTLING_QUOTA_EXCEEDED;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_ID;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION;
+import static org.apache.kafka.controller.ClusterControlManagerTest.CONTROLLER_ID;
 import static org.apache.kafka.controller.ControllerRequestContextUtil.QUOTA_EXCEEDED_IN_TEST_MSG;
 import static org.apache.kafka.controller.ControllerRequestContextUtil.anonymousContextFor;
 import static org.apache.kafka.controller.ControllerRequestContextUtil.anonymousContextWithMutationQuotaExceededFor;
@@ -165,7 +166,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class ReplicationControlManagerTest {
     private final static Logger log = LoggerFactory.getLogger(ReplicationControlManagerTest.class);
     private final static int BROKER_SESSION_TIMEOUT_MS = 1000;
-    private final static int CONTROLLER_ID = 3000;
 
     private static class ReplicationControlTestContext {
         private static class Builder {
@@ -2540,6 +2540,7 @@ public class ReplicationControlManagerTest {
         ReplicationControlManager replication = ctx.replicationControl;
         ctx.registerBrokers(0, 1, 2, 3, 4);
         ctx.unfenceBrokers(2, 3, 4);
+
         Uuid fooId = ctx.createTestTopic("foo", new int[][]{
             new int[]{1, 2, 3}, new int[]{2, 3, 4}, new int[]{0, 2, 1}}).topicId();
 
@@ -3087,6 +3088,59 @@ public class ReplicationControlManagerTest {
     }
 
     @Test
+    void testTriggerUncleanLeaderElectionForNoLeaderPartitions() {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+
+        // Register 2 brokers, but only broker 0 is unfenced, so the ISR for each partition is [0]
+        ctx.registerBrokers(0, 1);
+        ctx.unfenceBrokers(0);
+        Uuid topicId1 = ctx.createTestTopic("test1", 1, (short) 2, NONE.code()).topicId();
+        Uuid topicId2 = ctx.createTestTopic("test2", 1, (short) 2, NONE.code()).topicId();
+
+        // enable unclean leader election config record for topic test1
+        ApiMessageAndVersion enableUncleanLeaderElection = new ApiMessageAndVersion(new ConfigRecord().
+                setResourceType(ConfigResource.Type.TOPIC.id()).
+                setResourceName("test1").
+                setName(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG).
+                setValue("true"), (short) 2);
+
+        // unclean leader election record for test1-0
+        ApiMessageAndVersion uncleanElection1 = new ApiMessageAndVersion(new PartitionChangeRecord()
+                .setPartitionId(0)
+                .setLeader(1)
+                .setTopicId(topicId1)
+                .setIsr(Arrays.asList(1))
+                .setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value()), (short) 2);
+
+        // unclean leader election record for test2-0
+        ApiMessageAndVersion uncleanElection2 = new ApiMessageAndVersion(new PartitionChangeRecord()
+                .setPartitionId(0)
+                .setLeader(1)
+                .setTopicId(topicId2)
+                .setIsr(Arrays.asList(1))
+                .setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value()), (short) 2);
+
+        // fence leader broker 0 and unfence non-ISR broker 1, so unclean leader election should be triggered if enabled
+        ctx.fenceBrokers(Collections.singleton(0));
+        ctx.unfenceBrokers(1);
+
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+        ctx.replicationControl.triggerUncleanLeaderElectionForNoLeaderPartitions(records, true);
+
+        assertEquals(Collections.emptyList(), records);
+
+        ctx.replicationControl.triggerUncleanLeaderElectionForNoLeaderPartitions(records, false);
+        assertEquals(Arrays.asList(uncleanElection1, uncleanElection2), records);
+        records.clear();
+
+        ctx.replay(Arrays.asList(enableUncleanLeaderElection));
+
+        ctx.replicationControl.triggerUncleanLeaderElectionForNoLeaderPartitions(records, true);
+        assertEquals(Arrays.asList(uncleanElection1), records);
+        records.clear();
+    }
+
+    @Test
     void testMaybeTriggerUncleanLeaderElection() {
         ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
 
@@ -3118,6 +3172,14 @@ public class ReplicationControlManagerTest {
                 setName(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG).
                 setValue("true"), (short) 2);
 
+        // unclean leader election record for test2-0
+        ApiMessageAndVersion uncleanElection2 = new ApiMessageAndVersion(new PartitionChangeRecord()
+                .setPartitionId(0)
+                .setLeader(1)
+                .setTopicId(topicId2)
+                .setIsr(Arrays.asList(1))
+                .setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value()), (short) 2);
+
         ApiMessageAndVersion enableUncleanLeaderElectionOnController = new ApiMessageAndVersion(new ConfigRecord().
                 setResourceType(ConfigResource.Type.BROKER.id()).
                 setResourceName(String.valueOf(CONTROLLER_ID)).
@@ -3129,14 +3191,6 @@ public class ReplicationControlManagerTest {
                 setResourceName("").
                 setName(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG).
                 setValue("true"), (short) 2);
-
-        // unclean leader election record for test2-0
-        ApiMessageAndVersion uncleanElection2 = new ApiMessageAndVersion(new PartitionChangeRecord()
-                .setPartitionId(0)
-                .setLeader(1)
-                .setTopicId(topicId2)
-                .setIsr(Arrays.asList(1))
-                .setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value()), (short) 2);
 
         // disable unclean leader election config record for topic test1
         ApiMessageAndVersion disableUncleanLeaderElection = new ApiMessageAndVersion(new ConfigRecord().
@@ -3155,6 +3209,9 @@ public class ReplicationControlManagerTest {
         // fence leader broker 0 and unfence non-ISR broker 1, so unclean leader election should be triggered if enabled
         ctx.fenceBrokers(Collections.singleton(0));
         ctx.unfenceBrokers(1);
+
+        // created a new topic, but the leader will be set to the alive broker 1, so no unclean leader election should be triggered
+        ctx.createTestTopic("test3", 1, (short) 2, NONE.code()).topicId();
 
         // enable unclean leader election for topic test1, the end result should add leader election record for test1-0 partition
         ControllerResult<Map<ConfigResource, ApiError>> oriResults = ControllerResult.of(Arrays.asList(enableUncleanLeaderElection1), Collections.emptyMap());
