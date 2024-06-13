@@ -40,6 +40,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_NAME;
@@ -73,6 +74,8 @@ class ConsumerTask implements Runnable, Closeable {
 
     // It indicates whether the ConsumerTask is closed or not.
     private volatile boolean isClosed = false;
+    // It indicates whether the internal consumer is closed or not.
+    private final AtomicBoolean isInternalConsumerClosed;
     // It indicates whether the user topic partition assignment to the consumer has changed or not. If the assignment
     // has changed, the consumer will eventually start tracking the newly assigned partitions and stop tracking the
     // ones it is no longer assigned to.
@@ -115,6 +118,7 @@ class ConsumerTask implements Runnable, Closeable {
         this.pollTimeoutMs = pollTimeoutMs;
         this.offsetFetchRetryIntervalMs = offsetFetchRetryIntervalMs;
         this.time = Objects.requireNonNull(time);
+        this.isInternalConsumerClosed = new AtomicBoolean(false);
         this.uninitializedAt = time.milliseconds();
     }
 
@@ -124,9 +128,11 @@ class ConsumerTask implements Runnable, Closeable {
         while (!isClosed) {
             ingestRecords();
         }
+        closeConsumer();
         log.info("Exited from consumer task thread");
     }
 
+    // public for testing
     public void ingestRecords() {
         try {
             if (hasAssignmentChanged) {
@@ -141,21 +147,24 @@ class ConsumerTask implements Runnable, Closeable {
             maybeMarkUserPartitionsAsReady();
         } catch (final WakeupException ex) {
             // ignore logging the error
+            isClosed = true;
             closeConsumer();
         } catch (final RetriableException ex) {
             log.warn("Retriable error occurred while processing the records. Retrying...", ex);
         } catch (final Exception ex) {
+            isClosed = true;
             log.error("Error occurred while processing the records", ex);
             closeConsumer();
         }
     }
 
     private void closeConsumer() {
-        isClosed = true;
-        try {
-            consumer.close(Duration.ofSeconds(30));
-        } catch (final Exception e) {
-            log.error("Error encountered while closing the consumer", e);
+        if (isInternalConsumerClosed.compareAndSet(false, true)) {
+            try {
+                consumer.close(Duration.ofSeconds(30));
+            } catch (final Exception e) {
+                log.error("Error encountered while closing the consumer", e);
+            }
         }
     }
 

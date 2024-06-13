@@ -17,7 +17,6 @@
 package org.apache.kafka.server.log.remote.metadata.storage;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.TopicIdPartition;
@@ -54,7 +53,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -67,9 +65,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.spy;
 
 public class ConsumerTaskTest {
 
@@ -88,7 +83,7 @@ public class ConsumerTaskTest {
     public void beforeEach() {
         final Map<TopicPartition, Long> offsets = remoteLogPartitions.stream()
             .collect(Collectors.toMap(Function.identity(), e -> 0L));
-        consumer = spy(new MockConsumer<>(OffsetResetStrategy.EARLIEST));
+        consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
         consumer.updateBeginningOffsets(offsets);
         consumerTask = new ConsumerTask(handler, partitioner, consumer, 10L, 300_000L, new SystemTime());
     }
@@ -153,6 +148,7 @@ public class ConsumerTaskTest {
         consumerTask.ingestRecords();
 
         final TopicIdPartition tpId = allPartitions.get(0);
+        assertTrue(() -> consumerTask.isUserPartitionAssigned(tpId), "Partition " + tpId + " has not been assigned");
         addRecord(consumer, partitioner.metadataPartition(tpId), tpId, 0);
         consumerTask.ingestRecords();
         assertTrue(() -> consumerTask.readOffsetForMetadataPartition(partitioner.metadataPartition(tpId)).isPresent(),
@@ -162,8 +158,8 @@ public class ConsumerTaskTest {
         consumerTask.removeAssignmentsForPartitions(removePartitions);
         consumerTask.ingestRecords();
         for (final TopicIdPartition idPartition : allPartitions) {
-            final BooleanSupplier condition = () -> removePartitions.contains(idPartition) == !consumerTask.isUserPartitionAssigned(idPartition);
-            assertTrue(condition, "Partition " + idPartition + " has not been removed");
+            assertEquals(!removePartitions.contains(idPartition), consumerTask.isUserPartitionAssigned(idPartition),
+                    "Partition " + idPartition + " has not been removed");
         }
         for (TopicIdPartition removePartition : removePartitions) {
             assertTrue(() -> handler.isPartitionCleared.containsKey(removePartition),
@@ -235,7 +231,7 @@ public class ConsumerTaskTest {
         addRecord(consumer, metadataPartition, tpId0, 0);
         addRecord(consumer, metadataPartition, tpId0, 1);
         consumerTask.ingestRecords();
-        assertTrue(() -> consumerTask.readOffsetForMetadataPartition(metadataPartition).equals(Optional.of(1L)), "Couldn't read record");
+        assertTrue(() -> consumerTask.readOffsetForMetadataPartition(metadataPartition).equals(Optional.of(1L)), "Partition offset did not reach expected value of 1");
         assertEquals(2, handler.metadataCounter);
 
         // should only read the tpId1 records
@@ -244,13 +240,13 @@ public class ConsumerTaskTest {
 
         addRecord(consumer, metadataPartition, tpId1, 2);
         consumerTask.ingestRecords();
-        assertTrue(() -> consumerTask.readOffsetForMetadataPartition(metadataPartition).equals(Optional.of(2L)), "Couldn't read record");
+        assertTrue(() -> consumerTask.readOffsetForMetadataPartition(metadataPartition).equals(Optional.of(2L)), "Partition offset did not reach expected value of 2");
         assertEquals(3, handler.metadataCounter);
 
         // shouldn't read tpId2 records because it's not assigned
         addRecord(consumer, metadataPartition, tpId2, 3);
         consumerTask.ingestRecords();
-        assertTrue(() -> consumerTask.readOffsetForMetadataPartition(metadataPartition).equals(Optional.of(3L)), "Couldn't read record");
+        assertTrue(() -> consumerTask.readOffsetForMetadataPartition(metadataPartition).equals(Optional.of(3L)), "Partition offset did not reach expected value of 3");
         assertEquals(3, handler.metadataCounter);
     }
 
@@ -265,15 +261,6 @@ public class ConsumerTaskTest {
 
         final int metadataPartition = partitioner.metadataPartition(tpId0);
         final int anotherMetadataPartition = partitioner.metadataPartition(tpId3);
-
-        // Mocking the consumer to be able to wait for the second reassignment
-        doAnswer(invocation -> {
-            if (consumerTask.isUserPartitionAssigned(tpId1) && !consumerTask.isUserPartitionAssigned(tpId3)) {
-                return ConsumerRecords.empty();
-            } else {
-                return invocation.callRealMethod();
-            }
-        }).when(consumer).poll(any());
 
         consumer.updateEndOffsets(Collections.singletonMap(toRemoteLogPartition(metadataPartition), 0L));
         consumer.updateEndOffsets(Collections.singletonMap(toRemoteLogPartition(anotherMetadataPartition), 0L));
