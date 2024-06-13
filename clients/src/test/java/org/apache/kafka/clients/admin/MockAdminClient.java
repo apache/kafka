@@ -270,7 +270,7 @@ public class MockAdminClient extends AdminClient {
         addTopic(internal, name, partitions, configs, true);
     }
 
-    synchronized public void addTopic(boolean internal,
+    public synchronized void addTopic(boolean internal,
                                       String name,
                                       List<TopicPartitionInfo> partitions,
                                       Map<String, String> configs,
@@ -306,7 +306,7 @@ public class MockAdminClient extends AdminClient {
         allTopics.put(name, new TopicMetadata(topicId, internal, partitions, logDirs, configs));
     }
 
-    synchronized public void markTopicForDeletion(final String name) {
+    public synchronized void markTopicForDeletion(final String name) {
         if (!allTopics.containsKey(name)) {
             throw new IllegalArgumentException(String.format("Topic %s did not exist.", name));
         }
@@ -314,12 +314,12 @@ public class MockAdminClient extends AdminClient {
         allTopics.get(name).markedForDeletion = true;
     }
 
-    synchronized public void timeoutNextRequest(int numberOfRequest) {
+    public synchronized void timeoutNextRequest(int numberOfRequest) {
         timeoutNextRequests = numberOfRequest;
     }
 
     @Override
-    synchronized public DescribeClusterResult describeCluster(DescribeClusterOptions options) {
+    public synchronized DescribeClusterResult describeCluster(DescribeClusterOptions options) {
         KafkaFutureImpl<Collection<Node>> nodesFuture = new KafkaFutureImpl<>();
         KafkaFutureImpl<Node> controllerFuture = new KafkaFutureImpl<>();
         KafkaFutureImpl<String> brokerIdFuture = new KafkaFutureImpl<>();
@@ -342,7 +342,7 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    synchronized public CreateTopicsResult createTopics(Collection<NewTopic> newTopics, CreateTopicsOptions options) {
+    public synchronized CreateTopicsResult createTopics(Collection<NewTopic> newTopics, CreateTopicsOptions options) {
         Map<String, KafkaFuture<CreateTopicsResult.TopicMetadataAndConfig>> createTopicResult = new HashMap<>();
 
         if (timeoutNextRequests > 0) {
@@ -416,7 +416,7 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    synchronized public ListTopicsResult listTopics(ListTopicsOptions options) {
+    public synchronized ListTopicsResult listTopics(ListTopicsOptions options) {
         Map<String, TopicListing> topicListings = new HashMap<>();
 
         if (timeoutNextRequests > 0) {
@@ -442,7 +442,7 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    synchronized public DescribeTopicsResult describeTopics(TopicCollection topics, DescribeTopicsOptions options) {
+    public synchronized DescribeTopicsResult describeTopics(TopicCollection topics, DescribeTopicsOptions options) {
         if (topics instanceof TopicIdCollection)
             return DescribeTopicsResult.ofTopicIds(new HashMap<>(handleDescribeTopicsUsingIds(((TopicIdCollection) topics).topicIds(), options)));
         else if (topics instanceof TopicNameCollection)
@@ -491,7 +491,7 @@ public class MockAdminClient extends AdminClient {
         return topicDescriptions;
     }
 
-    synchronized public Map<Uuid, KafkaFuture<TopicDescription>>  handleDescribeTopicsUsingIds(Collection<Uuid> topicIds, DescribeTopicsOptions options) {
+    public synchronized Map<Uuid, KafkaFuture<TopicDescription>>  handleDescribeTopicsUsingIds(Collection<Uuid> topicIds, DescribeTopicsOptions options) {
 
         Map<Uuid, KafkaFuture<TopicDescription>> topicDescriptions = new HashMap<>();
 
@@ -534,7 +534,7 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    synchronized public DeleteTopicsResult deleteTopics(TopicCollection topics, DeleteTopicsOptions options) {
+    public synchronized DeleteTopicsResult deleteTopics(TopicCollection topics, DeleteTopicsOptions options) {
         DeleteTopicsResult result;
         if (topics instanceof TopicIdCollection)
             result = DeleteTopicsResult.ofTopicIds(new HashMap<>(handleDeleteTopicsUsingIds(((TopicIdCollection) topics).topicIds(), options)));
@@ -605,12 +605,12 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    synchronized public CreatePartitionsResult createPartitions(Map<String, NewPartitions> newPartitions, CreatePartitionsOptions options) {
+    public synchronized CreatePartitionsResult createPartitions(Map<String, NewPartitions> newPartitions, CreatePartitionsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    synchronized public DeleteRecordsResult deleteRecords(Map<TopicPartition, RecordsToDelete> recordsToDelete, DeleteRecordsOptions options) {
+    public synchronized DeleteRecordsResult deleteRecords(Map<TopicPartition, RecordsToDelete> recordsToDelete, DeleteRecordsOptions options) {
         Map<TopicPartition, KafkaFuture<DeletedRecords>> deletedRecordsResult = new HashMap<>();
         if (recordsToDelete.isEmpty()) {
             return new DeleteRecordsResult(deletedRecordsResult);
@@ -620,7 +620,7 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    synchronized public CreateDelegationTokenResult createDelegationToken(CreateDelegationTokenOptions options) {
+    public synchronized CreateDelegationTokenResult createDelegationToken(CreateDelegationTokenOptions options) {
         KafkaFutureImpl<DelegationToken> future = new KafkaFutureImpl<>();
 
         for (KafkaPrincipal renewer : options.renewers()) {
@@ -640,7 +640,7 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    synchronized public RenewDelegationTokenResult renewDelegationToken(byte[] hmac, RenewDelegationTokenOptions options) {
+    public synchronized RenewDelegationTokenResult renewDelegationToken(byte[] hmac, RenewDelegationTokenOptions options) {
         KafkaFutureImpl<Long> future = new KafkaFutureImpl<>();
 
         boolean tokenFound = false;
@@ -662,7 +662,7 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    synchronized public ExpireDelegationTokenResult expireDelegationToken(byte[] hmac, ExpireDelegationTokenOptions options) {
+    public synchronized ExpireDelegationTokenResult expireDelegationToken(byte[] hmac, ExpireDelegationTokenOptions options) {
         KafkaFutureImpl<Long> future = new KafkaFutureImpl<>();
 
         long expiryTimestamp = options.expiryTimePeriodMs();
@@ -688,7 +688,7 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    synchronized public DescribeDelegationTokenResult describeDelegationToken(DescribeDelegationTokenOptions options) {
+    public synchronized DescribeDelegationTokenResult describeDelegationToken(DescribeDelegationTokenOptions options) {
         KafkaFutureImpl<List<DelegationToken>> future = new KafkaFutureImpl<>();
 
         if (options.owners().isEmpty()) {
@@ -707,17 +707,17 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    synchronized public DescribeConsumerGroupsResult describeConsumerGroups(Collection<String> groupIds, DescribeConsumerGroupsOptions options) {
+    public synchronized DescribeConsumerGroupsResult describeConsumerGroups(Collection<String> groupIds, DescribeConsumerGroupsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    synchronized public ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options) {
+    public synchronized ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    synchronized public ListConsumerGroupOffsetsResult listConsumerGroupOffsets(Map<String, ListConsumerGroupOffsetsSpec> groupSpecs, ListConsumerGroupOffsetsOptions options) {
+    public synchronized ListConsumerGroupOffsetsResult listConsumerGroupOffsets(Map<String, ListConsumerGroupOffsetsSpec> groupSpecs, ListConsumerGroupOffsetsOptions options) {
         // ignoring the groups and assume one test would only work on one group only
         if (groupSpecs.size() != 1)
             throw new UnsupportedOperationException("Not implemented yet");
@@ -732,17 +732,17 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    synchronized public DeleteConsumerGroupsResult deleteConsumerGroups(Collection<String> groupIds, DeleteConsumerGroupsOptions options) {
+    public synchronized DeleteConsumerGroupsResult deleteConsumerGroups(Collection<String> groupIds, DeleteConsumerGroupsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    synchronized public DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsets(String groupId, Set<TopicPartition> partitions, DeleteConsumerGroupOffsetsOptions options) {
+    public synchronized DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsets(String groupId, Set<TopicPartition> partitions, DeleteConsumerGroupOffsetsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    synchronized public ElectLeadersResult electLeaders(
+    public synchronized ElectLeadersResult electLeaders(
             ElectionType electionType,
             Set<TopicPartition> partitions,
             ElectLeadersOptions options) {
@@ -750,27 +750,27 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    synchronized public RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroup(String groupId, RemoveMembersFromConsumerGroupOptions options) {
+    public synchronized RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroup(String groupId, RemoveMembersFromConsumerGroupOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    synchronized public CreateAclsResult createAcls(Collection<AclBinding> acls, CreateAclsOptions options) {
+    public synchronized CreateAclsResult createAcls(Collection<AclBinding> acls, CreateAclsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    synchronized public DescribeAclsResult describeAcls(AclBindingFilter filter, DescribeAclsOptions options) {
+    public synchronized DescribeAclsResult describeAcls(AclBindingFilter filter, DescribeAclsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    synchronized public DeleteAclsResult deleteAcls(Collection<AclBindingFilter> filters, DeleteAclsOptions options) {
+    public synchronized DeleteAclsResult deleteAcls(Collection<AclBindingFilter> filters, DeleteAclsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    synchronized public DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
+    public synchronized DescribeConfigsResult describeConfigs(Collection<ConfigResource> resources, DescribeConfigsOptions options) {
 
         if (timeoutNextRequests > 0) {
             Map<ConfigResource, KafkaFuture<Config>> configs = new HashMap<>();
@@ -797,7 +797,7 @@ public class MockAdminClient extends AdminClient {
         return new DescribeConfigsResult(results);
     }
 
-    synchronized private Config getResourceDescription(ConfigResource resource) {
+    private synchronized Config getResourceDescription(ConfigResource resource) {
         switch (resource.type()) {
             case BROKER: {
                 int brokerId = Integer.parseInt(resource.name());
@@ -839,12 +839,12 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     @Deprecated
-    synchronized public AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options) {
+    public synchronized AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
-    synchronized public AlterConfigsResult incrementalAlterConfigs(
+    public synchronized AlterConfigsResult incrementalAlterConfigs(
             Map<ConfigResource, Collection<AlterConfigOp>> configs,
             AlterConfigsOptions options) {
         Map<ConfigResource, KafkaFuture<Void>> futures = new HashMap<>();
@@ -864,7 +864,7 @@ public class MockAdminClient extends AdminClient {
         return new AlterConfigsResult(futures);
     }
 
-    synchronized private Throwable handleIncrementalResourceAlteration(
+    private synchronized Throwable handleIncrementalResourceAlteration(
             ConfigResource resource, Collection<AlterConfigOp> ops) {
         switch (resource.type()) {
             case BROKER: {
@@ -951,7 +951,7 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    synchronized public AlterReplicaLogDirsResult alterReplicaLogDirs(
+    public synchronized AlterReplicaLogDirsResult alterReplicaLogDirs(
             Map<TopicPartitionReplica, String> replicaAssignment,
             AlterReplicaLogDirsOptions options) {
         Map<TopicPartitionReplica, KafkaFuture<Void>> results = new HashMap<>();
@@ -984,7 +984,7 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    synchronized public DescribeLogDirsResult describeLogDirs(Collection<Integer> brokers,
+    public synchronized DescribeLogDirsResult describeLogDirs(Collection<Integer> brokers,
                                                               DescribeLogDirsOptions options) {
         Map<Integer, Map<String, LogDirDescription>> unwrappedResults = new HashMap<>();
 
@@ -1026,7 +1026,7 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    synchronized public DescribeReplicaLogDirsResult describeReplicaLogDirs(
+    public synchronized DescribeReplicaLogDirsResult describeReplicaLogDirs(
             Collection<TopicPartitionReplica> replicas, DescribeReplicaLogDirsOptions options) {
         Map<TopicPartitionReplica, KafkaFuture<ReplicaLogDirInfo>> results = new HashMap<>();
         for (TopicPartitionReplica replica : replicas) {
@@ -1065,7 +1065,7 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    synchronized public AlterPartitionReassignmentsResult alterPartitionReassignments(
+    public synchronized AlterPartitionReassignmentsResult alterPartitionReassignments(
             Map<TopicPartition, Optional<NewPartitionReassignment>> newReassignments,
             AlterPartitionReassignmentsOptions options) {
         Map<TopicPartition, KafkaFuture<Void>> futures = new HashMap<>();
@@ -1092,7 +1092,7 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    synchronized public ListPartitionReassignmentsResult listPartitionReassignments(
+    public synchronized ListPartitionReassignmentsResult listPartitionReassignments(
             Optional<Set<TopicPartition>> partitions,
             ListPartitionReassignmentsOptions options) {
         Map<TopicPartition, PartitionReassignment> map = new HashMap<>();
@@ -1106,7 +1106,7 @@ public class MockAdminClient extends AdminClient {
         return new ListPartitionReassignmentsResult(KafkaFutureImpl.completedFuture(map));
     }
 
-    synchronized private PartitionReassignment findPartitionReassignment(TopicPartition partition) {
+    private synchronized PartitionReassignment findPartitionReassignment(TopicPartition partition) {
         NewPartitionReassignment reassignment = reassignments.get(partition);
         if (reassignment == null) {
             return null;
@@ -1135,12 +1135,12 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    synchronized public AlterConsumerGroupOffsetsResult alterConsumerGroupOffsets(String groupId, Map<TopicPartition, OffsetAndMetadata> offsets, AlterConsumerGroupOffsetsOptions options) {
+    public synchronized AlterConsumerGroupOffsetsResult alterConsumerGroupOffsets(String groupId, Map<TopicPartition, OffsetAndMetadata> offsets, AlterConsumerGroupOffsetsOptions options) {
         throw new UnsupportedOperationException("Not implement yet");
     }
 
     @Override
-    synchronized public ListOffsetsResult listOffsets(Map<TopicPartition, OffsetSpec> topicPartitionOffsets, ListOffsetsOptions options) {
+    public synchronized ListOffsetsResult listOffsets(Map<TopicPartition, OffsetSpec> topicPartitionOffsets, ListOffsetsOptions options) {
         Map<TopicPartition, KafkaFuture<ListOffsetsResult.ListOffsetsResultInfo>> futures = new HashMap<>();
 
         for (Map.Entry<TopicPartition, OffsetSpec> entry : topicPartitionOffsets.entrySet()) {
@@ -1317,7 +1317,7 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    synchronized public void close(Duration timeout) {}
+    public synchronized void close(Duration timeout) {}
 
     public synchronized void updateBeginningOffsets(Map<TopicPartition, Long> newOffsets) {
         beginningOffsets.putAll(newOffsets);
@@ -1331,7 +1331,7 @@ public class MockAdminClient extends AdminClient {
         committedOffsets.putAll(newOffsets);
     }
 
-    private final static class TopicMetadata {
+    private static final class TopicMetadata {
         final Uuid topicId;
         final boolean isInternalTopic;
         final List<TopicPartitionInfo> partitions;
@@ -1356,7 +1356,7 @@ public class MockAdminClient extends AdminClient {
         }
     }
 
-    synchronized public void setMockMetrics(MetricName name, Metric metric) {
+    public synchronized void setMockMetrics(MetricName name, Metric metric) {
         mockMetrics.put(name, metric);
     }
 
@@ -1404,11 +1404,11 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    synchronized public Map<MetricName, ? extends Metric> metrics() {
+    public synchronized Map<MetricName, ? extends Metric> metrics() {
         return mockMetrics;
     }
 
-    synchronized public void setFetchesRemainingUntilVisible(String topicName, int fetchesRemainingUntilVisible) {
+    public synchronized void setFetchesRemainingUntilVisible(String topicName, int fetchesRemainingUntilVisible) {
         TopicMetadata metadata = allTopics.get(topicName);
         if (metadata == null) {
             throw new RuntimeException("No such topic as " + topicName);
@@ -1416,11 +1416,11 @@ public class MockAdminClient extends AdminClient {
         metadata.fetchesRemainingUntilVisible = fetchesRemainingUntilVisible;
     }
 
-    synchronized public List<Node> brokers() {
+    public synchronized List<Node> brokers() {
         return new ArrayList<>(brokers);
     }
 
-    synchronized public Node broker(int index) {
+    public synchronized Node broker(int index) {
         return brokers.get(index);
     }
 }

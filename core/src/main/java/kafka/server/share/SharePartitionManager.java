@@ -39,7 +39,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class SharePartitionManager implements AutoCloseable {
 
-    private final static Logger log = LoggerFactory.getLogger(SharePartitionManager.class);
+    private static final Logger log = LoggerFactory.getLogger(SharePartitionManager.class);
 
     /**
      * The partition cache map is used to store the SharePartition objects for each share group topic-partition.

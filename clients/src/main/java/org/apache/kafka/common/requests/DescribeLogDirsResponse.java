@@ -82,7 +82,7 @@ public class DescribeLogDirsResponse extends AbstractResponse {
      * class {@link org.apache.kafka.clients.admin.LogDirDescription}.
      */
     @Deprecated
-    static public class LogDirInfo {
+    public static class LogDirInfo {
         public final Errors error;
         public final Map<TopicPartition, ReplicaInfo> replicaInfos;
 
@@ -110,7 +110,7 @@ public class DescribeLogDirsResponse extends AbstractResponse {
      * class {@link org.apache.kafka.clients.admin.ReplicaInfo}.
      */
     @Deprecated
-    static public class ReplicaInfo {
+    public static class ReplicaInfo {
 
         public final long size;
         public final long offsetLag;

@@ -23,7 +23,7 @@ import org.apache.kafka.common.KafkaException;
  */
 public class RaftException extends KafkaException {
 
-    private final static long serialVersionUID = 1L;
+    private static final long serialVersionUID = 1L;
 
     public RaftException(String s) {
         super(s);

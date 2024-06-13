@@ -161,8 +161,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(40)
 public class ReplicationControlManagerTest {
-    private final static Logger log = LoggerFactory.getLogger(ReplicationControlManagerTest.class);
-    private final static int BROKER_SESSION_TIMEOUT_MS = 1000;
+    private static final Logger log = LoggerFactory.getLogger(ReplicationControlManagerTest.class);
+    private static final int BROKER_SESSION_TIMEOUT_MS = 1000;
 
     private static class ReplicationControlTestContext {
         private static class Builder {
@@ -1703,7 +1703,7 @@ public class ReplicationControlManagerTest {
                         OptionalInt.of(3))).getMessage());
     }
 
-    private final static ListPartitionReassignmentsResponseData NONE_REASSIGNING =
+    private static final ListPartitionReassignmentsResponseData NONE_REASSIGNING =
         new ListPartitionReassignmentsResponseData().setErrorMessage(null);
 
     @ParameterizedTest
