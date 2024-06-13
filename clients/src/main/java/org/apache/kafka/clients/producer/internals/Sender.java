@@ -484,7 +484,7 @@ public class Sender implements Runnable {
             FindCoordinatorRequest.CoordinatorType coordinatorType = nextRequestHandler.coordinatorType();
             targetNode = coordinatorType != null ?
                     transactionManager.coordinator(coordinatorType) :
-                    client.leastLoadedNode(time.milliseconds());
+                    client.leastLoadedNode(time.milliseconds()).node();
             if (targetNode != null) {
                 if (!awaitNodeReady(targetNode, coordinatorType)) {
                     log.trace("Target node {} not ready within request timeout, will retry when node is ready.", targetNode);

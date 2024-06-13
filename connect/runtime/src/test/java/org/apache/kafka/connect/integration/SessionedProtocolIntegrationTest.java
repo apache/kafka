@@ -19,9 +19,7 @@ package org.apache.kafka.connect.integration;
 import org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
-import org.apache.kafka.connect.util.clusters.WorkerHandle;
 import org.apache.kafka.test.IntegrationTest;
-import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -98,10 +96,6 @@ public class SessionedProtocolIntegrationTest {
         invalidSignatureHeaders.put(SIGNATURE_HEADER, "S2Fma2Flc3F1ZQ==");
         invalidSignatureHeaders.put(SIGNATURE_ALGORITHM_HEADER, "HmacSHA256");
 
-        TestUtils.waitForCondition(
-                () -> connect.workers().stream().allMatch(WorkerHandle::isRunning),
-                30000L, "Timed out waiting for workers to start");
-
         // We haven't created the connector yet, but this should still return a 400 instead of a 404
         // if the endpoint is secured
         log.info(
@@ -120,9 +114,10 @@ public class SessionedProtocolIntegrationTest {
                 + "expecting 403 error response",
             connectorTasksEndpoint
         );
-        TestUtils.waitForCondition(
-                () -> connect.requestPost(connectorTasksEndpoint, "[]", invalidSignatureHeaders).getStatus() == FORBIDDEN.getStatusCode(),
-                30000L, "Timed out waiting for workers to start");
+        assertEquals(
+                FORBIDDEN.getStatusCode(),
+                connect.requestPost(connectorTasksEndpoint, "[]", invalidSignatureHeaders).getStatus()
+        );
 
         // Create the connector now
         // setup up props for the sink connector

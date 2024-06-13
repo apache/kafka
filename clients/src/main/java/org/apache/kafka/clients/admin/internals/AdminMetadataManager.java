@@ -92,6 +92,11 @@ public class AdminMetadataManager {
      */
     private ApiException fatalException = null;
 
+    /**
+     * The cluster with which the metadata was bootstrapped.
+     */
+    private Cluster bootstrapCluster;
+
     public class AdminMetadataUpdater implements MetadataUpdater {
         @Override
         public List<Node> fetchNodes() {
@@ -275,6 +280,7 @@ public class AdminMetadataManager {
     public void update(Cluster cluster, long now) {
         if (cluster.isBootstrapConfigured()) {
             log.debug("Setting bootstrap cluster metadata {}.", cluster);
+            bootstrapCluster = cluster;
         } else {
             log.debug("Updating cluster metadata to {}", cluster);
             this.lastMetadataUpdateMs = now;
@@ -286,5 +292,13 @@ public class AdminMetadataManager {
         if (!cluster.nodes().isEmpty()) {
             this.cluster = cluster;
         }
+    }
+
+    /**
+     * Rebootstrap metadata with the cluster previously used for bootstrapping.
+     */
+    public void rebootstrap(long now) {
+        log.info("Rebootstrapping with {}", this.bootstrapCluster);
+        update(bootstrapCluster, now);
     }
 }

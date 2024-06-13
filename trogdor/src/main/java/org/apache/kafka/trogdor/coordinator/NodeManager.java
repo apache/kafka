@@ -56,6 +56,7 @@ import org.apache.kafka.trogdor.rest.WorkerStarting;
 import org.apache.kafka.trogdor.rest.WorkerState;
 import org.apache.kafka.trogdor.rest.WorkerStopping;
 import org.apache.kafka.trogdor.task.TaskSpec;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
