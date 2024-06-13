@@ -153,7 +153,6 @@ public class AsyncKafkaConsumerTest {
     private final ConsumerMetadata metadata = mock(ConsumerMetadata.class);
     private final LinkedBlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
     private final CompletableEventReaper backgroundEventReaper = mock(CompletableEventReaper.class);
-    private MockedStatic<ConsumerUtils> consumerUtilsMockedStatic;
 
     @AfterEach
     public void resetAll() {
@@ -162,11 +161,6 @@ public class AsyncKafkaConsumerTest {
             consumer.close(Duration.ZERO);
         }
         consumer = null;
-
-        if (consumerUtilsMockedStatic != null) {
-            consumerUtilsMockedStatic.close();
-            consumerUtilsMockedStatic = null;
-        }
 
         Mockito.framework().clearInlineMocks();
         MockConsumerInterceptor.resetCounters();
@@ -674,53 +668,56 @@ public class AsyncKafkaConsumerTest {
         assertTrue(consumer.hasPendingOffsetFetchEvent());
     }
 
-    @ParameterizedTest
-    @MethodSource("offsetFetchExceptionSupplier")
-    public void testOffsetFetchPendingEventErrors(Throwable reportedFailure,
-                                                  boolean expectErrorFromPoll,
-                                                  boolean expectPending) {
-        // Interrupt the thread and then clear it so that the interrupt flag is in a known good state before starting.
-        try {
-            Thread.currentThread().interrupt();
-        } finally {
-            assertTrue(Thread.interrupted());
-        }
-
+    @Test
+    public void testOffsetFetchTimeoutExceptionKeepsPendingEvent() {
         consumer = newConsumer();
         long timeoutMs = 0;
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
         consumer.assign(Collections.singleton(new TopicPartition("topic1", 0)));
 
-        // Set up a pending offset fetch event.
         consumer.poll(Duration.ofMillis(timeoutMs));
         verify(applicationEventHandler).add(any(FetchCommittedOffsetsEvent.class));
-        CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> event1 = getLastEnqueuedEvent();
-        assertThrows(TimeoutException.class, () -> ConsumerUtils.getResult(event1.future(), time.timer(timeoutMs)));
+        CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> event = getLastEnqueuedEvent();
         assertTrue(consumer.hasPendingOffsetFetchEvent());
 
-        clearInvocations(applicationEventHandler);
-
-        assertNull(consumerUtilsMockedStatic);
-        consumerUtilsMockedStatic = mockStatic(ConsumerUtils.class);
-        consumerUtilsMockedStatic.when(() -> ConsumerUtils.getResult(any(Future.class), any(Timer.class))).thenThrow(reportedFailure);
-        consumerUtilsMockedStatic.when(() -> ConsumerUtils.getResult(any(Future.class))).thenThrow(reportedFailure);
-        consumerUtilsMockedStatic.when(() -> ConsumerUtils.maybeWrapAsKafkaException(any(Throwable.class))).thenCallRealMethod();
-
-        if (expectErrorFromPoll)
-            assertThrows(reportedFailure.getClass(), () -> consumer.poll(Duration.ofMillis(timeoutMs)));
-        else
-            assertDoesNotThrow(() -> consumer.poll(Duration.ofMillis(timeoutMs)));
-
-        verify(applicationEventHandler, never()).add(any(FetchCommittedOffsetsEvent.class));
-        assertEquals(expectPending, consumer.hasPendingOffsetFetchEvent());
+        event.future().completeExceptionally(new TimeoutException("Test error"));
+        assertDoesNotThrow(() -> consumer.poll(Duration.ofMillis(timeoutMs)));
+        assertTrue(consumer.hasPendingOffsetFetchEvent());
     }
 
-    private static Stream<Arguments> offsetFetchExceptionSupplier() {
-        return Stream.of(
-            Arguments.of(new TimeoutException("Test exception"), false, true),
-            Arguments.of(new InterruptException("Test exception"), true, true),
-            Arguments.of(new KafkaException(new NullPointerException(("Test exception"))), true, false)
-        );
+    @Test
+    public void testOffsetFetchInterruptKeepsPendingEvent() {
+        consumer = newConsumer();
+        long timeoutMs = 0;
+        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
+        consumer.assign(Collections.singleton(new TopicPartition("topic1", 0)));
+
+        consumer.poll(Duration.ofMillis(timeoutMs));
+        verify(applicationEventHandler).add(any(FetchCommittedOffsetsEvent.class));
+        CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> event = getLastEnqueuedEvent();
+        assertTrue(consumer.hasPendingOffsetFetchEvent());
+
+        event.future().completeExceptionally(new InterruptException("Test error"));
+        assertThrows(InterruptException.class, () -> consumer.poll(Duration.ofMillis(timeoutMs)));
+        assertTrue(Thread.interrupted());
+        assertTrue(consumer.hasPendingOffsetFetchEvent());
+    }
+
+    @Test
+    public void testOffsetFetchUnexpectedExceptionClearsPendingEvent() {
+        consumer = newConsumer();
+        long timeoutMs = 0;
+        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
+        consumer.assign(Collections.singleton(new TopicPartition("topic1", 0)));
+
+        consumer.poll(Duration.ofMillis(timeoutMs));
+        verify(applicationEventHandler).add(any(FetchCommittedOffsetsEvent.class));
+        CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> event = getLastEnqueuedEvent();
+        assertTrue(consumer.hasPendingOffsetFetchEvent());
+
+        event.future().completeExceptionally(new NullPointerException("Test error"));
+        assertThrows(KafkaException.class, () -> consumer.poll(Duration.ofMillis(timeoutMs)));
+        assertFalse(consumer.hasPendingOffsetFetchEvent());
     }
 
     @Test
