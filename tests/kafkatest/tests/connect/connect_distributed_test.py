@@ -21,7 +21,7 @@ from ducktape.cluster.remoteaccount import RemoteCommandError
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService, config_property, quorum, consumer_group
-from kafkatest.services.connect import ConnectDistributedService, VerifiableSource, VerifiableSink, ConnectRestError, MockSink, MockSource
+from kafkatest.services.connect import ConnectDistributedService, ConnectServiceBase, VerifiableSource, VerifiableSink, ConnectRestError, MockSink, MockSource
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.version import DEV_BRANCH, LATEST_2_3, LATEST_2_2, LATEST_2_1, LATEST_2_0, LATEST_1_1, LATEST_1_0, LATEST_0_11_0, LATEST_0_10_2, LATEST_0_10_1, LATEST_0_10_0, LATEST_0_9, LATEST_0_8_2, KafkaVersion
@@ -468,7 +468,7 @@ class ConnectDistributedTest(Test):
 
         self.setup_services(num_workers=3)
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
-        self.cc.start()
+        self.cc.start(mode=ConnectServiceBase.STARTUP_MODE_JOIN)
 
         worker = self.cc.nodes[0]
         initial_loggers = self.cc.get_all_loggers(worker)
@@ -633,9 +633,8 @@ class ConnectDistributedTest(Test):
     def _wait_for_loggers(self, level, request_time, namespace, workers=None):
         wait_until(
             lambda: self._loggers_are_set(level, request_time, namespace, workers),
-            # This should generally be super quick--just a write+read of the config topic, which workers are constantly polling,
-            # but the timeout is still set to a slightly higher value.
-            timeout_sec=30,
+            # This should be super quick--just a write+read of the config topic, which workers are constantly polling
+            timeout_sec=10,
             err_msg="Log level for namespace '" + namespace + "'  was not adjusted in a reasonable amount of time."
         )
 
