@@ -39,13 +39,171 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     serverProperties = Array(
       new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
       new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+      new ClusterConfigProperty(key = "group.consumer.migration.policy", value = "bidirectional")
     ),
     features = Array(
       new ClusterFeature(feature = Features.GROUP_VERSION, version = 1)
     )
   )
-  def testUpgradeFromEmptyClassicToConsumerGroup(): Unit = {
+  def testUpgradeFromEmptyClassicToConsumerGroupWithBidirectionalPolicy(): Unit =
+    testUpgradeFromEmptyClassicToConsumerGroup()
+
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
+      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+      new ClusterConfigProperty(key = "group.consumer.migration.policy", value = "upgrade")
+    ),
+    features = Array(
+      new ClusterFeature(feature = Features.GROUP_VERSION, version = 1)
+    )
+  )
+  def testUpgradeFromEmptyClassicToConsumerGroupWithUpgradePolicy(): Unit =
+    testUpgradeFromEmptyClassicToConsumerGroup()
+
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
+      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+      new ClusterConfigProperty(key = "group.consumer.migration.policy", value = "downgrade")
+    ),
+    features = Array(
+      new ClusterFeature(feature = Features.GROUP_VERSION, version = 1)
+    )
+  )
+  def testUpgradeFromEmptyClassicToConsumerGroupWithDowngradePolicy(): Unit =
+    testUpgradeFromEmptyClassicToConsumerGroup()
+
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
+      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+      new ClusterConfigProperty(key = "group.consumer.migration.policy", value = "disabled")
+    ),
+    features = Array(
+      new ClusterFeature(feature = Features.GROUP_VERSION, version = 1)
+    )
+  )
+  def testUpgradeFromEmptyClassicToConsumerGroupWithDisabledPolicy(): Unit =
+    testUpgradeFromEmptyClassicToConsumerGroup()
+
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
+      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+      new ClusterConfigProperty(key = "group.consumer.migration.policy", value = "bidirectional")
+    ),
+    features = Array(
+      new ClusterFeature(feature = Features.GROUP_VERSION, version = 1)
+    )
+  )
+  def testDowngradeFromEmptyConsumerToClassicGroupWithBidirectionalPolicy(): Unit =
+    testDowngradeFromEmptyConsumerToClassicGroup()
+
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
+      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+      new ClusterConfigProperty(key = "group.consumer.migration.policy", value = "upgrade")
+    ),
+    features = Array(
+      new ClusterFeature(feature = Features.GROUP_VERSION, version = 1)
+    )
+  )
+  def testDowngradeFromEmptyConsumerToClassicGroupWithUpgradePolicy(): Unit =
+    testDowngradeFromEmptyConsumerToClassicGroup()
+
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
+      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+      new ClusterConfigProperty(key = "group.consumer.migration.policy", value = "downgrade")
+    ),
+    features = Array(
+      new ClusterFeature(feature = Features.GROUP_VERSION, version = 1)
+    )
+  )
+  def testDowngradeFromEmptyConsumerToClassicGroupWithDowngradePolicy(): Unit =
+    testDowngradeFromEmptyConsumerToClassicGroup()
+
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
+      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+      new ClusterConfigProperty(key = "group.consumer.migration.policy", value = "disabled")
+    ),
+    features = Array(
+      new ClusterFeature(feature = Features.GROUP_VERSION, version = 1)
+    )
+  )
+  def testDowngradeFromEmptyConsumerToClassicGroupWithDisabledPolicy(): Unit =
+    testDowngradeFromEmptyConsumerToClassicGroup()
+
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
+      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+      new ClusterConfigProperty(key = "group.consumer.migration.policy", value = "bidirectional")
+    ),
+    features = Array(
+      new ClusterFeature(feature = Features.GROUP_VERSION, version = 1)
+    )
+  )
+  def testUpgradeFromSimpleGroupToConsumerGroupWithBidirectionalPolicy(): Unit =
+    testUpgradeFromSimpleGroupToConsumerGroup()
+
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
+      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+      new ClusterConfigProperty(key = "group.consumer.migration.policy", value = "upgrade")
+    ),
+    features = Array(
+      new ClusterFeature(feature = Features.GROUP_VERSION, version = 1)
+    )
+  )
+  def testUpgradeFromSimpleGroupToConsumerGroupWithUpgradePolicy(): Unit =
+    testUpgradeFromSimpleGroupToConsumerGroup()
+
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
+      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+      new ClusterConfigProperty(key = "group.consumer.migration.policy", value = "downgrade")
+    ),
+    features = Array(
+      new ClusterFeature(feature = Features.GROUP_VERSION, version = 1)
+    )
+  )
+  def testUpgradeFromSimpleGroupToConsumerGroupWithDowngradePolicy(): Unit =
+    testUpgradeFromSimpleGroupToConsumerGroup()
+
+  @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
+      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+      new ClusterConfigProperty(key = "group.consumer.migration.policy", value = "disabled")
+    ),
+    features = Array(
+      new ClusterFeature(feature = Features.GROUP_VERSION, version = 1)
+    )
+  )
+  def testUpgradeFromSimpleGroupToConsumerGroupWithDisabledPolicy(): Unit =
+    testUpgradeFromSimpleGroupToConsumerGroup()
+
+  private def testUpgradeFromEmptyClassicToConsumerGroup(): Unit = {
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
     createOffsetsTopic()
@@ -109,17 +267,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     )
   }
 
-  @ClusterTest(
-    serverProperties = Array(
-      new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
-      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
-    ),
-    features = Array(
-      new ClusterFeature(feature = Features.GROUP_VERSION, version = 1)
-    )
-  )
-  def testDowngradeFromEmptyConsumerToClassicGroup(): Unit = {
+  private def testDowngradeFromEmptyConsumerToClassicGroup(): Unit = {
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
     createOffsetsTopic()
@@ -176,17 +324,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     )
   }
 
-  @ClusterTest(
-    serverProperties = Array(
-      new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
-      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
-    ),
-    features = Array(
-      new ClusterFeature(feature = Features.GROUP_VERSION, version = 1)
-    )
-  )
-  def testUpgradeFromSimpleGroupToConsumerGroup(): Unit = {
+  private def testUpgradeFromSimpleGroupToConsumerGroup(): Unit = {
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
     createOffsetsTopic()
