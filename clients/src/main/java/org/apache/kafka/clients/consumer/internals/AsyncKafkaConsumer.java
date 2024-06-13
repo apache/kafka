@@ -1675,8 +1675,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         // case it times out, subsequent attempts will also use the event in order to wait for the results.
         if (!canReusePendingOffsetFetchEvent(initializingPartitions)) {
             // Give the event a reasonable amount of time to complete.
-            long timeoutMs = Math.max(defaultApiTimeoutMs, timer.remainingMs());
-            long deadlineMs = calculateDeadlineMs(time, timeoutMs);
+            final long timeoutMs = Math.max(defaultApiTimeoutMs, timer.remainingMs());
+            final long deadlineMs = calculateDeadlineMs(time, timeoutMs);
             pendingOffsetFetchEvent = new FetchCommittedOffsetsEvent(initializingPartitions, deadlineMs);
             applicationEventHandler.add(pendingOffsetFetchEvent);
         }
