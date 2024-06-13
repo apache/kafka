@@ -46,6 +46,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -1196,11 +1197,14 @@ public class MembershipManagerImpl implements MembershipManager {
      * request fails, this will proceed to invoke the user callbacks anyway,
      * returning a future that will complete or fail depending on the callback execution only.
      *
-     * @param revokedPartitions Partitions to revoke.
+     * @param partitionsToRevoke Partitions to revoke.
      * @return Future that will complete when the commit request and user callback completes.
      * Visible for testing
      */
-    CompletableFuture<Void> revokePartitions(Set<TopicPartition> revokedPartitions) {
+    CompletableFuture<Void> revokePartitions(Set<TopicPartition> partitionsToRevoke) {
+        // Ensure the set of partitions to revoke are still assigned
+        Set<TopicPartition> revokedPartitions = new HashSet<>(partitionsToRevoke);
+        revokedPartitions.retainAll(subscriptions.assignedPartitions());
         log.info("Revoking previously assigned partitions {}", revokedPartitions.stream().map(TopicPartition::toString).collect(Collectors.joining(", ")));
 
         logPausedPartitionsBeingRevoked(revokedPartitions);
