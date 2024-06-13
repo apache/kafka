@@ -188,10 +188,13 @@ public class TransactionManager {
     private boolean coordinatorSupportsBumpingEpoch;
 
     private volatile State currentState = State.UNINITIALIZED;
+    private volatile State prevState = null;
+
     private volatile RuntimeException lastError = null;
     private volatile ProducerIdAndEpoch producerIdAndEpoch;
     private volatile boolean transactionStarted = false;
     private volatile boolean epochBumpRequired = false;
+    private volatile boolean prevEpochBumpRequired = false;
 
     private enum State {
         UNINITIALIZED,
@@ -659,9 +662,20 @@ public class TransactionManager {
             transitionToFatalError(exception);
         } else if (isTransactional()) {
             if (canBumpEpoch() && !isCompleting()) {
+                prevEpochBumpRequired = epochBumpRequired;
                 epochBumpRequired = true;
             }
+            prevState = currentState;
             transitionToAbortableError(exception);
+        }
+    }
+
+    public synchronized void maybeClearLastError() {
+        if (isTransactional() && hasError()) {
+            lastError = null;
+            currentState = prevState;
+            epochBumpRequired = prevEpochBumpRequired;
+            log.debug("Transition from error state {} to {} and cleared the last error {}", currentState, prevState, lastError);
         }
     }
 
