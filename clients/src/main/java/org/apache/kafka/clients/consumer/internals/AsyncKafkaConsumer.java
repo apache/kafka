@@ -1233,7 +1233,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         clientTelemetryReporter.ifPresent(reporter -> reporter.initiateClose(timeout.toMillis()));
         closeTimer.update();
         // Prepare shutting down the network thread
-        prepareShutdown(closeTimer, firstException);
+        releaseAssignmentAndLeaveGroup(closeTimer, firstException);
         closeTimer.update();
         swallow(log, Level.ERROR, "Failed invoking asynchronous commit callback.",
             () -> awaitPendingAsyncCommitsAndExecuteCommitCallbacks(closeTimer, false), firstException);
@@ -1269,12 +1269,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * 2. revoke all partitions
      * 3. if partition revocation completes successfully, send leave group
      */
-    void prepareShutdown(final Timer timer, final AtomicReference<Throwable> firstException) {
+    void releaseAssignmentAndLeaveGroup(final Timer timer, final AtomicReference<Throwable> firstException) {
         if (!groupMetadata.get().isPresent())
             return;
 
         if (autoCommitEnabled)
-            autoCommitSync(timer);
+            commitSyncAllConsumed(timer);
 
         applicationEventHandler.add(new CommitOnCloseEvent());
         completeQuietly(() -> maybeRevokePartitions(),
@@ -1284,7 +1284,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     // Visible for testing
-    void autoCommitSync(final Timer timer) {
+    void commitSyncAllConsumed(final Timer timer) {
         Map<TopicPartition, OffsetAndMetadata> allConsumed = subscriptions.allConsumed();
         log.debug("Sending synchronous auto-commit of offsets {} on closing", allConsumed);
         try {

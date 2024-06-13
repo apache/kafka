@@ -1034,7 +1034,7 @@ public class AsyncKafkaConsumerTest {
         consumer.subscribe(singleton("topic"), mock(ConsumerRebalanceListener.class));
         subscriptions.assignFromSubscribed(singleton(new TopicPartition("topic", 0)));
         subscriptions.seek(new TopicPartition("topic", 0), 100);
-        consumer.autoCommitSync(time.timer(100));
+        consumer.commitSyncAllConsumed(time.timer(100));
         verify(applicationEventHandler).add(any(SyncCommitEvent.class));
     }
 
