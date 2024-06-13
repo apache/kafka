@@ -41,13 +41,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(value = 40)
 public class FeaturesImageTest {
-    public final static FeaturesImage IMAGE1;
-    public final static List<ApiMessageAndVersion> DELTA1_RECORDS;
-    final static FeaturesDelta DELTA1;
-    final static FeaturesImage IMAGE2;
-    final static List<ApiMessageAndVersion> DELTA2_RECORDS;
-    final static FeaturesDelta DELTA2;
-    final static FeaturesImage IMAGE3;
+    public static final FeaturesImage IMAGE1;
+    public static final List<ApiMessageAndVersion> DELTA1_RECORDS;
+    static final FeaturesDelta DELTA1;
+    static final FeaturesImage IMAGE2;
+    static final List<ApiMessageAndVersion> DELTA2_RECORDS;
+    static final FeaturesDelta DELTA2;
+    static final FeaturesImage IMAGE3;
 
     static {
         Map<String, Short> map1 = new HashMap<>();

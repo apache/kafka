@@ -45,7 +45,7 @@ public class ClusterImageControllersNodeTest {
                     setListeners(Collections.emptyMap()).
                         build()));
 
-    private final static ClusterImageControllersNode NODE = new ClusterImageControllersNode(TEST_IMAGE);
+    private static final ClusterImageControllersNode NODE = new ClusterImageControllersNode(TEST_IMAGE);
 
     @Test
     public void testChildNames() {

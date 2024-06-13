@@ -42,7 +42,7 @@ import static org.junit.Assert.assertFalse;
 
 public class InMemoryWindowStoreTest extends AbstractWindowBytesStoreTest {
 
-    private final static String STORE_NAME = "InMemoryWindowStore";
+    private static final String STORE_NAME = "InMemoryWindowStore";
 
     @Override
     <K, V> WindowStore<K, V> buildWindowStore(final long retentionPeriod,

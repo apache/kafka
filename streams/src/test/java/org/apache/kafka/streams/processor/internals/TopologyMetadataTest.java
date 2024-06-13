@@ -31,8 +31,8 @@ import static org.mockito.Mockito.mock;
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class TopologyMetadataTest {
-    final static String TOPOLOGY1 = "topology1";
-    final static String TOPOLOGY2 = "topology2";
+    static final String TOPOLOGY1 = "topology1";
+    static final String TOPOLOGY2 = "topology2";
 
     @Test
     public void testPauseResume() {

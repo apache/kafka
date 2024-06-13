@@ -189,7 +189,7 @@ public class StoreChangelogReader implements ChangelogReader {
         }
     }
 
-    private final static long DEFAULT_OFFSET_UPDATE_MS = Duration.ofMinutes(5L).toMillis();
+    private static final long DEFAULT_OFFSET_UPDATE_MS = Duration.ofMinutes(5L).toMillis();
 
     private ChangelogReaderState state;
 

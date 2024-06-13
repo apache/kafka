@@ -192,9 +192,9 @@ public class StreamThreadTest {
         });
     }
 
-    private final static String APPLICATION_ID = "stream-thread-test";
-    private final static UUID PROCESS_ID = UUID.fromString("87bf53a8-54f2-485f-a4b6-acdbec0a8b3d");
-    private final static String CLIENT_ID = APPLICATION_ID + "-" + PROCESS_ID;
+    private static final String APPLICATION_ID = "stream-thread-test";
+    private static final UUID PROCESS_ID = UUID.fromString("87bf53a8-54f2-485f-a4b6-acdbec0a8b3d");
+    private static final String CLIENT_ID = APPLICATION_ID + "-" + PROCESS_ID;
     public static final String STREAM_THREAD_TEST_COUNT_ONE_CHANGELOG = "stream-thread-test-count-one-changelog";
     public static final String STREAM_THREAD_TEST_TABLE_TWO_CHANGELOG = "stream-thread-test-table-two-changelog";
 
@@ -217,7 +217,7 @@ public class StreamThreadTest {
     @Mock
     private Consumer<byte[], byte[]> consumer;
 
-    private final static BiConsumer<Throwable, Boolean> HANDLER = (e, b) -> {
+    private static final BiConsumer<Throwable, Boolean> HANDLER = (e, b) -> {
         if (e instanceof RuntimeException) {
             throw (RuntimeException) e;
         } else if (e instanceof Error) {

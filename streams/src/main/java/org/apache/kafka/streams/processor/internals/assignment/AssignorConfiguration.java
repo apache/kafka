@@ -242,9 +242,9 @@ public final class AssignorConfiguration {
         return AssignmentConfigs.of(streamsConfig);
     }
 
-    public TaskAssignor taskAssignor() {
+    public LegacyTaskAssignor taskAssignor() {
         try {
-            return Utils.newInstance(internalTaskAssignorClass, TaskAssignor.class);
+            return Utils.newInstance(internalTaskAssignorClass, LegacyTaskAssignor.class);
         } catch (final ClassNotFoundException e) {
             throw new IllegalArgumentException(
                 "Expected an instantiable class name for " + INTERNAL_TASK_ASSIGNOR_CLASS,
