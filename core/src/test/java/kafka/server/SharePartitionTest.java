@@ -50,6 +50,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class SharePartitionTest {
 
@@ -235,6 +236,44 @@ public class SharePartitionTest {
 
         assertEquals(0, result.join().size());
         assertEquals(0, sharePartition.nextFetchOffset());
+    }
+
+    @Test
+    public void testNextFetchOffsetInitialState() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        assertEquals(0, sharePartition.nextFetchOffset());
+    }
+
+    @Test
+    public void testNextFetchOffsetWithCachedStateAcquired() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        sharePartition.acquire(
+            MEMBER_ID,
+            new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+        assertEquals(5, sharePartition.nextFetchOffset());
+    }
+
+    @Test
+    public void testNextFetchOffsetWithFindAndCachedStateEmpty() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        sharePartition.findNextFetchOffset(true);
+        assertTrue(sharePartition.findNextFetchOffset());
+        assertEquals(0, sharePartition.nextFetchOffset());
+        assertFalse(sharePartition.findNextFetchOffset());
+    }
+
+    @Test
+    public void testNextFetchOffsetWithFindAndCachedState() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().build();
+        sharePartition.findNextFetchOffset(true);
+        assertTrue(sharePartition.findNextFetchOffset());
+        sharePartition.acquire(
+            MEMBER_ID,
+            new FetchPartitionData(Errors.NONE, 20, 3, memoryRecords(5),
+                Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false));
+        assertEquals(5, sharePartition.nextFetchOffset());
+        assertFalse(sharePartition.findNextFetchOffset());
     }
 
     private MemoryRecords memoryRecords(int numOfRecords) {

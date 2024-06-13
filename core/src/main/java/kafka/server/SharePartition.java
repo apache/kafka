@@ -623,6 +623,16 @@ public class SharePartition {
         return new ConcurrentSkipListMap<>(cachedState);
     }
 
+    // Visible for testing.
+    boolean findNextFetchOffset() {
+        return findNextFetchOffset.get();
+    }
+
+    // Visible for testing. Should only be used for testing purposes.
+    void findNextFetchOffset(boolean findNextOffset) {
+        findNextFetchOffset.getAndSet(findNextOffset);
+    }
+
     private final class AcquisitionLockTimerTask extends TimerTask {
         private final long expirationMs;
         private final String memberId;
