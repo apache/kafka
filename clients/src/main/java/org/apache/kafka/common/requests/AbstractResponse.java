@@ -277,6 +277,16 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return RemoveRaftVoterResponse.parse(responseBuffer, version);
             case UPDATE_RAFT_VOTER:
                 return UpdateRaftVoterResponse.parse(responseBuffer, version);
+            case INITIALIZE_SHARE_GROUP_STATE:
+                return InitializeShareGroupStateResponse.parse(responseBuffer, version);
+            case READ_SHARE_GROUP_STATE:
+                return ReadShareGroupStateResponse.parse(responseBuffer, version);
+            case WRITE_SHARE_GROUP_STATE:
+                return WriteShareGroupStateResponse.parse(responseBuffer, version);
+            case DELETE_SHARE_GROUP_STATE:
+                return DeleteShareGroupStateResponse.parse(responseBuffer, version);
+            case READ_SHARE_GROUP_STATE_SUMMARY:
+                return ReadShareGroupStateSummaryResponse.parse(responseBuffer, version);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));
