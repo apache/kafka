@@ -33,7 +33,7 @@ import java.util.LinkedHashMap;
  */
 public class FinalContext extends ShareFetchContext {
 
-    private final static Logger log = LoggerFactory.getLogger(FinalContext.class);
+    private static final Logger log = LoggerFactory.getLogger(FinalContext.class);
 
     public FinalContext() {
     }

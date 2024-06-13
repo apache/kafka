@@ -46,7 +46,7 @@ import scala.Tuple2;
  */
 public class ShareSessionContext extends ShareFetchContext {
 
-    private final static Logger log = LoggerFactory.getLogger(ShareSessionContext.class);
+    private static final Logger log = LoggerFactory.getLogger(ShareSessionContext.class);
 
     private final ShareFetchMetadata reqMetadata;
     private final boolean isSubsequent;

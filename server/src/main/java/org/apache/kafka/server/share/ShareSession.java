@@ -70,50 +70,50 @@ public class ShareSession {
         return key;
     }
 
-    synchronized public int cachedSize() {
+    public synchronized int cachedSize() {
         return cachedSize;
     }
 
-    synchronized public void cachedSize(int size) {
+    public synchronized void cachedSize(int size) {
         cachedSize = size;
     }
 
-    synchronized public long lastUsedMs() {
+    public synchronized long lastUsedMs() {
         return lastUsedMs;
     }
 
-    synchronized public void lastUsedMs(long ts) {
+    public synchronized void lastUsedMs(long ts) {
         lastUsedMs = ts;
     }
 
-    synchronized public ImplicitLinkedHashCollection<CachedSharePartition> partitionMap() {
+    public synchronized ImplicitLinkedHashCollection<CachedSharePartition> partitionMap() {
         return partitionMap;
     }
 
     // Visible for testing
-    synchronized public int epoch() {
+    public synchronized int epoch() {
         return epoch;
     }
 
-    synchronized public int size() {
+    public synchronized int size() {
         return partitionMap.size();
     }
 
-    synchronized public Boolean isEmpty() {
+    public synchronized Boolean isEmpty() {
         return partitionMap.isEmpty();
     }
 
-    synchronized public LastUsedKey lastUsedKey() {
+    public synchronized LastUsedKey lastUsedKey() {
         return new LastUsedKey(key, lastUsedMs);
     }
 
     // Visible for testing
-    synchronized public long creationMs() {
+    public synchronized long creationMs() {
         return creationMs;
     }
 
     // Update the cached partition data based on the request.
-    synchronized public Map<ModifiedTopicIdPartitionType, List<TopicIdPartition>> update(Map<TopicIdPartition,
+    public synchronized Map<ModifiedTopicIdPartitionType, List<TopicIdPartition>> update(Map<TopicIdPartition,
             ShareFetchRequest.SharePartitionData> shareFetchData, List<TopicIdPartition> toForget) {
         List<TopicIdPartition> added = new ArrayList<>();
         List<TopicIdPartition> updated = new ArrayList<>();

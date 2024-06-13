@@ -46,7 +46,7 @@ public class ShareSessionCache {
     private TreeMap<LastUsedKey, ShareSession> lastUsed = new TreeMap<>();
 
     // Visible for testing
-    synchronized public TreeMap<LastUsedKey, ShareSession> lastUsed() {
+    public synchronized TreeMap<LastUsedKey, ShareSession> lastUsed() {
         return lastUsed;
     }
 
@@ -61,22 +61,22 @@ public class ShareSessionCache {
      * @param key The share session key.
      * @return The session, or None if no such session was found.
      */
-    synchronized public ShareSession get(ShareSessionKey key) {
+    public synchronized ShareSession get(ShareSessionKey key) {
         return sessions.getOrDefault(key, null);
     }
 
     /**
      * Get the number of entries currently in the share session cache.
      */
-    synchronized public int size() {
+    public synchronized int size() {
         return sessions.size();
     }
 
-    synchronized public long totalPartitions() {
+    public synchronized long totalPartitions() {
         return numPartitions;
     }
 
-    synchronized public ShareSession remove(ShareSessionKey key) {
+    public synchronized ShareSession remove(ShareSessionKey key) {
         ShareSession session = get(key);
         if (session != null)
             return remove(session);
@@ -89,7 +89,7 @@ public class ShareSessionCache {
      * @param session The session.
      * @return The removed session, or None if there was no such session.
      */
-    synchronized public ShareSession remove(ShareSession session) {
+    public synchronized ShareSession remove(ShareSession session) {
         synchronized (session) {
             lastUsed.remove(session.lastUsedKey());
         }
@@ -106,7 +106,7 @@ public class ShareSessionCache {
      * @param session  The session.
      * @param now      The current time in milliseconds.
      */
-    synchronized public void touch(ShareSession session, long now) {
+    public synchronized void touch(ShareSession session, long now) {
         synchronized (session) {
             // Update the lastUsed map.
             lastUsed.remove(session.lastUsedKey());
@@ -131,7 +131,7 @@ public class ShareSessionCache {
      * @param now        The current time in milliseconds.
      * @return           True if an entry was evicted; false otherwise.
      */
-    synchronized public boolean tryEvict(long now) {
+    public synchronized boolean tryEvict(long now) {
         // Try to evict an entry which is stale.
         Map.Entry<LastUsedKey, ShareSession> lastUsedEntry = lastUsed.firstEntry();
         if (lastUsedEntry == null) {
@@ -144,7 +144,7 @@ public class ShareSessionCache {
         return false;
     }
 
-    synchronized public ShareSessionKey maybeCreateSession(String groupId, Uuid memberId, long now, ImplicitLinkedHashCollection<CachedSharePartition> partitionMap) {
+    public synchronized ShareSessionKey maybeCreateSession(String groupId, Uuid memberId, long now, ImplicitLinkedHashCollection<CachedSharePartition> partitionMap) {
         if (sessions.size() < maxEntries || tryEvict(now)) {
             ShareSession session = new ShareSession(new ShareSessionKey(groupId, memberId), partitionMap,
                     now, now, ShareFetchMetadata.nextEpoch(ShareFetchMetadata.INITIAL_EPOCH));
