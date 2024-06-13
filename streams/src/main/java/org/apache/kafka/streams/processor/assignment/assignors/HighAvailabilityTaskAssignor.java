@@ -50,6 +50,7 @@ import org.apache.kafka.streams.processor.assignment.TaskAssignmentUtils;
 import org.apache.kafka.streams.processor.assignment.TaskAssignmentUtils.RackAwareOptimizationParams;
 import org.apache.kafka.streams.processor.assignment.TaskAssignor;
 import org.apache.kafka.streams.processor.assignment.TaskInfo;
+import org.apache.kafka.streams.processor.assignment.TaskTopicPartition;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.assignment.ConstrainedPrioritySet;
 import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor;
@@ -97,6 +98,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         final int neededStandbyTaskMovements = assignStandbyTaskMovements(
             tasksToCaughtUpClients,
             tasksToClientByLag,
+            applicationState,
             clientStates,
             assignments,
             remainingWarmupReplicas,
@@ -120,6 +122,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
                                                   final Map<ProcessId, KafkaStreamsAssignment> assignments) {
         final Set<TaskId> statefulTasks = applicationState.allTasks().values().stream()
             .filter(TaskInfo::isStateful)
+            .filter(taskInfo -> taskInfo.topicPartitions().stream().anyMatch(TaskTopicPartition::isChangelog))
             .map(TaskInfo::id)
             .collect(Collectors.toSet());
 
@@ -195,7 +198,9 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         final Map<ProcessId, KafkaStreamsAssignment> assignments
     ) {
         final Set<TaskId> statelessTasks = applicationState.allTasks().values().stream()
-            .filter(task -> !task.isStateful())
+            .filter(taskInfo -> {
+                return !taskInfo.isStateful() || taskInfo.topicPartitions().stream().noneMatch(TaskTopicPartition::isChangelog);
+            })
             .map(TaskInfo::id)
             .collect(Collectors.toSet());
 
@@ -342,6 +347,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
                                                                         final Map<ProcessId, KafkaStreamsState> clientStates) {
         final Set<TaskId> statefulTasks = applicationState.allTasks().values().stream()
             .filter(TaskInfo::isStateful)
+            .filter(taskInfo -> taskInfo.topicPartitions().stream().anyMatch(TaskTopicPartition::isChangelog))
             .map(TaskInfo::id)
             .collect(Collectors.toSet());
 
@@ -356,12 +362,11 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         return tasksToClientByLag;
     }
 
-    private static Map<TaskId, SortedSet<ProcessId>> tasksToCaughtUpClients(
-        final ApplicationState applicationState,
-        final Map<ProcessId, KafkaStreamsState> clientStates
-    ) {
+    private static Map<TaskId, SortedSet<ProcessId>> tasksToCaughtUpClients(final ApplicationState applicationState,
+                                                                            final Map<ProcessId, KafkaStreamsState> clientStates) {
         final Set<TaskId> statefulTasks = applicationState.allTasks().values().stream()
             .filter(TaskInfo::isStateful)
+            .filter(taskInfo -> taskInfo.topicPartitions().stream().anyMatch(TaskTopicPartition::isChangelog))
             .map(TaskInfo::id)
             .collect(Collectors.toSet());
 
@@ -425,7 +430,8 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
                                                                                      final Map<ProcessId, KafkaStreamsState> clientStates,
                                                                                      final Map<TaskId, SortedSet<ProcessId>> tasksToCaughtUpClients,
                                                                                      final Map<TaskId, SortedSet<ProcessId>> tasksToClientByLag) {
-        final SortedSet<ProcessId> taskClients = requireNonNull(tasksToClientByLag.get(task), "uninitialized set");
+        LOG.error("checking lag: {}", task);
+        final SortedSet<ProcessId> taskClients = requireNonNull(tasksToClientByLag.get(task), "uninitialized set for " + task);
         if (taskIsCaughtUpOnClient(task, client, tasksToCaughtUpClients)) {
             return false;
         }
@@ -466,7 +472,6 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
 
         for (final Map.Entry<ProcessId, KafkaStreamsState> clientStateEntry : clientStates.entrySet()) {
             final ProcessId client = clientStateEntry.getKey();
-            final KafkaStreamsState state = clientStateEntry.getValue();
             final Set<TaskId> activeTasks = assignments.get(client).tasks().values().stream()
                 .filter(task -> task.type() == ACTIVE)
                 .map(AssignedTask::id)
@@ -506,6 +511,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
 
     static int assignStandbyTaskMovements(final Map<TaskId, SortedSet<ProcessId>> tasksToCaughtUpClients,
                                           final Map<TaskId, SortedSet<ProcessId>> tasksToClientByLag,
+                                          final ApplicationState applicationState,
                                           final Map<ProcessId, KafkaStreamsState> clientStates,
                                           final Map<ProcessId, KafkaStreamsAssignment> assignments,
                                           final AtomicInteger remainingWarmupReplicas,
@@ -530,6 +536,10 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
             final ProcessId destination = clientStateEntry.getKey();
             final Set<TaskId> standbyTasks = assignments.get(destination).tasks().values().stream()
                 .filter(task -> task.type() == STANDBY)
+                .filter(task -> {
+                    final TaskInfo taskInfo = applicationState.allTasks().get(task.id());
+                    return taskInfo.topicPartitions().stream().anyMatch(TaskTopicPartition::isChangelog);
+                })
                 .map(AssignedTask::id)
                 .collect(Collectors.toSet());
             for (final TaskId task : standbyTasks) {
