@@ -645,7 +645,6 @@ public class AsyncKafkaConsumerTest {
 
         // The first attempt at poll() creates an event, enqueues it, but its Future does not complete within
         // the timeout, leaving a pending fetch.
-        consumer.assign(Collections.singleton(new TopicPartition("topic1", 0)));
         consumer.poll(Duration.ofMillis(timeoutMs));
         verify(applicationEventHandler, times(1)).add(any(FetchCommittedOffsetsEvent.class));
         CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> event1 = getLastEnqueuedEvent();
