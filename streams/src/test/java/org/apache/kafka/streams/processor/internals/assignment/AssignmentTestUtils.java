@@ -40,6 +40,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
@@ -91,15 +92,15 @@ import static org.mockito.Mockito.when;
 
 public final class AssignmentTestUtils {
 
-    public static final UUID UUID_1 = uuidForInt(1);
-    public static final UUID UUID_2 = uuidForInt(2);
-    public static final UUID UUID_3 = uuidForInt(3);
-    public static final UUID UUID_4 = uuidForInt(4);
-    public static final UUID UUID_5 = uuidForInt(5);
-    public static final UUID UUID_6 = uuidForInt(6);
-    public static final UUID UUID_7 = uuidForInt(7);
-    public static final UUID UUID_8 = uuidForInt(8);
-    public static final UUID UUID_9 = uuidForInt(9);
+    public static final ProcessId PID_1 = processIdForInt(1);
+    public static final ProcessId PID_2 = processIdForInt(2);
+    public static final ProcessId PID_3 = processIdForInt(3);
+    public static final ProcessId PID_4 = processIdForInt(4);
+    public static final ProcessId PID_5 = processIdForInt(5);
+    public static final ProcessId PID_6 = processIdForInt(6);
+    public static final ProcessId PID_7 = processIdForInt(7);
+    public static final ProcessId PID_8 = processIdForInt(8);
+    public static final ProcessId PID_9 = processIdForInt(9);
 
     public static final String RACK_0 = "rack0";
     public static final String RACK_1 = "rack1";
@@ -233,11 +234,11 @@ public final class AssignmentTestUtils {
 
     private AssignmentTestUtils() {}
 
-    static Map<UUID, ClientState> getClientStatesMap(final ClientState... states) {
-        final Map<UUID, ClientState> clientStates = new HashMap<>();
+    static Map<ProcessId, ClientState> getClientStatesMap(final ClientState... states) {
+        final Map<ProcessId, ClientState> clientStates = new HashMap<>();
         int nthState = 1;
         for (final ClientState state : states) {
-            clientStates.put(uuidForInt(nthState), state);
+            clientStates.put(processIdForInt(nthState), state);
             ++nthState;
         }
         return clientStates;
@@ -261,14 +262,14 @@ public final class AssignmentTestUtils {
         return adminClient;
     }
 
-    public static SubscriptionInfo getInfo(final UUID processId,
+    public static SubscriptionInfo getInfo(final ProcessId processId,
                                            final Set<TaskId> prevTasks,
                                            final Set<TaskId> standbyTasks) {
         return new SubscriptionInfo(
             LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks), (byte) 0, 0, EMPTY_CLIENT_TAGS);
     }
 
-    public static SubscriptionInfo getInfo(final UUID processId,
+    public static SubscriptionInfo getInfo(final ProcessId processId,
                                            final Set<TaskId> prevTasks,
                                            final Set<TaskId> standbyTasks,
                                            final String userEndPoint) {
@@ -276,7 +277,7 @@ public final class AssignmentTestUtils {
             LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, userEndPoint, getTaskOffsetSums(prevTasks, standbyTasks), (byte) 0, 0, EMPTY_CLIENT_TAGS);
     }
 
-    public static SubscriptionInfo getInfo(final UUID processId,
+    public static SubscriptionInfo getInfo(final ProcessId processId,
                                            final Set<TaskId> prevTasks,
                                            final Set<TaskId> standbyTasks,
                                            final byte uniqueField) {
@@ -284,7 +285,7 @@ public final class AssignmentTestUtils {
             LATEST_SUPPORTED_VERSION, LATEST_SUPPORTED_VERSION, processId, null, getTaskOffsetSums(prevTasks, standbyTasks), uniqueField, 0, EMPTY_CLIENT_TAGS);
     }
 
-    public static SubscriptionInfo getInfo(final UUID processId,
+    public static SubscriptionInfo getInfo(final ProcessId processId,
                                            final Set<TaskId> prevTasks,
                                            final Set<TaskId> standbyTasks,
                                            final byte uniqueField,
@@ -301,17 +302,17 @@ public final class AssignmentTestUtils {
     }
 
     /**
-     * Builds a UUID by repeating the given number n. For valid n, it is guaranteed that the returned UUIDs satisfy
+     * Builds a ProcessId with a UUID by repeating the given number n. For valid n, it is guaranteed that the returned UUIDs satisfy
      * the same relation relative to others as their parameter n does: iff n < m, then uuidForInt(n) < uuidForInt(m)
      */
-    public static UUID uuidForInt(final int n) {
-        return new UUID(0, n);
+    public static ProcessId processIdForInt(final int n) {
+        return new ProcessId(new UUID(0, n));
     }
 
     static void assertValidAssignment(final int numStandbyReplicas,
                                       final Set<TaskId> statefulTasks,
                                       final Set<TaskId> statelessTasks,
-                                      final Map<UUID, ClientState> assignedStates,
+                                      final Map<ProcessId, ClientState> assignedStates,
                                       final StringBuilder failureContext) {
         assertValidAssignment(
             numStandbyReplicas,
@@ -327,23 +328,23 @@ public final class AssignmentTestUtils {
                                       final int maxWarmupReplicas,
                                       final Set<TaskId> statefulTasks,
                                       final Set<TaskId> statelessTasks,
-                                      final Map<UUID, ClientState> assignedStates,
+                                      final Map<ProcessId, ClientState> assignedStates,
                                       final StringBuilder failureContext) {
-        final Map<TaskId, Set<UUID>> assignments = new TreeMap<>();
+        final Map<TaskId, Set<ProcessId>> assignments = new TreeMap<>();
         for (final TaskId taskId : statefulTasks) {
             assignments.put(taskId, new TreeSet<>());
         }
         for (final TaskId taskId : statelessTasks) {
             assignments.put(taskId, new TreeSet<>());
         }
-        for (final Map.Entry<UUID, ClientState> entry : assignedStates.entrySet()) {
+        for (final Map.Entry<ProcessId, ClientState> entry : assignedStates.entrySet()) {
             validateAndAddActiveAssignments(statefulTasks, statelessTasks, failureContext, assignments, entry);
             validateAndAddStandbyAssignments(statefulTasks, statelessTasks, failureContext, assignments, entry);
         }
 
         final AtomicInteger remainingWarmups = new AtomicInteger(maxWarmupReplicas);
 
-        final TreeMap<TaskId, Set<UUID>> misassigned =
+        final TreeMap<TaskId, Set<ProcessId>> misassigned =
             assignments
                 .entrySet()
                 .stream()
@@ -390,8 +391,8 @@ public final class AssignmentTestUtils {
     private static void validateAndAddStandbyAssignments(final Set<TaskId> statefulTasks,
                                                          final Set<TaskId> statelessTasks,
                                                          final StringBuilder failureContext,
-                                                         final Map<TaskId, Set<UUID>> assignments,
-                                                         final Map.Entry<UUID, ClientState> entry) {
+                                                         final Map<TaskId, Set<ProcessId>> assignments,
+                                                         final Map.Entry<ProcessId, ClientState> entry) {
         for (final TaskId standbyTask : entry.getValue().standbyTasks()) {
             if (statelessTasks.contains(standbyTask)) {
                 throw new AssertionError(
@@ -424,8 +425,8 @@ public final class AssignmentTestUtils {
     private static void validateAndAddActiveAssignments(final Set<TaskId> statefulTasks,
                                                         final Set<TaskId> statelessTasks,
                                                         final StringBuilder failureContext,
-                                                        final Map<TaskId, Set<UUID>> assignments,
-                                                        final Map.Entry<UUID, ClientState> entry) {
+                                                        final Map<TaskId, Set<ProcessId>> assignments,
+                                                        final Map.Entry<ProcessId, ClientState> entry) {
         for (final TaskId activeTask : entry.getValue().activeTasks()) {
             if (assignments.containsKey(activeTask)) {
                 assignments.get(activeTask).add(entry.getKey());
@@ -447,7 +448,7 @@ public final class AssignmentTestUtils {
     }
 
     static void assertBalancedStatefulAssignment(final Set<TaskId> allStatefulTasks,
-                                                 final Map<UUID, ClientState> clientStates,
+                                                 final Map<ProcessId, ClientState> clientStates,
                                                  final StringBuilder failureContext) {
         double maxStateful = Double.MIN_VALUE;
         double minStateful = Double.MAX_VALUE;
@@ -472,7 +473,7 @@ public final class AssignmentTestUtils {
         }
     }
 
-    static void assertBalancedActiveAssignment(final Map<UUID, ClientState> clientStates,
+    static void assertBalancedActiveAssignment(final Map<ProcessId, ClientState> clientStates,
                                                final StringBuilder failureContext) {
         double maxActive = Double.MIN_VALUE;
         double minActive = Double.MAX_VALUE;
@@ -494,24 +495,24 @@ public final class AssignmentTestUtils {
         }
     }
 
-    static void assertBalancedTasks(final Map<UUID, ClientState> clientStates) {
+    static void assertBalancedTasks(final Map<ProcessId, ClientState> clientStates) {
         assertBalancedTasks(clientStates, 1);
     }
 
-    static void assertBalancedTasks(final Map<UUID, ClientState> clientStates, final int skewThreshold) {
+    static void assertBalancedTasks(final Map<ProcessId, ClientState> clientStates, final int skewThreshold) {
         final TaskSkewReport taskSkewReport = analyzeTaskAssignmentBalance(clientStates, skewThreshold);
         if (taskSkewReport.totalSkewedTasks() > 0) {
             fail("Expected a balanced task assignment, but was: " + taskSkewReport);
         }
     }
 
-    static TaskSkewReport analyzeTaskAssignmentBalance(final Map<UUID, ClientState> clientStates, final int skewThreshold) {
-        final Function<Integer, Map<UUID, AtomicInteger>> initialClientCounts =
+    static TaskSkewReport analyzeTaskAssignmentBalance(final Map<ProcessId, ClientState> clientStates, final int skewThreshold) {
+        final Function<Integer, Map<ProcessId, AtomicInteger>> initialClientCounts =
             i -> clientStates.keySet().stream().collect(Collectors.toMap(c -> c, c -> new AtomicInteger(0)));
 
-        final Map<Integer, Map<UUID, AtomicInteger>> subtopologyToClientsWithPartition = new TreeMap<>();
-        for (final Map.Entry<UUID, ClientState> entry : clientStates.entrySet()) {
-            final UUID client = entry.getKey();
+        final Map<Integer, Map<ProcessId, AtomicInteger>> subtopologyToClientsWithPartition = new TreeMap<>();
+        for (final Map.Entry<ProcessId, ClientState> entry : clientStates.entrySet()) {
+            final ProcessId client = entry.getKey();
             final ClientState clientState = entry.getValue();
             for (final TaskId task : clientState.activeTasks()) {
                 final int subtopology = task.subtopology();
@@ -525,8 +526,8 @@ public final class AssignmentTestUtils {
         int maxTaskSkew = 0;
         final Set<Integer> skewedSubtopologies = new TreeSet<>();
 
-        for (final Map.Entry<Integer, Map<UUID, AtomicInteger>> entry : subtopologyToClientsWithPartition.entrySet()) {
-            final Map<UUID, AtomicInteger> clientsWithPartition = entry.getValue();
+        for (final Map.Entry<Integer, Map<ProcessId, AtomicInteger>> entry : subtopologyToClientsWithPartition.entrySet()) {
+            final Map<ProcessId, AtomicInteger> clientsWithPartition = entry.getValue();
             int max = Integer.MIN_VALUE;
             int min = Integer.MAX_VALUE;
             for (final AtomicInteger count : clientsWithPartition.values()) {
@@ -576,9 +577,9 @@ public final class AssignmentTestUtils {
     }
 
     static void appendClientStates(final StringBuilder stringBuilder,
-                                   final Map<UUID, ClientState> clientStates) {
+                                   final Map<ProcessId, ClientState> clientStates) {
         stringBuilder.append('{').append('\n');
-        for (final Map.Entry<UUID, ClientState> entry : clientStates.entrySet()) {
+        for (final Map.Entry<ProcessId, ClientState> entry : clientStates.entrySet()) {
             stringBuilder.append("  ").append(entry.getKey()).append(": ").append(entry.getValue()).append('\n');
         }
         stringBuilder.append('}').append('\n');
@@ -587,11 +588,11 @@ public final class AssignmentTestUtils {
     static final class TaskSkewReport {
         private final int maxTaskSkew;
         private final Set<Integer> skewedSubtopologies;
-        private final Map<Integer, Map<UUID, AtomicInteger>> subtopologyToClientsWithPartition;
+        private final Map<Integer, Map<ProcessId, AtomicInteger>> subtopologyToClientsWithPartition;
 
         private TaskSkewReport(final int maxTaskSkew,
                                final Set<Integer> skewedSubtopologies,
-                               final Map<Integer, Map<UUID, AtomicInteger>> subtopologyToClientsWithPartition) {
+                               final Map<Integer, Map<ProcessId, AtomicInteger>> subtopologyToClientsWithPartition) {
             this.maxTaskSkew = maxTaskSkew;
             this.skewedSubtopologies = skewedSubtopologies;
             this.subtopologyToClientsWithPartition = subtopologyToClientsWithPartition;
@@ -651,17 +652,17 @@ public final class AssignmentTestUtils {
         );
     }
 
-    static Map<UUID, Map<String, Optional<String>>> getRandomProcessRacks(final int clientSize, final int nodeSize) {
+    static Map<ProcessId, Map<String, Optional<String>>> getRandomProcessRacks(final int clientSize, final int nodeSize) {
         final List<String> racks = new ArrayList<>(nodeSize);
         for (int i = 0; i < nodeSize; i++) {
             racks.add(RACK_PREFIX + i);
         }
         final Random rand = getRandom();
         Collections.shuffle(racks, rand);
-        final Map<UUID, Map<String, Optional<String>>> processRacks = new HashMap<>();
+        final Map<ProcessId, Map<String, Optional<String>>> processRacks = new HashMap<>();
         for (int i = 1; i <= clientSize; i++) {
             final String rack = racks.get(i % nodeSize);
-            processRacks.put(uuidForInt(i), mkMap(mkEntry("1", Optional.of(rack))));
+            processRacks.put(processIdForInt(i), mkMap(mkEntry("1", Optional.of(rack))));
         }
         return processRacks;
     }
@@ -739,7 +740,7 @@ public final class AssignmentTestUtils {
         return spyTopicManager;
     }
 
-    static SortedMap<UUID, ClientState> getRandomClientState(final int clientSize, final int tpSize, final int partitionSize, final int maxCapacity, final Set<TaskId> statefulTasks) {
+    static SortedMap<ProcessId, ClientState> getRandomClientState(final int clientSize, final int tpSize, final int partitionSize, final int maxCapacity, final Set<TaskId> statefulTasks) {
         return getRandomClientState(clientSize, tpSize, partitionSize, maxCapacity, true, statefulTasks);
     }
 
@@ -765,8 +766,8 @@ public final class AssignmentTestUtils {
         return subSets;
     }
 
-    static SortedMap<UUID, ClientState> getRandomClientState(final int clientSize, final int tpSize, final int partitionSize, final int maxCapacity, final boolean initialAssignment, final Set<TaskId> statefulTasks) {
-        final SortedMap<UUID, ClientState> clientStates = new TreeMap<>();
+    static SortedMap<ProcessId, ClientState> getRandomClientState(final int clientSize, final int tpSize, final int partitionSize, final int maxCapacity, final boolean initialAssignment, final Set<TaskId> statefulTasks) {
+        final SortedMap<ProcessId, ClientState> clientStates = new TreeMap<>();
         final Map<TaskId, Long> taskLags = statefulTasks.stream().collect(Collectors.toMap(taskId -> taskId, taskId -> 0L));
         final Set<TaskId> taskIds = new HashSet<>();
         for (int i = 0; i < tpSize; i++) {
@@ -788,13 +789,13 @@ public final class AssignmentTestUtils {
 
         for (int i = 1; i <= clientSize; i++) {
             final int capacity = rand.nextInt(maxCapacity) + 1;
-            final UUID processId = uuidForInt(i);
+            final ProcessId processId = processIdForInt(i);
             final ClientState clientState = new ClientState(previousActives.get(i - 1), previousStandbys.get(i - 1), taskLags, EMPTY_CLIENT_TAGS, capacity, processId);
             clientStates.put(processId, clientState);
         }
 
         if (initialAssignment) {
-            Iterator<Entry<UUID, ClientState>> iterator = clientStates.entrySet().iterator();
+            Iterator<Entry<ProcessId, ClientState>> iterator = clientStates.entrySet().iterator();
             final List<TaskId> taskIdList = new ArrayList<>(taskIds);
             Collections.shuffle(taskIdList, rand);
             for (final TaskId taskId : taskIdList) {
@@ -950,14 +951,14 @@ public final class AssignmentTestUtils {
 
     static void verifyStandbySatisfyRackReplica(
         final Set<TaskId> taskIds,
-        final Map<UUID, String> racksForProcess,
-        final Map<UUID, ClientState> clientStateMap,
+        final Map<ProcessId, String> racksForProcess,
+        final Map<ProcessId, ClientState> clientStateMap,
         final Integer replica,
         final boolean relaxRackCheck,
-        final Map<UUID, Integer> standbyTaskCount
+        final Map<ProcessId, Integer> standbyTaskCount
     ) {
         if (standbyTaskCount != null) {
-            for (final Entry<UUID, ClientState> entry : clientStateMap.entrySet()) {
+            for (final Entry<ProcessId, ClientState> entry : clientStateMap.entrySet()) {
                 final int expected = standbyTaskCount.get(entry.getKey());
                 final int actual = entry.getValue().standbyTaskCount();
                 assertEquals("StandbyTaskCount for " + entry.getKey() + " doesn't match", expected, actual);
@@ -966,9 +967,9 @@ public final class AssignmentTestUtils {
         for (final TaskId taskId : taskIds) {
             int activeCount = 0;
             int standbyCount = 0;
-            final Map<String, UUID> racks = new HashMap<>();
-            for (final Map.Entry<UUID, ClientState> entry : clientStateMap.entrySet()) {
-                final UUID processId = entry.getKey();
+            final Map<String, ProcessId> racks = new HashMap<>();
+            for (final Map.Entry<ProcessId, ClientState> entry : clientStateMap.entrySet()) {
+                final ProcessId processId = entry.getKey();
                 final ClientState clientState = entry.getValue();
 
                 if (!relaxRackCheck && clientState.hasAssignedTask(taskId)) {
@@ -999,20 +1000,20 @@ public final class AssignmentTestUtils {
         }
     }
 
-    static Map<UUID, Integer> clientTaskCount(final Map<UUID, ClientState> clientStateMap,
+    static Map<ProcessId, Integer> clientTaskCount(final Map<ProcessId, ClientState> clientStateMap,
         final Function<ClientState, Integer> taskFunc) {
         return clientStateMap.entrySet().stream().collect(Collectors.toMap(Entry::getKey, v -> taskFunc.apply(v.getValue())));
     }
 
-    static Map<UUID, Map<String, Optional<String>>> getProcessRacksForAllProcess() {
+    static Map<ProcessId, Map<String, Optional<String>>> getProcessRacksForAllProcess() {
         return mkMap(
-            mkEntry(UUID_1, mkMap(mkEntry("1", Optional.of(RACK_0)))),
-            mkEntry(UUID_2, mkMap(mkEntry("1", Optional.of(RACK_1)))),
-            mkEntry(UUID_3, mkMap(mkEntry("1", Optional.of(RACK_2)))),
-            mkEntry(UUID_4, mkMap(mkEntry("1", Optional.of(RACK_3)))),
-            mkEntry(UUID_5, mkMap(mkEntry("1", Optional.of(RACK_4)))),
-            mkEntry(UUID_6, mkMap(mkEntry("1", Optional.of(RACK_0)))),
-            mkEntry(UUID_7, mkMap(mkEntry("1", Optional.of(RACK_1))))
+            mkEntry(PID_1, mkMap(mkEntry("1", Optional.of(RACK_0)))),
+            mkEntry(PID_2, mkMap(mkEntry("1", Optional.of(RACK_1)))),
+            mkEntry(PID_3, mkMap(mkEntry("1", Optional.of(RACK_2)))),
+            mkEntry(PID_4, mkMap(mkEntry("1", Optional.of(RACK_3)))),
+            mkEntry(PID_5, mkMap(mkEntry("1", Optional.of(RACK_4)))),
+            mkEntry(PID_6, mkMap(mkEntry("1", Optional.of(RACK_0)))),
+            mkEntry(PID_7, mkMap(mkEntry("1", Optional.of(RACK_1))))
         );
     }
 
@@ -1037,7 +1038,7 @@ public final class AssignmentTestUtils {
 
     static void verifyTaskPlacementWithRackAwareAssignor(final RackAwareTaskAssignor rackAwareTaskAssignor,
                                                          final Set<TaskId> allTaskIds,
-                                                         final Map<UUID, ClientState> clientStates,
+                                                         final Map<ProcessId, ClientState> clientStates,
                                                          final boolean hasStandby,
                                                          final boolean enableRackAwareTaskAssignor) {
         // Verifies active and standby are in different clients
@@ -1052,7 +1053,7 @@ public final class AssignmentTestUtils {
         }
     }
 
-    static SortedMap<UUID, ClientState> copyClientStateMap(final Map<UUID, ClientState> originalMap) {
+    static SortedMap<ProcessId, ClientState> copyClientStateMap(final Map<ProcessId, ClientState> originalMap) {
         return new TreeMap<>(originalMap
             .entrySet()
             .stream()

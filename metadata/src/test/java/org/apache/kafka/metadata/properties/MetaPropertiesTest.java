@@ -28,7 +28,7 @@ import java.util.Properties;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-final public class MetaPropertiesTest {
+public final class MetaPropertiesTest {
     @Test
     public void testV0SerializationWithNothing() {
         testV0Serialization(Optional.empty(),

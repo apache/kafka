@@ -23,7 +23,7 @@ import java.util.Objects;
  * An immutable class which represents version ranges.
  */
 public class VersionRange {
-    public final static VersionRange ALL = of((short) 0, Short.MAX_VALUE);
+    public static final VersionRange ALL = of((short) 0, Short.MAX_VALUE);
 
     private final short min;
     private final short max;

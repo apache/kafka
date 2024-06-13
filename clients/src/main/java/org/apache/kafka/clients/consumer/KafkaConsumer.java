@@ -523,7 +523,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  */
 public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
-    private final static ConsumerDelegateCreator CREATOR = new ConsumerDelegateCreator();
+    private static final ConsumerDelegateCreator CREATOR = new ConsumerDelegateCreator();
 
     private final ConsumerDelegate<K, V> delegate;
 

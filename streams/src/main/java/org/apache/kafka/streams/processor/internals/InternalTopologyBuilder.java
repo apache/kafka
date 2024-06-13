@@ -187,7 +187,7 @@ public class InternalTopologyBuilder {
         }
     }
 
-    private static abstract class NodeFactory<KIn, VIn, KOut, VOut> {
+    private abstract static class NodeFactory<KIn, VIn, KOut, VOut> {
         final String name;
         final String[] predecessors;
 
@@ -363,12 +363,12 @@ public class InternalTopologyBuilder {
         return this;
     }
 
-    public synchronized final void setStreamsConfig(final StreamsConfig applicationConfig) {
+    public final synchronized void setStreamsConfig(final StreamsConfig applicationConfig) {
         Objects.requireNonNull(applicationConfig, "config can't be null");
         topologyConfigs = new TopologyConfig(applicationConfig);
     }
 
-    public synchronized  final void setNamedTopology(final NamedTopology namedTopology) {
+    public final synchronized void setNamedTopology(final NamedTopology namedTopology) {
         this.namedTopology = namedTopology;
     }
 
@@ -384,7 +384,7 @@ public class InternalTopologyBuilder {
         return namedTopology;
     }
 
-    public synchronized final InternalTopologyBuilder rewriteTopology(final StreamsConfig config) {
+    public final synchronized InternalTopologyBuilder rewriteTopology(final StreamsConfig config) {
         Objects.requireNonNull(config, "config can't be null");
 
         setApplicationId(config.getString(StreamsConfig.APPLICATION_ID_CONFIG));
@@ -1605,7 +1605,7 @@ public class InternalTopologyBuilder {
         }
     }
 
-    private final static NodeComparator NODE_COMPARATOR = new NodeComparator();
+    private static final NodeComparator NODE_COMPARATOR = new NodeComparator();
 
     private static void updateSize(final AbstractNode node,
                                    final int delta) {
@@ -1642,7 +1642,7 @@ public class InternalTopologyBuilder {
                 new HashSet<>(nodesByName.values())));
     }
 
-    public final static class GlobalStore implements TopologyDescription.GlobalStore {
+    public static final class GlobalStore implements TopologyDescription.GlobalStore {
         private final Source source;
         private final Processor processor;
         private final int id;
@@ -1739,7 +1739,7 @@ public class InternalTopologyBuilder {
         }
     }
 
-    public final static class Source extends AbstractNode implements TopologyDescription.Source {
+    public static final class Source extends AbstractNode implements TopologyDescription.Source {
         private final Set<String> topics;
         private final Pattern topicPattern;
 
@@ -1805,7 +1805,7 @@ public class InternalTopologyBuilder {
         }
     }
 
-    public final static class Processor extends AbstractNode implements TopologyDescription.Processor {
+    public static final class Processor extends AbstractNode implements TopologyDescription.Processor {
         private final Set<String> stores;
 
         public Processor(final String name,
@@ -1848,7 +1848,7 @@ public class InternalTopologyBuilder {
         }
     }
 
-    public final static class Sink<K, V> extends AbstractNode implements TopologyDescription.Sink {
+    public static final class Sink<K, V> extends AbstractNode implements TopologyDescription.Sink {
         private final TopicNameExtractor<K, V> topicNameExtractor;
         public Sink(final String name,
                     final TopicNameExtractor<K, V> topicNameExtractor) {
@@ -1917,7 +1917,7 @@ public class InternalTopologyBuilder {
         }
     }
 
-    public final static class SubtopologyDescription implements TopologyDescription.Subtopology {
+    public static final class SubtopologyDescription implements TopologyDescription.Subtopology {
         private final int id;
         private final Set<TopologyDescription.Node> nodes;
 
@@ -2061,7 +2061,7 @@ public class InternalTopologyBuilder {
         }
     }
 
-    private final static GlobalStoreComparator GLOBALSTORE_COMPARATOR = new GlobalStoreComparator();
+    private static final GlobalStoreComparator GLOBALSTORE_COMPARATOR = new GlobalStoreComparator();
 
     private static class SubtopologyComparator implements Comparator<TopologyDescription.Subtopology>, Serializable {
         @Override
@@ -2074,9 +2074,9 @@ public class InternalTopologyBuilder {
         }
     }
 
-    private final static SubtopologyComparator SUBTOPOLOGY_COMPARATOR = new SubtopologyComparator();
+    private static final SubtopologyComparator SUBTOPOLOGY_COMPARATOR = new SubtopologyComparator();
 
-    public final static class TopologyDescription implements org.apache.kafka.streams.TopologyDescription {
+    public static final class TopologyDescription implements org.apache.kafka.streams.TopologyDescription {
         private final TreeSet<TopologyDescription.Subtopology> subtopologies = new TreeSet<>(SUBTOPOLOGY_COMPARATOR);
         private final TreeSet<TopologyDescription.GlobalStore> globalStores = new TreeSet<>(GLOBALSTORE_COMPARATOR);
         private final String namedTopology;

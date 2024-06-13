@@ -50,9 +50,9 @@ import static org.apache.kafka.metadata.Replicas.NONE;
  * works because partition IDs cannot be negative.
  */
 public class BrokersToIsrs {
-    private final static int LEADER_FLAG = 0x8000_0000;
+    private static final int LEADER_FLAG = 0x8000_0000;
 
-    private final static int REPLICA_MASK = 0x7fff_ffff;
+    private static final int REPLICA_MASK = 0x7fff_ffff;
 
     static class PartitionsOnReplicaIterator implements Iterator<TopicIdPartition> {
         private final Iterator<Entry<Uuid, int[]>> iterator;

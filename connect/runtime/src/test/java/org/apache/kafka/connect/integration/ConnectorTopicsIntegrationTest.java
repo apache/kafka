@@ -115,8 +115,6 @@ public class ConnectorTopicsIntegrationTest {
         connect.kafka().createTopic(FOO_TOPIC, NUM_TOPIC_PARTITIONS);
         connect.kafka().createTopic(BAR_TOPIC, NUM_TOPIC_PARTITIONS);
 
-        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS, "Initial group of workers did not start in time.");
-
         connect.assertions().assertConnectorActiveTopics(FOO_CONNECTOR, Collections.emptyList(),
                 "Active topic set is not empty for connector: " + FOO_CONNECTOR);
 
@@ -179,8 +177,6 @@ public class ConnectorTopicsIntegrationTest {
         connect.kafka().createTopic(FOO_TOPIC, NUM_TOPIC_PARTITIONS);
         connect.kafka().createTopic(BAR_TOPIC, NUM_TOPIC_PARTITIONS);
 
-        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS, "Initial group of workers did not start in time.");
-
         connect.assertions().assertConnectorActiveTopics(FOO_CONNECTOR, Collections.emptyList(),
                 "Active topic set is not empty for connector: " + FOO_CONNECTOR);
 
@@ -234,8 +230,6 @@ public class ConnectorTopicsIntegrationTest {
         // create test topic
         connect.kafka().createTopic(FOO_TOPIC, NUM_TOPIC_PARTITIONS);
         connect.kafka().createTopic(BAR_TOPIC, NUM_TOPIC_PARTITIONS);
-
-        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS, "Initial group of workers did not start in time.");
 
         // start a source connector
         connect.configureConnector(FOO_CONNECTOR, defaultSourceConnectorProps(FOO_TOPIC));

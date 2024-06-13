@@ -30,7 +30,7 @@ import java.util.Objects;
  * The header for a request in the Kafka protocol
  */
 public class RequestHeader implements AbstractRequestResponse {
-    private final static int SIZE_NOT_INITIALIZED = -1;
+    private static final int SIZE_NOT_INITIALIZED = -1;
     private final RequestHeaderData data;
     private final short headerVersion;
     private int size = SIZE_NOT_INITIALIZED;

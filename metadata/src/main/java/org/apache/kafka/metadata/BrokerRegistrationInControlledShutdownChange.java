@@ -34,7 +34,7 @@ public enum BrokerRegistrationInControlledShutdownChange {
 
     private final Optional<Boolean> asBoolean;
 
-    private final static Map<Byte, BrokerRegistrationInControlledShutdownChange> VALUE_TO_ENUM =
+    private static final Map<Byte, BrokerRegistrationInControlledShutdownChange> VALUE_TO_ENUM =
         Arrays.stream(BrokerRegistrationInControlledShutdownChange.values()).
             collect(Collectors.toMap(v -> v.value(), Function.identity()));
 
