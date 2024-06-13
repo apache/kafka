@@ -20,7 +20,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -30,6 +29,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 public class MockAssignorTest {
@@ -79,10 +79,9 @@ public class MockAssignorTest {
         final MemberAssignment testMember = result.members().get("test_member");
         assertNotNull(testMember);
         assertEquals(mkMap(
-           mkEntry( "test-subtopology", mkSet(0, 1, 2, 3))
+            mkEntry("test-subtopology", mkSet(0, 1, 2, 3))
         ), testMember.activeTasks());
     }
-
 
 
     @Test
@@ -120,19 +119,22 @@ public class MockAssignorTest {
             x -> 4
         );
 
+        final Map<String, Set<Integer>> expected1 = mkMap(
+            mkEntry("test-subtopology1", mkSet(1, 3)),
+            mkEntry("test-subtopology2", mkSet(1, 3))
+        );
+        final Map<String, Set<Integer>> expected2 = mkMap(
+            mkEntry("test-subtopology1", mkSet(0, 2)),
+            mkEntry("test-subtopology2", mkSet(0, 2))
+        );
+
         assertEquals(2, result.members().size());
         final MemberAssignment testMember1 = result.members().get("test_member1");
         final MemberAssignment testMember2 = result.members().get("test_member2");
         assertNotNull(testMember1);
         assertNotNull(testMember2);
-        assertEquals(mkMap(
-            mkEntry( "test-subtopology1", mkSet(1, 3)),
-            mkEntry( "test-subtopology2", mkSet(1, 3))
-        ), testMember1.activeTasks());
-        assertEquals(mkMap(
-            mkEntry( "test-subtopology1", mkSet(0, 2)),
-            mkEntry( "test-subtopology2", mkSet(0, 2))
-        ), testMember2.activeTasks());
+        assertTrue(expected1.equals(testMember1.activeTasks()) || expected2.equals(testMember1.activeTasks()));
+        assertTrue(expected1.equals(testMember2.activeTasks()) || expected2.equals(testMember2.activeTasks()));
     }
 
     @Test
@@ -142,8 +144,8 @@ public class MockAssignorTest {
             Optional.empty(),
             Optional.empty(),
             mkMap(
-                mkEntry( "test-subtopology1", mkSet(0, 2, 3)),
-                mkEntry( "test-subtopology2", mkSet(0))
+                mkEntry("test-subtopology1", mkSet(0, 2, 3)),
+                mkEntry("test-subtopology2", mkSet(0))
             ),
             Collections.emptyMap(),
             Collections.emptyMap(),
@@ -157,8 +159,8 @@ public class MockAssignorTest {
             Optional.empty(),
             Optional.empty(),
             mkMap(
-                mkEntry( "test-subtopology1", mkSet(1)),
-                mkEntry( "test-subtopology2", mkSet(3))
+                mkEntry("test-subtopology1", mkSet(1)),
+                mkEntry("test-subtopology2", mkSet(3))
             ),
             Collections.emptyMap(),
             Collections.emptyMap(),
@@ -181,12 +183,12 @@ public class MockAssignorTest {
         assertNotNull(testMember1);
         assertNotNull(testMember2);
         assertEquals(mkMap(
-            mkEntry( "test-subtopology1", mkSet(0, 2, 3)),
-            mkEntry( "test-subtopology2", mkSet(0))
+            mkEntry("test-subtopology1", mkSet(0, 2, 3)),
+            mkEntry("test-subtopology2", mkSet(0))
         ), testMember1.activeTasks());
         assertEquals(mkMap(
-            mkEntry( "test-subtopology1", mkSet(1)),
-            mkEntry( "test-subtopology2", mkSet(1, 2, 3))
+            mkEntry("test-subtopology1", mkSet(1)),
+            mkEntry("test-subtopology2", mkSet(1, 2, 3))
         ), testMember2.activeTasks());
     }
 

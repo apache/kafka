@@ -29,6 +29,7 @@ import java.util.stream.Collectors;
  * An immutable assignment for a member.
  */
 public class Assignment {
+
     public static final Assignment EMPTY = new Assignment(
         Collections.emptyMap(),
         Collections.emptyMap(),
@@ -70,8 +71,12 @@ public class Assignment {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
         Assignment that = (Assignment) o;
         return Objects.equals(activeTasks, that.activeTasks)
             && Objects.equals(standbyTasks, that.standbyTasks)
@@ -87,7 +92,7 @@ public class Assignment {
     public String toString() {
         return "Assignment(active tasks=" + activeTasks +
             ", standby tasks=" + standbyTasks +
-            ", warm-up tasks=" + warmupTasks +')';
+            ", warm-up tasks=" + warmupTasks + ')';
     }
 
     /**
@@ -103,8 +108,8 @@ public class Assignment {
         return new Assignment(
             record.activeTasks().stream()
                 .collect(Collectors.toMap(
-                    StreamsGroupTargetAssignmentMemberValue.TaskIds::subtopology,
-                    taskId -> new HashSet<>(taskId.partitions())
+                        StreamsGroupTargetAssignmentMemberValue.TaskIds::subtopology,
+                        taskId -> new HashSet<>(taskId.partitions())
                     )
                 ),
             record.standbyTasks().stream()

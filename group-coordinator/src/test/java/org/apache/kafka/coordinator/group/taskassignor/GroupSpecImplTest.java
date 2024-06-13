@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group.taskassignor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -37,6 +38,7 @@ public class GroupSpecImplTest {
     @BeforeEach
     void setUp() {
         members = new HashMap<>();
+        subtopologies = new ArrayList<>();
 
         members.put("test-member", new AssignmentMemberSpec(
             Optional.of("test-instance"),
