@@ -1309,7 +1309,6 @@ public class ConnectWorkerIntegrationTest {
         // since failure to reconfigure the tasks (which may occur if the bug this test was written
         // to help catch resurfaces) will not cause existing tasks to fail or stop running
         StartAndStopLatch restarts = connectorHandle.expectedStarts(1);
-        connectorHandle.expectedCommits(NUM_TASKS * 2);
 
         final String secondConnectorTopic = "connector-topic-2";
         connect.kafka().createTopic(secondConnectorTopic, 1);
@@ -1323,6 +1322,9 @@ public class ConnectWorkerIntegrationTest {
                 "Connector tasks were not restarted in time",
                 restarts.await(10, TimeUnit.SECONDS)
         );
+
+        // Wait for at least one task to commit offsets after being restarted
+        connectorHandle.expectedCommits(1);
         connectorHandle.awaitCommits(offsetCommitIntervalMs * 3);
 
         final long endOffset = connect.kafka().endOffset(new TopicPartition(secondConnectorTopic, 0));
