@@ -55,7 +55,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class KTableKTableInnerJoinTest {
-    private final static KeyValueTimestamp<?, ?>[] EMPTY = new KeyValueTimestamp[0];
+    private static final KeyValueTimestamp<?, ?>[] EMPTY = new KeyValueTimestamp[0];
 
     private final String topic1 = "topic1";
     private final String topic2 = "topic2";

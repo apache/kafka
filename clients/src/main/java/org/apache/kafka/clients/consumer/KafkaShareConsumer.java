@@ -332,7 +332,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
 @InterfaceStability.Evolving
 public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
 
-    private final static ShareConsumerDelegateCreator CREATOR = new ShareConsumerDelegateCreator();
+    private static final ShareConsumerDelegateCreator CREATOR = new ShareConsumerDelegateCreator();
 
     private final ShareConsumerDelegate<K, V> delegate;
 

@@ -36,7 +36,7 @@ import java.util.Optional;
 public final class ManCommandHandler implements Commands.Handler {
     private final String cmd;
 
-    public final static Commands.Type TYPE = new ManCommandType();
+    public static final Commands.Type TYPE = new ManCommandType();
 
     public static class ManCommandType implements Commands.Type {
         private ManCommandType() {

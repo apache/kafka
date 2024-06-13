@@ -44,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 @Timeout(120)
 @Tag("integration")
 public class MetadataShellIntegrationTest {
-    private final static Logger LOG = LoggerFactory.getLogger(MetadataShellIntegrationTest.class);
+    private static final Logger LOG = LoggerFactory.getLogger(MetadataShellIntegrationTest.class);
 
     static class IntegrationEnv implements AutoCloseable {
         File tempDir;

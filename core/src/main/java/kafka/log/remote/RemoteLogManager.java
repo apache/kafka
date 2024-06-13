@@ -633,7 +633,7 @@ public class RemoteLogManager implements Closeable {
         return Optional.empty();
     }
 
-    private static abstract class CancellableRunnable implements Runnable {
+    private abstract static class CancellableRunnable implements Runnable {
         private volatile boolean cancelled = false;
 
         public void cancel() {

@@ -32,7 +32,7 @@ import org.slf4j.LoggerFactory;
  * <code>Shell</code> can be used to run unix commands like <code>du</code> or
  * <code>df</code>.
  */
-abstract public class Shell {
+public abstract class Shell {
 
     private static final Logger LOG = LoggerFactory.getLogger(Shell.class);
 

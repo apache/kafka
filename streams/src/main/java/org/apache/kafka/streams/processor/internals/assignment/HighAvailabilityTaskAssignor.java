@@ -43,7 +43,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.RackAwareT
 import static org.apache.kafka.streams.processor.internals.assignment.TaskMovement.assignActiveTaskMovements;
 import static org.apache.kafka.streams.processor.internals.assignment.TaskMovement.assignStandbyTaskMovements;
 
-public class HighAvailabilityTaskAssignor implements TaskAssignor {
+public class HighAvailabilityTaskAssignor implements LegacyTaskAssignor {
     private static final Logger log = LoggerFactory.getLogger(HighAvailabilityTaskAssignor.class);
     public static final int DEFAULT_HIGH_AVAILABILITY_TRAFFIC_COST = 10;
     public static final int DEFAULT_HIGH_AVAILABILITY_NON_OVERLAP_COST = 1;

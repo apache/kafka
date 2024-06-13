@@ -85,7 +85,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
         }
     }
 
-    abstract protected MemberData memberData(Subscription subscription);
+    protected abstract MemberData memberData(Subscription subscription);
 
     @Override
     public Map<String, List<TopicPartition>> assignPartitions(Map<String, List<PartitionInfo>> partitionsPerTopic,

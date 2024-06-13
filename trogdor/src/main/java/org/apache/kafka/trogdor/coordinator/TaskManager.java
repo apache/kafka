@@ -151,23 +151,23 @@ public final class TaskManager {
         /**
          * The task id.
          */
-        final private String id;
+        private final String id;
 
         /**
          * The original task specification as submitted when the task was created.
          */
-        final private TaskSpec originalSpec;
+        private final TaskSpec originalSpec;
 
         /**
          * The effective task specification.
          * The start time will be adjusted to reflect the time when the task was submitted.
          */
-        final private TaskSpec spec;
+        private final TaskSpec spec;
 
         /**
          * The task controller.
          */
-        final private TaskController controller;
+        private final TaskController controller;
 
         /**
          * The task state.

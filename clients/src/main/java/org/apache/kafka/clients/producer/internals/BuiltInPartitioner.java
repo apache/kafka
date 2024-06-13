@@ -332,7 +332,7 @@ public class BuiltInPartitioner {
     /**
      * The partition load stats for each topic that are used for adaptive partition distribution.
      */
-    private final static class PartitionLoadStats {
+    private static final class PartitionLoadStats {
         public final int[] cumulativeFrequencyTable;
         public final int[] partitionIds;
         public final int length;
