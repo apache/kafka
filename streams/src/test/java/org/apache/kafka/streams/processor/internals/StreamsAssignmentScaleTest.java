@@ -36,7 +36,7 @@ import org.apache.kafka.streams.processor.internals.assignment.FallbackPriorTask
 import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
-import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.LegacyTaskAssignor;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockClientSupplier;
@@ -75,8 +75,8 @@ import static org.mockito.Mockito.when;
 @Category({IntegrationTest.class})
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class StreamsAssignmentScaleTest {
-    final static long MAX_ASSIGNMENT_DURATION = 120 * 1000L; // we should stay below `max.poll.interval.ms`
-    final static String APPLICATION_ID = "streams-assignment-scale-test";
+    static final long MAX_ASSIGNMENT_DURATION = 120 * 1000L; // we should stay below `max.poll.interval.ms`
+    static final String APPLICATION_ID = "streams-assignment-scale-test";
 
     private final Logger log = LoggerFactory.getLogger(StreamsAssignmentScaleTest.class);
 
@@ -150,7 +150,7 @@ public class StreamsAssignmentScaleTest {
                                          final int numClients,
                                          final int numThreadsPerClient,
                                          final int numStandbys,
-                                         final Class<? extends TaskAssignor> taskAssignor) {
+                                         final Class<? extends LegacyTaskAssignor> taskAssignor) {
         final List<String> topic = singletonList("topic");
 
         final Map<TopicPartition, Long> changelogEndOffsets = new HashMap<>();

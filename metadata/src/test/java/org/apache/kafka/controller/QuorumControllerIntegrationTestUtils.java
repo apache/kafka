@@ -50,7 +50,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  * Utility functions for use in QuorumController integration tests.
  */
 public class QuorumControllerIntegrationTestUtils {
-    private final static Logger log = LoggerFactory.getLogger(QuorumControllerIntegrationTestUtils.class);
+    private static final Logger log = LoggerFactory.getLogger(QuorumControllerIntegrationTestUtils.class);
 
     BrokerRegistrationRequestData.FeatureCollection brokerFeatures() {
         return brokerFeatures(MetadataVersion.MINIMUM_KRAFT_VERSION, MetadataVersion.latestTesting());

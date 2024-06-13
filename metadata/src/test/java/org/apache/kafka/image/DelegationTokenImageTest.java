@@ -43,13 +43,13 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 @Timeout(value = 40)
 public class DelegationTokenImageTest {
-    public final static DelegationTokenImage IMAGE1;
+    public static final DelegationTokenImage IMAGE1;
 
-    public final static List<ApiMessageAndVersion> DELTA1_RECORDS;
+    public static final List<ApiMessageAndVersion> DELTA1_RECORDS;
 
-    final static DelegationTokenDelta DELTA1;
+    static final DelegationTokenDelta DELTA1;
 
-    final static DelegationTokenImage IMAGE2;
+    static final DelegationTokenImage IMAGE2;
 
     static DelegationTokenData randomDelegationTokenData(String tokenId, long expireTimestamp) {
         TokenInformation ti = new TokenInformation(

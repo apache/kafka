@@ -84,45 +84,45 @@ import static org.mockito.Mockito.when;
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class StreamsMetricsImplTest {
 
-    private final static String SENSOR_PREFIX_DELIMITER = ".";
-    private final static String SENSOR_NAME_DELIMITER = ".s.";
-    private final static String SENSOR_NAME_1 = "sensor1";
-    private final static String SENSOR_NAME_2 = "sensor2";
-    private final static String INTERNAL_PREFIX = "internal";
-    private final static String VERSION = StreamsConfig.METRICS_LATEST;
-    private final static String CLIENT_ID = "test-client";
-    private final static String THREAD_ID1 = "test-thread-1";
-    private final static String TASK_ID1 = "test-task-1";
-    private final static String TASK_ID2 = "test-task-2";
-    private final static String NODE_ID1 = "test-node-1";
-    private final static String NODE_ID2 = "test-node-2";
-    private final static String TOPIC_ID1 = "test-topic-1";
-    private final static String TOPIC_ID2 = "test-topic-2";
-    private final static String METRIC_NAME1 = "test-metric1";
-    private final static String METRIC_NAME2 = "test-metric2";
-    private final static String THREAD_ID_TAG = "thread-id";
-    private final static String TASK_ID_TAG = "task-id";
-    private final static String SCOPE_NAME = "test-scope";
-    private final static String STORE_ID_TAG = "-state-id";
-    private final static String STORE_NAME1 = "store1";
-    private final static String STORE_NAME2 = "store2";
-    private final static Map<String, String> STORE_LEVEL_TAG_MAP = mkMap(
+    private static final String SENSOR_PREFIX_DELIMITER = ".";
+    private static final String SENSOR_NAME_DELIMITER = ".s.";
+    private static final String SENSOR_NAME_1 = "sensor1";
+    private static final String SENSOR_NAME_2 = "sensor2";
+    private static final String INTERNAL_PREFIX = "internal";
+    private static final String VERSION = StreamsConfig.METRICS_LATEST;
+    private static final String CLIENT_ID = "test-client";
+    private static final String THREAD_ID1 = "test-thread-1";
+    private static final String TASK_ID1 = "test-task-1";
+    private static final String TASK_ID2 = "test-task-2";
+    private static final String NODE_ID1 = "test-node-1";
+    private static final String NODE_ID2 = "test-node-2";
+    private static final String TOPIC_ID1 = "test-topic-1";
+    private static final String TOPIC_ID2 = "test-topic-2";
+    private static final String METRIC_NAME1 = "test-metric1";
+    private static final String METRIC_NAME2 = "test-metric2";
+    private static final String THREAD_ID_TAG = "thread-id";
+    private static final String TASK_ID_TAG = "task-id";
+    private static final String SCOPE_NAME = "test-scope";
+    private static final String STORE_ID_TAG = "-state-id";
+    private static final String STORE_NAME1 = "store1";
+    private static final String STORE_NAME2 = "store2";
+    private static final Map<String, String> STORE_LEVEL_TAG_MAP = mkMap(
         mkEntry(THREAD_ID_TAG, Thread.currentThread().getName()),
         mkEntry(TASK_ID_TAG, TASK_ID1),
         mkEntry(SCOPE_NAME + STORE_ID_TAG, STORE_NAME1)
     );
-    private final static String RECORD_CACHE_ID_TAG = "record-cache-id";
-    private final static String ENTITY_NAME = "test-entity";
-    private final static String OPERATION_NAME = "test-operation";
-    private final static String CUSTOM_TAG_KEY1 = "test-key1";
-    private final static String CUSTOM_TAG_VALUE1 = "test-value1";
-    private final static String CUSTOM_TAG_KEY2 = "test-key2";
-    private final static String CUSTOM_TAG_VALUE2 = "test-value2";
-    private final static RecordingLevel INFO_RECORDING_LEVEL = RecordingLevel.INFO;
-    private final static String DESCRIPTION1 = "description number one";
-    private final static String DESCRIPTION2 = "description number two";
-    private final static String DESCRIPTION3 = "description number three";
-    private final static Gauge<String> VALUE_PROVIDER = (config, now) -> "mutable-value";
+    private static final String RECORD_CACHE_ID_TAG = "record-cache-id";
+    private static final String ENTITY_NAME = "test-entity";
+    private static final String OPERATION_NAME = "test-operation";
+    private static final String CUSTOM_TAG_KEY1 = "test-key1";
+    private static final String CUSTOM_TAG_VALUE1 = "test-value1";
+    private static final String CUSTOM_TAG_KEY2 = "test-key2";
+    private static final String CUSTOM_TAG_VALUE2 = "test-value2";
+    private static final RecordingLevel INFO_RECORDING_LEVEL = RecordingLevel.INFO;
+    private static final String DESCRIPTION1 = "description number one";
+    private static final String DESCRIPTION2 = "description number two";
+    private static final String DESCRIPTION3 = "description number three";
+    private static final Gauge<String> VALUE_PROVIDER = (config, now) -> "mutable-value";
 
     private final Metrics metrics = new Metrics();
     private final Sensor sensor = metrics.sensor("dummy");

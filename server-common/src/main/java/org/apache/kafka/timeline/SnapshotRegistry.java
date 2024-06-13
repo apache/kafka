@@ -34,7 +34,7 @@ import java.util.stream.Collectors;
  * Therefore, we use ArrayLists here rather than a data structure with higher overhead.
  */
 public class SnapshotRegistry {
-    public final static long LATEST_EPOCH = Long.MAX_VALUE;
+    public static final long LATEST_EPOCH = Long.MAX_VALUE;
 
     /**
      * Iterate through the list of snapshots in order of creation, such that older

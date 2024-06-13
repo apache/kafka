@@ -26,7 +26,7 @@ public class DelegationTokenImageNode implements MetadataNode {
     /**
      * The name of this node.
      */
-    public final static String NAME = "delegationToken";
+    public static final String NAME = "delegationToken";
 
     /**
      * The DelegationToken image.

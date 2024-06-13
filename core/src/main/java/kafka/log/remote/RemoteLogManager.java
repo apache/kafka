@@ -34,6 +34,7 @@ import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Quota;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
@@ -247,6 +248,16 @@ public class RemoteLogManager implements Closeable {
 
     public void resizeCacheSize(long remoteLogIndexFileCacheSize) {
         indexCache.resizeCacheSize(remoteLogIndexFileCacheSize);
+    }
+
+    public void updateCopyQuota(long quota) {
+        LOGGER.info("Updating remote copy quota to {} bytes per second", quota);
+        rlmCopyQuotaManager.updateQuota(new Quota(quota, true));
+    }
+
+    public void updateFetchQuota(long quota) {
+        LOGGER.info("Updating remote fetch quota to {} bytes per second", quota);
+        rlmFetchQuotaManager.updateQuota(new Quota(quota, true));
     }
 
     private void removeMetrics() {
@@ -622,7 +633,7 @@ public class RemoteLogManager implements Closeable {
         return Optional.empty();
     }
 
-    private static abstract class CancellableRunnable implements Runnable {
+    private abstract static class CancellableRunnable implements Runnable {
         private volatile boolean cancelled = false;
 
         public void cancel() {
@@ -972,7 +983,9 @@ public class RemoteLogManager implements Closeable {
                     }
                 }
                 if (shouldDeleteSegment) {
-                    logStartOffset = OptionalLong.of(metadata.endOffset() + 1);
+                    if (!logStartOffset.isPresent() || logStartOffset.getAsLong() < metadata.endOffset() + 1) {
+                        logStartOffset = OptionalLong.of(metadata.endOffset() + 1);
+                    }
                     logger.info("About to delete remote log segment {} due to retention size {} breach. Log size after deletion will be {}.",
                             metadata.remoteLogSegmentId(), retentionSizeData.get().retentionSize, remainingBreachedSize + retentionSizeData.get().retentionSize);
                 }
@@ -989,7 +1002,9 @@ public class RemoteLogManager implements Closeable {
                     remainingBreachedSize = Math.max(0, remainingBreachedSize - metadata.segmentSizeInBytes());
                     // It is fine to have logStartOffset as `metadata.endOffset() + 1` as the segment offset intervals
                     // are ascending with in an epoch.
-                    logStartOffset = OptionalLong.of(metadata.endOffset() + 1);
+                    if (!logStartOffset.isPresent() || logStartOffset.getAsLong() < metadata.endOffset() + 1) {
+                        logStartOffset = OptionalLong.of(metadata.endOffset() + 1);
+                    }
                     logger.info("About to delete remote log segment {} due to retention time {}ms breach based on the largest record timestamp in the segment",
                             metadata.remoteLogSegmentId(), retentionTimeData.get().retentionMs);
                 }

@@ -490,7 +490,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         return result;
     }
 
-    private OffsetFetchRequestState createOffsetFetchRequest(final Set<TopicPartition> partitions,
+    // Visible for testing
+    OffsetFetchRequestState createOffsetFetchRequest(final Set<TopicPartition> partitions,
                                                              final long deadlineMs) {
         return jitter.isPresent() ?
             new OffsetFetchRequestState(
@@ -865,6 +866,11 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             }
         }
 
+        @Override
+        public String toStringBase() {
+            return super.toStringBase() + ", " + memberInfo;
+        }
+
         abstract void onResponse(final ClientResponse response);
 
         abstract void removeRequest();
@@ -1078,14 +1084,9 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         @Override
-        public String toString() {
-            return "OffsetFetchRequestState{" +
-                    "requestedPartitions=" + requestedPartitions +
-                    ", memberId=" + memberInfo.memberId.orElse("undefined") +
-                    ", memberEpoch=" + (memberInfo.memberEpoch.isPresent() ? memberInfo.memberEpoch.get() : "undefined") +
-                    ", future=" + future +
-                    ", " + toStringBase() +
-                    '}';
+        public String toStringBase() {
+            return super.toStringBase() +
+                    ", requestedPartitions=" + requestedPartitions;
         }
     }
 
@@ -1277,6 +1278,12 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         MemberInfo() {
             this.memberId = Optional.empty();
             this.memberEpoch = Optional.empty();
+        }
+
+        @Override
+        public String toString() {
+            return "memberId=" + memberId.orElse("undefined") +
+                    ", memberEpoch=" + (memberEpoch.isPresent() ? memberEpoch.get() : "undefined");
         }
     }
 }
