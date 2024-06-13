@@ -60,12 +60,7 @@ public class MirrorCheckpointConnectorTest {
 
         Set<String> knownConsumerGroups = new HashSet<>();
         knownConsumerGroups.add(CONSUMER_GROUP);
-        // MirrorCheckpointConnector as minimum to run taskConfig()
-        MirrorCheckpointConnector connector = new MirrorCheckpointConnector(knownConsumerGroups,
-                config);
-        List<Map<String, String>> output = connector.taskConfigs(1);
-        // expect no task will be created
-        assertEquals(0, output.size(), "MirrorCheckpointConnector not disabled");
+        assertMirrorCheckpointConnectorDisabled(new MirrorCheckpointConnector(knownConsumerGroups, config));
     }
 
     @Test
@@ -77,12 +72,7 @@ public class MirrorCheckpointConnectorTest {
 
         Set<String> knownConsumerGroups = new HashSet<>();
         knownConsumerGroups.add(CONSUMER_GROUP);
-        // MirrorCheckpointConnector as minimum to run taskConfig()
-        MirrorCheckpointConnector connector = new MirrorCheckpointConnector(knownConsumerGroups,
-                config);
-        List<Map<String, String>> output = connector.taskConfigs(1);
-        // expect no task will be created
-        assertEquals(0, output.size(), "MirrorCheckpointConnector not disabled");
+        assertMirrorCheckpointConnectorDisabled(new MirrorCheckpointConnector(knownConsumerGroups, config));
     }
 
     @Test
@@ -93,12 +83,13 @@ public class MirrorCheckpointConnectorTest {
 
         Set<String> knownConsumerGroups = new HashSet<>();
         knownConsumerGroups.add(CONSUMER_GROUP);
+        assertMirrorCheckpointConnectorDisabled(new MirrorCheckpointConnector(knownConsumerGroups, config));
+    }
+
+    private void assertMirrorCheckpointConnectorDisabled(MirrorCheckpointConnector connector) {
         // MirrorCheckpointConnector as minimum to run taskConfig()
-        MirrorCheckpointConnector connector = new MirrorCheckpointConnector(knownConsumerGroups,
-                                                                            config);
-        List<Map<String, String>> output = connector.taskConfigs(1);
         // expect no task will be created
-        assertEquals(0, output.size(), "MirrorCheckpointConnector not disabled");
+        assertEquals(0, connector.taskConfigs(1).size(), "MirrorCheckpointConnector not disabled");
     }
 
     @Test
