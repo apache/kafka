@@ -19,6 +19,7 @@ package org.apache.kafka.connect.data;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.Schema.Type;
 import org.apache.kafka.connect.errors.DataException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

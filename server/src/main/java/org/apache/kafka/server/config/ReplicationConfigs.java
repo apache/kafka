@@ -28,7 +28,8 @@ public class ReplicationConfigs {
 
     public static final String DEFAULT_REPLICATION_FACTOR_CONFIG = "default.replication.factor";
     public static final int REPLICATION_FACTOR_DEFAULT = 1;
-    public static final String DEFAULT_REPLICATION_FACTOR_DOC = "The default replication factors for automatically created topics.";
+    public static final String DEFAULT_REPLICATION_FACTOR_DOC = "The replication factor for automatically created topics," +
+            " and for topics created with -1 as the replication factor";
 
     public static final String REPLICA_LAG_TIME_MAX_MS_CONFIG = "replica.lag.time.max.ms";
     public static final long REPLICA_LAG_TIME_MAX_MS_DEFAULT = 30000L;

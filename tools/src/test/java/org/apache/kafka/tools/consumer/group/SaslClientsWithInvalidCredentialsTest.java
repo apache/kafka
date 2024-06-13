@@ -20,27 +20,30 @@ import kafka.api.AbstractSaslTest;
 import kafka.api.Both$;
 import kafka.utils.JaasTestUtils;
 import kafka.zk.ConfigEntityChangeNotificationZNode;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.function.Executable;
-import scala.Option;
-import scala.Some$;
-import scala.collection.JavaConverters;
-import scala.collection.Seq;
 
 import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.Properties;
+
+import scala.Option;
+import scala.Some$;
+import scala.collection.JavaConverters;
+import scala.collection.Seq;
 
 import static org.apache.kafka.tools.consumer.group.ConsumerGroupCommandTest.seq;
 import static org.junit.jupiter.api.Assertions.assertEquals;

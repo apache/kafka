@@ -18,6 +18,7 @@
 package org.apache.kafka.tools.consumer.group;
 
 import kafka.test.ClusterConfig;
+
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;

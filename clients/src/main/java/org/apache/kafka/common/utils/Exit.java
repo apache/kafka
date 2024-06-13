@@ -51,9 +51,9 @@ public class Exit {
         throw new IllegalStateException("Exit called after resetting procedures; possible race condition present in test");
     };
 
-    private volatile static Procedure exitProcedure = DEFAULT_EXIT_PROCEDURE;
-    private volatile static Procedure haltProcedure = DEFAULT_HALT_PROCEDURE;
-    private volatile static ShutdownHookAdder shutdownHookAdder = DEFAULT_SHUTDOWN_HOOK_ADDER;
+    private static volatile Procedure exitProcedure = DEFAULT_EXIT_PROCEDURE;
+    private static volatile Procedure haltProcedure = DEFAULT_HALT_PROCEDURE;
+    private static volatile ShutdownHookAdder shutdownHookAdder = DEFAULT_SHUTDOWN_HOOK_ADDER;
 
     public static void exit(int statusCode) {
         exit(statusCode, null);

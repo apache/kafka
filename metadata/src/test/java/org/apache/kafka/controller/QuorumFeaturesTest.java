@@ -37,9 +37,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class QuorumFeaturesTest {
-    private final static Map<String, VersionRange> LOCAL;
+    private static final Map<String, VersionRange> LOCAL;
 
-    private final static QuorumFeatures QUORUM_FEATURES;
+    private static final QuorumFeatures QUORUM_FEATURES;
 
     static {
         Map<String, VersionRange> local = new HashMap<>();

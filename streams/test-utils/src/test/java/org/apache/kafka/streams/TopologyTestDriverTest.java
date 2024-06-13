@@ -103,10 +103,10 @@ public abstract class TopologyTestDriverTest {
         config.putAll(overrides);
     }
 
-    private final static String SOURCE_TOPIC_1 = "source-topic-1";
-    private final static String SOURCE_TOPIC_2 = "source-topic-2";
-    private final static String SINK_TOPIC_1 = "sink-topic-1";
-    private final static String SINK_TOPIC_2 = "sink-topic-2";
+    private static final String SOURCE_TOPIC_1 = "source-topic-1";
+    private static final String SOURCE_TOPIC_2 = "source-topic-2";
+    private static final String SINK_TOPIC_1 = "sink-topic-1";
+    private static final String SINK_TOPIC_2 = "sink-topic-2";
 
     private final Headers headers = new RecordHeaders(new Header[]{new RecordHeader("key", "value".getBytes())});
 
@@ -126,7 +126,7 @@ public abstract class TopologyTestDriverTest {
     private final StringDeserializer stringDeserializer = new StringDeserializer();
     private final LongDeserializer longDeserializer = new LongDeserializer();
 
-    private final static class TTDTestRecord {
+    private static final class TTDTestRecord {
         private final Object key;
         private final Object value;
         private final long timestamp;
@@ -192,7 +192,7 @@ public abstract class TopologyTestDriverTest {
         }
     }
 
-    private final static class Punctuation {
+    private static final class Punctuation {
         private final long intervalMs;
         private final PunctuationType punctuationType;
         private final Punctuator callback;
@@ -206,7 +206,7 @@ public abstract class TopologyTestDriverTest {
         }
     }
 
-    private final static class MockPunctuator implements Punctuator {
+    private static final class MockPunctuator implements Punctuator {
         private final List<Long> punctuatedAt = new LinkedList<>();
 
         @Override
@@ -215,7 +215,7 @@ public abstract class TopologyTestDriverTest {
         }
     }
 
-    private final static class MockProcessor implements Processor<Object, Object, Object, Object> {
+    private static final class MockProcessor implements Processor<Object, Object, Object, Object> {
         private final Collection<Punctuation> punctuations;
         private ProcessorContext<Object, Object> context;
 

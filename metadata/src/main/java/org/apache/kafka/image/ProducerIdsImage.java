@@ -31,7 +31,7 @@ import java.util.Objects;
  * This class is thread-safe.
  */
 public final class ProducerIdsImage {
-    public final static ProducerIdsImage EMPTY = new ProducerIdsImage(-1L);
+    public static final ProducerIdsImage EMPTY = new ProducerIdsImage(-1L);
 
     /**
      * The next producer ID, or -1 in the special case where no producer IDs have been issued.

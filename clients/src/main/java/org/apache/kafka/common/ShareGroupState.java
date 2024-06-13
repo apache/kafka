@@ -32,7 +32,7 @@ public enum ShareGroupState {
     DEAD("Dead"),
     EMPTY("Empty");
 
-    private final static Map<String, ShareGroupState> NAME_TO_ENUM = Arrays.stream(values())
+    private static final Map<String, ShareGroupState> NAME_TO_ENUM = Arrays.stream(values())
             .collect(Collectors.toMap(state -> state.name.toUpperCase(Locale.ROOT), Function.identity()));
 
     private final String name;
