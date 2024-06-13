@@ -114,7 +114,7 @@ public class LeaderState<T> implements EpochState {
                 "Did not receive fetch request from the majority of the voters within {}ms. Current fetched voters are {}, and voters are {}",
                 checkQuorumTimeoutMs,
                 fetchedVoters,
-                voterStates);
+                voterStates.keySet());
         }
         return remainingMs;
     }
@@ -127,8 +127,8 @@ public class LeaderState<T> implements EpochState {
      */
     public void updateCheckQuorumForFollowingVoter(int id, long currentTimeMs) {
         updateFetchedVoters(id);
-        // The majority number of the voters. Ex: 3 voters, the value will be 2
-        int majority = (int) ((double) (voterStates.size() + 1) / 2);
+        // The majority number of the voters. Ex: 2 for 3 voters, 3 for 4 voters... etc.
+        int majority = (int) Math.ceil((double) (voterStates.size() + 1) / 2);
         // Check if the leader is removed from the voter set
         if (voterStates.containsKey(localId)) {
             majority = majority - 1;

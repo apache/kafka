@@ -740,7 +740,7 @@ public class LeaderStateTest {
 
         // checkQuorum timeout not exceeded, should not expire the timer
         time.sleep(checkQuorumTimeoutMs / 2);
-        assertTrue(state.timeUntilCheckQuorumExpires(time.milliseconds()) > 0);
+        assertEquals(checkQuorumTimeoutMs / 2, state.timeUntilCheckQuorumExpires(time.milliseconds()));
 
         // received fetch request from 1 voter node, the timer should be reset
         state.updateCheckQuorumForFollowingVoter(node1, time.milliseconds());
@@ -750,11 +750,10 @@ public class LeaderStateTest {
         Set<Integer> voterSetWithNode3 = mkSet(localId, node1, node2, node3);
         state.updateLocalState(new LogOffsetMetadata(1L), voterSetWithNode3);
 
+        time.sleep(checkQuorumTimeoutMs / 2);
         // received fetch request from 1 voter node, the timer should not be reset because the majority should be 3
         state.updateCheckQuorumForFollowingVoter(node1, time.milliseconds());
-        // Since the timer was not reset, it will be expired.
-        time.sleep(checkQuorumTimeoutMs);
-        assertEquals(0, state.timeUntilCheckQuorumExpires(time.milliseconds()));
+        assertEquals(checkQuorumTimeoutMs / 2, state.timeUntilCheckQuorumExpires(time.milliseconds()));
 
         // Timer should be reset after receiving another voter's fetch request
         state.updateCheckQuorumForFollowingVoter(node2, time.milliseconds());
@@ -764,11 +763,10 @@ public class LeaderStateTest {
         Set<Integer> voterSetWithoutLeader = mkSet(node1, node2, node3);
         state.updateLocalState(new LogOffsetMetadata(1L), voterSetWithoutLeader);
 
+        time.sleep(checkQuorumTimeoutMs / 2);
         // received fetch request from 1 voter, the timer should not be reset.
         state.updateCheckQuorumForFollowingVoter(node2, time.milliseconds());
-        // Since the timer was reset, it won't expire this time.
-        time.sleep(checkQuorumTimeoutMs);
-        assertEquals(0, state.timeUntilCheckQuorumExpires(time.milliseconds()));
+        assertEquals(checkQuorumTimeoutMs / 2, state.timeUntilCheckQuorumExpires(time.milliseconds()));
 
         // received fetch request from another voter, the timer should be reset since the current quorum majority is 2.
         state.updateCheckQuorumForFollowingVoter(node1, time.milliseconds());
