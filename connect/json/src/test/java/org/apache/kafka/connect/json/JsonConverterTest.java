@@ -1010,7 +1010,7 @@ public class JsonConverterTest {
         converter.configure(props, false);
 
         // Test the toConnectData method with the external schema
-        String jsonData = "{\"payload\":\"test\"}";
+        String jsonData = "\"test\"";
         SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, jsonData.getBytes());
         assertEquals(Schema.STRING_SCHEMA, schemaAndValue.schema());
         assertEquals("test", schemaAndValue.value());

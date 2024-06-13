@@ -42,6 +42,7 @@ public class JsonConverterConfigTest {
     @Test
     public void shouldReturnNullForSchemaFileLocationIfNotSet() {
         final Map<String, Object> configValues = new HashMap<>();
+        configValues.put(ConverterConfig.TYPE_CONFIG, ConverterType.VALUE.getName());
         final JsonConverterConfig config = new JsonConverterConfig(configValues);
         assertNull(config.getSchemaFileLocation());
     }
