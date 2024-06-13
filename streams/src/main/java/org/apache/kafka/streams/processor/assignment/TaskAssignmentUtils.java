@@ -729,7 +729,7 @@ public final class TaskAssignmentUtils {
         final ConstrainedPrioritySet standbyTaskClientsByTaskLoad = standbyTaskPriorityListByLoad(streamStates, assignments);
 
         final Set<TaskId> statefulTaskIds = applicationState.allTasks().values().stream()
-            .filter(TaskInfo::isStateful)
+            .filter(taskInfo -> taskInfo.topicPartitions().stream().anyMatch(TaskTopicPartition::isChangelog))
             .map(TaskInfo::id)
             .collect(Collectors.toSet());
         final Map<TaskId, Integer> tasksToRemainingStandbys = statefulTaskIds.stream()
@@ -775,7 +775,7 @@ public final class TaskAssignmentUtils {
         final Map<ProcessId, KafkaStreamsState> streamStates = applicationState.kafkaStreamsStates(false);
 
         final Set<TaskId> statefulTaskIds = applicationState.allTasks().values().stream()
-            .filter(TaskInfo::isStateful)
+            .filter(taskInfo -> taskInfo.topicPartitions().stream().anyMatch(TaskTopicPartition::isChangelog))
             .map(TaskInfo::id)
             .collect(Collectors.toSet());
         final Map<TaskId, Integer> tasksToRemainingStandbys = statefulTaskIds.stream()
