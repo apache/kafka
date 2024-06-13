@@ -1682,20 +1682,30 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
 
         final CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = pendingOffsetFetchEvent.future();
+        boolean shouldClearPendingEvent = false;
 
         try {
             wakeupTrigger.setActiveTask(future);
             final Map<TopicPartition, OffsetAndMetadata> offsets = ConsumerUtils.getResult(future, timer);
 
-            // Clear the stored event once its result is successfully retrieved.
-            pendingOffsetFetchEvent = null;
+            // Clear the pending event once its result is successfully retrieved.
+            shouldClearPendingEvent = true;
 
             refreshCommittedOffsets(offsets, metadata, subscriptions);
             return true;
         } catch (TimeoutException e) {
             log.error("Couldn't refresh committed offsets before timeout expired");
             return false;
+        } catch (InterruptException e) {
+            throw ConsumerUtils.maybeWrapAsKafkaException(e);
+        } catch (Throwable t) {
+            // Clear the pending event on errors that are not timeout-related.
+            shouldClearPendingEvent = true;
+            throw ConsumerUtils.maybeWrapAsKafkaException(t);
         } finally {
+            if (shouldClearPendingEvent)
+                pendingOffsetFetchEvent = null;
+
             wakeupTrigger.clearTask();
         }
     }
