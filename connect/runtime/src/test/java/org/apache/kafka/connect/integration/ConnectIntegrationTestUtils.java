@@ -16,28 +16,26 @@
  */
 package org.apache.kafka.connect.integration;
 
-import org.junit.rules.TestRule;
-import org.junit.rules.TestWatcher;
-import org.junit.runner.Description;
+import org.junit.jupiter.api.extension.AfterEachCallback;
+import org.junit.jupiter.api.extension.BeforeEachCallback;
+import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.api.extension.TestWatcher;
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A utility class for Connect's integration tests
  */
-public class ConnectIntegrationTestUtils {
-    public static TestRule newTestWatcher(Logger log) {
-        return new TestWatcher() {
-            @Override
-            protected void starting(Description description) {
-                super.starting(description);
-                log.info("Starting test {}", description.getMethodName());
-            }
+public class ConnectIntegrationTestUtils implements TestWatcher, BeforeEachCallback, AfterEachCallback {
+    private static final Logger log = LoggerFactory.getLogger(ConnectIntegrationTestUtils.class);
 
-            @Override
-            protected void finished(Description description) {
-                super.finished(description);
-                log.info("Finished test {}", description.getMethodName());
-            }
-        };
+    @Override
+    public void afterEach(ExtensionContext context) {
+        log.info("Finished test {}", context.getDisplayName());
+    }
+
+    @Override
+    public void beforeEach(ExtensionContext context) {
+        log.info("Starting test {}", context.getDisplayName());
     }
 }
