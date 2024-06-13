@@ -27,22 +27,22 @@ public class FeaturesImageNode implements MetadataNode {
     /**
      * The name of this node.
      */
-    public final static String NAME = "features";
+    public static final String NAME = "features";
 
     /**
      * The name of the metadata version child node.
      */
-    public final static String METADATA_VERSION = "metadataVersion";
+    public static final String METADATA_VERSION = "metadataVersion";
 
     /**
      * The name of the zk migration state child node.
      */
-    public final static String ZK_MIGRATION_STATE = "zkMigrationState";
+    public static final String ZK_MIGRATION_STATE = "zkMigrationState";
 
     /**
      * The prefix to put before finalized feature children.
      */
-    public final static String FINALIZED_PREFIX = "finalized_";
+    public static final String FINALIZED_PREFIX = "finalized_";
 
     /**
      * The features image.

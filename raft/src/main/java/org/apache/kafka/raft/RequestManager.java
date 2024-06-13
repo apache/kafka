@@ -281,7 +281,7 @@ public class RequestManager {
         READY
     }
 
-    private final static class ConnectionState {
+    private static final class ConnectionState {
         private final Node node;
         private final int retryBackoffMs;
         private final int requestTimeoutMs;

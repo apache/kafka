@@ -17,14 +17,14 @@
 
 package org.apache.kafka.trogdor.common;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
-import org.junit.jupiter.api.Timeout;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(value = 120)
 public class StringExpanderTest {

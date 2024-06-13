@@ -2596,7 +2596,7 @@ public class OffsetMetadataManagerTest {
         assertEquals(Collections.emptyList(), records);
     }
 
-    static private OffsetFetchResponseData.OffsetFetchResponsePartitions mkOffsetPartitionResponse(
+    private static OffsetFetchResponseData.OffsetFetchResponsePartitions mkOffsetPartitionResponse(
         int partition,
         long offset,
         int leaderEpoch,
@@ -2609,7 +2609,7 @@ public class OffsetMetadataManagerTest {
             .setMetadata(metadata);
     }
 
-    static private OffsetFetchResponseData.OffsetFetchResponsePartitions mkInvalidOffsetPartitionResponse(int partition) {
+    private static OffsetFetchResponseData.OffsetFetchResponsePartitions mkInvalidOffsetPartitionResponse(int partition) {
         return new OffsetFetchResponseData.OffsetFetchResponsePartitions()
             .setPartitionIndex(partition)
             .setCommittedOffset(INVALID_OFFSET)
@@ -2617,7 +2617,7 @@ public class OffsetMetadataManagerTest {
             .setMetadata("");
     }
 
-    static private OffsetFetchResponseData.OffsetFetchResponsePartitions mkOffsetPartitionResponse(int partition, Errors error) {
+    private static OffsetFetchResponseData.OffsetFetchResponsePartitions mkOffsetPartitionResponse(int partition, Errors error) {
         return new OffsetFetchResponseData.OffsetFetchResponsePartitions()
             .setPartitionIndex(partition)
             .setErrorCode(error.code())

@@ -39,6 +39,7 @@ import org.apache.kafka.connect.data.Values;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.transforms.util.SchemaUtil;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

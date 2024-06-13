@@ -254,7 +254,7 @@ public class StandardAuthorizerTest {
         return authorizer;
     }
 
-    private final static AtomicLong NEXT_ID = new AtomicLong(0);
+    private static final AtomicLong NEXT_ID = new AtomicLong(0);
 
     static StandardAcl newFooAcl(AclOperation op, AclPermissionType permission) {
         return new StandardAcl(

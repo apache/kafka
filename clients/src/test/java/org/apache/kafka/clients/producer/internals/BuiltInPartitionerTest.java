@@ -36,15 +36,15 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class BuiltInPartitionerTest {
-    private final static Node[] NODES = new Node[] {
+    private static final Node[] NODES = new Node[] {
         new Node(0, "localhost", 99),
         new Node(1, "localhost", 100),
         new Node(2, "localhost", 101),
         new Node(11, "localhost", 102)
     };
-    final static String TOPIC_A = "topicA";
-    final static String TOPIC_B = "topicB";
-    final static String TOPIC_C = "topicC";
+    static final String TOPIC_A = "topicA";
+    static final String TOPIC_B = "topicB";
+    static final String TOPIC_C = "topicC";
     final LogContext logContext = new LogContext();
 
     @AfterEach
