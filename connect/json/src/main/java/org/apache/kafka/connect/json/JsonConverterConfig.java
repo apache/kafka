@@ -51,6 +51,10 @@ public class JsonConverterConfig extends ConverterConfig {
     private static final String REPLACE_NULL_WITH_DEFAULT_DOC = "Whether to replace fields that have a default value and that are null to the default value. When set to true, the default value is used, otherwise null is used.";
     private static final String REPLACE_NULL_WITH_DEFAULT_DISPLAY = "Replace null with default";
 
+    public static final String SCHEMAS_FILE_LOCATION_CONFIG = "schemas.file.location";
+    private static final String SCHEMAS_FILE_LOCATION_DOC = "The location of the external JSON schema file to use instead of embedding schemas in the message payload.";
+    private static final String SCHEMAS_FILE_LOCATION_DISPLAY = "External Schema File Location";
+
     private final static ConfigDef CONFIG;
 
     static {
@@ -61,6 +65,8 @@ public class JsonConverterConfig extends ConverterConfig {
                       orderInGroup++, Width.MEDIUM, SCHEMAS_ENABLE_DISPLAY);
         CONFIG.define(SCHEMAS_CACHE_SIZE_CONFIG, Type.INT, SCHEMAS_CACHE_SIZE_DEFAULT, Importance.HIGH, SCHEMAS_CACHE_SIZE_DOC, group,
                       orderInGroup++, Width.MEDIUM, SCHEMAS_CACHE_SIZE_DISPLAY);
+        CONFIG.define(SCHEMAS_FILE_LOCATION_CONFIG, Type.STRING, null, Importance.MEDIUM, SCHEMAS_FILE_LOCATION_DOC, group,
+                      orderInGroup++, Width.MEDIUM, SCHEMAS_FILE_LOCATION_DISPLAY);
 
         group = "Serialization";
         orderInGroup = 0;
@@ -84,14 +90,17 @@ public class JsonConverterConfig extends ConverterConfig {
     // cached config values
     private final boolean schemasEnabled;
     private final int schemaCacheSize;
+    private final String schemaFileLocation;
     private final DecimalFormat decimalFormat;
     private final boolean replaceNullWithDefault;
+
 
     @SuppressWarnings("this-escape")
     public JsonConverterConfig(Map<String, ?> props) {
         super(CONFIG, props);
         this.schemasEnabled = getBoolean(SCHEMAS_ENABLE_CONFIG);
         this.schemaCacheSize = getInt(SCHEMAS_CACHE_SIZE_CONFIG);
+        this.schemaFileLocation = getString(SCHEMAS_FILE_LOCATION_CONFIG);
         this.decimalFormat = DecimalFormat.valueOf(getString(DECIMAL_FORMAT_CONFIG).toUpperCase(Locale.ROOT));
         this.replaceNullWithDefault = getBoolean(REPLACE_NULL_WITH_DEFAULT_CONFIG);
     }
@@ -129,6 +138,14 @@ public class JsonConverterConfig extends ConverterConfig {
      */
     public boolean replaceNullWithDefault() {
         return replaceNullWithDefault;
+    }
+
+    /**
+     * Get the location of the external schema file.
+     * @return the location of the external schema file, or null if not set
+     */
+    public String getSchemaFileLocation() {
+        return schemaFileLocation;
     }
 
 }

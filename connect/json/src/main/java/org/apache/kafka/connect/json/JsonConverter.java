@@ -49,6 +49,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumMap;
@@ -235,6 +237,8 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
     private final JsonSerializer serializer;
     private final JsonDeserializer deserializer;
 
+    private Schema externalSchema;
+
     public JsonConverter() {
         this(true);
     }
@@ -293,6 +297,17 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
 
         fromConnectSchemaCache = new SynchronizedCache<>(new LRUCache<>(config.schemaCacheSize()));
         toConnectSchemaCache = new SynchronizedCache<>(new LRUCache<>(config.schemaCacheSize()));
+
+        String schemaFileLocation = config.getSchemaFileLocation();
+        if(schemaFileLocation != null){
+            try{
+                byte []schemaData = Files.readAllBytes(Paths.get(schemaFileLocation));
+                JsonNode schemaNode = deserializer.deserialize("", schemaData);
+                externalSchema = asConnectSchema(schemaNode);
+            }catch (IOException e){
+                throw new DataException("Failed to read external schema file: " + schemaFileLocation, e);
+            }
+        }
     }
 
     @Override
@@ -324,7 +339,14 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
             return null;
         }
 
-        JsonNode jsonValue = config.schemasEnabled() ? convertToJsonWithEnvelope(schema, value) : convertToJsonWithoutEnvelope(schema, value);
+        JsonNode jsonValue;
+        // check if the external schema is configured
+        if(config.getSchemaFileLocation() != null){
+            jsonValue = convertToJsonWithoutEnvelope(externalSchema, value);
+        }else{
+            jsonValue = config.schemasEnabled() ? convertToJsonWithEnvelope(schema, value) : convertToJsonWithoutEnvelope(schema, value);
+        }
+
         try {
             return serializer.serialize(topic, jsonValue);
         } catch (SerializationException e) {
@@ -347,24 +369,30 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
             throw new DataException("Converting byte[] to Kafka Connect data failed due to serialization error: ", e);
         }
 
-        if (config.schemasEnabled() && (!jsonValue.isObject() || jsonValue.size() != 2 || !jsonValue.has(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME) || !jsonValue.has(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME)))
-            throw new DataException("JsonConverter with schemas.enable requires \"schema\" and \"payload\" fields and may not contain additional fields." +
-                    " If you are trying to deserialize plain JSON data, set schemas.enable=false in your converter configuration.");
+        // check if external schema is configured
+        if (config.getSchemaFileLocation() != null) {
+            // Use the external schema
+            return new SchemaAndValue(externalSchema, convertToConnect(externalSchema, jsonValue, config));
+        }else {
+            if (config.schemasEnabled() && (!jsonValue.isObject() || jsonValue.size() != 2 || !jsonValue.has(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME) || !jsonValue.has(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME)))
+                throw new DataException("JsonConverter with schemas.enable requires \"schema\" and \"payload\" fields and may not contain additional fields." +
+                        " If you are trying to deserialize plain JSON data, set schemas.enable=false in your converter configuration.");
 
-        // The deserialized data should either be an envelope object containing the schema and the payload or the schema
-        // was stripped during serialization and we need to fill in an all-encompassing schema.
-        if (!config.schemasEnabled()) {
-            ObjectNode envelope = JSON_NODE_FACTORY.objectNode();
-            envelope.set(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME, null);
-            envelope.set(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME, jsonValue);
-            jsonValue = envelope;
+            // The deserialized data should either be an envelope object containing the schema and the payload or the schema
+            // was stripped during serialization and we need to fill in an all-encompassing schema.
+            if (!config.schemasEnabled()) {
+                ObjectNode envelope = JSON_NODE_FACTORY.objectNode();
+                envelope.set(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME, null);
+                envelope.set(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME, jsonValue);
+                jsonValue = envelope;
+            }
+
+            Schema schema = asConnectSchema(jsonValue.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+            return new SchemaAndValue(
+                    schema,
+                    convertToConnect(schema, jsonValue.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME), config)
+            );
         }
-
-        Schema schema = asConnectSchema(jsonValue.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
-        return new SchemaAndValue(
-                schema,
-                convertToConnect(schema, jsonValue.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME), config)
-        );
     }
 
     public ObjectNode asJsonSchema(Schema schema) {
