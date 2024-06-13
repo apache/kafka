@@ -107,7 +107,6 @@ public class HeartbeatRequestManagerTest {
     private final String memberId = "member-id";
     private final int memberEpoch = 1;
     private BackgroundEventHandler backgroundEventHandler;
-    private RequestManagers requestManagers;
     private LogContext logContext;
     private ConsumerConfig config;
 
@@ -136,15 +135,6 @@ public class HeartbeatRequestManagerTest {
                 membershipManager,
                 backgroundEventHandler,
                 metrics);
-
-        this.requestManagers = new RequestManagers(
-                logContext,
-                mock(OffsetsRequestManager.class),
-                mock(TopicMetadataRequestManager.class),
-                mock(FetchRequestManager.class),
-                Optional.empty(), Optional.empty(),
-                Optional.of(heartbeatRequestManager),
-                Optional.empty());
 
         this.heartbeatRequestState1 = new HeartbeatRequestState(
                 logContext,
@@ -194,15 +184,7 @@ public class HeartbeatRequestManagerTest {
     }
 
     private void resetWithZeroHeartbeatInterval() {
-        cleanup();
         setUp();
-    }
-
-    @AfterEach
-    public void cleanup() {
-        if (heartbeatRequestManager != null) {
-            closeQuietly(requestManagers, RequestManagers.class.getSimpleName());
-        }
     }
 
     @Test
