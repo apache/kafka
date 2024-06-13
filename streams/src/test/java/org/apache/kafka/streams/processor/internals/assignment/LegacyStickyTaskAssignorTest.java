@@ -104,7 +104,7 @@ import static org.junit.Assert.assertFalse;
 import static org.mockito.Mockito.spy;
 
 @RunWith(Parameterized.class)
-public class StickyTaskAssignorTest {
+public class LegacyStickyTaskAssignorTest {
 
     private final List<Integer> expectedTopicGroupIds = asList(1, 2);
     private final Time time = new MockTime();
@@ -807,7 +807,7 @@ public class StickyTaskAssignorTest {
             time
         );
 
-        final boolean probingRebalanceNeeded = new StickyTaskAssignor(true).assign(
+        final boolean probingRebalanceNeeded = new LegacyStickyTaskAssignor(true).assign(
             clients,
             new HashSet<>(taskIds),
             new HashSet<>(taskIds),
@@ -857,7 +857,7 @@ public class StickyTaskAssignorTest {
             time
         );
 
-        final boolean probingRebalanceNeeded = new StickyTaskAssignor().assign(
+        final boolean probingRebalanceNeeded = new LegacyStickyTaskAssignor().assign(
             clients,
             new HashSet<>(taskIds),
             new HashSet<>(statefulTaskIds),
@@ -937,7 +937,7 @@ public class StickyTaskAssignorTest {
             tpSize, partitionSize, maxCapacity, false, statefulTasks);
 
 
-        final boolean probing = new StickyTaskAssignor().assign(
+        final boolean probing = new LegacyStickyTaskAssignor().assign(
             clientStateMap,
             taskIds,
             statefulTasks,
@@ -1005,7 +1005,7 @@ public class StickyTaskAssignorTest {
         final SortedMap<ProcessId, ClientState> clientStateMap = getRandomClientState(clientSize,
             tpSize, partitionSize, maxCapacity, false, statefulTasks);
 
-        new StickyTaskAssignor().assign(
+        new LegacyStickyTaskAssignor().assign(
             clientStateMap,
             taskIds,
             statefulTasks,
@@ -1047,7 +1047,7 @@ public class StickyTaskAssignorTest {
             time
         ));
 
-        new StickyTaskAssignor().assign(
+        new LegacyStickyTaskAssignor().assign(
             clientStateMapCopy,
             taskIds,
             statefulTasks,
@@ -1085,7 +1085,7 @@ public class StickyTaskAssignorTest {
     private boolean assign(final AssignmentConfigs configs, final RackAwareTaskAssignor rackAwareTaskAssignor, final TaskId... tasks) {
         final List<TaskId> taskIds = asList(tasks);
         Collections.shuffle(taskIds);
-        return new StickyTaskAssignor().assign(
+        return new LegacyStickyTaskAssignor().assign(
             clients,
             new HashSet<>(taskIds),
             new HashSet<>(taskIds),

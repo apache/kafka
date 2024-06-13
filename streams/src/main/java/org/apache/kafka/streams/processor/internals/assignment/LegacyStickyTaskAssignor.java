@@ -40,9 +40,14 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-public class StickyTaskAssignor implements LegacyTaskAssignor {
+// Note: as of 3.8, this class has been renamed from StickyTaskAssignor to LegacyStickyTaskAssignor,
+// and a new StickyTaskAssignor implementation was added that implements the new TaskAssignor interface.
+// If you were previously plugging in the old StickyTaskAssignor via the internal.task.assignor.class config,
+// you should migrate to the new TaskAssignor interface by removing the internal config and instead
+// passing in the new StickyTaskAssignor class to the new public task.assignor.class config
+public class LegacyStickyTaskAssignor implements LegacyTaskAssignor {
 
-    private static final Logger log = LoggerFactory.getLogger(StickyTaskAssignor.class);
+    private static final Logger log = LoggerFactory.getLogger(LegacyStickyTaskAssignor.class);
 
     // For stateful tasks, by default we want to maintain stickiness. So we have higher non_overlap_cost
     private static final int DEFAULT_STATEFUL_TRAFFIC_COST = 1;
@@ -59,11 +64,11 @@ public class StickyTaskAssignor implements LegacyTaskAssignor {
 
     private final boolean mustPreserveActiveTaskAssignment;
 
-    public StickyTaskAssignor() {
+    public LegacyStickyTaskAssignor() {
         this(false);
     }
 
-    StickyTaskAssignor(final boolean mustPreserveActiveTaskAssignment) {
+    LegacyStickyTaskAssignor(final boolean mustPreserveActiveTaskAssignment) {
         this.mustPreserveActiveTaskAssignment = mustPreserveActiveTaskAssignment;
     }
 
