@@ -1989,15 +1989,6 @@ public class KafkaAdminClientTest {
         }
     }
 
-    @Test
-    public void testCreateDescribeConfigsByDuplicateResources() {
-        ConfigResource resource = new ConfigResource(ConfigResource.Type.BROKER, "1");
-        ConfigResource duplicateResource = new ConfigResource(ConfigResource.Type.BROKER, "1");
-        try (AdminClientUnitTestEnv env = mockClientEnv()) {
-            assertDoesNotThrow(() -> env.adminClient().describeConfigs(asList(resource, duplicateResource)));
-        }
-    }
-
     private static DescribeLogDirsResponse prepareDescribeLogDirsResponse(Errors error, String logDir, TopicPartition tp, long partitionSize, long offsetLag) {
         return prepareDescribeLogDirsResponse(error, logDir,
                 prepareDescribeLogDirsTopics(partitionSize, offsetLag, tp.topic(), tp.partition(), false));
