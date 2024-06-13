@@ -3833,6 +3833,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleConsumerGroupDescribe(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val consumerGroupDescribeRequest = request.body[ConsumerGroupDescribeRequest]
+    val includeAuthorizedOperations = consumerGroupDescribeRequest.data.includeAuthorizedOperations
 
     if (!isConsumerGroupProtocolEnabled()) {
       // The API is not supported by the "old" group coordinator (the default). If the
@@ -3861,6 +3862,17 @@ class KafkaApis(val requestChannel: RequestChannel,
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, consumerGroupDescribeRequest.getErrorResponse(exception))
         } else {
+          if (includeAuthorizedOperations) {
+            results.forEach { groupResult =>
+              if (groupResult.errorCode == Errors.NONE.code) {
+                groupResult.setAuthorizedOperations(authHelper.authorizedOperations(
+                  request,
+                  new Resource(ResourceType.GROUP, groupResult.groupId)
+                ))
+              }
+            }
+          }
+
           if (response.groups.isEmpty) {
             // If the response is empty, we can directly reuse the results.
             response.setGroups(results)

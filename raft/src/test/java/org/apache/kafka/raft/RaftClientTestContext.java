@@ -561,9 +561,22 @@ public final class RaftClientTestContext {
             .setHighWatermark(highWatermark)
             .setCurrentVoters(voterStates)
             .setObservers(observerStates);
+
+        DescribeQuorumResponseData.NodeCollection nodes = new DescribeQuorumResponseData.NodeCollection();
+        voterStates.forEach(replicaState -> {
+            if (kip853Rpc && nodes.find(replicaState.replicaId()) == null) {
+                // TODO: need to add listeners
+                nodes.add(
+                    new DescribeQuorumResponseData.Node()
+                        .setNodeId(replicaState.replicaId())
+                );
+            }
+        });
+
         DescribeQuorumResponseData expectedResponse = DescribeQuorumResponse.singletonResponse(
             metadataPartition,
-            partitionData
+            partitionData,
+            nodes
         );
         assertEquals(expectedResponse, response);
     }
@@ -1365,6 +1378,10 @@ public final class RaftClientTestContext {
         );
     }
 
+    DescribeQuorumRequestData describeQuorumRequest() {
+        return RaftUtil.singletonDescribeQuorumRequest(metadataPartition);
+    }
+
     private short fetchRpcVersion() {
         if (kip853Rpc) {
             return 17;
@@ -1407,8 +1424,7 @@ public final class RaftClientTestContext {
 
     private short describeQuorumRpcVersion() {
         if (kip853Rpc) {
-            // KAFKA-16520 should change this to the new latest value (2)
-            return 1;
+            return 2;
         } else {
             return 1;
         }

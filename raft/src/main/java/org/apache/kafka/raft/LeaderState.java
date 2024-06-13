@@ -17,8 +17,8 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.message.DescribeQuorumResponseData;
-import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.message.LeaderChangeMessage;
+import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.ControlRecordUtils;
 import org.apache.kafka.common.utils.LogContext;
@@ -312,7 +312,7 @@ public class LeaderState<T> implements EpochState {
      * Update the local replica state.
      *
      * @param endOffsetMetadata updated log end offset of local replica
-     * @param lastVoterSet the up-to-date voter set
+     * @param lastVoters the up-to-date voter set
      * @return true if the high watermark is updated as a result of this call
      */
     public boolean updateLocalState(
@@ -326,8 +326,10 @@ public class LeaderState<T> implements EpochState {
                     "end offset: " + currentEndOffset.offset + " -> " + endOffsetMetadata.offset);
             }
         });
+
         state.updateLeaderEndOffset(endOffsetMetadata);
         updateVoterAndObserverStates(lastVoterSet);
+
         return maybeUpdateHighWatermark();
     }
 
@@ -335,6 +337,7 @@ public class LeaderState<T> implements EpochState {
      * Update the replica state in terms of fetch time and log end offsets.
      *
      * @param replicaId replica id
+     * @param replicaDirectoryId replica directory id
      * @param currentTimeMs current time in milliseconds
      * @param fetchOffsetMetadata new log offset and metadata
      * @return true if the high watermark is updated as a result of this call
@@ -436,6 +439,21 @@ public class LeaderState<T> implements EpochState {
             .setObservers(describeReplicaStates(observerStates.values(), currentTimeMs));
     }
 
+    public DescribeQuorumResponseData.NodeCollection nodes(long currentTimeMs) {
+        clearInactiveObservers(currentTimeMs);
+
+        DescribeQuorumResponseData.NodeCollection nodes = new DescribeQuorumResponseData.NodeCollection();
+
+        voterStates.values().forEach(replicaState -> {
+            if (nodes.find(replicaState.replicaKey.id()) == null) {
+                // TODO: add missing listeners
+                nodes.add(new DescribeQuorumResponseData.Node().setNodeId(replicaState.replicaKey.id()));
+            }
+        });
+
+        return nodes;
+    }
+
     private List<DescribeQuorumResponseData.ReplicaState> describeReplicaStates(
         Collection<ReplicaState> states,
         long currentTimeMs
@@ -461,6 +479,7 @@ public class LeaderState<T> implements EpochState {
         }
         return new DescribeQuorumResponseData.ReplicaState()
             .setReplicaId(replicaState.replicaKey.id())
+            .setReplicaDirectoryId(replicaState.replicaKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
             .setLogEndOffset(replicaState.endOffset.map(md -> md.offset).orElse(-1L))
             .setLastCaughtUpTimestamp(lastCaughtUpTimestamp)
             .setLastFetchTimestamp(lastFetchTimestamp);

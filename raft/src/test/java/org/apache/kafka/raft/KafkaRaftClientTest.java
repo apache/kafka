@@ -36,7 +36,6 @@ import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
-import org.apache.kafka.common.requests.DescribeQuorumRequest;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
@@ -2551,6 +2550,7 @@ public class KafkaRaftClientTest {
         );
     }
 
+    // TODO: add withKip853Rpc support
     @Test
     public void testDescribeQuorumNonLeader() throws Exception {
         int localId = 0;
@@ -2563,11 +2563,12 @@ public class KafkaRaftClientTest {
             .withUnknownLeader(epoch)
             .build();
 
-        context.deliverRequest(DescribeQuorumRequest.singletonRequest(context.metadataPartition));
+        context.deliverRequest(context.describeQuorumRequest());
         context.pollUntilResponse();
 
         DescribeQuorumResponseData responseData = context.collectDescribeQuorumResponse();
         assertEquals(Errors.NONE, Errors.forCode(responseData.errorCode()));
+        assertEquals("", responseData.errorMessage());
 
         assertEquals(1, responseData.topics().size());
         DescribeQuorumResponseData.TopicData topicData = responseData.topics().get(0);
@@ -2577,6 +2578,7 @@ public class KafkaRaftClientTest {
         DescribeQuorumResponseData.PartitionData partitionData = topicData.partitions().get(0);
         assertEquals(context.metadataPartition.partition(), partitionData.partitionIndex());
         assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, Errors.forCode(partitionData.errorCode()));
+        assertEquals(Errors.NOT_LEADER_OR_FOLLOWER.message(), partitionData.errorMessage());
     }
 
     @ParameterizedTest
@@ -2617,13 +2619,14 @@ public class KafkaRaftClientTest {
         context.assertSentFetchPartitionResponse(3L, epoch);
 
         context.time.sleep(100);
-        context.deliverRequest(DescribeQuorumRequest.singletonRequest(context.metadataPartition));
+        context.deliverRequest(context.describeQuorumRequest());
         context.pollUntilResponse();
 
         context.assertSentDescribeQuorumResponse(localId, epoch, 3L,
             Arrays.asList(
                 new ReplicaState()
                     .setReplicaId(localId)
+                    .setReplicaDirectoryId(ReplicaKey.NO_DIRECTORY_ID)
                     // As we are appending the records directly to the log,
                     // the leader end offset hasn't been updated yet.
                     .setLogEndOffset(3L)
@@ -2631,17 +2634,20 @@ public class KafkaRaftClientTest {
                     .setLastCaughtUpTimestamp(context.time.milliseconds()),
                 new ReplicaState()
                     .setReplicaId(laggingFollower.id())
+                    .setReplicaDirectoryId(ReplicaKey.NO_DIRECTORY_ID)
                     .setLogEndOffset(1L)
                     .setLastFetchTimestamp(laggingFollowerFetchTime)
                     .setLastCaughtUpTimestamp(laggingFollowerFetchTime),
                 new ReplicaState()
                     .setReplicaId(closeFollower.id())
+                    .setReplicaDirectoryId(ReplicaKey.NO_DIRECTORY_ID)
                     .setLogEndOffset(3L)
                     .setLastFetchTimestamp(closeFollowerFetchTime)
                     .setLastCaughtUpTimestamp(closeFollowerFetchTime)),
             singletonList(
                 new ReplicaState()
                     .setReplicaId(observerId.id())
+                    .setReplicaDirectoryId(observerId.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
                     .setLogEndOffset(0L)
                     .setLastFetchTimestamp(observerFetchTime)
                     .setLastCaughtUpTimestamp(-1L)));

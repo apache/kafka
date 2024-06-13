@@ -30,8 +30,6 @@
   <allow pkg="org.opentest4j" />
   <allow pkg="org.hamcrest" />
   <allow pkg="org.mockito" />
-  <allow pkg="org.easymock" />
-  <allow pkg="org.powermock" />
   <allow pkg="java.security" />
   <allow pkg="javax.net.ssl" />
   <allow pkg="javax.security" />
@@ -622,9 +620,6 @@
     <subpackage name="file">
       <allow pkg="org.apache.kafka.connect" />
       <allow pkg="org.apache.kafka.clients.consumer" />
-      <!-- for tests -->
-      <allow pkg="org.easymock" />
-      <allow pkg="org.powermock" />
     </subpackage>
 
     <subpackage name="tools">

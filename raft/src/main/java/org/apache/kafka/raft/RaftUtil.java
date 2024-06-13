@@ -21,6 +21,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.message.DescribeQuorumRequestData;
+import org.apache.kafka.common.message.DescribeQuorumResponseData;
 import org.apache.kafka.common.message.EndQuorumEpochRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.FetchRequestData;
@@ -441,6 +442,52 @@ public class RaftUtil {
                 );
                 response.setNodeEndpoints(nodeEndpoints);
             }
+        }
+
+        return response;
+    }
+
+
+    public static DescribeQuorumRequestData singletonDescribeQuorumRequest(
+        TopicPartition topicPartition
+    ) {
+
+        return new DescribeQuorumRequestData()
+            .setTopics(
+                Collections.singletonList(
+                    new DescribeQuorumRequestData.TopicData()
+                        .setTopicName(topicPartition.topic())
+                        .setPartitions(
+                            Collections.singletonList(
+                                new DescribeQuorumRequestData.PartitionData()
+                                    .setPartitionIndex(topicPartition.partition())
+                            )
+                        )
+                )
+            );
+    }
+
+    public static DescribeQuorumResponseData singletonDescribeQuorumResponse(
+        short apiVersion,
+        TopicPartition topicPartition,
+        DescribeQuorumResponseData.PartitionData partitionData,
+        DescribeQuorumResponseData.NodeCollection nodes
+    ) {
+        DescribeQuorumResponseData response = new DescribeQuorumResponseData()
+            .setTopics(
+                Collections.singletonList(
+                    new DescribeQuorumResponseData.TopicData()
+                        .setTopicName(topicPartition.topic())
+                        .setPartitions(
+                            Collections.singletonList(
+                                partitionData.setPartitionIndex(topicPartition.partition())
+                            )
+                        )
+                )
+            );
+
+        if (apiVersion >= 2) {
+            response.setNodes(nodes);
         }
 
         return response;

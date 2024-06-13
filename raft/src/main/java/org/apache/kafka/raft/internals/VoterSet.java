@@ -286,7 +286,7 @@ final public class VoterSet {
         private final Endpoints listeners;
         private final SupportedVersionRange supportedKRaftVersion;
 
-        VoterNode(
+        public VoterNode(
             ReplicaKey voterKey,
             Endpoints listeners,
             SupportedVersionRange supportedKRaftVersion

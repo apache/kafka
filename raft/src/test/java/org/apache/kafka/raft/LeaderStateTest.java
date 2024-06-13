@@ -254,6 +254,7 @@ public class LeaderStateTest {
         );
     }
 
+    // TODO: looks like this need to get fixed
     @Test
     public void testLastCaughtUpTimeObserver() {
         int node1 = 1;
@@ -582,6 +583,7 @@ public class LeaderStateTest {
         assertEquals(
             new DescribeQuorumResponseData.ReplicaState()
                 .setReplicaId(localReplicaKey.id())
+                .setReplicaDirectoryId(localReplicaKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
                 .setLogEndOffset(-1)
                 .setLastFetchTimestamp(time.milliseconds())
                 .setLastCaughtUpTimestamp(time.milliseconds()),
@@ -604,6 +606,7 @@ public class LeaderStateTest {
         assertEquals(
             new DescribeQuorumResponseData.ReplicaState()
                 .setReplicaId(localReplicaKey.id())
+                .setReplicaDirectoryId(localReplicaKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
                 .setLogEndOffset(leaderEndOffset)
                 .setLastFetchTimestamp(time.milliseconds())
                 .setLastCaughtUpTimestamp(time.milliseconds()),
@@ -611,10 +614,14 @@ public class LeaderStateTest {
         );
     }
 
+    // TODO: probably need to update this test
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testDescribeQuorumWithMultipleVoters(boolean withDirectoryId) {
         MockTime time = new MockTime();
+        Uuid localVoterDirectoryId = withDirectoryId ?
+            localReplicaKey.directoryId().get() :
+            ReplicaKey.NO_DIRECTORY_ID;
         ReplicaKey activeFollowerKey = replicaKey(1, withDirectoryId);
         ReplicaKey inactiveFollowerKey = replicaKey(2, withDirectoryId);
         long leaderStartOffset = 10L;
@@ -657,6 +664,7 @@ public class LeaderStateTest {
         assertEquals(
             new DescribeQuorumResponseData.ReplicaState()
                 .setReplicaId(localReplicaKey.id())
+                .setReplicaDirectoryId(localVoterDirectoryId)
                 .setLogEndOffset(leaderEndOffset)
                 .setLastFetchTimestamp(time.milliseconds())
                 .setLastCaughtUpTimestamp(time.milliseconds()),
@@ -670,6 +678,7 @@ public class LeaderStateTest {
         assertEquals(
             new DescribeQuorumResponseData.ReplicaState()
                 .setReplicaId(activeFollowerKey.id())
+                .setReplicaDirectoryId(activeFollowerKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
                 .setLogEndOffset(leaderEndOffset)
                 .setLastFetchTimestamp(activeFollowerFetchTimeMs)
                 .setLastCaughtUpTimestamp(activeFollowerFetchTimeMs),
@@ -683,6 +692,7 @@ public class LeaderStateTest {
         assertEquals(
             new DescribeQuorumResponseData.ReplicaState()
                 .setReplicaId(inactiveFollowerKey.id())
+                .setReplicaDirectoryId(inactiveFollowerKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
                 .setLogEndOffset(-1)
                 .setLastFetchTimestamp(-1)
                 .setLastCaughtUpTimestamp(-1),
@@ -690,13 +700,16 @@ public class LeaderStateTest {
         );
     }
 
-    @Test
-    public void testDescribeQuorumWithObservers() {
+    // TODO: test with withKip853Rpc
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testDescribeQuorumWithObservers(boolean withDirectoryId) {
         MockTime time = new MockTime();
-        int observerId = 10;
+
+        ReplicaKey observerKey = replicaKey(10, withDirectoryId);
         long epochStartOffset = 10L;
 
-        VoterSet voters = VoterSetTest.voterSet(Stream.of(localReplicaKey));
+        VoterSet voters = localWithRemoteVoterSet(Stream.empty(), withDirectoryId);
         LeaderState<?> state = newLeaderState(voters, epochStartOffset);
         assertTrue(state.updateLocalState(new LogOffsetMetadata(epochStartOffset + 1), voters));
         assertEquals(Optional.of(new LogOffsetMetadata(epochStartOffset + 1)), state.highWatermark());
@@ -705,7 +718,7 @@ public class LeaderStateTest {
         long observerFetchTimeMs = time.milliseconds();
         assertFalse(
             state.updateReplicaState(
-                ReplicaKey.of(observerId, ReplicaKey.NO_DIRECTORY_ID),
+                observerKey,
                 observerFetchTimeMs,
                 new LogOffsetMetadata(epochStartOffset + 1)
             )
@@ -718,6 +731,7 @@ public class LeaderStateTest {
         assertEquals(epoch, partitionData.leaderEpoch());
 
         assertEquals(1, partitionData.currentVoters().size());
+        // TODO: test voter directory id
         assertEquals(localReplicaKey.id(), partitionData.currentVoters().get(0).replicaId());
 
         List<DescribeQuorumResponseData.ReplicaState> observerStates = partitionData.observers();
@@ -725,13 +739,15 @@ public class LeaderStateTest {
 
         DescribeQuorumResponseData.ReplicaState observerState = observerStates.get(0);
         assertEquals(new DescribeQuorumResponseData.ReplicaState()
-                .setReplicaId(observerId)
+                .setReplicaId(observerKey.id())
+                .setReplicaDirectoryId(observerKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID))
                 .setLogEndOffset(epochStartOffset + 1)
                 .setLastFetchTimestamp(observerFetchTimeMs)
                 .setLastCaughtUpTimestamp(observerFetchTimeMs),
             observerState);
     }
 
+    // TODO: test with withKip853Rpc
     @Test
     public void testDescribeQuorumWithVotersAndObservers() {
         MockTime time = new MockTime();
@@ -752,7 +768,6 @@ public class LeaderStateTest {
         assertFalse(state.updateReplicaState(nodeKey1, fetchTimeMs, new LogOffsetMetadata(epochStartOffset + 1)));
         VoterSet votersWithoutNode1 = voters.removeVoter(nodeKey1).get();
         state.updateLocalState(new LogOffsetMetadata(epochStartOffset + 5), votersWithoutNode1);
-
 
         time.sleep(500);
         DescribeQuorumResponseData.PartitionData partitionData = state.describeQuorum(time.milliseconds());
@@ -963,6 +978,7 @@ public class LeaderStateTest {
         assertEquals(Collections.emptyList(), observerStates);
     }
 
+    // TODO: Test directory id is set
     @Test
     public void testObserverStateExpiration() {
         MockTime time = new MockTime();
@@ -1049,6 +1065,7 @@ public class LeaderStateTest {
         return findReplicaOrFail(observerId, partitionData.observers());
     }
 
+    // TODO: fix to use replica key instead of just replica id
     private DescribeQuorumResponseData.ReplicaState findReplicaOrFail(
         int replicaId,
         List<DescribeQuorumResponseData.ReplicaState> replicas

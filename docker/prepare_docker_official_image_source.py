@@ -36,14 +36,18 @@ import argparse
 from distutils.dir_util import copy_tree
 import os
 import shutil
+import re
 
 
-def remove_args_and_hardcode_values(file_path, kafka_url):
+def remove_args_and_hardcode_values(file_path, kafka_version, kafka_url):
     with open(file_path, 'r') as file:
         filedata = file.read()
     filedata = filedata.replace("ARG kafka_url", f"ENV kafka_url {kafka_url}")
     filedata = filedata.replace(
         "ARG build_date", f"ENV build_date {str(date.today())}")
+    original_comment = re.compile(r"# Get kafka from https://archive.apache.org/dist/kafka and pass the url through build arguments")
+    updated_comment = f"# Get Kafka from https://archive.apache.org/dist/kafka, url passed as env var, for version {kafka_version}"
+    filedata = original_comment.sub(updated_comment, filedata)
     with open(file_path, 'w') as file:
         file.write(filedata)
 
@@ -55,7 +59,7 @@ if __name__ == '__main__':
     parser.add_argument("--kafka-version", "-v", dest="kafka_version",
                         help="Kafka version for which the source for docker official image is to be built")
     args = parser.parse_args()
-    kafka_url = f"https://downloads.apache.org/kafka/{args.kafka_version}/kafka_2.13-{args.kafka_version}.tgz"
+    kafka_url = f"https://archive.apache.org/dist/kafka/{args.kafka_version}/kafka_2.13-{args.kafka_version}.tgz"
     current_dir = os.path.dirname(os.path.realpath(__file__))
     new_dir = os.path.join(
         current_dir, f'docker_official_images', args.kafka_version)
@@ -65,4 +69,4 @@ if __name__ == '__main__':
     copy_tree(os.path.join(current_dir, args.image_type), os.path.join(new_dir, args.kafka_version, args.image_type))
     copy_tree(os.path.join(current_dir, 'resources'), os.path.join(new_dir, args.kafka_version, args.image_type, 'resources'))
     remove_args_and_hardcode_values(
-        os.path.join(new_dir, args.kafka_version, args.image_type, 'Dockerfile'), kafka_url)
+        os.path.join(new_dir, args.kafka_version, args.image_type, 'Dockerfile'), args.kafka_version, kafka_url)
