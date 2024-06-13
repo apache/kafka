@@ -57,15 +57,13 @@ import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.hamcrest.Matcher;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.Arguments;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -74,7 +72,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
 import java.util.stream.Collectors;
-import org.junit.runners.Parameterized.Parameter;
+import java.util.stream.Stream;
 
 import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
@@ -87,32 +85,25 @@ import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@RunWith(Parameterized.class)
 public class KStreamSlidingWindowAggregateTest {
-
-    @Parameterized.Parameters(name = "{0}_inorder:{1}_cache:{2}")
-    public static Collection<Object[]> data() {
-        return Arrays.asList(new Object[][] {
-            {StrategyType.ON_WINDOW_UPDATE, true, true},
-            {StrategyType.ON_WINDOW_UPDATE, true, false},
-            {StrategyType.ON_WINDOW_UPDATE, false, true},
-            {StrategyType.ON_WINDOW_UPDATE, false, false},
-            {StrategyType.ON_WINDOW_CLOSE, true, true},
-            {StrategyType.ON_WINDOW_CLOSE, true, false},
-            {StrategyType.ON_WINDOW_CLOSE, false, true},
-            {StrategyType.ON_WINDOW_CLOSE, false, false}
-        });
+    
+    public static Stream<Arguments> data() {
+        return Stream.of(
+            Arguments.of(StrategyType.ON_WINDOW_UPDATE, true, true),
+            Arguments.of(StrategyType.ON_WINDOW_UPDATE, true, false),
+            Arguments.of(StrategyType.ON_WINDOW_UPDATE, false, true),
+            Arguments.of(StrategyType.ON_WINDOW_UPDATE, false, false),
+            Arguments.of(StrategyType.ON_WINDOW_CLOSE, true, true), 
+            Arguments.of(StrategyType.ON_WINDOW_CLOSE, true, false),
+            Arguments.of(StrategyType.ON_WINDOW_CLOSE, false, true),
+            Arguments.of(StrategyType.ON_WINDOW_CLOSE, false, false)
+        );
     }
-    @Parameter
     public StrategyType type;
-
-    @Parameter(1)
     public boolean inOrderIterator;
-
-    @Parameter(2)
     public boolean withCache;
 
     private boolean emitFinal;
@@ -120,15 +111,19 @@ public class KStreamSlidingWindowAggregateTest {
 
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
     private final String threadId = Thread.currentThread().getName();
-
-    @Before
-    public void before() {
+    
+    public void setup(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache) {
+        type = inputType;
+        inOrderIterator = inputInOrderIterator;
+        withCache = inputWithCache;
         emitFinal = type.equals(StrategyType.ON_WINDOW_CLOSE);
         emitStrategy = StrategyType.forType(type);
     }
 
-    @Test
-    public void testAggregateSmallInput() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void testAggregateSmallInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache) {
+        setup(inputType, inputInOrderIterator, inputWithCache);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
 
@@ -223,8 +218,10 @@ public class KStreamSlidingWindowAggregateTest {
         assertEquals(expected, actual);
     }
 
-    @Test
-    public void testReduceSmallInput() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void testReduceSmallInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache) {
+        setup(inputType, inputInOrderIterator, inputWithCache);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
         final WindowBytesStoreSupplier storeSupplier = setupWindowBytesStoreSupplier(1);
@@ -288,8 +285,10 @@ public class KStreamSlidingWindowAggregateTest {
         assertEquals(expected, actual);
     }
 
-    @Test
-    public void testAggregateLargeInput() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void testAggregateLargeInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache) {
+        setup(inputType, inputInOrderIterator, inputWithCache);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final long grace = emitFinal ? 10L : 50L;
@@ -507,8 +506,10 @@ public class KStreamSlidingWindowAggregateTest {
         }
     }
 
-    @Test
-    public void testJoin() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void testJoin(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache) {
+        setup(inputType, inputInOrderIterator, inputWithCache);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final String topic2 = "topic2";
@@ -655,8 +656,10 @@ public class KStreamSlidingWindowAggregateTest {
         }
     }
 
-    @Test
-    public void testEarlyRecordsSmallInput() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void testEarlyRecordsSmallInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache) {
+        setup(inputType, inputInOrderIterator, inputWithCache);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
 
@@ -777,8 +780,10 @@ public class KStreamSlidingWindowAggregateTest {
         assertEquals(expected, actual);
     }
 
-    @Test
-    public void testEarlyRecordsRepeatedInput() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void testEarlyRecordsRepeatedInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache) {
+        setup(inputType, inputInOrderIterator, inputWithCache);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
 
@@ -859,8 +864,10 @@ public class KStreamSlidingWindowAggregateTest {
         assertEquals(expected, actual);
     }
 
-    @Test
-    public void testEarlyRecordsLargeInput() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void testEarlyRecordsLargeInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache) {
+        setup(inputType, inputInOrderIterator, inputWithCache);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
         final WindowBytesStoreSupplier storeSupplier = setupWindowBytesStoreSupplier(1);
@@ -1012,8 +1019,10 @@ public class KStreamSlidingWindowAggregateTest {
         }
     }
 
-    @Test
-    public void testEarlyNoGracePeriodSmallInput() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void testEarlyNoGracePeriodSmallInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache) {
+        setup(inputType, inputInOrderIterator, inputWithCache);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
 
@@ -1110,8 +1119,10 @@ public class KStreamSlidingWindowAggregateTest {
         assertEquals(expected, actual);
     }
 
-    @Test
-    public void testNoGracePeriodSmallInput() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void testNoGracePeriodSmallInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache) {
+        setup(inputType, inputInOrderIterator, inputWithCache);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
 
@@ -1200,8 +1211,10 @@ public class KStreamSlidingWindowAggregateTest {
         assertEquals(expected, actual);
     }
 
-    @Test
-    public void testEarlyNoGracePeriodLargeInput() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void testEarlyNoGracePeriodLargeInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache) {
+        setup(inputType, inputInOrderIterator, inputWithCache);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
         final WindowBytesStoreSupplier storeSupplier =
@@ -1319,8 +1332,10 @@ public class KStreamSlidingWindowAggregateTest {
         }
     }
 
-    @Test
-    public void testNoGracePeriodLargeInput() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void testNoGracePeriodLargeInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache) {
+        setup(inputType, inputInOrderIterator, inputWithCache);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
         final WindowBytesStoreSupplier storeSupplier =
@@ -1442,8 +1457,10 @@ public class KStreamSlidingWindowAggregateTest {
         }
     }
 
-    @Test
-    public void shouldLogAndMeterWhenSkippingNullKey() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldLogAndMeterWhenSkippingNullKey(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache) {
+        setup(inputType, inputInOrderIterator, inputWithCache);
         final String builtInMetricsVersion = StreamsConfig.METRICS_LATEST;
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
@@ -1473,8 +1490,10 @@ public class KStreamSlidingWindowAggregateTest {
         }
     }
 
-    @Test
-    public void shouldLogAndMeterWhenSkippingExpiredWindowByGrace() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldLogAndMeterWhenSkippingExpiredWindowByGrace(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache) {
+        setup(inputType, inputInOrderIterator, inputWithCache);
         final String builtInMetricsVersion = StreamsConfig.METRICS_LATEST;
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic = "topic";
@@ -1550,9 +1569,10 @@ public class KStreamSlidingWindowAggregateTest {
         }
     }
 
-    @Test
-    public void testAggregateRandomInput() {
-
+    @ParameterizedTest
+    @MethodSource("data")
+    public void testAggregateRandomInput(final StrategyType inputType, final boolean inputInOrderIterator, final boolean inputWithCache) {
+        setup(inputType, inputInOrderIterator, inputWithCache);
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final WindowBytesStoreSupplier storeSupplier =
