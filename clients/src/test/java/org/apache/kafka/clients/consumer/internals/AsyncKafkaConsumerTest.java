@@ -832,18 +832,18 @@ public class AsyncKafkaConsumerTest {
 
     // ArgumentCaptor's type-matching does not work reliably with Java 8, so we cannot directly capture the AsyncCommitEvent
     // Instead, we capture the super-class CompletableApplicationEvent and fetch the last captured event.
+    private <T> CompletableFuture<T> getLastEnqueuedEventFuture() {
+        final CompletableApplicationEvent<T> lastEvent = getLastEnqueuedEvent();
+        return lastEvent.future();
+    }
+
+    // ArgumentCaptor's type-matching does not work reliably with Java 8, so we cannot directly capture the AsyncCommitEvent
+    // Instead, we capture the super-class CompletableApplicationEvent and fetch the last captured event.
     private <T> CompletableApplicationEvent<T> getLastEnqueuedEvent() {
         final ArgumentCaptor<CompletableApplicationEvent<T>> eventArgumentCaptor = ArgumentCaptor.forClass(CompletableApplicationEvent.class);
         verify(applicationEventHandler, atLeast(1)).add(eventArgumentCaptor.capture());
         final List<CompletableApplicationEvent<T>> allValues = eventArgumentCaptor.getAllValues();
         return allValues.get(allValues.size() - 1);
-    }
-
-    // ArgumentCaptor's type-matching does not work reliably with Java 8, so we cannot directly capture the AsyncCommitEvent
-    // Instead, we capture the super-class CompletableApplicationEvent and fetch the last captured event.
-    private <T> CompletableFuture<T> getLastEnqueuedEventFuture() {
-        final CompletableApplicationEvent<T> lastEvent = getLastEnqueuedEvent();
-        return lastEvent.future();
     }
 
     @Test
