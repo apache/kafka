@@ -33,7 +33,7 @@ import java.util.concurrent.Semaphore;
  * Used internally by MirrorMaker to write, queued, and promote the new translated offsets into offset-syncs topic.
  */
 class OffsetSyncWriter implements AutoCloseable {
-    private static final Logger log = LoggerFactory.getLogger(OffsetSyncWriter.class);
+    private static final Logger LOG = LoggerFactory.getLogger(OffsetSyncWriter.class);
     private static final int MAX_OUTSTANDING_OFFSET_SYNCS = 10;
 
     private final Map<TopicPartition, OffsetSync> delayedOffsetSyncs = new LinkedHashMap<>();
@@ -70,9 +70,9 @@ class OffsetSyncWriter implements AutoCloseable {
                 offsetSync.recordKey(), offsetSync.recordValue());
         offsetProducer.send(record, (x, e) -> {
             if (e != null) {
-                log.error("Failure sending offset sync.", e);
+                LOG.error("Failure sending offset sync.", e);
             } else {
-                log.trace("Sync'd offsets for {}: {}=={}", offsetSync.topicPartition(),
+                LOG.trace("Sync'd offsets for {}: {}=={}", offsetSync.topicPartition(),
                         offsetSync.upstreamOffset(), offsetSync.downstreamOffset());
             }
             outstandingOffsetSyncs.release();
@@ -86,13 +86,13 @@ class OffsetSyncWriter implements AutoCloseable {
                 Iterator<OffsetSync> syncIterator = pendingOffsetSyncs.values().iterator();
                 if (!syncIterator.hasNext()) {
                     // Nothing to sync
-                    log.trace("No more pending offset syncs");
+                    LOG.trace("No more pending offset syncs");
                     return;
                 }
                 pendingOffsetSync = syncIterator.next();
                 if (!outstandingOffsetSyncs.tryAcquire()) {
                     // Too many outstanding syncs
-                    log.trace("Too many in-flight offset syncs; will try to send remaining offset syncs later");
+                    LOG.trace("Too many in-flight offset syncs; will try to send remaining offset syncs later");
                     return;
                 }
                 syncIterator.remove();
@@ -100,7 +100,7 @@ class OffsetSyncWriter implements AutoCloseable {
             // Publish offset sync outside of synchronized block; we may have to
             // wait for producer metadata to update before Producer::send returns
             sendOffsetSync(pendingOffsetSync);
-            log.trace("Dispatched offset sync for {}", pendingOffsetSync.topicPartition());
+            LOG.trace("Dispatched offset sync for {}", pendingOffsetSync.topicPartition());
         }
     }
 
