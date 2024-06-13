@@ -32,10 +32,10 @@ import org.apache.kafka.streams.processor.assignment.ProcessId;
  * 2. always return true, indicating that a follow-up rebalance is needed
  */
 public class FallbackPriorTaskAssignor implements LegacyTaskAssignor {
-    private final StickyTaskAssignor delegate;
+    private final LegacyStickyTaskAssignor delegate;
 
     public FallbackPriorTaskAssignor() {
-        delegate = new StickyTaskAssignor(true);
+        delegate = new LegacyStickyTaskAssignor(true);
     }
 
     @Override
