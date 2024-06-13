@@ -61,7 +61,7 @@ public class SharePartition {
      * offset, or be state persisted to disk.
      */
     // Visible for testing
-    public enum RecordState {
+    enum RecordState {
         AVAILABLE((byte) 0),
         ACQUIRED((byte) 1),
         ACKNOWLEDGED((byte) 2),
@@ -262,10 +262,10 @@ public class SharePartition {
             // When none of the records in the cachedState are in the AVAILABLE state, findNextFetchOffset will be false
             if (!findNextFetchOffset.get()) {
                 if (cachedState.isEmpty() || startOffset > cachedState.lastEntry().getValue().lastOffset()) {
-                    // 1. When cachedState is empty, endOffset is set to the next offset of the last offset removed from
-                    // batch, which is the next offset to be fetched.
-                    // 2. When startOffset has moved beyond the in-flight records, startOffset and endOffset point to the LSO,
-                    // which is the next offset to be fetched.
+                    // 1. When cachedState is empty, endOffset is set to the next offset of the last
+                    // offset removed from batch, which is the next offset to be fetched.
+                    // 2. When startOffset has moved beyond the in-flight records, startOffset and
+                    // endOffset point to the LSO, which is the next offset to be fetched.
                     return endOffset;
                 } else {
                     return endOffset + 1;
@@ -586,7 +586,6 @@ public class SharePartition {
         return scheduleAcquisitionLockTimeout(memberId, firstOffset, lastOffset, recordLockDurationMs);
     }
 
-    // TODO: maxDeliveryCount should be utilized here once it is implemented
     /**
      * Apply acquisition lock to acquired records.
      *
