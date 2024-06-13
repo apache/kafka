@@ -1697,7 +1697,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             log.error("Couldn't refresh committed offsets before timeout expired");
             return false;
         } catch (InterruptException e) {
-            throw ConsumerUtils.maybeWrapAsKafkaException(e);
+            throw e;
         } catch (Throwable t) {
             // Clear the pending event on errors that are not timeout-related.
             shouldClearPendingEvent = true;
