@@ -103,7 +103,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -140,6 +139,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.clearInvocations;
@@ -578,57 +578,90 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testOffsetFetchStoresPendingEvent() {
         consumer = newConsumer();
+        long timeoutMs = 0;
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
 
-        Map<TopicPartition, OffsetAndMetadata> results = Collections.emptyMap();
-        AtomicInteger eventCounter = new AtomicInteger();
-
-        doAnswerFetchCommittedOffsetsEvent(eventCounter, null);
-
         consumer.assign(Collections.singleton(new TopicPartition("topic1", 0)));
-        assertEquals(0, eventCounter.get());
 
-        consumer.poll(Duration.ZERO);
-        assertEquals(1, eventCounter.get());
+        // The first attempt at poll() creates an event, enqueues it, but its Future does not complete within the
+        // timeout, leaving a pending fetch.
+        consumer.poll(Duration.ofMillis(timeoutMs));
+        verify(applicationEventHandler, times(1)).add(any(FetchCommittedOffsetsEvent.class));
+        CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> event = getLastEnqueuedEvent();
+        assertThrows(TimeoutException.class, () -> ConsumerUtils.getResult(event.future(), time.timer(timeoutMs)));
+        assertNotNull(consumer.pendingOffsetFetch());
 
-        doAnswerFetchCommittedOffsetsEvent(eventCounter, results);
-
-        consumer.poll(Duration.ZERO);
-        assertEquals(1, eventCounter.get());
+        // For the second attempt, the event is reused, and this time the Future returns successfully, clearing
+        // the pending fetch. Verify that the number of FetchCommittedOffsetsEvent enqueued remains at 1.
+        event.future().complete(Collections.emptyMap());
+        consumer.poll(Duration.ofMillis(timeoutMs));
+        verify(applicationEventHandler, times(1)).add(any(FetchCommittedOffsetsEvent.class));
+        assertDoesNotThrow(() -> ConsumerUtils.getResult(event.future(), time.timer(timeoutMs)));
+        assertNull(consumer.pendingOffsetFetch());
     }
 
     @Test
     public void testOffsetFetchDoesNotReuseMismatchedPendingEvent() {
         consumer = newConsumer();
+        long timeoutMs = 0;
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
 
-        Map<TopicPartition, OffsetAndMetadata> results = Collections.emptyMap();
-        AtomicInteger eventCounter = new AtomicInteger();
-
-        doAnswerFetchCommittedOffsetsEvent(eventCounter, results);
-
+        // The first attempt at poll() retrieves data for partition 0 of the topic. poll() creates an event,
+        // enqueues it, but its Future does not complete within the timeout, leaving a pending fetch.
         consumer.assign(Collections.singleton(new TopicPartition("topic1", 0)));
-        consumer.poll(Duration.ZERO);
-        assertEquals(1, eventCounter.get());
+        consumer.poll(Duration.ofMillis(timeoutMs));
+        verify(applicationEventHandler, times(1)).add(any(FetchCommittedOffsetsEvent.class));
+        CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> event1 = getLastEnqueuedEvent();
+        assertThrows(TimeoutException.class, () -> ConsumerUtils.getResult(event1.future(), time.timer(timeoutMs)));
+        assertNotNull(consumer.pendingOffsetFetch());
 
+        // For the second attempt, the set of partitions is reassigned, causing the pending offset to be replaced.
+        // Verify that the number of FetchCommittedOffsetsEvent enqueued is updated to 2.
         consumer.assign(Collections.singleton(new TopicPartition("topic1", 1)));
-        consumer.poll(Duration.ZERO);
-        assertEquals(2, eventCounter.get());
+        consumer.poll(Duration.ofMillis(timeoutMs));
+        verify(applicationEventHandler, times(2)).add(any(FetchCommittedOffsetsEvent.class));
+        CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> event2 = getLastEnqueuedEvent();
+        assertThrows(TimeoutException.class, () -> ConsumerUtils.getResult(event2.future(), time.timer(timeoutMs)));
+        assertNotNull(consumer.pendingOffsetFetch());
+
+        // For the third attempt, the event from attempt 2 is reused, so make the Future return successfully. This
+        // will finally clear out the pending fetch. Verify that the number of FetchCommittedOffsetsEvent
+        // enqueued remains at 2.
+        event2.future().complete(Collections.emptyMap());
+        consumer.poll(Duration.ofMillis(timeoutMs));
+        verify(applicationEventHandler, times(2)).add(any(FetchCommittedOffsetsEvent.class));
+        assertDoesNotThrow(() -> ConsumerUtils.getResult(event2.future(), time.timer(timeoutMs)));
+        assertNull(consumer.pendingOffsetFetch());
     }
 
-    private void doAnswerFetchCommittedOffsetsEvent(AtomicInteger eventCounter, Map<TopicPartition, OffsetAndMetadata> results) {
-        doAnswer(invocation -> {
-            eventCounter.incrementAndGet();
+    @Test
+    public void testOffsetFetchDoesNotReuseExpiredPendingEvent() {
+        consumer = newConsumer();
+        long timeoutMs = 0;
 
-            if (results != null) {
-                FetchCommittedOffsetsEvent event = invocation.getArgument(0);
-                event.future().complete(results);
-            }
+        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
 
-            return results;
-        })
-            .when(applicationEventHandler)
-            .add(any(FetchCommittedOffsetsEvent.class));
+        consumer.assign(Collections.singleton(new TopicPartition("topic1", 0)));
+
+        // The first attempt at poll() creates an event, enqueues it, but its Future does not complete within
+        // the timeout, leaving a pending fetch.
+        consumer.assign(Collections.singleton(new TopicPartition("topic1", 0)));
+        consumer.poll(Duration.ofMillis(timeoutMs));
+        verify(applicationEventHandler, times(1)).add(any(FetchCommittedOffsetsEvent.class));
+        CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> event1 = getLastEnqueuedEvent();
+        assertThrows(TimeoutException.class, () -> ConsumerUtils.getResult(event1.future(), time.timer(timeoutMs)));
+        assertNotNull(consumer.pendingOffsetFetch());
+
+        // Sleep past the event's expiration, causing the poll() to *not* reuse the pending fetch. A new event
+        // is created and added to the application event queue.
+        time.sleep(event1.deadlineMs() - time.milliseconds());
+        consumer.poll(Duration.ofMillis(timeoutMs));
+        assertNotNull(consumer.pendingOffsetFetch());
+        verify(applicationEventHandler, times(2)).add(any(FetchCommittedOffsetsEvent.class));
+        CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> event2 = getLastEnqueuedEvent();
+        assertNotEquals(event1.id(), event2.id());
+        assertThrows(TimeoutException.class, () -> ConsumerUtils.getResult(event2.future(), time.timer(timeoutMs)));
+        assertNotNull(consumer.pendingOffsetFetch());
     }
 
     @Test
@@ -788,7 +821,7 @@ public class AsyncKafkaConsumerTest {
         assertDoesNotThrow(() -> consumer.commitSync(Collections.singletonMap(tp, new OffsetAndMetadata(20)), Duration.ofMillis(100)));
     }
 
-    private CompletableFuture<Void> setUpConsumerWithIncompleteAsyncCommit(TopicPartition tp) {
+    private <T> CompletableFuture<T> setUpConsumerWithIncompleteAsyncCommit(TopicPartition tp) {
         time = new MockTime(1);
         consumer = newConsumer();
 
@@ -803,11 +836,17 @@ public class AsyncKafkaConsumerTest {
 
     // ArgumentCaptor's type-matching does not work reliably with Java 8, so we cannot directly capture the AsyncCommitEvent
     // Instead, we capture the super-class CompletableApplicationEvent and fetch the last captured event.
-    private CompletableFuture<Void> getLastEnqueuedEventFuture() {
-        final ArgumentCaptor<CompletableApplicationEvent<Void>> eventArgumentCaptor = ArgumentCaptor.forClass(CompletableApplicationEvent.class);
+    private <T> CompletableApplicationEvent<T> getLastEnqueuedEvent() {
+        final ArgumentCaptor<CompletableApplicationEvent<T>> eventArgumentCaptor = ArgumentCaptor.forClass(CompletableApplicationEvent.class);
         verify(applicationEventHandler, atLeast(1)).add(eventArgumentCaptor.capture());
-        final List<CompletableApplicationEvent<Void>> allValues = eventArgumentCaptor.getAllValues();
-        final CompletableApplicationEvent<Void> lastEvent = allValues.get(allValues.size() - 1);
+        final List<CompletableApplicationEvent<T>> allValues = eventArgumentCaptor.getAllValues();
+        return allValues.get(allValues.size() - 1);
+    }
+
+    // ArgumentCaptor's type-matching does not work reliably with Java 8, so we cannot directly capture the AsyncCommitEvent
+    // Instead, we capture the super-class CompletableApplicationEvent and fetch the last captured event.
+    private <T> CompletableFuture<T> getLastEnqueuedEventFuture() {
+        final CompletableApplicationEvent<T> lastEvent = getLastEnqueuedEvent();
         return lastEvent.future();
     }
 
