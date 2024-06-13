@@ -22,6 +22,7 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.ManualMetadataUpdater;
+import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NetworkClientUtils;
 import org.apache.kafka.clients.admin.Admin;
@@ -708,7 +709,8 @@ public class ReplicaVerificationTool {
                 time,
                 false,
                 new ApiVersions(),
-                logContext
+                logContext,
+                MetadataRecoveryStrategy.forName(consumerConfig.getString(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG))
             );
         }
 

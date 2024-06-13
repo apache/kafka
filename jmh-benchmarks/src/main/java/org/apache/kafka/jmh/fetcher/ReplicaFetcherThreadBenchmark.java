@@ -17,14 +17,13 @@
 
 package org.apache.kafka.jmh.fetcher;
 
+import kafka.cluster.AlterPartitionListener;
 import kafka.cluster.BrokerEndPoint;
 import kafka.cluster.DelayedOperations;
-import kafka.cluster.AlterPartitionListener;
 import kafka.cluster.Partition;
-import org.apache.kafka.server.util.MockTime;
-import org.apache.kafka.storage.internals.log.LogAppendInfo;
 import kafka.log.LogManager;
 import kafka.server.AlterPartitionManager;
+import kafka.server.BrokerBlockingSender;
 import kafka.server.BrokerFeatures;
 import kafka.server.BrokerTopicStats;
 import kafka.server.FailedPartitions;
@@ -34,7 +33,6 @@ import kafka.server.MetadataCache;
 import kafka.server.OffsetTruncationState;
 import kafka.server.QuotaFactory;
 import kafka.server.RemoteLeaderEndPoint;
-import kafka.server.BrokerBlockingSender;
 import kafka.server.ReplicaFetcherThread;
 import kafka.server.ReplicaManager;
 import kafka.server.ReplicaQuota;
@@ -46,9 +44,10 @@ import kafka.server.metadata.ZkMetadataCache;
 import kafka.utils.Pool;
 import kafka.utils.TestUtils;
 import kafka.zk.KafkaZkClient;
+
 import org.apache.kafka.clients.FetchSessionHandler;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData;
@@ -66,12 +65,15 @@ import org.apache.kafka.common.requests.UpdateMetadataRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.common.OffsetAndEpoch;
+import org.apache.kafka.server.util.KafkaScheduler;
+import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
+import org.apache.kafka.storage.internals.log.LogAppendInfo;
 import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
-import org.apache.kafka.server.util.KafkaScheduler;
+
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -98,6 +100,7 @@ import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+
 import scala.Option;
 import scala.collection.Iterator;
 import scala.collection.Map;

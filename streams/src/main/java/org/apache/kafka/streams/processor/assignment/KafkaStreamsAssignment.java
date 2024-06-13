@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.assignment;
 import static java.util.Collections.unmodifiableMap;
 
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -108,6 +109,16 @@ public class KafkaStreamsAssignment {
         return followupRebalanceDeadline;
     }
 
+    @Override
+    public String toString() {
+        return String.format(
+            "KafkaStreamsAssignment{%s, %s, %s}",
+            processId,
+            Arrays.toString(tasks.values().toArray(new AssignedTask[0])),
+            followupRebalanceDeadline
+        );
+    }
+
     public static class AssignedTask {
         private final TaskId id;
         private final Type taskType;
@@ -156,6 +167,11 @@ public class KafkaStreamsAssignment {
                 return false;
             final AssignedTask other = (AssignedTask) obj;
             return this.id.equals(other.id()) && this.taskType == other.taskType;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("AssignedTask{%s, %s}", taskType, id);
         }
     }
 }

@@ -202,24 +202,11 @@ def determineCommitId() {
 }
 
 def excludedSpotlessModules = [':clients',
-                               ':connect:api',
-                               ':connect:basic-auth-extension',
-                               ':connect:file',
-                               ':connect:json',
-                               ':connect:mirror',
-                               ':connect:mirror-client',
                                ':connect:runtime',
-                               ':connect:test-plugins',
-                               ':connect:transforms',
                                ':core',
-                               ':examples',
-                               ':generator',
-                               ':jmh-benchmarks',
-                               ':log4j-appender',
                                ':metadata',
                                ':raft',
                                ':server',
-                               ':shell',
                                ':storage',
                                ':storage:storage-api', //  rename in settings.gradle
                                ':streams',
@@ -248,8 +235,7 @@ def excludedSpotlessModules = [':clients',
                                ':streams:upgrade-system-tests-34',
                                ':streams:upgrade-system-tests-35',
                                ':streams:upgrade-system-tests-36',
-                               ':streams:upgrade-system-tests-37',
-                               ':trogdor']
+                               ':streams:upgrade-system-tests-37']
 
 
 apply from: file('wrapper.gradle')
