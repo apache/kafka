@@ -16,11 +16,20 @@
  */
 package org.apache.kafka.network;
 
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.server.config.ReplicationConfigs;
 import java.util.Arrays;
 import java.util.stream.Collectors;
+
+import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
+import static org.apache.kafka.common.config.ConfigDef.Importance.LOW;
+import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
+import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+import static org.apache.kafka.common.config.ConfigDef.Type.INT;
+import static org.apache.kafka.common.config.ConfigDef.Type.LONG;
+import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
 
 public class SocketServerConfigs {
     public static final String LISTENER_SECURITY_PROTOCOL_MAP_CONFIG = "listener.security.protocol.map";
@@ -143,4 +152,19 @@ public class SocketServerConfigs {
     public static final int FAILED_AUTHENTICATION_DELAY_MS_DEFAULT = 100;
     public static final String FAILED_AUTHENTICATION_DELAY_MS_DOC = "Connection close delay on failed authentication: this is the time (in milliseconds) by which connection close will be delayed on authentication failure. " +
             String.format("This must be configured to be less than %s to prevent connection timeout.", CONNECTIONS_MAX_IDLE_MS_CONFIG);
+    public static final ConfigDef CONFIG_DEF =  new ConfigDef()
+            .define(LISTENERS_CONFIG, STRING, LISTENERS_DEFAULT, HIGH, LISTENERS_DOC)
+            .define(ADVERTISED_LISTENERS_CONFIG, STRING, null, HIGH, ADVERTISED_LISTENERS_DOC)
+            .define(LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, STRING, LISTENER_SECURITY_PROTOCOL_MAP_DEFAULT, LOW, LISTENER_SECURITY_PROTOCOL_MAP_DOC)
+            .define(CONTROL_PLANE_LISTENER_NAME_CONFIG, STRING, null, HIGH, CONTROL_PLANE_LISTENER_NAME_DOC)
+            .define(SOCKET_SEND_BUFFER_BYTES_CONFIG, INT, SOCKET_SEND_BUFFER_BYTES_DEFAULT, HIGH, SOCKET_SEND_BUFFER_BYTES_DOC)
+            .define(SOCKET_RECEIVE_BUFFER_BYTES_CONFIG, INT, SOCKET_RECEIVE_BUFFER_BYTES_DEFAULT, HIGH, SOCKET_RECEIVE_BUFFER_BYTES_DOC)
+            .define(SOCKET_REQUEST_MAX_BYTES_CONFIG, INT, SOCKET_REQUEST_MAX_BYTES_DEFAULT, atLeast(1), HIGH, SOCKET_REQUEST_MAX_BYTES_DOC)
+            .define(SOCKET_LISTEN_BACKLOG_SIZE_CONFIG, INT, SOCKET_LISTEN_BACKLOG_SIZE_DEFAULT, atLeast(1), MEDIUM, SOCKET_LISTEN_BACKLOG_SIZE_DOC)
+            .define(MAX_CONNECTIONS_PER_IP_CONFIG, INT, MAX_CONNECTIONS_PER_IP_DEFAULT, atLeast(0), MEDIUM, MAX_CONNECTIONS_PER_IP_DOC)
+            .define(MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG, STRING, MAX_CONNECTIONS_PER_IP_OVERRIDES_DEFAULT, MEDIUM, MAX_CONNECTIONS_PER_IP_OVERRIDES_DOC)
+            .define(MAX_CONNECTIONS_CONFIG, INT, MAX_CONNECTIONS_DEFAULT, atLeast(0), MEDIUM, MAX_CONNECTIONS_DOC)
+            .define(MAX_CONNECTION_CREATION_RATE_CONFIG, INT, MAX_CONNECTION_CREATION_RATE_DEFAULT, atLeast(0), MEDIUM, MAX_CONNECTION_CREATION_RATE_DOC)
+            .define(CONNECTIONS_MAX_IDLE_MS_CONFIG, LONG, CONNECTIONS_MAX_IDLE_MS_DEFAULT, MEDIUM, CONNECTIONS_MAX_IDLE_MS_DOC)
+            .define(FAILED_AUTHENTICATION_DELAY_MS_CONFIG, INT, FAILED_AUTHENTICATION_DELAY_MS_DEFAULT, atLeast(0), LOW, FAILED_AUTHENTICATION_DELAY_MS_DOC);
 }

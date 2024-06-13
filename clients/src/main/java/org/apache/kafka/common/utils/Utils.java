@@ -17,6 +17,7 @@
 package org.apache.kafka.common.utils;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.network.TransferableChannel;
 import org.slf4j.Logger;
@@ -1654,6 +1655,15 @@ public final class Utils {
             throw new IllegalArgumentException("requirement failed");
     }
 
+    /**
+     * Merge multiple {@link ConfigDef} into one
+     * @param configDefs List of {@link ConfigDef}
+     */
+    public static ConfigDef mergeConfigs(List<ConfigDef> configDefs) {
+        ConfigDef all = new ConfigDef();
+        configDefs.forEach(configDef -> configDef.configKeys().values().forEach(all::define));
+        return all;
+    }
     /**
      * A runnable that can throw checked exception.
      */

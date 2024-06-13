@@ -1510,6 +1510,10 @@ project(':transaction-coordinator') {
     archivesName = "kafka-transaction-coordinator"
   }
 
+  dependencies {
+    implementation project(':clients')
+
+  }
   sourceSets {
     main {
       java {
@@ -1521,6 +1525,10 @@ project(':transaction-coordinator') {
         srcDirs = ["src/generated/java", "src/test/java"]
       }
     }
+  }
+
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-transaction-coordinator.xml")
   }
 
   javadoc {

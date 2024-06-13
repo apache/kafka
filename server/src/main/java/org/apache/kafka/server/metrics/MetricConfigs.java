@@ -17,7 +17,16 @@
 package org.apache.kafka.server.metrics;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.metrics.Sensor;
+
+import static org.apache.kafka.common.config.ConfigDef.Importance.LOW;
+import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+import static org.apache.kafka.common.config.ConfigDef.Type.BOOLEAN;
+import static org.apache.kafka.common.config.ConfigDef.Type.INT;
+import static org.apache.kafka.common.config.ConfigDef.Type.LIST;
+import static org.apache.kafka.common.config.ConfigDef.Type.LONG;
+import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
 
 public class MetricConfigs {
     /** ********* Kafka Metrics Configuration ***********/
@@ -60,4 +69,19 @@ public class MetricConfigs {
     public static final int CLIENT_TELEMETRY_MAX_BYTES_DEFAULT = 1024 * 1024;
     public static final String CLIENT_TELEMETRY_MAX_BYTES_DOC = "The maximum size (after compression if compression is used) of" +
             " telemetry metrics pushed from a client to the broker. The default value is 1048576 (1 MB).";
+
+    public static final ConfigDef CONFIG_DEF =  new ConfigDef()
+            // Kafka Metrics Configuration
+            .define(METRIC_NUM_SAMPLES_CONFIG, INT, METRIC_NUM_SAMPLES_DEFAULT, atLeast(1), LOW, METRIC_NUM_SAMPLES_DOC)
+            .define(METRIC_SAMPLE_WINDOW_MS_CONFIG, LONG, METRIC_SAMPLE_WINDOW_MS_DEFAULT, atLeast(1), LOW, METRIC_SAMPLE_WINDOW_MS_DOC)
+            .define(METRIC_REPORTER_CLASSES_CONFIG, LIST, METRIC_REPORTER_CLASSES_DEFAULT, LOW, METRIC_REPORTER_CLASSES_DOC)
+            .define(METRIC_RECORDING_LEVEL_CONFIG, STRING, METRIC_RECORDING_LEVEL_DEFAULT, LOW, METRIC_RECORDING_LEVEL_DOC)
+            .define(AUTO_INCLUDE_JMX_REPORTER_CONFIG, BOOLEAN, AUTO_INCLUDE_JMX_REPORTER_DEFAULT, LOW, AUTO_INCLUDE_JMX_REPORTER_DOC)
+
+            // Kafka Yammer Metrics Reporter Configuration
+            .define(KAFKA_METRICS_REPORTER_CLASSES_CONFIG, LIST, KAFKA_METRIC_REPORTER_CLASSES_DEFAULT, LOW, KAFKA_METRICS_REPORTER_CLASSES_DOC)
+            .define(KAFKA_METRICS_POLLING_INTERVAL_SECONDS_CONFIG, INT, KAFKA_METRICS_POLLING_INTERVAL_SECONDS_DEFAULT, atLeast(1), LOW, KAFKA_METRICS_POLLING_INTERVAL_SECONDS_DOC)
+
+            // Kafka Client Telemetry Metrics Configuration
+            .define(CLIENT_TELEMETRY_MAX_BYTES_CONFIG, INT, CLIENT_TELEMETRY_MAX_BYTES_DEFAULT, atLeast(1), LOW, CLIENT_TELEMETRY_MAX_BYTES_DOC);
 }
