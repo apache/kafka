@@ -79,7 +79,7 @@ public class MirrorHeartbeatConfig extends MirrorConnectorConfig {
                     HEARTBEATS_TOPIC_REPLICATION_FACTOR_DOC);
     }
 
-    protected final static ConfigDef CONNECTOR_CONFIG_DEF = defineHeartbeatConfig(new ConfigDef(BASE_CONNECTOR_CONFIG_DEF));
+    protected static final ConfigDef CONNECTOR_CONFIG_DEF = defineHeartbeatConfig(new ConfigDef(BASE_CONNECTOR_CONFIG_DEF));
 
     public static void main(String[] args) {
         System.out.println(defineHeartbeatConfig(new ConfigDef()).toHtml(4, config -> "mirror_heartbeat_" + config));

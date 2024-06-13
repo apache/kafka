@@ -37,10 +37,10 @@ import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
 
-final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
-    final private RawSnapshotWriter snapshot;
-    final private BatchAccumulator<T> accumulator;
-    final private Time time;
+public final class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
+    private final RawSnapshotWriter snapshot;
+    private final BatchAccumulator<T> accumulator;
+    private final Time time;
 
     private RecordsSnapshotWriter(
         RawSnapshotWriter snapshot,
@@ -140,7 +140,7 @@ final public class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
         }
     }
 
-    final public static class Builder {
+    public static final class Builder {
         private long lastContainedLogTimestamp = 0;
         private Compression compression = Compression.NONE;
         private Time time = Time.SYSTEM;

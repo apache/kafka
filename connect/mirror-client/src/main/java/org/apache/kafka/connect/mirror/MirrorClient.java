@@ -233,7 +233,7 @@ public class MirrorClient implements AutoCloseable {
         return sources;
     }
 
-    static private boolean endOfStream(Consumer<?, ?> consumer, Collection<TopicPartition> assignments) {
+    private static boolean endOfStream(Consumer<?, ?> consumer, Collection<TopicPartition> assignments) {
         Map<TopicPartition, Long> endOffsets = consumer.endOffsets(assignments);
         for (TopicPartition topicPartition : assignments) {
             if (consumer.position(topicPartition) < endOffsets.get(topicPartition)) {

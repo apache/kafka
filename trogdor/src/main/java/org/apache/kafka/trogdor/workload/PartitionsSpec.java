@@ -34,8 +34,8 @@ import java.util.Map.Entry;
  * Describes some partitions.
  */
 public class PartitionsSpec extends Message {
-    private final static short DEFAULT_REPLICATION_FACTOR = 3;
-    private final static short DEFAULT_NUM_PARTITIONS = 1;
+    private static final short DEFAULT_REPLICATION_FACTOR = 3;
+    private static final short DEFAULT_NUM_PARTITIONS = 1;
 
     private final int numPartitions;
     private final short replicationFactor;

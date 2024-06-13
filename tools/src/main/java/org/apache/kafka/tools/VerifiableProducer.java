@@ -316,7 +316,7 @@ public class VerifiableProducer implements AutoCloseable {
     }
 
     @JsonPropertyOrder({ "timestamp", "name" })
-    private static abstract class ProducerEvent {
+    private abstract static class ProducerEvent {
         private final long timestamp = System.currentTimeMillis();
 
         @JsonProperty

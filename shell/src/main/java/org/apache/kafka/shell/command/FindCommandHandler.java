@@ -37,7 +37,7 @@ import java.util.Optional;
  * Implements the find command.
  */
 public final class FindCommandHandler implements Commands.Handler {
-    public final static Commands.Type TYPE = new FindCommandType();
+    public static final Commands.Type TYPE = new FindCommandType();
 
     public static class FindCommandType implements Commands.Type {
         private FindCommandType() {

@@ -29,7 +29,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.UnaryOperator;
 
-final public class FetchSnapshotResponse extends AbstractResponse {
+public final class FetchSnapshotResponse extends AbstractResponse {
     private final FetchSnapshotResponseData data;
 
     public FetchSnapshotResponse(FetchSnapshotResponseData data) {

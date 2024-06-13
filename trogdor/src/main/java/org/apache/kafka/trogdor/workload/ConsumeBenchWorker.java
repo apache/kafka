@@ -405,7 +405,7 @@ public class ConsumeBenchWorker implements TaskWorker {
          * The percentiles to use when calculating the histogram data.
          * These should match up with the p50LatencyMs, p95LatencyMs, etc. fields.
          */
-        final static float[] PERCENTILES = {0.5f, 0.95f, 0.99f};
+        static final float[] PERCENTILES = {0.5f, 0.95f, 0.99f};
         @JsonCreator
         StatusData(@JsonProperty("assignedPartitions") List<String> assignedPartitions,
                    @JsonProperty("totalMessagesReceived") long totalMessagesReceived,

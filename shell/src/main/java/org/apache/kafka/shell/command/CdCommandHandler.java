@@ -34,7 +34,7 @@ import java.util.Optional;
  * Implements the cd command.
  */
 public final class CdCommandHandler implements Commands.Handler {
-    public final static Commands.Type TYPE = new CdCommandType();
+    public static final Commands.Type TYPE = new CdCommandType();
 
     public static class CdCommandType implements Commands.Type {
         private CdCommandType() {

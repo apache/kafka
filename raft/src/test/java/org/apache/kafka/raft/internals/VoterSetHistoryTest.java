@@ -26,7 +26,7 @@ import java.util.stream.IntStream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-final public class VoterSetHistoryTest {
+public final class VoterSetHistoryTest {
     @Test
     void testStaticVoterSet() {
         VoterSet staticVoterSet = new VoterSet(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true));

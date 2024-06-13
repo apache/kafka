@@ -41,7 +41,7 @@ import java.util.Optional;
 public final class TreeCommandHandler implements Commands.Handler {
     private static final Logger log = LoggerFactory.getLogger(TreeCommandHandler.class);
 
-    public final static Commands.Type TYPE = new CatCommandType();
+    public static final Commands.Type TYPE = new CatCommandType();
 
     public static class CatCommandType implements Commands.Type {
         private CatCommandType() {
