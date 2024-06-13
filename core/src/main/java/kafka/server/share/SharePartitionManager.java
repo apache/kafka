@@ -209,6 +209,14 @@ public class SharePartitionManager implements AutoCloseable {
         return future;
     }
 
+    /**
+     * The newContext method is used to create a new share fetch context for every share fetch request.
+     * @param groupId The group id in the share fetch request.
+     * @param shareFetchData The topic-partitions and their corresponding maxBytes data in the share fetch request.
+     * @param toForget The topic-partitions to forget present in the share fetch request.
+     * @param reqMetadata The metadata in the share fetch request.
+     * @return The new share fetch context object
+     */
     public ShareFetchContext newContext(String groupId, Map<TopicIdPartition,
             ShareFetchRequest.SharePartitionData> shareFetchData, List<TopicIdPartition> toForget, ShareFetchMetadata reqMetadata) {
         ShareFetchContext context;
@@ -242,6 +250,10 @@ public class SharePartitionManager implements AutoCloseable {
                     cachedSharePartitions.mustAdd(new CachedSharePartition(topicIdPartition, reqData, false)));
                 ShareSessionKey responseShareSessionKey = cache.maybeCreateSession(groupId, reqMetadata.memberId(),
                         time.milliseconds(), cachedSharePartitions);
+                if (responseShareSessionKey == null) {
+                    log.error("Could not create a share session for group {} member {}", groupId, reqMetadata.memberId());
+                    throw Errors.SHARE_SESSION_NOT_FOUND.exception();
+                }
 
                 context = new ShareSessionContext(reqMetadata, shareFetchDataWithMaxBytes);
                 log.debug("Created a new ShareSessionContext with key {} isSubsequent {} returning {}. A new share " +

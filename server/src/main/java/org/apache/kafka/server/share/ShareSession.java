@@ -113,28 +113,26 @@ public class ShareSession {
     }
 
     // Update the cached partition data based on the request.
-    public Map<ModifiedTopicIdPartitionType, List<TopicIdPartition>> update(Map<TopicIdPartition,
+    synchronized public Map<ModifiedTopicIdPartitionType, List<TopicIdPartition>> update(Map<TopicIdPartition,
             ShareFetchRequest.SharePartitionData> shareFetchData, List<TopicIdPartition> toForget) {
         List<TopicIdPartition> added = new ArrayList<>();
         List<TopicIdPartition> updated = new ArrayList<>();
         List<TopicIdPartition> removed = new ArrayList<>();
-        synchronized (this) {
-            shareFetchData.forEach((topicIdPartition, sharePartitionData) -> {
-                CachedSharePartition cachedSharePartitionKey = new CachedSharePartition(topicIdPartition, sharePartitionData, true);
-                CachedSharePartition cachedPart = partitionMap.find(cachedSharePartitionKey);
-                if (cachedPart == null) {
-                    partitionMap.mustAdd(cachedSharePartitionKey);
-                    added.add(topicIdPartition);
-                } else {
-                    cachedPart.updateRequestParams(sharePartitionData);
-                    updated.add(topicIdPartition);
-                }
-            });
-            toForget.forEach(topicIdPartition -> {
-                if (partitionMap.remove(new CachedSharePartition(topicIdPartition)))
-                    removed.add(topicIdPartition);
-            });
-        }
+        shareFetchData.forEach((topicIdPartition, sharePartitionData) -> {
+            CachedSharePartition cachedSharePartitionKey = new CachedSharePartition(topicIdPartition, sharePartitionData, true);
+            CachedSharePartition cachedPart = partitionMap.find(cachedSharePartitionKey);
+            if (cachedPart == null) {
+                partitionMap.mustAdd(cachedSharePartitionKey);
+                added.add(topicIdPartition);
+            } else {
+                cachedPart.updateRequestParams(sharePartitionData);
+                updated.add(topicIdPartition);
+            }
+        });
+        toForget.forEach(topicIdPartition -> {
+            if (partitionMap.remove(new CachedSharePartition(topicIdPartition)))
+                removed.add(topicIdPartition);
+        });
         Map<ModifiedTopicIdPartitionType, List<TopicIdPartition>> result = new HashMap<>();
         result.put(ModifiedTopicIdPartitionType.ADDED, added);
         result.put(ModifiedTopicIdPartitionType.UPDATED, updated);
