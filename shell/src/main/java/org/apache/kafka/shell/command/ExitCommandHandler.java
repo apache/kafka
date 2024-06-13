@@ -17,11 +17,13 @@
 
 package org.apache.kafka.shell.command;
 
-import net.sourceforge.argparse4j.inf.ArgumentParser;
-import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.shell.InteractiveShell;
 import org.apache.kafka.shell.state.MetadataShellState;
+
+import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.Namespace;
+
 import org.jline.reader.Candidate;
 
 import java.io.PrintWriter;
@@ -32,7 +34,7 @@ import java.util.Optional;
  * Implements the exit command.
  */
 public final class ExitCommandHandler implements Commands.Handler {
-    public final static Commands.Type TYPE = new ExitCommandType();
+    public static final Commands.Type TYPE = new ExitCommandType();
 
     public static class ExitCommandType implements Commands.Type {
         private ExitCommandType() {

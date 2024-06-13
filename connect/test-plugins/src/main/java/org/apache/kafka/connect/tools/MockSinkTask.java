@@ -19,6 +19,7 @@ package org.apache.kafka.connect.tools;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

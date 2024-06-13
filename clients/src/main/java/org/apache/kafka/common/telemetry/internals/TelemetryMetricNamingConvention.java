@@ -36,7 +36,7 @@ public class TelemetryMetricNamingConvention {
     private static final String TAG_JOINER = "_";
 
     // remove metrics as it is redundant for telemetry metrics naming convention
-    private final static Pattern GROUP_PATTERN = Pattern.compile("\\.(metrics)");
+    private static final Pattern GROUP_PATTERN = Pattern.compile("\\.(metrics)");
 
     public static MetricNamingStrategy<MetricName> getClientTelemetryMetricNamingStrategy(String prefix) {
         Objects.requireNonNull(prefix, "prefix cannot be null");

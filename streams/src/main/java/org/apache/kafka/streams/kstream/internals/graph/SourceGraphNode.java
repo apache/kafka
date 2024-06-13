@@ -25,7 +25,7 @@ import java.util.regex.Pattern;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 
-abstract public class SourceGraphNode<K, V> extends GraphNode {
+public abstract class SourceGraphNode<K, V> extends GraphNode {
 
     private final Set<String> topicNames;
     private final Pattern topicPattern;

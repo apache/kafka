@@ -121,7 +121,7 @@ public enum AclOperation {
     // Note: we cannot have more than 30 ACL operations without modifying the format used
     // to describe ACL operations in MetadataResponse.
 
-    private final static HashMap<Byte, AclOperation> CODE_TO_VALUE = new HashMap<>();
+    private static final HashMap<Byte, AclOperation> CODE_TO_VALUE = new HashMap<>();
 
     static {
         for (AclOperation operation : AclOperation.values()) {

@@ -223,9 +223,9 @@ public abstract class AbstractKStreamTimeWindowAggregateProcessor<KIn, VIn, VAgg
     }
 
     // upper and lower bound are inclusive; the bounds could be negative in which case we would skip range fetching and emitting
-    abstract protected long emitRangeLowerBound(final long windowCloseTime);
+    protected abstract long emitRangeLowerBound(final long windowCloseTime);
 
-    abstract protected long emitRangeUpperBound(final long windowCloseTime);
+    protected abstract long emitRangeUpperBound(final long windowCloseTime);
 
-    abstract protected boolean shouldRangeFetch(final long emitRangeLowerBound, final long emitRangeUpperBound);
+    protected abstract boolean shouldRangeFetch(final long emitRangeLowerBound, final long emitRangeUpperBound);
 }

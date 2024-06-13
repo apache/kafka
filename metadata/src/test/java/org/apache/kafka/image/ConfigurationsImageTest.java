@@ -40,13 +40,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(value = 40)
 public class ConfigurationsImageTest {
-    public final static ConfigurationsImage IMAGE1;
+    public static final ConfigurationsImage IMAGE1;
 
-    public final static List<ApiMessageAndVersion> DELTA1_RECORDS;
+    public static final List<ApiMessageAndVersion> DELTA1_RECORDS;
 
-    final static ConfigurationsDelta DELTA1;
+    static final ConfigurationsDelta DELTA1;
 
-    final static ConfigurationsImage IMAGE2;
+    static final ConfigurationsImage IMAGE2;
 
     static {
         Map<ConfigResource, ConfigurationImage> map1 = new HashMap<>();

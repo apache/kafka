@@ -27,7 +27,7 @@ import org.junit.jupiter.api.Test;
 
 public class ConfigurationUtilsTest extends OAuthBearerTest {
 
-    private final static String URL_CONFIG_NAME = "url";
+    private static final String URL_CONFIG_NAME = "url";
 
     @Test
     public void testUrl() {

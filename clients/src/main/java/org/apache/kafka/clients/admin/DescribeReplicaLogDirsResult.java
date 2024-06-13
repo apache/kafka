@@ -66,7 +66,7 @@ public class DescribeReplicaLogDirsResult {
             });
     }
 
-    static public class ReplicaLogDirInfo {
+    public static class ReplicaLogDirInfo {
         // The current log directory of the replica of this partition on the given broker.
         // Null if no replica is not found for this partition on the given broker.
         private final String currentReplicaLogDir;
