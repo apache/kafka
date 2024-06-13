@@ -18,6 +18,7 @@
 package org.apache.kafka.jmh.util;
 
 import org.apache.kafka.common.utils.CopyOnWriteMap;
+
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
