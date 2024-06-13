@@ -316,7 +316,7 @@
       <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=211883356">KIP-873</a> enables you to multicast
       result records to multiple partition of downstream sink topics and adds functionality for choosing to drop result records without sending.
       The <code>Integer StreamPartitioner.partition()</code> method is deprecated and replaced by the newly added
-      <code>Optiona&lg;Set&lt;Integer&gt;&gt;StreamPartitioner.partitions()</code> method, that allows to return a set of partitions to send the record to.
+      <code>Optiona&lg;Set&lt;Integer&gt;&gt;StreamPartitioner.partitions()</code> method, which enables returning a set of partitions to send the record to.
     </p>
 
     <p>
