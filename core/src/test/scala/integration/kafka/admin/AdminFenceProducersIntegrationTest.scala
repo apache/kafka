@@ -25,7 +25,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfigs, TransactionStateManagerConfigs}
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.junit.jupiter.api.Assertions.{assertInstanceOf, assertThrows, assertTrue, fail}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -33,6 +33,7 @@ import java.util.concurrent.ExecutionException
 import java.util.{Collections, Properties}
 import scala.collection.Seq
 
+@Tag("integration")
 class AdminFenceProducersIntegrationTest extends IntegrationTestHarness {
   override def brokerCount = 1
 
