@@ -36,7 +36,7 @@ import org.apache.kafka.streams.processor.internals.assignment.FallbackPriorTask
 import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
-import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.LegacyTaskAssignor;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockClientSupplier;
@@ -150,7 +150,7 @@ public class StreamsAssignmentScaleTest {
                                          final int numClients,
                                          final int numThreadsPerClient,
                                          final int numStandbys,
-                                         final Class<? extends TaskAssignor> taskAssignor) {
+                                         final Class<? extends LegacyTaskAssignor> taskAssignor) {
         final List<String> topic = singletonList("topic");
 
         final Map<TopicPartition, Long> changelogEndOffsets = new HashMap<>();
