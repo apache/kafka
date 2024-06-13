@@ -26,10 +26,10 @@ import org.apache.kafka.trogdor.basic.BasicNode;
 import org.apache.kafka.trogdor.basic.BasicPlatform;
 import org.apache.kafka.trogdor.basic.BasicTopology;
 import org.apache.kafka.trogdor.coordinator.Coordinator;
-
 import org.apache.kafka.trogdor.coordinator.CoordinatorClient;
 import org.apache.kafka.trogdor.coordinator.CoordinatorRestResource;
 import org.apache.kafka.trogdor.rest.JsonRestServer;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

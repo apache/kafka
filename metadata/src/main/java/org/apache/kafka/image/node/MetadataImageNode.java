@@ -30,14 +30,14 @@ public class MetadataImageNode implements MetadataNode {
     /**
      * The name of this node.
      */
-    public final static String NAME = "image";
+    public static final String NAME = "image";
 
     /**
      * The metadata image.
      */
     private final MetadataImage image;
 
-    private final static Map<String, Function<MetadataImage, MetadataNode>> CHILDREN;
+    private static final Map<String, Function<MetadataImage, MetadataNode>> CHILDREN;
 
     static {
         Map<String, Function<MetadataImage, MetadataNode>> children = new HashMap<>();

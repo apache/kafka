@@ -17,9 +17,10 @@
 
 package org.apache.kafka.trogdor.workload;
 
+import org.apache.kafka.clients.producer.KafkaProducer;
+
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
-import org.apache.kafka.clients.producer.KafkaProducer;
 
 /**
  * This interface is used to facilitate flushing the KafkaProducers on a cadence specified by the user.

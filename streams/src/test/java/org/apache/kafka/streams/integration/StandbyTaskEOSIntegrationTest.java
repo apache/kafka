@@ -77,9 +77,9 @@ import static org.junit.Assert.assertTrue;
 public class StandbyTaskEOSIntegrationTest {
     @Rule
     public Timeout globalTimeout = Timeout.seconds(600);
-    private final static long REBALANCE_TIMEOUT = Duration.ofMinutes(2L).toMillis();
-    private final static int KEY_0 = 0;
-    private final static int KEY_1 = 1;
+    private static final long REBALANCE_TIMEOUT = Duration.ofMinutes(2L).toMillis();
+    private static final int KEY_0 = 0;
+    private static final int KEY_1 = 1;
 
     @SuppressWarnings("deprecation")
     @Parameterized.Parameters(name = "{0}")

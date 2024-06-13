@@ -140,13 +140,13 @@ public class EosV2UpgradeIntegrationTest {
     }
 
     private static String applicationId;
-    private final static int NUM_TOPIC_PARTITIONS = 4;
-    private final static String CONSUMER_GROUP_ID = "readCommitted";
-    private final static String MULTI_PARTITION_INPUT_TOPIC = "multiPartitionInputTopic";
-    private final static String MULTI_PARTITION_OUTPUT_TOPIC = "multiPartitionOutputTopic";
-    private final static String APP_DIR_1 = "appDir1";
-    private final static String APP_DIR_2 = "appDir2";
-    private final static String UNEXPECTED_EXCEPTION_MSG = "Fail the test since we got an unexpected exception, or " +
+    private static final int NUM_TOPIC_PARTITIONS = 4;
+    private static final String CONSUMER_GROUP_ID = "readCommitted";
+    private static final String MULTI_PARTITION_INPUT_TOPIC = "multiPartitionInputTopic";
+    private static final String MULTI_PARTITION_OUTPUT_TOPIC = "multiPartitionOutputTopic";
+    private static final String APP_DIR_1 = "appDir1";
+    private static final String APP_DIR_2 = "appDir2";
+    private static final String UNEXPECTED_EXCEPTION_MSG = "Fail the test since we got an unexpected exception, or " +
         "there are too many exceptions thrown, please check standard error log for more info.";
     private final String storeName = "store";
 
@@ -1159,7 +1159,7 @@ public class EosV2UpgradeIntegrationTest {
 
     // must be public to allow KafkaProducer to instantiate it
     public static class KeyPartitioner implements Partitioner {
-        private final static LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
+        private static final LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
 
         @Override
         public int partition(final String topic,

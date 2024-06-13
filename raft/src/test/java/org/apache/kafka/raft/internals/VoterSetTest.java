@@ -42,7 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-final public class VoterSetTest {
+public final class VoterSetTest {
     @Test
     void testEmptyVoterSet() {
         assertThrows(IllegalArgumentException.class, () -> new VoterSet(Collections.emptyMap()));

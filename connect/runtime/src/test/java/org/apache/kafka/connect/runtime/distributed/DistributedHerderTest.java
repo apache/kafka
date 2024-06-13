@@ -4275,10 +4275,10 @@ public class DistributedHerderTest {
     }
 
     // We need to use a real class here due to some issue with mocking java.lang.Class
-    private static abstract class BogusSourceConnector extends SourceConnector {
+    private abstract static class BogusSourceConnector extends SourceConnector {
     }
 
-    private static abstract class BogusSourceTask extends SourceTask {
+    private abstract static class BogusSourceTask extends SourceTask {
     }
 
     /**

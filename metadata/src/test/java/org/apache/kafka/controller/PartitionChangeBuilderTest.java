@@ -116,7 +116,7 @@ public class PartitionChangeBuilderTest {
         setPartitionEpoch(200).
         build();
 
-    private final static Uuid FOO_ID = Uuid.fromString("FbrrdcfiR-KC2CPSTHaJrg");
+    private static final Uuid FOO_ID = Uuid.fromString("FbrrdcfiR-KC2CPSTHaJrg");
 
     private static MetadataVersion metadataVersionForPartitionChangeRecordVersion(short version) {
         switch (version) {
@@ -163,7 +163,7 @@ public class PartitionChangeBuilderTest {
         setPartitionEpoch(200).
         build();
 
-    private final static Uuid BAR_ID = Uuid.fromString("LKfUsCBnQKekvL9O5dY9nw");
+    private static final Uuid BAR_ID = Uuid.fromString("LKfUsCBnQKekvL9O5dY9nw");
 
     private static boolean isElrEnabled(short partitionChangeRecordVersion) {
         return partitionChangeRecordVersion >= 2;
@@ -194,7 +194,7 @@ public class PartitionChangeBuilderTest {
         setPartitionEpoch(200).
         build();
 
-    private final static Uuid BAZ_ID = Uuid.fromString("wQzt5gkSTwuQNXZF5gIw7A");
+    private static final Uuid BAZ_ID = Uuid.fromString("wQzt5gkSTwuQNXZF5gIw7A");
 
     private static PartitionChangeBuilder createBazBuilder(short version) {
         return new PartitionChangeBuilder(BAZ,
@@ -237,7 +237,7 @@ public class PartitionChangeBuilderTest {
             setPartitionEpoch(200).
             build();
 
-    private final static Uuid OFFLINE_ID = Uuid.fromString("LKfUsCBnQKekvL9O5dY9nw");
+    private static final Uuid OFFLINE_ID = Uuid.fromString("LKfUsCBnQKekvL9O5dY9nw");
 
     private static PartitionChangeBuilder createOfflineBuilder(short partitionChangeRecordVersion) {
         MetadataVersion metadataVersion =

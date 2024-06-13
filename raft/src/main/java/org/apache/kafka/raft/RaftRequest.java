@@ -47,7 +47,7 @@ public abstract class RaftRequest implements RaftMessage {
         return createdTimeMs;
     }
 
-    public final static class Inbound extends RaftRequest {
+    public static final class Inbound extends RaftRequest {
         private final short apiVersion;
         private final ListenerName listenerName;
 
@@ -88,7 +88,7 @@ public abstract class RaftRequest implements RaftMessage {
         }
     }
 
-    public final static class Outbound extends RaftRequest {
+    public static final class Outbound extends RaftRequest {
         private final Node destination;
         public final CompletableFuture<RaftResponse.Inbound> completion = new CompletableFuture<>();
 

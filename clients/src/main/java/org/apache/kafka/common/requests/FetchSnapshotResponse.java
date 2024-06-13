@@ -27,7 +27,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
-final public class FetchSnapshotResponse extends AbstractResponse {
+public final class FetchSnapshotResponse extends AbstractResponse {
     private final FetchSnapshotResponseData data;
 
     public FetchSnapshotResponse(FetchSnapshotResponseData data) {

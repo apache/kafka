@@ -35,7 +35,7 @@ import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.network.ListenerName;
 
-final public class Endpoints {
+public final class Endpoints {
     Map<ListenerName, InetSocketAddress> endpoints;
 
     private Endpoints(Map<ListenerName, InetSocketAddress> endpoints) {
@@ -97,7 +97,7 @@ final public class Endpoints {
         return leaderEndpoints;
     }
 
-    final private static Endpoints EMPTY = new Endpoints(Collections.emptyMap());
+    private static final Endpoints EMPTY = new Endpoints(Collections.emptyMap());
     public static Endpoints empty() {
         return EMPTY;
     }
