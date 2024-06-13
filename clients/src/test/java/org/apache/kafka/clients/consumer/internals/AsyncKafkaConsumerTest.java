@@ -580,7 +580,6 @@ public class AsyncKafkaConsumerTest {
         consumer = newConsumer();
         long timeoutMs = 0;
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
-
         consumer.assign(Collections.singleton(new TopicPartition("topic1", 0)));
 
         // The first attempt at poll() creates an event, enqueues it, but its Future does not complete within the
@@ -638,9 +637,7 @@ public class AsyncKafkaConsumerTest {
     public void testOffsetFetchDoesNotReuseExpiredPendingEvent() {
         consumer = newConsumer();
         long timeoutMs = 0;
-
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
-
         consumer.assign(Collections.singleton(new TopicPartition("topic1", 0)));
 
         // The first attempt at poll() creates an event, enqueues it, but its Future does not complete within
