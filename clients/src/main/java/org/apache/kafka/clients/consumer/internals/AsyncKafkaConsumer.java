@@ -1672,8 +1672,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         // The shorter the timeout the user provided to poll(), the less likely the offsets fetch will
         // be retrieved before it times out. Creates a FetchCommittedOffsetsEvent that can be reused by follow-up
         // attempts if the first attempt at retrieving the associated Future's value times out.
-        if (pendingOffsetFetch == null || !pendingOffsetFetch.partitions().equals(initializingPartitions)) {
-            pendingOffsetFetch = new FetchCommittedOffsetsEvent(initializingPartitions, Long.MAX_VALUE);
+        if (!canReusePendingOffsetFetch(initializingPartitions)) {
+            // Give the event a reasonable amount of time to complete.
+            long timeoutMs = Math.max(defaultApiTimeoutMs, timer.remainingMs());
+            long deadlineMs = time.milliseconds() + timeoutMs;
+            pendingOffsetFetch = new FetchCommittedOffsetsEvent(initializingPartitions, deadlineMs);
             applicationEventHandler.add(pendingOffsetFetch);
         }
 
@@ -1694,6 +1697,16 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         } finally {
             wakeupTrigger.clearTask();
         }
+    }
+
+    boolean canReusePendingOffsetFetch(Set<TopicPartition> initializingPartitions) {
+        if (pendingOffsetFetch == null)
+            return false;
+
+        if (!pendingOffsetFetch.partitions().equals(initializingPartitions))
+            return false;
+
+        return pendingOffsetFetch.deadlineMs() > time.milliseconds();
     }
 
     private void updateLastSeenEpochIfNewer(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata) {
@@ -1994,6 +2007,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     // Visible for testing
     SubscriptionState subscriptions() {
         return subscriptions;
+    }
+
+    FetchCommittedOffsetsEvent pendingOffsetFetch() {
+        return pendingOffsetFetch;
     }
 
     private void maybeUpdateSubscriptionMetadata() {
