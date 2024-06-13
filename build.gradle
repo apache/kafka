@@ -829,17 +829,9 @@ subprojects {
     apply plugin: 'com.diffplug.spotless'
     spotless {
       java {
+        targetExclude 'src/generated/**/*.java' 
         importOrder('kafka', 'org.apache.kafka', 'com', 'net', 'org', 'java', 'javax', '', '\\#')
         removeUnusedImports()
-      }
-    }
-  }
-  afterEvaluate {
-    def processMessageTask = tasks.findByName('processMessages')
-    def spotlessJavaTask = tasks.findByName('spotlessJava')
-    if (processMessageTask && spotlessJavaTask) {
-      spotlessJavaTask.configure {
-        dependsOn processMessageTask
       }
     }
   }
