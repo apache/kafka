@@ -50,6 +50,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -89,6 +90,19 @@ public class SharePartitionManagerTest {
     }
 
     @Test
+    public void testNewContextReturnsFinalContextForEmptyTopicPartitionsAndFinalEpoch() {
+        Time time = new MockTime();
+        ShareSessionCache cache = new ShareSessionCache(10, 1000);
+        SharePartitionManager sharePartitionManager = SharePartitionManagerBuilder.builder()
+                .withCache(cache).withTime(time).build();
+        String groupId = "grp";
+        // Verify that final epoch requests get a FinalContext
+        ShareFetchContext context1 = sharePartitionManager.newContext(groupId, Collections.emptyMap(), EMPTY_PART_LIST,
+                new ShareFetchMetadata(Uuid.randomUuid(), ShareFetchMetadata.FINAL_EPOCH));
+        assertEquals(FinalContext.class, context1.getClass());
+    }
+
+    @Test
     public void testNewContext() {
         Time time = new MockTime();
         ShareSessionCache cache = new ShareSessionCache(10, 1000);
@@ -105,11 +119,6 @@ public class SharePartitionManagerTest {
         TopicIdPartition tp3 = new TopicIdPartition(tpId1, new TopicPartition("bar", 1));
 
         String groupId = "grp";
-
-        // Verify that final epoch requests get a FinalContext
-        ShareFetchContext context1 = sharePartitionManager.newContext(groupId, Collections.emptyMap(), EMPTY_PART_LIST,
-                new ShareFetchMetadata(Uuid.randomUuid(), ShareFetchMetadata.FINAL_EPOCH));
-        assertEquals(FinalContext.class, context1.getClass());
 
         // Create a new share session with an initial share fetch request
         Map<TopicIdPartition, ShareFetchRequest.SharePartitionData> reqData2 = new LinkedHashMap<>();
@@ -806,6 +815,29 @@ public class SharePartitionManagerTest {
         assertEquals(Errors.NONE, resp6.error());
 
         assertEquals(Collections.emptyList(), sharePartitionManager.cachedTopicIdPartitionsInShareSession(groupId, memberId2));
+    }
+
+    @Test
+    public void testSharePartitionKey() {
+        SharePartitionManager.SharePartitionKey sharePartitionKey1 = new SharePartitionManager.SharePartitionKey("mock-group-1",
+                new TopicIdPartition(new Uuid(0L, 1L), new TopicPartition("test", 0)));
+        SharePartitionManager.SharePartitionKey sharePartitionKey2 = new SharePartitionManager.SharePartitionKey("mock-group-2",
+                new TopicIdPartition(new Uuid(0L, 1L), new TopicPartition("test", 0)));
+        SharePartitionManager.SharePartitionKey sharePartitionKey3 = new SharePartitionManager.SharePartitionKey("mock-group-1",
+                new TopicIdPartition(new Uuid(1L, 1L), new TopicPartition("test-1", 0)));
+        SharePartitionManager.SharePartitionKey sharePartitionKey4 = new SharePartitionManager.SharePartitionKey("mock-group-1",
+                new TopicIdPartition(new Uuid(0L, 1L), new TopicPartition("test", 1)));
+        SharePartitionManager.SharePartitionKey sharePartitionKey5 = new SharePartitionManager.SharePartitionKey("mock-group-1",
+                new TopicIdPartition(new Uuid(0L, 0L), new TopicPartition("test-2", 0)));
+        SharePartitionManager.SharePartitionKey sharePartitionKey1Copy = new SharePartitionManager.SharePartitionKey("mock-group-1",
+                new TopicIdPartition(new Uuid(0L, 1L), new TopicPartition("test", 0)));
+
+        assertEquals(sharePartitionKey1, sharePartitionKey1Copy);
+        assertNotEquals(sharePartitionKey1, sharePartitionKey2);
+        assertNotEquals(sharePartitionKey1, sharePartitionKey3);
+        assertNotEquals(sharePartitionKey1, sharePartitionKey4);
+        assertNotEquals(sharePartitionKey1, sharePartitionKey5);
+        assertNotEquals(sharePartitionKey1, null);
     }
 
     private ShareFetchResponseData.PartitionData noErrorShareFetchResponse() {

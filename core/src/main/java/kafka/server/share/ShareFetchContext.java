@@ -22,8 +22,6 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ShareFetchResponse;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -35,7 +33,10 @@ import java.util.LinkedHashMap;
  */
 public abstract class ShareFetchContext {
 
-    protected Logger log = LoggerFactory.getLogger(ShareFetchContext.class);
+    /**
+     * @return - Whether trace logging is enabled.
+     */
+    abstract boolean isTraceEnabled();
 
     /**
      *
@@ -43,7 +44,7 @@ public abstract class ShareFetchContext {
      * @return - A string representation of the partitions requested.
      */
     String partitionsToLogString(Collection<TopicIdPartition> partitions) {
-        return FetchSession.partitionsToLogString(partitions, log.isTraceEnabled());
+        return FetchSession.partitionsToLogString(partitions, isTraceEnabled());
     }
 
     /**

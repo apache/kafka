@@ -22,6 +22,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ShareFetchResponse;
+import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
@@ -32,8 +33,14 @@ import java.util.LinkedHashMap;
  */
 public class FinalContext extends ShareFetchContext {
 
+    private final static Logger log = LoggerFactory.getLogger(FinalContext.class);
+
     public FinalContext() {
-        this.log = LoggerFactory.getLogger(FinalContext.class);
+    }
+
+    @Override
+    boolean isTraceEnabled() {
+        return log.isTraceEnabled();
     }
 
     @Override

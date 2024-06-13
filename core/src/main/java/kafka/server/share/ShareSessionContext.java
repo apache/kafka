@@ -94,6 +94,11 @@ public class ShareSessionContext extends ShareFetchContext {
     }
 
     @Override
+    boolean isTraceEnabled() {
+        return log.isTraceEnabled();
+    }
+
+    @Override
     ShareFetchResponse throttleResponse(int throttleTimeMs) {
         if (!isSubsequent) {
             return new ShareFetchResponse(ShareFetchResponse.toMessage(Errors.NONE, throttleTimeMs,

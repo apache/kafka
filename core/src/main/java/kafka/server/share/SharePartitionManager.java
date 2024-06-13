@@ -283,7 +283,7 @@ public class SharePartitionManager implements AutoCloseable {
         return new ShareSessionKey(groupId, memberId);
     }
 
-    String partitionsToLogString(Collection<TopicIdPartition> partitions) {
+    private static String partitionsToLogString(Collection<TopicIdPartition> partitions) {
         return FetchSession.partitionsToLogString(partitions, log.isTraceEnabled());
     }
 
