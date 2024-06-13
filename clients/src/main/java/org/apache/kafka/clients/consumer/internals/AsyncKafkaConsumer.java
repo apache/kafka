@@ -1321,6 +1321,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             function.run();
         } catch (TimeoutException e) {
             log.debug("Timeout expired before the {} operation could complete.", msg);
+            firstException.compareAndSet(null, e);
         } catch (Exception e) {
             log.error(msg, e);
             firstException.compareAndSet(null, e);

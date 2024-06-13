@@ -555,7 +555,7 @@ public class MembershipManagerImpl implements MembershipManager {
                 log.error("onPartitionsLost callback invocation failed while releasing assignment" +
                         " after member got fenced. Member will rejoin the group anyways.", error);
             }
-            clearSubscription();
+            clearAssignment();
             if (state == MemberState.FENCED) {
                 transitionToJoining();
             } else {
@@ -592,7 +592,7 @@ public class MembershipManagerImpl implements MembershipManager {
                 log.error("onPartitionsLost callback invocation failed while releasing assignment" +
                         "after member failed with fatal error.", error);
             }
-            clearSubscription();
+            clearAssignment();
         });
     }
 
@@ -608,7 +608,7 @@ public class MembershipManagerImpl implements MembershipManager {
     /**
      * Clear the assigned partitions in the member subscription, pending assignments and metadata cache.
      */
-    private void clearSubscription() {
+    private void clearAssignment() {
         if (subscriptions.hasAutoAssignedPartitions()) {
             subscriptions.assignFromSubscribed(Collections.emptySet());
         }
@@ -658,7 +658,7 @@ public class MembershipManagerImpl implements MembershipManager {
     public CompletableFuture<Void> leaveGroup() {
         if (isNotInGroup()) {
             if (state == MemberState.FENCED) {
-                clearSubscription();
+                clearAssignment();
                 transitionTo(MemberState.UNSUBSCRIBED);
             }
             return CompletableFuture.completedFuture(null);
@@ -686,7 +686,7 @@ public class MembershipManagerImpl implements MembershipManager {
             }
             // Clear the subscription, no matter if the callback execution failed or succeeded.
             subscriptions.unsubscribe();
-            clearSubscription();
+            clearAssignment();
 
             // Transition to ensure that a heartbeat request is sent out to effectively leave the
             // group (even in the case where the member had no assignment to release or when the
@@ -894,7 +894,7 @@ public class MembershipManagerImpl implements MembershipManager {
                 log.error("onPartitionsLost callback invocation failed while releasing assignment" +
                     " after member left group due to expired poll timer.", error);
             }
-            clearSubscription();
+            clearAssignment();
             log.debug("Member {} sent leave group heartbeat and released its assignment. It will remain " +
                 "in {} state until the poll timer is reset, and it will then rejoin the group",
                 memberId, MemberState.STALE);
