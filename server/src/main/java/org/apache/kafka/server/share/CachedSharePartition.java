@@ -17,8 +17,6 @@
 
 package org.apache.kafka.server.share;
 
-import java.util.Objects;
-import java.util.Optional;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareFetchResponseData;
@@ -26,6 +24,9 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.requests.ShareFetchResponse;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
+
+import java.util.Objects;
+import java.util.Optional;
 
 /**
  * A cached share partition. The broker maintains a set of these objects for each share session.

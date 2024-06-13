@@ -34,11 +34,6 @@ import java.util.LinkedHashMap;
 public abstract class ShareFetchContext {
 
     /**
-     * @return - Whether trace logging is enabled.
-     */
-    abstract boolean isTraceEnabled();
-
-    /**
      *
      * @param partitions - The partitions requested in the fetch request.
      * @return - A string representation of the partitions requested.
@@ -56,6 +51,11 @@ public abstract class ShareFetchContext {
         return new ShareFetchResponse(ShareFetchResponse.toMessage(Errors.NONE, throttleTimeMs,
                 Collections.emptyIterator(), Collections.emptyList()));
     }
+
+    /**
+     * @return - Whether trace logging is enabled.
+     */
+    abstract boolean isTraceEnabled();
 
     /**
      * Get the response size to be used for quota computation. Since we are returning an empty response in case of

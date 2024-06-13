@@ -17,13 +17,14 @@
 
 package org.apache.kafka.server.share;
 
+import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.requests.ShareFetchRequest;
+import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.kafka.common.TopicIdPartition;
-import org.apache.kafka.common.requests.ShareFetchRequest;
-import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 
 public class ShareSession {
 

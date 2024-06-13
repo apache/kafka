@@ -17,8 +17,9 @@
 
 package org.apache.kafka.server.share;
 
-import java.util.Objects;
 import org.apache.kafka.common.Uuid;
+
+import java.util.Objects;
 
 public class ShareSessionKey {
     private final String groupId;

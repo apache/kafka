@@ -23,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 public class CachedSharePartitionTest {
+
     @Test
     public void testCachedSharePartitionEqualsAndHashCode() {
         Uuid topicId = Uuid.randomUuid();
@@ -48,7 +49,7 @@ public class CachedSharePartitionTest {
         assertNotEquals(cachedSharePartitionWithIdAndName, cachedSharePartitionWithZeroIdAndName);
         assertNotEquals(cachedSharePartitionWithIdAndName.hashCode(), cachedSharePartitionWithZeroIdAndName.hashCode());
 
-        // CachedSharePartitions will null name and valid IDs will act just like ones with valid names
+        // CachedSharePartitions with null name and valid IDs will act just like ones with valid names
 
         assertNotEquals(cachedSharePartitionWithIdAndNoName, cachedSharePartitionWithDifferentIdAndName);
         assertNotEquals(cachedSharePartitionWithIdAndNoName.hashCode(), cachedSharePartitionWithDifferentIdAndName.hashCode());

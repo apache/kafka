@@ -17,12 +17,13 @@
 
 package org.apache.kafka.server.share;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.TreeMap;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.requests.ShareFetchMetadata;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.TreeMap;
 
 /**
  * Caches share sessions.

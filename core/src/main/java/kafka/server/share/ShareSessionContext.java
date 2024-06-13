@@ -17,14 +17,6 @@
 
 package kafka.server.share;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.NoSuchElementException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -40,6 +32,15 @@ import org.apache.kafka.server.share.ShareSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import scala.Tuple2;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.NoSuchElementException;
 
 /**
  * The context for a share session fetch request.
@@ -207,18 +208,17 @@ public class ShareSessionContext extends ShareFetchContext {
                         session.key(), expectedEpoch, sessionEpoch);
                 return new ShareFetchResponse(ShareFetchResponse.toMessage(Errors.INVALID_SHARE_SESSION_EPOCH,
                         0, Collections.emptyIterator(), Collections.emptyList()));
-            } else {
-                // Iterate over the update list using PartitionIterator. This will prune updates which don't need to be sent
-                Iterator<Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData>> partitionIterator = new PartitionIterator(
-                        updates.entrySet().iterator(), true);
-                while (partitionIterator.hasNext()) {
-                    partitionIterator.next();
-                }
-                log.debug("Subsequent share session context with session key {} returning {}", session.key(),
-                        partitionsToLogString(updates.keySet()));
-                return new ShareFetchResponse(ShareFetchResponse.toMessage(
-                        Errors.NONE, 0, updates.entrySet().iterator(), Collections.emptyList()));
             }
+            // Iterate over the update list using PartitionIterator. This will prune updates which don't need to be sent
+            Iterator<Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData>> partitionIterator = new PartitionIterator(
+                    updates.entrySet().iterator(), true);
+            while (partitionIterator.hasNext()) {
+                partitionIterator.next();
+            }
+            log.debug("Subsequent share session context with session key {} returning {}", session.key(),
+                    partitionsToLogString(updates.keySet()));
+            return new ShareFetchResponse(ShareFetchResponse.toMessage(
+                    Errors.NONE, 0, updates.entrySet().iterator(), Collections.emptyList()));
         }
     }
 
@@ -226,23 +226,22 @@ public class ShareSessionContext extends ShareFetchContext {
     ErroneousAndValidPartitionData getErroneousAndValidTopicIdPartitions() {
         if (!isSubsequent) {
             return new ErroneousAndValidPartitionData(shareFetchData);
-        } else {
-            List<Tuple2<TopicIdPartition, PartitionData>> erroneous = new ArrayList<>();
-            List<Tuple2<TopicIdPartition, ShareFetchRequest.SharePartitionData>> valid = new ArrayList<>();
-            // Take the session lock and iterate over all the cached partitions.
-            synchronized (session) {
-                session.partitionMap().forEach(cachedSharePartition -> {
-                    TopicIdPartition topicIdPartition = new TopicIdPartition(cachedSharePartition.topicId(), new
-                            TopicPartition(cachedSharePartition.topic(), cachedSharePartition.partition()));
-                    ShareFetchRequest.SharePartitionData reqData = cachedSharePartition.reqData();
-                    if (topicIdPartition.topic() == null) {
-                        erroneous.add(new Tuple2<>(topicIdPartition, ShareFetchResponse.partitionResponse(topicIdPartition, Errors.UNKNOWN_TOPIC_ID)));
-                    } else {
-                        valid.add(new Tuple2<>(topicIdPartition, reqData));
-                    }
-                });
-                return new ErroneousAndValidPartitionData(erroneous, valid);
-            }
+        }
+        List<Tuple2<TopicIdPartition, PartitionData>> erroneous = new ArrayList<>();
+        List<Tuple2<TopicIdPartition, ShareFetchRequest.SharePartitionData>> valid = new ArrayList<>();
+        // Take the session lock and iterate over all the cached partitions.
+        synchronized (session) {
+            session.partitionMap().forEach(cachedSharePartition -> {
+                TopicIdPartition topicIdPartition = new TopicIdPartition(cachedSharePartition.topicId(), new
+                        TopicPartition(cachedSharePartition.topic(), cachedSharePartition.partition()));
+                ShareFetchRequest.SharePartitionData reqData = cachedSharePartition.reqData();
+                if (topicIdPartition.topic() == null) {
+                    erroneous.add(new Tuple2<>(topicIdPartition, ShareFetchResponse.partitionResponse(topicIdPartition, Errors.UNKNOWN_TOPIC_ID)));
+                } else {
+                    valid.add(new Tuple2<>(topicIdPartition, reqData));
+                }
+            });
+            return new ErroneousAndValidPartitionData(erroneous, valid);
         }
     }
 }

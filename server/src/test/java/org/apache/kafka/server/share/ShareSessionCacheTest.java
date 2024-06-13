@@ -100,14 +100,13 @@ public class ShareSessionCacheTest {
         return cacheMap;
     }
 
-    public void assertShareCacheContains(ShareSessionCache cache,
+    private void assertShareCacheContains(ShareSessionCache cache,
                                          ArrayList<ShareSessionKey> sessionKeys) {
         int i = 0;
         assertEquals(sessionKeys.size(), cache.size());
         for (ShareSessionKey sessionKey : sessionKeys) {
-            i++;
             assertFalse(cache.get(sessionKey).isEmpty(),
-                    "Missing session " + i + " out of " + sessionKeys.size() + " ( " + sessionKey + " )");
+                    "Missing session " + ++i + " out of " + sessionKeys.size() + " ( " + sessionKey + " )");
         }
     }
 }
