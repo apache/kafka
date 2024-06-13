@@ -38,7 +38,7 @@ public class GroupRebalanceConfig {
     }
 
     public final int sessionTimeoutMs;
-    public final int rebalanceTimeoutMs;
+    public final int commitTimeoutDuringReconciliation;
     public final int heartbeatIntervalMs;
     public final String groupId;
     public final Optional<String> groupInstanceId;
@@ -51,9 +51,9 @@ public class GroupRebalanceConfig {
 
         // Consumer and Connect use different config names for defining rebalance timeout
         if (protocolType == ProtocolType.CONSUMER) {
-            this.rebalanceTimeoutMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
+            this.commitTimeoutDuringReconciliation = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
         } else {
-            this.rebalanceTimeoutMs = config.getInt(CommonClientConfigs.REBALANCE_TIMEOUT_MS_CONFIG);
+            this.commitTimeoutDuringReconciliation = config.getInt(CommonClientConfigs.REBALANCE_TIMEOUT_MS_CONFIG);
         }
 
         this.heartbeatIntervalMs = config.getInt(CommonClientConfigs.HEARTBEAT_INTERVAL_MS_CONFIG);
@@ -85,7 +85,7 @@ public class GroupRebalanceConfig {
 
     // For testing purpose.
     public GroupRebalanceConfig(final int sessionTimeoutMs,
-                                final int rebalanceTimeoutMs,
+                                final int commitTimeoutDuringReconciliation,
                                 final int heartbeatIntervalMs,
                                 String groupId,
                                 Optional<String> groupInstanceId,
@@ -93,7 +93,7 @@ public class GroupRebalanceConfig {
                                 long retryBackoffMaxMs,
                                 boolean leaveGroupOnClose) {
         this.sessionTimeoutMs = sessionTimeoutMs;
-        this.rebalanceTimeoutMs = rebalanceTimeoutMs;
+        this.commitTimeoutDuringReconciliation = commitTimeoutDuringReconciliation;
         this.heartbeatIntervalMs = heartbeatIntervalMs;
         this.groupId = groupId;
         this.groupInstanceId = groupInstanceId;

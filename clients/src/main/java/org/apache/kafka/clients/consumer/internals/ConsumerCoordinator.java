@@ -712,7 +712,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (joinPrepareTimer == null) {
             // We should complete onJoinPrepare before rebalanceTimeoutMs,
             // and continue to join group to avoid member got kicked out from group
-            joinPrepareTimer = time.timer(rebalanceConfig.rebalanceTimeoutMs);
+            joinPrepareTimer = time.timer(rebalanceConfig.commitTimeoutDuringReconciliation);
         } else {
             joinPrepareTimer.update();
         }
