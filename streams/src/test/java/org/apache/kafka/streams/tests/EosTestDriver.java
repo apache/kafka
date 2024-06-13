@@ -59,7 +59,7 @@ public class EosTestDriver extends SmokeTestUtil {
     private static final int MAX_NUMBER_OF_KEYS = 20000;
     private static final long MAX_IDLE_TIME_MS = 600000L;
 
-    private volatile static boolean isRunning = true;
+    private static volatile boolean isRunning = true;
     private static CountDownLatch terminated = new CountDownLatch(1);
 
     private static int numRecordsProduced = 0;

@@ -75,8 +75,8 @@ import static org.mockito.Mockito.when;
 @Category({IntegrationTest.class})
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class StreamsAssignmentScaleTest {
-    final static long MAX_ASSIGNMENT_DURATION = 120 * 1000L; // we should stay below `max.poll.interval.ms`
-    final static String APPLICATION_ID = "streams-assignment-scale-test";
+    static final long MAX_ASSIGNMENT_DURATION = 120 * 1000L; // we should stay below `max.poll.interval.ms`
+    static final String APPLICATION_ID = "streams-assignment-scale-test";
 
     private final Logger log = LoggerFactory.getLogger(StreamsAssignmentScaleTest.class);
 

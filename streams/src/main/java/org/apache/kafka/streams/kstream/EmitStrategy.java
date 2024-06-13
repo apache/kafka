@@ -52,7 +52,7 @@ public interface EmitStrategy {
             this.strategy = strategy;
         }
 
-        private final static Map<Short, EmitStrategy> TYPE_TO_STRATEGY = new HashMap<>();
+        private static final Map<Short, EmitStrategy> TYPE_TO_STRATEGY = new HashMap<>();
 
         static {
             for (final StrategyType type : StrategyType.values()) {

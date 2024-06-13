@@ -43,8 +43,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class SerializationTest {
 
-    final private String topic = "testTopic";
-    final private Map<Class<?>, List<Object>> testData = new HashMap<Class<?>, List<Object>>() {
+    private final String topic = "testTopic";
+    private final Map<Class<?>, List<Object>> testData = new HashMap<Class<?>, List<Object>>() {
         {
             put(String.class, Arrays.asList(null, "my string"));
             put(Short.class, Arrays.asList(null, (short) 32767, (short) -32768));
