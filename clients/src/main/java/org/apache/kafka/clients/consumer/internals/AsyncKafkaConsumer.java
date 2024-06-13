@@ -2009,8 +2009,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         return subscriptions;
     }
 
-    FetchCommittedOffsetsEvent pendingOffsetFetch() {
-        return pendingOffsetFetch;
+    boolean hasPendingOffsetFetch() {
+        return pendingOffsetFetch != null;
     }
 
     private void maybeUpdateSubscriptionMetadata() {
