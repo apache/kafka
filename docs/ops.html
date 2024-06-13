@@ -2863,10 +2863,11 @@ active-process-ratio metrics which have a recording level of <code>info</code>:
 
  <h5 class="anchor-heading"><a id="kafka_streams_node_monitoring" class="anchor-link"></a><a href="#kafka_streams_node_monitoring">Processor Node Metrics</a></h5>
  The following metrics are only available on certain types of nodes, i.e., the process-* metrics are only available for
- source processor nodes, the suppression-emit-* metrics are only available for suppression operation nodes, and the
- record-e2e-latency-* metrics are only available for source processor nodes and terminal nodes (nodes without successor
+ source processor nodes, the <code>suppression-emit-*</code> metrics are only available for suppression operation nodes,
+ <code>emit-final-*</code> metrics are only available for windowed aggregations nodes, and the
+ <code>record-e2e-latency-*</code> metrics are only available for source processor nodes and terminal nodes (nodes without successor
  nodes).
- All of the metrics have a recording level of <code>debug</code>, except for the record-e2e-latency-* metrics which have
+ All of the metrics have a recording level of <code>debug</code>, except for the <code>record-e2e-latency-*</code> metrics which have
  a recording level of <code>info</code>:
  <table class="data-table">
       <tbody>
@@ -2903,6 +2904,26 @@ active-process-ratio metrics which have a recording level of <code>info</code>:
       <tr>
         <td>suppression-emit-total</td>
         <td>The total number of records that have been emitted downstream from suppression operation nodes.</td>
+        <td>kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>emit-final-latency-max</td>
+        <td>The max latency to emit final records when a record could be emitted.</td>
+        <td>kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>emit-final-latency-avg</td>
+        <td>The avg latency to emit final records when a record could be emitted.</td>
+        <td>kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>emit-final-records-rate</td>
+        <td>The rate of records emitted when records could be emitted.</td>
+        <td>kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>emit-final-records-total</td>
+        <td>The total number of records emitted.</td>
         <td>kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
       </tr>
       <tr>
