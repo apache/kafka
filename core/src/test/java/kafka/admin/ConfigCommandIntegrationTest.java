@@ -364,7 +364,7 @@ public class ConfigCommandIntegrationTest {
 
             alterConfigWithKraft(client, Optional.of(defaultBrokerId),
                     singletonMap(listenerName + "ssl.truststore.password", "password"));
-            verifyConfigDefaultValue(client, Optional.of(defaultBrokerId),
+            verifyConfigSecretValue(client, Optional.of(defaultBrokerId),
                     singleton(listenerName + "ssl.truststore.password"));
         }
     }
@@ -521,7 +521,22 @@ public class ConfigCommandIntegrationTest {
     }
 
     private void verifyConfigDefaultValue(Admin client, Optional<String> brokerId, Set<String> config) throws Exception {
-        ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, brokerId.orElse(defaultBrokerId));
+        ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, brokerId.orElse(""));
+        TestUtils.waitForCondition(() -> {
+            Map<String, String> current = client.describeConfigs(singletonList(configResource))
+                    .all()
+                    .get()
+                    .values()
+                    .stream()
+                    .flatMap(e -> e.entries().stream())
+                    .filter(configEntry -> Objects.nonNull(configEntry.value()))
+                    .collect(Collectors.toMap(ConfigEntry::name, ConfigEntry::value));
+            return config.stream().allMatch(current::containsKey);
+        }, 5000, config + " are not updated");
+    }
+
+    private void verifyConfigSecretValue(Admin client, Optional<String> brokerId, Set<String> config) throws Exception {
+        ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, brokerId.orElse(""));
         TestUtils.waitForCondition(() -> {
             Map<String, String> current = client.describeConfigs(singletonList(configResource))
                     .all()
