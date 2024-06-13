@@ -26,6 +26,7 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Time;
 import org.apache.kafka.connect.data.Timestamp;
 import org.apache.kafka.connect.source.SourceRecord;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -37,10 +38,10 @@ import java.util.Map;
 import java.util.TimeZone;
 
 import static org.apache.kafka.connect.transforms.util.Requirements.requireStruct;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 public class TimestampConverterTest {
     private static final TimeZone UTC = TimeZone.getTimeZone("UTC");

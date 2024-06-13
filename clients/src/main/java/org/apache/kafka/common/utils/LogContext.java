@@ -55,7 +55,7 @@ public class LogContext {
         return logPrefix;
     }
 
-    private static abstract class AbstractKafkaLogger implements Logger {
+    private abstract static class AbstractKafkaLogger implements Logger {
         private final String prefix;
 
         protected AbstractKafkaLogger(final String prefix) {

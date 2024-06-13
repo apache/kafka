@@ -356,7 +356,7 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
                         EMIT_OFFSET_SYNCS_ENABLED_DOC);
     }
 
-    protected final static ConfigDef CONNECTOR_CONFIG_DEF = defineSourceConfig(new ConfigDef(BASE_CONNECTOR_CONFIG_DEF));
+    protected static final ConfigDef CONNECTOR_CONFIG_DEF = defineSourceConfig(new ConfigDef(BASE_CONNECTOR_CONFIG_DEF));
 
     public static void main(String[] args) {        
         System.out.println(defineSourceConfig(new ConfigDef()).toHtml(4, config -> "mirror_source_" + config));

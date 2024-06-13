@@ -25,6 +25,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -42,7 +43,7 @@ public class Tls13SelectorTest extends SslSelectorTest {
     protected Map<String, Object> createSslClientConfigs(File trustStoreFile) throws GeneralSecurityException, IOException {
         Map<String, Object> configs = TestSslUtils.createSslConfig(false, false, Mode.CLIENT,
             trustStoreFile, "client");
-        configs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, asList("TLSv1.3"));
+        configs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Collections.singletonList("TLSv1.3"));
         return configs;
     }
 

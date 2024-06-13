@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.connect.file.FileStreamSourceConnector;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -94,7 +95,7 @@ public class FileStreamSourceConnectorIntegrationTest {
         // Append NUM_LINES more lines to the file
         try (PrintStream printStream = new PrintStream(Files.newOutputStream(sourceFile.toPath(), StandardOpenOption.APPEND))) {
             for (int i = NUM_LINES; i < 2 * NUM_LINES; i++) {
-                printStream.println(String.format(LINE_FORMAT, i));
+                printStream.printf(LINE_FORMAT + "%n", i);
             }
         }
 
@@ -197,7 +198,7 @@ public class FileStreamSourceConnectorIntegrationTest {
 
         try (PrintStream printStream = new PrintStream(Files.newOutputStream(sourceFile.toPath()))) {
             for (int i = 0; i < numLines; i++) {
-                printStream.println(String.format(LINE_FORMAT, i));
+                printStream.printf(LINE_FORMAT + "%n", i);
             }
         }
 

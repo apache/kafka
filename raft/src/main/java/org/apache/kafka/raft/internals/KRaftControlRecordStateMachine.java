@@ -43,7 +43,7 @@ import org.slf4j.Logger;
  * the public methods. The other actors/threads are the callers of {@code RaftClient.createSnapshot} which
  * indirectly call {@code voterSetAtOffset} and {@code kraftVersionAtOffset} when freezing a snapshot.
  */
-final public class KRaftControlRecordStateMachine {
+public final class KRaftControlRecordStateMachine {
     private final ReplicatedLog log;
     private final RecordSerde<?> serde;
     private final BufferSupplier bufferSupplier;

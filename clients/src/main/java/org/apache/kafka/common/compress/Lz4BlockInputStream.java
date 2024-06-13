@@ -276,11 +276,6 @@ public final class Lz4BlockInputStream extends InputStream {
         throw new RuntimeException("reset not supported");
     }
 
-    @Override
-    public boolean markSupported() {
-        return false;
-    }
-
     /**
      * Checks whether the version of lz4 on the classpath has the fix for reading from ByteBuffers with
      * non-zero array offsets (see https://github.com/lz4/lz4-java/pull/65)

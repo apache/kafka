@@ -179,12 +179,12 @@ public class DirectoryConfigProviderTest {
         provider.configure(configs);
 
         ConfigData configData = provider.get(subdir);
-        assertEquals(toSet(asList(subdirFileName)), configData.data().keySet());
+        assertEquals(toSet(Collections.singletonList(subdirFileName)), configData.data().keySet());
         assertEquals("SUBDIRFILE", configData.data().get(subdirFileName));
         assertNull(configData.ttl());
 
         configData = provider.get(siblingDir);
-        assertEquals(toSet(asList(siblingDirFileName)), configData.data().keySet());
+        assertEquals(toSet(Collections.singletonList(siblingDirFileName)), configData.data().keySet());
         assertEquals("SIBLINGDIRFILE", configData.data().get(siblingDirFileName));
         assertNull(configData.ttl());
     }

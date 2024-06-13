@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import java.util.Arrays;
 import java.util.Optional;
+import java.util.concurrent.TimeUnit;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
@@ -58,6 +59,7 @@ import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration;
@@ -65,10 +67,10 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
 import org.apache.kafka.streams.processor.internals.assignment.FallbackPriorTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.LegacyStickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
-import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
-import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.LegacyTaskAssignor;
 import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockClientSupplier;
@@ -76,6 +78,7 @@ import org.apache.kafka.test.MockInternalTopicManager;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.mockito.ArgumentCaptor;
@@ -97,7 +100,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.SortedSet;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static java.time.Duration.ofMillis;
@@ -142,8 +144,8 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_1_3;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_2_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_2_1;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_1;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_2;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_1;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_2;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.createMockAdminClientForAssignor;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getInfo;
 import static org.apache.kafka.streams.processor.internals.assignment.StreamsAssignmentProtocolVersions.LATEST_SUPPORTED_VERSION;
@@ -174,6 +176,8 @@ public class StreamsPartitionAssignorTest {
     // We need this rule because we would like to combine Parameterised tests with strict Mockito stubs.
     @Rule
     public MockitoRule rule = MockitoJUnit.rule().strictness(Strictness.STRICT_STUBS);
+    @Rule
+    public Timeout timeout = new Timeout(30_000, TimeUnit.SECONDS);
 
     private static final String CONSUMER_1 = "consumer1";
     private static final String CONSUMER_2 = "consumer2";
@@ -208,7 +212,7 @@ public class StreamsPartitionAssignorTest {
         new PartitionInfo("topic3", 3, NODE_0, REPLICA_0, REPLICA_0)
     );
 
-    private final SubscriptionInfo defaultSubscriptionInfo = getInfo(UUID_1, EMPTY_TASKS, EMPTY_TASKS);
+    private final SubscriptionInfo defaultSubscriptionInfo = getInfo(PID_1, EMPTY_TASKS, EMPTY_TASKS);
 
     private final Cluster metadata = new Cluster(
         "cluster",
@@ -233,7 +237,8 @@ public class StreamsPartitionAssignorTest {
     @Captor
     private ArgumentCaptor<Map<TopicPartition, PartitionInfo>> topicPartitionInfoCaptor;
     private final Map<String, Subscription> subscriptions = new HashMap<>();
-    private final Class<? extends TaskAssignor> taskAssignor;
+    private final Class<? extends LegacyTaskAssignor> internalTaskAssignor;
+    private final Class<? extends org.apache.kafka.streams.processor.assignment.TaskAssignor> customTaskAssignor;
     private final String rackAwareAssignorStrategy;
     private Map<String, String> clientTags;
 
@@ -253,8 +258,13 @@ public class StreamsPartitionAssignorTest {
         referenceContainer.time = time;
         referenceContainer.clientTags = clientTags != null ? clientTags : EMPTY_CLIENT_TAGS;
         configurationMap.put(InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
-        configurationMap.put(InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, taskAssignor.getName());
         configurationMap.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG, rackAwareAssignorStrategy);
+        if (internalTaskAssignor != null) {
+            configurationMap.put(InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, internalTaskAssignor.getName());
+        }
+        if (customTaskAssignor != null) {
+            configurationMap.put(StreamsConfig.TASK_ASSIGNOR_CLASS_CONFIG, customTaskAssignor.getName());
+        }
         return configurationMap;
     }
 
@@ -292,7 +302,7 @@ public class StreamsPartitionAssignorTest {
         taskManager = mock(TaskManager.class);
         lenient().when(taskManager.topologyMetadata()).thenReturn(topologyMetadata);
         lenient().when(taskManager.getTaskOffsetSums()).thenReturn(getTaskOffsetSums(activeTasks, standbyTasks));
-        lenient().when(taskManager.processId()).thenReturn(UUID_1);
+        lenient().when(taskManager.processId()).thenReturn(PID_1);
         builder.setApplicationId(APPLICATION_ID);
         topologyMetadata.buildAndRewriteTopology();
     }
@@ -329,20 +339,26 @@ public class StreamsPartitionAssignorTest {
         return mockInternalTopicManager;
     }
 
-    @Parameterized.Parameters(name = "task assignor = {0}, rack aware assignor = {1}")
+    @Parameterized.Parameters(name = "internal task assignor = {0}, rack aware assignor = {1}, custom task assignor = {2}")
     public static Collection<Object[]> parameters() {
         return asList(
-            new Object[]{HighAvailabilityTaskAssignor.class, true},
-            new Object[]{HighAvailabilityTaskAssignor.class, false},
-            new Object[]{StickyTaskAssignor.class, true},
-            new Object[]{StickyTaskAssignor.class, false},
-            new Object[]{FallbackPriorTaskAssignor.class, true},
-            new Object[]{FallbackPriorTaskAssignor.class, false}
+            new Object[]{HighAvailabilityTaskAssignor.class, true, null},
+            new Object[]{HighAvailabilityTaskAssignor.class, false, null},
+            new Object[]{LegacyStickyTaskAssignor.class, true, null},
+            new Object[]{LegacyStickyTaskAssignor.class, false, null},
+            new Object[]{FallbackPriorTaskAssignor.class, true, null},
+            new Object[]{FallbackPriorTaskAssignor.class, false, null},
+            new Object[]{null, false, org.apache.kafka.streams.processor.assignment.assignors.StickyTaskAssignor.class},
+            new Object[]{null, true, org.apache.kafka.streams.processor.assignment.assignors.StickyTaskAssignor.class},
+            new Object[]{HighAvailabilityTaskAssignor.class, false, org.apache.kafka.streams.processor.assignment.assignors.StickyTaskAssignor.class}
         );
     }
 
-    public StreamsPartitionAssignorTest(final Class<? extends TaskAssignor> taskAssignor, final boolean enableRackAwareAssignor) {
-        this.taskAssignor = taskAssignor;
+    public StreamsPartitionAssignorTest(final Class<? extends LegacyTaskAssignor> internalTaskAssignor,
+                                        final boolean enableRackAwareAssignor,
+                                        final Class<? extends org.apache.kafka.streams.processor.assignment.TaskAssignor> customTaskAssignor) {
+        this.internalTaskAssignor = internalTaskAssignor;
+        this.customTaskAssignor = customTaskAssignor;
         rackAwareAssignorStrategy = enableRackAwareAssignor ? StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC : StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE;
         adminClient = createMockAdminClientForAssignor(EMPTY_CHANGELOG_END_OFFSETS);
         topologyMetadata = new TopologyMetadata(builder, new StreamsConfig(configProps()));
@@ -383,7 +399,7 @@ public class StreamsPartitionAssignorTest {
         state.addPreviousTasksAndOffsetSums(CONSUMER_2, getTaskOffsetSums(asList(TASK_0_3, TASK_1_0), EMPTY_TASKS));
         state.addPreviousTasksAndOffsetSums(CONSUMER_3, getTaskOffsetSums(asList(TASK_0_1, TASK_0_2, TASK_1_2), EMPTY_TASKS));
         state.initializePrevTasks(emptyMap(), false);
-        state.computeTaskLags(UUID_1, getTaskEndOffsetSums(allTasks));
+        state.computeTaskLags(PID_1, getTaskEndOffsetSums(allTasks));
 
         assertEquivalentAssignment(
             previousAssignment,
@@ -414,7 +430,7 @@ public class StreamsPartitionAssignorTest {
         state.addPreviousTasksAndOffsetSums(CONSUMER_2, getTaskOffsetSums(asList(TASK_0_3, TASK_1_0), EMPTY_TASKS));
         state.addPreviousTasksAndOffsetSums(CONSUMER_3, getTaskOffsetSums(asList(TASK_0_1, TASK_0_2, TASK_1_2), EMPTY_TASKS));
         state.initializePrevTasks(emptyMap(), false);
-        state.computeTaskLags(UUID_1, getTaskEndOffsetSums(allTasks));
+        state.computeTaskLags(PID_1, getTaskEndOffsetSums(allTasks));
 
         // We should be able to add a new task without sacrificing stickiness
         final TaskId newTask = TASK_2_0;
@@ -451,7 +467,7 @@ public class StreamsPartitionAssignorTest {
         state.addPreviousTasksAndOffsetSums(CONSUMER_2, getTaskOffsetSums(asList(TASK_0_3, TASK_1_0), EMPTY_TASKS));
         state.addPreviousTasksAndOffsetSums(CONSUMER_3, getTaskOffsetSums(asList(TASK_0_1, TASK_0_2, TASK_1_2), EMPTY_TASKS));
         state.initializePrevTasks(emptyMap(), false);
-        state.computeTaskLags(UUID_1, getTaskEndOffsetSums(allTasks));
+        state.computeTaskLags(PID_1, getTaskEndOffsetSums(allTasks));
 
         // Consumer 3 leaves the group
         consumers.remove(CONSUMER_3);
@@ -495,7 +511,7 @@ public class StreamsPartitionAssignorTest {
         state.addPreviousTasksAndOffsetSums(CONSUMER_4, getTaskOffsetSums(EMPTY_TASKS, EMPTY_TASKS));
 
         state.initializePrevTasks(emptyMap(), false);
-        state.computeTaskLags(UUID_1, getTaskEndOffsetSums(allTasks));
+        state.computeTaskLags(PID_1, getTaskEndOffsetSums(allTasks));
 
         final Map<String, List<TaskId>> assignment = assignTasksToThreads(
             allTasks,
@@ -572,7 +588,7 @@ public class StreamsPartitionAssignorTest {
         Collections.sort(subscription.topics());
         assertEquals(asList("topic1", "topic2"), subscription.topics());
 
-        final SubscriptionInfo info = getInfo(UUID_1, prevTasks, standbyTasks, uniqueField);
+        final SubscriptionInfo info = getInfo(PID_1, prevTasks, standbyTasks, uniqueField);
         assertEquals(info, SubscriptionInfo.decode(subscription.userData()));
     }
 
@@ -598,7 +614,7 @@ public class StreamsPartitionAssignorTest {
         Collections.sort(subscription.topics());
         assertEquals(asList("topic1", "topic2"), subscription.topics());
 
-        final SubscriptionInfo info = getInfo(UUID_1, prevTasks, standbyTasks, uniqueField);
+        final SubscriptionInfo info = getInfo(PID_1, prevTasks, standbyTasks, uniqueField);
         assertEquals(info, SubscriptionInfo.decode(subscription.userData()));
     }
 
@@ -623,12 +639,25 @@ public class StreamsPartitionAssignorTest {
             singletonList(APPLICATION_ID + "-store-changelog"),
             singletonList(3))
         );
-        configureDefaultPartitionAssignor();
+
+        final List<Map<String, List<TopicPartitionInfo>>> partitionInfo = singletonList(mkMap(mkEntry(
+                "stream-partition-assignor-test-store-changelog",
+                singletonList(
+                    new TopicPartitionInfo(
+                        0,
+                        new Node(1, "h1", 80),
+                        singletonList(new Node(1, "h1", 80)),
+                        emptyList()
+                    )
+                )
+            )
+        ));
+        configurePartitionAssignorWith(emptyMap(), partitionInfo);
 
         subscriptions.put("consumer10",
                           new Subscription(
                               topics,
-                              getInfo(UUID_1, prevTasks10, standbyTasks10).encode(),
+                              getInfo(PID_1, prevTasks10, standbyTasks10).encode(),
                               Collections.emptyList(),
                               DEFAULT_GENERATION,
                               Optional.of(RACK_3)
@@ -636,7 +665,7 @@ public class StreamsPartitionAssignorTest {
         subscriptions.put("consumer11",
                           new Subscription(
                               topics,
-                              getInfo(UUID_1, prevTasks11, standbyTasks11).encode(),
+                              getInfo(PID_1, prevTasks11, standbyTasks11).encode(),
                               Collections.emptyList(),
                               DEFAULT_GENERATION,
                               Optional.of(RACK_3)
@@ -644,7 +673,7 @@ public class StreamsPartitionAssignorTest {
         subscriptions.put("consumer20",
                           new Subscription(
                               topics,
-                              getInfo(UUID_2, prevTasks20, standbyTasks20).encode(),
+                              getInfo(PID_2, prevTasks20, standbyTasks20).encode(),
                               Collections.emptyList(),
                               DEFAULT_GENERATION,
                               Optional.of(RACK_0)
@@ -775,7 +804,7 @@ public class StreamsPartitionAssignorTest {
         subscriptions.put("consumer10",
                           new Subscription(
                               topics,
-                              getInfo(UUID_1, mkSet(TASK_0_0, TASK_0_2), emptySet()).encode(),
+                              getInfo(PID_1, mkSet(TASK_0_0, TASK_0_2), emptySet()).encode(),
                               asList(t1p0, t1p2),
                               DEFAULT_GENERATION,
                               Optional.of(RACK_2)
@@ -783,7 +812,7 @@ public class StreamsPartitionAssignorTest {
         subscriptions.put("consumer11",
                           new Subscription(
                               topics,
-                              getInfo(UUID_1, mkSet(TASK_0_1, TASK_0_3), emptySet()).encode(),
+                              getInfo(PID_1, mkSet(TASK_0_1, TASK_0_3), emptySet()).encode(),
                               asList(t1p1, t1p3),
                               DEFAULT_GENERATION,
                               Optional.of(RACK_2)
@@ -791,7 +820,7 @@ public class StreamsPartitionAssignorTest {
         subscriptions.put("consumer20",
                           new Subscription(
                               topics,
-                              getInfo(UUID_2, emptySet(), emptySet()).encode(),
+                              getInfo(PID_2, emptySet(), emptySet()).encode(),
                               emptyList(),
                               DEFAULT_GENERATION,
                               Optional.of(RACK_2)
@@ -829,7 +858,7 @@ public class StreamsPartitionAssignorTest {
         subscriptions.put("consumer10",
                           new Subscription(
                               topics,
-                              getInfo(UUID_1, prevTasks10, standbyTasks10).encode(),
+                              getInfo(PID_1, prevTasks10, standbyTasks10).encode(),
                               emptyList(),
                               DEFAULT_GENERATION,
                               Optional.of(RACK_3)
@@ -886,21 +915,21 @@ public class StreamsPartitionAssignorTest {
         subscriptions.put("consumer10",
                           new Subscription(
                               topics,
-                              getInfo(UUID_1, prevTasks10, EMPTY_TASKS).encode(),
+                              getInfo(PID_1, prevTasks10, EMPTY_TASKS).encode(),
                               emptyList(),
                               DEFAULT_GENERATION,
                               Optional.of(RACK_4)));
         subscriptions.put("consumer11",
                           new Subscription(
                               topics,
-                              getInfo(UUID_1, prevTasks11, EMPTY_TASKS).encode(),
+                              getInfo(PID_1, prevTasks11, EMPTY_TASKS).encode(),
                               emptyList(),
                               DEFAULT_GENERATION,
                               Optional.of(RACK_4)));
         subscriptions.put("consumer20",
                           new Subscription(
                               topics,
-                              getInfo(UUID_2, prevTasks20, EMPTY_TASKS).encode(),
+                              getInfo(PID_2, prevTasks20, EMPTY_TASKS).encode(),
                               emptyList(),
                               DEFAULT_GENERATION,
                               Optional.of(RACK_1)));
@@ -976,7 +1005,7 @@ public class StreamsPartitionAssignorTest {
         subscriptions.put("consumer20",
                           new Subscription(
                               topics,
-                              getInfo(UUID_2, EMPTY_TASKS, EMPTY_TASKS).encode(),
+                              getInfo(PID_2, EMPTY_TASKS, EMPTY_TASKS).encode(),
                               emptyList(),
                               DEFAULT_GENERATION,
                               Optional.of(RACK_2)));
@@ -1043,14 +1072,14 @@ public class StreamsPartitionAssignorTest {
         subscriptions.put("consumer10",
             new Subscription(
                 topics,
-                getInfo(UUID_1, mkSet(TASK_0_0), emptySet()).encode(),
+                getInfo(PID_1, mkSet(TASK_0_0), emptySet()).encode(),
                 emptyList(),
                 DEFAULT_GENERATION,
                 Optional.of(RACK_0)));
         subscriptions.put("consumer20",
             new Subscription(
                 topics,
-                getInfo(UUID_2, mkSet(TASK_0_2), emptySet()).encode(),
+                getInfo(PID_2, mkSet(TASK_0_2), emptySet()).encode(),
                 emptyList(),
                 DEFAULT_GENERATION,
                 Optional.of(RACK_2)));
@@ -1079,14 +1108,14 @@ public class StreamsPartitionAssignorTest {
         subscriptions.put("consumer10",
             new Subscription(
                 topics,
-                getInfo(UUID_1, mkSet(TASK_0_0), emptySet()).encode(),
+                getInfo(PID_1, mkSet(TASK_0_0), emptySet()).encode(),
                 emptyList(),
                 DEFAULT_GENERATION,
                 Optional.of(RACK_1)));
         subscriptions.put("consumer20",
             new Subscription(
                 topics,
-                getInfo(UUID_2, mkSet(TASK_0_2), emptySet()).encode(),
+                getInfo(PID_2, mkSet(TASK_0_2), emptySet()).encode(),
                 emptyList(),
                 DEFAULT_GENERATION,
                 Optional.of(RACK_3)));
@@ -1137,21 +1166,21 @@ public class StreamsPartitionAssignorTest {
         subscriptions.put("consumer10",
                           new Subscription(
                               topics,
-                              getInfo(UUID_1, prevTasks00, EMPTY_TASKS, USER_END_POINT).encode(),
+                              getInfo(PID_1, prevTasks00, EMPTY_TASKS, USER_END_POINT).encode(),
                               emptyList(),
                               DEFAULT_GENERATION,
                               Optional.of(RACK_0)));
         subscriptions.put("consumer11",
                           new Subscription(
                               topics,
-                              getInfo(UUID_1, prevTasks01, standbyTasks02, USER_END_POINT).encode(),
+                              getInfo(PID_1, prevTasks01, standbyTasks02, USER_END_POINT).encode(),
                               emptyList(),
                               DEFAULT_GENERATION,
                               Optional.of(RACK_0)));
         subscriptions.put("consumer20",
                           new Subscription(
                               topics,
-                              getInfo(UUID_2, prevTasks02, standbyTasks00, OTHER_END_POINT).encode(),
+                              getInfo(PID_2, prevTasks02, standbyTasks00, OTHER_END_POINT).encode(),
                               emptyList(),
                               DEFAULT_GENERATION,
                               Optional.of(RACK_4)));
@@ -1240,7 +1269,7 @@ public class StreamsPartitionAssignorTest {
             subscriptions.put(consumerId,
                     new Subscription(
                             topics,
-                            getInfo(UUID_1, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
+                            getInfo(PID_1, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
                             emptyList(),
                             DEFAULT_GENERATION,
                             Optional.of(RACK_2)));
@@ -1249,7 +1278,7 @@ public class StreamsPartitionAssignorTest {
             subscriptions.put(consumerId,
                     new Subscription(
                             topics,
-                            getInfo(UUID_2, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
+                            getInfo(PID_2, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
                             emptyList(),
                             DEFAULT_GENERATION,
                             Optional.of(RACK_4)));
@@ -1298,14 +1327,14 @@ public class StreamsPartitionAssignorTest {
         subscriptions.put("consumer10",
                 new Subscription(
                         topics,
-                        getInfo(UUID_1, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
+                        getInfo(PID_1, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
                         emptyList(),
                         DEFAULT_GENERATION,
                         Optional.of(RACK_4)));
         subscriptions.put("consumer20",
                 new Subscription(
                         topics,
-                        getInfo(UUID_2, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
+                        getInfo(PID_2, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
                         emptyList(),
                         DEFAULT_GENERATION,
                         Optional.of(RACK_4)));
@@ -1349,28 +1378,28 @@ public class StreamsPartitionAssignorTest {
         subscriptions.put("consumer10",
                 new Subscription(
                         topics,
-                        getInfo(UUID_1, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
+                        getInfo(PID_1, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
                         emptyList(),
                         DEFAULT_GENERATION,
                         Optional.of(RACK_0)));
         subscriptions.put("consumer11",
                 new Subscription(
                         topics,
-                        getInfo(UUID_1, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
+                        getInfo(PID_1, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
                         emptyList(),
                         DEFAULT_GENERATION,
                         Optional.of(RACK_0)));
         subscriptions.put("consumer20",
                 new Subscription(
                         topics,
-                        getInfo(UUID_2, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
+                        getInfo(PID_2, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
                         emptyList(),
                         DEFAULT_GENERATION,
                         Optional.of(RACK_2)));
         subscriptions.put("consumer21",
                 new Subscription(
                         topics,
-                        getInfo(UUID_2, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
+                        getInfo(PID_2, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
                         emptyList(),
                         DEFAULT_GENERATION,
                         Optional.of(RACK_2)));
@@ -1697,7 +1726,7 @@ public class StreamsPartitionAssignorTest {
         subscriptions.put("consumer1",
                           new Subscription(
                               topics,
-                              getInfo(UUID_1, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
+                              getInfo(PID_1, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
                               emptyList(),
                               DEFAULT_GENERATION,
                               Optional.of(RACK_2)
@@ -1849,7 +1878,7 @@ public class StreamsPartitionAssignorTest {
         subscriptions.put(CONSUMER_1,
                           new Subscription(
                               Collections.singletonList("topic1"),
-                              getInfo(UUID_1, allTasks, EMPTY_TASKS).encode(),
+                              getInfo(PID_1, allTasks, EMPTY_TASKS).encode(),
                               allPartitions,
                               DEFAULT_GENERATION,
                               Optional.of(RACK_0))
@@ -1857,7 +1886,7 @@ public class StreamsPartitionAssignorTest {
         subscriptions.put(CONSUMER_2,
                           new Subscription(
                               Collections.singletonList("topic1"),
-                              getInfo(UUID_1, EMPTY_TASKS, allTasks).encode(),
+                              getInfo(PID_1, EMPTY_TASKS, allTasks).encode(),
                               emptyList(),
                               DEFAULT_GENERATION,
                               Optional.of(RACK_0))
@@ -1905,7 +1934,7 @@ public class StreamsPartitionAssignorTest {
         subscriptions.put("consumer1",
                           new Subscription(
                               Collections.singletonList("topic1"),
-                              getInfo(UUID_1, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
+                              getInfo(PID_1, EMPTY_TASKS, EMPTY_TASKS, USER_END_POINT).encode(),
                               emptyList(),
                               DEFAULT_GENERATION,
                               Optional.of(RACK_3))
@@ -1913,7 +1942,7 @@ public class StreamsPartitionAssignorTest {
         subscriptions.put("consumer2",
                           new Subscription(
                               Collections.singletonList("topic1"),
-                              getInfo(UUID_2, EMPTY_TASKS, EMPTY_TASKS, OTHER_END_POINT).encode(),
+                              getInfo(PID_2, EMPTY_TASKS, EMPTY_TASKS, OTHER_END_POINT).encode(),
                               emptyList(),
                               DEFAULT_GENERATION,
                               Optional.of(RACK_1))
@@ -1983,7 +2012,8 @@ public class StreamsPartitionAssignorTest {
         subscriptions.put("consumer1",
                           new Subscription(
                               Collections.singletonList("topic1"),
-                              getInfoForOlderVersion(smallestVersion, UUID_1, EMPTY_TASKS, EMPTY_TASKS).encode(),
+                              getInfoForOlderVersion(smallestVersion,
+                                  PID_1, EMPTY_TASKS, EMPTY_TASKS).encode(),
                               emptyList(),
                               DEFAULT_GENERATION,
                               Optional.of(RACK_2))
@@ -1991,7 +2021,7 @@ public class StreamsPartitionAssignorTest {
         subscriptions.put("consumer2",
                           new Subscription(
                               Collections.singletonList("topic1"),
-                              getInfoForOlderVersion(otherVersion, UUID_2, EMPTY_TASKS, EMPTY_TASKS).encode(),
+                              getInfoForOlderVersion(otherVersion, PID_2, EMPTY_TASKS, EMPTY_TASKS).encode(),
                               emptyList(),
                               DEFAULT_GENERATION,
                               Optional.of(RACK_1)
@@ -2063,7 +2093,7 @@ public class StreamsPartitionAssignorTest {
             CONSUMER_1,
             new Subscription(
                 Collections.singletonList("topic1"),
-                getInfo(UUID_1, allTasks, EMPTY_TASKS).encode(),
+                getInfo(PID_1, allTasks, EMPTY_TASKS).encode(),
                 asList(t1p0, t1p1, t1p2),
                 DEFAULT_GENERATION,
                 Optional.of(RACK_1)
@@ -2073,7 +2103,7 @@ public class StreamsPartitionAssignorTest {
             CONSUMER_2,
             new Subscription(
                 Collections.singletonList("topic1"),
-                getInfo(UUID_2, EMPTY_TASKS, EMPTY_TASKS).encode(),
+                getInfo(PID_2, EMPTY_TASKS, EMPTY_TASKS).encode(),
                 emptyList(),
                 DEFAULT_GENERATION,
                 Optional.of(RACK_2)
@@ -2357,7 +2387,19 @@ public class StreamsPartitionAssignorTest {
                           ));
 
         configureDefault();
-        overwriteInternalTopicManagerWithMock(true);
+        final List<Map<String, List<TopicPartitionInfo>>> partitionInfo = singletonList(mkMap(mkEntry(
+                "stream-partition-assignor-test-store-changelog",
+                singletonList(
+                    new TopicPartitionInfo(
+                        0,
+                        new Node(1, "h1", 80),
+                        singletonList(new Node(1, "h1", 80)),
+                        emptyList()
+                    )
+                )
+            )
+        ));
+        overwriteInternalTopicManagerWithMock(true, partitionInfo);
 
         partitionAssignor.assign(metadata, new GroupSubscription(subscriptions));
     }
@@ -2398,7 +2440,19 @@ public class StreamsPartitionAssignorTest {
             ));
 
         configureDefault();
-        overwriteInternalTopicManagerWithMock(false);
+        final List<Map<String, List<TopicPartitionInfo>>> partitionInfo = singletonList(mkMap(mkEntry(
+                "stream-partition-assignor-test-store-changelog",
+                singletonList(
+                    new TopicPartitionInfo(
+                        0,
+                        new Node(1, "h1", 80),
+                        singletonList(new Node(1, "h1", 80)),
+                        emptyList()
+                    )
+                )
+            )
+        ));
+        overwriteInternalTopicManagerWithMock(false, partitionInfo);
 
         partitionAssignor.assign(metadata, new GroupSubscription(subscriptions));
 
@@ -2546,7 +2600,7 @@ public class StreamsPartitionAssignorTest {
         final Set<String> topics = mkSet("input");
         final Subscription subscription = new Subscription(new ArrayList<>(topics),
                                                            partitionAssignor.subscriptionUserData(topics));
-        final SubscriptionInfo info = getInfo(UUID_1, EMPTY_TASKS, EMPTY_TASKS, uniqueField, clientTags);
+        final SubscriptionInfo info = getInfo(PID_1, EMPTY_TASKS, EMPTY_TASKS, uniqueField, clientTags);
 
         assertEquals(singletonList("input"), subscription.topics());
         assertEquals(info, SubscriptionInfo.decode(subscription.userData()));
@@ -2588,7 +2642,7 @@ public class StreamsPartitionAssignorTest {
         subscriptions.put("consumer1",
                           new Subscription(
                               Collections.singletonList("topic1"),
-                              getInfoForOlderVersion(oldVersion, UUID_1, EMPTY_TASKS, EMPTY_TASKS).encode(),
+                              getInfoForOlderVersion(oldVersion, PID_1, EMPTY_TASKS, EMPTY_TASKS).encode(),
                               emptyList(),
                               DEFAULT_GENERATION,
                               Optional.of(RACK_0))
@@ -2715,7 +2769,7 @@ public class StreamsPartitionAssignorTest {
 
 
     private static SubscriptionInfo getInfoForOlderVersion(final int version,
-                                                           final UUID processId,
+                                                           final ProcessId processId,
                                                            final Set<TaskId> prevTasks,
                                                            final Set<TaskId> standbyTasks) {
         return new SubscriptionInfo(

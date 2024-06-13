@@ -139,19 +139,14 @@ class ReplicationQuotasTest extends QuorumTestHarness {
         }
       }
       //Either throttle the six leaders or the two followers
-      if (leaderThrottle) {
-        admin.incrementalAlterConfigs(
-          Map(new ConfigResource(TOPIC, topic) -> Seq(new AlterConfigOp(new ConfigEntry(
-            QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0:100,1:101,2:102,3:103,4:104,5:105"),
-            SET)).asJavaCollection).asJava
-        ).all().get()
-      } else {
-        admin.incrementalAlterConfigs(
-          Map(new ConfigResource(TOPIC, topic) -> Seq(new AlterConfigOp(new ConfigEntry(
-            QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0:106,1:106,2:106,3:107,4:107,5:107"),
-            SET)).asJavaCollection).asJava
-        ).all().get()
-      }
+      val configEntry = if (leaderThrottle)
+        new ConfigEntry(QuotaConfigs.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0:100,1:101,2:102,3:103,4:104,5:105")
+      else
+        new ConfigEntry(QuotaConfigs.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0:106,1:106,2:106,3:107,4:107,5:107")
+
+      admin.incrementalAlterConfigs(
+        Map(new ConfigResource(TOPIC, topic) -> Seq(new AlterConfigOp(configEntry, SET)).asJavaCollection).asJava
+      ).all().get()
     }
 
     //Add data equally to each partition
@@ -299,7 +294,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
     features.add(new BrokerRegistrationRequestData.Feature()
       .setName(MetadataVersion.FEATURE_NAME)
       .setMinSupportedVersion(MetadataVersion.IBP_3_0_IV1.featureLevel())
-      .setMaxSupportedVersion(MetadataVersion.IBP_3_8_IV0.featureLevel()))
+      .setMaxSupportedVersion(MetadataVersion.IBP_4_0_IV0.featureLevel()))
     controllerServer.controller.registerBroker(
       ControllerRequestContextUtil.ANONYMOUS_CONTEXT,
       new BrokerRegistrationRequestData()
@@ -307,7 +302,9 @@ class ReplicationQuotasTest extends QuorumTestHarness {
         .setClusterId(controllerServer.clusterId)
         .setIncarnationId(Uuid.randomUuid())
         .setListeners(listeners)
-        .setLogDirs(Collections.singletonList(Uuid.randomUuid()))
+        .setLogDirs(Collections.singletonList(
+          Uuid.fromString(s"TESTBROKER${Integer.toString(100000 + id).substring(1)}DIRAAAA")
+        ))
         .setFeatures(features)
     ).get()
   }

@@ -16,25 +16,26 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.ForwardingAdmin;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
-import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.MetricsContext;
-import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
-import static org.apache.kafka.common.config.ConfigDef.CaseInsensitiveValidString.in;
 
-import java.util.Map;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
-import java.time.Duration;
+import java.util.Map;
+
+import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_OFFSET_RESET_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG;
+import static org.apache.kafka.common.config.ConfigDef.CaseInsensitiveValidString.in;
 
 /** Shared config properties used by {@link MirrorSourceConnector}, {@link MirrorCheckpointConnector}, and {@link MirrorHeartbeatConnector}.
  *  <p>

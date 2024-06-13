@@ -50,11 +50,11 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-final public class MetaPropertiesEnsembleTest {
+public final class MetaPropertiesEnsembleTest {
     private static final MetaPropertiesEnsemble FOO =
         new MetaPropertiesEnsemble(
             new HashSet<>(Arrays.asList("/tmp/empty1", "/tmp/empty2")),
-            new HashSet<>(Arrays.asList("/tmp/error3")),
+            new HashSet<>(Collections.singletonList("/tmp/error3")),
             Stream.of(
                 new SimpleImmutableEntry<>("/tmp/dir4",
                     new MetaProperties.Builder().
@@ -104,7 +104,7 @@ final public class MetaPropertiesEnsembleTest {
 
     @Test
     public void testErrorLogDirsForFoo() {
-        assertEquals(new HashSet<>(Arrays.asList("/tmp/error3")), FOO.errorLogDirs());
+        assertEquals(new HashSet<>(Collections.singletonList("/tmp/error3")), FOO.errorLogDirs());
     }
 
     @Test
@@ -294,7 +294,7 @@ final public class MetaPropertiesEnsembleTest {
         assertEquals(1, metaPropertiesEnsemble.logDirProps().size());
     }
 
-    static private void verifyCopy(
+    private static void verifyCopy(
         MetaPropertiesEnsemble expected,
         MetaPropertiesEnsemble.Copier copier
     ) {
@@ -393,7 +393,7 @@ final public class MetaPropertiesEnsembleTest {
             assertThrows(RuntimeException.class, () -> copier.verify()).getMessage());
     }
 
-    private final static List<MetaProperties> SAMPLE_META_PROPS_LIST = Arrays.asList(
+    private static final List<MetaProperties> SAMPLE_META_PROPS_LIST = Arrays.asList(
         new MetaProperties.Builder().
             setVersion(MetaPropertiesVersion.V1).
             setClusterId("AtgGav8yQjiaJ3rTXE7VCA").

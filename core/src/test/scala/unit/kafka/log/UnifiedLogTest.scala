@@ -4251,6 +4251,25 @@ class UnifiedLogTest {
     assertEquals(new LogOffsetMetadata(14, -1L, -1), log.maybeConvertToOffsetMetadata(14))
   }
 
+  @Test
+  def testGetFirstBatchTimestampForSegments(): Unit = {
+    val log = createLog(logDir, LogTestUtils.createLogConfig())
+
+    val segments: java.util.List[LogSegment] = new java.util.ArrayList[LogSegment]()
+    val seg1 = LogTestUtils.createSegment(1, logDir, 10, Time.SYSTEM)
+    val seg2 = LogTestUtils.createSegment(2, logDir, 10, Time.SYSTEM)
+    segments.add(seg1)
+    segments.add(seg2)
+    assertEquals(Seq(Long.MaxValue, Long.MaxValue), log.getFirstBatchTimestampForSegments(segments).asScala.toSeq)
+
+    seg1.append(1, 1000L, 1, MemoryRecords.withRecords(1, Compression.NONE, new SimpleRecord("one".getBytes)))
+    seg2.append(2, 2000L, 1, MemoryRecords.withRecords(2, Compression.NONE, new SimpleRecord("two".getBytes)))
+    assertEquals(Seq(1000L, 2000L), log.getFirstBatchTimestampForSegments(segments).asScala.toSeq)
+
+    seg1.close()
+    seg2.close()
+  }
+
   private def appendTransactionalToBuffer(buffer: ByteBuffer,
                                           producerId: Long,
                                           producerEpoch: Short,

@@ -207,8 +207,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
      */
     // Visible for testing
     static void runAtClose(final Collection<Optional<? extends RequestManager>> requestManagers,
-                           final NetworkClientDelegate networkClientDelegate,
-                           final Timer timer) {
+                           final NetworkClientDelegate networkClientDelegate) {
         // These are the optional outgoing requests at the
         requestManagers.stream()
                 .filter(Optional::isPresent)
@@ -293,21 +292,28 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
      * Check the unsent queue one last time and poll until all requests are sent or the timer runs out.
      */
     private void sendUnsentRequests(final Timer timer) {
-        if (networkClientDelegate.unsentRequests().isEmpty())
+        if (!networkClientDelegate.hasAnyPendingRequests())
             return;
+
         do {
             networkClientDelegate.poll(timer.remainingMs(), timer.currentTimeMs());
             timer.update();
-        } while (timer.notExpired() && !networkClientDelegate.unsentRequests().isEmpty());
+        } while (timer.notExpired() && networkClientDelegate.hasAnyPendingRequests());
+
+        if (networkClientDelegate.hasAnyPendingRequests()) {
+            log.warn("Close timeout of {} ms expired before the consumer network thread was able " +
+                "to complete pending requests. Inflight request count: {}, Unsent request count: {}",
+                timer.timeoutMs(), networkClientDelegate.inflightRequestCount(), networkClientDelegate.unsentRequests().size());
+        }
     }
 
     void cleanup() {
         log.trace("Closing the consumer network thread");
         Timer timer = time.timer(closeTimeout);
         try {
-            runAtClose(requestManagers.entries(), networkClientDelegate, timer);
+            runAtClose(requestManagers.entries(), networkClientDelegate);
         } catch (Exception e) {
-            log.error("Unexpected error during shutdown.  Proceed with closing.", e);
+            log.error("Unexpected error during shutdown. Proceed with closing.", e);
         } finally {
             sendUnsentRequests(timer);
             applicationEventReaper.reap(applicationEventQueue);

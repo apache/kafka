@@ -108,6 +108,7 @@ public class UtilsTest {
 
     @Test
     public void testGetHost() {
+        // valid
         assertEquals("127.0.0.1", getHost("127.0.0.1:8000"));
         assertEquals("mydomain.com", getHost("PLAINTEXT://mydomain.com:8080"));
         assertEquals("MyDomain.com", getHost("PLAINTEXT://MyDomain.com:8080"));
@@ -116,6 +117,20 @@ public class UtilsTest {
         assertEquals("2001:db8:85a3:8d3:1319:8a2e:370:7348", getHost("PLAINTEXT://[2001:db8:85a3:8d3:1319:8a2e:370:7348]:5678"));
         assertEquals("2001:DB8:85A3:8D3:1319:8A2E:370:7348", getHost("PLAINTEXT://[2001:DB8:85A3:8D3:1319:8A2E:370:7348]:5678"));
         assertEquals("fe80::b1da:69ca:57f7:63d8%3", getHost("PLAINTEXT://[fe80::b1da:69ca:57f7:63d8%3]:5678"));
+
+        // invalid
+        assertNull(getHost("PLAINTEXT://mydo)main.com:8080"));
+        assertNull(getHost("PLAINTEXT://mydo(main.com:8080"));
+        assertNull(getHost("PLAINTEXT://mydo()main.com:8080"));
+        assertNull(getHost("PLAINTEXT://mydo(main).com:8080"));
+        assertNull(getHost("ho)st:9092"));
+        assertNull(getHost("ho(st:9092"));
+        assertNull(getHost("ho()st:9092"));
+        assertNull(getHost("ho(st):9092"));
+        assertNull(getHost("PLAINTEXT://[2001:db)8:85a3:8d3:1319:8a2e:370:7348]:5678"));
+        assertNull(getHost("PLAINTEXT://[2001:db(8:85a3:8d3:1319:8a2e:370:7348]:5678"));
+        assertNull(getHost("PLAINTEXT://[2001:db()8:85a3:8d3:1319:8a2e:370:7348]:5678"));
+        assertNull(getHost("PLAINTEXT://[2001:db(8:85a3:)8d3:1319:8a2e:370:7348]:5678"));
     }
 
     @Test
@@ -130,6 +145,7 @@ public class UtilsTest {
 
     @Test
     public void testGetPort() {
+        // valid
         assertEquals(8000, getPort("127.0.0.1:8000").intValue());
         assertEquals(8080, getPort("mydomain.com:8080").intValue());
         assertEquals(8080, getPort("MyDomain.com:8080").intValue());
@@ -137,6 +153,12 @@ public class UtilsTest {
         assertEquals(5678, getPort("[2001:db8:85a3:8d3:1319:8a2e:370:7348]:5678").intValue());
         assertEquals(5678, getPort("[2001:DB8:85A3:8D3:1319:8A2E:370:7348]:5678").intValue());
         assertEquals(5678, getPort("[fe80::b1da:69ca:57f7:63d8%3]:5678").intValue());
+
+        // invalid
+        assertNull(getPort("host:-92"));
+        assertNull(getPort("host:-9-2"));
+        assertNull(getPort("host:92-"));
+        assertNull(getPort("host:9-2"));
     }
 
     @Test
@@ -801,19 +823,19 @@ public class UtilsTest {
     public void shouldThrowOnInvalidDateFormatOrNullTimestamp() {
         // check some invalid formats
         // test null timestamp
-        assertTrue(assertThrows(IllegalArgumentException.class, () -> {
-            Utils.getDateTime(null);
-        }).getMessage().contains("Error parsing timestamp with null value"));
+        assertTrue(assertThrows(IllegalArgumentException.class, () ->
+            Utils.getDateTime(null)
+        ).getMessage().contains("Error parsing timestamp with null value"));
 
         // test pattern: yyyy-MM-dd'T'HH:mm:ss.X
-        checkExceptionForGetDateTimeMethod(() -> {
-            invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.X"));
-        });
+        checkExceptionForGetDateTimeMethod(() ->
+            invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.X"))
+        );
 
         // test pattern: yyyy-MM-dd HH:mm:ss
-        assertTrue(assertThrows(ParseException.class, () -> {
-            invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss"));
-        }).getMessage().contains("It does not contain a 'T' according to ISO8601 format"));
+        assertTrue(assertThrows(ParseException.class, () ->
+            invokeGetDateTimeMethod(new SimpleDateFormat("yyyy-MM-dd HH:mm:ss"))
+        ).getMessage().contains("It does not contain a 'T' according to ISO8601 format"));
 
         // KAFKA-10685: use DateTimeFormatter generate micro/nano second timestamp
         final DateTimeFormatter formatter = new DateTimeFormatterBuilder()
@@ -825,19 +847,19 @@ public class UtilsTest {
         final LocalDateTime timestampWithSeconds = timestampWithNanoSeconds.truncatedTo(ChronoUnit.SECONDS);
 
         // test pattern: yyyy-MM-dd'T'HH:mm:ss.SSSSSSSSS
-        checkExceptionForGetDateTimeMethod(() -> {
-            Utils.getDateTime(formatter.format(timestampWithNanoSeconds));
-        });
+        checkExceptionForGetDateTimeMethod(() ->
+            Utils.getDateTime(formatter.format(timestampWithNanoSeconds))
+        );
 
         // test pattern: yyyy-MM-dd'T'HH:mm:ss.SSSSSS
-        checkExceptionForGetDateTimeMethod(() -> {
-            Utils.getDateTime(formatter.format(timestampWithMicroSeconds));
-        });
+        checkExceptionForGetDateTimeMethod(() ->
+            Utils.getDateTime(formatter.format(timestampWithMicroSeconds))
+        );
 
         // test pattern: yyyy-MM-dd'T'HH:mm:ss
-        checkExceptionForGetDateTimeMethod(() -> {
-            Utils.getDateTime(formatter.format(timestampWithSeconds));
-        });
+        checkExceptionForGetDateTimeMethod(() ->
+            Utils.getDateTime(formatter.format(timestampWithSeconds))
+        );
     }
 
     private void checkExceptionForGetDateTimeMethod(Executable executable) {

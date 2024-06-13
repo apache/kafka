@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.storage.internals.log.ProducerStateEntry;
 import org.apache.kafka.storage.internals.log.ProducerStateManager;
 import org.apache.kafka.storage.internals.log.ProducerStateManagerConfig;
+
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -49,7 +50,7 @@ import java.util.concurrent.TimeUnit;
 @Fork(1)
 @BenchmarkMode(Mode.AverageTime)
 @State(value = Scope.Benchmark)
-@OutputTimeUnit(TimeUnit.NANOSECONDS)
+@OutputTimeUnit(TimeUnit.MICROSECONDS)
 public class ProducerStateManagerBench {
     Time time = new MockTime();
     final int producerIdExpirationMs = 1000;
@@ -57,10 +58,10 @@ public class ProducerStateManagerBench {
     ProducerStateManager manager;
     Path tempDirectory;
 
-    @Param({"100", "1000", "10000", "100000"})
+    @Param({"10000", "100000", "1000000"})
     public int numProducerIds;
 
-    @Setup(Level.Trial)
+    @Setup(Level.Invocation)
     public void setup() throws IOException {
         tempDirectory = Files.createTempDirectory("kafka-logs");
         manager = new ProducerStateManager(
@@ -70,17 +71,6 @@ public class ProducerStateManagerBench {
             new ProducerStateManagerConfig(producerIdExpirationMs, false),
             time
         );
-    }
-
-
-    @TearDown(Level.Trial)
-    public void tearDown() throws Exception {
-        Files.deleteIfExists(tempDirectory);
-    }
-
-    @Benchmark
-    @Threads(1)
-    public void testDeleteExpiringIds() {
         short epoch = 0;
         for (long i = 0L; i < numProducerIds; i++) {
             final ProducerStateEntry entry = new ProducerStateEntry(
@@ -93,7 +83,17 @@ public class ProducerStateManagerBench {
             );
             manager.loadProducerEntry(entry);
         }
+    }
 
+
+    @TearDown(Level.Invocation)
+    public void tearDown() throws Exception {
+        Files.deleteIfExists(tempDirectory);
+    }
+
+    @Benchmark
+    @Threads(1)
+    public void testDeleteExpiringIds() {
         manager.removeExpiredProducers(time.milliseconds() + producerIdExpirationMs + 1);
     }
 }

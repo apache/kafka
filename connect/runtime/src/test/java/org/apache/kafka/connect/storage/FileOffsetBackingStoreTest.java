@@ -60,13 +60,13 @@ public class FileOffsetBackingStoreTest {
     private Converter converter;
 
 
-    private static Map<ByteBuffer, ByteBuffer> firstSet = new HashMap<>();
+    private static final Map<ByteBuffer, ByteBuffer> FIRST_SET = new HashMap<>();
     private static final Runnable EMPTY_RUNNABLE = () -> {
     };
 
     static {
-        firstSet.put(buffer("key"), buffer("value"));
-        firstSet.put(null, null);
+        FIRST_SET.put(buffer("key"), buffer("value"));
+        FIRST_SET.put(null, null);
     }
 
     @Before
@@ -96,7 +96,7 @@ public class FileOffsetBackingStoreTest {
         @SuppressWarnings("unchecked")
         Callback<Void> setCallback = mock(Callback.class);
 
-        store.set(firstSet, setCallback).get();
+        store.set(FIRST_SET, setCallback).get();
 
         Map<ByteBuffer, ByteBuffer> values = store.get(Arrays.asList(buffer("key"), buffer("bad"))).get();
         assertEquals(buffer("value"), values.get(buffer("key")));
@@ -109,7 +109,7 @@ public class FileOffsetBackingStoreTest {
         @SuppressWarnings("unchecked")
         Callback<Void> setCallback = mock(Callback.class);
 
-        store.set(firstSet, setCallback).get();
+        store.set(FIRST_SET, setCallback).get();
         store.stop();
 
         // Restore into a new store to ensure correct reload from scratch

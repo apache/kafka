@@ -82,6 +82,8 @@ public class Metadata implements Closeable {
     private final ClusterResourceListeners clusterResourceListeners;
     private boolean isClosed;
     private final Map<TopicPartition, Integer> lastSeenLeaderEpochs;
+    /** Addresses with which the metadata was originally bootstrapped. */
+    private List<InetSocketAddress> bootstrapAddresses;
 
     /**
      * Create a new Metadata instance
@@ -304,6 +306,12 @@ public class Metadata implements Closeable {
         this.needFullUpdate = true;
         this.updateVersion += 1;
         this.metadataSnapshot = MetadataSnapshot.bootstrap(addresses);
+        this.bootstrapAddresses = addresses;
+    }
+
+    public synchronized void rebootstrap() {
+        log.info("Rebootstrapping with {}", this.bootstrapAddresses);
+        this.bootstrap(this.bootstrapAddresses);
     }
 
     /**
@@ -425,8 +433,8 @@ public class Metadata implements Closeable {
         // Get topic-ids for updated topics from existing topic-ids.
         Map<String, Uuid> existingTopicIds = this.metadataSnapshot.topicIds();
         Map<String, Uuid> topicIdsForUpdatedTopics = updatedTopics.stream()
-            .filter(e -> existingTopicIds.containsKey(e))
-            .collect(Collectors.toMap(e -> e, e -> existingTopicIds.get(e)));
+            .filter(existingTopicIds::containsKey)
+            .collect(Collectors.toMap(e -> e, existingTopicIds::get));
 
         if (log.isDebugEnabled()) {
             updatePartitionMetadata.forEach(

@@ -118,7 +118,8 @@ abstract class EmbeddedConnect {
     };
 
     /**
-     * Start the connect cluster and the embedded Kafka and Zookeeper cluster.
+     * Start the Connect cluster and the embedded Kafka and Zookeeper cluster,
+     * and wait for the Kafka and Connect clusters to become healthy.
      */
     public void start() {
         if (maskExitProcedures) {
@@ -131,6 +132,27 @@ abstract class EmbeddedConnect {
             httpClient.start();
         } catch (Exception e) {
             throw new ConnectException("Failed to start HTTP client", e);
+        }
+
+        try {
+            if (numBrokers > 0) {
+                assertions().assertExactlyNumBrokersAreUp(
+                        numBrokers,
+                        "Kafka cluster did not start in time"
+                );
+                log.info("Completed startup of {} Kafka brokers", numBrokers);
+            }
+
+            int numWorkers = workers().size();
+            if (numWorkers > 0) {
+                assertions().assertExactlyNumWorkersAreUp(
+                        numWorkers,
+                        "Connect cluster did not start in time"
+                );
+                log.info("Completed startup of {} Connect workers", numWorkers);
+            }
+        } catch (InterruptedException e) {
+            throw new RuntimeException("Interrupted while awaiting cluster startup", e);
         }
     }
 

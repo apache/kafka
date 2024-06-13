@@ -67,7 +67,7 @@ public class KTableAggregateTest {
     private final Consumed<String, String> consumed = Consumed.with(stringSerde, stringSerde);
     private final Grouped<String, String> stringSerialized = Grouped.with(stringSerde, stringSerde);
     private final MockApiProcessorSupplier<String, Object, Void, Void> supplier = new MockApiProcessorSupplier<>();
-    private final static Properties CONFIG = mkProperties(mkMap(
+    private static final Properties CONFIG = mkProperties(mkMap(
         mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("kafka-test").getAbsolutePath())));
 
     @Test

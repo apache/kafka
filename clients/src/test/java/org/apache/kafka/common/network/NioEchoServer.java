@@ -61,7 +61,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
  *
  */
 public class NioEchoServer extends Thread {
-    private final static Logger LOG = LoggerFactory.getLogger(NioEchoServer.class);
+    private static final Logger LOG = LoggerFactory.getLogger(NioEchoServer.class);
 
     public enum MetricType {
         TOTAL, RATE, AVG, MAX;

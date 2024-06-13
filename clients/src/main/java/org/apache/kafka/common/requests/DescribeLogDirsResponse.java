@@ -59,9 +59,9 @@ public class DescribeLogDirsResponse extends AbstractResponse {
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
         errorCounts.put(Errors.forCode(data.errorCode()), 1);
-        data.results().forEach(result -> {
-            updateErrorCounts(errorCounts, Errors.forCode(result.errorCode()));
-        });
+        data.results().forEach(result ->
+            updateErrorCounts(errorCounts, Errors.forCode(result.errorCode()))
+        );
         return errorCounts;
     }
 
@@ -82,7 +82,7 @@ public class DescribeLogDirsResponse extends AbstractResponse {
      * class {@link org.apache.kafka.clients.admin.LogDirDescription}.
      */
     @Deprecated
-    static public class LogDirInfo {
+    public static class LogDirInfo {
         public final Errors error;
         public final Map<TopicPartition, ReplicaInfo> replicaInfos;
 
@@ -93,13 +93,11 @@ public class DescribeLogDirsResponse extends AbstractResponse {
 
         @Override
         public String toString() {
-            StringBuilder builder = new StringBuilder();
-            builder.append("(error=")
-                    .append(error)
-                    .append(", replicas=")
-                    .append(replicaInfos)
-                    .append(")");
-            return builder.toString();
+            return "(error=" +
+                    error +
+                    ", replicas=" +
+                    replicaInfos +
+                    ")";
         }
     }
 
@@ -112,7 +110,7 @@ public class DescribeLogDirsResponse extends AbstractResponse {
      * class {@link org.apache.kafka.clients.admin.ReplicaInfo}.
      */
     @Deprecated
-    static public class ReplicaInfo {
+    public static class ReplicaInfo {
 
         public final long size;
         public final long offsetLag;
@@ -126,15 +124,13 @@ public class DescribeLogDirsResponse extends AbstractResponse {
 
         @Override
         public String toString() {
-            StringBuilder builder = new StringBuilder();
-            builder.append("(size=")
-                .append(size)
-                .append(", offsetLag=")
-                .append(offsetLag)
-                .append(", isFuture=")
-                .append(isFuture)
-                .append(")");
-            return builder.toString();
+            return "(size=" +
+                    size +
+                    ", offsetLag=" +
+                    offsetLag +
+                    ", isFuture=" +
+                    isFuture +
+                    ")";
         }
     }
 

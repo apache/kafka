@@ -279,7 +279,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
 
     private static final class DataLogInputStream implements LogInputStream<AbstractLegacyRecordBatch> {
         private final InputStream stream;
-        protected final int maxMessageSize;
+        private final int maxMessageSize;
         private final ByteBuffer offsetAndSizeBuffer;
 
         DataLogInputStream(InputStream stream, int maxMessageSize) {

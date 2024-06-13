@@ -22,11 +22,11 @@ import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.runtime.rest.RestServerConfig;
+
 import org.glassfish.hk2.api.TypeLiteral;
 import org.glassfish.hk2.utilities.binding.AbstractBinder;
 import org.glassfish.jersey.server.ResourceConfig;
 
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
@@ -48,7 +48,7 @@ public class MirrorRestServer extends RestServer {
 
     @Override
     protected Collection<Class<?>> regularResources() {
-        return Arrays.asList(
+        return Collections.singletonList(
                 InternalMirrorResource.class
         );
     }
