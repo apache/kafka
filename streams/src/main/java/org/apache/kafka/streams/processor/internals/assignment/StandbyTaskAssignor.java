@@ -22,7 +22,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 import org.apache.kafka.streams.processor.assignment.ProcessId;
 
-interface StandbyTaskAssignor extends TaskAssignor {
+interface StandbyTaskAssignor extends LegacyTaskAssignor {
     default boolean isAllowedTaskMovement(final ClientState source, final ClientState destination) {
         return true;
     }

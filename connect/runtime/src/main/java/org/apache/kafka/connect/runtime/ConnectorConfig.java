@@ -419,7 +419,7 @@ public class ConnectorConfig extends AbstractConfig {
      * The abstract method pattern is used to cope with this.
      * @param <T> The type of plugin (either {@code Transformation} or {@code Predicate}).
      */
-    static abstract class EnrichablePlugin<T> {
+    abstract static class EnrichablePlugin<T> {
 
         private final String aliasKind;
         private final String aliasConfig;

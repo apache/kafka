@@ -70,7 +70,7 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
         KeyValue.pair(new Windowed<>(Bytes.wrap(storeKey.getBytes()), storeWindow), storeKey.getBytes())).iterator();
     private final TimeWindow cacheWindow = new TimeWindow(10, 20);
     private Iterator<KeyValue<Bytes, LRUCacheEntry>> cacheKvs;
-    final private Deserializer<String> deserializer = Serdes.String().deserializer();
+    private final Deserializer<String> deserializer = Serdes.String().deserializer();
 
     private StoreKeySerializer<String> storeKeySerializer;
     private StoreKeyToWindowKey storeKeyToWindowKey;

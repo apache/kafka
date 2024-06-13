@@ -35,23 +35,23 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @link{org.apache.kafka.controller.metrics.QuorumControllerMetrics}, not here.
  */
 public final class ControllerMetadataMetrics implements AutoCloseable {
-    private final static MetricName FENCED_BROKER_COUNT = getMetricName(
+    private static final MetricName FENCED_BROKER_COUNT = getMetricName(
         "KafkaController", "FencedBrokerCount");
-    private final static MetricName ACTIVE_BROKER_COUNT = getMetricName(
+    private static final MetricName ACTIVE_BROKER_COUNT = getMetricName(
         "KafkaController", "ActiveBrokerCount");
-    private final static MetricName MIGRATING_ZK_BROKER_COUNT = getMetricName(
+    private static final MetricName MIGRATING_ZK_BROKER_COUNT = getMetricName(
         "KafkaController", "MigratingZkBrokerCount");
-    private final static MetricName GLOBAL_TOPIC_COUNT = getMetricName(
+    private static final MetricName GLOBAL_TOPIC_COUNT = getMetricName(
         "KafkaController", "GlobalTopicCount");
-    private final static MetricName GLOBAL_PARTITION_COUNT = getMetricName(
+    private static final MetricName GLOBAL_PARTITION_COUNT = getMetricName(
         "KafkaController", "GlobalPartitionCount");
-    private final static MetricName OFFLINE_PARTITION_COUNT = getMetricName(
+    private static final MetricName OFFLINE_PARTITION_COUNT = getMetricName(
         "KafkaController", "OfflinePartitionsCount");
-    private final static MetricName PREFERRED_REPLICA_IMBALANCE_COUNT = getMetricName(
+    private static final MetricName PREFERRED_REPLICA_IMBALANCE_COUNT = getMetricName(
         "KafkaController", "PreferredReplicaImbalanceCount");
-    private final static MetricName METADATA_ERROR_COUNT = getMetricName(
+    private static final MetricName METADATA_ERROR_COUNT = getMetricName(
         "KafkaController", "MetadataErrorCount");
-    private final static MetricName ZK_MIGRATION_STATE = getMetricName(
+    private static final MetricName ZK_MIGRATION_STATE = getMetricName(
         "KafkaController", "ZkMigrationState");
 
     private final Optional<MetricsRegistry> registry;

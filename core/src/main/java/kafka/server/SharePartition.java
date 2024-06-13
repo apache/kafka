@@ -42,12 +42,12 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  */
 public class SharePartition {
 
-    private final static Logger log = LoggerFactory.getLogger(SharePartition.class);
+    private static final Logger log = LoggerFactory.getLogger(SharePartition.class);
 
     /**
      * empty member id used to indicate when a record is not acquired by any member.
      */
-    final static String EMPTY_MEMBER_ID = Uuid.ZERO_UUID.toString();
+    static final String EMPTY_MEMBER_ID = Uuid.ZERO_UUID.toString();
 
     /**
      * The RecordState is used to track the state of a record that has been fetched from the leader.

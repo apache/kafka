@@ -23,7 +23,7 @@ import java.util.Set;
 import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
 import org.apache.kafka.streams.processor.assignment.ProcessId;
 
-public interface TaskAssignor {
+public interface LegacyTaskAssignor {
     /**
      * @return whether the generated assignment requires a followup probing rebalance to satisfy all conditions
      */
