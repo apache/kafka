@@ -1699,7 +1699,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         } catch (InterruptException e) {
             throw e;
         } catch (Throwable t) {
-            // Clear the pending event on errors that are not timeout-related.
+            // Clear the pending event on errors that are not timeout- or interrupt-related.
             shouldClearPendingEvent = true;
             throw ConsumerUtils.maybeWrapAsKafkaException(t);
         } finally {
