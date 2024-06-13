@@ -3014,6 +3014,28 @@ public class RemoteLogManagerTest {
         assertEquals(99L, capturedValues.get(1).longValue());
     }
 
+    @Test
+    public void testTierLagResetsToZeroOnBecomingFollower() {
+        remoteLogManager.startup();
+        remoteLogManager.onLeadershipChange(
+                Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.emptySet(), topicIds);
+        RemoteLogManager.RLMTask rlmTask = remoteLogManager.rlmTask(leaderTopicIdPartition);
+        assertNotNull(rlmTask);
+        rlmTask.recordLagStats(1024, 2);
+        assertEquals(1024, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyLagBytes());
+        assertEquals(2, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyLagSegments());
+        // The same node becomes follower now which was the previous leader
+        remoteLogManager.onLeadershipChange(Collections.emptySet(),
+                Collections.singleton(mockPartition(leaderTopicIdPartition)), topicIds);
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyLagBytes());
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyLagSegments());
+
+        // If the old task emits the tier-lag stats, then it should be discarded
+        rlmTask.recordLagStats(2048, 4);
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyLagBytes());
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyLagSegments());
+    }
+
     private Partition mockPartition(TopicIdPartition topicIdPartition) {
         TopicPartition tp = topicIdPartition.topicPartition();
         Partition partition = mock(Partition.class);
