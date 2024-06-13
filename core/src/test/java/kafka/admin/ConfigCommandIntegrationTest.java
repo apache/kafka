@@ -28,6 +28,7 @@ import kafka.zk.BrokerInfo;
 import kafka.zk.KafkaZkClient;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.network.ListenerName;
@@ -48,6 +49,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
@@ -234,8 +236,10 @@ public class ConfigCommandIntegrationTest {
             // Listener configs: should work only with listener name
             alterAndVerifyConfig(client, Optional.of(defaultBrokerId),
                     singletonMap("listener.name.internal.ssl.keystore.location", "/tmp/test.jks"));
-            alterConfigWithKraft(client, Optional.empty(),
-                    singletonMap("listener.name.internal.ssl.keystore.location", "/tmp/test.jks"));
+            // Per-broker config configured at default cluster-level should fail
+            assertThrows(ExecutionException.class,
+                    () -> alterConfigWithKraft(client, Optional.empty(), 
+                            singletonMap("listener.name.internal.ssl.keystore.location", "/tmp/test.jks")));
             deleteAndVerifyConfig(client, Optional.of(defaultBrokerId),
                     singleton("listener.name.internal.ssl.keystore.location"));
             alterConfigWithKraft(client, Optional.of(defaultBrokerId),
@@ -478,8 +482,7 @@ public class ConfigCommandIntegrationTest {
 
     private List<String> generateDefaultAlterOpts(String bootstrapServers) {
         return asList("--bootstrap-server", bootstrapServers,
-                "--entity-type", "brokers",
-                "--entity-name", "0", "--alter");
+                "--entity-type", "brokers", "--alter");
     }
 
     private void alterAndVerifyConfig(Admin client, Optional<String> brokerId, Map<String, String> config) throws Exception {
@@ -495,7 +498,7 @@ public class ConfigCommandIntegrationTest {
     }
 
     private void verifyConfig(Admin client, Optional<String> brokerId, Map<String, String> config) throws Exception {
-        ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, brokerId.orElse(defaultBrokerId));
+        ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, brokerId.orElse(""));
         TestUtils.waitForCondition(() -> {
             Map<String, String> current = client.describeConfigs(singletonList(configResource))
                     .all()
@@ -503,7 +506,8 @@ public class ConfigCommandIntegrationTest {
                     .values()
                     .stream()
                     .flatMap(e -> e.entries().stream())
-                    .collect(HashMap::new, (map, entry) -> map.put(entry.name(), entry.value()), HashMap::putAll);
+                    .filter(configEntry -> Objects.nonNull(configEntry.value()))
+                    .collect(Collectors.toMap(ConfigEntry::name, ConfigEntry::value));
             return config.entrySet().stream().allMatch(e -> e.getValue().equals(current.get(e.getKey())));
         }, 10000, config + " are not updated");
     }
