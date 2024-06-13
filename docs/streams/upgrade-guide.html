@@ -324,7 +324,7 @@
         For multi-AZ deployments, it is desired to assign StandbyTasks to a KafkaStreams instance running in a different
         AZ than the corresponding active StreamTask.
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-708%3A+Rack+aware+StandbyTask+assignment+for+Kafka+Streams">KIP-708</a>
-        allows to configure Kafka Streams instances with a rack-aware StandbyTask assignment strategy, by using the new added configs
+        enables configuring Kafka Streams instances with a rack-aware StandbyTask assignment strategy, by using the new added configs
         <code>rack.aware.assignment.tags</code> and corresponding <code>client.tag.&lt;myTag&gt;</code>.
     </p>
 
