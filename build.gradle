@@ -834,6 +834,15 @@ subprojects {
       }
     }
   }
+  afterEvaluate {
+    def processMessageTask = tasks.findByName('processMessages')
+    def spotlessJavaTask = tasks.findByName('spotlessJava')
+    if (processMessageTask && spotlessJavaTask) {
+      spotlessJavaTask.configure {
+        dependsOn processMessageTask
+      }
+    }
+  }
 }
 
 gradle.taskGraph.whenReady { taskGraph ->
