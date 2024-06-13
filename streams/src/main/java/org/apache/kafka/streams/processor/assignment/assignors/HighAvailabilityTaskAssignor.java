@@ -126,12 +126,12 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
             .map(TaskInfo::id)
             .collect(Collectors.toSet());
 
-        Iterator<ProcessId> clientStateIterator = clientStates.keySet().iterator();
+        Iterator<Map.Entry<ProcessId, KafkaStreamsState>> clientStateIterator = clientStates.entrySet().iterator();
         for (final TaskId task : statefulTasks) {
             if (!clientStateIterator.hasNext()) {
-                clientStateIterator = assignments.keySet().iterator();
+                clientStateIterator = clientStates.entrySet().iterator();
             }
-            final ProcessId designatedClient = clientStateIterator.next();
+            final ProcessId designatedClient = clientStateIterator.next().getKey();
             assignments.get(designatedClient).assignTask(
                 new AssignedTask(task, ACTIVE)
             );
