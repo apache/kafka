@@ -3901,7 +3901,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  def handleStreamsGroupHeartbeat(request: RequestChannel.Request): CompletableFuture[Unit] = {
+  def handleStreamsHeartbeat(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val streamsHeartbeatRequest = request.body[StreamsHeartbeatRequest]
 
     if (!config.isNewGroupCoordinatorEnabled) {
