@@ -20,6 +20,7 @@ package org.apache.kafka.shell;
 import org.apache.kafka.shell.command.CommandUtils;
 import org.apache.kafka.shell.command.Commands;
 import org.apache.kafka.shell.state.MetadataShellState;
+
 import org.jline.reader.Candidate;
 import org.jline.reader.Completer;
 import org.jline.reader.EndOfFileException;

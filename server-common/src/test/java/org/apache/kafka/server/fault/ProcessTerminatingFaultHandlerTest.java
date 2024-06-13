@@ -29,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-final public class ProcessTerminatingFaultHandlerTest {
+public final class ProcessTerminatingFaultHandlerTest {
     private static Procedure terminatingProcedure(AtomicBoolean called) {
         return (statusCode, message) -> {
             assertEquals(1, statusCode);

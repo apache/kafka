@@ -191,7 +191,8 @@ class NodeToControllerChannelManagerImpl(
         time,
         true,
         apiVersions,
-        logContext
+        logContext,
+        MetadataRecoveryStrategy.NONE
       )
     }
     val threadName = s"${threadNamePrefix}to-controller-${channelName}-channel-manager"

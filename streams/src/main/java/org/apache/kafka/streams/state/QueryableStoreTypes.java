@@ -92,7 +92,7 @@ public final class QueryableStoreTypes {
         return new SessionStoreType<>();
     }
 
-    private static abstract class QueryableStoreTypeMatcher<T> implements QueryableStoreType<T> {
+    private abstract static class QueryableStoreTypeMatcher<T> implements QueryableStoreType<T> {
 
         private final Set<Class> matchTo;
 

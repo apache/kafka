@@ -50,7 +50,7 @@ public class ChangeLoggingTimestampedWindowBytesStoreTest {
     private ProcessorContextImpl context;
     private ChangeLoggingTimestampedWindowBytesStore store;
 
-    private final static Position POSITION = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 1L)))));
+    private static final Position POSITION = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 1L)))));
 
     @Before
     public void setUp() {

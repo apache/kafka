@@ -50,7 +50,7 @@ public enum AclPermissionType {
      */
     ALLOW((byte) 3);
 
-    private final static HashMap<Byte, AclPermissionType> CODE_TO_VALUE = new HashMap<>();
+    private static final HashMap<Byte, AclPermissionType> CODE_TO_VALUE = new HashMap<>();
 
     static {
         for (AclPermissionType permissionType : AclPermissionType.values()) {

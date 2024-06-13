@@ -45,7 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-final public class SnapshotWriterReaderTest {
+public final class SnapshotWriterReaderTest {
     private final int localId = 0;
     private final Set<Integer> voters = Collections.singleton(localId);
 

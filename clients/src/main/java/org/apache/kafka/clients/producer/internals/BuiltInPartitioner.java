@@ -45,7 +45,7 @@ public class BuiltInPartitioner {
     private final AtomicReference<StickyPartitionInfo> stickyPartitionInfo = new AtomicReference<>();
 
     // Visible and used for testing only.
-    static volatile public Supplier<Integer> mockRandom = null;
+    public static volatile Supplier<Integer> mockRandom = null;
 
     /**
      * BuiltInPartitioner constructor.
@@ -331,7 +331,7 @@ public class BuiltInPartitioner {
     /**
      * The partition load stats for each topic that are used for adaptive partition distribution.
      */
-    private final static class PartitionLoadStats {
+    private static final class PartitionLoadStats {
         public final int[] cumulativeFrequencyTable;
         public final int[] partitionIds;
         public final int length;

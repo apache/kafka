@@ -52,10 +52,10 @@ import static org.hamcrest.Matchers.hasProperty;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class TestTopicsTest {
-    private final static String INPUT_TOPIC = "input";
-    private final static String OUTPUT_TOPIC = "output1";
-    private final static String INPUT_TOPIC_MAP = OUTPUT_TOPIC;
-    private final static String OUTPUT_TOPIC_MAP = "output2";
+    private static final String INPUT_TOPIC = "input";
+    private static final String OUTPUT_TOPIC = "output1";
+    private static final String INPUT_TOPIC_MAP = OUTPUT_TOPIC;
+    private static final String OUTPUT_TOPIC_MAP = "output2";
 
     private TopologyTestDriver testDriver;
     private final Serde<String> stringSerde = new Serdes.StringSerde();

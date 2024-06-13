@@ -76,8 +76,8 @@ public class GlobalStreamThreadTest {
     private StreamsConfig config;
     private String baseDirectoryName;
 
-    private final static String GLOBAL_STORE_TOPIC_NAME = "foo";
-    private final static String GLOBAL_STORE_NAME = "bar";
+    private static final String GLOBAL_STORE_TOPIC_NAME = "foo";
+    private static final String GLOBAL_STORE_NAME = "bar";
     private final TopicPartition topicPartition = new TopicPartition(GLOBAL_STORE_TOPIC_NAME, 0);
 
     @Before

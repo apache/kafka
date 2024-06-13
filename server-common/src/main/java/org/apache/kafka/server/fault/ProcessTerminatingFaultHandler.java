@@ -27,7 +27,7 @@ import java.util.Objects;
 /**
  * This is a fault handler which terminates the JVM process.
  */
-final public class ProcessTerminatingFaultHandler implements FaultHandler {
+public final class ProcessTerminatingFaultHandler implements FaultHandler {
     private static final Logger log = LoggerFactory.getLogger(ProcessTerminatingFaultHandler.class);
 
     private final Runnable action;
