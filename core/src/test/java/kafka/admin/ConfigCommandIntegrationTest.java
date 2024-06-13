@@ -500,16 +500,21 @@ public class ConfigCommandIntegrationTest {
     private void verifyConfig(Admin client, Optional<String> brokerId, Map<String, String> config) throws Exception {
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, brokerId.orElse(""));
         TestUtils.waitForCondition(() -> {
-            Map<String, String> current = client.describeConfigs(singletonList(configResource))
-                    .all()
-                    .get()
-                    .values()
-                    .stream()
-                    .flatMap(e -> e.entries().stream())
+            Map<String, String> current = getConfigEntryStream(client, configResource)
                     .filter(configEntry -> Objects.nonNull(configEntry.value()))
                     .collect(Collectors.toMap(ConfigEntry::name, ConfigEntry::value));
             return config.entrySet().stream().allMatch(e -> e.getValue().equals(current.get(e.getKey())));
         }, 10000, config + " are not updated");
+    }
+
+    private Stream<ConfigEntry> getConfigEntryStream(Admin client,
+                                                     ConfigResource configResource) throws InterruptedException, ExecutionException {
+        return client.describeConfigs(singletonList(configResource))
+                .all()
+                .get()
+                .values()
+                .stream()
+                .flatMap(e -> e.entries().stream());
     }
 
     private void deleteAndVerifyConfig(Admin client, Optional<String> brokerId, Set<String> config) throws Exception {
@@ -523,12 +528,7 @@ public class ConfigCommandIntegrationTest {
     private void verifyConfigDefaultValue(Admin client, Optional<String> brokerId, Set<String> config) throws Exception {
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, brokerId.orElse(""));
         TestUtils.waitForCondition(() -> {
-            Map<String, String> current = client.describeConfigs(singletonList(configResource))
-                    .all()
-                    .get()
-                    .values()
-                    .stream()
-                    .flatMap(e -> e.entries().stream())
+            Map<String, String> current = getConfigEntryStream(client, configResource)
                     .filter(configEntry -> Objects.nonNull(configEntry.value()))
                     .collect(Collectors.toMap(ConfigEntry::name, ConfigEntry::value));
             return config.stream().allMatch(current::containsKey);
@@ -538,12 +538,7 @@ public class ConfigCommandIntegrationTest {
     private void verifyConfigSecretValue(Admin client, Optional<String> brokerId, Set<String> config) throws Exception {
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, brokerId.orElse(""));
         TestUtils.waitForCondition(() -> {
-            Map<String, String> current = client.describeConfigs(singletonList(configResource))
-                    .all()
-                    .get()
-                    .values()
-                    .stream()
-                    .flatMap(e -> e.entries().stream())
+            Map<String, String> current = getConfigEntryStream(client, configResource)
                     .collect(HashMap::new, (map, entry) -> map.put(entry.name(), entry.value()), HashMap::putAll);
             return config.stream().allMatch(current::containsKey);
         }, 5000, config + " are not updated");
