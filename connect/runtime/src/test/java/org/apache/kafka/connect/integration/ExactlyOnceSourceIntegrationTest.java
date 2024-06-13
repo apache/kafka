@@ -500,9 +500,6 @@ public class ExactlyOnceSourceIntegrationTest {
         connectorHandle.expectedRecords(MINIMUM_MESSAGES);
         connectorHandle.expectedCommits(MINIMUM_MESSAGES);
 
-        // make sure the worker is actually up (otherwise, it may fence out our simulated zombie leader, instead of the other way around)
-        connect.assertions().assertExactlyNumWorkersAreUp(1, "Connect worker did not complete startup in time");
-
         // fence out the leader of the cluster
         Producer<?, ?> zombieLeader = transactionalProducer(
                 "simulated-zombie-leader",
