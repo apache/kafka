@@ -226,6 +226,17 @@ object TestUtils extends Logging {
     }
   }
 
+  @deprecated("This method will be removed soon, please use plaintextBootstrapServers() or bootstrapServers() instead")
+  def getBrokerListStrFromServers[B <: KafkaBroker](
+                                                     brokers: Seq[B],
+                                                     protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): String = {
+    brokers.map { s =>
+      val listener = s.config.effectiveAdvertisedListeners.find(_.securityProtocol == protocol).getOrElse(
+        sys.error(s"Could not find listener with security protocol $protocol"))
+      formatAddress(listener.host, boundPort(s, protocol))
+    }.mkString(",")
+  }
+
   def plaintextBootstrapServers[B <: KafkaBroker](
     brokers: Seq[B]
   ): String = {
