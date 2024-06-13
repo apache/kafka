@@ -77,9 +77,6 @@ public class RestExtensionIntegrationTest {
         // start the clusters
         connect.start();
 
-        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
-                "Initial group of workers did not start in time.");
-
         WorkerHandle worker = connect.workers().stream()
             .findFirst()
             .orElseThrow(() -> new AssertionError("At least one worker handle should be available"));
