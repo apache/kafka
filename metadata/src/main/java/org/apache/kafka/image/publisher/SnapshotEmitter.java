@@ -42,7 +42,7 @@ public class SnapshotEmitter implements SnapshotGenerator.Emitter {
      * However, it's more convenient to limit the batch size here in terms of number of records.
      * So we chose a low number that will not cause problems.
      */
-    private final static int DEFAULT_BATCH_SIZE = 1024;
+    private static final int DEFAULT_BATCH_SIZE = 1024;
 
     public static class Builder {
         private Time time = Time.SYSTEM;

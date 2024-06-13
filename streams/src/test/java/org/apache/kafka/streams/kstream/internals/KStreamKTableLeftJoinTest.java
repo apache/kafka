@@ -47,7 +47,7 @@ import java.util.Set;
 import static org.junit.Assert.assertEquals;
 
 public class KStreamKTableLeftJoinTest {
-    private final static KeyValueTimestamp[] EMPTY = new KeyValueTimestamp[0];
+    private static final KeyValueTimestamp[] EMPTY = new KeyValueTimestamp[0];
 
     private final String streamTopic = "streamTopic";
     private final String tableTopic = "tableTopic";

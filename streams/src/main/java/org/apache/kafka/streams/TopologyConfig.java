@@ -117,7 +117,7 @@ public class TopologyConfig extends AbstractConfig {
                 Importance.LOW,
                 DSL_STORE_SUPPLIERS_CLASS_DOC);
     }
-    private final static Logger log = LoggerFactory.getLogger(TopologyConfig.class);
+    private static final Logger log = LoggerFactory.getLogger(TopologyConfig.class);
 
     private final StreamsConfig globalAppConfigs;
 

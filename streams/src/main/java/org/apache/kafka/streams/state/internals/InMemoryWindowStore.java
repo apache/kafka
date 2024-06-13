@@ -479,7 +479,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         void deregisterIterator(final InMemoryWindowStoreIteratorWrapper iterator);
     }
 
-    private static abstract class InMemoryWindowStoreIteratorWrapper {
+    private abstract static class InMemoryWindowStoreIteratorWrapper {
 
         private Iterator<Map.Entry<Bytes, byte[]>> recordIterator;
         private KeyValue<Bytes, byte[]> next;

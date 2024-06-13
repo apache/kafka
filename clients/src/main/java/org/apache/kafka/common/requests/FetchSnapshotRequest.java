@@ -28,7 +28,7 @@ import java.util.Collections;
 import java.util.Optional;
 import java.util.function.UnaryOperator;
 
-final public class FetchSnapshotRequest extends AbstractRequest {
+public final class FetchSnapshotRequest extends AbstractRequest {
     private final FetchSnapshotRequestData data;
 
     public FetchSnapshotRequest(FetchSnapshotRequestData data, short version) {

@@ -70,7 +70,7 @@ import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityT
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
-import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.LegacyTaskAssignor;
 import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockClientSupplier;
@@ -237,7 +237,7 @@ public class StreamsPartitionAssignorTest {
     @Captor
     private ArgumentCaptor<Map<TopicPartition, PartitionInfo>> topicPartitionInfoCaptor;
     private final Map<String, Subscription> subscriptions = new HashMap<>();
-    private final Class<? extends TaskAssignor> internalTaskAssignor;
+    private final Class<? extends LegacyTaskAssignor> internalTaskAssignor;
     private final Class<? extends org.apache.kafka.streams.processor.assignment.TaskAssignor> customTaskAssignor;
     private final String rackAwareAssignorStrategy;
     private Map<String, String> clientTags;
@@ -354,7 +354,7 @@ public class StreamsPartitionAssignorTest {
         );
     }
 
-    public StreamsPartitionAssignorTest(final Class<? extends TaskAssignor> internalTaskAssignor,
+    public StreamsPartitionAssignorTest(final Class<? extends LegacyTaskAssignor> internalTaskAssignor,
                                         final boolean enableRackAwareAssignor,
                                         final Class<? extends org.apache.kafka.streams.processor.assignment.TaskAssignor> customTaskAssignor) {
         this.internalTaskAssignor = internalTaskAssignor;
