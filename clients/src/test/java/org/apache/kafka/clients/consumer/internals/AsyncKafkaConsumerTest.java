@@ -686,7 +686,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
-    public void testOffsetFetchInterruptKeepsPendingEvent() {
+    public void testOffsetFetchInterruptExceptionKeepsPendingEvent() {
         consumer = newConsumer();
         long timeoutMs = 0;
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
