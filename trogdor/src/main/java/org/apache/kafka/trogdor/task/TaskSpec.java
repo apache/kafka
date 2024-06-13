@@ -39,7 +39,7 @@ public abstract class TaskSpec {
      * point rounding.  (Objects serialized as JSON canonically contain only floating point numbers,
      * because JavaScript did not support integers.)
      */
-    public final static long MAX_TASK_DURATION_MS = 1000000000000000L;
+    public static final long MAX_TASK_DURATION_MS = 1000000000000000L;
 
     /**
      * When the time should start in milliseconds.

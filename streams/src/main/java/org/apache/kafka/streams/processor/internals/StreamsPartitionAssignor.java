@@ -64,7 +64,7 @@ import org.apache.kafka.streams.processor.internals.assignment.RackUtils;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
-import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.LegacyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.DefaultTaskInfo;
 import org.apache.kafka.streams.state.HostInfo;
 import org.slf4j.Logger;
@@ -93,7 +93,6 @@ import java.util.stream.Collectors;
 
 import static java.util.Collections.unmodifiableSet;
 import static java.util.Map.Entry.comparingByKey;
-import static java.util.UUID.randomUUID;
 import static org.apache.kafka.common.utils.Utils.filterMap;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchCommittedOffsets;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchEndOffsetsResult;
@@ -197,7 +196,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
     }
 
     // keep track of any future consumers in a "dummy" Client since we can't decipher their subscription
-    private static final ProcessId FUTURE_ID = new ProcessId(randomUUID());
+    private static final ProcessId FUTURE_ID = ProcessId.randomProcessId();
 
     protected static final Comparator<TopicPartition> PARTITION_COMPARATOR =
         Comparator.comparing(TopicPartition::topic).thenComparingInt(TopicPartition::partition);
@@ -225,7 +224,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     private Supplier<Optional<org.apache.kafka.streams.processor.assignment.TaskAssignor>>
         customTaskAssignorSupplier;
-    private Supplier<TaskAssignor> internalTaskAssignorSupplier;
+    private Supplier<LegacyTaskAssignor> legacyTaskAssignorSupplier;
     private byte uniqueField;
     private Map<String, String> clientTags;
 
@@ -260,7 +259,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         copartitionedTopicsEnforcer = assignorConfiguration.copartitionedTopicsEnforcer();
         rebalanceProtocol = assignorConfiguration.rebalanceProtocol();
         customTaskAssignorSupplier = assignorConfiguration::customTaskAssignor;
-        internalTaskAssignorSupplier = assignorConfiguration::taskAssignor;
+        legacyTaskAssignorSupplier = assignorConfiguration::taskAssignor;
         assignmentListener = assignorConfiguration.assignmentListener();
         uniqueField = 0;
         clientTags = referenceContainer.clientTags;
@@ -818,7 +817,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             };
         } else {
             customTaskAssignmentListener = (assignment, subscription) -> { };
-            final TaskAssignor taskAssignor = createTaskAssignor(lagComputationSuccessful);
+            final LegacyTaskAssignor taskAssignor = createTaskAssignor(lagComputationSuccessful);
             final RackAwareTaskAssignor rackAwareTaskAssignor = new RackAwareTaskAssignor(
                 fullMetadata,
                 partitionsForTask,
@@ -860,8 +859,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         return customTaskAssignmentListener;
     }
 
-    private TaskAssignor createTaskAssignor(final boolean lagComputationSuccessful) {
-        final TaskAssignor taskAssignor = internalTaskAssignorSupplier.get();
+    private LegacyTaskAssignor createTaskAssignor(final boolean lagComputationSuccessful) {
+        final LegacyTaskAssignor taskAssignor = legacyTaskAssignorSupplier.get();
         if (taskAssignor instanceof StickyTaskAssignor) {
             // special case: to preserve pre-existing behavior, we invoke the StickyTaskAssignor
             // whether or not lag computation failed.

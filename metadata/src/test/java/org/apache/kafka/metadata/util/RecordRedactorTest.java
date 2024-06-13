@@ -34,7 +34,7 @@ import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 
-final public class RecordRedactorTest {
+public final class RecordRedactorTest {
     public static final Map<ConfigResource.Type, ConfigDef> CONFIGS = new HashMap<>();
 
     static {

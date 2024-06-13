@@ -43,7 +43,7 @@ public abstract class RaftResponse implements RaftMessage {
         return data;
     }
 
-    public final static class Inbound extends RaftResponse {
+    public static final class Inbound extends RaftResponse {
         private final Node source;
 
         public Inbound(int correlationId, ApiMessage data, Node source) {
@@ -66,7 +66,7 @@ public abstract class RaftResponse implements RaftMessage {
         }
     }
 
-    public final static class Outbound extends RaftResponse {
+    public static final class Outbound extends RaftResponse {
         public Outbound(int requestId, ApiMessage data) {
             super(requestId, data);
         }

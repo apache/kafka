@@ -20,6 +20,7 @@ package org.apache.kafka.trogdor.workload;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.ManualMetadataUpdater;
+import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NetworkClientUtils;
 import org.apache.kafka.clients.admin.Admin;
@@ -181,7 +182,8 @@ public class ConnectionStressWorker implements TaskWorker {
                             TIME,
                             false,
                             new ApiVersions(),
-                            logContext)) {
+                            logContext,
+                            MetadataRecoveryStrategy.NONE)) {
                             NetworkClientUtils.awaitReady(client, targetNode, TIME, 500);
                         }
                     }

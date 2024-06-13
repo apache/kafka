@@ -44,7 +44,7 @@ import java.util.OptionalInt;
 public final class LsCommandHandler implements Commands.Handler {
     private static final Logger log = LoggerFactory.getLogger(LsCommandHandler.class);
 
-    public final static Commands.Type TYPE = new LsCommandType();
+    public static final Commands.Type TYPE = new LsCommandType();
 
     public static class LsCommandType implements Commands.Type {
         private LsCommandType() {
