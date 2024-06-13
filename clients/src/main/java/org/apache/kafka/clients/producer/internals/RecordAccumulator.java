@@ -1038,9 +1038,6 @@ public class RecordAccumulator {
         return topicInfo.batches.computeIfAbsent(tp.partition(), k -> new ArrayDeque<>());
     }
 
-    /**
-     * Subclass can custom {@link BuiltInPartitioner}
-     **/
     BuiltInPartitioner createBuiltInPartitioner(LogContext logContext, String topic, int stickyBatchSize) {
         return new BuiltInPartitioner(logContext, topic, stickyBatchSize);
     }
