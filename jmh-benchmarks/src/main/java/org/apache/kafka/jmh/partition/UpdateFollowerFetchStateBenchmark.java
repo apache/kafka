@@ -17,8 +17,8 @@
 
 package org.apache.kafka.jmh.partition;
 
-import kafka.cluster.DelayedOperations;
 import kafka.cluster.AlterPartitionListener;
+import kafka.cluster.DelayedOperations;
 import kafka.cluster.Partition;
 import kafka.cluster.Replica;
 import kafka.log.LogManager;
@@ -28,16 +28,18 @@ import kafka.server.MetadataCache;
 import kafka.server.builders.LogManagerBuilder;
 import kafka.server.checkpoints.OffsetCheckpoints;
 import kafka.server.metadata.MockConfigRepository;
+
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.util.KafkaScheduler;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
 import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
-import org.apache.kafka.server.util.KafkaScheduler;
+
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -60,6 +62,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+
 import scala.Option;
 import scala.compat.java8.OptionConverters;
 

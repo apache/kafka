@@ -17,9 +17,10 @@
 
 package org.apache.kafka.trogdor.task;
 
+import org.apache.kafka.trogdor.common.JsonUtil;
+
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
-import org.apache.kafka.trogdor.common.JsonUtil;
 
 import java.util.Collections;
 import java.util.Map;

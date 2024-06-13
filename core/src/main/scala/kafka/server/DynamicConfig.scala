@@ -17,6 +17,8 @@
 
 package kafka.server
 
+import kafka.server.DynamicBrokerConfig.AllDynamicConfigs
+
 import java.net.{InetAddress, UnknownHostException}
 import java.util.Properties
 import org.apache.kafka.common.config.ConfigDef
@@ -30,10 +32,20 @@ import scala.jdk.CollectionConverters._
   * and can only be set dynamically.
   */
 object DynamicConfig {
+    object Broker {
+      private val brokerConfigs = {
+        val configs = QuotaConfigs.brokerQuotaConfigs()
 
-  object Broker {
-    private val brokerConfigs = QuotaConfigs.brokerQuotaConfigs()
-    DynamicBrokerConfig.addDynamicConfigs(brokerConfigs)
+        // Filter and define all dynamic configurations
+        KafkaConfig.configKeys
+          .filter { case (configName, _) => AllDynamicConfigs.contains(configName) }
+          .foreach { case (_, config) => configs.define(config) }
+        configs
+      }
+
+    // In order to avoid circular reference, all DynamicBrokerConfig's variables which are initialized by `DynamicConfig.Broker` should be moved to `DynamicConfig.Broker`.
+    // Otherwise, those variables of DynamicBrokerConfig will see intermediate state of `DynamicConfig.Broker`, because `brokerConfigs` is created by `DynamicBrokerConfig.AllDynamicConfigs`
+    val nonDynamicProps: Set[String] = KafkaConfig.configNames.toSet -- brokerConfigs.names.asScala
 
     def configKeys: util.Map[String, ConfigDef.ConfigKey] = brokerConfigs.configKeys
 
