@@ -71,7 +71,7 @@ import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
  * Any code depends on kafka.server.KafkaConfig will keep for using kafka.server.KafkaConfig for the time being until we move it out of core
  * For more details check KAFKA-15853
  */
-public abstract class KafkaConfig extends AbstractConfig {
+public abstract class AbstractKafkaConfig extends AbstractConfig {
     @SuppressWarnings("deprecation")
     public static final ConfigDef CONFIG_DEF =  new ConfigDef(RemoteLogManagerConfig.configDef())
         // Zookeeper Configuration
@@ -439,7 +439,7 @@ public abstract class KafkaConfig extends AbstractConfig {
         // This indicates whether unreleased MetadataVersions should be enabled on this node.
         .defineInternal(ServerConfigs.UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG, BOOLEAN, false, HIGH);
 
-    public KafkaConfig(ConfigDef definition, Map<?, ?> originals, Map<String, ?> configProviderProps, boolean doLog) {
+    public AbstractKafkaConfig(ConfigDef definition, Map<?, ?> originals, Map<String, ?> configProviderProps, boolean doLog) {
         super(definition, originals, configProviderProps, doLog);
     }
 }
