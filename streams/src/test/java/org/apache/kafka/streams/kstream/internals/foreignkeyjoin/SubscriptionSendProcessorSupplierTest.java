@@ -335,7 +335,7 @@ public class SubscriptionSendProcessorSupplierTest {
         }
     }
 
-    private final static class LeftValue {
+    private static final class LeftValue {
         private final String foreignKey;
 
         public LeftValue(final String value) {

@@ -276,7 +276,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
     }
 
     @JsonPropertyOrder({ "timestamp", "name" })
-    private static abstract class ConsumerEvent {
+    private abstract static class ConsumerEvent {
         private final long timestamp = System.currentTimeMillis();
 
         @JsonProperty

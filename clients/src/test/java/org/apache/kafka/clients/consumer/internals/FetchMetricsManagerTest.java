@@ -38,8 +38,8 @@ public class FetchMetricsManagerTest {
     private static final double EPSILON = 0.0001;
 
     private final Time time = new MockTime(1, 0, 0);
-    private final static String TOPIC_NAME = "test";
-    private final static TopicPartition TP = new TopicPartition(TOPIC_NAME, 0);
+    private static final String TOPIC_NAME = "test";
+    private static final TopicPartition TP = new TopicPartition(TOPIC_NAME, 0);
 
     private Metrics metrics;
     private FetchMetricsRegistry metricsRegistry;

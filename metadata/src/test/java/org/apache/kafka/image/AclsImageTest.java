@@ -40,13 +40,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(value = 40)
 public class AclsImageTest {
-    public final static AclsImage IMAGE1;
+    public static final AclsImage IMAGE1;
 
-    public final static List<ApiMessageAndVersion> DELTA1_RECORDS;
+    public static final List<ApiMessageAndVersion> DELTA1_RECORDS;
 
-    final static AclsDelta DELTA1;
+    static final AclsDelta DELTA1;
 
-    final static AclsImage IMAGE2;
+    static final AclsImage IMAGE2;
 
     static {
         Map<Uuid, StandardAcl> map = new HashMap<>();
