@@ -588,7 +588,7 @@ public class AsyncKafkaConsumerTest {
         verify(applicationEventHandler, times(1)).add(any(FetchCommittedOffsetsEvent.class));
         CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> event = getLastEnqueuedEvent();
         assertThrows(TimeoutException.class, () -> ConsumerUtils.getResult(event.future(), time.timer(timeoutMs)));
-        assertTrue(consumer.hasPendingOffsetFetch());
+        assertTrue(consumer.hasPendingOffsetFetchEvent());
 
         // For the second attempt, the event is reused, and this time the Future returns successfully, clearing
         // the pending fetch. Verify that the number of FetchCommittedOffsetsEvent enqueued remains at 1.
@@ -596,7 +596,7 @@ public class AsyncKafkaConsumerTest {
         consumer.poll(Duration.ofMillis(timeoutMs));
         verify(applicationEventHandler, times(1)).add(any(FetchCommittedOffsetsEvent.class));
         assertDoesNotThrow(() -> ConsumerUtils.getResult(event.future(), time.timer(timeoutMs)));
-        assertFalse(consumer.hasPendingOffsetFetch());
+        assertFalse(consumer.hasPendingOffsetFetchEvent());
     }
 
     @Test
@@ -612,7 +612,7 @@ public class AsyncKafkaConsumerTest {
         verify(applicationEventHandler, times(1)).add(any(FetchCommittedOffsetsEvent.class));
         CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> event1 = getLastEnqueuedEvent();
         assertThrows(TimeoutException.class, () -> ConsumerUtils.getResult(event1.future(), time.timer(timeoutMs)));
-        assertTrue(consumer.hasPendingOffsetFetch());
+        assertTrue(consumer.hasPendingOffsetFetchEvent());
 
         // For the second attempt, the set of partitions is reassigned, causing the pending offset to be replaced.
         // Verify that the number of FetchCommittedOffsetsEvent enqueued is updated to 2.
@@ -621,7 +621,7 @@ public class AsyncKafkaConsumerTest {
         verify(applicationEventHandler, times(2)).add(any(FetchCommittedOffsetsEvent.class));
         CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> event2 = getLastEnqueuedEvent();
         assertThrows(TimeoutException.class, () -> ConsumerUtils.getResult(event2.future(), time.timer(timeoutMs)));
-        assertTrue(consumer.hasPendingOffsetFetch());
+        assertTrue(consumer.hasPendingOffsetFetchEvent());
 
         // For the third attempt, the event from attempt 2 is reused, so make the Future return successfully. This
         // will finally clear out the pending fetch. Verify that the number of FetchCommittedOffsetsEvent
@@ -630,7 +630,7 @@ public class AsyncKafkaConsumerTest {
         consumer.poll(Duration.ofMillis(timeoutMs));
         verify(applicationEventHandler, times(2)).add(any(FetchCommittedOffsetsEvent.class));
         assertDoesNotThrow(() -> ConsumerUtils.getResult(event2.future(), time.timer(timeoutMs)));
-        assertFalse(consumer.hasPendingOffsetFetch());
+        assertFalse(consumer.hasPendingOffsetFetchEvent());
     }
 
     @Test
@@ -646,7 +646,7 @@ public class AsyncKafkaConsumerTest {
         verify(applicationEventHandler, times(1)).add(any(FetchCommittedOffsetsEvent.class));
         CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> event1 = getLastEnqueuedEvent();
         assertThrows(TimeoutException.class, () -> ConsumerUtils.getResult(event1.future(), time.timer(timeoutMs)));
-        assertTrue(consumer.hasPendingOffsetFetch());
+        assertTrue(consumer.hasPendingOffsetFetchEvent());
 
         // Sleep past the event's expiration, causing the poll() to *not* reuse the pending fetch. A new event
         // is created and added to the application event queue.
@@ -656,7 +656,7 @@ public class AsyncKafkaConsumerTest {
         CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> event2 = getLastEnqueuedEvent();
         assertNotEquals(event1.id(), event2.id());
         assertThrows(TimeoutException.class, () -> ConsumerUtils.getResult(event2.future(), time.timer(timeoutMs)));
-        assertTrue(consumer.hasPendingOffsetFetch());
+        assertTrue(consumer.hasPendingOffsetFetchEvent());
     }
 
     @Test

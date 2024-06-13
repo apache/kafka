@@ -256,7 +256,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private final AtomicLong currentThread = new AtomicLong(NO_CURRENT_THREAD);
     private final AtomicInteger refCount = new AtomicInteger(0);
 
-    private FetchCommittedOffsetsEvent pendingOffsetFetch;
+    private FetchCommittedOffsetsEvent pendingOffsetFetchEvent;
 
     AsyncKafkaConsumer(final ConsumerConfig config,
                        final Deserializer<K> keyDeserializer,
@@ -1669,25 +1669,26 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         log.debug("Refreshing committed offsets for partitions {}", initializingPartitions);
 
-        // The shorter the timeout the user provided to poll(), the less likely the offsets fetch will
-        // be retrieved before it times out. Creates a FetchCommittedOffsetsEvent that can be reused by follow-up
-        // attempts if the first attempt at retrieving the associated Future's value times out.
-        if (!canReusePendingOffsetFetch(initializingPartitions)) {
+        // The shorter the timeout provided to poll(), the more likely the offsets fetch will time out. To handle
+        // this case, on the first attempt to fetch the committed offsets, a FetchCommittedOffsetsEvent is created
+        // (with potentially a longer timeout) and stored. The event is used for the first attempt, but in the
+        // case it times out, subsequent attempts will also use the event in order to wait for the results.
+        if (!canReusePendingOffsetFetchEvent(initializingPartitions)) {
             // Give the event a reasonable amount of time to complete.
             long timeoutMs = Math.max(defaultApiTimeoutMs, timer.remainingMs());
             long deadlineMs = time.milliseconds() + timeoutMs;
-            pendingOffsetFetch = new FetchCommittedOffsetsEvent(initializingPartitions, deadlineMs);
-            applicationEventHandler.add(pendingOffsetFetch);
+            pendingOffsetFetchEvent = new FetchCommittedOffsetsEvent(initializingPartitions, deadlineMs);
+            applicationEventHandler.add(pendingOffsetFetchEvent);
         }
 
-        final CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = pendingOffsetFetch.future();
+        final CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = pendingOffsetFetchEvent.future();
 
         try {
             wakeupTrigger.setActiveTask(future);
             final Map<TopicPartition, OffsetAndMetadata> offsets = ConsumerUtils.getResult(future, timer);
 
             // Clear the stored event once its result is successfully retrieved.
-            pendingOffsetFetch = null;
+            pendingOffsetFetchEvent = null;
 
             refreshCommittedOffsets(offsets, metadata, subscriptions);
             return true;
@@ -1699,14 +1700,24 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
     }
 
-    boolean canReusePendingOffsetFetch(Set<TopicPartition> initializingPartitions) {
-        if (pendingOffsetFetch == null)
+    /**
+     * This determines if the {@link #pendingOffsetFetchEvent pending offset fetch event} can be reused. Reuse
+     * is only possible if all the following conditions are true:
+     *
+     * <ul>
+     *     <li>A pending offset fetch event exists</li>
+     *     <li>The partition set of the pending offset fetch event is the same as the given partition set</li>
+     *     <li>The pending offset fetch event has not expired</li>
+     * </ul>
+     */
+    private boolean canReusePendingOffsetFetchEvent(Set<TopicPartition> partitions) {
+        if (pendingOffsetFetchEvent == null)
             return false;
 
-        if (!pendingOffsetFetch.partitions().equals(initializingPartitions))
+        if (!pendingOffsetFetchEvent.partitions().equals(partitions))
             return false;
 
-        return pendingOffsetFetch.deadlineMs() > time.milliseconds();
+        return pendingOffsetFetchEvent.deadlineMs() > time.milliseconds();
     }
 
     private void updateLastSeenEpochIfNewer(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata) {
@@ -2009,8 +2020,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         return subscriptions;
     }
 
-    boolean hasPendingOffsetFetch() {
-        return pendingOffsetFetch != null;
+    boolean hasPendingOffsetFetchEvent() {
+        return pendingOffsetFetchEvent != null;
     }
 
     private void maybeUpdateSubscriptionMetadata() {
