@@ -113,16 +113,26 @@ public class UtilsTest {
         assertEquals("mydomain.com", getHost("PLAINTEXT://mydomain.com:8080"));
         assertEquals("MyDomain.com", getHost("PLAINTEXT://MyDomain.com:8080"));
         assertEquals("My_Domain.com", getHost("PLAINTEXT://My_Domain.com:8080"));
+        assertEquals("mydomain.com", getHost("SASL_PLAINTEXT://mydomain.com:8080"));
+        assertEquals("MyDomain.com", getHost("SASL_PLAINTEXT://MyDomain.com:8080"));
+        assertEquals("My_Domain.com", getHost("SASL_PLAINTEXT://My_Domain.com:8080"));
         assertEquals("::1", getHost("[::1]:1234"));
         assertEquals("2001:db8:85a3:8d3:1319:8a2e:370:7348", getHost("PLAINTEXT://[2001:db8:85a3:8d3:1319:8a2e:370:7348]:5678"));
         assertEquals("2001:DB8:85A3:8D3:1319:8A2E:370:7348", getHost("PLAINTEXT://[2001:DB8:85A3:8D3:1319:8A2E:370:7348]:5678"));
         assertEquals("fe80::b1da:69ca:57f7:63d8%3", getHost("PLAINTEXT://[fe80::b1da:69ca:57f7:63d8%3]:5678"));
+        assertEquals("2001:db8:85a3:8d3:1319:8a2e:370:7348", getHost("SASL_PLAINTEXT://[2001:db8:85a3:8d3:1319:8a2e:370:7348]:5678"));
+        assertEquals("2001:DB8:85A3:8D3:1319:8A2E:370:7348", getHost("SASL_PLAINTEXT://[2001:DB8:85A3:8D3:1319:8A2E:370:7348]:5678"));
+        assertEquals("fe80::b1da:69ca:57f7:63d8%3", getHost("SASL_PLAINTEXT://[fe80::b1da:69ca:57f7:63d8%3]:5678"));
 
         // invalid
         assertNull(getHost("PLAINTEXT://mydo)main.com:8080"));
         assertNull(getHost("PLAINTEXT://mydo(main.com:8080"));
         assertNull(getHost("PLAINTEXT://mydo()main.com:8080"));
         assertNull(getHost("PLAINTEXT://mydo(main).com:8080"));
+        assertNull(getHost("SASL_PLAINTEXT://mydo)main.com:8080"));
+        assertNull(getHost("SASL_PLAINTEXT://mydo(main.com:8080"));
+        assertNull(getHost("SASL_PLAINTEXT://mydo()main.com:8080"));
+        assertNull(getHost("SASL_PLAINTEXT://mydo(main).com:8080"));
         assertNull(getHost("ho)st:9092"));
         assertNull(getHost("ho(st:9092"));
         assertNull(getHost("ho()st:9092"));
@@ -131,6 +141,10 @@ public class UtilsTest {
         assertNull(getHost("PLAINTEXT://[2001:db(8:85a3:8d3:1319:8a2e:370:7348]:5678"));
         assertNull(getHost("PLAINTEXT://[2001:db()8:85a3:8d3:1319:8a2e:370:7348]:5678"));
         assertNull(getHost("PLAINTEXT://[2001:db(8:85a3:)8d3:1319:8a2e:370:7348]:5678"));
+        assertNull(getHost("SASL_PLAINTEXT://[2001:db)8:85a3:8d3:1319:8a2e:370:7348]:5678"));
+        assertNull(getHost("SASL_PLAINTEXT://[2001:db(8:85a3:8d3:1319:8a2e:370:7348]:5678"));
+        assertNull(getHost("SASL_PLAINTEXT://[2001:db()8:85a3:8d3:1319:8a2e:370:7348]:5678"));
+        assertNull(getHost("SASL_PLAINTEXT://[2001:db(8:85a3:)8d3:1319:8a2e:370:7348]:5678"));
     }
 
     @Test
