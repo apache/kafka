@@ -306,7 +306,7 @@
     <h3><a id="streams_api_changes_330" href="#streams_api_changes_330">Streams API changes in 3.3.0</a></h3>
     <p>
       Kafka Streams does not send a "leave group" request when an instance is closed. This behavior implies
-      that a rebalance is delayed until max.poll.interval.ms passed.
+      that a rebalance is delayed until <code>max.poll.interval.ms</code> passed.
       <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-812%3A+Introduce+another+form+of+the+%60KafkaStreams.close%28%29%60+API+that+forces+the+member+to+leave+the+consumer+group">KIP-812</a>
       introduces <code>KafkaStreams.close(CloseOptions)</code> overload, which allows forcing an instance to leave the
       group immediately.
