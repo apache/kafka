@@ -283,7 +283,6 @@ class ZkMigrationFailoverTest extends Logging {
     } finally {
       driver1.close()
       driver2.close()
-      Utils.closeQuietly(zookeeper, "EmbeddedZookeeper")
       zookeeper.shutdown()
       if (zkClient != null) Utils.closeQuietly(zkClient, "KafkaZkClient")
     }
@@ -347,7 +346,7 @@ class ZkMigrationFailoverTest extends Logging {
       val delta = new MetadataDelta(image)
       delta.replay(new FeatureLevelRecord()
         .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.IBP_3_6_IV1.featureLevel))
+        .setFeatureLevel(MetadataVersion.latestProduction().featureLevel))
       delta.replay(ZkMigrationState.MIGRATION.toRecord.message)
 
       val provenance = new MetadataProvenance(210, 11, 1)
@@ -408,13 +407,12 @@ class ZkMigrationFailoverTest extends Logging {
       }, "waiting for topics to be created in ZK.")
 
       assertTrue(topicClient1.createdTopics.nonEmpty, "Expect first leader to write some topics")
-      assertTrue(topicClient1.createdTopics.nonEmpty, "Expect second leader to write some topics")
+      assertTrue(topicClient2.createdTopics.nonEmpty, "Expect second leader to write some topics")
       assertEquals(1000, topicClient1.createdTopics.size + topicClient2.createdTopics.size,
         "Expect drivers to only write to ZK if they are the leader")
     } finally {
       driver1.close()
       driver2.close()
-      Utils.closeQuietly(zookeeper, "EmbeddedZookeeper")
       zookeeper.shutdown()
       if (zkClient != null) Utils.closeQuietly(zkClient, "KafkaZkClient")
     }

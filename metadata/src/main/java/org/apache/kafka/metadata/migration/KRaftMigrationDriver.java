@@ -702,7 +702,8 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 // between writes and reads on different ZNodes, we need to write something to the /migration ZNode to
                 // ensure we have the latest /migration zkVersion.
                 applyMigrationOperation("Updated migration state", state -> {
-                    state = state.withMigrationZkVersion(-1); // Causes an unconditional update on /migration
+                    // ZkVersion of -1 causes an unconditional update on /migration via KafkaZkClient#retryRequestsUntilConnected
+                    state = state.withMigrationZkVersion(-1);
                     return zkMigrationClient.setMigrationRecoveryState(state);
                 });
 
