@@ -34,7 +34,7 @@ import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_
 import org.apache.kafka.common.requests.{OffsetsForLeaderEpochRequest, OffsetsForLeaderEpochResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.StringSerializer
-import org.apache.kafka.common.utils.{LogContext, SystemTime}
+import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions._
@@ -246,7 +246,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
     val node = from.metadataCache.getAliveBrokerNode(to.config.brokerId,
       from.config.interBrokerListenerName).get
     val endPoint = new BrokerEndPoint(node.id(), node.host(), node.port())
-    new BrokerBlockingSender(endPoint, from.config, new Metrics(), new SystemTime(), 42, "TestFetcher", new LogContext())
+    new BrokerBlockingSender(endPoint, from.config, new Metrics(), Time.SYSTEM, 42, "TestFetcher", new LogContext())
   }
 
   private def waitForEpochChangeTo(topic: String, partition: Int, epoch: Int): Unit = {
