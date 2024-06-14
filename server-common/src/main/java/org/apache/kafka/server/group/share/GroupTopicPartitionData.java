@@ -20,6 +20,11 @@ package org.apache.kafka.server.group.share;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * This class is used to contain the data for a group, a topic and its partitions in the interface to {@link Persister}.
+ *
+ * @param <P> The type of {@link PartitionInfoData}
+ */
 public class GroupTopicPartitionData<P extends PartitionInfoData> {
     private final String groupId;
     private final List<TopicData<P>> topicsData;

@@ -22,6 +22,9 @@ import org.apache.kafka.common.message.InitializeShareGroupStateResponseData;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * This class contains the result from {@link Persister#initializeState(InitializeShareGroupStateParameters)}.
+ */
 public class InitializeShareGroupStateResult implements PersisterResult {
     private final List<TopicData<PartitionErrorData>> topicsData;
 

@@ -22,6 +22,9 @@ import org.apache.kafka.common.message.ReadShareGroupStateSummaryResponseData;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * This class contains the result from {@link Persister#readSummary(ReadShareGroupStateSummaryParameters)}.
+ */
 public class ReadShareGroupStateSummaryResult implements PersisterResult {
     private final List<TopicData<PartitionStateErrorData>> topicsData;
 

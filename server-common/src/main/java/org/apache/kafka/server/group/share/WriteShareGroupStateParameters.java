@@ -21,6 +21,9 @@ import org.apache.kafka.common.message.WriteShareGroupStateRequestData;
 
 import java.util.stream.Collectors;
 
+/**
+ * This class contains the parameters for {@link Persister#writeState(WriteShareGroupStateParameters)}.
+ */
 public class WriteShareGroupStateParameters implements PersisterParameters {
     private final GroupTopicPartitionData<PartitionStateBatchData> groupTopicPartitionData;
 

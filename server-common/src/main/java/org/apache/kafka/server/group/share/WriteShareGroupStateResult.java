@@ -22,6 +22,9 @@ import org.apache.kafka.common.message.WriteShareGroupStateResponseData;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * This class contains the result from {@link Persister#writeState(WriteShareGroupStateParameters)}.
+ */
 public class WriteShareGroupStateResult implements PersisterResult {
     private final List<TopicData<PartitionErrorData>> topicsData;
 

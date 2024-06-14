@@ -17,5 +17,9 @@
 
 package org.apache.kafka.server.group.share;
 
+/**
+ * This interface is implemented by classes used to contain the data for a partition in the
+ * interface to {@link Persister}.
+ */
 public interface PartitionInfoData {
 }

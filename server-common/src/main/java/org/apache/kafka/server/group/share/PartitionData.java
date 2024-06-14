@@ -20,6 +20,10 @@ package org.apache.kafka.server.group.share;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * This class contains the data for a partition in the interface to {@link Persister}. The various interfaces
+ * reflect the ways in which a subset of the data can be accessed for different purposes.
+ */
 public class PartitionData implements
         PartitionIdData, PartitionStateData, PartitionErrorData, PartitionStateErrorData, PartitionStateBatchData, PartitionIdLeaderEpochData, PartitionAllData {
     private final int partition;

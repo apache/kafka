@@ -21,6 +21,9 @@ import org.apache.kafka.common.message.DeleteShareGroupStateRequestData;
 
 import java.util.stream.Collectors;
 
+/**
+ * This class contains the parameters for {@link Persister#deleteState(DeleteShareGroupStateParameters)}.
+ */
 public class DeleteShareGroupStateParameters implements PersisterParameters {
 
     private final GroupTopicPartitionData<PartitionIdData> groupTopicPartitionData;

@@ -22,6 +22,11 @@ import org.apache.kafka.common.Uuid;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * This class is used to contain the data for a topic and its partitions in the interface to {@link Persister}.
+ *
+ * @param <P> The type of {@link PartitionInfoData}
+ */
 public class TopicData<P extends PartitionInfoData> {
     private final Uuid topicId;
     private final List<P> partitions;
@@ -55,8 +60,8 @@ public class TopicData<P extends PartitionInfoData> {
     @Override
     public String toString() {
         return "TopicData(" +
-                "topicId=" + topicId +
-                "partitions" + partitions +
+                "topicId=" + topicId + "," +
+                "partitions=" + partitions +
                 ")";
     }
 }

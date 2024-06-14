@@ -19,6 +19,10 @@ package org.apache.kafka.server.group.share;
 
 import java.util.List;
 
+/**
+ * This interface is implemented by classes used to contain the data for a partition with all of its data
+ * in the interface to {@link Persister}.
+ */
 public interface PartitionAllData extends PartitionInfoData, PartitionIdData {
     int stateEpoch();
 

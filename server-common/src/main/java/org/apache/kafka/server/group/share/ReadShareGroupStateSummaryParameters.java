@@ -21,6 +21,9 @@ import org.apache.kafka.common.message.ReadShareGroupStateSummaryRequestData;
 
 import java.util.stream.Collectors;
 
+/**
+ * This class contains the parameters for {@link Persister#readSummary(ReadShareGroupStateSummaryParameters)}.
+ */
 public class ReadShareGroupStateSummaryParameters implements PersisterParameters {
     private final GroupTopicPartitionData<PartitionIdLeaderEpochData> groupTopicPartitionData;
 

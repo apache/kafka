@@ -21,6 +21,9 @@ import org.apache.kafka.common.protocol.Errors;
 
 import java.util.List;
 
+/**
+ * This is a factory class for creating instances of {@link PartitionData}.
+ */
 public class PartitionFactory {
 
     public static final int DEFAULT_STATE_EPOCH = 0;

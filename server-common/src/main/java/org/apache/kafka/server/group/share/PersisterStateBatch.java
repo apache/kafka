@@ -22,6 +22,9 @@ import org.apache.kafka.common.message.WriteShareGroupStateRequestData;
 
 import java.util.Objects;
 
+/**
+ * This class contains the information for a single batch of state information for use by the {@link Persister}.
+ */
 public class PersisterStateBatch {
     private final long firstOffset;
     private final long lastOffset;

@@ -23,9 +23,9 @@ import java.util.concurrent.CompletableFuture;
 
 /**
  * This interface introduces methods which can be used by callers to interact with the
- * persistence impl responsible for storing share group/partition states.
- * For KIP-932, the persistence impl will be a share coordinator which stores information in
- * an internal topic, but this allows for other variations as well.
+ * persistence implementation responsible for storing share group/partition states.
+ * For KIP-932, the default {@link Persister} use a share coordinator which stores information in
+ * an internal topic, but this interface allows for other variations as well.
  */
 @InterfaceStability.Evolving
 public interface Persister {
@@ -38,7 +38,7 @@ public interface Persister {
     CompletableFuture<InitializeShareGroupStateResult> initializeState(InitializeShareGroupStateParameters request) throws IllegalArgumentException;
 
     /**
-     * Read share-partition state from a persistence impl.
+     * Read share-partition state.
      *
      * @param request ReadShareGroupStateParameters
      * @return ReadShareGroupStateResult
@@ -46,7 +46,7 @@ public interface Persister {
     CompletableFuture<ReadShareGroupStateResult> readState(ReadShareGroupStateParameters request) throws IllegalArgumentException;
 
     /**
-     * Write share-partition state to a persistence impl.
+     * Write share-partition state.
      *
      * @param request WriteShareGroupStateParameters
      * @return WriteShareGroupStateResult
@@ -54,7 +54,7 @@ public interface Persister {
     CompletableFuture<WriteShareGroupStateResult> writeState(WriteShareGroupStateParameters request) throws IllegalArgumentException;
 
     /**
-     * Delete share-partition state from a persistence impl.
+     * Delete share-partition state.
      *
      * @param request DeleteShareGroupStateParameters
      * @return DeleteShareGroupStateResult
@@ -62,10 +62,10 @@ public interface Persister {
     CompletableFuture<DeleteShareGroupStateResult> deleteState(DeleteShareGroupStateParameters request) throws IllegalArgumentException;
 
     /**
-     * Read the offset information from share-partition state from a persistence impl.
+     * Read the offset information from share-partition state.
      *
-     * @param request ReadShareGroupOffsetsStateParameters
-     * @return ReadShareGroupOffsetsStateResult
+     * @param request ReadShareGroupStateSummaryResult
+     * @return ReadShareGroupStateSummaryParameters
      */
     CompletableFuture<ReadShareGroupStateSummaryResult> readSummary(ReadShareGroupStateSummaryParameters request) throws IllegalArgumentException;
 

@@ -17,6 +17,10 @@
 
 package org.apache.kafka.server.group.share;
 
+/**
+ * This interface is implemented by classes used to contain the data for a partition with error data
+ * in the interface to {@link Persister}.
+ */
 public interface PartitionErrorData extends PartitionInfoData, PartitionIdData {
     short errorCode();
 
