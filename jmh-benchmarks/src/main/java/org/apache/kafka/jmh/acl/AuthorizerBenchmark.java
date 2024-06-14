@@ -19,6 +19,7 @@ package org.apache.kafka.jmh.acl;
 
 import kafka.security.authorizer.AclAuthorizer;
 import kafka.security.authorizer.AclAuthorizer.VersionedAcls;
+
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
@@ -35,11 +36,12 @@ import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.security.authorizer.AclEntry;
 import org.apache.kafka.metadata.authorizer.StandardAcl;
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
+import org.apache.kafka.security.authorizer.AclEntry;
 import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.Authorizer;
+
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -53,7 +55,6 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
-import scala.collection.JavaConverters;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -68,6 +69,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
+
+import scala.collection.JavaConverters;
 
 @State(Scope.Benchmark)
 @Fork(value = 1)

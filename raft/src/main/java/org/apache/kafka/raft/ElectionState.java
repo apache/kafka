@@ -29,7 +29,7 @@ import org.apache.kafka.raft.internals.ReplicaKey;
 /**
  * Encapsulate election state stored on disk after every state change.
  */
-final public class ElectionState {
+public final class ElectionState {
     private static final int UNKNOWN_LEADER_ID = -1;
     private static final int NOT_VOTED = -1;
     private static final Uuid NO_VOTED_DIRECTORY_ID = Uuid.ZERO_UUID;

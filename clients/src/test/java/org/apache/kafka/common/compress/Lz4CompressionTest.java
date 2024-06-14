@@ -53,7 +53,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class Lz4CompressionTest {
 
-    private final static Random RANDOM = new Random(0);
+    private static final Random RANDOM = new Random(0);
 
     @Test
     public void testLz4FramingMagicV0() {

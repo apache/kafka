@@ -116,9 +116,6 @@ public class RebalanceSourceConnectorsIntegrationTest {
         // setup up props for the source connector
         Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
 
-        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
-                "Connect workers did not start in time.");
-
         // start a source connector
         connect.configureConnector(CONNECTOR_NAME, props);
 
@@ -146,9 +143,6 @@ public class RebalanceSourceConnectorsIntegrationTest {
 
         // setup up props for the source connector
         Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
-
-        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
-                "Connect workers did not start in time.");
 
         // start a source connector
         connect.configureConnector(CONNECTOR_NAME, props);
@@ -194,9 +188,6 @@ public class RebalanceSourceConnectorsIntegrationTest {
         // setup up props for the source connector
         Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
 
-        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
-                "Connect workers did not start in time.");
-
         // start several source connectors
         IntStream.range(0, 4).forEachOrdered(i -> connect.configureConnector(CONNECTOR_NAME + i, props));
 
@@ -220,9 +211,6 @@ public class RebalanceSourceConnectorsIntegrationTest {
 
         // setup up props for the source connector
         Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
-
-        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
-                "Connect workers did not start in time.");
 
         // start a source connector
         IntStream.range(0, 4).forEachOrdered(i -> connect.configureConnector(CONNECTOR_NAME + i, props));
@@ -250,9 +238,6 @@ public class RebalanceSourceConnectorsIntegrationTest {
         // setup up props for the source connector
         Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
 
-        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
-                "Connect workers did not start in time.");
-
         // start a source connector
         IntStream.range(0, 4).forEachOrdered(i -> connect.configureConnector(CONNECTOR_NAME + i, props));
 
@@ -275,9 +260,6 @@ public class RebalanceSourceConnectorsIntegrationTest {
 
         // setup up props for the source connector
         Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
-
-        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS,
-                "Connect workers did not start in time.");
 
         // start a source connector
         IntStream.range(0, 4).forEachOrdered(i -> connect.configureConnector(CONNECTOR_NAME + i, props));

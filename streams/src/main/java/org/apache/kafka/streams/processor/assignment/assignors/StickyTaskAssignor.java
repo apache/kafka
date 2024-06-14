@@ -95,10 +95,15 @@ public class StickyTaskAssignor implements TaskAssignor {
 
         final Map<ProcessId, KafkaStreamsAssignment> currentAssignments = assignmentState.newAssignments;
 
-        TaskAssignmentUtils.optimizeRackAwareActiveTasks(
-            RackAwareOptimizationParams.of(applicationState).forStatefulTasks(),
-            currentAssignments
-        );
+        final RackAwareOptimizationParams statefulTaskParams = RackAwareOptimizationParams.of(applicationState)
+            .withTrafficCostOverride(
+                applicationState.assignmentConfigs().rackAwareTrafficCost().orElse(DEFAULT_STICKY_TRAFFIC_COST)
+            )
+            .withNonOverlapCostOverride(
+                applicationState.assignmentConfigs().rackAwareNonOverlapCost().orElse(DEFAULT_STICKY_NON_OVERLAP_COST)
+            )
+            .forStatefulTasks();
+        TaskAssignmentUtils.optimizeRackAwareActiveTasks(statefulTaskParams, currentAssignments);
 
         TaskAssignmentUtils.optimizeRackAwareActiveTasks(
             RackAwareOptimizationParams.of(applicationState)
@@ -120,7 +125,15 @@ public class StickyTaskAssignor implements TaskAssignor {
         }
 
         final Map<ProcessId, KafkaStreamsAssignment> assignments = assignmentState.newAssignments;
-        TaskAssignmentUtils.optimizeRackAwareStandbyTasks(RackAwareOptimizationParams.of(applicationState), assignments);
+
+        final RackAwareOptimizationParams optimizationParams = RackAwareOptimizationParams.of(applicationState)
+            .withTrafficCostOverride(
+                applicationState.assignmentConfigs().rackAwareTrafficCost().orElse(DEFAULT_STICKY_TRAFFIC_COST)
+            )
+            .withNonOverlapCostOverride(
+                applicationState.assignmentConfigs().rackAwareNonOverlapCost().orElse(DEFAULT_STICKY_NON_OVERLAP_COST)
+            );
+        TaskAssignmentUtils.optimizeRackAwareStandbyTasks(optimizationParams, assignments);
         assignmentState.processOptimizedAssignments(assignments);
     }
 

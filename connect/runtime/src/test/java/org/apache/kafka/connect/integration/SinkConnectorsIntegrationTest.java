@@ -83,7 +83,6 @@ public class SinkConnectorsIntegrationTest {
                 .brokerProps(brokerProps)
                 .build();
         connect.start();
-        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS, "Initial group of workers did not start in time.");
     }
 
     @After
@@ -209,7 +208,6 @@ public class SinkConnectorsIntegrationTest {
         final Collection<String> topics = Arrays.asList(topic1, topic2, topic3);
 
         Map<String, String> connectorProps = baseSinkConnectorProps(String.join(",", topics));
-        // Need an eager assignor here; round robin is as good as any
         connectorProps.put(
                 CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
                 CooperativeStickyAssignor.class.getName());

@@ -99,6 +99,7 @@ import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.EXA
 import static org.apache.kafka.connect.source.SourceTask.TransactionBoundary.CONNECTOR;
 import static org.apache.kafka.connect.source.SourceTask.TransactionBoundary.INTERVAL;
 import static org.apache.kafka.connect.source.SourceTask.TransactionBoundary.POLL;
+import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -500,9 +501,6 @@ public class ExactlyOnceSourceIntegrationTest {
         connectorHandle.expectedRecords(MINIMUM_MESSAGES);
         connectorHandle.expectedCommits(MINIMUM_MESSAGES);
 
-        // make sure the worker is actually up (otherwise, it may fence out our simulated zombie leader, instead of the other way around)
-        connect.assertions().assertExactlyNumWorkersAreUp(1, "Connect worker did not complete startup in time");
-
         // fence out the leader of the cluster
         Producer<?, ?> zombieLeader = transactionalProducer(
                 "simulated-zombie-leader",
@@ -750,9 +748,18 @@ public class ExactlyOnceSourceIntegrationTest {
         workerProps.put(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, globalOffsetsTopic);
 
         startConnect();
-        EmbeddedKafkaCluster connectorTargetedCluster = new EmbeddedKafkaCluster(1, brokerProps);
+
+        int numConnectorTargetedBrokers = 1;
+        EmbeddedKafkaCluster connectorTargetedCluster = new EmbeddedKafkaCluster(numConnectorTargetedBrokers, brokerProps);
         try (Closeable clusterShutdown = connectorTargetedCluster::stop) {
             connectorTargetedCluster.start();
+            // Wait for the connector-targeted Kafka cluster to get on its feet
+            waitForCondition(
+                    () -> connectorTargetedCluster.runningBrokers().size() == numConnectorTargetedBrokers,
+                    ConnectAssertions.WORKER_SETUP_DURATION_MS,
+                    "Separate Kafka cluster did not start in time"
+            );
+
             String topic = "test-topic";
             connectorTargetedCluster.createTopic(topic, 3);
 
@@ -780,6 +787,11 @@ public class ExactlyOnceSourceIntegrationTest {
 
             // start a source connector
             connect.configureConnector(CONNECTOR_NAME, props);
+            connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+                    CONNECTOR_NAME,
+                    numTasks,
+                    "connector and tasks did not start in time"
+            );
 
             log.info("Waiting for records to be provided to worker by task");
             // wait for the connector tasks to produce enough records

@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-final public class SnapshotsTest {
+public final class SnapshotsTest {
 
     @Test
     public void testValidSnapshotFilename() {

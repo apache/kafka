@@ -422,7 +422,7 @@ public class ClientQuotaControlManagerTest {
         assertEquals(expectedError, ClientQuotaControlManager.configKeysForEntityType(entity, output));
     }
 
-    private final static HashMap<String, ConfigDef.ConfigKey> VALID_CLIENT_ID_QUOTA_KEYS;
+    private static final HashMap<String, ConfigDef.ConfigKey> VALID_CLIENT_ID_QUOTA_KEYS;
 
     static {
         VALID_CLIENT_ID_QUOTA_KEYS = new HashMap<>();

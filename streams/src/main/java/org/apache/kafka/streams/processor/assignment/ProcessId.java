@@ -35,6 +35,14 @@ public class ProcessId implements Comparable<ProcessId> {
         return id;
     }
 
+    /**
+     *
+     * @return a randomly generated process id
+     */
+    public static ProcessId randomProcessId() {
+        return new ProcessId(UUID.randomUUID());
+    }
+
     @Override
     public String toString() {
         return id.toString();

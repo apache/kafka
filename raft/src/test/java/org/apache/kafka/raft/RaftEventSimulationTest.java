@@ -387,7 +387,7 @@ public class RaftEventSimulationTest {
         }
     }
 
-    private static abstract class Event implements Comparable<Event> {
+    private abstract static class Event implements Comparable<Event> {
         final int eventId;
         final long deadlineMs;
         final Runnable action;

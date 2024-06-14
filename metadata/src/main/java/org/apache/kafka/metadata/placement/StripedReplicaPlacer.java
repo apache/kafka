@@ -120,7 +120,7 @@ public class StripedReplicaPlacer implements ReplicaPlacer {
      * A list of brokers that we can iterate through.
      */
     static class BrokerList {
-        final static BrokerList EMPTY = new BrokerList();
+        static final BrokerList EMPTY = new BrokerList();
         private final List<Integer> brokers = new ArrayList<>(0);
 
         /**

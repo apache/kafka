@@ -59,16 +59,16 @@ public final class TaskAssignmentUtils {
      * A simple config container for necessary parameters and optional overrides to apply when
      * running the active or standby task rack-aware optimizations.
      */
-    public static class RackAwareOptimizationParams {
+    public static final class RackAwareOptimizationParams {
         private final ApplicationState applicationState;
         private final Optional<Integer> trafficCostOverride;
         private final Optional<Integer> nonOverlapCostOverride;
         private final Optional<SortedSet<TaskId>> tasksToOptimize;
 
         private RackAwareOptimizationParams(final ApplicationState applicationState,
-                                           final Optional<Integer> trafficCostOverride,
-                                           final Optional<Integer> nonOverlapCostOverride,
-                                           final Optional<SortedSet<TaskId>> tasksToOptimize) {
+                                            final Optional<Integer> trafficCostOverride,
+                                            final Optional<Integer> nonOverlapCostOverride,
+                                            final Optional<SortedSet<TaskId>> tasksToOptimize) {
             this.applicationState = applicationState;
             this.trafficCostOverride = trafficCostOverride;
             this.nonOverlapCostOverride = nonOverlapCostOverride;

@@ -56,47 +56,47 @@ public class RemoteStorageMetrics {
     public static final Set<String> REMOTE_STORAGE_THREAD_POOL_METRICS = Collections.unmodifiableSet(
             new HashSet<>(Arrays.asList(REMOTE_LOG_READER_TASK_QUEUE_SIZE, REMOTE_LOG_READER_AVG_IDLE_PERCENT)));
 
-    public final static MetricName REMOTE_COPY_BYTES_PER_SEC_METRIC = getMetricName(
+    public static final MetricName REMOTE_COPY_BYTES_PER_SEC_METRIC = getMetricName(
             "kafka.server", "BrokerTopicMetrics", REMOTE_COPY_BYTES_PER_SEC);
-    public final static MetricName REMOTE_FETCH_BYTES_PER_SEC_METRIC = getMetricName(
+    public static final MetricName REMOTE_FETCH_BYTES_PER_SEC_METRIC = getMetricName(
             "kafka.server", "BrokerTopicMetrics", REMOTE_FETCH_BYTES_PER_SEC);
-    public final static MetricName REMOTE_FETCH_REQUESTS_PER_SEC_METRIC = getMetricName(
+    public static final MetricName REMOTE_FETCH_REQUESTS_PER_SEC_METRIC = getMetricName(
             "kafka.server", "BrokerTopicMetrics", REMOTE_FETCH_REQUESTS_PER_SEC);
-    public final static MetricName REMOTE_COPY_REQUESTS_PER_SEC_METRIC = getMetricName(
+    public static final MetricName REMOTE_COPY_REQUESTS_PER_SEC_METRIC = getMetricName(
             "kafka.server", "BrokerTopicMetrics", REMOTE_COPY_REQUESTS_PER_SEC);
-    public final static MetricName REMOTE_DELETE_REQUESTS_PER_SEC_METRIC = getMetricName(
+    public static final MetricName REMOTE_DELETE_REQUESTS_PER_SEC_METRIC = getMetricName(
             "kafka.server", "BrokerTopicMetrics", REMOTE_DELETE_REQUESTS_PER_SEC);
-    public final static MetricName BUILD_REMOTE_LOG_AUX_STATE_REQUESTS_PER_SEC_METRIC = getMetricName(
+    public static final MetricName BUILD_REMOTE_LOG_AUX_STATE_REQUESTS_PER_SEC_METRIC = getMetricName(
             "kafka.server", "BrokerTopicMetrics", BUILD_REMOTE_LOG_AUX_STATE_REQUESTS_PER_SEC);
-    public final static MetricName FAILED_REMOTE_FETCH_PER_SEC_METRIC = getMetricName(
+    public static final MetricName FAILED_REMOTE_FETCH_PER_SEC_METRIC = getMetricName(
             "kafka.server", "BrokerTopicMetrics", FAILED_REMOTE_FETCH_PER_SEC);
-    public final static MetricName FAILED_REMOTE_COPY_PER_SEC_METRIC = getMetricName(
+    public static final MetricName FAILED_REMOTE_COPY_PER_SEC_METRIC = getMetricName(
             "kafka.server", "BrokerTopicMetrics", FAILED_REMOTE_COPY_PER_SEC);
-    public final static MetricName REMOTE_LOG_METADATA_COUNT_METRIC = getMetricName(
+    public static final MetricName REMOTE_LOG_METADATA_COUNT_METRIC = getMetricName(
             "kafka.server", "BrokerTopicMetrics", REMOTE_LOG_METADATA_COUNT);
-    public final static MetricName REMOTE_LOG_SIZE_BYTES_METRIC = getMetricName(
+    public static final MetricName REMOTE_LOG_SIZE_BYTES_METRIC = getMetricName(
             "kafka.server", "BrokerTopicMetrics", REMOTE_LOG_SIZE_BYTES);
-    public final static MetricName REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC = getMetricName(
+    public static final MetricName REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC = getMetricName(
             "kafka.server", "BrokerTopicMetrics", REMOTE_LOG_SIZE_COMPUTATION_TIME);
-    public final static MetricName FAILED_REMOTE_DELETE_PER_SEC_METRIC = getMetricName(
+    public static final MetricName FAILED_REMOTE_DELETE_PER_SEC_METRIC = getMetricName(
             "kafka.server", "BrokerTopicMetrics", FAILED_REMOTE_DELETE_PER_SEC);
-    public final static MetricName FAILED_BUILD_REMOTE_LOG_AUX_STATE_PER_SEC_METRIC = getMetricName(
+    public static final MetricName FAILED_BUILD_REMOTE_LOG_AUX_STATE_PER_SEC_METRIC = getMetricName(
             "kafka.server", "BrokerTopicMetrics", FAILED_BUILD_REMOTE_LOG_AUX_STATE_PER_SEC);
-    public final static MetricName REMOTE_COPY_LAG_BYTES_METRIC = getMetricName(
+    public static final MetricName REMOTE_COPY_LAG_BYTES_METRIC = getMetricName(
             "kafka.server", "BrokerTopicMetrics", REMOTE_COPY_LAG_BYTES);
-    public final static MetricName REMOTE_COPY_LAG_SEGMENTS_METRIC = getMetricName(
+    public static final MetricName REMOTE_COPY_LAG_SEGMENTS_METRIC = getMetricName(
             "kafka.server", "BrokerTopicMetrics", REMOTE_COPY_LAG_SEGMENTS);
-    public final static MetricName REMOTE_DELETE_LAG_BYTES_METRIC = getMetricName(
+    public static final MetricName REMOTE_DELETE_LAG_BYTES_METRIC = getMetricName(
             "kafka.server", "BrokerTopicMetrics", REMOTE_DELETE_LAG_BYTES);
-    public final static MetricName REMOTE_DELETE_LAG_SEGMENTS_METRIC = getMetricName(
+    public static final MetricName REMOTE_DELETE_LAG_SEGMENTS_METRIC = getMetricName(
             "kafka.server", "BrokerTopicMetrics", REMOTE_DELETE_LAG_SEGMENTS);
-    public final static MetricName REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC = getMetricName(
+    public static final MetricName REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC = getMetricName(
             "kafka.log.remote", "RemoteLogManager", REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT);
-    public final static MetricName REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC = getMetricName(
+    public static final MetricName REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC = getMetricName(
             "org.apache.kafka.storage.internals.log", "RemoteStorageThreadPool", REMOTE_LOG_READER_TASK_QUEUE_SIZE);
-    public final static MetricName REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC = getMetricName(
+    public static final MetricName REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC = getMetricName(
             "org.apache.kafka.storage.internals.log", "RemoteStorageThreadPool", REMOTE_LOG_READER_AVG_IDLE_PERCENT);
-    public final static MetricName REMOTE_LOG_READER_FETCH_RATE_AND_TIME_METRIC = getMetricName(
+    public static final MetricName REMOTE_LOG_READER_FETCH_RATE_AND_TIME_METRIC = getMetricName(
             "kafka.log.remote", "RemoteLogManager", REMOTE_LOG_READER_FETCH_RATE_AND_TIME_MS);
 
     public static Set<MetricName> allMetrics() {

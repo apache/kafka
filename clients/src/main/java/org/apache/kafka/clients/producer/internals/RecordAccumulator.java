@@ -1208,7 +1208,7 @@ public class RecordAccumulator {
     /*
      * Metadata about a record just appended to the record accumulator
      */
-    public final static class RecordAppendResult {
+    public static final class RecordAppendResult {
         public final FutureRecordMetadata future;
         public final boolean batchIsFull;
         public final boolean newBatchCreated;
@@ -1242,7 +1242,7 @@ public class RecordAccumulator {
     /*
      * The set of nodes that have at least one complete record batch in the accumulator
      */
-    public final static class ReadyCheckResult {
+    public static final class ReadyCheckResult {
         public final Set<Node> readyNodes;
         public final long nextReadyCheckDelayMs;
         public final Set<String> unknownLeaderTopics;
@@ -1270,9 +1270,9 @@ public class RecordAccumulator {
      * Node latency stats for each node that are used for adaptive partition distribution
      * Visible for testing
      */
-    public final static class NodeLatencyStats {
-        volatile public long readyTimeMs;  // last time the node had batches ready to send
-        volatile public long drainTimeMs;  // last time the node was able to drain batches
+    public static final class NodeLatencyStats {
+        public volatile long readyTimeMs;  // last time the node had batches ready to send
+        public volatile long drainTimeMs;  // last time the node was able to drain batches
 
         NodeLatencyStats(long nowMs) {
             readyTimeMs = nowMs;

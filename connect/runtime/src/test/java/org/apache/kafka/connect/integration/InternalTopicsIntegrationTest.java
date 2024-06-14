@@ -72,8 +72,6 @@ public class InternalTopicsIntegrationTest {
 
         // Start the Connect cluster
         connect.start();
-        connect.assertions().assertExactlyNumBrokersAreUp(numBrokers, "Brokers did not start in time.");
-        connect.assertions().assertExactlyNumWorkersAreUp(numWorkers, "Worker did not start in time.");
         log.info("Completed startup of {} Kafka brokers and {} Connect workers", numBrokers, numWorkers);
 
         // Check the topics
@@ -111,9 +109,6 @@ public class InternalTopicsIntegrationTest {
 
         // Start the Connect cluster
         connect.start();
-        connect.assertions().assertExactlyNumBrokersAreUp(numBrokers, "Broker did not start in time.");
-        connect.assertions().assertAtLeastNumWorkersAreUp(numWorkers, "Worker did not start in time.");
-        log.info("Completed startup of {} Kafka brokers and {} Connect workers", numBrokers, numWorkers);
 
         // Check the topics
         log.info("Verifying the internal topics for Connect");
@@ -126,7 +121,7 @@ public class InternalTopicsIntegrationTest {
         workerProps.put(DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG, "3");
         workerProps.put(DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG, "2");
         workerProps.put(DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_CONFIG, "1");
-        int numWorkers = 1;
+        int numWorkers = 0;
         int numBrokers = 1;
         connect = new EmbeddedConnectCluster.Builder().name("connect-cluster-1")
                                                       .workerProps(workerProps)
@@ -137,11 +132,14 @@ public class InternalTopicsIntegrationTest {
 
         // Start the brokers and Connect, but Connect should fail to create config and offset topic
         connect.start();
-        connect.assertions().assertExactlyNumBrokersAreUp(numBrokers, "Broker did not start in time.");
         log.info("Completed startup of {} Kafka broker. Expected Connect worker to fail", numBrokers);
+
+        // Try to start a worker
+        connect.addWorker();
 
         // Verify that the offset and config topic don't exist;
         // the status topic may have been created if timing was right but we don't care
+        // TODO: Synchronously await and verify that the worker fails during startup
         log.info("Verifying the internal topics for Connect");
         connect.assertions().assertTopicsDoNotExist(configTopic(), offsetTopic());
     }
@@ -169,7 +167,6 @@ public class InternalTopicsIntegrationTest {
         // Start the brokers but not Connect
         log.info("Starting {} Kafka brokers, but no Connect workers yet", numBrokers);
         connect.start();
-        connect.assertions().assertExactlyNumBrokersAreUp(numBrokers, "Broker did not start in time.");
         log.info("Completed startup of {} Kafka broker. Expected Connect worker to fail", numBrokers);
 
         // Create the good topics
@@ -243,7 +240,6 @@ public class InternalTopicsIntegrationTest {
         // Start the brokers but not Connect
         log.info("Starting {} Kafka brokers, but no Connect workers yet", numBrokers);
         connect.start();
-        connect.assertions().assertExactlyNumBrokersAreUp(numBrokers, "Broker did not start in time.");
         log.info("Completed startup of {} Kafka broker. Expected Connect worker to fail", numBrokers);
 
         // Create the valid internal topics w/o topic settings, so these will use the broker's

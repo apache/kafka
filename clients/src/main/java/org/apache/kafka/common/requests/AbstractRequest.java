@@ -29,7 +29,7 @@ import java.util.Map;
 
 public abstract class AbstractRequest implements AbstractRequestResponse {
 
-    public static abstract class Builder<T extends AbstractRequest> {
+    public abstract static class Builder<T extends AbstractRequest> {
         private final ApiKeys apiKey;
         private final short oldestAllowedVersion;
         private final short latestAllowedVersion;

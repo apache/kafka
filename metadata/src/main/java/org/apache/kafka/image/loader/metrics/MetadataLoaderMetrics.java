@@ -35,11 +35,11 @@ import java.util.function.Consumer;
  * These are the metrics which are managed by the MetadataLoader class.
  */
 public final class MetadataLoaderMetrics implements AutoCloseable {
-    private final static MetricName CURRENT_METADATA_VERSION = getMetricName(
+    private static final MetricName CURRENT_METADATA_VERSION = getMetricName(
         "MetadataLoader", "CurrentMetadataVersion");
-    private final static MetricName HANDLE_LOAD_SNAPSHOT_COUNT = getMetricName(
+    private static final MetricName HANDLE_LOAD_SNAPSHOT_COUNT = getMetricName(
         "MetadataLoader", "HandleLoadSnapshotCount");
-    public final static MetricName CURRENT_CONTROLLER_ID = getMetricName(
+    public static final MetricName CURRENT_CONTROLLER_ID = getMetricName(
         "MetadataLoader", "CurrentControllerId");
 
     private final Optional<MetricsRegistry> registry;

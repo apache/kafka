@@ -108,7 +108,7 @@ public class RackAwarenessStreamsPartitionAssignorTest {
             emptySet(),
             emptySet());
 
-    private final static List<String> ALL_TAG_KEYS = new ArrayList<>();
+    private static final List<String> ALL_TAG_KEYS = new ArrayList<>();
     static {
         for (int i = 0; i < StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE; i++) {
             ALL_TAG_KEYS.add("key-" + i);

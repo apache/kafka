@@ -45,7 +45,7 @@ import org.apache.kafka.common.utils.Utils;
  * It provides functionality for converting to and from {@code VotersRecord} and for converting
  * from the static configuration.
  */
-final public class VoterSet {
+public final class VoterSet {
     private final Map<Integer, VoterNode> voters;
 
     VoterSet(Map<Integer, VoterNode> voters) {
@@ -275,7 +275,7 @@ final public class VoterSet {
         return String.format("VoterSet(voters=%s)", voters);
     }
 
-    public final static class VoterNode {
+    public static final class VoterNode {
         private final ReplicaKey voterKey;
         private final Map<ListenerName, InetSocketAddress> listeners;
         private final SupportedVersionRange supportedKRaftVersion;
