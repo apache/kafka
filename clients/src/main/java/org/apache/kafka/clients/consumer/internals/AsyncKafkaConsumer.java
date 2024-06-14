@@ -1682,14 +1682,13 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
 
         final CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = pendingOffsetFetchEvent.future();
-        boolean shouldClearPendingEvent = false;
 
         try {
             wakeupTrigger.setActiveTask(future);
             final Map<TopicPartition, OffsetAndMetadata> offsets = ConsumerUtils.getResult(future, timer);
 
             // Clear the pending event once its result is successfully retrieved.
-            shouldClearPendingEvent = true;
+            pendingOffsetFetchEvent = null;
 
             refreshCommittedOffsets(offsets, metadata, subscriptions);
             return true;
@@ -1699,13 +1698,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         } catch (InterruptException e) {
             throw e;
         } catch (Throwable t) {
-            // Clear the pending event on errors that are not timeout- or interrupt-related.
-            shouldClearPendingEvent = true;
+            pendingOffsetFetchEvent = null;
             throw ConsumerUtils.maybeWrapAsKafkaException(t);
         } finally {
-            if (shouldClearPendingEvent)
-                pendingOffsetFetchEvent = null;
-
             wakeupTrigger.clearTask();
         }
     }
