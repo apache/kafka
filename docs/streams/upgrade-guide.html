@@ -146,8 +146,13 @@
         <code>HighAvailabilityTaskAssignor</code>. If no custom task assignor is configured, the default task assignor
         <code>HighAvailabilityTaskAssignor</code> is used.
 
-        This change also removes the internal config <code>internal.task.assignor.class</code> that was used for the same
-        purpose. If you were using this config, you should switch to using <code>task.assignor.class</code> instead.
+        If you were using the <code>internal.task.assignor.class</code> config, you should switch to using the new
+        <code>task.assignor.class</code> config instead, as the internal config will be removed in a future release.
+        If you were previously plugging in the <code>StickyTaskAssignor</code> via the legacy
+        <code>internal.task.assignor.class</code> config, you will need to make sure that you are importing
+        version of the <code>org.apache.kafka.streams.processor.assignment.StickTaskAssignor</code> when you switch
+        over to the new <code>task.assignor.class</code> config, which is a version of the <code>StickyTaskAssignor</code>
+        that implements the new public <code>TaskAssignor</code> interface.
 
         For more details, see the public interface section of
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-924%3A+customizable+task+assignment+for+Streams">KIP-924</a>.
