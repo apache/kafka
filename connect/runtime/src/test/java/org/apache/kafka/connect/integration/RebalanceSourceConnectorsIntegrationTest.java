@@ -23,7 +23,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.TestInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,7 +57,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Integration tests for incremental cooperative rebalancing between Connect workers
  */
-@ExtendWith(ConnectIntegrationTestUtils.class)
 @Tag("integration")
 public class RebalanceSourceConnectorsIntegrationTest {
 
@@ -75,7 +74,8 @@ public class RebalanceSourceConnectorsIntegrationTest {
     
 
     @BeforeEach
-    public void setup() {
+    public void setup(TestInfo testInfo) {
+        log.info("Starting test {}", testInfo.getDisplayName());
         // setup Connect worker properties
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put(CONNECT_PROTOCOL_CONFIG, COMPATIBLE.toString());
@@ -100,7 +100,8 @@ public class RebalanceSourceConnectorsIntegrationTest {
     }
 
     @AfterEach
-    public void close() {
+    public void close(TestInfo testInfo) {
+        log.info("Finished test {}", testInfo.getDisplayName());
         // stop all Connect, Kafka and Zk threads.
         connect.stop();
     }

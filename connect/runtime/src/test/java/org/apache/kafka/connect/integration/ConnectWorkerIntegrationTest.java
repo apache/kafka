@@ -46,7 +46,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.io.TempDir;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -106,7 +106,6 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 /**
  * Test simple operations on the workers of a Connect cluster.
  */
-@ExtendWith(ConnectIntegrationTestUtils.class)
 @Tag("integration")
 public class ConnectWorkerIntegrationTest {
     private static final Logger log = LoggerFactory.getLogger(ConnectWorkerIntegrationTest.class);
@@ -125,7 +124,8 @@ public class ConnectWorkerIntegrationTest {
     private Properties brokerProps;
 
     @BeforeEach
-    public void setup() {
+    public void setup(TestInfo testInfo) {
+        log.info("Starting test {}", testInfo.getDisplayName());
         // setup Connect worker properties
         workerProps = new HashMap<>();
         workerProps.put(OFFSET_COMMIT_INTERVAL_MS_CONFIG, String.valueOf(OFFSET_COMMIT_INTERVAL_MS));
@@ -145,7 +145,8 @@ public class ConnectWorkerIntegrationTest {
     }
 
     @AfterEach
-    public void close() {
+    public void close(TestInfo testInfo) {
+        log.info("Finished test {}", testInfo.getDisplayName());
         // stop all Connect, Kafka and Zk threads.
         connect.stop();
     }

@@ -26,7 +26,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -59,7 +58,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Test connectors restart API use cases.
  */
-@ExtendWith(ConnectIntegrationTestUtils.class)
 @Tag("integration")
 public class ConnectorRestartApiIntegrationTest {
     private static final Logger log = LoggerFactory.getLogger(ConnectorRestartApiIntegrationTest.class);
@@ -80,6 +78,7 @@ public class ConnectorRestartApiIntegrationTest {
 
     @BeforeEach
     public void setup(TestInfo testInfo) {
+        log.info("Starting test {}", testInfo.getDisplayName());
         connectorName = CONNECTOR_NAME_PREFIX + testInfo.getTestMethod().get().getName();
         // get connector handles before starting test.
         connectorHandle = RuntimeHandles.get().connectorHandle(connectorName);
@@ -111,7 +110,8 @@ public class ConnectorRestartApiIntegrationTest {
     }
 
     @AfterEach
-    public void tearDown() {
+    public void tearDown(TestInfo testInfo) {
+        log.info("Finished test {}", testInfo.getDisplayName());
         RuntimeHandles.get().deleteConnector(connectorName);
     }
 
