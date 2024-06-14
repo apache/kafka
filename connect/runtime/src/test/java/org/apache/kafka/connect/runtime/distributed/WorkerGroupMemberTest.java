@@ -27,9 +27,9 @@ import org.apache.kafka.connect.runtime.MockConnectMetrics;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
@@ -37,15 +37,15 @@ import java.lang.management.ManagementFactory;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
 public class WorkerGroupMemberTest {
     @Mock
     private ConfigBackingStore configBackingStore;
@@ -83,8 +83,8 @@ public class WorkerGroupMemberTest {
                 foundJmxReporter = true;
             }
         }
-        assertTrue("Failed to find MockMetricsReporter", foundMockReporter);
-        assertTrue("Failed to find JmxReporter", foundJmxReporter);
+        assertTrue(foundMockReporter, "Failed to find MockMetricsReporter");
+        assertTrue(foundJmxReporter, "Failed to find JmxReporter");
 
         MetricName name = member.metrics().metricName("test.avg", "grp1");
         member.metrics().addMetric(name, new Avg());
