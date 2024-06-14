@@ -52,6 +52,7 @@ import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -62,6 +63,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.AbstractRecords;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.RecordBatch;
@@ -1108,7 +1110,16 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.errors.record();
             this.interceptors.onSendError(record, appendCallbacks.topicPartition(), e);
             if (transactionManager != null) {
-                transactionManager.maybeTransitionToErrorState(e);
+
+                if (e instanceof UnknownTopicOrPartitionException) {
+                    // if there is any custom handler get the Response
+                        // Response = SWALLOW: log.info("The custom handler drops the record of UNKNOWN_TOPIC_OR_PARTITION. Processing continues despite the UNKNOWN_TOPIC_OR_PARTITION.");
+                    // else: means Response = FAIL (if the response has been RETRY, we end up with TimeoutException. Thus, RETRY does not need to be considered here.)
+                        transactionManager.maybeTransitionToErrorState(e);
+
+                } else {
+                    transactionManager.maybeTransitionToErrorState(e);
+                }
             }
             return new FutureFailure(e);
         } catch (InterruptedException e) {
@@ -1174,6 +1185,12 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             sender.wakeup();
             try {
                 metadata.awaitUpdate(version, remainingWaitMs);
+                if (metadata.getError(topic) != null && metadata.getError(topic) == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
+                    metadata.deleteError(topic);
+                    // if there is any handler, get the Response
+                        // Response = SWALLOW || Response = FAIL: throw UnknownTopicOrPartitionException
+                        // Response = RETRY: do nothing. This is the default to retry for 60s.
+                }
             } catch (TimeoutException ex) {
                 // Rethrow with original maxWaitMs to prevent logging exception with remainingWaitMs
                 throw new TimeoutException(
