@@ -189,7 +189,6 @@ public class CoordinatorRequestManagerTest {
 
     private CoordinatorRequestManager setupCoordinatorManager(String groupId) {
         return new CoordinatorRequestManager(
-            time,
             new LogContext(),
             RETRY_BACKOFF_MS,
             RETRY_BACKOFF_MS,

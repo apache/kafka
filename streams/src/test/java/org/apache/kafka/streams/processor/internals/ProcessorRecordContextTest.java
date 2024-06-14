@@ -25,7 +25,7 @@ import static org.junit.Assert.assertThrows;
 
 public class ProcessorRecordContextTest {
     // timestamp + offset + partition: 8 + 8 + 4
-    private final static long MIN_SIZE = 20L;
+    private static final long MIN_SIZE = 20L;
 
     @Test
     public void shouldNotAllowNullHeaders() {

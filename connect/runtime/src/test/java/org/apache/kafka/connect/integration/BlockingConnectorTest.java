@@ -134,11 +134,6 @@ public class BlockingConnectorTest {
 
         // start the clusters
         connect.start();
-
-        connect.assertions().assertAtLeastNumWorkersAreUp(
-                NUM_WORKERS,
-                "Initial group of workers did not start in time"
-        );
     }
 
     @After

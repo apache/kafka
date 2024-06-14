@@ -299,9 +299,9 @@ public class AbstractCoordinatorTest {
         coordinator.ensureCoordinatorReadyAsync();
 
         // But should wakeup in sync variation even if timer is 0.
-        assertThrows(WakeupException.class, () -> {
-            coordinator.ensureCoordinatorReady(mockTime.timer(0));
-        });
+        assertThrows(WakeupException.class, () ->
+            coordinator.ensureCoordinatorReady(mockTime.timer(0))
+        );
     }
 
     @Test

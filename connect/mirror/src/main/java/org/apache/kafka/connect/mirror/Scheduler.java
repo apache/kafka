@@ -16,15 +16,15 @@
  */
 package org.apache.kafka.connect.mirror;
 
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeoutException;
-import java.time.Duration;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.time.Duration;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 class Scheduler implements AutoCloseable {
     private static final Logger LOG = LoggerFactory.getLogger(Scheduler.class);
@@ -112,4 +112,3 @@ class Scheduler implements AutoCloseable {
         run(task, description);
     }
 }
-

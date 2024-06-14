@@ -189,9 +189,13 @@ public class RestClient {
                         Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(),
                         "Unexpected status code when handling forwarded request: " + responseCode);
             }
-        } catch (IOException | InterruptedException | TimeoutException | ExecutionException e) {
+        } catch (IOException | TimeoutException | ExecutionException e) {
             log.error("IO error forwarding REST request to {} :", url, e);
             throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR, "IO Error trying to forward REST request: " + e.getMessage(), e);
+        } catch (InterruptedException e) {
+            log.error("Thread was interrupted forwarding REST request to {} :", url, e);
+            Thread.currentThread().interrupt();
+            throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR, "Thread was interrupted trying to forward REST request: " + e.getMessage(), e);
         } catch (ConnectRestException e) {
             // catching any explicitly thrown ConnectRestException-s to preserve its status code
             // and to avoid getting it overridden by the more generic catch (Throwable) clause down below

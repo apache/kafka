@@ -74,6 +74,7 @@ public class TopicMetadataRequestManagerTest {
         props.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         this.topicMetadataRequestManager = spy(new TopicMetadataRequestManager(
             new LogContext(),
+            time,
             new ConsumerConfig(props)));
     }
 
