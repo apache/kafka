@@ -453,15 +453,14 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     private void createOffsetSyncsTopic() {
-        if (config.emitOffsetSyncEnabled()) {
-            Admin offsetSyncsAdminClient = config.forwardingAdmin(config.offsetSyncsTopicAdminConfig());
-            MirrorUtils.createSinglePartitionCompactedTopic(
-                    config.offsetSyncsTopic(),
-                    config.offsetSyncsTopicReplicationFactor(),
-                    offsetSyncsAdminClient
-            );
-
-            Utils.closeQuietly(offsetSyncsAdminClient, "offset syncs admin client");
+        if (config.emitOffsetSyncsEnabled()) {
+            try (Admin offsetSyncsAdminClient = config.forwardingAdmin(config.offsetSyncsTopicAdminConfig())) {
+                MirrorUtils.createSinglePartitionCompactedTopic(
+                        config.offsetSyncsTopic(),
+                        config.offsetSyncsTopicReplicationFactor(),
+                        offsetSyncsAdminClient
+                );
+            }
         }
     }
 

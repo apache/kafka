@@ -22,7 +22,6 @@ import org.slf4j.LoggerFactory;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -39,6 +38,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.Semaphore;
 import java.util.stream.Collectors;
@@ -62,17 +62,14 @@ public class MirrorSourceTask extends SourceTask {
 
     // for testing
     MirrorSourceTask(KafkaConsumer<byte[], byte[]> consumer, MirrorSourceMetrics metrics, String sourceClusterAlias,
-                     ReplicationPolicy replicationPolicy, long maxOffsetLag, KafkaProducer<byte[], byte[]> producer,
-                     Semaphore outstandingOffsetSyncs, Map<TopicPartition, PartitionState> partitionStates,
-                     String offsetSyncsTopic, boolean emitOffsetSyncEnabled) {
+                     ReplicationPolicy replicationPolicy, Map<TopicPartition, PartitionState> partitionStates,
+                     OffsetSyncWriter offsetSyncWriter) {
         this.consumer = consumer;
         this.metrics = metrics;
         this.sourceClusterAlias = sourceClusterAlias;
         this.replicationPolicy = replicationPolicy;
         consumerAccess = new Semaphore(1);
-        if (emitOffsetSyncEnabled) {
-            this.offsetSyncWriter = new OffsetSyncWriter(producer, offsetSyncsTopic, outstandingOffsetSyncs, maxOffsetLag);
-        }
+        this.offsetSyncWriter = offsetSyncWriter;
         this.partitionStates = partitionStates;
     }
 
@@ -85,7 +82,7 @@ public class MirrorSourceTask extends SourceTask {
         pollTimeout = config.consumerPollTimeout();
         replicationPolicy = config.replicationPolicy();
         partitionStates = new HashMap<>();
-        if (config.emitOffsetSyncEnabled()) {
+        if (config.emitOffsetSyncsEnabled()) {
             offsetSyncWriter = new OffsetSyncWriter(config);
         }
         consumer = MirrorUtils.newConsumer(config.sourceConsumerConfig("replication-consumer"));
@@ -120,7 +117,7 @@ public class MirrorSourceTask extends SourceTask {
             log.warn("Interrupted waiting for access to consumer. Will try closing anyway."); 
         }
         Utils.closeQuietly(consumer, "source consumer");
-        Utils.closeQuietly(offsetSyncWriter, "offset producer");
+        Utils.closeQuietly(offsetSyncWriter, "offset sync writer");
         Utils.closeQuietly(metrics, "metrics");
         log.info("Stopping {} took {} ms.", Thread.currentThread().getName(), System.currentTimeMillis() - start);
     }
@@ -192,7 +189,7 @@ public class MirrorSourceTask extends SourceTask {
             long upstreamOffset = MirrorUtils.unwrapOffset(record.sourceOffset());
             long downstreamOffset = metadata.offset();
             MirrorSourceTask.PartitionState partitionState =
-                    partitionStates.computeIfAbsent(topicPartition, x -> new MirrorSourceTask.PartitionState(offsetSyncWriter.maxOffsetLag));
+                    partitionStates.computeIfAbsent(topicPartition, x -> new MirrorSourceTask.PartitionState(offsetSyncWriter.maxOffsetLag()));
             offsetSyncWriter.maybeQueueOffsetSyncs(partitionState, sourceTopicPartition, upstreamOffset, downstreamOffset);
             // We may be able to immediately publish an offset sync that we've queued up here
             offsetSyncWriter.firePendingOffsetSyncs();
@@ -292,6 +289,19 @@ public class MirrorSourceTask extends SourceTask {
             previousUpstreamOffset = upstreamOffset;
             previousDownstreamOffset = downstreamOffset;
             return shouldSyncOffsets;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof PartitionState)) return false;
+            PartitionState that = (PartitionState) o;
+            return previousUpstreamOffset == that.previousUpstreamOffset && previousDownstreamOffset == that.previousDownstreamOffset && lastSyncDownstreamOffset == that.lastSyncDownstreamOffset && maxOffsetLag == that.maxOffsetLag && shouldSyncOffsets == that.shouldSyncOffsets;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(previousUpstreamOffset, previousDownstreamOffset, lastSyncDownstreamOffset, maxOffsetLag, shouldSyncOffsets);
         }
 
         void reset() {

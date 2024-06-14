@@ -220,7 +220,7 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
         return getBoolean(ADD_SOURCE_ALIAS_TO_METRICS);
     }
 
-    boolean emitOffsetSyncEnabled() {
+    boolean emitOffsetSyncsEnabled() {
         return getBoolean(EMIT_OFFSET_SYNCS_ENABLED);
     }
 

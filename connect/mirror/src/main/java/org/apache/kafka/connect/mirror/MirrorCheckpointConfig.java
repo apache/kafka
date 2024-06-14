@@ -16,18 +16,19 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.utils.ConfigUtils;
 
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 public class MirrorCheckpointConfig extends MirrorConnectorConfig {
-
+    private static final Logger LOG = LoggerFactory.getLogger(MirrorCheckpointConfig.class);
     protected static final String REFRESH_GROUPS = "refresh.groups";
     protected static final String EMIT_CHECKPOINTS = "emit.checkpoints";
     protected static final String SYNC_GROUP_OFFSETS = "sync.group.offsets";
@@ -169,32 +170,23 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
         return Duration.ofMillis(getLong(CONSUMER_POLL_TIMEOUT_MILLIS));
     }
 
-    public List<ConfigValue> validate() {
+    public boolean validate() {
         Boolean emitCheckpointsValue = this.getBoolean(EMIT_CHECKPOINTS_ENABLED);
         Boolean syncGroupOffsetsValue = this.getBoolean(SYNC_GROUP_OFFSETS_ENABLED);
 
-        List<ConfigValue> invalidConfigs = new ArrayList<>();
         if (!emitCheckpointsValue && !syncGroupOffsetsValue) {
-            ConfigValue syncGroupOffsets = new ConfigValue(SYNC_GROUP_OFFSETS_ENABLED);
-            ConfigValue emitCheckpoints = new ConfigValue(EMIT_CHECKPOINTS_ENABLED);
-
-            String errorMessage = "MirrorCheckpointConnector can't run without both" + SYNC_GROUP_OFFSETS_ENABLED + ", " +
-                    EMIT_CHECKPOINTS_ENABLED + "set to false";
-            syncGroupOffsets.addErrorMessage(errorMessage);
-            emitCheckpoints.addErrorMessage(errorMessage);
-            invalidConfigs.add(syncGroupOffsets);
-            invalidConfigs.add(emitCheckpoints);
+            LOG.warn("MirrorCheckpointConnector can't run without both " + SYNC_GROUP_OFFSETS_ENABLED + ", " +
+                    EMIT_CHECKPOINTS_ENABLED + " set to false");
+            return false;
         }
 
-        boolean configuredWithDependincesOnOffsetSyncs = emitCheckpointsValue || syncGroupOffsetsValue;
-        if (!"true".equals(Optional.ofNullable(this.originals().get(EMIT_OFFSET_SYNCS_ENABLED)).orElse("true")) & configuredWithDependincesOnOffsetSyncs) {
-            ConfigValue emitOffsetSync = new ConfigValue(EMIT_OFFSET_SYNCS_ENABLED);
-            emitOffsetSync.addErrorMessage("MirrorCheckpointConnector can't run with " + EMIT_OFFSET_SYNCS_ENABLED + " set to false while, " +
-                    EMIT_CHECKPOINTS_ENABLED  + "and/or" + SYNC_GROUP_OFFSETS_ENABLED + "set to true");
-            invalidConfigs.add(emitOffsetSync);
+        boolean requireOffsetSyncs = emitCheckpointsValue || syncGroupOffsetsValue;
+        if (!"true".equals(Optional.ofNullable(this.originals().get(EMIT_OFFSET_SYNCS_ENABLED)).orElse("true")) & requireOffsetSyncs) {
+            LOG.warn("MirrorCheckpointConnector can't run with " + EMIT_OFFSET_SYNCS_ENABLED + " set to false while, " +
+                    EMIT_CHECKPOINTS_ENABLED  + " and/o r" + SYNC_GROUP_OFFSETS_ENABLED + " set to true");
+            return false;
         }
-
-        return invalidConfigs;
+        return true;
     }
 
     private static ConfigDef defineCheckpointConfig(ConfigDef baseConfig) {

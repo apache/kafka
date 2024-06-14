@@ -64,6 +64,10 @@ class OffsetSyncWriter implements AutoCloseable {
         Utils.closeQuietly(offsetProducer, "offset producer");
     }
 
+    public long maxOffsetLag() {
+        return maxOffsetLag;
+    }
+
     // sends OffsetSync record to internal offsets topic
     private void sendOffsetSync(OffsetSync offsetSync) {
         ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(offsetSyncsTopic, 0,
@@ -111,9 +115,9 @@ class OffsetSyncWriter implements AutoCloseable {
 
     // updates partition state and queues up OffsetSync if necessary
     void maybeQueueOffsetSyncs(MirrorSourceTask.PartitionState partitionState,
-                                       TopicPartition topicPartition,
-                                       long upstreamOffset,
-                                       long downstreamOffset) {
+                               TopicPartition topicPartition,
+                               long upstreamOffset,
+                               long downstreamOffset) {
         OffsetSync offsetSync = new OffsetSync(topicPartition, upstreamOffset, downstreamOffset);
         if (partitionState.update(upstreamOffset, downstreamOffset)) {
             // Queue this sync for an immediate send, as downstream state is sufficiently stale
@@ -128,5 +132,15 @@ class OffsetSyncWriter implements AutoCloseable {
                 delayedOffsetSyncs.put(topicPartition, offsetSync);
             }
         }
+    }
+
+    // visible for testing
+    protected Map<TopicPartition, OffsetSync> getDelayedOffsetSyncs() {
+        return delayedOffsetSyncs;
+    }
+
+    // visible for testing
+    protected Map<TopicPartition, OffsetSync> getPendingOffsetSyncs() {
+        return pendingOffsetSyncs;
     }
 }

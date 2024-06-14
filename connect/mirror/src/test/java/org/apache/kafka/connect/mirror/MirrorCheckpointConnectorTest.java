@@ -52,30 +52,6 @@ public class MirrorCheckpointConnectorTest {
     private static final Map<String, ?> SOURCE_OFFSET = MirrorUtils.wrapOffset(0);
 
     @Test
-    public void testEmitCheckpointsAndSyncGroupOffsetsBothDisabled() {
-        // disable the checkpoint emission
-        MirrorCheckpointConfig config = new MirrorCheckpointConfig(
-                makeProps("emit.checkpoints.enabled", "false",
-                        "sync.group.offsets.enabled", "false"));
-
-        Set<String> knownConsumerGroups = new HashSet<>();
-        knownConsumerGroups.add(CONSUMER_GROUP);
-        assertMirrorCheckpointConnectorDisabled(new MirrorCheckpointConnector(knownConsumerGroups, config));
-    }
-
-    @Test
-    public void testEmitOffsetSyncsDisabled() {
-        // disable the checkpoint emission
-        MirrorCheckpointConfig config = new MirrorCheckpointConfig(
-                makeProps("emit.checkpoints.enabled", "false",
-                        MirrorConnectorConfig.EMIT_OFFSET_SYNCS_ENABLED, "false"));
-
-        Set<String> knownConsumerGroups = new HashSet<>();
-        knownConsumerGroups.add(CONSUMER_GROUP);
-        assertMirrorCheckpointConnectorDisabled(new MirrorCheckpointConnector(knownConsumerGroups, config));
-    }
-
-    @Test
     public void testMirrorCheckpointConnectorDisabled() {
         // disable the checkpoint emission
         MirrorCheckpointConfig config = new MirrorCheckpointConfig(
