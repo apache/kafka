@@ -431,11 +431,14 @@ public class RemoteLogManager implements Closeable {
 
             leaderPartitions.forEach(this::cacheTopicPartitionIds);
             followerPartitions.forEach(this::cacheTopicPartitionIds);
-            followerPartitions.forEach(this::removeRemoteTopicPartitionMetrics);
 
             remoteLogMetadataManager.onPartitionLeadershipChanges(leaderPartitions, followerPartitions);
             followerPartitions.forEach(topicIdPartition ->
                     doHandleLeaderOrFollowerPartitions(topicIdPartition, RLMTask::convertToFollower));
+
+            // If this node was the previous leader for the partition, then the RLMTask might be running in the
+            // background thread and might emit metrics. So, removing the metrics after marking this node as follower.
+            followerPartitions.forEach(this::removeRemoteTopicPartitionMetrics);
 
             leaderPartitionsWithLeaderEpoch.forEach((topicIdPartition, leaderEpoch) ->
                     doHandleLeaderOrFollowerPartitions(topicIdPartition,
@@ -663,6 +666,15 @@ public class RemoteLogManager implements Closeable {
         } else {
             return Collections.emptyList();
         }
+    }
+
+    // VisibleForTesting
+    RLMTask rlmTask(TopicIdPartition topicIdPartition) {
+        RLMTaskWithFuture task = leaderOrFollowerTasks.get(topicIdPartition);
+        if (task != null) {
+            return task.rlmTask;
+        }
+        return null;
     }
 
     class RLMTask extends CancellableRunnable {
@@ -893,11 +905,18 @@ public class RemoteLogManager implements Closeable {
             logger.info("Copied {} to remote storage with segment-id: {}", logFileName, copySegmentFinishedRlsm.remoteLogSegmentId());
 
             long bytesLag = log.onlyLocalLogSegmentsSize() - log.activeSegment().size();
-            String topic = topicIdPartition.topic();
-            int partition = topicIdPartition.partition();
             long segmentsLag = log.onlyLocalLogSegmentsCount();
-            brokerTopicStats.recordRemoteCopyLagBytes(topic, partition, bytesLag);
-            brokerTopicStats.recordRemoteCopyLagSegments(topic, partition, segmentsLag);
+            recordLagStats(bytesLag, segmentsLag);
+        }
+
+        // VisibleForTesting
+        void recordLagStats(long bytesLag, long segmentsLag) {
+            if (isLeader()) {
+                String topic = topicIdPartition.topic();
+                int partition = topicIdPartition.partition();
+                brokerTopicStats.recordRemoteCopyLagBytes(topic, partition, bytesLag);
+                brokerTopicStats.recordRemoteCopyLagSegments(topic, partition, segmentsLag);
+            }
         }
 
         private Path toPathIfExists(File file) {
