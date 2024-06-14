@@ -14,12 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.server;
+package kafka.server.share;
 
+import kafka.server.ReplicaManager;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.message.ShareAcknowledgeResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.share.ShareAcknowledgementBatch;
 import org.apache.kafka.storage.internals.log.FetchParams;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -156,7 +158,7 @@ public class SharePartitionManager implements AutoCloseable {
     public CompletableFuture<Map<TopicIdPartition, ShareAcknowledgeResponseData.PartitionData>> acknowledge(
         String memberId,
         String groupId,
-        Map<TopicIdPartition, List<SharePartition.AcknowledgementBatch>> acknowledgeTopics
+        Map<TopicIdPartition, List<ShareAcknowledgementBatch>> acknowledgeTopics
     ) {
         log.trace("Acknowledge request for topicIdPartitions: {} with groupId: {}",
             acknowledgeTopics.keySet(), groupId);
