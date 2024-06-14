@@ -17,7 +17,9 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerProtocolAssignment;
+import org.apache.kafka.common.message.ConsumerProtocolSubscription;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 
@@ -25,6 +27,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -129,5 +132,30 @@ public class Utils {
             }
         });
         return topicPartitionMap;
+    }
+
+    /**
+     * Converts a ConsumerProtocolSubscription.TopicPartitionCollection to a list of ConsumerGroupHeartbeatRequestData.TopicPartitions.
+     *
+     * @param topicPartitionCollection  The TopicPartitionCollection to convert.
+     * @param topicsImage               The TopicsImage.
+     * @return a list of ConsumerGroupHeartbeatRequestData.TopicPartitions.
+     */
+    public static List<ConsumerGroupHeartbeatRequestData.TopicPartitions> toTopicPartitions(
+        ConsumerProtocolSubscription.TopicPartitionCollection topicPartitionCollection,
+        TopicsImage topicsImage
+    ) {
+        List<ConsumerGroupHeartbeatRequestData.TopicPartitions> res = new ArrayList<>();
+        for (ConsumerProtocolSubscription.TopicPartition tp : topicPartitionCollection) {
+            TopicImage topicImage = topicsImage.getTopic(tp.topic());
+            if (topicImage != null) {
+                res.add(
+                    new ConsumerGroupHeartbeatRequestData.TopicPartitions()
+                        .setTopicId(topicImage.id())
+                        .setPartitions(tp.partitions())
+                );
+            }
+        }
+        return res;
     }
 }

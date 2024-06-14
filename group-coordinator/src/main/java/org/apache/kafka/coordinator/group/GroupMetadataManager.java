@@ -133,6 +133,7 @@ import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTar
 import static org.apache.kafka.coordinator.group.Utils.assignmentToString;
 import static org.apache.kafka.coordinator.group.Utils.ofSentinel;
 import static org.apache.kafka.coordinator.group.Utils.toConsumerProtocolAssignment;
+import static org.apache.kafka.coordinator.group.Utils.toTopicPartitions;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupMember.EMPTY_ASSIGNMENT;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.COMPLETING_REBALANCE;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.DEAD;
@@ -1300,27 +1301,6 @@ public class GroupMetadataManager {
         } catch (SchemaException e) {
             throw new IllegalStateException("Malformed embedded consumer protocol in subscription deserialization.");
         }
-    }
-
-    /**
-     * @return The ConsumerGroupHeartbeatRequestData.TopicPartitions list converted from the TopicPartitions collection.
-     */
-    private static List<ConsumerGroupHeartbeatRequestData.TopicPartitions> toTopicPartitions(
-        ConsumerProtocolSubscription.TopicPartitionCollection topicPartitionCollection,
-        TopicsImage topicsImage
-    ) {
-        List<ConsumerGroupHeartbeatRequestData.TopicPartitions> res = new ArrayList<>();
-        for (ConsumerProtocolSubscription.TopicPartition tp : topicPartitionCollection) {
-            TopicImage topicImage = topicsImage.getTopic(tp.topic());
-            if (topicImage != null) {
-                res.add(
-                    new ConsumerGroupHeartbeatRequestData.TopicPartitions()
-                        .setTopicId(topicImage.id())
-                        .setPartitions(tp.partitions())
-                );
-            }
-        }
-        return res;
     }
 
     private ConsumerGroupHeartbeatResponseData.Assignment createResponseAssignment(
