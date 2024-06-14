@@ -78,7 +78,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(value = 40)
 public class ClusterControlManagerTest {
-    public final static int CONTROLLER_ID = 3000;
+    public static final int CONTROLLER_ID = 3000;
     @ParameterizedTest
     @EnumSource(value = MetadataVersion.class, names = {"IBP_3_0_IV1", "IBP_3_3_IV2"})
     public void testReplay(MetadataVersion metadataVersion) {

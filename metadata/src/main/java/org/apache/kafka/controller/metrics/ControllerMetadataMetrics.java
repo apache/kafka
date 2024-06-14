@@ -55,7 +55,7 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
         "KafkaController", "MetadataErrorCount");
     private static final MetricName ZK_MIGRATION_STATE = getMetricName(
         "KafkaController", "ZkMigrationState");
-    private final static MetricName UNCLEAN_LEADER_ELECTIONS_PER_SEC = getMetricName(
+    private static final MetricName UNCLEAN_LEADER_ELECTIONS_PER_SEC = getMetricName(
             "ControllerStats", "UncleanLeaderElectionsPerSec");
 
     private final Optional<MetricsRegistry> registry;
