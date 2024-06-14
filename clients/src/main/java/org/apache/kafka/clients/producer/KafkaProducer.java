@@ -52,6 +52,7 @@ import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -62,6 +63,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.AbstractRecords;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.RecordBatch;
@@ -1176,18 +1178,25 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 metadata.awaitUpdate(version, remainingWaitMs);
             } catch (TimeoutException ex) {
                 // Rethrow with original maxWaitMs to prevent logging exception with remainingWaitMs
-                throw new TimeoutException(
-                        String.format("Topic %s not present in metadata after %d ms.",
-                                topic, maxWaitMs));
+                final String errorMessage = String.format("Topic %s not present in metadata after %d ms.",
+                        topic, maxWaitMs);
+                if (metadata.getError(topic) == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
+                    throw new UnknownTopicOrPartitionException(errorMessage);
+                }
+                throw new TimeoutException(errorMessage);
             }
             cluster = metadata.fetch();
             elapsed = time.milliseconds() - nowMs;
             if (elapsed >= maxWaitMs) {
-                throw new TimeoutException(partitionsCount == null ?
+                final String errorMessage = partitionsCount == null ?
                         String.format("Topic %s not present in metadata after %d ms.",
                                 topic, maxWaitMs) :
                         String.format("Partition %d of topic %s with partition count %d is not present in metadata after %d ms.",
-                                partition, topic, partitionsCount, maxWaitMs));
+                                partition, topic, partitionsCount, maxWaitMs);
+                if (metadata.getError(topic) == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
+                    throw new UnknownTopicOrPartitionException(errorMessage);
+                }
+                throw new TimeoutException(errorMessage);
             }
             metadata.maybeThrowExceptionForTopic(topic);
             remainingWaitMs = maxWaitMs - elapsed;

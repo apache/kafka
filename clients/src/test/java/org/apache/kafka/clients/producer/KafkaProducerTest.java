@@ -46,6 +46,7 @@ import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
@@ -952,7 +953,7 @@ public class KafkaProducerTest {
                 }
             });
             t.start();
-            assertThrows(TimeoutException.class, () -> producer.partitionsFor(topic));
+            assertThrows(UnknownTopicOrPartitionException.class, () -> producer.partitionsFor(topic));
             running.set(false);
             t.join();
         }
