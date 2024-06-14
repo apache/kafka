@@ -25,7 +25,7 @@ import org.apache.kafka.common.message.ListOffsetsResponseData.{ListOffsetsParti
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.AbstractRequest.Builder
 import org.apache.kafka.common.requests.{AbstractRequest, FetchResponse, ListOffsetsResponse, OffsetsForLeaderEpochResponse, FetchMetadata => JFetchMetadata}
-import org.apache.kafka.common.utils.{SystemTime, Time}
+import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
 
 import java.net.SocketTimeoutException
@@ -46,7 +46,7 @@ class MockBlockingSender(offsets: java.util.Map[TopicPartition, EpochEndOffset],
                          time: Time)
   extends BlockingSend {
 
-  private val client = new MockClient(new SystemTime)
+  private val client = new MockClient(Time.SYSTEM)
   var fetchCount = 0
   var epochFetchCount = 0
   var listOffsetsCount = 0

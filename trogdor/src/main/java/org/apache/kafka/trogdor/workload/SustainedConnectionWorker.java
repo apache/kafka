@@ -27,8 +27,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.ThreadUtils;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.common.Platform;
@@ -62,7 +62,6 @@ import java.util.stream.Collectors;
 
 public class SustainedConnectionWorker implements TaskWorker {
     private static final Logger log = LoggerFactory.getLogger(SustainedConnectionWorker.class);
-    private static final SystemTime SYSTEM_TIME = new SystemTime();
 
     // This is the metadata for the test itself.
     private final String id;
@@ -166,7 +165,7 @@ public class SustainedConnectionWorker implements TaskWorker {
         }
 
         protected void completeRefresh() {
-            this.nextUpdate = SustainedConnectionWorker.SYSTEM_TIME.milliseconds() + this.refreshRate;
+            this.nextUpdate = Time.SYSTEM.milliseconds() + this.refreshRate;
             this.inUse = false;
         }
 
@@ -390,7 +389,7 @@ public class SustainedConnectionWorker implements TaskWorker {
                     if (currentConnection.isPresent()) {
                         currentConnection.get().refresh();
                     } else {
-                        SustainedConnectionWorker.SYSTEM_TIME.sleep(SustainedConnectionWorker.BACKOFF_PERIOD_MS);
+                        Time.SYSTEM.sleep(SustainedConnectionWorker.BACKOFF_PERIOD_MS);
                     }
                 }
             } catch (Exception e) {
@@ -401,7 +400,7 @@ public class SustainedConnectionWorker implements TaskWorker {
     }
 
     private synchronized Optional<SustainedConnection> findConnectionToMaintain() {
-        final long milliseconds = SustainedConnectionWorker.SYSTEM_TIME.milliseconds();
+        final long milliseconds = Time.SYSTEM.milliseconds();
         for (SustainedConnection connection : this.connections) {
             if (connection.needsRefresh(milliseconds)) {
                 connection.claim();
@@ -424,7 +423,7 @@ public class SustainedConnectionWorker implements TaskWorker {
                             SustainedConnectionWorker.this.totalMetadataConnections.get(),
                             SustainedConnectionWorker.this.totalMetadataFailedConnections.get(),
                             SustainedConnectionWorker.this.totalAbortedThreads.get(),
-                            SustainedConnectionWorker.SYSTEM_TIME.milliseconds()));
+                            Time.SYSTEM.milliseconds()));
                 status.update(node);
             } catch (Exception e) {
                 SustainedConnectionWorker.log.error("Aborted test while running StatusUpdater", e);

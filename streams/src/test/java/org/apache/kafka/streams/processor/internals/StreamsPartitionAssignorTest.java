@@ -67,8 +67,8 @@ import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
 import org.apache.kafka.streams.processor.internals.assignment.FallbackPriorTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.LegacyStickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
-import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
 import org.apache.kafka.streams.processor.internals.assignment.LegacyTaskAssignor;
 import org.apache.kafka.streams.state.HostInfo;
@@ -344,8 +344,8 @@ public class StreamsPartitionAssignorTest {
         return asList(
             new Object[]{HighAvailabilityTaskAssignor.class, true, null},
             new Object[]{HighAvailabilityTaskAssignor.class, false, null},
-            new Object[]{StickyTaskAssignor.class, true, null},
-            new Object[]{StickyTaskAssignor.class, false, null},
+            new Object[]{LegacyStickyTaskAssignor.class, true, null},
+            new Object[]{LegacyStickyTaskAssignor.class, false, null},
             new Object[]{FallbackPriorTaskAssignor.class, true, null},
             new Object[]{FallbackPriorTaskAssignor.class, false, null},
             new Object[]{null, false, org.apache.kafka.streams.processor.assignment.assignors.StickyTaskAssignor.class},

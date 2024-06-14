@@ -24,7 +24,6 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.TokenBucket;
 import org.apache.kafka.common.metrics.stats.WindowedSum;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.junit.jupiter.api.Test;
 
@@ -80,45 +79,45 @@ public class SensorTest {
 
     @Test
     public void testShouldRecordForInfoLevelSensor() {
-        Sensor infoSensor = new Sensor(null, "infoSensor", null, INFO_CONFIG, new SystemTime(),
+        Sensor infoSensor = new Sensor(null, "infoSensor", null, INFO_CONFIG,  Time.SYSTEM,
             0, Sensor.RecordingLevel.INFO);
         assertTrue(infoSensor.shouldRecord());
 
-        infoSensor = new Sensor(null, "infoSensor", null, DEBUG_CONFIG, new SystemTime(),
+        infoSensor = new Sensor(null, "infoSensor", null, DEBUG_CONFIG,  Time.SYSTEM,
             0, Sensor.RecordingLevel.INFO);
         assertTrue(infoSensor.shouldRecord());
 
-        infoSensor = new Sensor(null, "infoSensor", null, TRACE_CONFIG, new SystemTime(),
+        infoSensor = new Sensor(null, "infoSensor", null, TRACE_CONFIG, Time.SYSTEM,
             0, Sensor.RecordingLevel.INFO);
         assertTrue(infoSensor.shouldRecord());
     }
 
     @Test
     public void testShouldRecordForDebugLevelSensor() {
-        Sensor debugSensor = new Sensor(null, "debugSensor", null, INFO_CONFIG, new SystemTime(),
+        Sensor debugSensor = new Sensor(null, "debugSensor", null, INFO_CONFIG, Time.SYSTEM,
             0, Sensor.RecordingLevel.DEBUG);
         assertFalse(debugSensor.shouldRecord());
 
-        debugSensor = new Sensor(null, "debugSensor", null, DEBUG_CONFIG, new SystemTime(),
+        debugSensor = new Sensor(null, "debugSensor", null, DEBUG_CONFIG, Time.SYSTEM,
              0, Sensor.RecordingLevel.DEBUG);
         assertTrue(debugSensor.shouldRecord());
 
-        debugSensor = new Sensor(null, "debugSensor", null, TRACE_CONFIG, new SystemTime(),
+        debugSensor = new Sensor(null, "debugSensor", null, TRACE_CONFIG, Time.SYSTEM,
              0, Sensor.RecordingLevel.DEBUG);
         assertTrue(debugSensor.shouldRecord());
     }
 
     @Test
     public void testShouldRecordForTraceLevelSensor() {
-        Sensor traceSensor = new Sensor(null, "traceSensor", null, INFO_CONFIG, new SystemTime(),
+        Sensor traceSensor = new Sensor(null, "traceSensor", null, INFO_CONFIG, Time.SYSTEM,
              0, Sensor.RecordingLevel.TRACE);
         assertFalse(traceSensor.shouldRecord());
 
-        traceSensor = new Sensor(null, "traceSensor", null, DEBUG_CONFIG, new SystemTime(),
+        traceSensor = new Sensor(null, "traceSensor", null, DEBUG_CONFIG, Time.SYSTEM,
              0, Sensor.RecordingLevel.TRACE);
         assertFalse(traceSensor.shouldRecord());
 
-        traceSensor = new Sensor(null, "traceSensor", null, TRACE_CONFIG, new SystemTime(),
+        traceSensor = new Sensor(null, "traceSensor", null, TRACE_CONFIG, Time.SYSTEM,
              0, Sensor.RecordingLevel.TRACE);
         assertTrue(traceSensor.shouldRecord());
     }
