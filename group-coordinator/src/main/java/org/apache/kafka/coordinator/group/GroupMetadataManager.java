@@ -16,10 +16,8 @@
  */
 package org.apache.kafka.coordinator.group;
 
-import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
@@ -134,6 +132,7 @@ import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newMem
 import static org.apache.kafka.coordinator.group.CoordinatorRecordHelpers.newTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.Utils.assignmentToString;
 import static org.apache.kafka.coordinator.group.Utils.ofSentinel;
+import static org.apache.kafka.coordinator.group.Utils.toConsumerProtocolAssignment;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupMember.EMPTY_ASSIGNMENT;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.COMPLETING_REBALANCE;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.DEAD;
@@ -1324,25 +1323,6 @@ public class GroupMetadataManager {
         return res;
     }
 
-    /**
-     * @return The TopicPartition list converted from the assignment map.
-     */
-    private static List<TopicPartition> toTopicPartitionList(
-        Map<Uuid, Set<Integer>> partitions,
-        TopicsImage topicsImage
-    ) {
-        List<TopicPartition> topicPartitions = new ArrayList<>();
-        partitions.forEach((topicId, partitionSet) -> {
-            TopicImage topicImage = topicsImage.getTopic(topicId);
-            if (topicImage != null) {
-                partitionSet.forEach(partition ->
-                    topicPartitions.add(new TopicPartition(topicImage.name(), partition))
-                );
-            }
-        });
-        return topicPartitions;
-    }
-
     private ConsumerGroupHeartbeatResponseData.Assignment createResponseAssignment(
         ConsumerGroupMember member
     ) {
@@ -1653,8 +1633,6 @@ public class GroupMetadataManager {
         final ConsumerProtocolSubscription subscription = deserializeSubscription(protocols);
         final List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions =
             toTopicPartitions(subscription.ownedPartitions(), metadataImage.topics());
-        final Optional<String> rackId = subscription.rackId() == null || subscription.rackId().isEmpty() ?
-            Optional.empty() : Optional.of(subscription.rackId());
 
         // 1. Create or update the member. If the member is new or has changed, a ConsumerGroupMemberMetadataValue
         // record is written to the __consumer_offsets partition to persist the change. If the subscriptions have
@@ -1663,7 +1641,7 @@ public class GroupMetadataManager {
         // changed, and persisted by writing a ConsumerGroupMetadataValue record to the partition.
         ConsumerGroupMember updatedMember = updatedMemberBuilder
             .maybeUpdateInstanceId(Optional.ofNullable(instanceId))
-            .maybeUpdateRackId(rackId)
+            .maybeUpdateRackId(Utils.toOptional(subscription.rackId()))
             .maybeUpdateRebalanceTimeoutMs(ofSentinel(request.rebalanceTimeoutMs()))
             .maybeUpdateServerAssignorName(Optional.empty())
             .maybeUpdateSubscribedTopicNames(Optional.ofNullable(subscription.topics()))
@@ -4171,7 +4149,10 @@ public class GroupMetadataManager {
     private byte[] prepareAssignment(ConsumerGroupMember member) {
         try {
             return ConsumerProtocol.serializeAssignment(
-                new ConsumerPartitionAssignor.Assignment(toTopicPartitionList(member.assignedPartitions(), metadataImage.topics())),
+                toConsumerProtocolAssignment(
+                    member.assignedPartitions(),
+                    metadataImage.topics()
+                ),
                 ConsumerProtocol.deserializeVersion(
                     ByteBuffer.wrap(member.classicMemberMetadata().get().supportedProtocols().iterator().next().metadata())
                 )

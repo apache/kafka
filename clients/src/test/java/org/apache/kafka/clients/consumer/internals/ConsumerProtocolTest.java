@@ -207,6 +207,29 @@ public class ConsumerProtocolTest {
     }
 
     @Test
+    public void serializeDeserializeConsumerProtocolAssignmentAllVersions() {
+        ConsumerProtocolAssignment assignment = new ConsumerProtocolAssignment()
+            .setAssignedPartitions(
+                new ConsumerProtocolAssignment.TopicPartitionCollection(Arrays.asList(
+                    new ConsumerProtocolAssignment.TopicPartition()
+                        .setTopic(tp1.topic())
+                        .setPartitions(Collections.singletonList(tp1.partition())),
+                    new ConsumerProtocolAssignment.TopicPartition()
+                        .setTopic(tp2.topic())
+                        .setPartitions(Collections.singletonList(tp2.partition()))
+                ).iterator())
+            )
+            .setUserData(ByteBuffer.wrap("hello".getBytes()));
+
+        for (short version = ConsumerProtocolAssignment.LOWEST_SUPPORTED_VERSION; version <= ConsumerProtocolAssignment.HIGHEST_SUPPORTED_VERSION; version++) {
+            ByteBuffer buffer = ConsumerProtocol.serializeAssignment(assignment, version);
+            ConsumerProtocolAssignment parsedAssignment = ConsumerProtocol.deserializeConsumerProtocolAssignment(buffer);
+            assertEquals(toSet(assignment.assignedPartitions()), toSet(parsedAssignment.assignedPartitions()));
+            assertEquals(assignment.userData(), parsedAssignment.userData());
+        }
+    }
+
+    @Test
     public void serializeDeserializeAssignment() {
         List<TopicPartition> partitions = Arrays.asList(tp1, tp2);
         ByteBuffer buffer = ConsumerProtocol.serializeAssignment(new Assignment(partitions, ByteBuffer.wrap(new byte[0])));
