@@ -2858,6 +2858,16 @@ active-process-ratio metrics which have a recording level of <code>info</code>:
         <td>The fraction of time the stream thread spent on processing this task among all assigned active tasks.</td>
         <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
       </tr>
+      <tr>
+        <td>input-buffer-bytes-total</td>
+        <td>The total number of bytes accumulated by this task,</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>cache-size-bytes-total</td>
+        <td>The cache size in bytes accumulated by this task.</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
  </tbody>
 </table>
 
