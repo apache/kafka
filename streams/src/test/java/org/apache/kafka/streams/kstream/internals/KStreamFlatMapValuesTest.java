@@ -28,14 +28,14 @@ import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.TestInputTopic;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Properties;
 
-import static org.junit.Assert.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 
 public class KStreamFlatMapValuesTest {
     private final String topicName = "topic";

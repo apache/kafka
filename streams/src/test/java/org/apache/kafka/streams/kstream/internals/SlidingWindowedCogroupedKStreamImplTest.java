@@ -20,8 +20,8 @@ package org.apache.kafka.streams.kstream.internals;
 import static java.time.Duration.ofMillis;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.LinkedList;
 import java.util.List;
@@ -51,8 +51,8 @@ import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 @SuppressWarnings("deprecation")
 public class SlidingWindowedCogroupedKStreamImplTest {
@@ -69,7 +69,7 @@ public class SlidingWindowedCogroupedKStreamImplTest {
 
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
-    @Before
+    @BeforeEach
     public void setup() {
         final KStream<String, String> stream = builder.stream(TOPIC, Consumed
                 .with(Serdes.String(), Serdes.String()));

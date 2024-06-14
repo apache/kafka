@@ -40,8 +40,8 @@ import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.junit.Ignore;
-import org.junit.Test;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -52,9 +52,9 @@ import static java.util.Arrays.asList;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class KTableSourceTest {
     private final Consumed<String, String> stringConsumed = Consumed.with(Serdes.String(), Serdes.String());
@@ -91,7 +91,7 @@ public class KTableSourceTest {
             supplier.theCapturedProcessor().processed());
     }
 
-    @Ignore // we have disabled KIP-557 until KAFKA-12508 can be properly addressed
+    @Disabled // we have disabled KIP-557 until KAFKA-12508 can be properly addressed
     @Test
     public void testKTableSourceEmitOnChange() {
         final StreamsBuilder builder = new StreamsBuilder();

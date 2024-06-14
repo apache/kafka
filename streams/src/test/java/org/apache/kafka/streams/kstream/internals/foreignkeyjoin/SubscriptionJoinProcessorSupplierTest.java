@@ -29,8 +29,8 @@ import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class SubscriptionJoinProcessorSupplierTest {
     final Map<String, ValueAndTimestamp<String>> fks = Collections.singletonMap(
@@ -46,7 +46,7 @@ public class SubscriptionJoinProcessorSupplierTest {
     @Test
     public void shouldDetectVersionChange() {
         // This test serves as a reminder to add new tests once we bump SubscriptionWrapper version.
-        Assert.assertEquals(SubscriptionWrapper.VERSION_1, SubscriptionWrapper.CURRENT_VERSION);
+        assertEquals(SubscriptionWrapper.VERSION_1, SubscriptionWrapper.CURRENT_VERSION);
     }
 
     @Test
@@ -69,8 +69,8 @@ public class SubscriptionJoinProcessorSupplierTest {
             );
         processor.process(record);
         final List<CapturedForward<? extends String, ? extends SubscriptionResponseWrapper<String>>> forwarded = context.forwarded();
-        Assert.assertEquals(1, forwarded.size());
-        Assert.assertEquals(
+        assertEquals(1, forwarded.size());
+        assertEquals(
             new Record<>(
                 "pk1",
                 new SubscriptionResponseWrapper<>(
@@ -103,8 +103,8 @@ public class SubscriptionJoinProcessorSupplierTest {
             );
         processor.process(record);
         final List<CapturedForward<? extends String, ? extends SubscriptionResponseWrapper<String>>> forwarded = context.forwarded();
-        Assert.assertEquals(1, forwarded.size());
-        Assert.assertEquals(
+        assertEquals(1, forwarded.size());
+        assertEquals(
             new Record<>(
                 "pk1",
                 new SubscriptionResponseWrapper<>(
@@ -138,8 +138,8 @@ public class SubscriptionJoinProcessorSupplierTest {
         );
         processor.process(record);
         final List<CapturedForward<? extends String, ? extends SubscriptionResponseWrapper<String>>> forwarded = context.forwarded();
-        Assert.assertEquals(1, forwarded.size());
-        Assert.assertEquals(
+        assertEquals(1, forwarded.size());
+        assertEquals(
             new Record<>(
                 "pk1",
                 new SubscriptionResponseWrapper<>(
@@ -173,8 +173,8 @@ public class SubscriptionJoinProcessorSupplierTest {
             );
         processor.process(record);
         final List<CapturedForward<? extends String, ? extends SubscriptionResponseWrapper<String>>> forwarded = context.forwarded();
-        Assert.assertEquals(1, forwarded.size());
-        Assert.assertEquals(
+        assertEquals(1, forwarded.size());
+        assertEquals(
             new Record<>(
                 "pk1",
                 new SubscriptionResponseWrapper<>(
@@ -208,8 +208,8 @@ public class SubscriptionJoinProcessorSupplierTest {
         processor.process(record);
         // propagate matched FK
         List<CapturedForward<? extends String, ? extends SubscriptionResponseWrapper<String>>> forwarded = context.forwarded();
-        Assert.assertEquals(1, forwarded.size());
-        Assert.assertEquals(
+        assertEquals(1, forwarded.size());
+        assertEquals(
             new Record<>(
                 "pk1",
                 new SubscriptionResponseWrapper<>(
@@ -229,8 +229,8 @@ public class SubscriptionJoinProcessorSupplierTest {
         processor.process(record);
         // propagate null if there is no match
         forwarded = context.forwarded();
-        Assert.assertEquals(2, forwarded.size());
-        Assert.assertEquals(
+        assertEquals(2, forwarded.size());
+        assertEquals(
             new Record<>(
                 "pk1",
                 new SubscriptionResponseWrapper<>(
@@ -262,8 +262,8 @@ public class SubscriptionJoinProcessorSupplierTest {
             );
         processor.process(record);
         List<CapturedForward<? extends String, ? extends SubscriptionResponseWrapper<String>>> forwarded = context.forwarded();
-        Assert.assertEquals(1, forwarded.size());
-        Assert.assertEquals(
+        assertEquals(1, forwarded.size());
+        assertEquals(
             new Record<>(
                 "pk1",
                 new SubscriptionResponseWrapper<>(
@@ -283,8 +283,8 @@ public class SubscriptionJoinProcessorSupplierTest {
         processor.process(record);
         // propagate null if there is no match
         forwarded = context.forwarded();
-        Assert.assertEquals(2, forwarded.size());
-        Assert.assertEquals(
+        assertEquals(2, forwarded.size());
+        assertEquals(
             new Record<>(
                 "pk1",
                 new SubscriptionResponseWrapper<>(
@@ -316,7 +316,7 @@ public class SubscriptionJoinProcessorSupplierTest {
             );
         processor.process(record);
         final List<CapturedForward<? extends String, ? extends SubscriptionResponseWrapper<String>>> forwarded = context.forwarded();
-        Assert.assertEquals(0, forwarded.size());
+        assertEquals(0, forwarded.size());
     }
 
     @Test
@@ -337,7 +337,7 @@ public class SubscriptionJoinProcessorSupplierTest {
             );
         processor.process(record);
         final List<CapturedForward<? extends String, ? extends SubscriptionResponseWrapper<String>>> forwarded = context.forwarded();
-        Assert.assertEquals(0, forwarded.size());
+        assertEquals(0, forwarded.size());
     }
 
     private KTableValueGetterSupplier<String, String> valueGetterSupplier(final Map<String, ValueAndTimestamp<String>> map) {

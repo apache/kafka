@@ -45,8 +45,7 @@ import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Assert;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -60,7 +59,9 @@ import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 
 public class KTableAggregateTest {
     private final Serde<String> stringSerde = Serdes.String();
@@ -479,8 +480,8 @@ public class KTableAggregateTest {
 
             final NoEqualsImpl a = new NoEqualsImpl("1");
             final NoEqualsImpl b = new NoEqualsImpl("1");
-            Assert.assertNotEquals(a, b);
-            Assert.assertNotSame(a, b);
+            assertNotEquals(a, b);
+            assertNotSame(a, b);
 
             inputTopic.pipeInput(a, a, 8);
             inputTopic.pipeInput(b, b, 9);
