@@ -14,12 +14,13 @@
 // limitations under the License.
 
 {
-  "apiKey":76,
+  "apiKey":83,
   "type": "request",
   "listeners": ["broker"],
   "name": "GetReplicaLogInfoRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",
+  "latestVersionUnstable": true,
   "fields": [
     { "name": "BrokerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The ID of the broker." },

@@ -27,6 +27,8 @@ import org.apache.kafka.common.protocol.SendBuilder;
 import java.nio.ByteBuffer;
 import java.util.Map;
 
+import static org.apache.kafka.common.message.ApiMessageType.GET_REPLICA_LOG_INFO;
+
 public abstract class AbstractRequest implements AbstractRequestResponse {
 
     public abstract static class Builder<T extends AbstractRequest> {

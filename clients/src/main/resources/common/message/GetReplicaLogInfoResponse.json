@@ -14,7 +14,7 @@
 // limitations under the License.
 
 {
-  "apiKey":76,
+  "apiKey":83,
   "type": "response",
   "name": "GetReplicaLogInfoResponse",
   "validVersions": "0",
