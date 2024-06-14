@@ -1693,7 +1693,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             refreshCommittedOffsets(offsets, metadata, subscriptions);
             return true;
         } catch (TimeoutException e) {
-            log.error("Couldn't refresh committed offsets before timeout expired");
+            log.debug(
+                "The committed offsets for the following partition(s) could not be refreshed within the timeout: {} ",
+                initializingPartitions
+            );
             return false;
         } catch (InterruptException e) {
             throw e;
