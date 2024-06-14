@@ -640,8 +640,8 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
       reconfigurable.validateReconfiguration(newConfigs)
     } catch {
       case e: ConfigException => throw e
-      case _: Exception =>
-        throw new ConfigException(s"Validation of dynamic config update of $updatedConfigNames failed with class ${reconfigurable.getClass}")
+      case e: Exception =>
+        throw new ConfigException(s"Validation of dynamic config update of $updatedConfigNames failed with class ${reconfigurable.getClass} due to: $e")
     }
 
     if (!validateOnly) {
