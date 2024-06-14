@@ -21,10 +21,10 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.distributed.Crypto;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.eclipse.jetty.client.api.Request;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import javax.crypto.Mac;
 import javax.crypto.SecretKey;
@@ -34,18 +34,18 @@ import javax.ws.rs.core.HttpHeaders;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
 public class InternalRequestSignatureTest {
 
     private static final byte[] REQUEST_BODY =
@@ -123,16 +123,12 @@ public class InternalRequestSignatureTest {
 
         InternalRequestSignature.addToRequest(crypto, KEY, REQUEST_BODY, SIGNATURE_ALGORITHM, request);
 
-        assertEquals(
-            "Request should have valid base 64-encoded signature added as header",
-            ENCODED_SIGNATURE,
-            signatureCapture.getValue()
-        );
-        assertEquals(
-            "Request should have provided signature algorithm added as header",
-            SIGNATURE_ALGORITHM,
-            signatureAlgorithmCapture.getValue()
-        );
+        assertEquals(ENCODED_SIGNATURE,
+            signatureCapture.getValue(),
+            "Request should have valid base 64-encoded signature added as header");
+        assertEquals(SIGNATURE_ALGORITHM,
+            signatureAlgorithmCapture.getValue(),
+            "Request should have provided signature algorithm added as header");
     }
 
     @Test
