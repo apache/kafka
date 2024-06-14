@@ -539,6 +539,7 @@ public class ConfigCommandIntegrationTest {
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, brokerId.orElse(""));
         TestUtils.waitForCondition(() -> {
             Map<String, String> current = getConfigEntryStream(client, configResource)
+                    .filter(ConfigEntry::isSensitive)
                     .collect(HashMap::new, (map, entry) -> map.put(entry.name(), entry.value()), HashMap::putAll);
             return config.stream().allMatch(current::containsKey);
         }, 5000, config + " are not updated");
