@@ -178,6 +178,35 @@
       adds a new config <code>default.client.supplier</code> that allows to use a custom <code>KafkaClientSupplier</code> without any code changes.
     </p>
 
+    <h3><a id="streams_api_changes_340" href="#streams_api_changes_340">Streams API changes in 3.4.0</a></h3>
+    <p>
+      <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=186878390">KIP-770</a> deprecates
+      config <code>cache.max.bytes.buffering</code> in favor of the newly introduced config <code>statestore.cache.max.bytes</code>.
+      To improve monitoring, two new metrics <code>input-buffer-bytes-total</code> and <code>cache-size-bytes-total</code>
+      were added at the DEBUG level. Note, that the KIP is only partially implemented in the 3.4.0 release, and config
+      <code>input.buffer.max.bytes</code> is not available yet.
+    </p>
+
+    <p>
+      <a href="https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=211883356">KIP-873</a> enables you to multicast
+      result records to multiple partition of downstream sink topics and adds functionality for choosing to drop result records without sending.
+      The <code>Integer StreamPartitioner.partition()</code> method is deprecated and replaced by the newly added
+      <code>Optiona&lg;Set&lt;Integer&gt;&gt;StreamPartitioner.partitions()</code> method, which enables returning a set of partitions to send the record to.
+    </p>
+
+    <p>
+      <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-862%3A+Self-join+optimization+for+stream-stream+joins">KIP-862</a>
+      adds a DSL optimization for stream-stream self-joins. The optimization is enabled via a new option <code>single.store.self.join</code>
+      which can be set via existing config <code>topology.optimization</code>. If enabled, the DSL will use a different
+      join processor implementation that uses a single RocksDB store instead of two, to avoid unnecessary data duplication for the self-join case.
+    </p>
+
+    <p>
+      <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-865%3A+Support+--bootstrap-server+in+kafka-streams-application-reset">KIP-865</a>
+      updates the Kafka Streams application reset tool’s server parameter name to conform to the other Kafka tooling by deprecating
+      the <code>--bootstrap-servers</code> parameter and introducing a new <code>--bootstrap-server</code> parameter in its place.
+    </p>
+
     <h3><a id="streams_api_changes_330" href="#streams_api_changes_330">Streams API changes in 3.3.0</a></h3>
     <p>
       Kafka Streams does not send a "leave group" request when an instance is closed. This behavior implies
