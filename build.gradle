@@ -204,8 +204,6 @@ def determineCommitId() {
 def excludedSpotlessModules = [':clients',
                                ':connect:runtime',
                                ':core',
-                               ':group-coordinator:group-coordinator-api', // https://github.com/apache/kafka/pull/16198
-                               ':group-coordinator',
                                ':raft',
                                ':streams',
                                ':streams:examples',
@@ -813,6 +811,7 @@ subprojects {
     apply plugin: 'com.diffplug.spotless'
     spotless {
       java {
+        targetExclude 'src/generated/**/*.java' 
         importOrder('kafka', 'org.apache.kafka', 'com', 'net', 'org', 'java', 'javax', '', '\\#')
         removeUnusedImports()
       }

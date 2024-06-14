@@ -34,7 +34,7 @@ import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -46,7 +46,7 @@ import java.util.Set;
 
 import static java.time.Duration.ZERO;
 import static java.time.Duration.ofMillis;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class KStreamKStreamLeftJoinTest {
     private static final KeyValueTimestamp[] EMPTY = new KeyValueTimestamp[0];
