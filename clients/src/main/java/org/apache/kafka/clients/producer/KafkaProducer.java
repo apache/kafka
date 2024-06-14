@@ -794,7 +794,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * errors, this method will throw the last received exception immediately and the transaction will not be committed.
      * It should be noted that if <code>flush()</code> is called explicitly beforehand, this method will NOT throw any
      * exception related to the {@link #send(ProducerRecord)} calls. Since <code>flush()</code> clears the last received
-     * exception and returns the transaction from the error state.
+     * exception and transits the transaction out of error state.
      * So all {@link #send(ProducerRecord)} calls in a transaction must succeed in order for this method to succeed.
      * <p>
      * If the transaction is committed successfully and this method returns without throwing an exception, it is guaranteed
@@ -1223,7 +1223,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * of <code>flush()</code> is that any previously sent record will have completed (e.g. <code>Future.isDone() == true</code>).
      * A request is considered completed when it is successfully acknowledged
      * according to the <code>acks</code> configuration you have specified or else it results in an error.
-     * Additionally, this method clears the last exception in the transaction and returns the transaction from the error state.
+     * Additionally, this method clears the last exception in the transaction and transits the transaction out of error state.
      * <p>
      * Other threads can continue sending records while one thread is blocked waiting for a flush call to complete,
      * however no guarantee is made about the completion of records sent after the flush call begins.

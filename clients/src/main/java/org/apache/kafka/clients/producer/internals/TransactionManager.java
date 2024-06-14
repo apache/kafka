@@ -671,7 +671,7 @@ public class TransactionManager {
     }
 
     public synchronized void maybeClearLastError() {
-        if (isTransactional() && hasError()) {
+        if (isTransactional() && currentState == State.ABORTABLE_ERROR) {
             lastError = null;
             currentState = prevState;
             epochBumpRequired = prevEpochBumpRequired;
