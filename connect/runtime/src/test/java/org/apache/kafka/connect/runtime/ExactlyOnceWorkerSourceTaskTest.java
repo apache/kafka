@@ -16,6 +16,23 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import java.time.Duration;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
+import java.util.stream.Collectors;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
@@ -54,10 +71,10 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.ParameterizedTest;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.apache.kafka.connect.util.TopicCreationGroup;
-import org.junit.After;
-import org.junit.Before;
 import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.mockito.Mock;
@@ -65,24 +82,6 @@ import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 import org.mockito.stubbing.OngoingStubbing;
 import org.mockito.verification.VerificationMode;
-
-import java.time.Duration;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
 import static java.util.Collections.emptySet;
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
@@ -99,11 +98,11 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.INCLUDE_REGEX
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_CREATION_ENABLE_CONFIG;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeast;
@@ -189,7 +188,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
         this.taskStarted = false;
     }
 
-    @Before
+    @BeforeEach
     public void setup() throws Exception {
         Map<String, String> workerProps = workerProps();
         plugins = new Plugins(workerProps);
@@ -209,7 +208,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
         });
     }
 
-    @After
+    @AfterEach
     public void teardown() throws Exception {
         // In most tests, we don't really care about how many times the task got polled,
         // how many times we prepared to write offsets, etc.
@@ -607,15 +606,15 @@ public class ExactlyOnceWorkerSourceTaskTest {
         startTaskThread();
 
         awaitPolls(2);
-        assertEquals("No flushes should have taken place before offset commit interval has elapsed", 0, flushCount());
+        assertEquals(0, flushCount(), "No flushes should have taken place before offset commit interval has elapsed");
         time.sleep(commitInterval);
 
         awaitPolls(2);
-        assertEquals("One flush should have taken place after offset commit interval has elapsed", 1, flushCount());
+        assertEquals(1, flushCount(), "One flush should have taken place after offset commit interval has elapsed");
         time.sleep(commitInterval * 2);
 
         awaitPolls(2);
-        assertEquals("Two flushes should have taken place after offset commit interval has elapsed again", 2, flushCount());
+        assertEquals(2, flushCount(), "Two flushes should have taken place after offset commit interval has elapsed again");
 
         awaitShutdown();
 
@@ -664,22 +663,22 @@ public class ExactlyOnceWorkerSourceTaskTest {
         startTaskThread();
 
         awaitPolls(3);
-        assertEquals("No flushes should have taken place without connector requesting transaction commit",
-                0, flushCount());
+        assertEquals(0, flushCount(),
+                "No flushes should have taken place without connector requesting transaction commit");
 
         requestCommit.accept(transactionContext);
         awaitPolls(3);
-        assertEquals("One flush should have taken place after transaction commit/abort was requested",
-                1, flushCount());
+        assertEquals(1, flushCount(),
+                "One flush should have taken place after transaction commit/abort was requested");
 
         awaitPolls(3);
-        assertEquals("Only one flush should still have taken place without connector re-requesting commit/abort, even on identical records",
-                1, flushCount());
+        assertEquals(1, flushCount(),
+                "Only one flush should still have taken place without connector re-requesting commit/abort, even on identical records");
 
         awaitShutdown();
 
-        assertEquals("Task should have flushed offsets once based on connector-defined boundaries, and skipped final end-of-life offset commit",
-                1, flushCount());
+        assertEquals(1, flushCount(),
+                "Task should have flushed offsets once based on connector-defined boundaries, and skipped final end-of-life offset commit");
         // We begin a new transaction after connector-requested aborts so that we can still write offsets for the source records that were aborted
         verify(producer, times(abort ? 3 : 2)).beginTransaction();
         verifySends();
@@ -1205,8 +1204,8 @@ public class ExactlyOnceWorkerSourceTaskTest {
         if (actualMax - actualMin <= 0.000001d) {
             assertEquals(actualMax, actualAvg, 0.000002d);
         } else {
-            assertTrue("Average transaction size should be greater than minimum transaction size", actualAvg > actualMin);
-            assertTrue("Average transaction size should be less than maximum transaction size", actualAvg < actualMax);
+            assertTrue(actualAvg > actualMin, "Average transaction size should be greater than minimum transaction size");
+            assertTrue(actualAvg < actualMax, "Average transaction size should be less than maximum transaction size");
         }
     }
 

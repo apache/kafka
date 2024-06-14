@@ -16,14 +16,13 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import java.util.List;
+import java.util.Map;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
-
-import java.util.List;
-import java.util.Map;
 
 public class SampleSourceConnector extends SourceConnector {
 

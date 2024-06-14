@@ -16,13 +16,12 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import java.util.Map;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.transforms.Transformation;
-
-import java.util.Map;
 
 public class SampleTransformation<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
 

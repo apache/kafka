@@ -16,23 +16,6 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
-import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.connect.components.Versioned;
-import org.apache.kafka.connect.connector.ConnectRecord;
-import org.apache.kafka.connect.data.Schema;
-import org.apache.kafka.connect.data.SchemaAndValue;
-import org.apache.kafka.connect.sink.SinkConnector;
-import org.apache.kafka.connect.source.SourceConnector;
-import org.apache.kafka.connect.storage.Converter;
-import org.apache.kafka.connect.storage.HeaderConverter;
-import org.apache.kafka.connect.tools.MockSinkConnector;
-import org.apache.kafka.connect.tools.MockSourceConnector;
-import org.apache.kafka.connect.transforms.Transformation;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -45,17 +28,33 @@ import java.util.List;
 import java.util.Map;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.connect.components.Versioned;
+import org.apache.kafka.connect.connector.ConnectRecord;
+import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.SchemaAndValue;
+import org.apache.kafka.connect.sink.SinkConnector;
+import org.apache.kafka.connect.source.SourceConnector;
+import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.HeaderConverter;
+import org.apache.kafka.connect.tools.MockSinkConnector;
+import org.apache.kafka.connect.tools.MockSourceConnector;
+import org.apache.kafka.connect.transforms.Transformation;
+import org.junit.Rule;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.rules.TemporaryFolder;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class PluginUtilsTest {
     @Rule
     public TemporaryFolder rootDir = new TemporaryFolder();
     private Path pluginPath;
 
-    @Before
+    @BeforeEach
     public void setUp() throws Exception {
         pluginPath = rootDir.newFolder("plugins").toPath().toRealPath();
     }
@@ -191,9 +190,9 @@ public class PluginUtilsTest {
         // Classes in the API should never be loaded in isolation.
         for (String clazz : apiClasses) {
             assertFalse(
-                clazz + " from 'api' is loaded in isolation but should not be",
-                PluginUtils.shouldLoadInIsolation(clazz)
-            );
+                    PluginUtils.shouldLoadInIsolation(clazz),
+                    clazz + " from 'api' is loaded in isolation but should not be"
+                        );
         }
     }
 
@@ -222,8 +221,8 @@ public class PluginUtilsTest {
         );
         for (String clazz : runtimeClasses) {
             assertFalse(
-                clazz + " from 'runtime' is loaded in isolation but should not be",
-                PluginUtils.shouldLoadInIsolation(clazz)
+                    PluginUtils.shouldLoadInIsolation(clazz),
+                    clazz + " from 'runtime' is loaded in isolation but should not be"
             );
         }
     }
@@ -251,8 +250,8 @@ public class PluginUtilsTest {
         );
         for (String clazz : jsonConverterClasses) {
             assertTrue(
-                clazz + " from 'runtime' is not loaded in isolation but should be",
-                PluginUtils.shouldLoadInIsolation(clazz)
+                    PluginUtils.shouldLoadInIsolation(clazz),
+                    clazz + " from 'runtime' is not loaded in isolation but should be"
             );
         }
     }
@@ -306,8 +305,8 @@ public class PluginUtilsTest {
         );
         for (String clazz : transformsClasses) {
             assertTrue(
-                clazz + " from 'transforms' is not loaded in isolation but should be",
-                PluginUtils.shouldLoadInIsolation(clazz)
+                    PluginUtils.shouldLoadInIsolation(clazz),
+                    clazz + " from 'transforms' is not loaded in isolation but should be"
             );
         }
     }
@@ -325,8 +324,8 @@ public class PluginUtilsTest {
         );
         for (String clazz : jsonConverterClasses) {
             assertTrue(
-                clazz + " from 'json' is not loaded in isolation but should be",
-                PluginUtils.shouldLoadInIsolation(clazz)
+                    PluginUtils.shouldLoadInIsolation(clazz),
+                    clazz + " from 'json' is not loaded in isolation but should be"
             );
         }
     }
@@ -342,8 +341,8 @@ public class PluginUtilsTest {
         );
         for (String clazz : jsonConverterClasses) {
             assertTrue(
-                clazz + " from 'file' is not loaded in isolation but should be",
-                PluginUtils.shouldLoadInIsolation(clazz)
+                    PluginUtils.shouldLoadInIsolation(clazz),
+                    clazz + " from 'file' is not loaded in isolation but should be"
             );
         }
     }
@@ -357,8 +356,8 @@ public class PluginUtilsTest {
         );
         for (String clazz : basicAuthExtensionClasses) {
             assertTrue(
-                clazz + " from 'basic-auth-extension' is not loaded in isolation but should be",
-                PluginUtils.shouldLoadInIsolation(clazz)
+                    PluginUtils.shouldLoadInIsolation(clazz),
+                    clazz + " from 'basic-auth-extension' is not loaded in isolation but should be"
             );
         }
     }

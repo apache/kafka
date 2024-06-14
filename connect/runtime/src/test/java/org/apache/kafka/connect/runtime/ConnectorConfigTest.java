@@ -16,6 +16,11 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.components.Versioned;
@@ -26,20 +31,14 @@ import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class ConnectorConfigTest<R extends ConnectRecord<R>> {
 
@@ -469,8 +468,8 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
     private static void assertEnrichedConfigDef(ConfigDef def, String prefix, String keyName, ConfigDef.Type expectedType) {
         assertNull(def.configKeys().get(keyName));
         ConfigDef.ConfigKey configKey = def.configKeys().get(prefix + keyName);
-        assertNotNull(prefix + keyName + "' config must be present", configKey);
-        assertEquals(prefix + keyName + "' config should be a " + expectedType, expectedType, configKey.type);
+        assertNotNull(configKey, prefix + keyName + "' config must be present");
+        assertEquals(expectedType, configKey.type, prefix + keyName + "' config should be a " + expectedType);
     }
 
     public static class HasDuplicateConfigTransformation<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {

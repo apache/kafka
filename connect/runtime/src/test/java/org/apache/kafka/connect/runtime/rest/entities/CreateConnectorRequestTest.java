@@ -16,10 +16,9 @@
  */
 package org.apache.kafka.connect.runtime.rest.entities;
 
-import org.apache.kafka.connect.runtime.TargetState;
-import org.junit.Test;
-
 import java.util.Collections;
+import org.apache.kafka.connect.runtime.TargetState;
+import org.junit.jupiter.api.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;

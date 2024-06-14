@@ -16,6 +16,26 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import javax.management.MBeanServer;
+import javax.management.ObjectName;
+import java.lang.management.ManagementFactory;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConsumerGroupOffsetsOptions;
@@ -88,9 +108,9 @@ import org.apache.kafka.connect.util.FutureCallback;
 import org.apache.kafka.connect.util.ParameterizedTest;
 import org.apache.kafka.connect.util.SinkUtils;
 import org.apache.kafka.connect.util.TopicAdmin;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.mockito.AdditionalAnswers;
@@ -102,27 +122,6 @@ import org.mockito.Mockito;
 import org.mockito.MockitoSession;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.quality.Strictness;
-
-import javax.management.MBeanServer;
-import javax.management.ObjectName;
-import java.lang.management.ManagementFactory;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
 
 import static org.apache.kafka.clients.admin.AdminClientConfig.RETRY_BACKOFF_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ISOLATION_LEVEL_CONFIG;
@@ -148,14 +147,14 @@ import static org.apache.kafka.connect.sink.SinkTask.TOPICS_CONFIG;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -254,7 +253,7 @@ public class WorkerTest {
         this.enableTopicCreation = enableTopicCreation;
     }
 
-    @Before
+    @BeforeEach
     public void setup() {
         // Use strict mode to detect unused mocks
         mockitoSession = Mockito.mockitoSession()
@@ -315,7 +314,7 @@ public class WorkerTest {
                 WorkerTest::workerTaskConstructor);
     }
 
-    @After
+    @AfterEach
     public void teardown() {
         // Critical to always close MockedStatics
         // Ideal would be to use try-with-resources in an individual test, but it introduced a rather large level of
@@ -1845,9 +1844,9 @@ public class WorkerTest {
 
         assertEquals(expectedZombieFenceFuture, actualZombieFenceFuture);
         assertNotNull(adminConfig.get());
-        assertEquals("Admin should be configured with user-specified overrides",
-                "4761",
-                adminConfig.get().get(RETRY_BACKOFF_MS_CONFIG)
+        assertEquals("4761",
+                adminConfig.get().get(RETRY_BACKOFF_MS_CONFIG),
+                "Admin should be configured with user-specified overrides"
         );
 
         verifyKafkaClusterId();
@@ -2751,11 +2750,9 @@ public class WorkerTest {
 
                 ArgumentCaptor<Throwable> failureCaptor = ArgumentCaptor.forClass(Throwable.class);
                 verify(taskStatusListener, times(1)).onFailure(eq(TASK_ID), failureCaptor.capture());
-                assertTrue(
+                assertInstanceOf(TooManyTasksException.class, failureCaptor.getValue(),
                         "Expected task start exception to be TooManyTasksException, but was "
-                                + failureCaptor.getValue().getClass() + " instead",
-                        failureCaptor.getValue() instanceof TooManyTasksException
-                );
+                                + failureCaptor.getValue().getClass() + " instead");
 
                 tasksMaxExceededMessage = failureCaptor.getValue().getMessage();
             } else {
@@ -2788,10 +2785,10 @@ public class WorkerTest {
                 + numTasks + " tasks, which is greater than "
                 + maxTasks;
         assertTrue(
+                message.startsWith(expectedPrefix),
                 "Warning/exception message '"
                         + message + "' did not start with the expected prefix '"
-                        + expectedPrefix + "'",
-                message.startsWith(expectedPrefix)
+                        + expectedPrefix + "'"
         );
     }
 
