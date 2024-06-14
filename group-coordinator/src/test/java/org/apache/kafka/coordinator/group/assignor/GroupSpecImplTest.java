@@ -21,6 +21,7 @@ import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.consumer.Assignment;
 import org.apache.kafka.coordinator.group.consumer.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.consumer.MemberSubscriptionAndAssignmentImpl;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

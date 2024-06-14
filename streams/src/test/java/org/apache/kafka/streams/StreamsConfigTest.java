@@ -1460,8 +1460,8 @@ public class StreamsConfigTest {
 
     @Test
     public void shouldReturnTaskAssignorClass() {
-        props.put(StreamsConfig.TASK_ASSIGNOR_CLASS_CONFIG, "StickyTaskAssignor");
-        assertEquals("StickyTaskAssignor", new StreamsConfig(props).getString(TASK_ASSIGNOR_CLASS_CONFIG));
+        props.put(StreamsConfig.TASK_ASSIGNOR_CLASS_CONFIG, "LegacyStickyTaskAssignor");
+        assertEquals("LegacyStickyTaskAssignor", new StreamsConfig(props).getString(TASK_ASSIGNOR_CLASS_CONFIG));
     }
 
     @Test
