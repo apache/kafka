@@ -38,7 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @Timeout(60)
 public class BootstrapMetadataTest {
-    final static List<ApiMessageAndVersion> SAMPLE_RECORDS1 = unmodifiableList(asList(
+    static final List<ApiMessageAndVersion> SAMPLE_RECORDS1 = unmodifiableList(asList(
         new ApiMessageAndVersion(new FeatureLevelRecord().
             setName(FEATURE_NAME).
             setFeatureLevel((short) 7), (short) 0),
@@ -76,7 +76,7 @@ public class BootstrapMetadataTest {
                 BootstrapMetadata.fromRecords(SAMPLE_RECORDS1, "baz").copyWithOnlyVersion());
     }
 
-    final static List<ApiMessageAndVersion> RECORDS_WITH_OLD_METADATA_VERSION = unmodifiableList(Collections.singletonList(
+    static final List<ApiMessageAndVersion> RECORDS_WITH_OLD_METADATA_VERSION = unmodifiableList(Collections.singletonList(
             new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(FEATURE_NAME).
                 setFeatureLevel(IBP_3_0_IV1.featureLevel()), (short) 0)));

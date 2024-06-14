@@ -37,7 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 @Timeout(value = 40)
 public class StandardAclTest {
-    public final static List<StandardAcl> TEST_ACLS = new ArrayList<>();
+    public static final List<StandardAcl> TEST_ACLS = new ArrayList<>();
 
     static {
         TEST_ACLS.add(new StandardAcl(

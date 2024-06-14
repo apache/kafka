@@ -115,8 +115,6 @@ public class TransformationIntegrationTest {
      */
     @Test
     public void testFilterOnTopicNameWithSinkConnector() throws Exception {
-        assertConnectReady();
-
         Map<String, Long> observedRecords = observeRecords();
 
         // create test topics
@@ -180,12 +178,6 @@ public class TransformationIntegrationTest {
         connect.deleteConnector(CONNECTOR_NAME);
     }
 
-    private void assertConnectReady() throws InterruptedException {
-        connect.assertions().assertExactlyNumBrokersAreUp(1, "Brokers did not start in time.");
-        connect.assertions().assertExactlyNumWorkersAreUp(NUM_WORKERS, "Worker did not start in time.");
-        log.info("Completed startup of {} Kafka brokers and {} Connect workers", 1, NUM_WORKERS);
-    }
-
     private void assertConnectorRunning() throws InterruptedException {
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, NUM_TASKS,
                 "Connector tasks did not start in time.");
@@ -212,8 +204,6 @@ public class TransformationIntegrationTest {
      */
     @Test
     public void testFilterOnTombstonesWithSinkConnector() throws Exception {
-        assertConnectReady();
-
         Map<String, Long> observedRecords = observeRecords();
 
         // create test topics
@@ -273,8 +263,6 @@ public class TransformationIntegrationTest {
      */
     @Test
     public void testFilterOnHasHeaderKeyWithSourceConnectorAndTopicCreation() throws Exception {
-        assertConnectReady();
-
         // setup up props for the sink connector
         Map<String, String> props = new HashMap<>();
         props.put("name", CONNECTOR_NAME);

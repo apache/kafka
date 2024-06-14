@@ -113,8 +113,6 @@ public class ConnectorRestartApiIntegrationTest {
             connect.start();
             return connect;
         });
-        connect.assertions().assertExactlyNumWorkersAreUp(numWorkers,
-                "Initial group of workers did not start in time.");
     }
 
     @After

@@ -44,11 +44,11 @@ import java.util.function.Predicate;
 
 public class ClientTelemetryUtils {
 
-    private final static Logger log = LoggerFactory.getLogger(ClientTelemetryUtils.class);
+    private static final Logger log = LoggerFactory.getLogger(ClientTelemetryUtils.class);
 
-    public final static Predicate<? super MetricKeyable> SELECTOR_NO_METRICS = k -> false;
+    public static final Predicate<? super MetricKeyable> SELECTOR_NO_METRICS = k -> false;
 
-    public final static Predicate<? super MetricKeyable> SELECTOR_ALL_METRICS = k -> true;
+    public static final Predicate<? super MetricKeyable> SELECTOR_ALL_METRICS = k -> true;
 
     /**
      * Examine the response data and handle different error code accordingly:

@@ -772,7 +772,7 @@ public class KafkaStreams implements AutoCloseable {
         }
     }
 
-    final static class DelegatingStandbyUpdateListener implements StandbyUpdateListener {
+    static final class DelegatingStandbyUpdateListener implements StandbyUpdateListener {
         private StandbyUpdateListener userStandbyListener;
 
         private void throwOnFatalException(final Exception fatalUserException,

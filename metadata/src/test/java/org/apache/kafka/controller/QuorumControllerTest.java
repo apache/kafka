@@ -175,7 +175,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(value = 40)
 public class QuorumControllerTest {
-    private final static Logger log = LoggerFactory.getLogger(QuorumControllerTest.class);
+    private static final Logger log = LoggerFactory.getLogger(QuorumControllerTest.class);
 
     static final BootstrapMetadata SIMPLE_BOOTSTRAP = BootstrapMetadata.
             fromVersion(MetadataVersion.IBP_3_7_IV0, "test-provided bootstrap");
@@ -1346,7 +1346,7 @@ public class QuorumControllerTest {
         }
     }
 
-    private final static List<ApiMessageAndVersion> PRE_PRODUCTION_RECORDS =
+    private static final List<ApiMessageAndVersion> PRE_PRODUCTION_RECORDS =
             Collections.unmodifiableList(Arrays.asList(
                 new ApiMessageAndVersion(new RegisterBrokerRecord().
                         setBrokerEpoch(42).
@@ -1363,7 +1363,7 @@ public class QuorumControllerTest {
                         setTopicId(Uuid.fromString("cxBT72dK4si8Ied1iP4wBA")),
                         (short) 0)));
 
-    private final static BootstrapMetadata COMPLEX_BOOTSTRAP = BootstrapMetadata.fromRecords(
+    private static final BootstrapMetadata COMPLEX_BOOTSTRAP = BootstrapMetadata.fromRecords(
             Arrays.asList(
                 new ApiMessageAndVersion(new FeatureLevelRecord().
                         setName(MetadataVersion.FEATURE_NAME).
@@ -1775,7 +1775,7 @@ public class QuorumControllerTest {
         );
     }
 
-    private final static List<ApiMessageAndVersion> ZK_MIGRATION_RECORDS =
+    private static final List<ApiMessageAndVersion> ZK_MIGRATION_RECORDS =
         Collections.unmodifiableList(Arrays.asList(
             new ApiMessageAndVersion(new TopicRecord().
                 setName("spam").

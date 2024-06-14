@@ -387,7 +387,7 @@ public class RaftEventSimulationTest {
         }
     }
 
-    private static abstract class Event implements Comparable<Event> {
+    private abstract static class Event implements Comparable<Event> {
         final int eventId;
         final long deadlineMs;
         final Runnable action;
@@ -1235,7 +1235,7 @@ public class RaftEventSimulationTest {
 
             int correlationId = outbound.correlationId();
             Node destination = outbound.destination();
-            RaftRequest.Inbound inbound = new RaftRequest.Inbound(correlationId, outbound.data(),
+            RaftRequest.Inbound inbound = new RaftRequest.Inbound(correlationId, outbound.apiVersion(), outbound.data(),
                 cluster.time.milliseconds());
 
             if (!filters.get(destination.id()).acceptInbound(inbound))

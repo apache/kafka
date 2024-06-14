@@ -31,9 +31,9 @@ import java.util.concurrent.atomic.AtomicLong;
  * These are the metrics which are managed by the SnapshotEmitter class.
  */
 public final class SnapshotEmitterMetrics implements AutoCloseable {
-    private final static MetricName LATEST_SNAPSHOT_GENERATED_BYTES = getMetricName(
+    private static final MetricName LATEST_SNAPSHOT_GENERATED_BYTES = getMetricName(
         "SnapshotEmitter", "LatestSnapshotGeneratedBytes");
-    private final static MetricName LATEST_SNAPSHOT_GENERATED_AGE_MS = getMetricName(
+    private static final MetricName LATEST_SNAPSHOT_GENERATED_AGE_MS = getMetricName(
         "SnapshotEmitter", "LatestSnapshotGeneratedAgeMs");
 
     private final Optional<MetricsRegistry> registry;

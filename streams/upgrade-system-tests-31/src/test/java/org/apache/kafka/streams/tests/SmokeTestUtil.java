@@ -32,7 +32,7 @@ import org.apache.kafka.streams.processor.api.Record;
 
 public class SmokeTestUtil {
 
-    final static int END = Integer.MAX_VALUE;
+    static final int END = Integer.MAX_VALUE;
 
     static ProcessorSupplier<Object, Object, Void, Void> printProcessorSupplier(final String topic) {
         return printProcessorSupplier(topic, "");

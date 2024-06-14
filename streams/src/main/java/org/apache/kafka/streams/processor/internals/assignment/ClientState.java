@@ -22,6 +22,7 @@ import java.util.SortedMap;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,7 +36,6 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.emptyMap;
@@ -63,7 +63,7 @@ public class ClientState {
     private final ClientStateTask previousActiveTasks = new ClientStateTask(null, new TreeMap<>());
     private final ClientStateTask previousStandbyTasks = new ClientStateTask(null, null);
     private final ClientStateTask revokingActiveTasks = new ClientStateTask(null, new TreeMap<>());
-    private final UUID processId;
+    private final ProcessId processId;
 
     private Optional<Instant> followupRebalanceDeadline = Optional.empty();
     private int capacity;
@@ -72,7 +72,7 @@ public class ClientState {
         this(null, 0);
     }
 
-    public ClientState(final UUID processId, final Map<String, String> clientTags) {
+    public ClientState(final ProcessId processId, final Map<String, String> clientTags) {
         this(processId, 0, clientTags);
     }
 
@@ -80,11 +80,11 @@ public class ClientState {
         this(null, capacity);
     }
 
-    ClientState(final UUID processId, final int capacity) {
+    ClientState(final ProcessId processId, final int capacity) {
         this(processId, capacity, Collections.emptyMap());
     }
 
-    ClientState(final UUID processId, final int capacity, final Map<String, String> clientTags) {
+    ClientState(final ProcessId processId, final int capacity, final Map<String, String> clientTags) {
         previousStandbyTasks.setTaskIds(new TreeSet<>());
         previousActiveTasks.setTaskIds(new TreeSet<>());
         taskOffsetSums = new TreeMap<>();
@@ -109,7 +109,7 @@ public class ClientState {
                        final Map<TaskId, Long> taskLagTotals,
                        final Map<String, String> clientTags,
                        final int capacity,
-                       final UUID processId) {
+                       final ProcessId processId) {
         this.previousStandbyTasks.setTaskIds(unmodifiableSet(new TreeSet<>(previousStandbyTasks)));
         this.previousActiveTasks.setTaskIds(unmodifiableSet(new TreeSet<>(previousActiveTasks)));
         taskOffsetSums = emptyMap();
@@ -135,7 +135,7 @@ public class ClientState {
         return capacity;
     }
 
-    UUID processId() {
+    ProcessId processId() {
         return processId;
     }
 
@@ -378,7 +378,7 @@ public class ClientState {
     /**
      * Compute the lag for each stateful task, including tasks this client did not previously have.
      */
-    public void computeTaskLags(final UUID uuid, final Map<TaskId, Long> allTaskEndOffsetSums) {
+    public void computeTaskLags(final ProcessId uuid, final Map<TaskId, Long> allTaskEndOffsetSums) {
         if (!taskLagTotals.isEmpty()) {
             throw new IllegalStateException("Already computed task lags for this client.");
         }

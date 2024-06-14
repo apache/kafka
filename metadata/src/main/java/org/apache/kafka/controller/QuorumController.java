@@ -179,19 +179,19 @@ public final class QuorumController implements Controller {
     /**
      * The maximum records that the controller will write in a single batch.
      */
-    private final static int MAX_RECORDS_PER_BATCH = 10000;
+    private static final int MAX_RECORDS_PER_BATCH = 10000;
 
     /**
      * The maximum records any user-initiated operation is allowed to generate.
      *
      * For now, this is set to the maximum records in a single batch.
      */
-    final static int MAX_RECORDS_PER_USER_OP = MAX_RECORDS_PER_BATCH;
+    static final int MAX_RECORDS_PER_USER_OP = MAX_RECORDS_PER_BATCH;
 
     /**
      * A builder class which creates the QuorumController.
      */
-    static public class Builder {
+    public static class Builder {
         private final int nodeId;
         private final String clusterId;
         private FaultHandler nonFatalFaultHandler = null;
