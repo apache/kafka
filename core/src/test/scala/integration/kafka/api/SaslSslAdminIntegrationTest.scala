@@ -13,9 +13,8 @@
 package kafka.api
 
 import kafka.security.authorizer.AclAuthorizer
-import kafka.utils.TestInfoUtils
 import kafka.utils.TestUtils._
-import kafka.utils.{JaasTestUtils, TestUtils}
+import kafka.utils.{JaasTestUtils, TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.acl._
@@ -244,9 +243,9 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     // Delete all literal ACLs:
     deleted = client.deleteAcls(List(allLiteralTopicAcls).asJava).all().get().asScala.toSet
     brokers.foreach { b =>
-      TestUtils.waitAndVerifyRemovedAcl(anyAcl.entry(), b.dataPlaneRequestProcessor.authorizer.get, anyAcl.pattern())
-      TestUtils.waitAndVerifyRemovedAcl(acl2.entry(), b.dataPlaneRequestProcessor.authorizer.get, acl2.pattern())
-      TestUtils.waitAndVerifyRemovedAcl(fooAcl.entry(), b.dataPlaneRequestProcessor.authorizer.get, fooAcl.pattern())
+      Set(anyAcl, acl2, fooAcl).foreach(acl =>
+        TestUtils.waitAndVerifyRemovedAcl(acl.entry(), b.dataPlaneRequestProcessor.authorizer.get, acl.pattern())
+      )
     }
     assertEquals(Set(prefixAcl), getAcls(allTopicAcls))
 
@@ -264,10 +263,9 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     // Delete all topic ACLs:
     deleted = client.deleteAcls(List(allTopicAcls).asJava).all().get().asScala.toSet
     brokers.foreach { b =>
-      TestUtils.waitAndVerifyRemovedAcl(anyAcl.entry(), b.dataPlaneRequestProcessor.authorizer.get, anyAcl.pattern())
-      TestUtils.waitAndVerifyRemovedAcl(acl2.entry(), b.dataPlaneRequestProcessor.authorizer.get, acl2.pattern())
-      TestUtils.waitAndVerifyRemovedAcl(fooAcl.entry(), b.dataPlaneRequestProcessor.authorizer.get, fooAcl.pattern())
-      TestUtils.waitAndVerifyRemovedAcl(prefixAcl.entry(), b.dataPlaneRequestProcessor.authorizer.get, prefixAcl.pattern())
+      Set(anyAcl, acl2, fooAcl, prefixAcl).foreach(acl =>
+        TestUtils.waitAndVerifyRemovedAcl(acl.entry(), b.dataPlaneRequestProcessor.authorizer.get, acl.pattern())
+      )
     }
     assertEquals(Set(), getAcls(allTopicAcls))
   }
@@ -311,9 +309,9 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     // Delete all (legacy) topic ACLs:
     deleted = client.deleteAcls(List(legacyAllTopicAcls).asJava).all().get().asScala.toSet
     brokers.foreach { b =>
-      TestUtils.waitAndVerifyRemovedAcl(acl2.entry(), b.dataPlaneRequestProcessor.authorizer.get, acl2.pattern())
-      TestUtils.waitAndVerifyRemovedAcl(fooAcl.entry(), b.dataPlaneRequestProcessor.authorizer.get, fooAcl.pattern())
-      TestUtils.waitAndVerifyRemovedAcl(anyAcl.entry(), b.dataPlaneRequestProcessor.authorizer.get, anyAcl.pattern())
+      Set(anyAcl, acl2, fooAcl).foreach(acl =>
+        TestUtils.waitAndVerifyRemovedAcl(acl.entry(), b.dataPlaneRequestProcessor.authorizer.get, acl.pattern())
+      )
     }
     assertEquals(Set(), getAcls(legacyAllTopicAcls))
     assertEquals(Set(prefixAcl), getAcls(allTopicAcls))
