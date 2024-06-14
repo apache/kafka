@@ -30,7 +30,7 @@ import java.util.function.Supplier;
  */
 public interface Time {
 
-    Time SYSTEM = new SystemTime();
+    Time SYSTEM = SystemTime.getSystemTime();
 
     /**
      * Returns the current time in milliseconds.

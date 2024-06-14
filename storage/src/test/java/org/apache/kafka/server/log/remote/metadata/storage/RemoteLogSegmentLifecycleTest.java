@@ -23,7 +23,6 @@ import kafka.test.junit.ClusterTestExtensions;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.log.remote.storage.RemoteLogMetadataManager;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
@@ -66,7 +65,7 @@ public class RemoteLogSegmentLifecycleTest {
     private final Uuid topicId = Uuid.randomUuid();
     private final TopicPartition tp = new TopicPartition("foo", 0);
     private final TopicIdPartition topicIdPartition = new TopicIdPartition(topicId, tp);
-    private final Time time = new SystemTime();
+    private final Time time = Time.SYSTEM;
     private final RemotePartitionMetadataStore spyRemotePartitionMetadataStore = spy(new RemotePartitionMetadataStore());
     private final ClusterInstance clusterInstance;
 

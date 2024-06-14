@@ -59,10 +59,10 @@ import org.apache.kafka.streams.processor.internals.assignment.ClientState;
 import org.apache.kafka.streams.processor.internals.assignment.CopartitionedTopicsEnforcer;
 import org.apache.kafka.streams.processor.internals.assignment.DefaultTaskTopicPartition;
 import org.apache.kafka.streams.processor.internals.assignment.FallbackPriorTaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.LegacyStickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.RackUtils;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
-import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
 import org.apache.kafka.streams.processor.internals.assignment.LegacyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.DefaultTaskInfo;
@@ -861,8 +861,8 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     private LegacyTaskAssignor createTaskAssignor(final boolean lagComputationSuccessful) {
         final LegacyTaskAssignor taskAssignor = legacyTaskAssignorSupplier.get();
-        if (taskAssignor instanceof StickyTaskAssignor) {
-            // special case: to preserve pre-existing behavior, we invoke the StickyTaskAssignor
+        if (taskAssignor instanceof LegacyStickyTaskAssignor) {
+            // special case: to preserve pre-existing behavior, we invoke the LegacyStickyTaskAssignor
             // whether or not lag computation failed.
             return taskAssignor;
         } else if (lagComputationSuccessful) {

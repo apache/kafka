@@ -17,8 +17,8 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.integration.StandbyTaskCreationIntegrationTest;
+import org.apache.kafka.streams.processor.internals.assignment.LegacyStickyTaskAssignorTest;
 import org.apache.kafka.streams.processor.internals.metrics.TaskMetricsTest;
-import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignorTest;
 import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
 
@@ -35,7 +35,7 @@ import org.junit.runners.Suite;
                         GlobalStateTaskTest.class,
                         TaskManagerTest.class,
                         TaskMetricsTest.class,
-                        StickyTaskAssignorTest.class,
+                        LegacyStickyTaskAssignorTest.class,
                         StreamsPartitionAssignorTest.class,
                         StandbyTaskCreationIntegrationTest.class,
                     })
