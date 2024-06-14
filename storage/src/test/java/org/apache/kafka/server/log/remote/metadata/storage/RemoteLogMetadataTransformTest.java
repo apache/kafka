@@ -19,7 +19,6 @@ package org.apache.kafka.server.log.remote.metadata.storage;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteLogSegmentMetadataTransform;
@@ -41,7 +40,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class RemoteLogMetadataTransformTest {
     private static final TopicIdPartition TP0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
-    private final Time time = new SystemTime();
+    private final Time time = Time.SYSTEM;
 
     @Test
     public void testRemoteLogSegmentMetadataTransform() {

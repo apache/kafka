@@ -19,7 +19,6 @@ package org.apache.kafka.server.log.remote.metadata.storage;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteLogMetadataSerde;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
@@ -44,7 +43,7 @@ public class RemoteLogMetadataSerdeTest {
 
     public static final String TOPIC = "foo";
     private static final TopicIdPartition TP0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition(TOPIC, 0));
-    private final Time time = new SystemTime();
+    private final Time time = Time.SYSTEM;
 
     @Test
     public void testRemoteLogSegmentMetadataSerde() {

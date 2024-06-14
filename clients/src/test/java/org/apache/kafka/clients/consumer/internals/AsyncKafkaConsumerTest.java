@@ -158,7 +158,12 @@ public class AsyncKafkaConsumerTest {
     public void resetAll() {
         backgroundEventQueue.clear();
         if (consumer != null) {
-            consumer.close(Duration.ZERO);
+            try {
+                consumer.close(Duration.ZERO);
+            } catch (Exception e) {
+                // best effort to clean up after each test, but may throw (ex. if callbacks where
+                // throwing errors)
+            }
         }
         consumer = null;
         Mockito.framework().clearInlineMocks();
@@ -832,8 +837,8 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testFailedPartitionRevocationOnClose() {
-        // If rebalance listener failed to execute during close, we will skip sending leave group and proceed with
-        // closing the consumer.
+        // If rebalance listener failed to execute during close, we still send the leave group,
+        // and proceed with closing the consumer.
         ConsumerRebalanceListener listener = mock(ConsumerRebalanceListener.class);
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
         consumer = newConsumer(
@@ -848,7 +853,7 @@ public class AsyncKafkaConsumerTest {
         subscriptions.assignFromSubscribed(singleton(tp));
         doThrow(new KafkaException()).when(listener).onPartitionsRevoked(eq(singleton(tp)));
         assertThrows(KafkaException.class, () -> consumer.close(Duration.ZERO));
-        verify(applicationEventHandler, never()).addAndGet(any(LeaveOnCloseEvent.class));
+        verify(applicationEventHandler).addAndGet(any(LeaveOnCloseEvent.class));
         verify(listener).onPartitionsRevoked(eq(singleton(tp)));
         assertEquals(emptySet(), subscriptions.assignedPartitions());
     }
