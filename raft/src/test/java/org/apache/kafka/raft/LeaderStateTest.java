@@ -780,7 +780,7 @@ public class LeaderStateTest {
 
         // Adding 1 new voter to the voter set
         Set<Integer> voterSetWithNode3 = mkSet(localId, node1, node2, node3);
-        state.updateLocalState(new LogOffsetMetadata(1L), voterSetWithNode3);
+        state.updateLocalState(new LogOffsetMetadata(1L), toMap(voterSetWithNode3));
 
         time.sleep(checkQuorumTimeoutMs / 2);
         // received fetch request from 1 voter node, the timer should not be reset because the majority should be 3
@@ -793,7 +793,7 @@ public class LeaderStateTest {
 
         // removing leader from the voter set
         Set<Integer> voterSetWithoutLeader = mkSet(node1, node2, node3);
-        state.updateLocalState(new LogOffsetMetadata(1L), voterSetWithoutLeader);
+        state.updateLocalState(new LogOffsetMetadata(1L), toMap(voterSetWithoutLeader));
 
         time.sleep(checkQuorumTimeoutMs / 2);
         // received fetch request from 1 voter, the timer should not be reset.
