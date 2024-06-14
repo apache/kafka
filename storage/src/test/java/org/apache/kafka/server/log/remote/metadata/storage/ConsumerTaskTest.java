@@ -91,7 +91,7 @@ public class ConsumerTaskTest {
     @AfterEach
     public void afterEach() {
         assertDoesNotThrow(() -> consumerTask.close(), "Close method threw exception");
-        consumerTask.ingestRecords();
+        assertDoesNotThrow(() -> consumerTask.closeConsumer(), "CloseConsumer method threw exception");
         assertTrue(consumer.closed());
     }
 
@@ -101,12 +101,18 @@ public class ConsumerTaskTest {
     @Test
     public void testCloseOnNoAssignment() {
         assertDoesNotThrow(() -> consumerTask.close(), "Close method threw exception");
+        assertDoesNotThrow(() -> consumerTask.closeConsumer(), "CloseConsumer method threw exception");
     }
 
     @Test
     public void testIdempotentClose() {
+        // Go through the closure process
         consumerTask.close();
+        consumerTask.closeConsumer();
+
+        // Go through the closure process again
         consumerTask.close();
+        consumerTask.closeConsumer();
     }
 
     @Test
@@ -148,11 +154,10 @@ public class ConsumerTaskTest {
         consumerTask.ingestRecords();
 
         final TopicIdPartition tpId = allPartitions.get(0);
-        assertTrue(() -> consumerTask.isUserPartitionAssigned(tpId), "Partition " + tpId + " has not been assigned");
+        assertTrue(consumerTask.isUserPartitionAssigned(tpId), "Partition " + tpId + " has not been assigned");
         addRecord(consumer, partitioner.metadataPartition(tpId), tpId, 0);
         consumerTask.ingestRecords();
-        assertTrue(() -> consumerTask.readOffsetForMetadataPartition(partitioner.metadataPartition(tpId)).isPresent(),
-                "Couldn't read record");
+        assertTrue(consumerTask.readOffsetForMetadataPartition(partitioner.metadataPartition(tpId)).isPresent());
 
         final Set<TopicIdPartition> removePartitions = Collections.singleton(tpId);
         consumerTask.removeAssignmentsForPartitions(removePartitions);
@@ -162,7 +167,7 @@ public class ConsumerTaskTest {
                     "Partition " + idPartition + " has not been removed");
         }
         for (TopicIdPartition removePartition : removePartitions) {
-            assertTrue(() -> handler.isPartitionCleared.containsKey(removePartition),
+            assertTrue(handler.isPartitionCleared.containsKey(removePartition),
                     "Partition " + removePartition + " has not been cleared");
         }
     }
@@ -231,7 +236,7 @@ public class ConsumerTaskTest {
         addRecord(consumer, metadataPartition, tpId0, 0);
         addRecord(consumer, metadataPartition, tpId0, 1);
         consumerTask.ingestRecords();
-        assertTrue(() -> consumerTask.readOffsetForMetadataPartition(metadataPartition).equals(Optional.of(1L)), "Partition offset did not reach expected value of 1");
+        assertEquals(Optional.of(1L), consumerTask.readOffsetForMetadataPartition(metadataPartition), "Partition offset did not reach expected value of 1");
         assertEquals(2, handler.metadataCounter);
 
         // should only read the tpId1 records
@@ -240,13 +245,13 @@ public class ConsumerTaskTest {
 
         addRecord(consumer, metadataPartition, tpId1, 2);
         consumerTask.ingestRecords();
-        assertTrue(() -> consumerTask.readOffsetForMetadataPartition(metadataPartition).equals(Optional.of(2L)), "Partition offset did not reach expected value of 2");
+        assertEquals(Optional.of(2L), consumerTask.readOffsetForMetadataPartition(metadataPartition), "Partition offset did not reach expected value of 2");
         assertEquals(3, handler.metadataCounter);
 
         // shouldn't read tpId2 records because it's not assigned
         addRecord(consumer, metadataPartition, tpId2, 3);
         consumerTask.ingestRecords();
-        assertTrue(() -> consumerTask.readOffsetForMetadataPartition(metadataPartition).equals(Optional.of(3L)), "Partition offset did not reach expected value of 3");
+        assertEquals(Optional.of(3L), consumerTask.readOffsetForMetadataPartition(metadataPartition), "Partition offset did not reach expected value of 3");
         assertEquals(3, handler.metadataCounter);
     }
 
@@ -272,7 +277,7 @@ public class ConsumerTaskTest {
         addRecord(consumer, metadataPartition, tpId1, 0);
         addRecord(consumer, metadataPartition, tpId0, 1);
         consumerTask.ingestRecords();
-        assertTrue(() -> consumerTask.readOffsetForMetadataPartition(metadataPartition).equals(Optional.of(1L)), "Couldn't read record");
+        assertEquals(Optional.of(1L), consumerTask.readOffsetForMetadataPartition(metadataPartition));
         // Only one record is processed, tpId1 record is skipped as unassigned
         // but read offset is 1 e.g., record for tpId1 has been read by consumer
         assertEquals(1, handler.metadataCounter);
@@ -291,9 +296,9 @@ public class ConsumerTaskTest {
         addRecord(consumer, metadataPartition, tpId0, 1);
         consumerTask.ingestRecords();
         // Waiting for all metadata records to be re-read from the first metadata partition number
-        assertTrue(() -> consumerTask.readOffsetForMetadataPartition(metadataPartition).equals(Optional.of(1L)), "Couldn't read record");
+        assertEquals(Optional.of(1L), consumerTask.readOffsetForMetadataPartition(metadataPartition));
         // Verifying that all the metadata records from the first metadata partition were processed properly.
-        assertTrue(() -> handler.metadataCounter == 2, "Couldn't read record");
+        assertEquals(2, handler.metadataCounter);
     }
 
     @Test
@@ -308,14 +313,13 @@ public class ConsumerTaskTest {
         assertFalse(handler.isPartitionInitialized.containsKey(tpId));
         IntStream.range(0, 5).forEach(offset -> addRecord(consumer, metadataPartition, tpId, offset));
         consumerTask.ingestRecords();
-        assertTrue(() -> consumerTask.readOffsetForMetadataPartition(metadataPartition).equals(Optional.of(4L)), "Couldn't read record");
+        assertEquals(Optional.of(4L), consumerTask.readOffsetForMetadataPartition(metadataPartition));
         assertTrue(handler.isPartitionInitialized.get(tpId));
     }
 
     @ParameterizedTest
     @CsvSource(value = {"0, 0", "500, 500"})
-    public void testMaybeMarkUserPartitionAsReadyWhenTopicIsEmpty(long beginOffset,
-                                                                  long endOffset) {
+    public void testMaybeMarkUserPartitionAsReadyWhenTopicIsEmpty(long beginOffset, long endOffset) {
         final TopicIdPartition tpId = getIdPartitions("world", 1).get(0);
         final int metadataPartition = partitioner.metadataPartition(tpId);
         consumer.updateBeginningOffsets(Collections.singletonMap(toRemoteLogPartition(metadataPartition), beginOffset));
@@ -324,8 +328,7 @@ public class ConsumerTaskTest {
         consumerTask.ingestRecords();
 
         assertTrue(consumerTask.isMetadataPartitionAssigned(metadataPartition));
-        assertTrue(() -> handler.isPartitionInitialized.containsKey(tpId),
-            "should have initialized the partition");
+        assertTrue(handler.isPartitionInitialized.containsKey(tpId), "Should have initialized the partition");
         assertFalse(consumerTask.readOffsetForMetadataPartition(metadataPartition).isPresent());
     }
 
@@ -370,7 +373,7 @@ public class ConsumerTaskTest {
 
         assertTrue(consumerTask.isMetadataPartitionAssigned(metadataPartition));
 
-        consumer.setPollException(new LeaderNotAvailableException("leader not available!"));
+        consumer.setPollException(new LeaderNotAvailableException("Leader not available!"));
         consumerTask.ingestRecords();
         addRecord(consumer, metadataPartition, tpId, 0);
         consumerTask.ingestRecords();
@@ -379,7 +382,7 @@ public class ConsumerTaskTest {
         addRecord(consumer, metadataPartition, tpId, 1);
         consumerTask.ingestRecords();
 
-        assertTrue(() -> consumerTask.readOffsetForMetadataPartition(metadataPartition).equals(Optional.of(1L)), "Couldn't read record");
+        assertEquals(Optional.of(1L), consumerTask.readOffsetForMetadataPartition(metadataPartition));
         assertEquals(2, handler.metadataCounter);
     }
 
@@ -394,8 +397,10 @@ public class ConsumerTaskTest {
         assertTrue(consumerTask.isMetadataPartitionAssigned(metadataPartition));
 
         consumer.setPollException(new AuthorizationException("Unauthorized to read the topic!"));
-        consumerTask.ingestRecords();
-        assertTrue(() -> consumer.closed(), "Should close the consume on non-retriable error");
+        // Due to the exception set up earlier, calling run() will trigger an exception and close the Consumer, instead of resulting in an infinite loop
+        // The purpose of calling run() is to validate the capability of ConsumerTask to shut down automatically
+        consumerTask.run();
+        assertTrue(consumer.closed(), "Should close the consume on non-retriable error");
     }
 
     private void addRecord(final MockConsumer<byte[], byte[]> consumer,
