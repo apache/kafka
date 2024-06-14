@@ -25,7 +25,6 @@ import java.util.stream.Collectors;
  * This class contains the parameters for {@link Persister#initializeState(InitializeShareGroupStateParameters)}.
  */
 public class InitializeShareGroupStateParameters implements PersisterParameters {
-
     private final GroupTopicPartitionData<PartitionStateData> groupTopicPartitionData;
 
     private InitializeShareGroupStateParameters(GroupTopicPartitionData<PartitionStateData> groupTopicPartitionData) {

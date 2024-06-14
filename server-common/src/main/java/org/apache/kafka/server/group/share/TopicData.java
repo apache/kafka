@@ -36,6 +36,14 @@ public class TopicData<P extends PartitionInfoData> {
         this.partitions = partitions;
     }
 
+    public Uuid topicId() {
+        return topicId;
+    }
+
+    public List<P> partitions() {
+        return partitions;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -47,14 +55,6 @@ public class TopicData<P extends PartitionInfoData> {
     @Override
     public int hashCode() {
         return Objects.hash(topicId, partitions);
-    }
-
-    public Uuid topicId() {
-        return topicId;
-    }
-
-    public List<P> partitions() {
-        return partitions;
     }
 
     @Override

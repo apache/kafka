@@ -25,7 +25,8 @@ import java.util.Objects;
  * reflect the ways in which a subset of the data can be accessed for different purposes.
  */
 public class PartitionData implements
-        PartitionIdData, PartitionStateData, PartitionErrorData, PartitionStateErrorData, PartitionStateBatchData, PartitionIdLeaderEpochData, PartitionAllData {
+        PartitionIdData, PartitionStateData, PartitionErrorData, PartitionStateErrorData,
+        PartitionStateBatchData, PartitionIdLeaderEpochData, PartitionAllData {
     private final int partition;
     private final int stateEpoch;
     private final long startOffset;
@@ -34,7 +35,8 @@ public class PartitionData implements
     private final int leaderEpoch;
     private final List<PersisterStateBatch> stateBatches;
 
-    public PartitionData(int partition, int stateEpoch, long startOffset, short errorCode, String errorMessage, int leaderEpoch, List<PersisterStateBatch> stateBatches) {
+    public PartitionData(int partition, int stateEpoch, long startOffset, short errorCode,
+                         String errorMessage, int leaderEpoch, List<PersisterStateBatch> stateBatches) {
         this.partition = partition;
         this.stateEpoch = stateEpoch;
         this.startOffset = startOffset;
@@ -42,25 +44,6 @@ public class PartitionData implements
         this.leaderEpoch = leaderEpoch;
         this.errorMessage = errorMessage;
         this.stateBatches = stateBatches;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        PartitionData that = (PartitionData) o;
-        return Objects.equals(partition, that.partition) &&
-                Objects.equals(stateEpoch, that.stateEpoch) &&
-                Objects.equals(startOffset, that.startOffset) &&
-                Objects.equals(errorCode, that.errorCode) &&
-                Objects.equals(errorMessage, that.errorMessage) &&
-                Objects.equals(leaderEpoch, that.leaderEpoch) &&
-                Objects.equals(stateBatches, that.stateBatches);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(partition, stateEpoch, startOffset, errorCode, leaderEpoch, errorMessage, stateBatches);
     }
 
     public int partition() {
@@ -89,6 +72,25 @@ public class PartitionData implements
 
     public List<PersisterStateBatch> stateBatches() {
         return stateBatches;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        PartitionData that = (PartitionData) o;
+        return Objects.equals(partition, that.partition) &&
+                Objects.equals(stateEpoch, that.stateEpoch) &&
+                Objects.equals(startOffset, that.startOffset) &&
+                Objects.equals(errorCode, that.errorCode) &&
+                Objects.equals(errorMessage, that.errorMessage) &&
+                Objects.equals(leaderEpoch, that.leaderEpoch) &&
+                Objects.equals(stateBatches, that.stateBatches);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(partition, stateEpoch, startOffset, errorCode, leaderEpoch, errorMessage, stateBatches);
     }
 
     public static class Builder {

@@ -25,7 +25,6 @@ import java.util.List;
  * This is a factory class for creating instances of {@link PartitionData}.
  */
 public class PartitionFactory {
-
     public static final int DEFAULT_STATE_EPOCH = 0;
     public static final int DEFAULT_START_OFFSET = 0;
     public static final short DEFAULT_ERROR_CODE = Errors.NONE.code();

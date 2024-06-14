@@ -25,7 +25,6 @@ import java.util.stream.Collectors;
  * This class contains the parameters for {@link Persister#readState(ReadShareGroupStateParameters)}.
  */
 public class ReadShareGroupStateParameters implements PersisterParameters {
-
     private final GroupTopicPartitionData<PartitionIdLeaderEpochData> groupTopicPartitionData;
 
     private ReadShareGroupStateParameters(GroupTopicPartitionData<PartitionIdLeaderEpochData> groupTopicPartitionData) {
@@ -37,15 +36,6 @@ public class ReadShareGroupStateParameters implements PersisterParameters {
     }
 
     public static ReadShareGroupStateParameters from(ReadShareGroupStateRequestData data) {
-//    {
-//      groupId,
-//      topics[
-//          topicId,
-//          partitions [
-//              partitionId
-//          ]
-//      ]
-//    }
         return new Builder()
                 .setGroupTopicPartitionData(new GroupTopicPartitionData<>(data.groupId(), data.topics().stream()
                         .map(readStateData -> new TopicData<>(readStateData.topicId(),

@@ -32,40 +32,40 @@ public interface Persister {
     /**
      * Initialize the share partition state.
      *
-     * @param request InitializeShareGroupStateParameters
-     * @return InitializeShareGroupStateResult
+     * @param request Request parameters
+     * @return A {@link CompletableFuture} that completes with the result.
      */
     CompletableFuture<InitializeShareGroupStateResult> initializeState(InitializeShareGroupStateParameters request) throws IllegalArgumentException;
 
     /**
      * Read share-partition state.
      *
-     * @param request ReadShareGroupStateParameters
-     * @return ReadShareGroupStateResult
+     * @param request Request parameters
+     * @return A {@link CompletableFuture} that completes with the result.
      */
     CompletableFuture<ReadShareGroupStateResult> readState(ReadShareGroupStateParameters request) throws IllegalArgumentException;
 
     /**
      * Write share-partition state.
      *
-     * @param request WriteShareGroupStateParameters
-     * @return WriteShareGroupStateResult
+     * @param request Request parameters
+     * @return A {@link CompletableFuture} that completes with the result.
      */
     CompletableFuture<WriteShareGroupStateResult> writeState(WriteShareGroupStateParameters request) throws IllegalArgumentException;
 
     /**
      * Delete share-partition state.
      *
-     * @param request DeleteShareGroupStateParameters
-     * @return DeleteShareGroupStateResult
+     * @param request Request parameters
+     * @return A {@link CompletableFuture} that completes with the result.
      */
     CompletableFuture<DeleteShareGroupStateResult> deleteState(DeleteShareGroupStateParameters request) throws IllegalArgumentException;
 
     /**
      * Read the offset information from share-partition state.
      *
-     * @param request ReadShareGroupStateSummaryResult
-     * @return ReadShareGroupStateSummaryParameters
+     * @param request Request parameters
+     * @return A {@link CompletableFuture} that completes with the result.
      */
     CompletableFuture<ReadShareGroupStateSummaryResult> readSummary(ReadShareGroupStateSummaryParameters request) throws IllegalArgumentException;
 
