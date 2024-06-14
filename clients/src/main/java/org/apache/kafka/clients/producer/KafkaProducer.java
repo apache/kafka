@@ -1180,8 +1180,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 // Rethrow with original maxWaitMs to prevent logging exception with remainingWaitMs
                 final String errorMessage = String.format("Topic %s not present in metadata after %d ms.",
                         topic, maxWaitMs);
-                if (metadata.getError(topic) == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
-                    throw new UnknownTopicOrPartitionException(errorMessage);
+                if (metadata.getError(topic) != null) {
+                    throw new TimeoutException(errorMessage, metadata.getError(topic).exception());
                 }
                 throw new TimeoutException(errorMessage);
             }
@@ -1193,8 +1193,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                                 topic, maxWaitMs) :
                         String.format("Partition %d of topic %s with partition count %d is not present in metadata after %d ms.",
                                 partition, topic, partitionsCount, maxWaitMs);
-                if (metadata.getError(topic) == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
-                    throw new UnknownTopicOrPartitionException(errorMessage);
+                if (metadata.getError(topic) != null) {
+                    throw new TimeoutException(errorMessage, metadata.getError(topic).exception());
                 }
                 throw new TimeoutException(errorMessage);
             }

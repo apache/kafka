@@ -953,7 +953,8 @@ public class KafkaProducerTest {
                 }
             });
             t.start();
-            assertThrows(UnknownTopicOrPartitionException.class, () -> producer.partitionsFor(topic));
+            Throwable throwable = assertThrows(TimeoutException.class, () -> producer.partitionsFor(topic));
+            assertEquals(UnknownTopicOrPartitionException.class, throwable.getCause().getClass());
             running.set(false);
             t.join();
         }
