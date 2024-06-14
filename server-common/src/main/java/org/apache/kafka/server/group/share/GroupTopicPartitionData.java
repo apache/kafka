@@ -21,62 +21,62 @@ import java.util.List;
 import java.util.Objects;
 
 public class GroupTopicPartitionData<P extends PartitionInfoData> {
-  private final String groupId;
-  private final List<TopicData<P>> topicsData;
+    private final String groupId;
+    private final List<TopicData<P>> topicsData;
 
-  public GroupTopicPartitionData(String groupId, List<TopicData<P>> topicsData) {
-    this.groupId = groupId;
-    this.topicsData = topicsData;
-  }
-
-  public String groupId() {
-    return groupId;
-  }
-
-  public List<TopicData<P>> topicsData() {
-    return topicsData;
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) return true;
-    if (o == null || getClass() != o.getClass()) return false;
-    GroupTopicPartitionData<?> that = (GroupTopicPartitionData<?>) o;
-    return Objects.equals(groupId, that.groupId) && Objects.equals(topicsData, that.topicsData);
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(groupId, topicsData);
-  }
-
-  public static class Builder<P extends PartitionInfoData> {
-    private String groupId;
-    private List<TopicData<P>> topicsData;
-
-    public Builder<P> setGroupId(String groupId) {
-      this.groupId = groupId;
-      return this;
+    public GroupTopicPartitionData(String groupId, List<TopicData<P>> topicsData) {
+        this.groupId = groupId;
+        this.topicsData = topicsData;
     }
 
-    public Builder<P> setTopicsData(List<TopicData<P>> topicsData) {
-      this.topicsData = topicsData;
-      return this;
+    public String groupId() {
+        return groupId;
     }
 
-    public Builder<P> setGroupTopicPartition(GroupTopicPartitionData<P> groupTopicPartitionData) {
-      this.groupId = groupTopicPartitionData.groupId();
-      this.topicsData = groupTopicPartitionData.topicsData();
-      return this;
+    public List<TopicData<P>> topicsData() {
+        return topicsData;
     }
 
-    public GroupTopicPartitionData<P> build() {
-      return new GroupTopicPartitionData<P>(this.groupId, this.topicsData);
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        GroupTopicPartitionData<?> that = (GroupTopicPartitionData<?>) o;
+        return Objects.equals(groupId, that.groupId) && Objects.equals(topicsData, that.topicsData);
     }
-  }
 
-  @Override
-  public String toString() {
-    return "GroupTopicPartitionData(" + groupId + ", " + topicsData + ")";
-  }
+    @Override
+    public int hashCode() {
+        return Objects.hash(groupId, topicsData);
+    }
+
+    public static class Builder<P extends PartitionInfoData> {
+        private String groupId;
+        private List<TopicData<P>> topicsData;
+
+        public Builder<P> setGroupId(String groupId) {
+            this.groupId = groupId;
+            return this;
+        }
+
+        public Builder<P> setTopicsData(List<TopicData<P>> topicsData) {
+            this.topicsData = topicsData;
+            return this;
+        }
+
+        public Builder<P> setGroupTopicPartition(GroupTopicPartitionData<P> groupTopicPartitionData) {
+            this.groupId = groupTopicPartitionData.groupId();
+            this.topicsData = groupTopicPartitionData.topicsData();
+            return this;
+        }
+
+        public GroupTopicPartitionData<P> build() {
+            return new GroupTopicPartitionData<P>(this.groupId, this.topicsData);
+        }
+    }
+
+    @Override
+    public String toString() {
+        return "GroupTopicPartitionData(" + groupId + ", " + topicsData + ")";
+    }
 }

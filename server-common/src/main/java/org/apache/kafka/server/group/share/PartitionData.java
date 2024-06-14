@@ -21,131 +21,131 @@ import java.util.List;
 import java.util.Objects;
 
 public class PartitionData implements
-    PartitionIdData, PartitionStateData, PartitionErrorData, PartitionStateErrorData, PartitionStateBatchData, PartitionIdLeaderEpochData, PartitionAllData {
-  private final int partition;
-  private final int stateEpoch;
-  private final long startOffset;
-  private final short errorCode;
-  private final String errorMessage;
-  private final int leaderEpoch;
-  private final List<PersisterStateBatch> stateBatches;
+        PartitionIdData, PartitionStateData, PartitionErrorData, PartitionStateErrorData, PartitionStateBatchData, PartitionIdLeaderEpochData, PartitionAllData {
+    private final int partition;
+    private final int stateEpoch;
+    private final long startOffset;
+    private final short errorCode;
+    private final String errorMessage;
+    private final int leaderEpoch;
+    private final List<PersisterStateBatch> stateBatches;
 
-  public PartitionData(int partition, int stateEpoch, long startOffset, short errorCode, String errorMessage, int leaderEpoch, List<PersisterStateBatch> stateBatches) {
-    this.partition = partition;
-    this.stateEpoch = stateEpoch;
-    this.startOffset = startOffset;
-    this.errorCode = errorCode;
-    this.leaderEpoch = leaderEpoch;
-    this.errorMessage = errorMessage;
-    this.stateBatches = stateBatches;
-  }
-
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) return true;
-    if (o == null || getClass() != o.getClass()) return false;
-    PartitionData that = (PartitionData) o;
-    return Objects.equals(partition, that.partition) &&
-        Objects.equals(stateEpoch, that.stateEpoch) &&
-        Objects.equals(startOffset, that.startOffset) &&
-        Objects.equals(errorCode, that.errorCode) &&
-        Objects.equals(errorMessage, that.errorMessage) &&
-        Objects.equals(leaderEpoch, that.leaderEpoch) &&
-        Objects.equals(stateBatches, that.stateBatches);
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(partition, stateEpoch, startOffset, errorCode, leaderEpoch, errorMessage, stateBatches);
-  }
-
-  public int partition() {
-    return partition;
-  }
-
-  public int stateEpoch() {
-    return stateEpoch;
-  }
-
-  public long startOffset() {
-    return startOffset;
-  }
-
-  public short errorCode() {
-    return errorCode;
-  }
-
-  public String errorMessage() {
-    return errorMessage;
-  }
-
-  public int leaderEpoch() {
-    return leaderEpoch;
-  }
-
-  public List<PersisterStateBatch> stateBatches() {
-    return stateBatches;
-  }
-
-  public static class Builder {
-    private int partition;
-    private int stateEpoch;
-    private long startOffset;
-    private short errorCode;
-    private String errorMessage;
-    private int leaderEpoch;
-    private List<PersisterStateBatch> stateBatches;
-
-    public Builder setPartition(int partition) {
-      this.partition = partition;
-      return this;
+    public PartitionData(int partition, int stateEpoch, long startOffset, short errorCode, String errorMessage, int leaderEpoch, List<PersisterStateBatch> stateBatches) {
+        this.partition = partition;
+        this.stateEpoch = stateEpoch;
+        this.startOffset = startOffset;
+        this.errorCode = errorCode;
+        this.leaderEpoch = leaderEpoch;
+        this.errorMessage = errorMessage;
+        this.stateBatches = stateBatches;
     }
 
-    public Builder setStateEpoch(int stateEpoch) {
-      this.stateEpoch = stateEpoch;
-      return this;
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        PartitionData that = (PartitionData) o;
+        return Objects.equals(partition, that.partition) &&
+                Objects.equals(stateEpoch, that.stateEpoch) &&
+                Objects.equals(startOffset, that.startOffset) &&
+                Objects.equals(errorCode, that.errorCode) &&
+                Objects.equals(errorMessage, that.errorMessage) &&
+                Objects.equals(leaderEpoch, that.leaderEpoch) &&
+                Objects.equals(stateBatches, that.stateBatches);
     }
 
-    public Builder setStartOffset(long startOffset) {
-      this.startOffset = startOffset;
-      return this;
+    @Override
+    public int hashCode() {
+        return Objects.hash(partition, stateEpoch, startOffset, errorCode, leaderEpoch, errorMessage, stateBatches);
     }
 
-    public Builder setErrorCode(short errorCode) {
-      this.errorCode = errorCode;
-      return this;
+    public int partition() {
+        return partition;
     }
 
-    public Builder setErrorMessage(String errorMessage) {
-      this.errorMessage = errorMessage;
-      return this;
+    public int stateEpoch() {
+        return stateEpoch;
     }
 
-    public Builder setLeaderEpoch(int leaderEpoch) {
-      this.leaderEpoch = leaderEpoch;
-      return this;
+    public long startOffset() {
+        return startOffset;
     }
 
-    public Builder setStateBatches(List<PersisterStateBatch> stateBatches) {
-      this.stateBatches = stateBatches;
-      return this;
+    public short errorCode() {
+        return errorCode;
     }
 
-    public PartitionData build() {
-      return new PartitionData(partition, stateEpoch, startOffset, errorCode, errorMessage, leaderEpoch, stateBatches);
+    public String errorMessage() {
+        return errorMessage;
     }
-  }
 
-  @Override
-  public String toString() {
-    return "PartitionData(" +
-        "partition=" + partition + "," +
-        "stateEpoch=" + stateEpoch + "," +
-        "startOffset=" + startOffset + "," +
-        "errorCode=" + errorCode + "," +
-        "errorMessage=" + errorMessage + "," +
-        "leaderEpoch=" + leaderEpoch + "," +
-        "stateBatches=" + stateBatches +
-        ")";
-  }
+    public int leaderEpoch() {
+        return leaderEpoch;
+    }
+
+    public List<PersisterStateBatch> stateBatches() {
+        return stateBatches;
+    }
+
+    public static class Builder {
+        private int partition;
+        private int stateEpoch;
+        private long startOffset;
+        private short errorCode;
+        private String errorMessage;
+        private int leaderEpoch;
+        private List<PersisterStateBatch> stateBatches;
+
+        public Builder setPartition(int partition) {
+            this.partition = partition;
+            return this;
+        }
+
+        public Builder setStateEpoch(int stateEpoch) {
+            this.stateEpoch = stateEpoch;
+            return this;
+        }
+
+        public Builder setStartOffset(long startOffset) {
+            this.startOffset = startOffset;
+            return this;
+        }
+
+        public Builder setErrorCode(short errorCode) {
+            this.errorCode = errorCode;
+            return this;
+        }
+
+        public Builder setErrorMessage(String errorMessage) {
+            this.errorMessage = errorMessage;
+            return this;
+        }
+
+        public Builder setLeaderEpoch(int leaderEpoch) {
+            this.leaderEpoch = leaderEpoch;
+            return this;
+        }
+
+        public Builder setStateBatches(List<PersisterStateBatch> stateBatches) {
+            this.stateBatches = stateBatches;
+            return this;
+        }
+
+        public PartitionData build() {
+            return new PartitionData(partition, stateEpoch, startOffset, errorCode, errorMessage, leaderEpoch, stateBatches);
+        }
+    }
+
+    @Override
+    public String toString() {
+        return "PartitionData(" +
+                "partition=" + partition + "," +
+                "stateEpoch=" + stateEpoch + "," +
+                "startOffset=" + startOffset + "," +
+                "errorCode=" + errorCode + "," +
+                "errorMessage=" + errorMessage + "," +
+                "leaderEpoch=" + leaderEpoch + "," +
+                "stateBatches=" + stateBatches +
+                ")";
+    }
 }

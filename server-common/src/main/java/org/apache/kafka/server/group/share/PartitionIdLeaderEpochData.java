@@ -18,5 +18,5 @@
 package org.apache.kafka.server.group.share;
 
 public interface PartitionIdLeaderEpochData extends PartitionInfoData, PartitionIdData {
-  int leaderEpoch();
+    int leaderEpoch();
 }

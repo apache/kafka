@@ -20,11 +20,11 @@ package org.apache.kafka.server.group.share;
 import java.util.List;
 
 public interface PartitionStateBatchData extends PartitionInfoData, PartitionIdData {
-  int stateEpoch();
+    int stateEpoch();
 
-  long startOffset();
+    long startOffset();
 
-  int leaderEpoch();
+    int leaderEpoch();
 
-  List<PersisterStateBatch> stateBatches();
+    List<PersisterStateBatch> stateBatches();
 }

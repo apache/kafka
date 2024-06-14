@@ -23,70 +23,70 @@ import org.apache.kafka.common.message.WriteShareGroupStateRequestData;
 import java.util.Objects;
 
 public class PersisterStateBatch {
-  private final long firstOffset;
-  private final long lastOffset;
-  private final byte deliveryState;
-  private final short deliveryCount;
+    private final long firstOffset;
+    private final long lastOffset;
+    private final byte deliveryState;
+    private final short deliveryCount;
 
-  public PersisterStateBatch(long firstOffset, long lastOffset, byte deliveryState, short deliveryCount) {
-    this.firstOffset = firstOffset;
-    this.lastOffset = lastOffset;
-    this.deliveryState = deliveryState;
-    this.deliveryCount = deliveryCount;
-  }
+    public PersisterStateBatch(long firstOffset, long lastOffset, byte deliveryState, short deliveryCount) {
+        this.firstOffset = firstOffset;
+        this.lastOffset = lastOffset;
+        this.deliveryState = deliveryState;
+        this.deliveryCount = deliveryCount;
+    }
 
-  public long firstOffset() {
-    return firstOffset;
-  }
+    public long firstOffset() {
+        return firstOffset;
+    }
 
-  public long lastOffset() {
-    return lastOffset;
-  }
+    public long lastOffset() {
+        return lastOffset;
+    }
 
-  public byte deliveryState() {
-    return deliveryState;
-  }
+    public byte deliveryState() {
+        return deliveryState;
+    }
 
-  public short deliveryCount() {
-    return deliveryCount;
-  }
+    public short deliveryCount() {
+        return deliveryCount;
+    }
 
-  public static PersisterStateBatch from(ReadShareGroupStateResponseData.StateBatch batch) {
-    return new PersisterStateBatch(
-        batch.firstOffset(),
-        batch.lastOffset(),
-        batch.deliveryState(),
-        batch.deliveryCount());
-  }
+    public static PersisterStateBatch from(ReadShareGroupStateResponseData.StateBatch batch) {
+        return new PersisterStateBatch(
+                batch.firstOffset(),
+                batch.lastOffset(),
+                batch.deliveryState(),
+                batch.deliveryCount());
+    }
 
-  public static PersisterStateBatch from(WriteShareGroupStateRequestData.StateBatch batch) {
-    return new PersisterStateBatch(
-        batch.firstOffset(),
-        batch.lastOffset(),
-        batch.deliveryState(),
-        batch.deliveryCount());
-  }
+    public static PersisterStateBatch from(WriteShareGroupStateRequestData.StateBatch batch) {
+        return new PersisterStateBatch(
+                batch.firstOffset(),
+                batch.lastOffset(),
+                batch.deliveryState(),
+                batch.deliveryCount());
+    }
 
-  @Override
-  public boolean equals(Object o) {
-    if (this == o) return true;
-    if (o == null || getClass() != o.getClass()) return false;
-    PersisterStateBatch that = (PersisterStateBatch) o;
-    return firstOffset == that.firstOffset && lastOffset == that.lastOffset && deliveryState == that.deliveryState && deliveryCount == that.deliveryCount;
-  }
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        PersisterStateBatch that = (PersisterStateBatch) o;
+        return firstOffset == that.firstOffset && lastOffset == that.lastOffset && deliveryState == that.deliveryState && deliveryCount == that.deliveryCount;
+    }
 
-  @Override
-  public int hashCode() {
-    return Objects.hash(firstOffset, lastOffset, deliveryState, deliveryCount);
-  }
+    @Override
+    public int hashCode() {
+        return Objects.hash(firstOffset, lastOffset, deliveryState, deliveryCount);
+    }
 
-  @Override
-  public String toString() {
-    return "PersisterStateBatch(" +
-        "firstOffset=" + firstOffset + "," +
-        "lastOffset=" + lastOffset + "," +
-        "deliveryState=" + deliveryState + "," +
-        "deliveryCount=" + deliveryCount +
-        ")";
-  }
+    @Override
+    public String toString() {
+        return "PersisterStateBatch(" +
+                "firstOffset=" + firstOffset + "," +
+                "lastOffset=" + lastOffset + "," +
+                "deliveryState=" + deliveryState + "," +
+                "deliveryCount=" + deliveryCount +
+                ")";
+    }
 }

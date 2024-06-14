@@ -22,10 +22,10 @@ import org.apache.kafka.common.Uuid;
 import java.util.Objects;
 
 public class ShareGroupHelper {
-  public static String coordinatorKey(String groupId, Uuid topicId, int partition) {
-    Objects.requireNonNull(groupId);
-    Objects.requireNonNull(topicId);
+    public static String coordinatorKey(String groupId, Uuid topicId, int partition) {
+        Objects.requireNonNull(groupId);
+        Objects.requireNonNull(topicId);
 
-    return String.format("%s:%s:%d", groupId, topicId, partition);
-  }
+        return String.format("%s:%s:%d", groupId, topicId, partition);
+    }
 }

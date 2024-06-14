@@ -22,46 +22,46 @@ import org.apache.kafka.common.message.WriteShareGroupStateRequestData;
 import java.util.stream.Collectors;
 
 public class WriteShareGroupStateParameters implements PersisterParameters {
-  private final GroupTopicPartitionData<PartitionStateBatchData> groupTopicPartitionData;
+    private final GroupTopicPartitionData<PartitionStateBatchData> groupTopicPartitionData;
 
-  private WriteShareGroupStateParameters(GroupTopicPartitionData<PartitionStateBatchData> groupTopicPartitionData) {
-    this.groupTopicPartitionData = groupTopicPartitionData;
-  }
-
-  public GroupTopicPartitionData<PartitionStateBatchData> groupTopicPartitionData() {
-    return groupTopicPartitionData;
-  }
-
-  public static WriteShareGroupStateParameters from(WriteShareGroupStateRequestData data) {
-    return new Builder()
-        .setGroupTopicPartitionData(new GroupTopicPartitionData<>(data.groupId(), data.topics().stream()
-            .map(writeStateData -> new TopicData<>(writeStateData.topicId(),
-                writeStateData.partitions().stream()
-                    .map(partitionData -> PartitionFactory.newPartitionStateBatchData(partitionData.partition(), partitionData.stateEpoch(), partitionData.startOffset(),
-                        partitionData.leaderEpoch(),
-                        partitionData.stateBatches().stream()
-                            .map(PersisterStateBatch::from)
-                            .collect(Collectors.toList())))
-                    .collect(Collectors.toList())))
-            .collect(Collectors.toList())))
-        .build();
-  }
-
-  public static class Builder {
-    private GroupTopicPartitionData<PartitionStateBatchData> groupTopicPartitionData;
-
-    public Builder setGroupTopicPartitionData(GroupTopicPartitionData<PartitionStateBatchData> groupTopicPartitionData) {
-      this.groupTopicPartitionData = groupTopicPartitionData;
-      return this;
+    private WriteShareGroupStateParameters(GroupTopicPartitionData<PartitionStateBatchData> groupTopicPartitionData) {
+        this.groupTopicPartitionData = groupTopicPartitionData;
     }
 
-    public WriteShareGroupStateParameters build() {
-      return new WriteShareGroupStateParameters(groupTopicPartitionData);
+    public GroupTopicPartitionData<PartitionStateBatchData> groupTopicPartitionData() {
+        return groupTopicPartitionData;
     }
-  }
 
-  @Override
-  public String toString() {
-    return "WriteShareGroupStateParameters(" + groupTopicPartitionData + ")";
-  }
+    public static WriteShareGroupStateParameters from(WriteShareGroupStateRequestData data) {
+        return new Builder()
+                .setGroupTopicPartitionData(new GroupTopicPartitionData<>(data.groupId(), data.topics().stream()
+                        .map(writeStateData -> new TopicData<>(writeStateData.topicId(),
+                                writeStateData.partitions().stream()
+                                        .map(partitionData -> PartitionFactory.newPartitionStateBatchData(partitionData.partition(), partitionData.stateEpoch(), partitionData.startOffset(),
+                                                partitionData.leaderEpoch(),
+                                                partitionData.stateBatches().stream()
+                                                        .map(PersisterStateBatch::from)
+                                                        .collect(Collectors.toList())))
+                                        .collect(Collectors.toList())))
+                        .collect(Collectors.toList())))
+                .build();
+    }
+
+    public static class Builder {
+        private GroupTopicPartitionData<PartitionStateBatchData> groupTopicPartitionData;
+
+        public Builder setGroupTopicPartitionData(GroupTopicPartitionData<PartitionStateBatchData> groupTopicPartitionData) {
+            this.groupTopicPartitionData = groupTopicPartitionData;
+            return this;
+        }
+
+        public WriteShareGroupStateParameters build() {
+            return new WriteShareGroupStateParameters(groupTopicPartitionData);
+        }
+    }
+
+    @Override
+    public String toString() {
+        return "WriteShareGroupStateParameters(" + groupTopicPartitionData + ")";
+    }
 }

@@ -23,36 +23,36 @@ import java.util.stream.Collectors;
 
 public class DeleteShareGroupStateParameters implements PersisterParameters {
 
-  private final GroupTopicPartitionData<PartitionIdData> groupTopicPartitionData;
+    private final GroupTopicPartitionData<PartitionIdData> groupTopicPartitionData;
 
-  private DeleteShareGroupStateParameters(GroupTopicPartitionData<PartitionIdData> groupTopicPartitionData) {
-    this.groupTopicPartitionData = groupTopicPartitionData;
-  }
-
-  public static DeleteShareGroupStateParameters from(DeleteShareGroupStateRequestData data) {
-    return new Builder()
-        .setGroupTopicPartitionData(new GroupTopicPartitionData<>(data.groupId(), data.topics().stream()
-            .map(deleteStateData -> new TopicData<>(deleteStateData.topicId(), deleteStateData.partitions().stream()
-                .map(partitionData -> PartitionFactory.newPartitionIdData(partitionData.partition()))
-                .collect(Collectors.toList())))
-            .collect(Collectors.toList())))
-        .build();
-  }
-
-  public GroupTopicPartitionData<PartitionIdData> groupTopicPartitionData() {
-    return groupTopicPartitionData;
-  }
-
-  public static class Builder {
-    private GroupTopicPartitionData<PartitionIdData> groupTopicPartitionData;
-
-    public Builder setGroupTopicPartitionData(GroupTopicPartitionData<PartitionIdData> groupTopicPartitionData) {
-      this.groupTopicPartitionData = groupTopicPartitionData;
-      return this;
+    private DeleteShareGroupStateParameters(GroupTopicPartitionData<PartitionIdData> groupTopicPartitionData) {
+        this.groupTopicPartitionData = groupTopicPartitionData;
     }
 
-    public DeleteShareGroupStateParameters build() {
-      return new DeleteShareGroupStateParameters(groupTopicPartitionData);
+    public static DeleteShareGroupStateParameters from(DeleteShareGroupStateRequestData data) {
+        return new Builder()
+                .setGroupTopicPartitionData(new GroupTopicPartitionData<>(data.groupId(), data.topics().stream()
+                        .map(deleteStateData -> new TopicData<>(deleteStateData.topicId(), deleteStateData.partitions().stream()
+                                .map(partitionData -> PartitionFactory.newPartitionIdData(partitionData.partition()))
+                                .collect(Collectors.toList())))
+                        .collect(Collectors.toList())))
+                .build();
     }
-  }
+
+    public GroupTopicPartitionData<PartitionIdData> groupTopicPartitionData() {
+        return groupTopicPartitionData;
+    }
+
+    public static class Builder {
+        private GroupTopicPartitionData<PartitionIdData> groupTopicPartitionData;
+
+        public Builder setGroupTopicPartitionData(GroupTopicPartitionData<PartitionIdData> groupTopicPartitionData) {
+            this.groupTopicPartitionData = groupTopicPartitionData;
+            return this;
+        }
+
+        public DeleteShareGroupStateParameters build() {
+            return new DeleteShareGroupStateParameters(groupTopicPartitionData);
+        }
+    }
 }

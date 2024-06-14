@@ -23,37 +23,37 @@ import java.util.stream.Collectors;
 
 public class InitializeShareGroupStateParameters implements PersisterParameters {
 
-  private final GroupTopicPartitionData<PartitionStateData> groupTopicPartitionData;
+    private final GroupTopicPartitionData<PartitionStateData> groupTopicPartitionData;
 
-  private InitializeShareGroupStateParameters(GroupTopicPartitionData<PartitionStateData> groupTopicPartitionData) {
-    this.groupTopicPartitionData = groupTopicPartitionData;
-  }
-
-  public GroupTopicPartitionData<PartitionStateData> groupTopicPartitionData() {
-    return groupTopicPartitionData;
-  }
-
-  public static InitializeShareGroupStateParameters from(InitializeShareGroupStateRequestData data) {
-    return new Builder()
-        .setGroupTopicPartitionData(new GroupTopicPartitionData<>(data.groupId(), data.topics().stream()
-            .map(readStateData -> new TopicData<>(readStateData.topicId(),
-                readStateData.partitions().stream()
-                    .map(partitionData -> PartitionFactory.newPartitionStateData(partitionData.partition(), partitionData.stateEpoch(), partitionData.startOffset()))
-                    .collect(Collectors.toList())))
-            .collect(Collectors.toList())))
-        .build();
-  }
-
-  public static class Builder {
-    private GroupTopicPartitionData<PartitionStateData> groupTopicPartitionData;
-
-    public Builder setGroupTopicPartitionData(GroupTopicPartitionData<PartitionStateData> groupTopicPartitionData) {
-      this.groupTopicPartitionData = groupTopicPartitionData;
-      return this;
+    private InitializeShareGroupStateParameters(GroupTopicPartitionData<PartitionStateData> groupTopicPartitionData) {
+        this.groupTopicPartitionData = groupTopicPartitionData;
     }
 
-    public InitializeShareGroupStateParameters build() {
-      return new InitializeShareGroupStateParameters(this.groupTopicPartitionData);
+    public GroupTopicPartitionData<PartitionStateData> groupTopicPartitionData() {
+        return groupTopicPartitionData;
     }
-  }
+
+    public static InitializeShareGroupStateParameters from(InitializeShareGroupStateRequestData data) {
+        return new Builder()
+                .setGroupTopicPartitionData(new GroupTopicPartitionData<>(data.groupId(), data.topics().stream()
+                        .map(readStateData -> new TopicData<>(readStateData.topicId(),
+                                readStateData.partitions().stream()
+                                        .map(partitionData -> PartitionFactory.newPartitionStateData(partitionData.partition(), partitionData.stateEpoch(), partitionData.startOffset()))
+                                        .collect(Collectors.toList())))
+                        .collect(Collectors.toList())))
+                .build();
+    }
+
+    public static class Builder {
+        private GroupTopicPartitionData<PartitionStateData> groupTopicPartitionData;
+
+        public Builder setGroupTopicPartitionData(GroupTopicPartitionData<PartitionStateData> groupTopicPartitionData) {
+            this.groupTopicPartitionData = groupTopicPartitionData;
+            return this;
+        }
+
+        public InitializeShareGroupStateParameters build() {
+            return new InitializeShareGroupStateParameters(this.groupTopicPartitionData);
+        }
+    }
 }

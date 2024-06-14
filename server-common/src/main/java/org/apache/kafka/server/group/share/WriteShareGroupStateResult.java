@@ -23,37 +23,37 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class WriteShareGroupStateResult implements PersisterResult {
-  private final List<TopicData<PartitionErrorData>> topicsData;
+    private final List<TopicData<PartitionErrorData>> topicsData;
 
-  private WriteShareGroupStateResult(List<TopicData<PartitionErrorData>> topicsData) {
-    this.topicsData = topicsData;
-  }
-
-  public List<TopicData<PartitionErrorData>> topicsData() {
-    return topicsData;
-  }
-
-  public static WriteShareGroupStateResult from(WriteShareGroupStateResponseData data) {
-    return new Builder()
-        .setTopicsData(data.results().stream()
-            .map(writeStateResult -> new TopicData<>(writeStateResult.topicId(),
-                writeStateResult.partitions().stream()
-                    .map(partitionResult -> PartitionFactory.newPartitionErrorData(partitionResult.partition(), partitionResult.errorCode(), partitionResult.errorMessage()))
-                    .collect(Collectors.toList())))
-            .collect(Collectors.toList()))
-        .build();
-  }
-
-  public static class Builder {
-    private List<TopicData<PartitionErrorData>> topicsData;
-
-    public Builder setTopicsData(List<TopicData<PartitionErrorData>> topicsData) {
-      this.topicsData = topicsData;
-      return this;
+    private WriteShareGroupStateResult(List<TopicData<PartitionErrorData>> topicsData) {
+        this.topicsData = topicsData;
     }
 
-    public WriteShareGroupStateResult build() {
-      return new WriteShareGroupStateResult(topicsData);
+    public List<TopicData<PartitionErrorData>> topicsData() {
+        return topicsData;
     }
-  }
+
+    public static WriteShareGroupStateResult from(WriteShareGroupStateResponseData data) {
+        return new Builder()
+                .setTopicsData(data.results().stream()
+                        .map(writeStateResult -> new TopicData<>(writeStateResult.topicId(),
+                                writeStateResult.partitions().stream()
+                                        .map(partitionResult -> PartitionFactory.newPartitionErrorData(partitionResult.partition(), partitionResult.errorCode(), partitionResult.errorMessage()))
+                                        .collect(Collectors.toList())))
+                        .collect(Collectors.toList()))
+                .build();
+    }
+
+    public static class Builder {
+        private List<TopicData<PartitionErrorData>> topicsData;
+
+        public Builder setTopicsData(List<TopicData<PartitionErrorData>> topicsData) {
+            this.topicsData = topicsData;
+            return this;
+        }
+
+        public WriteShareGroupStateResult build() {
+            return new WriteShareGroupStateResult(topicsData);
+        }
+    }
 }

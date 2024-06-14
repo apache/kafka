@@ -23,17 +23,17 @@ import java.util.stream.Collectors;
 
 public class ReadShareGroupStateParameters implements PersisterParameters {
 
-  private final GroupTopicPartitionData<PartitionIdLeaderEpochData> groupTopicPartitionData;
+    private final GroupTopicPartitionData<PartitionIdLeaderEpochData> groupTopicPartitionData;
 
-  private ReadShareGroupStateParameters(GroupTopicPartitionData<PartitionIdLeaderEpochData> groupTopicPartitionData) {
-    this.groupTopicPartitionData = groupTopicPartitionData;
-  }
+    private ReadShareGroupStateParameters(GroupTopicPartitionData<PartitionIdLeaderEpochData> groupTopicPartitionData) {
+        this.groupTopicPartitionData = groupTopicPartitionData;
+    }
 
-  public GroupTopicPartitionData<PartitionIdLeaderEpochData> groupTopicPartitionData() {
-    return groupTopicPartitionData;
-  }
+    public GroupTopicPartitionData<PartitionIdLeaderEpochData> groupTopicPartitionData() {
+        return groupTopicPartitionData;
+    }
 
-  public static ReadShareGroupStateParameters from(ReadShareGroupStateRequestData data) {
+    public static ReadShareGroupStateParameters from(ReadShareGroupStateRequestData data) {
 //    {
 //      groupId,
 //      topics[
@@ -43,31 +43,31 @@ public class ReadShareGroupStateParameters implements PersisterParameters {
 //          ]
 //      ]
 //    }
-    return new Builder()
-        .setGroupTopicPartitionData(new GroupTopicPartitionData<>(data.groupId(), data.topics().stream()
-            .map(readStateData -> new TopicData<>(readStateData.topicId(),
-                readStateData.partitions().stream()
-                    .map(partitionData -> PartitionFactory.newPartitionIdLeaderEpochData(partitionData.partition(), partitionData.leaderEpoch()))
-                    .collect(Collectors.toList())))
-            .collect(Collectors.toList())))
-        .build();
-  }
-
-  public static class Builder {
-    private GroupTopicPartitionData<PartitionIdLeaderEpochData> groupTopicPartitionData;
-
-    public Builder setGroupTopicPartitionData(GroupTopicPartitionData<PartitionIdLeaderEpochData> groupTopicPartitionData) {
-      this.groupTopicPartitionData = groupTopicPartitionData;
-      return this;
+        return new Builder()
+                .setGroupTopicPartitionData(new GroupTopicPartitionData<>(data.groupId(), data.topics().stream()
+                        .map(readStateData -> new TopicData<>(readStateData.topicId(),
+                                readStateData.partitions().stream()
+                                        .map(partitionData -> PartitionFactory.newPartitionIdLeaderEpochData(partitionData.partition(), partitionData.leaderEpoch()))
+                                        .collect(Collectors.toList())))
+                        .collect(Collectors.toList())))
+                .build();
     }
 
-    public ReadShareGroupStateParameters build() {
-      return new ReadShareGroupStateParameters(groupTopicPartitionData);
-    }
-  }
+    public static class Builder {
+        private GroupTopicPartitionData<PartitionIdLeaderEpochData> groupTopicPartitionData;
 
-  @Override
-  public String toString() {
-    return "ReadShareGroupStateParameters(" + groupTopicPartitionData + ")";
-  }
+        public Builder setGroupTopicPartitionData(GroupTopicPartitionData<PartitionIdLeaderEpochData> groupTopicPartitionData) {
+            this.groupTopicPartitionData = groupTopicPartitionData;
+            return this;
+        }
+
+        public ReadShareGroupStateParameters build() {
+            return new ReadShareGroupStateParameters(groupTopicPartitionData);
+        }
+    }
+
+    @Override
+    public String toString() {
+        return "ReadShareGroupStateParameters(" + groupTopicPartitionData + ")";
+    }
 }

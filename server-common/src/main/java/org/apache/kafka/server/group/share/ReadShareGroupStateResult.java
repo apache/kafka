@@ -23,47 +23,47 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class ReadShareGroupStateResult implements PersisterResult {
-  private final List<TopicData<PartitionAllData>> topicsData;
+    private final List<TopicData<PartitionAllData>> topicsData;
 
-  private ReadShareGroupStateResult(List<TopicData<PartitionAllData>> topicsData) {
-    this.topicsData = topicsData;
-  }
-
-  public List<TopicData<PartitionAllData>> topicsData() {
-    return topicsData;
-  }
-
-  public static ReadShareGroupStateResult from(ReadShareGroupStateResponseData data) {
-    return new Builder()
-        .setTopicsData(data.results().stream()
-            .map(topicData -> new TopicData<>(topicData.topicId(),
-                topicData.partitions().stream()
-                    .map(partitionResult -> PartitionFactory.newPartitionAllData(
-                        partitionResult.partition(),
-                        partitionResult.stateEpoch(),
-                        partitionResult.startOffset(),
-                        partitionResult.errorCode(),
-                        partitionResult.errorMessage(),
-                        partitionResult.stateBatches().stream()
-                            .map(PersisterStateBatch::from)
-                            .collect(Collectors.toList())
-                    ))
-                    .collect(Collectors.toList())))
-            .collect(Collectors.toList()))
-        .build();
-  }
-
-  public static class Builder {
-
-    private List<TopicData<PartitionAllData>> topicsData;
-
-    public Builder setTopicsData(List<TopicData<PartitionAllData>> topicsData) {
-      this.topicsData = topicsData;
-      return this;
+    private ReadShareGroupStateResult(List<TopicData<PartitionAllData>> topicsData) {
+        this.topicsData = topicsData;
     }
 
-    public ReadShareGroupStateResult build() {
-      return new ReadShareGroupStateResult(topicsData);
+    public List<TopicData<PartitionAllData>> topicsData() {
+        return topicsData;
     }
-  }
+
+    public static ReadShareGroupStateResult from(ReadShareGroupStateResponseData data) {
+        return new Builder()
+                .setTopicsData(data.results().stream()
+                        .map(topicData -> new TopicData<>(topicData.topicId(),
+                                topicData.partitions().stream()
+                                        .map(partitionResult -> PartitionFactory.newPartitionAllData(
+                                                partitionResult.partition(),
+                                                partitionResult.stateEpoch(),
+                                                partitionResult.startOffset(),
+                                                partitionResult.errorCode(),
+                                                partitionResult.errorMessage(),
+                                                partitionResult.stateBatches().stream()
+                                                        .map(PersisterStateBatch::from)
+                                                        .collect(Collectors.toList())
+                                        ))
+                                        .collect(Collectors.toList())))
+                        .collect(Collectors.toList()))
+                .build();
+    }
+
+    public static class Builder {
+
+        private List<TopicData<PartitionAllData>> topicsData;
+
+        public Builder setTopicsData(List<TopicData<PartitionAllData>> topicsData) {
+            this.topicsData = topicsData;
+            return this;
+        }
+
+        public ReadShareGroupStateResult build() {
+            return new ReadShareGroupStateResult(topicsData);
+        }
+    }
 }

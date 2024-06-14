@@ -18,5 +18,5 @@
 package org.apache.kafka.server.group.share;
 
 public interface PartitionIdData extends PartitionInfoData {
-  int partition();
+    int partition();
 }
