@@ -17,7 +17,7 @@
 version: '2'
 services:
   kafka-1:
-    image: apache/kafka:latest
+    image: ${IMAGE}
     hostname: kafka-1
     container_name: kafka-1
     ports:
@@ -39,7 +39,7 @@ services:
       KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
 
   kafka-2:
-    image: apache/kafka:latest
+    image: ${IMAGE}
     hostname: kafka-2
     container_name: kafka-2
     ports:
@@ -61,7 +61,7 @@ services:
       KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
 
   kafka-3:
-    image: apache/kafka:latest
+    image: ${IMAGE}
     hostname: kafka-3
     container_name: kafka-3
     ports:

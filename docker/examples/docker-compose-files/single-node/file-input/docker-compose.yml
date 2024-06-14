@@ -17,7 +17,7 @@
 version: '2'
 services:
   broker:
-    image: apache/kafka:latest
+    image: ${IMAGE}
     hostname: broker
     container_name: broker
     ports:
