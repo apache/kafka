@@ -19,6 +19,7 @@ package org.apache.kafka.shell.command;
 
 import org.apache.kafka.image.node.MetadataNode;
 import org.apache.kafka.shell.state.MetadataShellState;
+
 import org.jline.reader.Candidate;
 
 import java.util.ArrayList;

@@ -34,6 +34,11 @@ public class BlockingMessageQueue implements RaftMessageQueue {
         }
 
         @Override
+        public short apiVersion() {
+            return 0;
+        }
+
+        @Override
         public ApiMessage data() {
             return null;
         }

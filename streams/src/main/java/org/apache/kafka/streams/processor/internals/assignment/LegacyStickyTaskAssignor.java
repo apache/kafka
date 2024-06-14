@@ -25,6 +25,7 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -38,37 +39,41 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.UUID;
 
-public class StickyTaskAssignor implements TaskAssignor {
+// Note: as of 3.8, this class has been renamed from StickyTaskAssignor to LegacyStickyTaskAssignor,
+// and a new StickyTaskAssignor implementation was added that implements the new TaskAssignor interface.
+// If you were previously plugging in the old StickyTaskAssignor via the internal.task.assignor.class config,
+// you should migrate to the new TaskAssignor interface by removing the internal config and instead
+// passing in the new StickyTaskAssignor class to the new public task.assignor.class config
+public class LegacyStickyTaskAssignor implements LegacyTaskAssignor {
 
-    private static final Logger log = LoggerFactory.getLogger(StickyTaskAssignor.class);
+    private static final Logger log = LoggerFactory.getLogger(LegacyStickyTaskAssignor.class);
 
     // For stateful tasks, by default we want to maintain stickiness. So we have higher non_overlap_cost
     private static final int DEFAULT_STATEFUL_TRAFFIC_COST = 1;
     private static final int DEFAULT_STATEFUL_NON_OVERLAP_COST = 10;
 
-    private Map<UUID, ClientState> clients;
+    private Map<ProcessId, ClientState> clients;
     private Set<TaskId> allTaskIds;
     private Set<TaskId> statefulTaskIds;
-    private final Map<TaskId, UUID> previousActiveTaskAssignment = new HashMap<>();
-    private final Map<TaskId, Set<UUID>> previousStandbyTaskAssignment = new HashMap<>();
+    private final Map<TaskId, ProcessId> previousActiveTaskAssignment = new HashMap<>();
+    private final Map<TaskId, Set<ProcessId>> previousStandbyTaskAssignment = new HashMap<>();
     private RackAwareTaskAssignor rackAwareTaskAssignor; // nullable if passed from FallbackPriorTaskAssignor
     private AssignmentConfigs configs;
     private TaskPairs taskPairs;
 
     private final boolean mustPreserveActiveTaskAssignment;
 
-    public StickyTaskAssignor() {
+    public LegacyStickyTaskAssignor() {
         this(false);
     }
 
-    StickyTaskAssignor(final boolean mustPreserveActiveTaskAssignment) {
+    LegacyStickyTaskAssignor(final boolean mustPreserveActiveTaskAssignment) {
         this.mustPreserveActiveTaskAssignment = mustPreserveActiveTaskAssignment;
     }
 
     @Override
-    public boolean assign(final Map<UUID, ClientState> clients,
+    public boolean assign(final Map<ProcessId, ClientState> clients,
                           final Set<TaskId> allTaskIds,
                           final Set<TaskId> statefulTaskIds,
                           final RackAwareTaskAssignor rackAwareTaskAssignor,
@@ -94,7 +99,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         if (configs.numStandbyReplicas() > 0 && rackAwareTaskAssignor != null && rackAwareTaskAssignor.canEnableRackAwareAssignor()) {
             final int trafficCost = configs.rackAwareTrafficCost().orElse(DEFAULT_STATEFUL_TRAFFIC_COST);
             final int nonOverlapCost = configs.rackAwareNonOverlapCost().orElse(DEFAULT_STATEFUL_NON_OVERLAP_COST);
-            final TreeMap<UUID, ClientState> clientStates = new TreeMap<>(clients);
+            final TreeMap<ProcessId, ClientState> clientStates = new TreeMap<>(clients);
 
             rackAwareTaskAssignor.optimizeStandbyTasks(clientStates, trafficCost, nonOverlapCost, (s, d, t, c) -> true);
         }
@@ -106,7 +111,7 @@ public class StickyTaskAssignor implements TaskAssignor {
             final int nonOverlapCost = configs.rackAwareNonOverlapCost().orElse(DEFAULT_STATEFUL_NON_OVERLAP_COST);
 
             final SortedSet<TaskId> statefulTasks = new TreeSet<>(statefulTaskIds);
-            final TreeMap<UUID, ClientState> clientStates = new TreeMap<>(clients);
+            final TreeMap<ProcessId, ClientState> clientStates = new TreeMap<>(clients);
 
             rackAwareTaskAssignor.optimizeActiveTasks(statefulTasks, clientStates, trafficCost, nonOverlapCost);
 
@@ -119,7 +124,7 @@ public class StickyTaskAssignor implements TaskAssignor {
     private void assignStandby(final int numStandbyReplicas) {
         for (final TaskId taskId : statefulTaskIds) {
             for (int i = 0; i < numStandbyReplicas; i++) {
-                final Set<UUID> ids = findClientsWithoutAssignedTask(taskId);
+                final Set<ProcessId> ids = findClientsWithoutAssignedTask(taskId);
                 if (ids.isEmpty()) {
                     log.warn("Unable to assign {} of {} standby tasks for task [{}]. " +
                                      "There is not enough available capacity. You should " +
@@ -145,7 +150,7 @@ public class StickyTaskAssignor implements TaskAssignor {
 
         // first try and re-assign existing active tasks to clients that previously had
         // the same active task
-        for (final Map.Entry<TaskId, UUID> entry : previousActiveTaskAssignment.entrySet()) {
+        for (final Map.Entry<TaskId, ProcessId> entry : previousActiveTaskAssignment.entrySet()) {
             final TaskId taskId = entry.getKey();
             if (allTaskIds.contains(taskId)) {
                 final ClientState client = clients.get(entry.getValue());
@@ -162,9 +167,9 @@ public class StickyTaskAssignor implements TaskAssignor {
         // have seen the task.
         for (final Iterator<TaskId> iterator = unassigned.iterator(); iterator.hasNext(); ) {
             final TaskId taskId = iterator.next();
-            final Set<UUID> clientIds = previousStandbyTaskAssignment.get(taskId);
+            final Set<ProcessId> clientIds = previousStandbyTaskAssignment.get(taskId);
             if (clientIds != null) {
-                for (final UUID clientId : clientIds) {
+                for (final ProcessId clientId : clientIds) {
                     final ClientState client = clients.get(clientId);
                     if (client.hasUnfulfilledQuota(tasksPerThread)) {
                         assignTaskToClient(assigned, taskId, client);
@@ -183,7 +188,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         }
     }
 
-    private void allocateTaskWithClientCandidates(final TaskId taskId, final Set<UUID> clientsWithin, final boolean active) {
+    private void allocateTaskWithClientCandidates(final TaskId taskId, final Set<ProcessId> clientsWithin, final boolean active) {
         final ClientState client = findClient(taskId, clientsWithin);
         taskPairs.addPairs(taskId, client.assignedTasks());
         if (active) {
@@ -199,9 +204,9 @@ public class StickyTaskAssignor implements TaskAssignor {
         assigned.add(taskId);
     }
 
-    private Set<UUID> findClientsWithoutAssignedTask(final TaskId taskId) {
-        final Set<UUID> clientIds = new HashSet<>();
-        for (final Map.Entry<UUID, ClientState> client : clients.entrySet()) {
+    private Set<ProcessId> findClientsWithoutAssignedTask(final TaskId taskId) {
+        final Set<ProcessId> clientIds = new HashSet<>();
+        for (final Map.Entry<ProcessId, ClientState> client : clients.entrySet()) {
             if (!client.getValue().hasAssignedTask(taskId)) {
                 clientIds.add(client.getKey());
             }
@@ -210,7 +215,7 @@ public class StickyTaskAssignor implements TaskAssignor {
     }
 
 
-    private ClientState findClient(final TaskId taskId, final Set<UUID> clientsWithin) {
+    private ClientState findClient(final TaskId taskId, final Set<ProcessId> clientsWithin) {
 
         // optimize the case where there is only 1 id to search within.
         if (clientsWithin.size() == 1) {
@@ -246,25 +251,25 @@ public class StickyTaskAssignor implements TaskAssignor {
         return false;
     }
 
-    private ClientState findClientsWithPreviousAssignedTask(final TaskId taskId, final Set<UUID> clientsWithin) {
-        final UUID previous = previousActiveTaskAssignment.get(taskId);
+    private ClientState findClientsWithPreviousAssignedTask(final TaskId taskId, final Set<ProcessId> clientsWithin) {
+        final ProcessId previous = previousActiveTaskAssignment.get(taskId);
         if (previous != null && clientsWithin.contains(previous)) {
             return clients.get(previous);
         }
         return findLeastLoadedClientWithPreviousStandByTask(taskId, clientsWithin);
     }
 
-    private ClientState findLeastLoadedClientWithPreviousStandByTask(final TaskId taskId, final Set<UUID> clientsWithin) {
-        final Set<UUID> ids = previousStandbyTaskAssignment.get(taskId);
+    private ClientState findLeastLoadedClientWithPreviousStandByTask(final TaskId taskId, final Set<ProcessId> clientsWithin) {
+        final Set<ProcessId> ids = previousStandbyTaskAssignment.get(taskId);
         if (ids == null) {
             return null;
         }
-        final HashSet<UUID> constrainTo = new HashSet<>(ids);
+        final HashSet<ProcessId> constrainTo = new HashSet<>(ids);
         constrainTo.retainAll(clientsWithin);
         return leastLoaded(taskId, constrainTo);
     }
 
-    private ClientState leastLoaded(final TaskId taskId, final Set<UUID> clientIds) {
+    private ClientState leastLoaded(final TaskId taskId, final Set<ProcessId> clientIds) {
         final ClientState leastLoaded = findLeastLoaded(taskId, clientIds, true);
         if (leastLoaded == null) {
             return findLeastLoaded(taskId, clientIds, false);
@@ -273,10 +278,10 @@ public class StickyTaskAssignor implements TaskAssignor {
     }
 
     private ClientState findLeastLoaded(final TaskId taskId,
-                                        final Set<UUID> clientIds,
+                                        final Set<ProcessId> clientIds,
                                         final boolean checkTaskPairs) {
         ClientState leastLoaded = null;
-        for (final UUID id : clientIds) {
+        for (final ProcessId id : clientIds) {
             final ClientState client = clients.get(id);
             if (client.assignedTaskCount() == 0) {
                 return client;
@@ -295,8 +300,8 @@ public class StickyTaskAssignor implements TaskAssignor {
 
     }
 
-    private void mapPreviousTaskAssignment(final Map<UUID, ClientState> clients) {
-        for (final Map.Entry<UUID, ClientState> clientState : clients.entrySet()) {
+    private void mapPreviousTaskAssignment(final Map<ProcessId, ClientState> clients) {
+        for (final Map.Entry<ProcessId, ClientState> clientState : clients.entrySet()) {
             for (final TaskId activeTask : clientState.getValue().prevActiveTasks()) {
                 previousActiveTaskAssignment.put(activeTask, clientState.getKey());
             }

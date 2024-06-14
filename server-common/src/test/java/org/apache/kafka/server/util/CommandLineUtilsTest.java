@@ -227,7 +227,7 @@ public class CommandLineUtilsTest {
         assertEquals("500", props.get("iondkey"));
     }
 
-    static private Properties createTestProps() {
+    private static Properties createTestProps() {
         Properties props = new Properties();
         props.setProperty("bootstrap.servers", "this");
         props.setProperty("bootstrap.controllers", "that");

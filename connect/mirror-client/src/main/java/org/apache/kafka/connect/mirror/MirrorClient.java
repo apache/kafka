@@ -19,28 +19,28 @@ package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.common.serialization.ByteArrayDeserializer;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.types.SchemaException;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
-import java.util.Set;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
-import java.util.Collections;
-import java.util.Collection;
-import java.util.stream.Collectors;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 /** Interprets MM2's internal topics (checkpoints, heartbeats) on a given cluster.
  *  <p> 
@@ -233,7 +233,7 @@ public class MirrorClient implements AutoCloseable {
         return sources;
     }
 
-    static private boolean endOfStream(Consumer<?, ?> consumer, Collection<TopicPartition> assignments) {
+    private static boolean endOfStream(Consumer<?, ?> consumer, Collection<TopicPartition> assignments) {
         Map<TopicPartition, Long> endOffsets = consumer.endOffsets(assignments);
         for (TopicPartition topicPartition : assignments) {
             if (consumer.position(topicPartition) < endOffsets.get(topicPartition)) {

@@ -20,8 +20,8 @@ import org.apache.kafka.streams.processor.TaskId;
 
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
 
 /**
  * A special task assignor implementation to be used as a fallback in case the
@@ -31,15 +31,15 @@ import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
  * 1. ignore the task lags in the ClientState map
  * 2. always return true, indicating that a follow-up rebalance is needed
  */
-public class FallbackPriorTaskAssignor implements TaskAssignor {
-    private final StickyTaskAssignor delegate;
+public class FallbackPriorTaskAssignor implements LegacyTaskAssignor {
+    private final LegacyStickyTaskAssignor delegate;
 
     public FallbackPriorTaskAssignor() {
-        delegate = new StickyTaskAssignor(true);
+        delegate = new LegacyStickyTaskAssignor(true);
     }
 
     @Override
-    public boolean assign(final Map<UUID, ClientState> clients,
+    public boolean assign(final Map<ProcessId, ClientState> clients,
                           final Set<TaskId> allTaskIds,
                           final Set<TaskId> statefulTaskIds,
                           final RackAwareTaskAssignor rackAwareTaskAssignor,

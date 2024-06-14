@@ -67,7 +67,7 @@ import static org.mockito.Mockito.when;
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class CachingInMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
-    private final static String TOPIC = "topic";
+    private static final String TOPIC = "topic";
     private static final String CACHE_NAMESPACE = "0_0-store-name";
     private final int maxCacheSizeBytes = 150;
     private InternalMockProcessorContext context;

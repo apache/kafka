@@ -16,10 +16,11 @@
  */
 package org.apache.kafka.coordinator.group.metrics;
 
-import com.yammer.metrics.core.Gauge;
-import com.yammer.metrics.core.MetricsRegistry;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Metrics;
+
+import com.yammer.metrics.core.Gauge;
+import com.yammer.metrics.core.MetricsRegistry;
 
 import java.util.Set;
 import java.util.TreeSet;

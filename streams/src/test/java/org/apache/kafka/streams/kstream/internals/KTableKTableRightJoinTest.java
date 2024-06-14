@@ -26,7 +26,7 @@ import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogCaptureAppender.Event;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.Properties;
 import java.util.stream.Collectors;

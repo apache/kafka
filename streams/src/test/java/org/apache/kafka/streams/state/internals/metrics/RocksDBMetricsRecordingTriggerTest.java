@@ -32,10 +32,10 @@ import static org.mockito.Mockito.when;
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class RocksDBMetricsRecordingTriggerTest {
 
-    private final static String STORE_NAME1 = "store-name1";
-    private final static String STORE_NAME2 = "store-name2";
-    private final static TaskId TASK_ID1 = new TaskId(1, 2);
-    private final static TaskId TASK_ID2 = new TaskId(2, 4);
+    private static final String STORE_NAME1 = "store-name1";
+    private static final String STORE_NAME2 = "store-name2";
+    private static final TaskId TASK_ID1 = new TaskId(1, 2);
+    private static final TaskId TASK_ID2 = new TaskId(2, 4);
     @Mock
     private RocksDBMetricsRecorder recorder1;
     @Mock

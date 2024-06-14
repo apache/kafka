@@ -19,6 +19,7 @@ package org.apache.kafka.coordinator.group.consumer;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.MetadataImageBuilder;
 import org.apache.kafka.image.TopicsImage;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
