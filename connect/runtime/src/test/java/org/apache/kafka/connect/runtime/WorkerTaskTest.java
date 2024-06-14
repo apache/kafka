@@ -283,7 +283,7 @@ public class WorkerTaskTest {
         assertEquals(runningTimeRatio, metrics.currentMetricValueAsDouble(group.metricGroup(), "running-ratio"), 0.000001d);
     }
 
-    private static abstract class TestSinkTask extends SinkTask {
+    private abstract static class TestSinkTask extends SinkTask {
     }
 
     private static class TestWorkerTask extends WorkerTask<Object, SourceRecord> {

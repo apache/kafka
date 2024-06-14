@@ -18,6 +18,7 @@ package org.apache.kafka.tools;
 
 import kafka.utils.TestInfoUtils;
 import kafka.utils.TestUtils;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.ConfigEntry;

@@ -58,8 +58,7 @@ public class PartitionChangeBuilder {
         if (record.removingReplicas() != null) return false;
         if (record.addingReplicas() != null) return false;
         if (record.leaderRecoveryState() != LeaderRecoveryState.NO_CHANGE) return false;
-        if (record.directories() != null) return false;
-        return true;
+        return record.directories() == null;
     }
 
     /**
@@ -515,7 +514,7 @@ public class PartitionChangeBuilder {
         if (record.isr() != null && record.isr().isEmpty() && (partition.lastKnownElr.length != 1 ||
             partition.lastKnownElr[0] != partition.leader)) {
             // Only update the last known leader when the first time the partition becomes leaderless.
-            record.setLastKnownElr(Arrays.asList(partition.leader));
+            record.setLastKnownElr(Collections.singletonList(partition.leader));
         } else if ((record.leader() >= 0 || (partition.leader != NO_LEADER && record.leader() != NO_LEADER))
             && partition.lastKnownElr.length > 0) {
             // Clear the LastKnownElr field if the partition will have or continues to have a valid leader.

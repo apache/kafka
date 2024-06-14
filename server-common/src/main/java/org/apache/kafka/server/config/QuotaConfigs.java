@@ -18,6 +18,7 @@ package org.apache.kafka.server.config;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
@@ -98,7 +99,7 @@ public class QuotaConfigs {
 
     public static final int IP_CONNECTION_RATE_DEFAULT = Integer.MAX_VALUE;
 
-    private final static Set<String> USER_AND_CLIENT_QUOTA_NAMES = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+    private static final Set<String> USER_AND_CLIENT_QUOTA_NAMES = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
             PRODUCER_BYTE_RATE_OVERRIDE_CONFIG,
             CONSUMER_BYTE_RATE_OVERRIDE_CONFIG,
             REQUEST_PERCENTAGE_OVERRIDE_CONFIG,

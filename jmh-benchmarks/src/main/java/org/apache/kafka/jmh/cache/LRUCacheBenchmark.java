@@ -17,8 +17,8 @@
 
 package org.apache.kafka.jmh.cache;
 
-import java.util.concurrent.TimeUnit;
 import org.apache.kafka.common.cache.LRUCache;
+
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.OutputTimeUnit;
@@ -29,6 +29,8 @@ import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
+
+import java.util.concurrent.TimeUnit;
 
 /**
  * This is a simple example of a JMH benchmark.
