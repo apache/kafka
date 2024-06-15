@@ -718,15 +718,6 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.DESCRIBE_TOPIC_PARTITIONS =>
           new DescribeTopicPartitionsRequest.Builder(new DescribeTopicPartitionsRequestData())
 
-        case ApiKeys.ADD_RAFT_VOTER =>
-          new AddRaftVoterRequest.Builder(new AddRaftVoterRequestData())
-
-        case ApiKeys.REMOVE_RAFT_VOTER =>
-          new RemoveRaftVoterRequest.Builder(new RemoveRaftVoterRequestData())
-
-        case ApiKeys.UPDATE_RAFT_VOTER =>
-          new UpdateRaftVoterRequest.Builder(new UpdateRaftVoterRequestData())
-
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }

@@ -118,10 +118,8 @@ public enum ApiKeys {
     PUSH_TELEMETRY(ApiMessageType.PUSH_TELEMETRY),
     ASSIGN_REPLICAS_TO_DIRS(ApiMessageType.ASSIGN_REPLICAS_TO_DIRS),
     LIST_CLIENT_METRICS_RESOURCES(ApiMessageType.LIST_CLIENT_METRICS_RESOURCES),
-    DESCRIBE_TOPIC_PARTITIONS(ApiMessageType.DESCRIBE_TOPIC_PARTITIONS),
-    ADD_RAFT_VOTER(ApiMessageType.ADD_RAFT_VOTER),
-    REMOVE_RAFT_VOTER(ApiMessageType.REMOVE_RAFT_VOTER),
-    UPDATE_RAFT_VOTER(ApiMessageType.UPDATE_RAFT_VOTER);
+    DESCRIBE_TOPIC_PARTITIONS(ApiMessageType.DESCRIBE_TOPIC_PARTITIONS);
+
     private static final Map<ApiMessageType.ListenerType, EnumSet<ApiKeys>> APIS_BY_LISTENER =
         new EnumMap<>(ApiMessageType.ListenerType.class);
 

@@ -326,12 +326,6 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return ListClientMetricsResourcesRequest.parse(buffer, apiVersion);
             case DESCRIBE_TOPIC_PARTITIONS:
                 return DescribeTopicPartitionsRequest.parse(buffer, apiVersion);
-            case ADD_RAFT_VOTER:
-                return AddRaftVoterRequest.parse(buffer, apiVersion);
-            case REMOVE_RAFT_VOTER:
-                return RemoveRaftVoterRequest.parse(buffer, apiVersion);
-            case UPDATE_RAFT_VOTER:
-                return UpdateRaftVoterRequest.parse(buffer, apiVersion);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseRequest`, the " +
                         "code should be updated to do so.", apiKey));
