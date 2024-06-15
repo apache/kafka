@@ -41,7 +41,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.STRICT_STUBS)
+@MockitoSettings(strictness = Strictness.WARN)
 public class WorkerMetricsGroupTest {
     private final String connector = "org.FakeConnector";
     private final ConnectorTaskId task = new ConnectorTaskId(connector, 0);

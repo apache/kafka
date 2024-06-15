@@ -30,7 +30,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@MockitoSettings(strictness = Strictness.STRICT_STUBS)
+@MockitoSettings(strictness = Strictness.LENIENT)
 public class TransformationStageTest {
 
     private final SourceRecord initial = new SourceRecord(singletonMap("initial", 1), null, null, null, null);

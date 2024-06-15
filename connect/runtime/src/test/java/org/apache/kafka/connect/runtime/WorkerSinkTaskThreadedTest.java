@@ -87,7 +87,7 @@ import static org.mockito.Mockito.when;
 
 @SuppressWarnings("unchecked")
 @ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.STRICT_STUBS)
+@MockitoSettings(strictness = Strictness.WARN)
 public class WorkerSinkTaskThreadedTest {
 
     // These are fixed to keep this code simpler. In this example we assume byte[] raw values

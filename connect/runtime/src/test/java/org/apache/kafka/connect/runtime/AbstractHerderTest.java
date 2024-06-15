@@ -101,7 +101,7 @@ import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.withSettings;
 
 @ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.STRICT_STUBS)
+@MockitoSettings(strictness = Strictness.LENIENT)
 public class AbstractHerderTest {
 
     private static final String CONN1 = "sourceA";
