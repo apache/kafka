@@ -16,6 +16,15 @@
  */
 package org.apache.kafka.connect.runtime.distributed;
 
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
@@ -29,26 +38,16 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.connect.storage.ClusterConfigState;
 import org.apache.kafka.connect.storage.KafkaConfigBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.junit.After;
-import org.junit.Before;
 import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 import org.mockito.quality.Strictness;
-
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 
 import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
 import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
@@ -60,9 +59,9 @@ import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompat
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.EAGER;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.SESSIONED;
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V1;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.runners.Parameterized.Parameter;
 import static org.junit.runners.Parameterized.Parameters;
 import static org.mockito.Mockito.times;
@@ -127,7 +126,7 @@ public class WorkerCoordinatorIncrementalTest {
     @Parameter(1)
     public int expectedMetadataSize;
 
-    @Before
+    @BeforeEach
     public void setup() {
         LogContext loggerFactory = new LogContext();
 
@@ -175,7 +174,7 @@ public class WorkerCoordinatorIncrementalTest {
         configState1 = clusterConfigState(offset, 2, 4);
     }
 
-    @After
+    @AfterEach
     public void teardown() {
         this.metrics.close();
         verifyNoMoreInteractions(configStorage);

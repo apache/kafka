@@ -16,22 +16,23 @@
  */
 package org.apache.kafka.connect.runtime.health;
 
-import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.runtime.Herder;
-import org.apache.kafka.connect.util.Callback;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
-
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.Herder;
+import org.apache.kafka.connect.util.Callback;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotSame;
@@ -39,7 +40,8 @@ import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class ConnectClusterStateImplTest {
     protected static final String KAFKA_CLUSTER_ID = "franzwashere";
 
@@ -49,7 +51,7 @@ public class ConnectClusterStateImplTest {
     protected long herderRequestTimeoutMs = TimeUnit.SECONDS.toMillis(10);
     protected Collection<String> expectedConnectors;
     
-    @Before
+    @BeforeEach
     public void setUp() {
         expectedConnectors = Arrays.asList("sink1", "source1", "source2");
         connectClusterState = new ConnectClusterStateImpl(

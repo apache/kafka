@@ -16,6 +16,22 @@
  */
 package org.apache.kafka.connect.runtime.rest.resources;
 
+import javax.ws.rs.BadRequestException;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
@@ -59,28 +75,13 @@ import org.apache.kafka.connect.transforms.TimestampConverter;
 import org.apache.kafka.connect.transforms.predicates.HasHeaderKey;
 import org.apache.kafka.connect.transforms.predicates.RecordIsTombstone;
 import org.apache.kafka.connect.util.Callback;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.junit.MockitoJUnitRunner;
-
-import javax.ws.rs.BadRequestException;
-import java.net.URL;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.TreeSet;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
@@ -97,7 +98,8 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class ConnectorPluginsResourceTest {
 
     private static final Map<String, String> PROPS;
@@ -201,7 +203,7 @@ public class ConnectorPluginsResourceTest {
     private final Plugins plugins = mock(Plugins.class);
     private ConnectorPluginsResource connectorPluginsResource;
 
-    @Before
+    @BeforeEach
     public void setUp() throws Exception {
         doReturn(plugins).when(herder).plugins();
         doReturn(SINK_CONNECTOR_PLUGINS).when(plugins).sinkConnectors();

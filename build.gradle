@@ -205,7 +205,6 @@ def excludedSpotlessModules = [':clients',
                                ':connect:runtime',
                                ':core',
                                ':metadata',
-                               ':raft',
                                ':server',
                                ':storage',
                                ':storage:storage-api', //  rename in settings.gradle

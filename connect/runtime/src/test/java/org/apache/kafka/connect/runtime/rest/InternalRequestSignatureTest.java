@@ -17,21 +17,22 @@
 
 package org.apache.kafka.connect.runtime.rest;
 
-import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.runtime.distributed.Crypto;
-import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
-import org.eclipse.jetty.client.api.Request;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.junit.MockitoJUnitRunner;
-
 import javax.crypto.Mac;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import javax.ws.rs.core.HttpHeaders;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
+import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.distributed.Crypto;
+import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
+import org.eclipse.jetty.client.api.Request;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -44,7 +45,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class InternalRequestSignatureTest {
 
     private static final byte[] REQUEST_BODY =
