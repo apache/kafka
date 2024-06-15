@@ -17,6 +17,7 @@
 
 package kafka.tools
 
+import kafka.cluster.EndPoint
 import kafka.server.KafkaConfig
 
 import java.io.PrintStream
@@ -26,12 +27,12 @@ import net.sourceforge.argparse4j.ArgumentParsers
 import net.sourceforge.argparse4j.impl.Arguments.{append, store, storeTrue}
 import net.sourceforge.argparse4j.inf.Namespace
 import org.apache.kafka.common.Uuid
+import org.apache.kafka.common.message.VotersRecord
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, Features, MetadataVersion}
 import org.apache.kafka.common.metadata.FeatureLevelRecord
 import org.apache.kafka.common.metadata.UserScramCredentialRecord
-import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.scram.internals.ScramFormatter
 import org.apache.kafka.server.config.ReplicationConfigs
@@ -42,7 +43,6 @@ import org.apache.kafka.raft.internals.{StringSerde, VoterSet}
 import org.apache.kafka.server.common.FeatureVersion
 import org.apache.kafka.snapshot.{FileRawSnapshotWriter, RecordsSnapshotWriter}
 
-import java.net.InetSocketAddress
 import java.util
 import java.util.{Base64, Collections, Optional}
 import scala.collection.mutable
@@ -50,6 +50,8 @@ import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ArrayBuffer
 
 object StorageTool extends Logging {
+
+  val clusterMetadataDir: String = "/__cluster_metadata-0"
 
   def main(args: Array[String]): Unit = {
     var exitCode: Integer = 0
@@ -108,15 +110,9 @@ object StorageTool extends Logging {
       setNodeId(config.nodeId).
       build()
     val standaloneMode = namespace.getBoolean("standalone")
-    var host: String = ""
-    var port: Int = 0
-    var listenerName: String = ""
-    config.effectiveAdvertisedListeners.foreach(e => {
-      host = e.host
-      port = e.port
-      listenerName = e.listenerName.value()
-    })
-    //    config.listeners.
+    val advertisedListenerEndpoints: scala.collection.Seq[kafka.cluster.EndPoint] = config.effectiveAdvertisedListeners
+
+    // effectiveAdvertisedControllerListeners to be added
 
     val metadataRecords : ArrayBuffer[ApiMessageAndVersion] = ArrayBuffer()
     val specifiedFeatures: util.List[String] = namespace.getList("feature")
@@ -153,7 +149,7 @@ object StorageTool extends Logging {
         "a legacy cluster. Formatting is only supported for clusters in KRaft mode.")
     }
     formatCommand(System.out, directories, metaProperties, bootstrapMetadata,
-      metadataVersion,ignoreFormatted, standaloneMode)
+      metadataVersion, ignoreFormatted, standaloneMode, advertisedListenerEndpoints)
   }
 
   private def validateMetadataVersion(metadataVersion: MetadataVersion, config: KafkaConfig): Unit = {
@@ -242,7 +238,12 @@ object StorageTool extends Logging {
       help(s"A KRaft release version to use for the initial metadata.version. The minimum is ${MetadataVersion.IBP_3_0_IV0}, the default is ${MetadataVersion.LATEST_PRODUCTION}")
     formatParser.addArgument("--feature", "-f").
       help("A feature upgrade we should perform, in feature=level format. For example: `metadata.version=5`.").
-      action(append());
+      action(append())
+    formatParser.addArgument("--standalone", "-s").
+      help("This command will 1) create a meta.properties file in metadata.log.dir with a randomly generated" +
+        " directory.id, 2) create a snapshot at 00000000000000000000-0000000000.checkpoint with the necessary control" +
+        " records (KRaftVersionRecord and VotersRecord) to make this Kafka node the only voter for the quorum").
+      action(storeTrue());
 
     parser.parseArgsOrFail(args)
   }
@@ -524,10 +525,12 @@ object StorageTool extends Logging {
     metaProperties: MetaProperties,
     metadataVersion: MetadataVersion,
     ignoreFormatted: Boolean,
-    standaloneMode: Boolean
+    standaloneMode: Boolean,
+    advertisedListenerEndpoints: scala.collection.Seq[kafka.cluster.EndPoint]
   ): Int = {
     val bootstrapMetadata = buildBootstrapMetadata(metadataVersion, None, "format command")
-    formatCommand(stream, directories, metaProperties, bootstrapMetadata, metadataVersion, ignoreFormatted, standaloneMode)
+    formatCommand(stream, directories, metaProperties, bootstrapMetadata, metadataVersion, ignoreFormatted,
+      standaloneMode, advertisedListenerEndpoints)
   }
 
   def formatCommand(
@@ -537,7 +540,8 @@ object StorageTool extends Logging {
     bootstrapMetadata: BootstrapMetadata,
     metadataVersion: MetadataVersion,
     ignoreFormatted: Boolean,
-    standaloneMode: Boolean
+    standaloneMode: Boolean,
+    advertisedListenerEndpoints: scala.collection.Seq[kafka.cluster.EndPoint]
   ): Int = {
     if (directories.isEmpty) {
       throw new TerseFailure("No log directories found in the configuration.")
@@ -582,7 +586,7 @@ object StorageTool extends Logging {
         })
         // Write new file checkpoint file if standalone mode
         if (standaloneMode) {
-          writeCheckpointFile(logDir, directoryId)
+          writeCheckpointFile(stream, logDir, directoryId, advertisedListenerEndpoints)
         }
       })
       copier.writeLogDirChanges()
@@ -613,8 +617,9 @@ object StorageTool extends Logging {
     }.toMap
   }
 
-  def writeCheckpointFile(logDir: String, directoryId: Uuid): Unit = {
-    val snapshotCheckpointDir = logDir + "/__cluster_metadata-0"
+  def writeCheckpointFile(stream: PrintStream, logDir: String, directoryId: Uuid,
+                          advertisedListenerEndpoints: scala.collection.Seq[kafka.cluster.EndPoint]): Unit = {
+    val snapshotCheckpointDir = logDir + clusterMetadataDir
 
     // Ensure the directory exists
     val snapshotDir = Paths.get(snapshotCheckpointDir)
@@ -627,20 +632,40 @@ object StorageTool extends Logging {
 
     // Create the raw snapshot writer
     val rawSnapshotWriter = FileRawSnapshotWriter.create(checkpointFilePath, new OffsetAndEpoch(0, 0))
-    val defaultListenerName = "LISTENER"
-    val inetSocketAddress: java.util.Map[Integer, InetSocketAddress] = new util.HashMap()
-    inetSocketAddress.put(1, new InetSocketAddress("host", 9092))
 
-    val voterSet = VoterSet.fromInetSocketAddresses(new ListenerName(defaultListenerName), inetSocketAddress, Optional.of(directoryId))
+    if(advertisedListenerEndpoints.nonEmpty){
+      val voterSet: VoterSet = getVoterSet(directoryId, advertisedListenerEndpoints)
 
-    val builder = new RecordsSnapshotWriter.Builder()
-      .setKraftVersion(1)
-      .setVoterSet(Optional.of(voterSet))
-      .setRawSnapshotWriter(rawSnapshotWriter).build(new StringSerde)
+      val builder = new RecordsSnapshotWriter.Builder()
+        .setKraftVersion(1)
+        .setVoterSet(Optional.of(voterSet))
+        .setRawSnapshotWriter(rawSnapshotWriter).build(new StringSerde)
 
-    // Close the builder to finalize the snapshot
-    builder.freeze()
-    builder.close()
-    println(s"Snapshot written to $checkpointFilePath")
+      // Close the builder to finalize the snapshot
+      builder.freeze()
+      builder.close()
+      stream.println(s"Snapshot written to $checkpointFilePath")
+    }
+  }
+
+  private def getVoterSet(directoryId: Uuid, advertisedListenerEndpoints: collection.Seq[EndPoint]) = {
+    // Create a VotersRecord endpoint collection
+    val endpointCollection = new VotersRecord.EndpointCollection()
+    advertisedListenerEndpoints.foreach(endpoint => {
+      endpointCollection.add(new VotersRecord.Endpoint().setName(endpoint.listenerName.value())
+        .setHost(endpoint.host).setPort(endpoint.port))
+    })
+
+    // Create voters
+    val voters: util.List[VotersRecord.Voter] = new util.ArrayList()
+    voters.add(new VotersRecord.Voter()
+      .setVoterId(1)
+      .setVoterDirectoryId(directoryId)
+      .setEndpoints(endpointCollection))
+
+    // Create Voter set
+    val voterNewRecord = new VotersRecord().setVersion(1).setVoters(voters)
+    val voterSet = VoterSet.fromVotersRecord(voterNewRecord)
+    voterSet
   }
 }
