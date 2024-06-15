@@ -34,8 +34,8 @@ import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.FallbackPriorTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.LegacyStickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
-import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.LegacyTaskAssignor;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockApiProcessorSupplier;
@@ -102,26 +102,26 @@ public class StreamsAssignmentScaleTest {
         completeLargeAssignment(1_000, 10, 1000, 1, HighAvailabilityTaskAssignor.class);
     }
 
-    /* StickyTaskAssignor tests */
+    /* LegacyStickyTaskAssignor tests */
 
     @Test(timeout = 300 * 1000)
     public void testStickyTaskAssignorLargePartitionCount() {
-        completeLargeAssignment(2_000, 2, 1, 1, StickyTaskAssignor.class);
+        completeLargeAssignment(2_000, 2, 1, 1, LegacyStickyTaskAssignor.class);
     }
 
     @Test(timeout = 300 * 1000)
     public void testStickyTaskAssignorLargeNumConsumers() {
-        completeLargeAssignment(1_000, 1_000, 1, 1, StickyTaskAssignor.class);
+        completeLargeAssignment(1_000, 1_000, 1, 1, LegacyStickyTaskAssignor.class);
     }
 
     @Test(timeout = 300 * 1000)
     public void testStickyTaskAssignorManyStandbys() {
-        completeLargeAssignment(1_000, 100, 1, 20, StickyTaskAssignor.class);
+        completeLargeAssignment(1_000, 100, 1, 20, LegacyStickyTaskAssignor.class);
     }
 
     @Test(timeout = 300 * 1000)
     public void testStickyTaskAssignorManyThreadsPerClient() {
-        completeLargeAssignment(1_000, 10, 1000, 1, StickyTaskAssignor.class);
+        completeLargeAssignment(1_000, 10, 1000, 1, LegacyStickyTaskAssignor.class);
     }
 
     /* FallbackPriorTaskAssignor tests */

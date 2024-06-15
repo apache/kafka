@@ -26,6 +26,7 @@ import org.apache.kafka.raft.LogOffsetMetadata;
 import org.apache.kafka.raft.MockQuorumStateStore;
 import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.QuorumState;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;

@@ -16,16 +16,19 @@
  */
 package org.apache.kafka.raft;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.generated.QuorumStateData;
 import org.apache.kafka.raft.internals.ReplicaKey;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;

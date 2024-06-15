@@ -30,7 +30,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
@@ -871,14 +871,14 @@ public abstract class TopologyTestDriverTest {
                 Stores.inMemoryKeyValueStore("store"),
                 Serdes.ByteArray(),
                 Serdes.ByteArray(),
-                new SystemTime()),
+                Time.SYSTEM),
             "processor");
         topology.addGlobalStore(
             new KeyValueStoreBuilder<>(
                 Stores.inMemoryKeyValueStore("globalStore"),
                 Serdes.ByteArray(),
                 Serdes.ByteArray(),
-                new SystemTime()).withLoggingDisabled(),
+                Time.SYSTEM).withLoggingDisabled(),
             "sourceProcessorName",
             Serdes.ByteArray().deserializer(),
             Serdes.ByteArray().deserializer(),
@@ -1263,13 +1263,13 @@ public abstract class TopologyTestDriverTest {
                 Stores.inMemoryKeyValueStore("store"),
                 Serdes.ByteArray(),
                 Serdes.ByteArray(),
-                new SystemTime()));
+                Time.SYSTEM));
         topology.addGlobalStore(
             new KeyValueStoreBuilder<>(
                 Stores.inMemoryKeyValueStore("globalStore"),
                 Serdes.ByteArray(),
                 Serdes.ByteArray(),
-                new SystemTime()).withLoggingDisabled(),
+                Time.SYSTEM).withLoggingDisabled(),
             "sourceProcessorName",
             Serdes.ByteArray().deserializer(),
             Serdes.ByteArray().deserializer(),

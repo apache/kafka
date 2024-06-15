@@ -16,9 +16,10 @@
  */
 package org.apache.kafka.raft.internals;
 
+import org.apache.kafka.common.Uuid;
+
 import java.util.Objects;
 import java.util.Optional;
-import org.apache.kafka.common.Uuid;
 
 public final class ReplicaKey implements Comparable<ReplicaKey> {
     public static final Uuid NO_DIRECTORY_ID = Uuid.ZERO_UUID;

@@ -17,12 +17,14 @@
 
 package org.apache.kafka.metadata.properties;
 
+import org.apache.kafka.common.Uuid;
+
+import org.junit.jupiter.api.Test;
+
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Properties;
 
-import org.apache.kafka.common.Uuid;
-import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 

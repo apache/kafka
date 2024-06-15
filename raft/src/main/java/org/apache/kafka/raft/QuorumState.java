@@ -16,6 +16,15 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.raft.internals.BatchAccumulator;
+import org.apache.kafka.raft.internals.ReplicaKey;
+import org.apache.kafka.raft.internals.VoterSet;
+
+import org.slf4j.Logger;
+
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.Collections;
@@ -24,14 +33,6 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Random;
 import java.util.function.Supplier;
-
-import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.raft.internals.BatchAccumulator;
-import org.apache.kafka.raft.internals.ReplicaKey;
-import org.apache.kafka.raft.internals.VoterSet;
-import org.slf4j.Logger;
 
 /**
  * This class is responsible for managing the current state of this node and ensuring

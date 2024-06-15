@@ -16,11 +16,6 @@
  */
 package org.apache.kafka.raft;
 
-import net.jqwik.api.AfterFailureMode;
-import net.jqwik.api.ForAll;
-import net.jqwik.api.Property;
-import net.jqwik.api.Tag;
-import net.jqwik.api.constraints.IntRange;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -42,6 +37,12 @@ import org.apache.kafka.raft.internals.BatchMemoryPool;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.snapshot.SnapshotReader;
+
+import net.jqwik.api.AfterFailureMode;
+import net.jqwik.api.ForAll;
+import net.jqwik.api.Property;
+import net.jqwik.api.Tag;
+import net.jqwik.api.constraints.IntRange;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;

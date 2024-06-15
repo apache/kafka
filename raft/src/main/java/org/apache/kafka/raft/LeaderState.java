@@ -27,6 +27,7 @@ import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.ReplicaKey;
 import org.apache.kafka.raft.internals.VoterSet;
+
 import org.slf4j.Logger;
 
 import java.util.ArrayList;

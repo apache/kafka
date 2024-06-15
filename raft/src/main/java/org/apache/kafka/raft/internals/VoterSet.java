@@ -16,6 +16,14 @@
  */
 package org.apache.kafka.raft.internals;
 
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.feature.SupportedVersionRange;
+import org.apache.kafka.common.message.VotersRecord;
+import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.raft.Endpoints;
+
 import java.net.InetSocketAddress;
 import java.util.Collections;
 import java.util.HashMap;
@@ -29,14 +37,6 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import org.apache.kafka.common.Node;
-import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.feature.SupportedVersionRange;
-import org.apache.kafka.common.message.VotersRecord;
-import org.apache.kafka.common.network.ListenerName;
-import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.raft.Endpoints;
 
 /**
  * A type for representing the set of voters for a topic partition.
