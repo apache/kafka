@@ -387,6 +387,8 @@ public class GroupMetadataManagerTestContext {
         private int classicGroupMinSessionTimeoutMs = 10;
         private int classicGroupMaxSessionTimeoutMs = 10 * 60 * 1000;
         private final GroupCoordinatorMetricsShard metrics = mock(GroupCoordinatorMetricsShard.class);
+
+        private final GroupConfigManager groupConfigManager = mock(GroupConfigManager.class);
         private ConsumerGroupMigrationPolicy consumerGroupMigrationPolicy = ConsumerGroupMigrationPolicy.DISABLED;
 
         public Builder withMetadataImage(MetadataImage metadataImage) {
@@ -466,6 +468,7 @@ public class GroupMetadataManagerTestContext {
                     .withClassicGroupNewMemberJoinTimeoutMs(classicGroupNewMemberJoinTimeoutMs)
                     .withGroupCoordinatorMetricsShard(metrics)
                     .withConsumerGroupMigrationPolicy(consumerGroupMigrationPolicy)
+                    .withGroupConfigManager(groupConfigManager)
                     .build(),
                 classicGroupInitialRebalanceDelayMs,
                 classicGroupNewMemberJoinTimeoutMs

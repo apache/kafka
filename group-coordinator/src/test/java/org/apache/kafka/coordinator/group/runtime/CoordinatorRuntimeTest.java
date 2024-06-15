@@ -945,6 +945,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         when(builder.withSnapshotRegistry(any())).thenReturn(builder);
@@ -953,6 +954,7 @@ public class CoordinatorRuntimeTest {
         when(builder.withTimer(any())).thenReturn(builder);
         when(builder.withCoordinatorMetrics(any())).thenReturn(builder);
         when(builder.withTopicPartition(any())).thenReturn(builder);
+        when(builder.withGroupConfigManager(any())).thenReturn(builder);
         when(builder.build()).thenReturn(coordinator);
         when(supplier.get()).thenReturn(builder);
 
@@ -1415,6 +1417,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         TopicPartition coordinator0 = new TopicPartition("__consumer_offsets", 0);
@@ -1580,6 +1583,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         // Schedule the loading.
@@ -2101,6 +2105,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         TopicPartition coordinator0 = new TopicPartition("__consumer_offsets", 0);
@@ -2554,6 +2559,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         // Loads the coordinator.
@@ -2672,6 +2678,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         // Loads the coordinator.
@@ -2972,6 +2979,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         // Loads the coordinator. Poll once to execute the load operation and once
@@ -3042,6 +3050,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         // Loads the coordinator. Poll once to execute the load operation and once
@@ -3116,6 +3125,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         // Loads the coordinator. Poll once to execute the load operation and once
@@ -3185,6 +3195,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
                 .withSerializer(serializer)
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .build();
 
         // Schedule the loading.
@@ -3235,6 +3246,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .withAppendLingerMs(10)
                 .build();
 
@@ -3369,6 +3381,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .withAppendLingerMs(10)
                 .build();
 
@@ -3420,6 +3433,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .withAppendLingerMs(10)
                 .build();
 
@@ -3505,6 +3519,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .withAppendLingerMs(10)
                 .build();
 
@@ -3602,6 +3617,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .withAppendLingerMs(10)
                 .build();
 
@@ -3744,6 +3760,7 @@ public class CoordinatorRuntimeTest {
                 .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
                 .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
                 .withSerializer(new StringSerializer())
+                .withGroupConfigManager(mock(GroupConfigManager.class))
                 .withAppendLingerMs(10)
                 .build();
 

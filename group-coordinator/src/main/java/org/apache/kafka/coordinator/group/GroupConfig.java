@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -17,10 +17,6 @@
 
 package org.apache.kafka.coordinator.group;
 
-import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
-import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
-import static org.apache.kafka.common.config.ConfigDef.Type.INT;
-
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
@@ -29,6 +25,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+
+import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
+import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 
 /**
  * Group configuration related parameters and supporting methods like validation, etc. are
@@ -56,19 +56,13 @@ public class GroupConfig extends AbstractConfig {
         CONFIG
             .define(CONSUMER_SESSION_TIMEOUT_MS_CONFIG, INT, DEFAULT_CONSUMER_GROUP_SESSION_TIMEOUT_MS, atLeast(1),
                 MEDIUM, CONSUMER_SESSION_TIMEOUT_MS_DOC)
-            .define(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, INT, DEFAULT_CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS, atLeast(1),
+            .define(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, INT, DEFAULT_CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS,
+                atLeast(1),
                 MEDIUM, CONSUMER_HEARTBEAT_INTERVAL_MS_DOC);
     }
 
-    public final int sessionTimeoutMs;
-
-    public final int heartbeatIntervalMs;
-
     public GroupConfig(Map<?, ?> props) {
         super(CONFIG, props, false);
-
-        this.sessionTimeoutMs = getInt(CONSUMER_SESSION_TIMEOUT_MS_CONFIG);
-        this.heartbeatIntervalMs = getInt(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG);
     }
 
     public static List<String> configNames() {
@@ -100,5 +94,13 @@ public class GroupConfig extends AbstractConfig {
         props.putAll(defaults);
         props.putAll(overrides);
         return new GroupConfig(props);
+    }
+
+    public int sessionTimeoutMs() {
+        return getInt(CONSUMER_SESSION_TIMEOUT_MS_CONFIG);
+    }
+
+    public int heartbeatIntervalMs() {
+        return getInt(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG);
     }
 }

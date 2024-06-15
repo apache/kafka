@@ -4843,7 +4843,7 @@ public class GroupMetadataManager {
      */
     private int getConsumerGroupSessionTimeoutMs(String groupId) {
         Optional<GroupConfig> groupConfig = groupConfigManager.getGroupConfig(groupId);
-        return groupConfig.map(config -> config.sessionTimeoutMs)
+        return groupConfig.map(GroupConfig::sessionTimeoutMs)
             .orElse(consumerGroupSessionTimeoutMs);
     }
 
@@ -4852,7 +4852,7 @@ public class GroupMetadataManager {
      */
     private int getConsumerGroupHeartbeatIntervalMs(String groupId) {
         Optional<GroupConfig> groupConfig = groupConfigManager.getGroupConfig(groupId);
-        return groupConfig.map(config -> config.heartbeatIntervalMs)
+        return groupConfig.map(GroupConfig::heartbeatIntervalMs)
             .orElse(consumerGroupHeartbeatIntervalMs);
     }
 

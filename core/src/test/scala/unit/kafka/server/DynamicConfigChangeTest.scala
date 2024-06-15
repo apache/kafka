@@ -473,7 +473,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
   def testDynamicGroupConfigChange(quorum: String): Unit = {
     val newSessionTimeoutMs = 50000
@@ -497,7 +497,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     assertEquals(newSessionTimeoutMs, groupConfig.sessionTimeoutMs)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
   def testIncrementalAlterDefaultGroupConfig(quorum: String): Unit = {
     val admin = createAdminClient()

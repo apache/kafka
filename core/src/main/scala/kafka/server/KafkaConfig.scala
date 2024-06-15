@@ -33,9 +33,8 @@ import org.apache.kafka.common.record.{CompressionType, TimestampType}
 import org.apache.kafka.common.security.auth.KafkaPrincipalSerde
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.coordinator.group.ConsumerGroupMigrationPolicy
+import org.apache.kafka.coordinator.group.{ConsumerGroupMigrationPolicy, GroupConfig, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.group.Group.GroupType
-import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfigs, TransactionStateManagerConfigs}
 import org.apache.kafka.network.SocketServerConfigs

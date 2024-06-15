@@ -136,7 +136,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             return this;
         }
 
-        public CoordinatorShardBuilder<GroupCoordinatorShard, Record> withGroupConfigManager(
+        public CoordinatorShardBuilder<GroupCoordinatorShard, CoordinatorRecord> withGroupConfigManager(
             GroupConfigManager groupConfigManager
         ) {
             this.groupConfigManager = groupConfigManager;
