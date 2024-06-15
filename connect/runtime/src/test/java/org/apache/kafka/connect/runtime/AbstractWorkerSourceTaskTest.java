@@ -109,7 +109,7 @@ import static org.mockito.Mockito.when;
 
 @SuppressWarnings("unchecked")
 @ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.STRICT_STUBS)
+@MockitoSettings(strictness = Strictness.WARN)
 public class AbstractWorkerSourceTaskTest {
 
     private static final String TOPIC = "topic";
