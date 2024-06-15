@@ -446,7 +446,8 @@ public class LeaderState<T> implements EpochState {
 
         voterStates.values().forEach(replicaState -> {
             if (nodes.find(replicaState.replicaKey.id()) == null) {
-                // TODO: add missing listeners
+                // KAFKA-16953 will add support for including the node listeners in the node
+                // collection
                 nodes.add(new DescribeQuorumResponseData.Node().setNodeId(replicaState.replicaKey.id()));
             }
         });

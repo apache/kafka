@@ -2550,14 +2550,14 @@ public class KafkaRaftClientTest {
         );
     }
 
-    // TODO: add withKip853Rpc support
-    @Test
-    public void testDescribeQuorumNonLeader() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = { true, false })
+    public void testDescribeQuorumNonLeader(boolean withKip853Rpc) throws Exception {
         int localId = 0;
-        int voter2 = localId + 1;
-        int voter3 = localId + 2;
+        ReplicaKey voter2 = replicaKey(localId + 1, withKip853Rpc);
+        ReplicaKey voter3 = replicaKey(localId + 2, withKip853Rpc);
         int epoch = 2;
-        Set<Integer> voters = Utils.mkSet(localId, voter2, voter3);
+        Set<Integer> voters = Utils.mkSet(localId, voter2.id(), voter3.id());
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
             .withUnknownLeader(epoch)
