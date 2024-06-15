@@ -16,34 +16,6 @@
  */
 package org.apache.kafka.storage.internals.log;
 
-import static java.util.Arrays.asList;
-import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
-import static org.apache.kafka.common.config.ConfigDef.Range.between;
-import static org.apache.kafka.common.config.ConfigDef.Type.BOOLEAN;
-import static org.apache.kafka.common.config.ConfigDef.Type.CLASS;
-import static org.apache.kafka.common.config.ConfigDef.Type.DOUBLE;
-import static org.apache.kafka.common.config.ConfigDef.Type.LIST;
-import static org.apache.kafka.common.config.ConfigDef.Type.LONG;
-import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV1;
-import static org.apache.kafka.common.config.ConfigDef.Importance.LOW;
-import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
-import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
-import static org.apache.kafka.common.config.ConfigDef.Type.INT;
-import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
-
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Properties;
-import java.util.Set;
-import java.util.concurrent.ThreadLocalRandom;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
-
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.compress.GzipCompression;
 import org.apache.kafka.common.compress.Lz4Compression;
@@ -68,6 +40,34 @@ import org.apache.kafka.server.config.QuotaConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms;
 import org.apache.kafka.server.record.BrokerCompressionType;
+
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Properties;
+import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+
+import static java.util.Arrays.asList;
+import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
+import static org.apache.kafka.common.config.ConfigDef.Importance.LOW;
+import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
+import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+import static org.apache.kafka.common.config.ConfigDef.Range.between;
+import static org.apache.kafka.common.config.ConfigDef.Type.BOOLEAN;
+import static org.apache.kafka.common.config.ConfigDef.Type.CLASS;
+import static org.apache.kafka.common.config.ConfigDef.Type.DOUBLE;
+import static org.apache.kafka.common.config.ConfigDef.Type.INT;
+import static org.apache.kafka.common.config.ConfigDef.Type.LIST;
+import static org.apache.kafka.common.config.ConfigDef.Type.LONG;
+import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
+import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
+import static org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV1;
 
 public class LogConfig extends AbstractConfig {
 
