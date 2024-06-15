@@ -30,6 +30,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.common.message.ApiMessageType.GET_REPLICA_LOG_INFO;
+
 public abstract class AbstractResponse implements AbstractRequestResponse {
     public static final int DEFAULT_THROTTLE_TIME = 0;
 
@@ -277,6 +279,8 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return RemoveRaftVoterResponse.parse(responseBuffer, version);
             case UPDATE_RAFT_VOTER:
                 return UpdateRaftVoterResponse.parse(responseBuffer, version);
+            case GET_REPLICA_LOG_INFO:
+                return GetReplicaLogInfoResponse.parse(responseBuffer, version);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));
