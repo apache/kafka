@@ -111,8 +111,8 @@ public class ConsumerTaskTest {
         consumerTask.closeConsumer();
 
         // Go through the closure process again
+        // Note: After ConsumerTask is closed, the second close() normally does not call closeConsumer() again
         consumerTask.close();
-        consumerTask.closeConsumer();
     }
 
     @Test
@@ -138,6 +138,7 @@ public class ConsumerTaskTest {
         consumerTask.addAssignmentsForPartitions(new HashSet<>(idPartitions));
         consumerTask.ingestRecords();
         for (final TopicIdPartition idPartition : idPartitions) {
+            assertTrue(consumerTask.isUserPartitionAssigned(idPartition), "Partition " + idPartition + " has not been assigned");
             assertTrue(consumerTask.isMetadataPartitionAssigned(partitioner.metadataPartition(idPartition)));
             assertTrue(handler.isPartitionLoaded.get(idPartition));
         }
@@ -232,6 +233,7 @@ public class ConsumerTaskTest {
         final Set<TopicIdPartition> assignments = Collections.singleton(tpId0);
         consumerTask.addAssignmentsForPartitions(assignments);
         consumerTask.ingestRecords();
+        assertTrue(consumerTask.isUserPartitionAssigned(tpId0), "Partition " + tpId0 + " has not been assigned");
 
         addRecord(consumer, metadataPartition, tpId0, 0);
         addRecord(consumer, metadataPartition, tpId0, 1);
@@ -242,6 +244,7 @@ public class ConsumerTaskTest {
         // should only read the tpId1 records
         consumerTask.addAssignmentsForPartitions(Collections.singleton(tpId1));
         consumerTask.ingestRecords();
+        assertTrue(consumerTask.isUserPartitionAssigned(tpId1), "Partition " + tpId1 + " has not been assigned");
 
         addRecord(consumer, metadataPartition, tpId1, 2);
         consumerTask.ingestRecords();
@@ -272,6 +275,7 @@ public class ConsumerTaskTest {
         final Set<TopicIdPartition> assignments = Collections.singleton(tpId0);
         consumerTask.addAssignmentsForPartitions(assignments);
         consumerTask.ingestRecords();
+        assertTrue(consumerTask.isUserPartitionAssigned(tpId0), "Partition " + tpId0 + " has not been assigned");
 
         // Adding metadata records in the order opposite to the order of assignments
         addRecord(consumer, metadataPartition, tpId1, 0);
@@ -284,6 +288,8 @@ public class ConsumerTaskTest {
 
         // Adding assignment for tpId1 after related metadata records have already been read
         consumerTask.addAssignmentsForPartitions(Collections.singleton(tpId1));
+        consumerTask.ingestRecords();
+        assertTrue(consumerTask.isUserPartitionAssigned(tpId1), "Partition " + tpId1 + " has not been assigned");
 
         // Adding assignment for tpId0 to trigger the reset to last read offset
         // and assignment for tpId3 that has different metadata partition to trigger the update of metadata snapshot
@@ -309,6 +315,7 @@ public class ConsumerTaskTest {
         consumerTask.addAssignmentsForPartitions(Collections.singleton(tpId));
         consumerTask.ingestRecords();
 
+        assertTrue(consumerTask.isUserPartitionAssigned(tpId), "Partition " + tpId + " has not been assigned");
         assertTrue(consumerTask.isMetadataPartitionAssigned(metadataPartition));
         assertFalse(handler.isPartitionInitialized.containsKey(tpId));
         IntStream.range(0, 5).forEach(offset -> addRecord(consumer, metadataPartition, tpId, offset));
@@ -327,6 +334,7 @@ public class ConsumerTaskTest {
         consumerTask.addAssignmentsForPartitions(Collections.singleton(tpId));
         consumerTask.ingestRecords();
 
+        assertTrue(consumerTask.isUserPartitionAssigned(tpId), "Partition " + tpId + " has not been assigned");
         assertTrue(consumerTask.isMetadataPartitionAssigned(metadataPartition));
         assertTrue(handler.isPartitionInitialized.containsKey(tpId), "Should have initialized the partition");
         assertFalse(consumerTask.readOffsetForMetadataPartition(metadataPartition).isPresent());
@@ -334,6 +342,10 @@ public class ConsumerTaskTest {
 
     @Test
     public void testConcurrentAccess() throws InterruptedException {
+        // Here we need to test concurrent access. When ConsumerTask is ingesting records,
+        // we need to concurrently add partitions and perform close()
+        new Thread(consumerTask).start();
+
         final CountDownLatch latch = new CountDownLatch(1);
         final TopicIdPartition tpId = getIdPartitions("concurrent", 1).get(0);
         consumer.updateEndOffsets(Collections.singletonMap(toRemoteLogPartition(partitioner.metadataPartition(tpId)), 0L));
@@ -341,7 +353,6 @@ public class ConsumerTaskTest {
             try {
                 latch.await();
                 consumerTask.addAssignmentsForPartitions(Collections.singleton(tpId));
-                consumerTask.ingestRecords();
             } catch (final InterruptedException e) {
                 fail("Shouldn't have thrown an exception");
             }
@@ -349,7 +360,6 @@ public class ConsumerTaskTest {
         final Thread closeThread = new Thread(() -> {
             try {
                 latch.await();
-                consumerTask.ingestRecords();
                 consumerTask.close();
             } catch (final InterruptedException e) {
                 fail("Shouldn't have thrown an exception");
@@ -371,6 +381,7 @@ public class ConsumerTaskTest {
         consumerTask.addAssignmentsForPartitions(Collections.singleton(tpId));
         consumerTask.ingestRecords();
 
+        assertTrue(consumerTask.isUserPartitionAssigned(tpId), "Partition " + tpId + " has not been assigned");
         assertTrue(consumerTask.isMetadataPartitionAssigned(metadataPartition));
 
         consumer.setPollException(new LeaderNotAvailableException("Leader not available!"));
@@ -394,6 +405,7 @@ public class ConsumerTaskTest {
         consumerTask.addAssignmentsForPartitions(Collections.singleton(tpId));
         consumerTask.ingestRecords();
 
+        assertTrue(consumerTask.isUserPartitionAssigned(tpId), "Partition " + tpId + " has not been assigned");
         assertTrue(consumerTask.isMetadataPartitionAssigned(metadataPartition));
 
         consumer.setPollException(new AuthorizationException("Unauthorized to read the topic!"));
