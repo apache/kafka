@@ -166,6 +166,7 @@ public class TaskAssignorIntegrationTest {
         final AtomicBoolean assignPoisonPartition2 = new AtomicBoolean(false);
 
         final AtomicBoolean taskAssignorConfigured = new AtomicBoolean(false);
+        final AtomicBoolean taskAssignorReceivedFinalAssignment = new AtomicBoolean(false);
         final AtomicBoolean taskAssignorErrored = new AtomicBoolean(false);
     }
 
@@ -176,6 +177,7 @@ public class TaskAssignorIntegrationTest {
         AtomicBoolean assignPoisonPartition;
 
         AtomicBoolean taskAssignorConfigured;
+        AtomicBoolean taskAssignorReceivedFinalAssignment;
         AtomicBoolean taskAssignorErrored;
 
         @Override
@@ -210,6 +212,7 @@ public class TaskAssignorIntegrationTest {
 
         @Override
         public void onAssignmentComputed(final GroupAssignment assignment, final GroupSubscription subscription, final AssignmentError error) {
+            taskAssignorReceivedFinalAssignment.set(true);
             if (error != AssignmentError.NONE) {
                 taskAssignorErrored.set(true);
                 throw new AssertionError("Failed because task assignment was invalid due to error: " + error);
@@ -225,6 +228,7 @@ public class TaskAssignorIntegrationTest {
             this.assignPoisonPartition = configContainer.assignPoisonPartition2;
 
             this.taskAssignorConfigured = configContainer.taskAssignorConfigured;
+            this.taskAssignorReceivedFinalAssignment = configContainer.taskAssignorReceivedFinalAssignment;
             this.taskAssignorErrored = configContainer.taskAssignorErrored;
 
             taskAssignorConfigured.set(true);
@@ -297,6 +301,7 @@ public class TaskAssignorIntegrationTest {
             waitForStreamsState(kafkaStreams, State.RUNNING);
 
             assertThat(assignorConfigs.taskAssignorConfigured.get(), is((true)));
+            assertThat(assignorConfigs.taskAssignorReceivedFinalAssignment.get(), is((true)));
             assertThat(assignorConfigs.taskAssignorErrored.get(), is((false)));
 
             verifyOutputRecordsForInputPartition(String.valueOf(PARTITION_0), 0L);
@@ -325,6 +330,9 @@ public class TaskAssignorIntegrationTest {
     public void shouldUseStickyTaskAssignor() throws Exception {
         final Class<StickyTaskAssignor> taskAssignorClass = StickyTaskAssignor.class;
 
+        final int numPartitions = 20;
+        CLUSTER.createTopic(inputTopic, numPartitions, 1);
+
         // Should use the new assignor if it's configured and the internal legacy assignor config is not
         configMap.put(StreamsConfig.TASK_ASSIGNOR_CLASS_CONFIG, taskAssignorClass.getName());
         final Properties properties = mkObjectProperties(configMap);
@@ -347,6 +355,9 @@ public class TaskAssignorIntegrationTest {
     @Test
     public void shouldProperlyConfigureLegacyTaskAssignor() throws Exception {
         final Class<MyLegacyTaskAssignor> taskAssignorClass = MyLegacyTaskAssignor.class;
+
+        final int numPartitions = 20;
+        CLUSTER.createTopic(inputTopic, numPartitions, 1);
 
         // Should use the legacy assignor if it's configured while the new public assignor config is not
         configMap.put(StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, taskAssignorClass.getName());
