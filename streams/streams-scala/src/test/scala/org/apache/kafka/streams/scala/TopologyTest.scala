@@ -42,7 +42,6 @@ import scala.jdk.CollectionConverters._
  */
 //noinspection ScalaDeprecation
 @Timeout(600)
-@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 class TopologyTest {
   private val inputTopic = "input-topic"
   private val userClicksTopic = "user-clicks-topic"
