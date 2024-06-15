@@ -245,14 +245,12 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig,
     val updatedDynamicBrokerConfigs = brokerConfig.dynamicConfig.currentDynamicBrokerConfigs
     val updatedDynamicDefaultConfigs = brokerConfig.dynamicConfig.currentDynamicDefaultConfigs
 
-    def getOrDefault(prop: String): Long = {
-      updatedDynamicBrokerConfigs get prop match {
-        case Some(value) => value.toLong
-        case None => {
-          updatedDynamicDefaultConfigs get prop match {
-            case Some(defaultValue) => defaultValue.toLong
-            case None => QuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT
-          }
+    def getOrDefault(prop: String): Long = updatedDynamicBrokerConfigs get prop match {
+      case Some(value) => value.toLong
+      case None => {
+        updatedDynamicDefaultConfigs get prop match {
+          case Some(defaultValue) => defaultValue.toLong
+          case None => QuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT
         }
       }
     }
