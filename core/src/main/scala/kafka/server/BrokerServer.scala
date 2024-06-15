@@ -447,7 +447,6 @@ class BrokerServer(
         rlm.startup()
       }
 
-      metadataPublishers.add(new MetadataVersionConfigValidator(config, sharedServer.metadataPublishingFaultHandler))
       brokerMetadataPublisher = new BrokerMetadataPublisher(config,
         metadataCache,
         logManager,
