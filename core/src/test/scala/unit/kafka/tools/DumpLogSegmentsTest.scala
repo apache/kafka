@@ -31,7 +31,7 @@ import kafka.tools.DumpLogSegments.{OffsetsMessageParser, TimeIndexDumpErrors}
 import kafka.utils.{TestUtils, VerifiableProperties}
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.{Assignment, Subscription}
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
-import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, RegisterBrokerRecord, TopicRecord}
@@ -46,6 +46,8 @@ import org.apache.kafka.raft.{KafkaRaftClient, OffsetAndEpoch}
 import org.apache.kafka.raft.internals.VoterSetTest
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.config.ServerLogConfigs
+import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteLogMetadataSerde
+import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentId, RemoteLogSegmentMetadata, RemoteLogSegmentMetadataUpdate, RemoteLogSegmentState, RemotePartitionDeleteMetadata, RemotePartitionDeleteState}
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.snapshot.RecordsSnapshotWriter
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
@@ -61,7 +63,6 @@ import scala.util.matching.Regex
 case class BatchInfo(records: Seq[SimpleRecord], hasKeys: Boolean, hasValues: Boolean)
 
 class DumpLogSegmentsTest {
-
   val tmpDir = TestUtils.tempDir()
   val logDir = TestUtils.randomPartitionLogDir(tmpDir)
   val segmentName = "00000000000000000000"
@@ -241,6 +242,32 @@ class DumpLogSegmentsTest {
     assertEquals(Map.empty, errors.misMatchesForTimeIndexFilesMap)
     assertEquals(Map.empty, errors.outOfOrderTimestamp)
     assertEquals(Map.empty, errors.shallowOffsetNotFound)
+  }
+
+  @Test
+  def testDumpRemoteLogMetadataRecords(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
+    log = LogTestUtils.createLog(logDir, logConfig, new BrokerTopicStats, time.scheduler, time)
+
+    val topicIdPartition = new TopicIdPartition(Uuid.randomUuid, new TopicPartition("foo", 0))
+    val remoteLogSegmentId = new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid)
+
+    val metadataRecords = Seq(
+      new RemoteLogSegmentMetadataUpdate(remoteLogSegmentId, time.milliseconds, 
+        Optional.of(new RemoteLogSegmentMetadata.CustomMetadata(Array[Byte](0, 1, 2, 3))), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, 2),
+      new RemotePartitionDeleteMetadata(topicIdPartition, RemotePartitionDeleteState.DELETE_PARTITION_MARKED, time.milliseconds, 0)
+    )
+
+    val records: Array[SimpleRecord] = metadataRecords.map(message => {
+      val serde = new RemoteLogMetadataSerde
+      new SimpleRecord(null, serde.serialize(message))
+    }).toArray
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, records:_*), leaderEpoch = 1)
+    log.flush(false)
+
+    val output = runDumpLogSegments(Array("--remote-log-metadata-decoder", "--files", logFilePath))
+    assertTrue(output.contains("COPY_SEGMENT_FINISHED"))
+    assertTrue(output.contains("DELETE_PARTITION_MARKED"))
   }
 
   @Test
