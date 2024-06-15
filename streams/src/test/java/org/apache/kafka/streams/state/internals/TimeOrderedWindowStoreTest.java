@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.util.Collection;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
@@ -53,9 +52,6 @@ import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.KeyFirs
 import org.apache.kafka.streams.state.internals.PrefixedWindowKeySchemas.TimeFirstWindowKeySchema;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -64,9 +60,12 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
+import java.util.stream.Stream;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import static java.time.Duration.ofHours;
 import static java.time.Duration.ofMinutes;
@@ -83,20 +82,18 @@ import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 
-
-@RunWith(Parameterized.class)
 public class TimeOrderedWindowStoreTest {
 
     private static final int MAX_CACHE_SIZE_BYTES = 300;
@@ -114,19 +111,14 @@ public class TimeOrderedWindowStoreTest {
     private ThreadCache cache;
     private TimeFirstWindowKeySchema baseKeySchema;
 
-    @Parameter
-    public boolean hasIndex;
-
-    @Parameterized.Parameters(name = "{0}")
-    public static Collection<Object[]> data() {
-        return asList(new Object[][] {
-            {true},
-            {false}
-        });
+    public static Stream<Arguments> data() {
+        return Stream.of(
+            Arguments.of(true),
+            Arguments.of(false)
+        );
     }
 
-    @Before
-    public void setUp() {
+    public void setUp(final boolean hasIndex) {
         baseKeySchema = new TimeFirstWindowKeySchema();
         bytesStore = new RocksDBTimeOrderedWindowSegmentedBytesStore("test", "metrics-scope", 100, SEGMENT_INTERVAL, hasIndex);
         underlyingStore = new RocksDBTimeOrderedWindowStore(bytesStore, false, WINDOW_SIZE);
@@ -141,14 +133,16 @@ public class TimeOrderedWindowStoreTest {
         cachingStore.init((StateStoreContext) context, cachingStore);
     }
 
-    @After
+    @AfterEach
     public void closeStore() {
         cachingStore.close();
     }
 
     @SuppressWarnings("deprecation")
-    @Test
-    public void shouldDelegateDeprecatedInit() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldDelegateDeprecatedInit(final boolean hasIndex) {
+        setUp(hasIndex);
         final RocksDBTimeOrderedWindowStore inner = mock(RocksDBTimeOrderedWindowStore.class);
         when(inner.hasIndex()).thenReturn(hasIndex);
         final TimeOrderedCachingWindowStore outer = new TimeOrderedCachingWindowStore(inner, WINDOW_SIZE, SEGMENT_INTERVAL);
@@ -159,8 +153,10 @@ public class TimeOrderedWindowStoreTest {
         verify(inner).init((ProcessorContext) context, outer);
     }
 
-    @Test
-    public void shouldDelegateInit() {
+    @ParameterizedTest
+@MethodSource("data")
+    public void shouldDelegateInit(final boolean hasIndex) {
+        setUp(hasIndex);
         final RocksDBTimeOrderedWindowStore inner = mock(RocksDBTimeOrderedWindowStore.class);
         when(inner.hasIndex()).thenReturn(hasIndex);
         final TimeOrderedCachingWindowStore outer = new TimeOrderedCachingWindowStore(inner, WINDOW_SIZE, SEGMENT_INTERVAL);
@@ -172,8 +168,10 @@ public class TimeOrderedWindowStoreTest {
         verify(inner).init((StateStoreContext) context, outer);
     }
 
-    @Test
-    public void shouldThrowIfWrongStore() {
+    @ParameterizedTest
+@MethodSource("data")
+    public void shouldThrowIfWrongStore(final boolean hasIndex) {
+        setUp(hasIndex);
         final RocksDBTimestampedWindowStore innerWrong = mock(RocksDBTimestampedWindowStore.class);
         final Exception e = assertThrows(IllegalArgumentException.class,
             () -> new TimeOrderedCachingWindowStore(innerWrong, WINDOW_SIZE, SEGMENT_INTERVAL));
@@ -185,8 +183,10 @@ public class TimeOrderedWindowStoreTest {
         new TimeOrderedCachingWindowStore(inner, WINDOW_SIZE, SEGMENT_INTERVAL);
     }
 
-    @Test
-    public void shouldNotReturnDuplicatesInRanges() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldNotReturnDuplicatesInRanges(final boolean hasIndex) {
+        setUp(hasIndex);
         final StreamsBuilder builder = new StreamsBuilder();
 
         final StoreBuilder<TimestampedWindowStore<String, String>> storeBuilder = Stores.timestampedWindowStoreBuilder(
@@ -284,8 +284,10 @@ public class TimeOrderedWindowStoreTest {
         driver.close();
     }
 
-    @Test
-    public void shouldPutFetchFromCache() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldPutFetchFromCache(final boolean hasIndex) {
+        setUp(hasIndex);
         cachingStore.put(bytesKey("a"), bytesValue("a"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("b"), bytesValue("b"), DEFAULT_TIMESTAMP);
 
@@ -305,14 +307,18 @@ public class TimeOrderedWindowStoreTest {
         }
     }
 
-    @Test
-    public void shouldMatchPositionAfterPutWithFlushListener() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldMatchPositionAfterPutWithFlushListener(final boolean hasIndex) {
+        setUp(hasIndex);
         cachingStore.setFlushListener(record -> { }, false);
         shouldMatchPositionAfterPut();
     }
 
-    @Test
-    public void shouldMatchPositionAfterPutWithoutFlushListener() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldMatchPositionAfterPutWithoutFlushListener(final boolean hasIndex) {
+        setUp(hasIndex);
         cachingStore.setFlushListener(null, false);
         shouldMatchPositionAfterPut();
     }
@@ -364,8 +370,10 @@ public class TimeOrderedWindowStoreTest {
         return Serdes.String().deserializer().deserialize("", from);
     }
 
-    @Test
-    public void shouldPutFetchRangeFromCache() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldPutFetchRangeFromCache(final boolean hasIndex) {
+        setUp(hasIndex);
         cachingStore.put(bytesKey("a"), bytesValue("a"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("b"), bytesValue("b"), DEFAULT_TIMESTAMP);
 
@@ -384,8 +392,10 @@ public class TimeOrderedWindowStoreTest {
         }
     }
 
-    @Test
-    public void shouldPutFetchRangeFromCacheForNullKeyFrom() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldPutFetchRangeFromCacheForNullKeyFrom(final boolean hasIndex) {
+        setUp(hasIndex);
         cachingStore.put(bytesKey("a"), bytesValue("a"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("b"), bytesValue("b"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("c"), bytesValue("c"), DEFAULT_TIMESTAMP + 10L);
@@ -407,8 +417,10 @@ public class TimeOrderedWindowStoreTest {
         }
     }
 
-    @Test
-    public void shouldPutFetchRangeFromCacheForNullKeyTo() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldPutFetchRangeFromCacheForNullKeyTo(final boolean hasIndex) {
+        setUp(hasIndex);
         cachingStore.put(bytesKey("a"), bytesValue("a"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("b"), bytesValue("b"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("c"), bytesValue("c"), DEFAULT_TIMESTAMP + 10L);
@@ -430,8 +442,10 @@ public class TimeOrderedWindowStoreTest {
         }
     }
 
-    @Test
-    public void shouldPutFetchRangeFromCacheForNullKeyFromKeyTo() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldPutFetchRangeFromCacheForNullKeyFromKeyTo(final boolean hasIndex) {
+        setUp(hasIndex);
         cachingStore.put(bytesKey("a"), bytesValue("a"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("b"), bytesValue("b"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("c"), bytesValue("c"), DEFAULT_TIMESTAMP + 10L);
@@ -454,8 +468,10 @@ public class TimeOrderedWindowStoreTest {
         }
     }
 
-    @Test
-    public void shouldPutBackwardFetchRangeFromCacheForNullKeyFrom() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldPutBackwardFetchRangeFromCacheForNullKeyFrom(final boolean hasIndex) {
+        setUp(hasIndex);
         cachingStore.put(bytesKey("a"), bytesValue("a"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("b"), bytesValue("b"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("c"), bytesValue("c"), DEFAULT_TIMESTAMP + 10L);
@@ -476,8 +492,10 @@ public class TimeOrderedWindowStoreTest {
         }
     }
 
-    @Test
-    public void shouldPutBackwardFetchRangeFromCacheForNullKeyTo() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldPutBackwardFetchRangeFromCacheForNullKeyTo(final boolean hasIndex) {
+        setUp(hasIndex);
         cachingStore.put(bytesKey("a"), bytesValue("a"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("b"), bytesValue("b"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("c"), bytesValue("c"), DEFAULT_TIMESTAMP + 10L);
@@ -498,8 +516,10 @@ public class TimeOrderedWindowStoreTest {
         }
     }
 
-    @Test
-    public void shouldPutBackwardFetchRangeFromCacheForNullKeyFromKeyTo() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldPutBackwardFetchRangeFromCacheForNullKeyFromKeyTo(final boolean hasIndex) {
+        setUp(hasIndex);
         cachingStore.put(bytesKey("a"), bytesValue("a"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("b"), bytesValue("b"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("c"), bytesValue("c"), DEFAULT_TIMESTAMP + 10L);
@@ -522,8 +542,10 @@ public class TimeOrderedWindowStoreTest {
         }
     }
 
-    @Test
-    public void shouldGetAllFromCache() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldGetAllFromCache(final boolean hasIndex) {
+        setUp(hasIndex);
         cachingStore.put(bytesKey("a"), bytesValue("a"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("b"), bytesValue("b"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("c"), bytesValue("c"), DEFAULT_TIMESTAMP);
@@ -545,8 +567,10 @@ public class TimeOrderedWindowStoreTest {
         }
     }
 
-    @Test
-    public void shouldGetAllBackwardFromCache() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldGetAllBackwardFromCache(final boolean hasIndex) {
+        setUp(hasIndex);
         cachingStore.put(bytesKey("a"), bytesValue("a"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("b"), bytesValue("b"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("c"), bytesValue("c"), DEFAULT_TIMESTAMP);
@@ -568,8 +592,10 @@ public class TimeOrderedWindowStoreTest {
         }
     }
 
-    @Test
-    public void shouldFetchAllWithinTimestampRange() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldFetchAllWithinTimestampRange(final boolean hasIndex) {
+        setUp(hasIndex);
         final String[] array = {"a", "b", "c", "d", "e", "f", "g", "h"};
         for (int i = 0; i < array.length; i++) {
             cachingStore.put(bytesKey(array[i]), bytesValue(array[i]), i);
@@ -612,8 +638,10 @@ public class TimeOrderedWindowStoreTest {
         }
     }
 
-    @Test
-    public void shouldFetchAllBackwardWithinTimestampRange() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldFetchAllBackwardWithinTimestampRange(final boolean hasIndex) {
+        setUp(hasIndex);
         final String[] array = {"a", "b", "c", "d", "e", "f", "g", "h"};
         for (int i = 0; i < array.length; i++) {
             cachingStore.put(bytesKey(array[i]), bytesValue(array[i]), i);
@@ -656,8 +684,10 @@ public class TimeOrderedWindowStoreTest {
         }
     }
 
-    @Test
-    public void shouldFlushEvictedItemsIntoUnderlyingStore() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldFlushEvictedItemsIntoUnderlyingStore(final boolean hasIndex) {
+        setUp(hasIndex);
         final int added = addItemsToCache();
         // all dirty entries should have been flushed
         try (final KeyValueIterator<Bytes, byte[]> iter = bytesStore.fetch(
@@ -672,8 +702,10 @@ public class TimeOrderedWindowStoreTest {
         }
     }
 
-    @Test
-    public void shouldForwardDirtyItemsWhenFlushCalled() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldForwardDirtyItemsWhenFlushCalled(final boolean hasIndex) {
+        setUp(hasIndex);
         final Windowed<String> windowedKey =
             new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
         cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
@@ -682,14 +714,18 @@ public class TimeOrderedWindowStoreTest {
         assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
     }
 
-    @Test
-    public void shouldSetFlushListener() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldSetFlushListener(final boolean hasIndex) {
+        setUp(hasIndex);
         assertTrue(cachingStore.setFlushListener(null, true));
         assertTrue(cachingStore.setFlushListener(null, false));
     }
 
-    @Test
-    public void shouldForwardOldValuesWhenEnabled() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldForwardOldValuesWhenEnabled(final boolean hasIndex) {
+        setUp(hasIndex);
         cachingStore.setFlushListener(cacheListener, true);
         final Windowed<String> windowedKey =
             new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
@@ -716,8 +752,10 @@ public class TimeOrderedWindowStoreTest {
         cacheListener.forwarded.clear();
     }
 
-    @Test
-    public void shouldForwardOldValuesWhenDisabled() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldForwardOldValuesWhenDisabled(final boolean hasIndex) {
+        setUp(hasIndex);
         final Windowed<String> windowedKey =
             new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
         cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
@@ -742,14 +780,18 @@ public class TimeOrderedWindowStoreTest {
         cacheListener.forwarded.clear();
     }
 
-    @Test
-    public void shouldForwardDirtyItemToListenerWhenEvicted() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldForwardDirtyItemToListenerWhenEvicted(final boolean hasIndex) {
+        setUp(hasIndex);
         final int numRecords = addItemsToCache();
         assertEquals(numRecords, cacheListener.forwarded.size());
     }
 
-    @Test
-    public void shouldTakeValueFromCacheIfSameTimestampFlushedToRocks() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldTakeValueFromCacheIfSameTimestampFlushedToRocks(final boolean hasIndex) {
+        setUp(hasIndex);
         cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
         cachingStore.flush();
         cachingStore.put(bytesKey("1"), bytesValue("b"), DEFAULT_TIMESTAMP);
@@ -761,8 +803,10 @@ public class TimeOrderedWindowStoreTest {
         }
     }
 
-    @Test
-    public void shouldIterateAcrossWindows() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldIterateAcrossWindows(final boolean hasIndex) {
+        setUp(hasIndex);
         cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("1"), bytesValue("b"), DEFAULT_TIMESTAMP + WINDOW_SIZE);
 
@@ -774,8 +818,10 @@ public class TimeOrderedWindowStoreTest {
         }
     }
 
-    @Test
-    public void shouldIterateBackwardAcrossWindows() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldIterateBackwardAcrossWindows(final boolean hasIndex) {
+        setUp(hasIndex);
         cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
         cachingStore.put(bytesKey("1"), bytesValue("b"), DEFAULT_TIMESTAMP + WINDOW_SIZE);
 
@@ -787,8 +833,10 @@ public class TimeOrderedWindowStoreTest {
         }
     }
 
-    @Test
-    public void shouldIterateCacheAndStore() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldIterateCacheAndStore(final boolean hasIndex) {
+        setUp(hasIndex);
         final Bytes key = Bytes.wrap("1".getBytes());
         bytesStore.put(TimeFirstWindowKeySchema.toStoreKeyBinary(key, DEFAULT_TIMESTAMP, 0), "a".getBytes());
         cachingStore.put(key, bytesValue("b"), DEFAULT_TIMESTAMP + WINDOW_SIZE);
@@ -800,8 +848,10 @@ public class TimeOrderedWindowStoreTest {
         }
     }
 
-    @Test
-    public void shouldIterateBackwardCacheAndStore() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldIterateBackwardCacheAndStore(final boolean hasIndex) {
+        setUp(hasIndex);
         final Bytes key = Bytes.wrap("1".getBytes());
         bytesStore.put(TimeFirstWindowKeySchema.toStoreKeyBinary(key, DEFAULT_TIMESTAMP, 0), "a".getBytes());
         cachingStore.put(key, bytesValue("b"), DEFAULT_TIMESTAMP + WINDOW_SIZE);
@@ -813,8 +863,10 @@ public class TimeOrderedWindowStoreTest {
         }
     }
 
-    @Test
-    public void shouldIterateCacheAndStoreKeyRange() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldIterateCacheAndStoreKeyRange(final boolean hasIndex) {
+        setUp(hasIndex);
         final Bytes key = Bytes.wrap("1".getBytes());
         bytesStore.put(TimeFirstWindowKeySchema.toStoreKeyBinary(key, DEFAULT_TIMESTAMP, 0), "a".getBytes());
         cachingStore.put(key, bytesValue("b"), DEFAULT_TIMESTAMP + WINDOW_SIZE);
@@ -833,8 +885,10 @@ public class TimeOrderedWindowStoreTest {
         }
     }
 
-    @Test
-    public void shouldIterateBackwardCacheAndStoreKeyRange() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldIterateBackwardCacheAndStoreKeyRange(final boolean hasIndex) {
+        setUp(hasIndex);
         final Bytes key = Bytes.wrap("1".getBytes());
         bytesStore.put(TimeFirstWindowKeySchema.toStoreKeyBinary(key, DEFAULT_TIMESTAMP, 0), "a".getBytes());
         cachingStore.put(key, bytesValue("b"), DEFAULT_TIMESTAMP + WINDOW_SIZE);
@@ -853,8 +907,10 @@ public class TimeOrderedWindowStoreTest {
         }
     }
 
-    @Test
-    public void shouldClearNamespaceCacheOnClose() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldClearNamespaceCacheOnClose(final boolean hasIndex) {
+        setUp(hasIndex);
         cachingStore.put(bytesKey("a"), bytesValue("a"), 0L);
         final int size = hasIndex ? 2 : 1;
         assertEquals(size, cache.size());
@@ -862,26 +918,34 @@ public class TimeOrderedWindowStoreTest {
         assertEquals(0, cache.size());
     }
 
-    @Test
-    public void shouldThrowIfTryingToFetchFromClosedCachingStore() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldThrowIfTryingToFetchFromClosedCachingStore(final boolean hasIndex) {
+        setUp(hasIndex);
         cachingStore.close();
         assertThrows(InvalidStateStoreException.class, () -> cachingStore.fetch(bytesKey("a"), ofEpochMilli(0), ofEpochMilli(10)));
     }
 
-    @Test
-    public void shouldThrowIfTryingToFetchRangeFromClosedCachingStore() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldThrowIfTryingToFetchRangeFromClosedCachingStore(final boolean hasIndex) {
+        setUp(hasIndex);
         cachingStore.close();
         assertThrows(InvalidStateStoreException.class, () -> cachingStore.fetch(bytesKey("a"), bytesKey("b"), ofEpochMilli(0), ofEpochMilli(10)));
     }
 
-    @Test
-    public void shouldThrowIfTryingToWriteToClosedCachingStore() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldThrowIfTryingToWriteToClosedCachingStore(final boolean hasIndex) {
+        setUp(hasIndex);
         cachingStore.close();
         assertThrows(InvalidStateStoreException.class, () -> cachingStore.put(bytesKey("a"), bytesValue("a"), 0L));
     }
 
-    @Test
-    public void shouldSkipNonExistBaseKeyInCache() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldSkipNonExistBaseKeyInCache(final boolean hasIndex) {
+        setUp(hasIndex);
         cachingStore.put(bytesKey("aa"), bytesValue("0002"), 0);
 
         final SegmentedCacheFunction indexCacheFunction = new SegmentedCacheFunction(new KeyFirstWindowKeySchema(), SEGMENT_INTERVAL);
@@ -927,8 +991,10 @@ public class TimeOrderedWindowStoreTest {
         }
     }
 
-    @Test
-    public void shouldFetchAndIterateOverExactKeys() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldFetchAndIterateOverExactKeys(final boolean hasIndex) {
+        setUp(hasIndex);
         cachingStore.put(bytesKey("a"), bytesValue("0001"), 0);
         cachingStore.put(bytesKey("aa"), bytesValue("0002"), 0);
         cachingStore.put(bytesKey("a"), bytesValue("0003"), 1);
@@ -945,8 +1011,10 @@ public class TimeOrderedWindowStoreTest {
         verifyKeyValueList(expected, actual);
     }
 
-    @Test
-    public void shouldBackwardFetchAndIterateOverExactKeys() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldBackwardFetchAndIterateOverExactKeys(final boolean hasIndex) {
+        setUp(hasIndex);
         cachingStore.put(bytesKey("a"), bytesValue("0001"), 0);
         cachingStore.put(bytesKey("aa"), bytesValue("0002"), 0);
         cachingStore.put(bytesKey("a"), bytesValue("0003"), 1);
@@ -963,8 +1031,10 @@ public class TimeOrderedWindowStoreTest {
         verifyKeyValueList(expected, actual);
     }
 
-    @Test
-    public void shouldFetchAndIterateOverKeyRange() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldFetchAndIterateOverKeyRange(final boolean hasIndex) {
+        setUp(hasIndex);
         cachingStore.put(bytesKey("a"), bytesValue("0001"), 0);
         cachingStore.put(bytesKey("aa"), bytesValue("0002"), 0);
         cachingStore.put(bytesKey("a"), bytesValue("0003"), 1);
@@ -1014,8 +1084,10 @@ public class TimeOrderedWindowStoreTest {
         }
     }
 
-    @Test
-    public void shouldFetchAndIterateOverKeyBackwardRange() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldFetchAndIterateOverKeyBackwardRange(final boolean hasIndex) {
+        setUp(hasIndex);
         cachingStore.put(bytesKey("a"), bytesValue("0001"), 0);
         cachingStore.put(bytesKey("aa"), bytesValue("0002"), 0);
         cachingStore.put(bytesKey("a"), bytesValue("0003"), 1);
@@ -1067,8 +1139,10 @@ public class TimeOrderedWindowStoreTest {
         }
     }
 
-    @Test
-    public void shouldReturnSameResultsForSingleKeyFetchAndEqualKeyRangeFetch() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldReturnSameResultsForSingleKeyFetchAndEqualKeyRangeFetch(final boolean hasIndex) {
+        setUp(hasIndex);
         cachingStore.put(bytesKey("a"), bytesValue("0001"), 0);
         cachingStore.put(bytesKey("aa"), bytesValue("0002"), 1);
         cachingStore.put(bytesKey("aa"), bytesValue("0003"), 2);
@@ -1084,8 +1158,10 @@ public class TimeOrderedWindowStoreTest {
         }
     }
 
-    @Test
-    public void shouldReturnSameResultsForSingleKeyFetchAndEqualKeyRangeBackwardFetch() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldReturnSameResultsForSingleKeyFetchAndEqualKeyRangeBackwardFetch(final boolean hasIndex) {
+        setUp(hasIndex);
         cachingStore.put(bytesKey("a"), bytesValue("0001"), 0);
         cachingStore.put(bytesKey("aa"), bytesValue("0002"), 1);
         cachingStore.put(bytesKey("aa"), bytesValue("0003"), 2);
@@ -1103,23 +1179,31 @@ public class TimeOrderedWindowStoreTest {
         }
     }
 
-    @Test
-    public void shouldThrowNullPointerExceptionOnPutNullKey() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldThrowNullPointerExceptionOnPutNullKey(final boolean hasIndex) {
+        setUp(hasIndex);
         assertThrows(NullPointerException.class, () -> cachingStore.put(null, bytesValue("anyValue"), 0L));
     }
 
-    @Test
-    public void shouldNotThrowNullPointerExceptionOnPutNullValue() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldNotThrowNullPointerExceptionOnPutNullValue(final boolean hasIndex) {
+        setUp(hasIndex);
         cachingStore.put(bytesKey("a"), null, 0L);
     }
 
-    @Test
-    public void shouldThrowNullPointerExceptionOnFetchNullKey() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldThrowNullPointerExceptionOnFetchNullKey(final boolean hasIndex) {
+        setUp(hasIndex);
         assertThrows(NullPointerException.class, () -> cachingStore.fetch(null, ofEpochMilli(1L), ofEpochMilli(2L)));
     }
 
-    @Test
-    public void shouldNotThrowInvalidRangeExceptionWithNegativeFromKey() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldNotThrowInvalidRangeExceptionWithNegativeFromKey(final boolean hasIndex) {
+        setUp(hasIndex);
         final Bytes keyFrom = Bytes.wrap(Serdes.Integer().serializer().serialize("", -1));
         final Bytes keyTo = Bytes.wrap(Serdes.Integer().serializer().serialize("", 1));
 
@@ -1138,8 +1222,10 @@ public class TimeOrderedWindowStoreTest {
         }
     }
 
-    @Test
-    public void shouldNotThrowInvalidBackwardRangeExceptionWithNegativeFromKey() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldNotThrowInvalidBackwardRangeExceptionWithNegativeFromKey(final boolean hasIndex) {
+        setUp(hasIndex);
         final Bytes keyFrom = Bytes.wrap(Serdes.Integer().serializer().serialize("", -1));
         final Bytes keyTo = Bytes.wrap(Serdes.Integer().serializer().serialize("", 1));
 
@@ -1158,8 +1244,10 @@ public class TimeOrderedWindowStoreTest {
         }
     }
 
-    @Test
-    public void shouldCloseCacheAndWrappedStoreAfterErrorDuringCacheFlush() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldCloseCacheAndWrappedStoreAfterErrorDuringCacheFlush(final boolean hasIndex) {
+        setUp(hasIndex);
         setUpCloseTests();
         doThrow(new RuntimeException(
                 "Simulating an error on flush"))
@@ -1168,8 +1256,10 @@ public class TimeOrderedWindowStoreTest {
         verifyAndTearDownCloseTests();
     }
 
-    @Test
-    public void shouldCloseWrappedStoreAfterErrorDuringCacheClose() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldCloseWrappedStoreAfterErrorDuringCacheClose(final boolean hasIndex) {
+        setUp(hasIndex);
         setUpCloseTests();
         doThrow(new RuntimeException("Simulating an error on close"))
                 .when(cache).close(CACHE_NAMESPACE);
@@ -1177,8 +1267,10 @@ public class TimeOrderedWindowStoreTest {
         verifyAndTearDownCloseTests();
     }
 
-    @Test
-    public void shouldCloseCacheAfterErrorDuringStateStoreClose() {
+    @ParameterizedTest
+    @MethodSource("data")
+    public void shouldCloseCacheAfterErrorDuringStateStoreClose(final boolean hasIndex) {
+        setUp(hasIndex);
         setUpCloseTests();
         doThrow(new RuntimeException("Simulating an error on close"))
                 .when(underlyingStore).close();
