@@ -439,7 +439,7 @@ class KafkaServer(
             metrics,
             threadNamePrefix,
             CompletableFuture.completedFuture(quorumVoters),
-            QuorumConfig.parseBootstrapServers(config.quorumBootstrapServers),
+            List().asJava,
             fatalFaultHandler = new LoggingFaultHandler("raftManager", () => shutdown())
           )
           quorumControllerNodeProvider = RaftControllerNodeProvider(raftManager, config)
