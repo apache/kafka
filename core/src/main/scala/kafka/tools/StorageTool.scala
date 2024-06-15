@@ -118,86 +118,6 @@ object StorageTool extends Logging {
     }
   }
 
-  /**
-   * Executes the command according to the given arguments and returns the appropriate exit code.
-   * @param args The command line arguments
-   * @return     The exit code
-   */
-  def execute(args: Array[String]): Int = {
-    val namespace = parseArguments(args)
-    val command = namespace.getString("command")
-    val config = Option(namespace.getString("config")).flatMap(
-      p => Some(new KafkaConfig(Utils.loadProps(p))))
-    command match {
-      case "info" =>
-        val directories = configToLogDirectories(config.get)
-        val selfManagedMode = configToSelfManagedMode(config.get)
-        infoCommand(System.out, selfManagedMode, directories)
-
-      case "format" =>
-        runFormatCommand(namespace, config.get)
-
-      case "random-uuid" =>
-        System.out.println(Uuid.randomUuid)
-        0
-      case _ =>
-        throw new RuntimeException(s"Unknown command $command")
-    }
-  }
-
-  /**
-   * Validates arguments, configuration, prepares bootstrap metadata and delegates to {{@link formatCommand}}.
-   * Visible for testing.
-   * @param namespace   Arguments
-   * @param config      The server configuration
-   * @return            The exit code
-   */
-  def runFormatCommand(namespace: Namespace, config: KafkaConfig) = {
-    val directories = configToLogDirectories(config)
-    val clusterId = namespace.getString("cluster_id")
-    val metaProperties = new MetaProperties.Builder().
-      setVersion(MetaPropertiesVersion.V1).
-      setClusterId(clusterId).
-      setNodeId(config.nodeId).
-      build()
-    val metadataRecords : ArrayBuffer[ApiMessageAndVersion] = ArrayBuffer()
-    val specifiedFeatures: util.List[String] = namespace.getList("feature")
-    val releaseVersionFlagSpecified = namespace.getString("release_version") != null
-    if (releaseVersionFlagSpecified && specifiedFeatures != null) {
-      throw new TerseFailure("Both --release-version and --feature were set. Only one of the two flags can be set.")
-    }
-    val featureNamesAndLevelsMap = featureNamesAndLevels(Option(specifiedFeatures).getOrElse(Collections.emptyList).asScala.toList)
-    val metadataVersion = getMetadataVersion(namespace, featureNamesAndLevelsMap,
-      Option(config.originals.get(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG)).map(_.toString))
-    validateMetadataVersion(metadataVersion, config)
-    // Get all other features, validate, and create records for them
-    // Use latest default for features if --release-version is not specified
-    generateFeatureRecords(
-      metadataRecords,
-      metadataVersion,
-      featureNamesAndLevelsMap,
-      Features.PRODUCTION_FEATURES.asScala.toList,
-      config.unstableFeatureVersionsEnabled,
-      releaseVersionFlagSpecified
-    )
-    getUserScramCredentialRecords(namespace).foreach(userScramCredentialRecords => {
-      if (!metadataVersion.isScramSupported) {
-        throw new TerseFailure(s"SCRAM is only supported in metadata.version ${MetadataVersion.IBP_3_5_IV2} or later.")
-      }
-      for (record <- userScramCredentialRecords) {
-        metadataRecords.append(new ApiMessageAndVersion(record, 0.toShort))
-      }
-    })
-    val bootstrapMetadata = buildBootstrapMetadata(metadataVersion, Some(metadataRecords), "format command")
-    val ignoreFormatted = namespace.getBoolean("ignore_formatted")
-    if (!configToSelfManagedMode(config)) {
-      throw new TerseFailure("The kafka configuration file appears to be for " +
-        "a legacy cluster. Formatting is only supported for clusters in KRaft mode.")
-    }
-    formatCommand(System.out, directories, metaProperties, bootstrapMetadata,
-      metadataVersion,ignoreFormatted)
-  }
-
   private def validateMetadataVersion(metadataVersion: MetadataVersion, config: Option[KafkaConfig]): Unit = {
     if (!metadataVersion.isKRaftSupported) {
       throw new TerseFailure(s"Must specify a valid KRaft metadata.version of at least ${MetadataVersion.IBP_3_0_IV0}.")
@@ -208,11 +128,6 @@ object StorageTool extends Logging {
       } else {
         throw new TerseFailure(s"The metadata.version $metadataVersion is not ready for production use yet.")
       }
-    }
-    try {
-      config.validateWithMetadataVersion(metadataVersion)
-    } catch {
-      case e: IllegalArgumentException => throw new TerseFailure(s"Invalid configuration for metadata version: ${e.getMessage}")
     }
   }
 
