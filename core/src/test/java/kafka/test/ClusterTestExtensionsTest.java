@@ -17,6 +17,7 @@
 
 package kafka.test;
 
+import kafka.server.KafkaBroker;
 import kafka.test.annotation.AutoStart;
 import kafka.test.annotation.ClusterConfigProperty;
 import kafka.test.annotation.ClusterTemplate;
@@ -236,13 +237,12 @@ public class ClusterTestExtensionsTest {
     @ClusterTest(brokers = 4)
     public void testClusterAliveBrokers(ClusterInstance clusterInstance) throws Exception {
         clusterInstance.waitForReadyBrokers();
+        Map<Integer, KafkaBroker> startBrokers = clusterInstance.brokers();
+
+        // Remove broker id 0
         clusterInstance.shutdownBroker(0);
-        List<Integer> aliveBrokerAfterShutdown = Arrays.asList(1, 2, 3);
+        startBrokers.remove(0);
 
-        Assertions.assertEquals(3, clusterInstance.aliveBrokers().size());
-
-        clusterInstance.aliveBrokers().forEach(s -> Assertions.assertTrue(
-                aliveBrokerAfterShutdown.contains(s.config().brokerId()))
-        );
+        Assertions.assertEquals(startBrokers, clusterInstance.aliveBrokers());
     }
 }

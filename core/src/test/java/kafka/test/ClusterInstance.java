@@ -31,7 +31,6 @@ import org.apache.kafka.test.TestUtils;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
@@ -52,8 +51,9 @@ public interface ClusterInstance {
 
     Map<Integer, KafkaBroker> brokers();
 
-    default List<KafkaBroker> aliveBrokers() {
-        return brokers().values().stream().filter(broker -> !broker.isShutdown()).collect(Collectors.toList());
+    default Map<Integer, KafkaBroker> aliveBrokers() {
+        return brokers().entrySet().stream().filter(entry -> !entry.getValue().isShutdown())
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     Map<Integer, ControllerServer> controllers();
