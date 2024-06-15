@@ -28,30 +28,27 @@ import org.apache.kafka.connect.source.SourceConnectorContext;
 import org.apache.kafka.connect.storage.CloseableOffsetStorageReader;
 import org.apache.kafka.connect.storage.ConnectorOffsetBackingStore;
 import org.apache.kafka.connect.util.Callback;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.mockito.ArgumentCaptor;
-import org.mockito.InOrder;
-import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
-import org.mockito.quality.Strictness;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -63,7 +60,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-@RunWith(Parameterized.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class WorkerConnectorTest {
 
     private static final String VERSION = "1.1";
@@ -77,25 +75,22 @@ public class WorkerConnectorTest {
     public ConnectorConfig connectorConfig;
     public MockConnectMetrics metrics;
 
-    @Rule
-    public MockitoRule rule = MockitoJUnit.rule().strictness(Strictness.STRICT_STUBS);
 
     @Mock private Plugins plugins;
     @Mock private CloseableConnectorContext ctx;
     @Mock private ConnectorStatus.Listener listener;
     @Mock private ClassLoader classLoader;
 
-    private final ConnectorType connectorType;
-    private final Connector connector;
-    private final CloseableOffsetStorageReader offsetStorageReader;
-    private final ConnectorOffsetBackingStore offsetStore;
+    private ConnectorType connectorType;
+    private Connector connector;
+    private CloseableOffsetStorageReader offsetStorageReader;
+    private ConnectorOffsetBackingStore offsetStore;
 
-    @Parameterized.Parameters
     public static Collection<ConnectorType> parameters() {
         return Arrays.asList(ConnectorType.SOURCE, ConnectorType.SINK);
     }
 
-    public WorkerConnectorTest(ConnectorType connectorType) {
+    private void setConnector(ConnectorType connectorType) {
         this.connectorType = connectorType;
         switch (connectorType) {
             case SINK:
@@ -112,20 +107,22 @@ public class WorkerConnectorTest {
                 throw new IllegalStateException("Unexpected connector type: " + connectorType);
         }
     }
-
-    @Before
-    public void setup() {
+    
+    public void setup(ConnectorType connectorType) {
+        setConnector(connectorType);
         connectorConfig = new ConnectorConfig(plugins, CONFIG);
         metrics = new MockConnectMetrics();
     }
 
-    @After
+    @AfterEach
     public void tearDown() {
         if (metrics != null) metrics.stop();
     }
 
-    @Test
-    public void testInitializeFailure() {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void testInitializeFailure(ConnectorType connectorType) {
+        setup(connectorType);
         RuntimeException exception = new RuntimeException();
 
         when(connector.version()).thenReturn(VERSION);
@@ -144,8 +141,10 @@ public class WorkerConnectorTest {
         verifyCleanShutdown(false);
     }
 
-    @Test
-    public void testFailureIsFinalState() {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void testFailureIsFinalState(ConnectorType connectorType) {
+        setup(connectorType);
         RuntimeException exception = new RuntimeException();
 
         when(connector.version()).thenReturn(VERSION);
@@ -171,8 +170,10 @@ public class WorkerConnectorTest {
         verifyNoMoreInteractions(onStateChange);
     }
 
-    @Test
-    public void testStartupAndShutdown() {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void testStartupAndShutdown(ConnectorType connectorType) {
+        setup(connectorType);
         when(connector.version()).thenReturn(VERSION);
 
         Callback<TargetState> onStateChange = mockCallback();
@@ -195,8 +196,10 @@ public class WorkerConnectorTest {
         verifyNoMoreInteractions(onStateChange);
     }
 
-    @Test
-    public void testStartupAndPause() {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void testStartupAndPause(ConnectorType connectorType) {
+        setup(connectorType);
         when(connector.version()).thenReturn(VERSION);
 
         Callback<TargetState> onStateChange = mockCallback();
@@ -224,8 +227,10 @@ public class WorkerConnectorTest {
         verifyNoMoreInteractions(onStateChange);
     }
 
-    @Test
-    public void testStartupAndStop() {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void testStartupAndStop(ConnectorType connectorType) {
+        setup(connectorType);
         when(connector.version()).thenReturn(VERSION);
 
         Callback<TargetState> onStateChange = mockCallback();
@@ -254,8 +259,10 @@ public class WorkerConnectorTest {
         verifyNoMoreInteractions(onStateChange);
     }
 
-    @Test
-    public void testOnResume() {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void testOnResume(ConnectorType connectorType) {
+        setup(connectorType);
         when(connector.version()).thenReturn(VERSION);
 
         Callback<TargetState> onStateChange = mockCallback();
@@ -284,8 +291,10 @@ public class WorkerConnectorTest {
         verifyNoMoreInteractions(onStateChange);
     }
 
-    @Test
-    public void testStartupPaused() {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void testStartupPaused(ConnectorType connectorType) {
+        setup(connectorType);
         when(connector.version()).thenReturn(VERSION);
 
         Callback<TargetState> onStateChange = mockCallback();
@@ -308,8 +317,10 @@ public class WorkerConnectorTest {
         verifyNoMoreInteractions(onStateChange);
     }
 
-    @Test
-    public void testStartupStopped() {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void testStartupStopped(ConnectorType connectorType) {
+        setup(connectorType);
         when(connector.version()).thenReturn(VERSION);
 
         Callback<TargetState> onStateChange = mockCallback();
@@ -332,8 +343,10 @@ public class WorkerConnectorTest {
         verifyNoMoreInteractions(onStateChange);
     }
 
-    @Test
-    public void testStartupFailure() {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void testStartupFailure(ConnectorType connectorType) {
+        setup(connectorType);
         RuntimeException exception = new RuntimeException();
 
         when(connector.version()).thenReturn(VERSION);
@@ -359,8 +372,10 @@ public class WorkerConnectorTest {
         verifyNoMoreInteractions(onStateChange);
     }
 
-    @Test
-    public void testStopFailure() {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void testStopFailure(ConnectorType connectorType) {
+        setup(connectorType);
         RuntimeException exception = new RuntimeException();
 
         when(connector.version()).thenReturn(VERSION);
@@ -401,8 +416,10 @@ public class WorkerConnectorTest {
         verifyNoMoreInteractions(listener);
     }
 
-    @Test
-    public void testShutdownFailure() {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void testShutdownFailure(ConnectorType connectorType) {
+        setup(connectorType);
         RuntimeException exception = new RuntimeException();
 
         when(connector.version()).thenReturn(VERSION);
@@ -429,8 +446,10 @@ public class WorkerConnectorTest {
         verifyShutdown(false, true);
     }
 
-    @Test
-    public void testTransitionStartedToStarted() {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void testTransitionStartedToStarted(ConnectorType connectorType) {
+        setup(connectorType);
         when(connector.version()).thenReturn(VERSION);
 
         Callback<TargetState> onStateChange = mockCallback();
@@ -456,8 +475,10 @@ public class WorkerConnectorTest {
         verifyNoMoreInteractions(onStateChange);
     }
 
-    @Test
-    public void testTransitionPausedToPaused() {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void testTransitionPausedToPaused(ConnectorType connectorType) {
+        setup(connectorType);
         when(connector.version()).thenReturn(VERSION);
 
         Callback<TargetState> onStateChange = mockCallback();
@@ -487,8 +508,10 @@ public class WorkerConnectorTest {
         verifyNoMoreInteractions(onStateChange);
     }
 
-    @Test
-    public void testTransitionStoppedToStopped() {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void testTransitionStoppedToStopped(ConnectorType connectorType) {
+        setup(connectorType);
         when(connector.version()).thenReturn(VERSION);
 
         Callback<TargetState> onStateChange = mockCallback();
@@ -518,8 +541,10 @@ public class WorkerConnectorTest {
         verifyNoMoreInteractions(onStateChange);
     }
 
-    @Test
-    public void testFailConnectorThatIsNeitherSourceNorSink() {
+    @ParameterizedTest
+    @MethodSource("parameters")
+    public void testFailConnectorThatIsNeitherSourceNorSink(ConnectorType connectorType) {
+        setup(connectorType);
         Connector badConnector = mock(Connector.class);
         when(badConnector.version()).thenReturn(VERSION);
         WorkerConnector workerConnector = new WorkerConnector(CONNECTOR, badConnector, connectorConfig, ctx, metrics, listener, offsetStorageReader, offsetStore, classLoader);
