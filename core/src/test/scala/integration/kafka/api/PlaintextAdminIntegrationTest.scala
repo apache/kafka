@@ -1001,6 +1001,30 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertTrue(assertThrows(classOf[ExecutionException], () => describeResult2.values.get(invalidTopic).get).getCause.isInstanceOf[InvalidTopicException])
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testIncludeDocumentation(quorum: String): Unit = {
+    val consumer = createConsumer()
+    subscribeAndWaitForAssignment(topic, consumer)
+    client = createAdminClient
+
+    val resource = new ConfigResource(ConfigResource.Type.TOPIC, topic)
+    val includeDescribe = new DescribeConfigsOptions().includeDocumentation(true)
+    var describeConfigs = client.describeConfigs(Collections.singletonList(resource), includeDescribe)
+    val pattern = """documentation=([^,]*?)\)""".r
+    var resourceToConfig = describeConfigs.all().get()
+    var matches = pattern.findAllMatchIn(resourceToConfig.toString)
+    var describes = matches.map(e => e.group(1)).toList
+    describes.foreach(e => assertNotNull(e))
+
+    val excludeDescribe = new DescribeConfigsOptions().includeDocumentation(false)
+    describeConfigs = client.describeConfigs(Collections.singletonList(resource), excludeDescribe)
+    resourceToConfig = describeConfigs.all().get()
+    matches = pattern.findAllMatchIn(resourceToConfig.toString)
+    describes = matches.map(e => e.group(1)).toList
+    describes.foreach(e => assertEquals("null", e))
+  }
+
   private def subscribeAndWaitForAssignment(topic: String, consumer: Consumer[Array[Byte], Array[Byte]]): Unit = {
     consumer.subscribe(Collections.singletonList(topic))
     TestUtils.pollUntilTrue(consumer, () => !consumer.assignment.isEmpty, "Expected non-empty assignment")
