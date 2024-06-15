@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.raft.internals;
 
-import java.util.Optional;
-import java.util.OptionalLong;
 import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.utils.BufferSupplier;
@@ -31,7 +29,11 @@ import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RawSnapshotReader;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.snapshot.SnapshotReader;
+
 import org.slf4j.Logger;
+
+import java.util.Optional;
+import java.util.OptionalLong;
 
 /**
  * The KRaft state machine for tracking control records in the topic partition.

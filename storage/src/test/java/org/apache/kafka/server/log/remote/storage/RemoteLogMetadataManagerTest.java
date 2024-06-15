@@ -23,7 +23,6 @@ import kafka.test.junit.ClusterTestExtensions;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.log.remote.metadata.storage.RemoteLogMetadataManagerTestUtils;
 import org.apache.kafka.server.log.remote.metadata.storage.RemotePartitionMetadataStore;
@@ -55,7 +54,7 @@ public class RemoteLogMetadataManagerTest {
     private static final int SEG_SIZE = 1048576;
     private static final int BROKER_ID_0 = 0;
     private static final int BROKER_ID_1 = 1;
-    private final Time time = new SystemTime();
+    private final Time time = Time.SYSTEM;
 
     RemoteLogMetadataManagerTest(ClusterInstance clusterInstance) {
         this.clusterInstance = clusterInstance;

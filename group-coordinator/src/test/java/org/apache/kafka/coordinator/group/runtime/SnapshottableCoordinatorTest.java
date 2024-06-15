@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.coordinator.group.MockCoordinatorTimer;
 import org.apache.kafka.timeline.SnapshotRegistry;
+
 import org.junit.jupiter.api.Test;
 
 import static org.apache.kafka.coordinator.group.runtime.CoordinatorRuntimeTest.MockCoordinatorShard;

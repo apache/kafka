@@ -25,6 +25,7 @@ import org.apache.kafka.coordinator.group.consumer.GroupSpecImpl;
 import org.apache.kafka.coordinator.group.consumer.MemberSubscriptionAndAssignmentImpl;
 import org.apache.kafka.coordinator.group.consumer.SubscribedTopicDescriberImpl;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
@@ -35,9 +36,9 @@ import java.util.Set;
 import java.util.TreeMap;
 
 import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.coordinator.group.AssignmentTestUtil.invertedTargetAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
-import static org.apache.kafka.coordinator.group.AssignmentTestUtil.invertedTargetAssignment;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
 import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
 import static org.junit.jupiter.api.Assertions.assertEquals;

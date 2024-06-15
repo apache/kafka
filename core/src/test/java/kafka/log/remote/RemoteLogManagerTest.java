@@ -1014,7 +1014,7 @@ public class RemoteLogManagerTest {
 
         when(mockLog.onlyLocalLogSegmentsSize()).thenReturn(175L, 100L);
         when(activeSegment.size()).thenReturn(100);
-        when(mockLog.onlyLocalLogSegmentsCount()).thenReturn(1L);
+        when(mockLog.onlyLocalLogSegmentsCount()).thenReturn(2L).thenReturn(1L);
 
         // before running tasks, the metric should not be registered
         assertThrows(NoSuchElementException.class, () -> yammerMetricValue("RemoteCopyLagBytes,topic=" + leaderTopic));
@@ -1045,6 +1045,17 @@ public class RemoteLogManagerTest {
                         safeLongYammerMetricValue("RemoteLogSizeComputationTime,topic=" + leaderTopic),
                         safeLongYammerMetricValue("RemoteLogSizeComputationTime")));
         remoteLogSizeComputationTimeLatch.countDown();
+        
+        TestUtils.waitForCondition(
+                () -> 0 == safeLongYammerMetricValue("RemoteCopyLagBytes") && 0 == safeLongYammerMetricValue("RemoteCopyLagBytes,topic=" + leaderTopic),
+                String.format("Expected to find 0 for RemoteCopyLagBytes metric value, but found %d for topic 'Leader' and %d for all topics.",
+                        safeLongYammerMetricValue("RemoteCopyLagBytes,topic=" + leaderTopic),
+                        safeLongYammerMetricValue("RemoteCopyLagBytes")));
+        TestUtils.waitForCondition(
+                () -> 0 == safeLongYammerMetricValue("RemoteCopyLagSegments") && 0 == safeLongYammerMetricValue("RemoteCopyLagSegments,topic=" + leaderTopic),
+                String.format("Expected to find 0 for RemoteCopyLagSegments metric value, but found %d for topic 'Leader' and %d for all topics.",
+                        safeLongYammerMetricValue("RemoteCopyLagSegments,topic=" + leaderTopic),
+                        safeLongYammerMetricValue("RemoteCopyLagSegments")));
     }
 
     private Object yammerMetricValue(String name) {
@@ -3012,6 +3023,28 @@ public class RemoteLogManagerTest {
         assertEquals(-1L, capturedValues.get(0).longValue());
         // Verify it was updated to 99L after the copy
         assertEquals(99L, capturedValues.get(1).longValue());
+    }
+
+    @Test
+    public void testTierLagResetsToZeroOnBecomingFollower() {
+        remoteLogManager.startup();
+        remoteLogManager.onLeadershipChange(
+                Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.emptySet(), topicIds);
+        RemoteLogManager.RLMTask rlmTask = remoteLogManager.rlmTask(leaderTopicIdPartition);
+        assertNotNull(rlmTask);
+        rlmTask.recordLagStats(1024, 2);
+        assertEquals(1024, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyLagBytes());
+        assertEquals(2, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyLagSegments());
+        // The same node becomes follower now which was the previous leader
+        remoteLogManager.onLeadershipChange(Collections.emptySet(),
+                Collections.singleton(mockPartition(leaderTopicIdPartition)), topicIds);
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyLagBytes());
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyLagSegments());
+
+        // If the old task emits the tier-lag stats, then it should be discarded
+        rlmTask.recordLagStats(2048, 4);
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyLagBytes());
+        assertEquals(0, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyLagSegments());
     }
 
     private Partition mockPartition(TopicIdPartition topicIdPartition) {
