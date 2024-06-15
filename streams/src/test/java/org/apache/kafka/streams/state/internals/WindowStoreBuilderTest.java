@@ -27,11 +27,12 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 import org.hamcrest.CoreMatchers;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.time.Duration;
 import java.util.Collections;
@@ -39,11 +40,12 @@ import java.util.Collections;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class WindowStoreBuilderTest {
 
     @Mock
@@ -52,7 +54,6 @@ public class WindowStoreBuilderTest {
     private WindowStore<Bytes, byte[]> inner;
     private WindowStoreBuilder<String, String> builder;
 
-    @Before
     public void setUp() {
         when(supplier.get()).thenReturn(inner);
         when(supplier.name()).thenReturn("name");
@@ -67,12 +68,14 @@ public class WindowStoreBuilderTest {
 
     @Test
     public void shouldHaveMeteredStoreAsOuterStore() {
+        setUp();
         final WindowStore<String, String> store = builder.build();
         assertThat(store, instanceOf(MeteredWindowStore.class));
     }
 
     @Test
     public void shouldHaveChangeLoggingStoreByDefault() {
+        setUp();
         final WindowStore<String, String> store = builder.build();
         final StateStore next = ((WrappedStateStore) store).wrapped();
         assertThat(next, instanceOf(ChangeLoggingWindowBytesStore.class));
@@ -80,6 +83,7 @@ public class WindowStoreBuilderTest {
 
     @Test
     public void shouldNotHaveChangeLoggingStoreWhenDisabled() {
+        setUp();
         final WindowStore<String, String> store = builder.withLoggingDisabled().build();
         final StateStore next = ((WrappedStateStore) store).wrapped();
         assertThat(next, CoreMatchers.equalTo(inner));
@@ -87,6 +91,7 @@ public class WindowStoreBuilderTest {
 
     @Test
     public void shouldHaveCachingStoreWhenEnabled() {
+        setUp();
         final WindowStore<String, String> store = builder.withCachingEnabled().build();
         final StateStore wrapped = ((WrappedStateStore) store).wrapped();
         assertThat(store, instanceOf(MeteredWindowStore.class));
@@ -95,6 +100,7 @@ public class WindowStoreBuilderTest {
 
     @Test
     public void shouldHaveChangeLoggingStoreWhenLoggingEnabled() {
+        setUp();
         final WindowStore<String, String> store = builder
                 .withLoggingEnabled(Collections.emptyMap())
                 .build();
@@ -106,6 +112,7 @@ public class WindowStoreBuilderTest {
 
     @Test
     public void shouldHaveCachingAndChangeLoggingWhenBothEnabled() {
+        setUp();
         final WindowStore<String, String> store = builder
                 .withLoggingEnabled(Collections.emptyMap())
                 .withCachingEnabled()
@@ -168,6 +175,14 @@ public class WindowStoreBuilderTest {
 
     @Test
     public void shouldThrowNullPointerIfMetricsScopeIsNull() {
+        when(supplier.name()).thenReturn("name");
+        when(supplier.metricsScope()).thenReturn("metricScope");
+
+        builder = new WindowStoreBuilder<>(
+                supplier,
+                Serdes.String(),
+                Serdes.String(),
+                new MockTime());
         when(supplier.metricsScope()).thenReturn(null);
 
         final Exception e = assertThrows(NullPointerException.class,
