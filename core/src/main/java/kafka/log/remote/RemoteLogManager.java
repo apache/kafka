@@ -905,7 +905,7 @@ public class RemoteLogManager implements Closeable {
             logger.info("Copied {} to remote storage with segment-id: {}", logFileName, copySegmentFinishedRlsm.remoteLogSegmentId());
 
             long bytesLag = log.onlyLocalLogSegmentsSize() - log.activeSegment().size();
-            long segmentsLag = log.onlyLocalLogSegmentsCount();
+            long segmentsLag = log.onlyLocalLogSegmentsCount() - 1;
             recordLagStats(bytesLag, segmentsLag);
         }
 
