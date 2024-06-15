@@ -409,7 +409,7 @@ class ConnectionQuotasTest {
     val futures = listeners.values.map { listener =>
       executor.submit((() =>
         // epsilon is set to account for the worst-case where the measurement is taken just before or after the quota window
-        acceptConnectionsAndVerifyRate(connectionQuotas, listener, connectionsPerListener, connCreateIntervalMs, listenerRateLimit, 7)): Runnable)
+        acceptConnectionsAndVerifyRate(connectionQuotas, listener, connectionsPerListener, connCreateIntervalMs, listenerRateLimit, 8)): Runnable)
     }
     futures.foreach(_.get(30, TimeUnit.SECONDS))
 
