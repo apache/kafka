@@ -47,6 +47,8 @@ public class ListOffsetsRequest extends AbstractRequest {
      */
     public static final long EARLIEST_LOCAL_TIMESTAMP = -4L;
 
+    public static final long LATEST_TIERED_TIMESTAMP = -5L;
+
     public static final int CONSUMER_REPLICA_ID = -1;
     public static final int DEBUGGING_REPLICA_ID = -2;
 
@@ -178,14 +180,5 @@ public class ListOffsetsRequest extends AbstractRequest {
             topic.partitions().add(entry.getValue());
         }
         return new ArrayList<>(topics.values());
-    }
-
-    public static ListOffsetsTopic singletonRequestData(String topic, int partitionIndex, long timestamp, int maxNumOffsets) {
-        return new ListOffsetsTopic()
-                .setName(topic)
-                .setPartitions(Collections.singletonList(new ListOffsetsPartition()
-                        .setPartitionIndex(partitionIndex)
-                        .setTimestamp(timestamp)
-                        .setMaxNumOffsets(maxNumOffsets)));
     }
 }

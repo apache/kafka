@@ -20,7 +20,7 @@ import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.json.JsonConverterConfig;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -32,8 +32,8 @@ import java.util.Set;
 
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class OffsetUtilsTest {
 
@@ -130,6 +130,16 @@ public class OffsetUtilsTest {
             Map<String, Set<Map<String, Object>>> connectorPartitions = new HashMap<>();
             OffsetUtils.processPartitionKey(serializePartitionKey(Arrays.asList("connector-name", new HashMap<>())), new byte[0], CONVERTER, connectorPartitions);
             assertEquals(1, connectorPartitions.size());
+            assertEquals(0, logCaptureAppender.getMessages().size());
+        }
+    }
+
+    @Test
+    public void testProcessPartitionKeyNullPartition() {
+        try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(OffsetUtils.class)) {
+            Map<String, Set<Map<String, Object>>> connectorPartitions = new HashMap<>();
+            OffsetUtils.processPartitionKey(serializePartitionKey(Arrays.asList("connector-name", null)), new byte[0], CONVERTER, connectorPartitions);
+            assertEquals(Collections.emptyMap(), connectorPartitions);
             assertEquals(0, logCaptureAppender.getMessages().size());
         }
     }

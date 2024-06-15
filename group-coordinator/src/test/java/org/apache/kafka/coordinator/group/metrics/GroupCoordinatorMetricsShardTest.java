@@ -16,17 +16,19 @@
  */
 package org.apache.kafka.coordinator.group.metrics;
 
-import com.yammer.metrics.core.MetricsRegistry;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
+import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
+import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
 import org.apache.kafka.timeline.SnapshotRegistry;
+
+import com.yammer.metrics.core.MetricsRegistry;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
@@ -214,7 +216,7 @@ public class GroupCoordinatorMetricsShardTest {
 
         // Set member2 to ASSIGNING state.
         new ConsumerGroupMember.Builder(member2)
-            .setPartitionsPendingAssignment(Collections.singletonMap(Uuid.ZERO_UUID, Collections.singleton(0)))
+            .setPartitionsPendingRevocation(Collections.singletonMap(Uuid.ZERO_UUID, Collections.singleton(0)))
             .build();
 
         snapshotRegistry.getOrCreateSnapshot(4000);

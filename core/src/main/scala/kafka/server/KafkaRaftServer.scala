@@ -29,7 +29,7 @@ import org.apache.kafka.metadata.KafkaConfigSchema
 import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag.{REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble}
-import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
@@ -65,15 +65,13 @@ class KafkaRaftServer(
     metaPropsEnsemble.clusterId().get()
   )
 
-  private val controllerQuorumVotersFuture = CompletableFuture.completedFuture(
-    RaftConfig.parseVoterConnections(config.quorumVoters))
-
   private val sharedServer = new SharedServer(
     config,
     metaPropsEnsemble,
     time,
     metrics,
-    controllerQuorumVotersFuture,
+    CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumVoters)),
+    QuorumConfig.parseBootstrapServers(config.quorumBootstrapServers),
     new StandardFaultHandlerFactory(),
   )
 
@@ -122,8 +120,8 @@ object KafkaRaftServer {
   val MetadataTopicId = Uuid.METADATA_TOPIC_ID
 
   /**
-   * Initialize the configured log directories, including both [[KafkaConfig.MetadataLogDirProp]]
-   * and [[KafkaConfig.LogDirProp]]. This method performs basic validation to ensure that all
+   * Initialize the configured log directories, including both [[KRaftConfigs.MetadataLogDirProp]]
+   * and [[KafkaConfig.LOG_DIR_PROP]]. This method performs basic validation to ensure that all
    * directories are accessible and have been initialized with consistent `meta.properties`.
    *
    * @param config The process configuration
@@ -138,10 +136,10 @@ object KafkaRaftServer {
     // Load and verify the original ensemble.
     val loader = new MetaPropertiesEnsemble.Loader()
     loader.addMetadataLogDir(config.metadataLogDir)
-    config.logDirs.foreach(loader.addLogDir(_))
+    config.logDirs.foreach(loader.addLogDir)
     val initialMetaPropsEnsemble = loader.load()
     val verificationFlags = util.EnumSet.of(REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR)
-    initialMetaPropsEnsemble.verify(Optional.empty(), OptionalInt.of(config.nodeId), verificationFlags);
+    initialMetaPropsEnsemble.verify(Optional.empty(), OptionalInt.of(config.nodeId), verificationFlags)
 
     // Check that the __cluster_metadata-0 topic does not appear outside the metadata directory.
     val metadataPartitionDirName = UnifiedLog.logDirName(MetadataPartition)

@@ -136,8 +136,8 @@ public class CoordinatorStrategy implements AdminApiLookupStrategy<CoordinatorKe
     }
 
     private void ensureSameType(Set<CoordinatorKey> keys) {
-        if (keys.size() < 1) {
-            throw new IllegalArgumentException("Unexpected size of key set: expected >= 1, but got " + keys.size());
+        if (keys.isEmpty()) {
+            throw new IllegalArgumentException("Unexpected size of key set: expected >= 1, but got 0");
         }
         if (keys.stream().filter(k -> k.type == type).collect(Collectors.toSet()).size() != keys.size()) {
             throw new IllegalArgumentException("Unexpected key set: expected all key to be of type " + type + ", but some key were not");

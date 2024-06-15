@@ -96,7 +96,6 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class TimingWheel {
     private final long tickMs;
-    private final long startMs;
     private final int wheelSize;
     private final AtomicInteger taskCounter;
     private final DelayQueue<TimerTaskList> queue;
@@ -116,7 +115,6 @@ public class TimingWheel {
         DelayQueue<TimerTaskList> queue
     ) {
         this.tickMs = tickMs;
-        this.startMs = startMs;
         this.wheelSize = wheelSize;
         this.taskCounter = taskCounter;
         this.queue = queue;

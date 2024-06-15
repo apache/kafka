@@ -123,7 +123,8 @@ public class RequestManagers implements Closeable {
                                                      final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
                                                      final Optional<ClientTelemetryReporter> clientTelemetryReporter,
                                                      final Metrics metrics,
-                                                     final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker
+                                                     final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
+                                                     final MemberStateListener applicationThreadMemberStateListener
                                                      ) {
         return new CachedSupplier<RequestManagers>() {
             @Override
@@ -154,6 +155,7 @@ public class RequestManagers implements Closeable {
                         apiVersions);
                 final TopicMetadataRequestManager topic = new TopicMetadataRequestManager(
                         logContext,
+                        time,
                         config);
                 HeartbeatRequestManager heartbeatRequestManager = null;
                 MembershipManager membershipManager = null;
@@ -162,7 +164,7 @@ public class RequestManagers implements Closeable {
 
                 if (groupRebalanceConfig != null && groupRebalanceConfig.groupId != null) {
                     Optional<String> serverAssignor = Optional.ofNullable(config.getString(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG));
-                    coordinator = new CoordinatorRequestManager(time,
+                    coordinator = new CoordinatorRequestManager(
                             logContext,
                             retryBackoffMs,
                             retryBackoffMaxMs,
@@ -189,8 +191,10 @@ public class RequestManagers implements Closeable {
                             logContext,
                             clientTelemetryReporter,
                             backgroundEventHandler,
-                            time);
+                            time,
+                            metrics);
                     membershipManager.registerStateListener(commit);
+                    membershipManager.registerStateListener(applicationThreadMemberStateListener);
                     heartbeatRequestManager = new HeartbeatRequestManager(
                             logContext,
                             time,

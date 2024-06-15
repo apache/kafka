@@ -49,11 +49,11 @@ public class ClusterImageBrokersNodeTest {
                     setInControlledShutdown(false).build()),
             Collections.emptyMap());
 
-    private final static ClusterImageBrokersNode NODE = new ClusterImageBrokersNode(TEST_IMAGE);
+    private static final ClusterImageBrokersNode NODE = new ClusterImageBrokersNode(TEST_IMAGE);
 
     @Test
     public void testChildNames() {
-        assertEquals(Arrays.asList("1"), NODE.childNames());
+        assertEquals(Collections.singletonList("1"), NODE.childNames());
     }
 
     @Test

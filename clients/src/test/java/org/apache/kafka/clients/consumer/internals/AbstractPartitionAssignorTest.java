@@ -217,7 +217,7 @@ public class AbstractPartitionAssignorTest {
     }
 
     private static String toSortedString(List<?> partitions) {
-        return Utils.join(partitions.stream().map(Object::toString).sorted().collect(Collectors.toList()), ", ");
+        return partitions.stream().map(Object::toString).sorted().collect(Collectors.joining(", "));
     }
 
     private static List<Subscription> subscriptions(List<List<String>> consumerTopics,

@@ -17,25 +17,38 @@
 
 package kafka.tools
 
+import com.fasterxml.jackson.databind.JsonNode
+
 import java.io._
 import com.fasterxml.jackson.databind.node.{IntNode, JsonNodeFactory, ObjectNode, TextNode}
-import kafka.coordinator.group.GroupMetadataManager
 import kafka.coordinator.transaction.TransactionLog
 import kafka.log._
-import kafka.serializer.Decoder
-import kafka.utils._
 import kafka.utils.Implicits._
-import org.apache.kafka.common.message.{SnapshotFooterRecordJsonConverter, SnapshotHeaderRecordJsonConverter}
+import kafka.utils.{CoreUtils, VerifiableProperties}
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
+import org.apache.kafka.common.message.ConsumerProtocolAssignment
+import org.apache.kafka.common.message.ConsumerProtocolAssignmentJsonConverter
+import org.apache.kafka.common.message.ConsumerProtocolSubscription
+import org.apache.kafka.common.message.ConsumerProtocolSubscriptionJsonConverter
+import org.apache.kafka.common.message.KRaftVersionRecordJsonConverter
+import org.apache.kafka.common.message.SnapshotFooterRecordJsonConverter
+import org.apache.kafka.common.message.SnapshotHeaderRecordJsonConverter
+import org.apache.kafka.common.message.VotersRecordJsonConverter
 import org.apache.kafka.common.metadata.{MetadataJsonConverters, MetadataRecordType}
-import org.apache.kafka.common.protocol.ByteBufferAccessor
+import org.apache.kafka.common.protocol.{ByteBufferAccessor, Message}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.coordinator.group.CoordinatorRecordSerde
+import org.apache.kafka.coordinator.group.generated.{ConsumerGroupCurrentMemberAssignmentKey, ConsumerGroupCurrentMemberAssignmentKeyJsonConverter, ConsumerGroupCurrentMemberAssignmentValue, ConsumerGroupCurrentMemberAssignmentValueJsonConverter, ConsumerGroupMemberMetadataKey, ConsumerGroupMemberMetadataKeyJsonConverter, ConsumerGroupMemberMetadataValue, ConsumerGroupMemberMetadataValueJsonConverter, ConsumerGroupMetadataKey, ConsumerGroupMetadataKeyJsonConverter, ConsumerGroupMetadataValue, ConsumerGroupMetadataValueJsonConverter, ConsumerGroupPartitionMetadataKey, ConsumerGroupPartitionMetadataKeyJsonConverter, ConsumerGroupPartitionMetadataValue, ConsumerGroupPartitionMetadataValueJsonConverter, ConsumerGroupTargetAssignmentMemberKey, ConsumerGroupTargetAssignmentMemberKeyJsonConverter, ConsumerGroupTargetAssignmentMemberValue, ConsumerGroupTargetAssignmentMemberValueJsonConverter, ConsumerGroupTargetAssignmentMetadataKey, ConsumerGroupTargetAssignmentMetadataKeyJsonConverter, ConsumerGroupTargetAssignmentMetadataValue, ConsumerGroupTargetAssignmentMetadataValueJsonConverter, GroupMetadataKey, GroupMetadataKeyJsonConverter, GroupMetadataValue, GroupMetadataValueJsonConverter, OffsetCommitKey, OffsetCommitKeyJsonConverter, OffsetCommitValue, OffsetCommitValueJsonConverter}
+import org.apache.kafka.coordinator.group.runtime.CoordinatorLoader.UnknownRecordTypeException
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.metadata.bootstrap.BootstrapDirectory
 import org.apache.kafka.snapshot.Snapshots
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 import org.apache.kafka.storage.internals.log.{CorruptSnapshotException, LogFileUtils, OffsetIndex, ProducerStateManager, TimeIndex, TransactionIndex}
+import org.apache.kafka.tools.api.{Decoder, DefaultDecoder, IntegerDecoder, LongDecoder, StringDecoder}
 
+import java.nio.ByteBuffer
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -307,6 +320,12 @@ object DumpLogSegments {
                   case ControlRecordType.SNAPSHOT_FOOTER =>
                     val footer = ControlRecordUtils.deserializeSnapshotFooterRecord(record)
                     print(s" SnapshotFooter ${SnapshotFooterRecordJsonConverter.write(footer, footer.version())}")
+                  case ControlRecordType.KRAFT_VERSION =>
+                    val kraftVersion = ControlRecordUtils.deserializeKRaftVersionRecord(record)
+                    print(s" KRaftVersion ${KRaftVersionRecordJsonConverter.write(kraftVersion, kraftVersion.version())}")
+                  case ControlRecordType.KRAFT_VOTERS=>
+                    val voters = ControlRecordUtils.deserializeVotersRecord(record)
+                    print(s" KRaftVoters ${VotersRecordJsonConverter.write(voters, voters.version())}")
                   case controlType =>
                     print(s" controlType: $controlType($controlTypeId)")
                 }
@@ -398,9 +417,141 @@ object DumpLogSegments {
     }
   }
 
-  private class OffsetsMessageParser extends MessageParser[String, String] {
+  // Package private for testing.
+  class OffsetsMessageParser extends MessageParser[String, String] {
+    private val serde = new CoordinatorRecordSerde()
+
+    private def prepareKey(message: Message, version: Short): String = {
+      val messageAsJson = message match {
+        case m: OffsetCommitKey =>
+          OffsetCommitKeyJsonConverter.write(m, version)
+        case m: GroupMetadataKey =>
+          GroupMetadataKeyJsonConverter.write(m, version)
+        case m: ConsumerGroupMetadataKey =>
+          ConsumerGroupMetadataKeyJsonConverter.write(m, version)
+        case m: ConsumerGroupPartitionMetadataKey =>
+          ConsumerGroupPartitionMetadataKeyJsonConverter.write(m, version)
+        case m: ConsumerGroupMemberMetadataKey =>
+          ConsumerGroupMemberMetadataKeyJsonConverter.write(m, version)
+        case m: ConsumerGroupTargetAssignmentMetadataKey =>
+          ConsumerGroupTargetAssignmentMetadataKeyJsonConverter.write(m, version)
+        case m: ConsumerGroupTargetAssignmentMemberKey =>
+          ConsumerGroupTargetAssignmentMemberKeyJsonConverter.write(m, version)
+        case m: ConsumerGroupCurrentMemberAssignmentKey =>
+          ConsumerGroupCurrentMemberAssignmentKeyJsonConverter.write(m, version)
+        case _ => throw new UnknownRecordTypeException(version)
+      }
+
+      val json = new ObjectNode(JsonNodeFactory.instance)
+      json.set("type", new TextNode(version.toString))
+      json.set("data", messageAsJson)
+      json.toString
+    }
+
+    private def prepareGroupMetadataValue(message: GroupMetadataValue, version: Short): JsonNode = {
+      val json = GroupMetadataValueJsonConverter.write(message, version)
+
+      def replace[T](
+        node: JsonNode,
+        field: String,
+        reader: (org.apache.kafka.common.protocol.Readable, Short) => T,
+        writer: (T, Short) => JsonNode
+      ): Unit = {
+        Option(node.get(field)).foreach { filedNode =>
+          try {
+            val buffer = ByteBuffer.wrap(filedNode.binaryValue())
+            val accessor = new ByteBufferAccessor(buffer)
+            val version = accessor.readShort
+            val data = reader(accessor, version)
+            node.asInstanceOf[ObjectNode].replace(field, writer(data, version))
+          } catch {
+            case _: RuntimeException => // Swallow and keep the original bytes.
+          }
+        }
+      }
+
+      Option(json.get("protocolType")).foreach { protocolTypeNode =>
+        // If the group uses the consumer embedded protocol, we deserialize
+        // the subscription and the assignment of each member.
+        if (protocolTypeNode.asText() == ConsumerProtocol.PROTOCOL_TYPE) {
+          Option(json.get("members")).foreach { membersNode =>
+            if (membersNode.isArray) {
+              membersNode.forEach { memberNode =>
+                // Replace the subscription field by its deserialized version.
+                replace(
+                  memberNode,
+                  "subscription",
+                  (readable, version) => new ConsumerProtocolSubscription(readable, version),
+                  ConsumerProtocolSubscriptionJsonConverter.write
+                )
+
+                // Replace the assignment field by its deserialized version.
+                replace(
+                  memberNode,
+                  "assignment",
+                  (readable, version) => new ConsumerProtocolAssignment(readable, version),
+                  ConsumerProtocolAssignmentJsonConverter.write
+                )
+              }
+            }
+          }
+        }
+      }
+
+      json
+    }
+
+    private def prepareValue(message: Message, version: Short): String = {
+      val messageAsJson = message match {
+        case m: OffsetCommitValue =>
+          OffsetCommitValueJsonConverter.write(m, version)
+        case m: GroupMetadataValue =>
+          prepareGroupMetadataValue(m, version)
+        case m: ConsumerGroupMetadataValue =>
+          ConsumerGroupMetadataValueJsonConverter.write(m, version)
+        case m: ConsumerGroupPartitionMetadataValue =>
+          ConsumerGroupPartitionMetadataValueJsonConverter.write(m, version)
+        case m: ConsumerGroupMemberMetadataValue =>
+          ConsumerGroupMemberMetadataValueJsonConverter.write(m, version)
+        case m: ConsumerGroupTargetAssignmentMetadataValue =>
+          ConsumerGroupTargetAssignmentMetadataValueJsonConverter.write(m, version)
+        case m: ConsumerGroupTargetAssignmentMemberValue =>
+          ConsumerGroupTargetAssignmentMemberValueJsonConverter.write(m, version)
+        case m: ConsumerGroupCurrentMemberAssignmentValue =>
+          ConsumerGroupCurrentMemberAssignmentValueJsonConverter.write(m, version)
+        case _ => throw new IllegalStateException(s"Message value ${message.getClass.getSimpleName} is not supported.")
+      }
+
+      val json = new ObjectNode(JsonNodeFactory.instance)
+      json.set("version", new TextNode(version.toString))
+      json.set("data", messageAsJson)
+      json.toString
+    }
+
     override def parse(record: Record): (Option[String], Option[String]) = {
-      GroupMetadataManager.formatRecordKeyAndValue(record)
+      if (!record.hasKey)
+        throw new RuntimeException(s"Failed to decode message at offset ${record.offset} using offset " +
+          "topic decoder (message had a missing key)")
+
+      try {
+        val r = serde.deserialize(record.key, record.value)
+        (
+          Some(prepareKey(r.key.message, r.key.version)),
+          Option(r.value).map(v => prepareValue(v.message, v.version)).orElse(Some("<DELETE>"))
+        )
+      } catch {
+        case e: UnknownRecordTypeException =>
+          (
+            Some(s"Unknown record type ${e.unknownType} at offset ${record.offset}, skipping."),
+            None
+          )
+
+        case e: Throwable =>
+          (
+            Some(s"Error at offset ${record.offset}, skipping. ${e.getMessage}"),
+            None
+          )
+      }
     }
   }
 
@@ -453,14 +604,14 @@ object DumpLogSegments {
        .ofType(classOf[java.lang.Integer])
        .defaultsTo(Integer.MAX_VALUE)
     private val deepIterationOpt = parser.accepts("deep-iteration", "if set, uses deep instead of shallow iteration. Automatically set if print-data-log is enabled.")
-    private val valueDecoderOpt = parser.accepts("value-decoder-class", "if set, used to deserialize the messages. This class should implement kafka.serializer.Decoder trait. Custom jar should be available in kafka/libs directory.")
+    private val valueDecoderOpt = parser.accepts("value-decoder-class", "if set, used to deserialize the messages. This class should implement org.apache.kafka.tools.api.Decoder trait. Custom jar should be available in kafka/libs directory.")
       .withOptionalArg()
       .ofType(classOf[java.lang.String])
-      .defaultsTo("kafka.serializer.StringDecoder")
-    private val keyDecoderOpt = parser.accepts("key-decoder-class", "if set, used to deserialize the keys. This class should implement kafka.serializer.Decoder trait. Custom jar should be available in kafka/libs directory.")
+      .defaultsTo(classOf[StringDecoder].getName)
+    private val keyDecoderOpt = parser.accepts("key-decoder-class", "if set, used to deserialize the keys. This class should implement org.apache.kafka.tools.api.Decoder trait. Custom jar should be available in kafka/libs directory.")
       .withOptionalArg()
       .ofType(classOf[java.lang.String])
-      .defaultsTo("kafka.serializer.StringDecoder")
+      .defaultsTo(classOf[StringDecoder].getName)
     private val offsetsOpt = parser.accepts("offsets-decoder", "if set, log data will be parsed as offset data from the " +
       "__consumer_offsets topic.")
     private val transactionLogOpt = parser.accepts("transaction-log-decoder", "if set, log data will be parsed as " +
@@ -477,8 +628,8 @@ object DumpLogSegments {
       } else if (options.has(clusterMetadataOpt)) {
         new ClusterMetadataLogMessageParser
       } else {
-        val valueDecoder: Decoder[_] = CoreUtils.createObject[Decoder[_]](options.valueOf(valueDecoderOpt), new VerifiableProperties)
-        val keyDecoder: Decoder[_] = CoreUtils.createObject[Decoder[_]](options.valueOf(keyDecoderOpt), new VerifiableProperties)
+        val valueDecoder = newDecoder(options.valueOf(valueDecoderOpt))
+        val keyDecoder = newDecoder(options.valueOf(keyDecoderOpt))
         new DecoderMessageParser(keyDecoder, valueDecoder)
       }
 
@@ -499,5 +650,43 @@ object DumpLogSegments {
 
     def checkArgs(): Unit = CommandLineUtils.checkRequiredArgs(parser, options, filesOpt)
 
+  }
+
+  /*
+   * The kafka.serializer.Decoder is deprecated in 3.8.0. This method is used to transfer the deprecated
+   * decoder to the new org.apache.kafka.tools.api.Decoder. Old decoders have an input VerifiableProperties.
+   * Remove it in new interface since it's always empty.
+   */
+  private[tools] def newDecoder(className: String): Decoder[_] = {
+    try {
+      CoreUtils.createObject[org.apache.kafka.tools.api.Decoder[_]](convertDeprecatedDecoderClass(className))
+    } catch  {
+      case _: Exception =>
+        // Old decoders always have an default VerifiableProperties input, because DumpLogSegments didn't provide
+        // any way to pass custom configs.
+        val decoder = CoreUtils.createObject[kafka.serializer.Decoder[_]](className, new VerifiableProperties())
+        (bytes: Array[Byte]) => decoder.fromBytes(bytes)
+    }
+  }
+
+  /*
+   * Covert deprecated decoder implementation to new decoder class.
+   */
+  private[tools] def convertDeprecatedDecoderClass(className: String): String = {
+    if (className == "kafka.serializer.StringDecoder") {
+      println("kafka.serializer.StringDecoder is deprecated. Please use org.apache.kafka.tools.api.StringDecoder instead")
+      classOf[StringDecoder].getName
+    } else if (className == "kafka.serializer.LongDecoder") {
+      println("kafka.serializer.LongDecoder is deprecated. Please use org.apache.kafka.tools.api.LongDecoder instead")
+      classOf[LongDecoder].getName
+    } else if (className == "kafka.serializer.IntegerDecoder") {
+      println("kafka.serializer.IntegerDecoder is deprecated. Please use org.apache.kafka.tools.api.IntegerDecoder instead")
+      classOf[IntegerDecoder].getName
+    } else if (className == "kafka.serializer.DefaultDecoder") {
+      println("kafka.serializer.DefaultDecoder is deprecated. Please use org.apache.kafka.tools.api.DefaultDecoder instead")
+      classOf[DefaultDecoder].getName
+    } else {
+      className
+    }
   }
 }

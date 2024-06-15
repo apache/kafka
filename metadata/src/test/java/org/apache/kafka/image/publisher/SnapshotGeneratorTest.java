@@ -31,7 +31,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -88,7 +87,7 @@ public class SnapshotGeneratorTest {
             .numBytes(100);
     }
 
-    private final static MetadataDelta TEST_DELTA;
+    private static final MetadataDelta TEST_DELTA;
 
     static {
         TEST_DELTA = new MetadataDelta.Builder().
@@ -97,7 +96,7 @@ public class SnapshotGeneratorTest {
         TEST_DELTA.replay(RecordTestUtils.testRecord(0).message());
     }
 
-    private final static MetadataImage TEST_IMAGE = TEST_DELTA.apply(MetadataProvenance.EMPTY);
+    private static final MetadataImage TEST_IMAGE = TEST_DELTA.apply(MetadataProvenance.EMPTY);
 
     @Test
     public void testCreateSnapshot() throws Exception {
@@ -118,7 +117,7 @@ public class SnapshotGeneratorTest {
             assertEquals(Collections.emptyList(), emitter.images());
             emitter.setReady();
         }
-        assertEquals(Arrays.asList(TEST_IMAGE), emitter.images());
+        assertEquals(Collections.singletonList(TEST_IMAGE), emitter.images());
         faultHandler.maybeRethrowFirstException();
     }
 
@@ -163,7 +162,7 @@ public class SnapshotGeneratorTest {
             // so this does not trigger a new snapshot.
             generator.publishLogDelta(TEST_DELTA, TEST_IMAGE, logDeltaManifestBuilder().numBytes(150).build());
         }
-        assertEquals(Arrays.asList(TEST_IMAGE), emitter.images());
+        assertEquals(Collections.singletonList(TEST_IMAGE), emitter.images());
         faultHandler.maybeRethrowFirstException();
     }
 

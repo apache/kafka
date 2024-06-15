@@ -38,9 +38,6 @@ public class LeaveGroupRequestTest {
 
     private final String groupId = "group_id";
     private final String memberIdOne = "member_1";
-    private final String instanceIdOne = "instance_1";
-    private final String memberIdTwo = "member_2";
-    private final String instanceIdTwo = "instance_2";
 
     private final int throttleTimeMs = 10;
 
@@ -51,10 +48,10 @@ public class LeaveGroupRequestTest {
     public void setUp() {
         members = Arrays.asList(new MemberIdentity()
                                          .setMemberId(memberIdOne)
-                                         .setGroupInstanceId(instanceIdOne),
+                                         .setGroupInstanceId("instance_1"),
                                 new MemberIdentity()
-                                         .setMemberId(memberIdTwo)
-                                         .setGroupInstanceId(instanceIdTwo));
+                                         .setMemberId("member_2")
+                                         .setGroupInstanceId("instance_2"));
         builder = new LeaveGroupRequest.Builder(
             groupId,
             members

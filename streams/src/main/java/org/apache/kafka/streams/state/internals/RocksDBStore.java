@@ -252,7 +252,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         // with the measurements from Rocks DB
         setupStatistics(configs, dbOptions);
         openRocksDB(dbOptions, columnFamilyOptions);
-        dbAccessor = new DirectDBAccessor(db, fOptions);
+        dbAccessor = new DirectDBAccessor(db, fOptions, wOptions);
         open = true;
 
         addValueProvidersToMetricsRecorder();
@@ -391,9 +391,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                                  final byte[] value) {
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
-        cfAccessor.put(dbAccessor, key.get(), value);
 
-        StoreQueryUtils.updatePosition(position, context);
+        synchronized (position) {
+            cfAccessor.put(dbAccessor, key.get(), value);
+            StoreQueryUtils.updatePosition(position, context);
+        }
     }
 
     @Override
@@ -409,12 +411,14 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     @Override
     public void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
-        try (final WriteBatch batch = new WriteBatch()) {
-            cfAccessor.prepareBatch(entries, batch);
-            write(batch);
-            StoreQueryUtils.updatePosition(position, context);
-        } catch (final RocksDBException e) {
-            throw new ProcessorStateException("Error while batch writing to store " + name, e);
+        synchronized (position) {
+            try (final WriteBatch batch = new WriteBatch()) {
+                cfAccessor.prepareBatch(entries, batch);
+                write(batch);
+                StoreQueryUtils.updatePosition(position, context);
+            } catch (final RocksDBException e) {
+                throw new ProcessorStateException("Error while batch writing to store " + name, e);
+            }
         }
     }
 
@@ -744,10 +748,12 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         private final RocksDB db;
         private final FlushOptions flushOptions;
+        private final WriteOptions wOptions;
 
-        DirectDBAccessor(final RocksDB db, final FlushOptions flushOptions) {
+        DirectDBAccessor(final RocksDB db, final FlushOptions flushOptions, final WriteOptions wOptions) {
             this.db = db;
             this.flushOptions = flushOptions;
+            this.wOptions = wOptions;
         }
 
         @Override
@@ -767,17 +773,17 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         @Override
         public void put(final ColumnFamilyHandle columnFamily, final byte[] key, final byte[] value) throws RocksDBException {
-            db.put(columnFamily, key, value);
+            db.put(columnFamily, wOptions, key, value);
         }
 
         @Override
         public void delete(final ColumnFamilyHandle columnFamily, final byte[] key) throws RocksDBException {
-            db.delete(columnFamily, key);
+            db.delete(columnFamily, wOptions, key);
         }
 
         @Override
         public void deleteRange(final ColumnFamilyHandle columnFamily, final byte[] from, final byte[] to) throws RocksDBException {
-            db.deleteRange(columnFamily, from, to);
+            db.deleteRange(columnFamily, wOptions, from, to);
         }
 
         @Override
@@ -980,21 +986,22 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     }
 
     void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> records) {
-        try (final WriteBatch batch = new WriteBatch()) {
-            for (final ConsumerRecord<byte[], byte[]> record : records) {
-                ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
-                    record,
-                    consistencyEnabled,
-                    position
-                );
-                // If version headers are not present or version is V0
-                cfAccessor.addToBatch(record.key(), record.value(), batch);
+        synchronized (position) {
+            try (final WriteBatch batch = new WriteBatch()) {
+                for (final ConsumerRecord<byte[], byte[]> record : records) {
+                    ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
+                        record,
+                        consistencyEnabled,
+                        position
+                    );
+                    // If version headers are not present or version is V0
+                    cfAccessor.addToBatch(record.key(), record.value(), batch);
+                }
+                write(batch);
+            } catch (final RocksDBException e) {
+                throw new ProcessorStateException("Error restoring batch to store " + name, e);
             }
-            write(batch);
-        } catch (final RocksDBException e) {
-            throw new ProcessorStateException("Error restoring batch to store " + name, e);
         }
-
     }
 
     // for testing

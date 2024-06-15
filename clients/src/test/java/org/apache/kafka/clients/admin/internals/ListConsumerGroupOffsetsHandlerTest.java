@@ -21,6 +21,7 @@ import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
@@ -403,7 +404,7 @@ public class ListConsumerGroupOffsetsHandlerTest {
         assertEquals(emptySet(), result.completedKeys.keySet());
         assertEquals(emptyList(), result.unmappedKeys);
         assertEquals(singleton(key), result.failedKeys.keySet());
-        assertTrue(expectedExceptionType.isInstance(result.failedKeys.get(key)));
+        assertInstanceOf(expectedExceptionType, result.failedKeys.get(key));
     }
 
     private void assertFailedForMultipleGroups(
@@ -415,7 +416,7 @@ public class ListConsumerGroupOffsetsHandlerTest {
         for (String g : groupToExceptionMap.keySet()) {
             CoordinatorKey key = CoordinatorKey.byGroupId(g);
             assertTrue(result.failedKeys.containsKey(key));
-            assertTrue(groupToExceptionMap.get(g).isInstance(result.failedKeys.get(key)));
+            assertInstanceOf(groupToExceptionMap.get(g), result.failedKeys.get(key));
         }
     }
 

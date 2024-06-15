@@ -325,11 +325,11 @@ class DelayedOperationTest {
     // Lock held by another thread, should not block, only operations that can be
     // locked without blocking on the current thread should complete
     ops = createDelayedOperations(2)
-    runOnAnotherThread(ops(0).lock.lock(), true)
+    runOnAnotherThread(ops(0).lock.lock(), shouldComplete = true)
     try {
       checkAndComplete(ops, Seq(ops(1)))
     } finally {
-      runOnAnotherThread(ops(0).lock.unlock(), true)
+      runOnAnotherThread(ops(0).lock.unlock(), shouldComplete = true)
       checkAndComplete(Seq(ops(0)), Seq(ops(0)))
     }
 
@@ -338,7 +338,7 @@ class DelayedOperationTest {
     // that can be locked without blocking on the current thread should complete
     ops = createDelayedOperations(2)
     ops(0).responseLockOpt.foreach { lock =>
-      runOnAnotherThread(lock.lock(), true)
+      runOnAnotherThread(lock.lock(), shouldComplete = true)
       try {
         try {
           checkAndComplete(ops, Seq(ops(1)))
@@ -348,7 +348,7 @@ class DelayedOperationTest {
             assertTrue(mismatchedLocks, "Should not have failed with valid locks")
         }
       } finally {
-        runOnAnotherThread(lock.unlock(), true)
+        runOnAnotherThread(lock.unlock(), shouldComplete = true)
         checkAndComplete(Seq(ops(0)), Seq(ops(0)))
       }
     }
@@ -363,7 +363,7 @@ class DelayedOperationTest {
 
   private def runOnAnotherThread(fun: => Unit, shouldComplete: Boolean): Future[_] = {
     val future = executorService.submit(new Runnable {
-      def run() = fun
+      def run(): Unit = fun
     })
     if (shouldComplete)
       future.get()

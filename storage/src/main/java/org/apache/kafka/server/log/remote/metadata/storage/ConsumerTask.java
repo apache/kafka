@@ -238,10 +238,15 @@ class ConsumerTask implements Runnable, Closeable {
             this.assignedMetadataPartitions = Collections.unmodifiableSet(metadataPartitionSnapshot);
             // for newly assigned user-partitions, read from the beginning of the corresponding metadata partition
             final Set<TopicPartition> seekToBeginOffsetPartitions = assignedUserTopicIdPartitionsSnapshot
-                .stream()
-                .filter(utp -> !utp.isAssigned)
-                .map(utp -> toRemoteLogPartition(utp.metadataPartition))
-                .collect(Collectors.toSet());
+                    .stream()
+                    .filter(utp -> !utp.isAssigned)
+                    .map(utp -> utp.metadataPartition)
+                    // When reset to beginning is happening, we also need to reset the last read offset
+                    // Otherwise if the next reassignment request for the same metadata partition comes in
+                    // before the record of already assigned topic has been read, then the reset will happen again to the last read offset
+                    .peek(readOffsetsByMetadataPartition::remove)
+                    .map(ConsumerTask::toRemoteLogPartition)
+                    .collect(Collectors.toSet());
             consumer.seekToBeginning(seekToBeginOffsetPartitions);
             // for other metadata partitions, read from the offset where the processing left last time.
             remoteLogPartitions.stream()

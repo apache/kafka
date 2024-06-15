@@ -18,3 +18,4 @@ org.apache.kafka.connect.integration.BlockingConnectorTest$TaskInitializeBlockin
 org.apache.kafka.connect.integration.ErrantRecordSinkConnector
 org.apache.kafka.connect.integration.MonitorableSinkConnector
 org.apache.kafka.connect.runtime.SampleSinkConnector
+org.apache.kafka.connect.integration.ConnectWorkerIntegrationTest$EmptyTaskConfigsConnector

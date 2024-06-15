@@ -17,12 +17,17 @@
 package org.apache.kafka.coordinator.group.assignor;
 
 import org.apache.kafka.common.Uuid;
-
-import org.apache.kafka.coordinator.group.consumer.SubscribedTopicMetadata;
+import org.apache.kafka.coordinator.group.api.assignor.GroupAssignment;
+import org.apache.kafka.coordinator.group.api.assignor.GroupSpec;
+import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorException;
+import org.apache.kafka.coordinator.group.consumer.Assignment;
+import org.apache.kafka.coordinator.group.consumer.GroupSpecImpl;
+import org.apache.kafka.coordinator.group.consumer.MemberSubscriptionAndAssignmentImpl;
+import org.apache.kafka.coordinator.group.consumer.SubscribedTopicDescriberImpl;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
+
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -30,8 +35,12 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 
+import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.coordinator.group.AssignmentTestUtil.invertedTargetAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkAssignment;
 import static org.apache.kafka.coordinator.group.AssignmentTestUtil.mkTopicAssignment;
+import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HETEROGENEOUS;
+import static org.apache.kafka.coordinator.group.api.assignor.SubscriptionType.HOMOGENEOUS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -44,68 +53,78 @@ public class RangeAssignorTest {
     private final String topic2Name = "topic2";
     private final Uuid topic3Uuid = Uuid.randomUuid();
     private final String topic3Name = "topic3";
-    private final String consumerA = "A";
-    private final String consumerB = "B";
-    private final String consumerC = "C";
+    private final String memberA = "A";
+    private final String memberB = "B";
+    private final String memberC = "C";
 
     @Test
     public void testOneConsumerNoTopic() {
-        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
             Collections.singletonMap(
                 topic1Uuid,
                 new TopicMetadata(
                     topic1Uuid,
                     topic1Name,
                     3,
-                    createPartitionRacks(3)
+                    Collections.emptyMap()
                 )
             )
         );
 
-        Map<String, AssignmentMemberSpec> members = Collections.singletonMap(
-            consumerA,
-            new AssignmentMemberSpec(
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = Collections.singletonMap(
+            memberA,
+            new MemberSubscriptionAndAssignmentImpl(
                 Optional.empty(),
-                Optional.empty(),
-                Collections.emptyList(),
-                Collections.emptyMap()
+                Collections.emptySet(),
+                Assignment.EMPTY
             )
         );
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
-        GroupAssignment groupAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
+        GroupSpec groupSpec = new GroupSpecImpl(
+            members,
+            HOMOGENEOUS,
+            Collections.emptyMap()
+        );
+
+        GroupAssignment groupAssignment = assignor.assign(
+            groupSpec,
+            subscribedTopicMetadata
+        );
 
         assertEquals(Collections.emptyMap(), groupAssignment.members());
     }
 
     @Test
     public void testOneConsumerSubscribedToNonExistentTopic() {
-        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
             Collections.singletonMap(
                 topic1Uuid,
                 new TopicMetadata(
                     topic1Uuid,
                     topic1Name,
                     3,
-                    createPartitionRacks(3)
+                    Collections.emptyMap()
                 )
             )
         );
 
-        Map<String, AssignmentMemberSpec> members = Collections.singletonMap(
-            consumerA,
-            new AssignmentMemberSpec(
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = Collections.singletonMap(
+            memberA,
+            new MemberSubscriptionAndAssignmentImpl(
                 Optional.empty(),
-                Optional.empty(),
-                Collections.singletonList(topic2Uuid),
-                Collections.emptyMap()
+                mkSet(topic2Uuid),
+                Assignment.EMPTY
             )
         );
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
+        GroupSpec groupSpec = new GroupSpecImpl(
+            members,
+            HOMOGENEOUS,
+            Collections.emptyMap()
+        );
 
         assertThrows(PartitionAssignorException.class,
-            () -> assignor.assign(assignmentSpec, subscribedTopicMetadata));
+            () -> assignor.assign(groupSpec, subscribedTopicMetadata));
     }
 
     @Test
@@ -115,44 +134,47 @@ public class RangeAssignorTest {
             topic1Uuid,
             topic1Name,
             3,
-            createPartitionRacks(3)
+            Collections.emptyMap()
         ));
         topicMetadata.put(topic3Uuid, new TopicMetadata(
             topic3Uuid,
             topic3Name,
             2,
-            createPartitionRacks(2)
-        ));
-
-        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
-
-        Map<String, AssignmentMemberSpec> members = new TreeMap<>();
-
-        members.put(consumerA, new AssignmentMemberSpec(
-            Optional.empty(),
-            Optional.empty(),
-            Arrays.asList(topic1Uuid, topic3Uuid),
             Collections.emptyMap()
         ));
 
-        members.put(consumerB, new AssignmentMemberSpec(
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
+
+        members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
-            Optional.empty(),
-            Arrays.asList(topic1Uuid, topic3Uuid),
-            Collections.emptyMap()
+            mkSet(topic1Uuid, topic3Uuid),
+            Assignment.EMPTY
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
-        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
+        members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
+            mkSet(topic1Uuid, topic3Uuid),
+            Assignment.EMPTY
+        ));
+
+        GroupSpec groupSpec = new GroupSpecImpl(
+            members,
+            HOMOGENEOUS,
+            invertedTargetAssignment(members)
+        );
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
+
+        GroupAssignment computedAssignment = assignor.assign(
+            groupSpec,
+            subscribedTopicMetadata
+        );
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
-
-        expectedAssignment.put(consumerA, mkAssignment(
+        expectedAssignment.put(memberA, mkAssignment(
             mkTopicAssignment(topic1Uuid, 0, 1),
             mkTopicAssignment(topic3Uuid, 0)
         ));
-
-        expectedAssignment.put(consumerB, mkAssignment(
+        expectedAssignment.put(memberB, mkAssignment(
             mkTopicAssignment(topic1Uuid, 2),
             mkTopicAssignment(topic3Uuid, 1)
         ));
@@ -167,61 +189,62 @@ public class RangeAssignorTest {
             topic1Uuid,
             topic1Name,
             3,
-            createPartitionRacks(3)
+            Collections.emptyMap()
         ));
         topicMetadata.put(topic2Uuid, new TopicMetadata(
             topic2Uuid,
             topic2Name,
             3,
-            createPartitionRacks(3)
+            Collections.emptyMap()
         ));
         topicMetadata.put(topic3Uuid, new TopicMetadata(
             topic3Uuid,
             topic3Name,
             2,
-            createPartitionRacks(2)
-        ));
-
-        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
-
-        Map<String, AssignmentMemberSpec> members = new TreeMap<>();
-
-        members.put(consumerA, new AssignmentMemberSpec(
-            Optional.empty(),
-            Optional.empty(),
-            Arrays.asList(topic1Uuid, topic2Uuid),
             Collections.emptyMap()
         ));
 
-        members.put(consumerB, new AssignmentMemberSpec(
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
+
+        members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
-            Optional.empty(),
-            Collections.singletonList(topic3Uuid),
-            Collections.emptyMap()
+            mkSet(topic1Uuid, topic2Uuid),
+            Assignment.EMPTY
         ));
 
-        members.put(consumerC, new AssignmentMemberSpec(
+        members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
-            Optional.empty(),
-            Arrays.asList(topic2Uuid, topic3Uuid),
-            Collections.emptyMap()
+            mkSet(topic3Uuid),
+            Assignment.EMPTY
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
-        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
+        members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
+            mkSet(topic2Uuid, topic3Uuid),
+            Assignment.EMPTY
+        ));
+
+        GroupSpec groupSpec = new GroupSpecImpl(
+            members,
+            HETEROGENEOUS,
+            invertedTargetAssignment(members)
+        );
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
+
+        GroupAssignment computedAssignment = assignor.assign(
+            groupSpec,
+            subscribedTopicMetadata
+        );
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
-
-        expectedAssignment.put(consumerA, mkAssignment(
+        expectedAssignment.put(memberA, mkAssignment(
             mkTopicAssignment(topic1Uuid, 0, 1, 2),
             mkTopicAssignment(topic2Uuid, 0, 1)
         ));
-
-        expectedAssignment.put(consumerB, mkAssignment(
+        expectedAssignment.put(memberB, mkAssignment(
             mkTopicAssignment(topic3Uuid, 0)
         ));
-
-        expectedAssignment.put(consumerC, mkAssignment(
+        expectedAssignment.put(memberC, mkAssignment(
             mkTopicAssignment(topic2Uuid, 2),
             mkTopicAssignment(topic3Uuid, 1)
         ));
@@ -236,56 +259,58 @@ public class RangeAssignorTest {
             topic1Uuid,
             topic1Name,
             3,
-            createPartitionRacks(3)
+            Collections.emptyMap()
         ));
         topicMetadata.put(topic3Uuid, new TopicMetadata(
             topic3Uuid,
             topic3Name,
             2,
-            createPartitionRacks(2)
-        ));
-
-        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
-
-        Map<String, AssignmentMemberSpec> members = new TreeMap<>();
-
-        members.put(consumerA, new AssignmentMemberSpec(
-            Optional.empty(),
-            Optional.empty(),
-            Arrays.asList(topic1Uuid, topic3Uuid),
             Collections.emptyMap()
         ));
 
-        members.put(consumerB, new AssignmentMemberSpec(
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
+
+        members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
-            Optional.empty(),
-            Arrays.asList(topic1Uuid, topic3Uuid),
-            Collections.emptyMap()
+            mkSet(topic1Uuid, topic3Uuid),
+            Assignment.EMPTY
         ));
 
-        members.put(consumerC, new AssignmentMemberSpec(
+        members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
-            Optional.empty(),
-            Arrays.asList(topic1Uuid, topic3Uuid),
-            Collections.emptyMap()
+            mkSet(topic1Uuid, topic3Uuid),
+            Assignment.EMPTY
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
-        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
+        members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
+            mkSet(topic1Uuid, topic3Uuid),
+            Assignment.EMPTY
+        ));
+
+        GroupSpec groupSpec = new GroupSpecImpl(
+            members,
+            HOMOGENEOUS,
+            invertedTargetAssignment(members)
+        );
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
+
+        GroupAssignment computedAssignment = assignor.assign(
+            groupSpec,
+            subscribedTopicMetadata
+        );
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
         // Topic 3 has 2 partitions but three consumers subscribed to it - one of them will not get a partition.
-        expectedAssignment.put(consumerA, mkAssignment(
+        expectedAssignment.put(memberA, mkAssignment(
             mkTopicAssignment(topic1Uuid, 0),
             mkTopicAssignment(topic3Uuid, 0)
         ));
-
-        expectedAssignment.put(consumerB, mkAssignment(
+        expectedAssignment.put(memberB, mkAssignment(
             mkTopicAssignment(topic1Uuid, 1),
             mkTopicAssignment(topic3Uuid, 1)
         ));
-
-        expectedAssignment.put(consumerC, mkAssignment(
+        expectedAssignment.put(memberC, mkAssignment(
             mkTopicAssignment(topic1Uuid, 2)
         ));
 
@@ -299,68 +324,66 @@ public class RangeAssignorTest {
             topic1Uuid,
             topic1Name,
             2,
-            createPartitionRacks(2)
+            Collections.emptyMap()
         ));
         topicMetadata.put(topic2Uuid, new TopicMetadata(
             topic2Uuid,
             topic2Name,
             2,
-            createPartitionRacks(2)
-        ));
-
-        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
-
-        Map<String, AssignmentMemberSpec> members = new TreeMap<>();
-
-        Map<Uuid, Set<Integer>> currentAssignmentForA = mkAssignment(
-            mkTopicAssignment(topic1Uuid, 0),
-            mkTopicAssignment(topic2Uuid, 0)
-        );
-
-        members.put(consumerA, new AssignmentMemberSpec(
-            Optional.empty(),
-            Optional.empty(),
-            Arrays.asList(topic1Uuid, topic2Uuid),
-            currentAssignmentForA
-        ));
-
-        Map<Uuid, Set<Integer>> currentAssignmentForB = mkAssignment(
-            mkTopicAssignment(topic1Uuid, 1),
-            mkTopicAssignment(topic2Uuid, 1)
-        );
-
-        members.put(consumerB, new AssignmentMemberSpec(
-            Optional.empty(),
-            Optional.empty(),
-            Arrays.asList(topic1Uuid, topic2Uuid),
-            currentAssignmentForB
-        ));
-
-        // Add a new consumer to trigger a re-assignment
-        members.put(consumerC, new AssignmentMemberSpec(
-            Optional.empty(),
-            Optional.empty(),
-            Arrays.asList(topic1Uuid, topic2Uuid),
             Collections.emptyMap()
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
-        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
+
+        members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
+            mkSet(topic1Uuid, topic2Uuid),
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic1Uuid, 0),
+                mkTopicAssignment(topic2Uuid, 0)
+            ))
+        ));
+
+        members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
+            mkSet(topic1Uuid, topic2Uuid),
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic1Uuid, 1),
+                mkTopicAssignment(topic2Uuid, 1)
+            ))
+        ));
+
+        // Add a new consumer to trigger a re-assignment
+        members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
+            mkSet(topic1Uuid, topic2Uuid),
+            Assignment.EMPTY
+        ));
+
+        GroupSpec groupSpec = new GroupSpecImpl(
+            members,
+            HOMOGENEOUS,
+            invertedTargetAssignment(members)
+        );
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
+
+        GroupAssignment computedAssignment = assignor.assign(
+            groupSpec,
+            subscribedTopicMetadata
+        );
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
-
-        expectedAssignment.put(consumerA, mkAssignment(
+        expectedAssignment.put(memberA, mkAssignment(
             mkTopicAssignment(topic1Uuid, 0),
             mkTopicAssignment(topic2Uuid, 0)
         ));
-
-        expectedAssignment.put(consumerB, mkAssignment(
+        expectedAssignment.put(memberB, mkAssignment(
             mkTopicAssignment(topic1Uuid, 1),
             mkTopicAssignment(topic2Uuid, 1)
         ));
 
         // Consumer C shouldn't get any assignment, due to stickiness A, B retain their assignments
-        assertNull(computedAssignment.members().get(consumerC));
+        assertNull(computedAssignment.members().get(memberC));
         assertAssignment(expectedAssignment, computedAssignment);
     }
 
@@ -372,54 +395,53 @@ public class RangeAssignorTest {
             topic1Uuid,
             topic1Name,
             4,
-            createPartitionRacks(4)
+            Collections.emptyMap()
         ));
         topicMetadata.put(topic2Uuid, new TopicMetadata(
             topic2Uuid,
             topic2Name,
             4,
-            createPartitionRacks(4)
+            Collections.emptyMap()
         ));
 
-        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
 
-        Map<String, AssignmentMemberSpec> members = new TreeMap<>();
+        members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
+            mkSet(topic1Uuid, topic2Uuid),
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic1Uuid, 0, 1),
+                mkTopicAssignment(topic2Uuid, 0, 1)
+            ))
+        ));
 
-        Map<Uuid, Set<Integer>> currentAssignmentForA = mkAssignment(
-            mkTopicAssignment(topic1Uuid, 0, 1),
-            mkTopicAssignment(topic2Uuid, 0, 1)
+        members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
+            mkSet(topic1Uuid, topic2Uuid),
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic1Uuid, 2),
+                mkTopicAssignment(topic2Uuid, 2)
+            ))
+        ));
+
+        GroupSpec groupSpec = new GroupSpecImpl(
+            members,
+            HOMOGENEOUS,
+            invertedTargetAssignment(members)
         );
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
 
-        members.put(consumerA, new AssignmentMemberSpec(
-            Optional.empty(),
-            Optional.empty(),
-            Arrays.asList(topic1Uuid, topic2Uuid),
-            currentAssignmentForA
-        ));
-
-        Map<Uuid, Set<Integer>> currentAssignmentForB = mkAssignment(
-            mkTopicAssignment(topic1Uuid, 2),
-            mkTopicAssignment(topic2Uuid, 2)
+        GroupAssignment computedAssignment = assignor.assign(
+            groupSpec,
+            subscribedTopicMetadata
         );
-
-        members.put(consumerB, new AssignmentMemberSpec(
-            Optional.empty(),
-            Optional.empty(),
-            Arrays.asList(topic1Uuid, topic2Uuid),
-            currentAssignmentForB
-        ));
-
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
-        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
-
-        expectedAssignment.put(consumerA, mkAssignment(
+        expectedAssignment.put(memberA, mkAssignment(
             mkTopicAssignment(topic1Uuid, 0, 1),
             mkTopicAssignment(topic2Uuid, 0, 1)
         ));
-
-        expectedAssignment.put(consumerB, mkAssignment(
+        expectedAssignment.put(memberB, mkAssignment(
             mkTopicAssignment(topic1Uuid, 2, 3),
             mkTopicAssignment(topic2Uuid, 2, 3)
         ));
@@ -434,67 +456,64 @@ public class RangeAssignorTest {
             topic1Uuid,
             topic1Name,
             3,
-            createPartitionRacks(3)
+            Collections.emptyMap()
         ));
         topicMetadata.put(topic2Uuid, new TopicMetadata(
             topic2Uuid,
             topic2Name,
             3,
-            createPartitionRacks(3)
-        ));
-
-        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
-
-        Map<String, AssignmentMemberSpec> members = new TreeMap<>();
-
-        Map<Uuid, Set<Integer>> currentAssignmentForA = mkAssignment(
-            mkTopicAssignment(topic1Uuid, 0, 1),
-            mkTopicAssignment(topic2Uuid, 0, 1)
-        );
-
-        members.put(consumerA, new AssignmentMemberSpec(
-            Optional.empty(),
-            Optional.empty(),
-            Arrays.asList(topic1Uuid, topic2Uuid),
-            currentAssignmentForA
-        ));
-
-        Map<Uuid, Set<Integer>> currentAssignmentForB = mkAssignment(
-            mkTopicAssignment(topic1Uuid, 2),
-            mkTopicAssignment(topic2Uuid, 2)
-        );
-
-        members.put(consumerB, new AssignmentMemberSpec(
-            Optional.empty(),
-            Optional.empty(),
-            Arrays.asList(topic1Uuid, topic2Uuid),
-            currentAssignmentForB
-        ));
-
-        // Add a new consumer to trigger a re-assignment
-        members.put(consumerC, new AssignmentMemberSpec(
-            Optional.empty(),
-            Optional.empty(),
-            Arrays.asList(topic1Uuid, topic2Uuid),
             Collections.emptyMap()
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
-        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
+
+        members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
+            mkSet(topic1Uuid, topic2Uuid),
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic1Uuid, 0, 1),
+                mkTopicAssignment(topic2Uuid, 0, 1)
+            ))
+        ));
+
+        members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
+            mkSet(topic1Uuid, topic2Uuid),
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic1Uuid, 2),
+                mkTopicAssignment(topic2Uuid, 2)
+            ))
+        ));
+
+        // Add a new consumer to trigger a re-assignment
+        members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
+            mkSet(topic1Uuid, topic2Uuid),
+            Assignment.EMPTY
+        ));
+
+        GroupSpec groupSpec = new GroupSpecImpl(
+            members,
+            HOMOGENEOUS,
+            invertedTargetAssignment(members)
+        );
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
+
+        GroupAssignment computedAssignment = assignor.assign(
+            groupSpec,
+            subscribedTopicMetadata
+        );
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
-
-        expectedAssignment.put(consumerA, mkAssignment(
+        expectedAssignment.put(memberA, mkAssignment(
             mkTopicAssignment(topic1Uuid, 0),
             mkTopicAssignment(topic2Uuid, 0)
         ));
-
-        expectedAssignment.put(consumerB, mkAssignment(
+        expectedAssignment.put(memberB, mkAssignment(
             mkTopicAssignment(topic1Uuid, 2),
             mkTopicAssignment(topic2Uuid, 2)
         ));
-
-        expectedAssignment.put(consumerC, mkAssignment(
+        expectedAssignment.put(memberC, mkAssignment(
             mkTopicAssignment(topic1Uuid, 1),
             mkTopicAssignment(topic2Uuid, 1)
         ));
@@ -510,67 +529,64 @@ public class RangeAssignorTest {
             topic1Uuid,
             topic1Name,
             4,
-            createPartitionRacks(4)
+            Collections.emptyMap()
         ));
         topicMetadata.put(topic2Uuid, new TopicMetadata(
             topic2Uuid,
             topic2Name,
             3,
-            createPartitionRacks(3)
-        ));
-
-        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
-
-        Map<String, AssignmentMemberSpec> members = new TreeMap<>();
-
-        Map<Uuid, Set<Integer>> currentAssignmentForA = mkAssignment(
-            mkTopicAssignment(topic1Uuid, 0, 1),
-            mkTopicAssignment(topic2Uuid, 0, 1)
-        );
-
-        members.put(consumerA, new AssignmentMemberSpec(
-            Optional.empty(),
-            Optional.empty(),
-            Arrays.asList(topic1Uuid, topic2Uuid),
-            currentAssignmentForA
-        ));
-
-        Map<Uuid, Set<Integer>> currentAssignmentForB = mkAssignment(
-            mkTopicAssignment(topic1Uuid, 2),
-            mkTopicAssignment(topic2Uuid, 2)
-        );
-
-        members.put(consumerB, new AssignmentMemberSpec(
-            Optional.empty(),
-            Optional.empty(),
-            Arrays.asList(topic1Uuid, topic2Uuid),
-            currentAssignmentForB
-        ));
-
-        // Add a new consumer to trigger a re-assignment
-        members.put(consumerC, new AssignmentMemberSpec(
-            Optional.empty(),
-            Optional.empty(),
-            Collections.singletonList(topic1Uuid),
             Collections.emptyMap()
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
-        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
+
+        members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
+            mkSet(topic1Uuid, topic2Uuid),
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic1Uuid, 0, 1),
+                mkTopicAssignment(topic2Uuid, 0, 1)
+            ))
+        ));
+
+        members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
+            mkSet(topic1Uuid, topic2Uuid),
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic1Uuid, 2),
+                mkTopicAssignment(topic2Uuid, 2)
+            ))
+        ));
+
+        // Add a new consumer to trigger a re-assignment
+        members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
+            mkSet(topic1Uuid),
+            Assignment.EMPTY
+        ));
+
+        GroupSpec groupSpec = new GroupSpecImpl(
+            members,
+            HETEROGENEOUS,
+            invertedTargetAssignment(members)
+        );
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
+
+        GroupAssignment computedAssignment = assignor.assign(
+            groupSpec,
+            subscribedTopicMetadata
+        );
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
-
-        expectedAssignment.put(consumerA, mkAssignment(
+        expectedAssignment.put(memberA, mkAssignment(
             mkTopicAssignment(topic1Uuid, 0, 1),
             mkTopicAssignment(topic2Uuid, 0, 1)
         ));
-
-        expectedAssignment.put(consumerB, mkAssignment(
+        expectedAssignment.put(memberB, mkAssignment(
             mkTopicAssignment(topic1Uuid, 2),
             mkTopicAssignment(topic2Uuid, 2)
         ));
-
-        expectedAssignment.put(consumerC, mkAssignment(
+        expectedAssignment.put(memberC, mkAssignment(
             mkTopicAssignment(topic1Uuid, 3)
         ));
 
@@ -584,38 +600,42 @@ public class RangeAssignorTest {
             topic1Uuid,
             topic1Name,
             3,
-            createPartitionRacks(3)
+            Collections.emptyMap()
         ));
         topicMetadata.put(topic2Uuid, new TopicMetadata(
             topic2Uuid,
             topic2Name,
             3,
-            createPartitionRacks(3)
+            Collections.emptyMap()
         ));
 
-        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
 
-        Map<String, AssignmentMemberSpec> members = new TreeMap<>();
         // Consumer A was removed
 
-        Map<Uuid, Set<Integer>> currentAssignmentForB = mkAssignment(
-            mkTopicAssignment(topic1Uuid, 2),
-            mkTopicAssignment(topic2Uuid, 2)
-        );
-
-        members.put(consumerB, new AssignmentMemberSpec(
+        members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
-            Optional.empty(),
-            Arrays.asList(topic1Uuid, topic2Uuid),
-            currentAssignmentForB
+            mkSet(topic1Uuid, topic2Uuid),
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic1Uuid, 2),
+                mkTopicAssignment(topic2Uuid, 2)
+            ))
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
-        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
+        GroupSpec groupSpec = new GroupSpecImpl(
+            members,
+            HOMOGENEOUS,
+            invertedTargetAssignment(members)
+        );
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
+
+        GroupAssignment computedAssignment = assignor.assign(
+            groupSpec,
+            subscribedTopicMetadata
+        );
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
-
-        expectedAssignment.put(consumerB, mkAssignment(
+        expectedAssignment.put(memberB, mkAssignment(
             mkTopicAssignment(topic1Uuid, 0, 1, 2),
             mkTopicAssignment(topic2Uuid, 0, 1, 2)
         ));
@@ -630,100 +650,87 @@ public class RangeAssignorTest {
             topic1Uuid,
             topic1Name,
             3,
-            createPartitionRacks(3)
+            Collections.emptyMap()
         ));
         topicMetadata.put(topic2Uuid, new TopicMetadata(
             topic2Uuid,
             topic2Name,
             3,
-            createPartitionRacks(3)
+            Collections.emptyMap()
         ));
         topicMetadata.put(topic3Uuid, new TopicMetadata(
             topic3Uuid,
             topic3Name,
             2,
-            createPartitionRacks(2)
+            Collections.emptyMap()
         ));
-
-        SubscribedTopicMetadata subscribedTopicMetadata = new SubscribedTopicMetadata(topicMetadata);
-
-        Map<String, AssignmentMemberSpec> members = new TreeMap<>();
 
         // Let initial subscriptions be A -> T1, T2 // B -> T2 // C -> T2, T3
         // Change the subscriptions to A -> T1 // B -> T1, T2, T3 // C -> T2
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
 
-        Map<Uuid, Set<Integer>> currentAssignmentForA = mkAssignment(
-            mkTopicAssignment(topic1Uuid, 0, 1, 2),
-            mkTopicAssignment(topic2Uuid, 0)
-        );
-
-        members.put(consumerA, new AssignmentMemberSpec(
+        members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
-            Optional.empty(),
-            Collections.singletonList(topic1Uuid),
-            currentAssignmentForA
+            mkSet(topic1Uuid),
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic1Uuid, 0, 1, 2),
+                mkTopicAssignment(topic2Uuid, 0)
+            ))
         ));
 
-        Map<Uuid, Set<Integer>> currentAssignmentForB = mkAssignment(
-            mkTopicAssignment(topic2Uuid, 1)
-        );
-
-        members.put(consumerB, new AssignmentMemberSpec(
+        members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
-            Optional.empty(),
-            Arrays.asList(topic1Uuid, topic2Uuid, topic3Uuid),
-            currentAssignmentForB
+            mkSet(topic1Uuid, topic2Uuid, topic3Uuid),
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic2Uuid, 1)
+            ))
         ));
 
-        Map<Uuid, Set<Integer>> currentAssignmentForC = mkAssignment(
-            mkTopicAssignment(topic2Uuid, 2),
-            mkTopicAssignment(topic3Uuid, 0, 1)
-        );
-
-        members.put(consumerC, new AssignmentMemberSpec(
+        members.put(memberC, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
-            Optional.empty(),
-            Collections.singletonList(topic2Uuid),
-            currentAssignmentForC
+            mkSet(topic2Uuid),
+            new Assignment(mkAssignment(
+                mkTopicAssignment(topic2Uuid, 2),
+                mkTopicAssignment(topic3Uuid, 0, 1)
+            ))
         ));
 
-        AssignmentSpec assignmentSpec = new AssignmentSpec(members);
-        GroupAssignment computedAssignment = assignor.assign(assignmentSpec, subscribedTopicMetadata);
+        GroupSpec groupSpec = new GroupSpecImpl(
+            members,
+            HETEROGENEOUS,
+            invertedTargetAssignment(members)
+        );
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
+
+        GroupAssignment computedAssignment = assignor.assign(
+            groupSpec,
+            subscribedTopicMetadata
+        );
 
         Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
-
-        expectedAssignment.put(consumerA, mkAssignment(
+        expectedAssignment.put(memberA, mkAssignment(
             mkTopicAssignment(topic1Uuid, 0, 1)
         ));
-
-        expectedAssignment.put(consumerB, mkAssignment(
+        expectedAssignment.put(memberB, mkAssignment(
             mkTopicAssignment(topic1Uuid, 2),
             mkTopicAssignment(topic2Uuid, 0, 1),
             mkTopicAssignment(topic3Uuid, 0, 1)
         ));
-
-        expectedAssignment.put(consumerC, mkAssignment(
+        expectedAssignment.put(memberC, mkAssignment(
             mkTopicAssignment(topic2Uuid, 2)
         ));
 
         assertAssignment(expectedAssignment, computedAssignment);
     }
 
-    private void assertAssignment(Map<String, Map<Uuid, Set<Integer>>> expectedAssignment, GroupAssignment computedGroupAssignment) {
+    private void assertAssignment(
+        Map<String, Map<Uuid, Set<Integer>>> expectedAssignment,
+        GroupAssignment computedGroupAssignment
+    ) {
         assertEquals(expectedAssignment.size(), computedGroupAssignment.members().size());
         for (String memberId : computedGroupAssignment.members().keySet()) {
-            Map<Uuid, Set<Integer>> computedAssignmentForMember = computedGroupAssignment.members().get(memberId).targetPartitions();
+            Map<Uuid, Set<Integer>> computedAssignmentForMember = computedGroupAssignment.members().get(memberId).partitions();
             assertEquals(expectedAssignment.get(memberId), computedAssignmentForMember);
         }
-    }
-
-    // When rack awareness is enabled for this assignor, rack information can be updated in this method.
-    private static Map<Integer, Set<String>> createPartitionRacks(int numPartitions) {
-        Map<Integer, Set<String>> partitionRacks = new HashMap<>(numPartitions);
-        Set<String> emptySet = Collections.emptySet();
-        for (int i = 0; i < numPartitions; i++) {
-            partitionRacks.put(i, emptySet);
-        }
-        return partitionRacks;
     }
 }

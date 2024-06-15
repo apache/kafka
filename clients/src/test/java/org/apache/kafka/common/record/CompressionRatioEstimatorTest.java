@@ -26,8 +26,8 @@ public class CompressionRatioEstimatorTest {
     @Test
     public void testUpdateEstimation() {
         class EstimationsObservedRatios {
-            float currentEstimation;
-            float observedRatio;
+            final float currentEstimation;
+            final float observedRatio;
             EstimationsObservedRatios(float currentEstimation, float observedRatio) {
                 this.currentEstimation = currentEstimation;
                 this.observedRatio = observedRatio;

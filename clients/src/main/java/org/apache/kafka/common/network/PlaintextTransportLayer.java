@@ -35,7 +35,7 @@ public class PlaintextTransportLayer implements TransportLayer {
     private final SocketChannel socketChannel;
     private final Principal principal = KafkaPrincipal.ANONYMOUS;
 
-    public PlaintextTransportLayer(SelectionKey key) throws IOException {
+    public PlaintextTransportLayer(SelectionKey key) {
         this.key = key;
         this.socketChannel = (SocketChannel) key.channel();
     }

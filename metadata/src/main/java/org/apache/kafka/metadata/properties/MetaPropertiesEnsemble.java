@@ -43,7 +43,6 @@ import java.util.Random;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
 /**
@@ -165,12 +164,6 @@ public final class MetaPropertiesEnsemble {
      * Utility class for copying a MetaPropertiesEnsemble object, possibly with changes.
      */
     public static class Copier {
-        public static final BiConsumer<String, IOException> LOGGING_ERROR_HANDLER = new BiConsumer<String, IOException>() {
-            @Override
-            public void accept(String logDir, IOException e) {
-                MetaPropertiesEnsemble.LOG.error("Error while writing meta.properties to {}", logDir, e);
-            }
-        };
 
         private final MetaPropertiesEnsemble prev;
         private final Set<String> emptyLogDirs;
@@ -258,7 +251,7 @@ public final class MetaPropertiesEnsemble {
         }
 
         /**
-         * Set the the current metadata log directory.
+         * Set the current metadata log directory.
          *
          * @param metaLogDir    The metadata log directory, or Optional.empty if there is none.
          *
@@ -607,8 +600,7 @@ public final class MetaPropertiesEnsemble {
         TreeMap<String, String> outputMap = new TreeMap<>();
         emptyLogDirs.forEach(e -> outputMap.put(e, "EMPTY"));
         errorLogDirs.forEach(e -> outputMap.put(e, "ERROR"));
-        logDirProps.entrySet().forEach(
-            e -> outputMap.put(e.getKey(), e.getValue().toString()));
+        logDirProps.forEach((key, value) -> outputMap.put(key, value.toString()));
         return "MetaPropertiesEnsemble" +
             "(metadataLogDir=" + metadataLogDir +
             ", dirs={" + outputMap.entrySet().stream().

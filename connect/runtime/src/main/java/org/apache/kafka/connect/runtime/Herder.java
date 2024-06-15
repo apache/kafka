@@ -122,6 +122,14 @@ public interface Herder {
                             Callback<Created<ConnectorInfo>> callback);
 
     /**
+     * Patch the configuration for a connector.
+     * @param connName name of the connector
+     * @param configPatch the connector's configuration patch.
+     * @param callback callback to invoke when the configuration has been written
+     */
+    void patchConnectorConfig(String connName, Map<String, String> configPatch, Callback<Created<ConnectorInfo>> callback);
+
+    /**
      * Delete a connector and its configuration.
      * @param connName name of the connector
      * @param callback callback to invoke when the configuration has been written

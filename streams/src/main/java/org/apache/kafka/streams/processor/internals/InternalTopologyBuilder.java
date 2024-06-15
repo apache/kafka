@@ -123,6 +123,9 @@ public class InternalTopologyBuilder {
     // map from changelog topic name to its corresponding state store.
     private final Map<String, String> changelogTopicToStore = new HashMap<>();
 
+    // map of store name to restore behavior
+    private final Map<String, Optional<ReprocessFactory<?, ?, ?, ?>>> storeNameToReprocessOnRestore = new HashMap<>();
+
     // all global topics
     private final Set<String> globalTopics = new HashSet<>();
 
@@ -141,7 +144,11 @@ public class InternalTopologyBuilder {
 
     private String applicationId = null;
 
+    // keyed by subtopology id
     private Map<Integer, Set<String>> nodeGroups = null;
+
+    // keyed by subtopology id
+    private Map<Integer, Set<String>> subtopologyIdToStateStoreNames = null;
 
     // The name of the topology this builder belongs to, or null if this is not a NamedTopology
     private final String topologyName;
@@ -154,7 +161,33 @@ public class InternalTopologyBuilder {
 
     private boolean hasPersistentStores = false;
 
-    private static abstract class NodeFactory<KIn, VIn, KOut, VOut> {
+    public static class ReprocessFactory<KIn, VIn, KOut, VOut> {
+
+        private final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier;
+        private final Deserializer<KIn> keyDeserializer;
+        private final Deserializer<VIn> valueDeserializer;
+
+        private ReprocessFactory(final ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier,
+                                 final Deserializer<KIn> key,
+                                 final Deserializer<VIn> value) {
+            this.processorSupplier = processorSupplier;
+            this.keyDeserializer = key;
+            this.valueDeserializer = value;
+        }
+        public ProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier() {
+            return processorSupplier;
+        }
+
+        public Deserializer<KIn> keyDeserializer() {
+            return keyDeserializer;
+        }
+
+        public Deserializer<VIn> valueDeserializer() {
+            return valueDeserializer;
+        }
+    }
+
+    private abstract static class NodeFactory<KIn, VIn, KOut, VOut> {
         final String name;
         final String[] predecessors;
 
@@ -330,12 +363,12 @@ public class InternalTopologyBuilder {
         return this;
     }
 
-    public synchronized final void setStreamsConfig(final StreamsConfig applicationConfig) {
+    public final synchronized void setStreamsConfig(final StreamsConfig applicationConfig) {
         Objects.requireNonNull(applicationConfig, "config can't be null");
         topologyConfigs = new TopologyConfig(applicationConfig);
     }
 
-    public synchronized  final void setNamedTopology(final NamedTopology namedTopology) {
+    public final synchronized void setNamedTopology(final NamedTopology namedTopology) {
         this.namedTopology = namedTopology;
     }
 
@@ -351,7 +384,7 @@ public class InternalTopologyBuilder {
         return namedTopology;
     }
 
-    public synchronized final InternalTopologyBuilder rewriteTopology(final StreamsConfig config) {
+    public final synchronized InternalTopologyBuilder rewriteTopology(final StreamsConfig config) {
         Objects.requireNonNull(config, "config can't be null");
 
         setApplicationId(config.getString(StreamsConfig.APPLICATION_ID_CONFIG));
@@ -584,7 +617,8 @@ public class InternalTopologyBuilder {
                                                 final Deserializer<VIn> valueDeserializer,
                                                 final String topic,
                                                 final String processorName,
-                                                final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
+                                                final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier,
+                                                final boolean reprocessOnRestore) {
         Objects.requireNonNull(storeFactory, "store builder must not be null");
         ApiUtils.checkSupplier(stateUpdateSupplier);
         validateGlobalStoreArguments(sourceName,
@@ -613,6 +647,10 @@ public class InternalTopologyBuilder {
             keyDeserializer,
             valueDeserializer)
         );
+        storeNameToReprocessOnRestore.put(storeFactory.name(),
+            reprocessOnRestore ?
+                Optional.of(new ReprocessFactory<>(stateUpdateSupplier, keyDeserializer, valueDeserializer))
+                : Optional.empty());
         nodeToSourceTopics.put(sourceName, Arrays.asList(topics));
         nodeGrouper.add(sourceName);
         nodeFactory.addStateStore(storeFactory.name());
@@ -903,14 +941,15 @@ public class InternalTopologyBuilder {
      * @return the full topology minus any global state
      */
     public synchronized ProcessorTopology buildTopology() {
-        final Set<String> nodeGroup = new HashSet<>();
+        final Set<String> allNodes = new HashSet<>();
         for (final Set<String> value : nodeGroups().values()) {
-            nodeGroup.addAll(value);
+            allNodes.addAll(value);
         }
-        nodeGroup.removeAll(globalNodeGroups());
+        allNodes.removeAll(globalNodeGroups());
 
         initializeSubscription();
-        return build(nodeGroup);
+        initializeSubtopologyIdToStateStoreNamesMap();
+        return build(allNodes);
     }
 
     /**
@@ -996,7 +1035,8 @@ public class InternalTopologyBuilder {
                                      new ArrayList<>(stateStoreMap.values()),
                                      new ArrayList<>(globalStateStores.values()),
                                      storeToChangelogTopic,
-                                     repartitionTopics);
+                                     repartitionTopics,
+                                     storeNameToReprocessOnRestore);
     }
 
     private void buildSinkNode(final Map<String, ProcessorNode<?, ?, ?, ?>> processorMap,
@@ -1465,6 +1505,34 @@ public class InternalTopologyBuilder {
         return false;
     }
 
+    public Set<String> stateStoreNamesForSubtopology(final int subtopologyId) {
+        return subtopologyIdToStateStoreNames.get(subtopologyId);
+    }
+
+    private void initializeSubtopologyIdToStateStoreNamesMap() {
+        final Map<Integer, Set<String>> storeNames = new HashMap<>();
+
+        for (final Map.Entry<Integer, Set<String>> nodeGroup : makeNodeGroups().entrySet()) {
+            final Set<String> subtopologyNodes = nodeGroup.getValue();
+            final boolean isNodeGroupOfGlobalStores = nodeGroupContainsGlobalSourceNode(subtopologyNodes);
+
+            if (!isNodeGroupOfGlobalStores) {
+                final int subtopologyId = nodeGroup.getKey();
+                final Set<String> subtopologyStoreNames = new HashSet<>();
+
+                for (final String nodeName : subtopologyNodes) {
+                    final AbstractNode node = nodeFactories.get(nodeName).describe();
+                    if (node instanceof Processor) {
+                        subtopologyStoreNames.addAll(((Processor) node).stores());
+                    }
+                }
+
+                storeNames.put(subtopologyId, subtopologyStoreNames);
+            }
+        }
+        subtopologyIdToStateStoreNames = storeNames;
+    }
+
     public TopologyDescription describe() {
         final TopologyDescription description = new TopologyDescription(topologyName);
 
@@ -1537,7 +1605,7 @@ public class InternalTopologyBuilder {
         }
     }
 
-    private final static NodeComparator NODE_COMPARATOR = new NodeComparator();
+    private static final NodeComparator NODE_COMPARATOR = new NodeComparator();
 
     private static void updateSize(final AbstractNode node,
                                    final int delta) {
@@ -1574,7 +1642,7 @@ public class InternalTopologyBuilder {
                 new HashSet<>(nodesByName.values())));
     }
 
-    public final static class GlobalStore implements TopologyDescription.GlobalStore {
+    public static final class GlobalStore implements TopologyDescription.GlobalStore {
         private final Source source;
         private final Processor processor;
         private final int id;
@@ -1671,7 +1739,7 @@ public class InternalTopologyBuilder {
         }
     }
 
-    public final static class Source extends AbstractNode implements TopologyDescription.Source {
+    public static final class Source extends AbstractNode implements TopologyDescription.Source {
         private final Set<String> topics;
         private final Pattern topicPattern;
 
@@ -1737,7 +1805,7 @@ public class InternalTopologyBuilder {
         }
     }
 
-    public final static class Processor extends AbstractNode implements TopologyDescription.Processor {
+    public static final class Processor extends AbstractNode implements TopologyDescription.Processor {
         private final Set<String> stores;
 
         public Processor(final String name,
@@ -1780,7 +1848,7 @@ public class InternalTopologyBuilder {
         }
     }
 
-    public final static class Sink<K, V> extends AbstractNode implements TopologyDescription.Sink {
+    public static final class Sink<K, V> extends AbstractNode implements TopologyDescription.Sink {
         private final TopicNameExtractor<K, V> topicNameExtractor;
         public Sink(final String name,
                     final TopicNameExtractor<K, V> topicNameExtractor) {
@@ -1849,7 +1917,7 @@ public class InternalTopologyBuilder {
         }
     }
 
-    public final static class SubtopologyDescription implements TopologyDescription.Subtopology {
+    public static final class SubtopologyDescription implements TopologyDescription.Subtopology {
         private final int id;
         private final Set<TopologyDescription.Node> nodes;
 
@@ -1940,6 +2008,15 @@ public class InternalTopologyBuilder {
         }
 
         /**
+         *
+         * @return the set of changelog topics, which includes both source changelog topics and non
+         * source changelog topics.
+         */
+        public Set<String> changelogTopics() {
+            return Collections.unmodifiableSet(stateChangelogTopics.keySet());
+        }
+
+        /**
          * Returns the topic names for any optimized source changelogs
          */
         public Set<String> sourceTopicChangelogs() {
@@ -1984,7 +2061,7 @@ public class InternalTopologyBuilder {
         }
     }
 
-    private final static GlobalStoreComparator GLOBALSTORE_COMPARATOR = new GlobalStoreComparator();
+    private static final GlobalStoreComparator GLOBALSTORE_COMPARATOR = new GlobalStoreComparator();
 
     private static class SubtopologyComparator implements Comparator<TopologyDescription.Subtopology>, Serializable {
         @Override
@@ -1997,9 +2074,9 @@ public class InternalTopologyBuilder {
         }
     }
 
-    private final static SubtopologyComparator SUBTOPOLOGY_COMPARATOR = new SubtopologyComparator();
+    private static final SubtopologyComparator SUBTOPOLOGY_COMPARATOR = new SubtopologyComparator();
 
-    public final static class TopologyDescription implements org.apache.kafka.streams.TopologyDescription {
+    public static final class TopologyDescription implements org.apache.kafka.streams.TopologyDescription {
         private final TreeSet<TopologyDescription.Subtopology> subtopologies = new TreeSet<>(SUBTOPOLOGY_COMPARATOR);
         private final TreeSet<TopologyDescription.GlobalStore> globalStores = new TreeSet<>(GLOBALSTORE_COMPARATOR);
         private final String namedTopology;

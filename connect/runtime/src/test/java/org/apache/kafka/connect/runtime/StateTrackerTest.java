@@ -30,14 +30,12 @@ public class StateTrackerTest {
 
     private StateTracker tracker;
     private MockTime time;
-    private State state;
 
     @Before
     public void setUp() {
         time = new MockTime();
         time.sleep(1000L);
         tracker = new StateTracker();
-        state = State.UNASSIGNED;
     }
 
     @Test

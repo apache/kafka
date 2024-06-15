@@ -33,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-final public class BatchFileWriterReaderTest {
+public final class BatchFileWriterReaderTest {
     @Test
     public void testHeaderFooter() throws Exception {
         File tempFile = TestUtils.tempFile();

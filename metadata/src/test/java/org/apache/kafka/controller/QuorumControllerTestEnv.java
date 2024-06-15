@@ -82,6 +82,7 @@ public class QuorumControllerTestEnv implements AutoCloseable {
                 controllerBuilderInitializer,
                 sessionTimeoutMillis,
                 leaderImbalanceCheckIntervalNs,
+                bootstrapMetadata.metadataVersion().isElrSupported(),
                 bootstrapMetadata);
         }
     }
@@ -91,6 +92,7 @@ public class QuorumControllerTestEnv implements AutoCloseable {
         Consumer<QuorumController.Builder> controllerBuilderInitializer,
         OptionalLong sessionTimeoutMillis,
         OptionalLong leaderImbalanceCheckIntervalNs,
+        boolean eligibleLeaderReplicasEnabled,
         BootstrapMetadata bootstrapMetadata
     ) throws Exception {
         this.logEnv = logEnv;
@@ -112,6 +114,7 @@ public class QuorumControllerTestEnv implements AutoCloseable {
                 fatalFaultHandlers.put(nodeId, fatalFaultHandler);
                 MockFaultHandler nonFatalFaultHandler = new MockFaultHandler("nonFatalFaultHandler");
                 builder.setNonFatalFaultHandler(nonFatalFaultHandler);
+                builder.setEligibleLeaderReplicasEnabled(eligibleLeaderReplicasEnabled);
                 nonFatalFaultHandlers.put(nodeId, fatalFaultHandler);
                 controllerBuilderInitializer.accept(builder);
                 this.controllers.add(builder.build());

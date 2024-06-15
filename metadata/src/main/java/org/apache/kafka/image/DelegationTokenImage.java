@@ -27,7 +27,6 @@ import java.util.List;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.stream.Collectors;
 
 
 /**
@@ -54,10 +53,8 @@ public final class DelegationTokenImage {
         } else {
             if (!tokens.isEmpty()) {
                 List<String> tokenIds = new ArrayList<>(tokens.keySet());
-                StringBuffer delegationTokenImageString = new StringBuffer("DelegationTokenImage(");
-                delegationTokenImageString.append(tokenIds.stream().collect(Collectors.joining(", ")));
-                delegationTokenImageString.append(")");
-                options.handleLoss(delegationTokenImageString.toString());
+                String delegationTokenImageString = "DelegationTokenImage(" + String.join(", ", tokenIds) + ")";
+                options.handleLoss(delegationTokenImageString);
             } 
         }
     }

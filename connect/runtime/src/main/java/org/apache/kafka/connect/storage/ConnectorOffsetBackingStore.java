@@ -39,6 +39,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.CountDownLatch;
 import java.util.function.Supplier;
 
 /**
@@ -253,8 +255,23 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
      * <p>If configured to use a connector-specific offset store, the returned {@link Future} corresponds to a
      * write to that store, and the passed-in {@link Callback} is invoked once that write completes. If a worker-global
      * store is provided, a secondary write is made to that store if the write to the connector-specific store
-     * succeeds. Errors with this secondary write are not reflected in the returned {@link Future} or the passed-in
-     * {@link Callback}; they are only logged as a warning to users.
+     * succeeds.
+     * <p>
+     * Normally, errors with this secondary write are not reflected in the returned {@link Future} or the passed-in
+     * {@link Callback}; they are only logged as a warning to users. The only exception to this rule is when the
+     * offsets that need to be committed contain tombstone records.
+     * <p>When the to-be-committed offsets contain tombstones, offset commits take place in three phases:
+     * <ol>
+     *     <li>First, only the tombstone offsets are written to the worker-global store. Failures during this step will
+     *     be reflected in the returned {@link Future} and reported to the passed-in {@link Callback}.</li>
+     *     <li>If and only if the previous write to the worker-global store succeeded, all offsets (both tombstones and
+     *     non-tombstones) are written to the connector-specific store. Failures during this step will also be
+     *     reflected in the returned {@link Future} and reported to the passed-in {@link Callback}.</li>
+     *     <li>Finally, if and only if the previous write to the connector-specific store succeeded, all offsets with
+     *     non-tombstone values are written to the worker-global store. Failures during this step will only be reported
+     *     as warning log messages, and will not be reflected in the returned {@link Future} or reported to the
+     *     passed-in {@link Callback}.</li>
+     * </ol>
      *
      * <p>If not configured to use a connector-specific offset store, the returned {@link Future} corresponds to a
      * write to the worker-global offset store, and the passed-in {@link Callback} is invoked once that write completes.
@@ -262,6 +279,10 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
      * @param values map from key to value
      * @param callback callback to invoke on completion of the primary write
      * @return void future for the primary write
+    *
+     * @see <a href="https://issues.apache.org/jira/browse/KAFKA-15018">KAFKA-15018</a> for context on the three-step
+     * write sequence
+     *
      */
     @Override
     public Future<Void> set(Map<ByteBuffer, ByteBuffer> values, Callback<Void> callback) {
@@ -279,7 +300,38 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
             throw new IllegalStateException("At least one non-null offset store must be provided");
         }
 
-        return primaryStore.set(values, (primaryWriteError, ignored) -> {
+        Map<ByteBuffer, ByteBuffer> regularOffsets = new HashMap<>();
+        Map<ByteBuffer, ByteBuffer> tombstoneOffsets = new HashMap<>();
+        values.forEach((partition, offset) -> {
+            if (offset == null) {
+                tombstoneOffsets.put(partition, null);
+            } else {
+                regularOffsets.put(partition, offset);
+            }
+        });
+
+        if (secondaryStore != null && !tombstoneOffsets.isEmpty()) {
+            return new ChainedOffsetWriteFuture(
+                primaryStore,
+                secondaryStore,
+                values,
+                regularOffsets,
+                tombstoneOffsets,
+                callback
+            );
+        } else {
+            return setPrimaryThenSecondary(primaryStore, secondaryStore, values, regularOffsets, callback);
+        }
+    }
+
+    private Future<Void> setPrimaryThenSecondary(
+        OffsetBackingStore primaryStore,
+        OffsetBackingStore secondaryStore,
+        Map<ByteBuffer, ByteBuffer> completeOffsets,
+        Map<ByteBuffer, ByteBuffer> nonTombstoneOffsets,
+        Callback<Void> callback
+    ) {
+        return primaryStore.set(completeOffsets, (primaryWriteError, ignored) -> {
             if (secondaryStore != null) {
                 if (primaryWriteError != null) {
                     log.trace("Skipping offsets write to secondary store because primary write has failed", primaryWriteError);
@@ -287,7 +339,7 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
                     try {
                         // Invoke OffsetBackingStore::set but ignore the resulting future; we don't block on writes to this
                         // backing store.
-                        secondaryStore.set(values, (secondaryWriteError, ignored2) -> {
+                        secondaryStore.set(nonTombstoneOffsets, (secondaryWriteError, ignored2) -> {
                             try (LoggingContext context = loggingContext()) {
                                 if (secondaryWriteError != null) {
                                     log.warn("Failed to write offsets to secondary backing store", secondaryWriteError);
@@ -346,6 +398,90 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
 
     private static Future<Map<ByteBuffer, ByteBuffer>> getFromStore(Optional<? extends OffsetBackingStore> store, Collection<ByteBuffer> keys) {
         return store.map(s -> s.get(keys)).orElseGet(() -> CompletableFuture.completedFuture(Collections.emptyMap()));
+    }
+
+    private class ChainedOffsetWriteFuture implements Future<Void> {
+
+        private final OffsetBackingStore primaryStore;
+        private final OffsetBackingStore secondaryStore;
+        private final Map<ByteBuffer, ByteBuffer> completeOffsets;
+        private final Map<ByteBuffer, ByteBuffer> regularOffsets;
+        private final Callback<Void> callback;
+        private final AtomicReference<Throwable> writeError;
+        private final CountDownLatch completed;
+
+        public ChainedOffsetWriteFuture(
+            OffsetBackingStore primaryStore,
+            OffsetBackingStore secondaryStore,
+            Map<ByteBuffer, ByteBuffer> completeOffsets,
+            Map<ByteBuffer, ByteBuffer> regularOffsets,
+            Map<ByteBuffer, ByteBuffer> tombstoneOffsets,
+            Callback<Void> callback
+        ) {
+            this.primaryStore = primaryStore;
+            this.secondaryStore = secondaryStore;
+            this.completeOffsets = completeOffsets;
+            this.regularOffsets = regularOffsets;
+            this.callback = callback;
+            this.writeError = new AtomicReference<>();
+            this.completed = new CountDownLatch(1);
+
+            secondaryStore.set(tombstoneOffsets, this::onFirstWrite);
+        }
+
+        private void onFirstWrite(Throwable error, Void ignored) {
+            if (error != null) {
+                log.trace("Skipping offsets write to primary store because secondary tombstone write has failed", error);
+                try (LoggingContext context = loggingContext()) {
+                    callback.onCompletion(error, ignored);
+                    writeError.compareAndSet(null, error);
+                    completed.countDown();
+                }
+                return;
+            }
+            setPrimaryThenSecondary(primaryStore, secondaryStore, completeOffsets, regularOffsets, this::onSecondWrite);
+        }
+
+        private void onSecondWrite(Throwable error, Void ignored) {
+            callback.onCompletion(error, ignored);
+            writeError.compareAndSet(null, error);
+            completed.countDown();
+        }
+
+        @Override
+        public boolean cancel(boolean mayInterruptIfRunning) {
+            return false;
+        }
+
+        @Override
+        public boolean isCancelled() {
+            return false;
+        }
+
+        @Override
+        public boolean isDone() {
+            return completed.getCount() == 0;
+        }
+
+        @Override
+        public Void get() throws InterruptedException, ExecutionException {
+            completed.await();
+            if (writeError.get() != null) {
+                throw new ExecutionException(writeError.get());
+            }
+            return null;
+        }
+
+        @Override
+        public Void get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
+            if (!completed.await(timeout, unit)) {
+                throw new TimeoutException("Failed to complete offset write in time");
+            }
+            if (writeError.get() != null) {
+                throw new ExecutionException(writeError.get());
+            }
+            return null;
+        }
     }
 
 }

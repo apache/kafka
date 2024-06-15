@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.tools.consumer;
 
-import joptsimple.OptionException;
-import joptsimple.OptionSpec;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.MessageFormatter;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
@@ -34,12 +32,15 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import joptsimple.OptionException;
+import joptsimple.OptionSpec;
 
 public final class ConsoleConsumerOptions extends CommandDefaultOptions {
 
@@ -55,7 +56,7 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
     private final OptionSpec<String> messageFormatterConfigOpt;
     private final OptionSpec<?> resetBeginningOpt;
     private final OptionSpec<Integer> maxMessagesOpt;
-    private final OptionSpec<Integer> timeoutMsOpt;
+    private final OptionSpec<Long> timeoutMsOpt;
     private final OptionSpec<?> skipMessageOnErrorOpt;
     private final OptionSpec<String> bootstrapServerOpt;
     private final OptionSpec<String> keyDeserializerOpt;
@@ -66,6 +67,7 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
 
     private final Properties consumerProps;
     private final long offset;
+    private final long timeoutMs;
     private final MessageFormatter formatter;
 
     public ConsoleConsumerOptions(String[] args) throws IOException {
@@ -139,7 +141,7 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
         timeoutMsOpt = parser.accepts("timeout-ms", "If specified, exit if no message is available for consumption for the specified interval.")
                 .withRequiredArg()
                 .describedAs("timeout_ms")
-                .ofType(Integer.class);
+                .ofType(Long.class);
         skipMessageOnErrorOpt = parser.accepts("skip-message-on-error", "If there is an error when processing a message, " +
                 "skip it instead of halt.");
         bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED: The server(s) to connect to.")
@@ -184,12 +186,13 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
         Set<String> groupIdsProvided = checkConsumerGroup(consumerPropsFromFile, extraConsumerProps);
         consumerProps = buildConsumerProps(consumerPropsFromFile, extraConsumerProps, groupIdsProvided);
         offset = parseOffset();
+        timeoutMs = parseTimeoutMs();
         formatter = buildFormatter();
     }
 
     private void checkRequiredArgs() {
-        List<String> topicOrFilterArgs = new ArrayList<>(Arrays.asList(topicArg(), includedTopicsArg()));
-        topicOrFilterArgs.removeIf(Objects::isNull);
+        List<Optional<String>> topicOrFilterArgs = new ArrayList<>(Arrays.asList(topicArg(), includedTopicsArg()));
+        topicOrFilterArgs.removeIf(arg -> !arg.isPresent());
         // user need to specify value for either --topic or one of the include filters options (--include or --whitelist)
         if (topicOrFilterArgs.size() != 1) {
             CommandLineUtils.printUsageAndExit(parser, "Exactly one of --include/--topic is required. " +
@@ -322,10 +325,15 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
                 "'earliest', 'latest', or a non-negative long.");
     }
 
+    private long parseTimeoutMs() {
+        long timeout = options.has(timeoutMsOpt) ? options.valueOf(timeoutMsOpt) : -1;
+        return timeout >= 0 ? timeout : Long.MAX_VALUE;
+    }
+
     private MessageFormatter buildFormatter() {
         MessageFormatter formatter = null;
         try {
-            Class<?> messageFormatterClass = Class.forName(options.valueOf(messageFormatterOpt));
+            Class<?> messageFormatterClass = Class.forName(convertDeprecatedClass(options.valueOf(messageFormatterOpt)));
             formatter = (MessageFormatter) messageFormatterClass.getDeclaredConstructor().newInstance();
 
             Properties formatterArgs = formatterArgs();
@@ -340,6 +348,25 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
             CommandLineUtils.printUsageAndExit(parser, e.getMessage());
         }
         return formatter;
+    }
+
+    private static String convertDeprecatedClass(String className) {
+        switch (className) {
+            case "kafka.tools.DefaultMessageFormatter":
+                System.err.println("WARNING: kafka.tools.DefaultMessageFormatter is deprecated and will be removed in the next major release. " +
+                        "Please use org.apache.kafka.tools.consumer.DefaultMessageFormatter instead");
+                return DefaultMessageFormatter.class.getName();
+            case "kafka.tools.LoggingMessageFormatter":
+                System.err.println("WARNING: kafka.tools.LoggingMessageFormatter is deprecated and will be removed in the next major release. " +
+                        "Please use org.apache.kafka.tools.consumer.LoggingMessageFormatter instead");
+                return LoggingMessageFormatter.class.getName();
+            case "kafka.tools.NoOpMessageFormatter":
+                System.err.println("WARNING: kafka.tools.NoOpMessageFormatter is deprecated and will be removed in the next major release. " +
+                        "Please use org.apache.kafka.tools.consumer.NoOpMessageFormatter instead");
+                return NoOpMessageFormatter.class.getName();
+            default:
+                return className;
+        }
     }
 
     Properties consumerProps() {
@@ -365,16 +392,16 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
         return OptionalInt.empty();
     }
 
-    String topicArg() {
-        return options.valueOf(topicOpt);
+    Optional<String> topicArg() {
+        return options.has(topicOpt) ? Optional.of(options.valueOf(topicOpt)) : Optional.empty();
     }
 
     int maxMessages() {
         return options.has(maxMessagesOpt) ? options.valueOf(maxMessagesOpt) : -1;
     }
 
-    int timeoutMs() {
-        return options.has(timeoutMsOpt) ? options.valueOf(timeoutMsOpt) : -1;
+    long timeoutMs() {
+        return timeoutMs;
     }
 
     boolean enableSystestEventsLogging() {
@@ -385,10 +412,10 @@ public final class ConsoleConsumerOptions extends CommandDefaultOptions {
         return options.valueOf(bootstrapServerOpt);
     }
 
-    String includedTopicsArg() {
+    Optional<String> includedTopicsArg() {
         return options.has(includeOpt)
-                ? options.valueOf(includeOpt)
-                : options.valueOf(whitelistOpt);
+                ? Optional.of(options.valueOf(includeOpt))
+                : Optional.ofNullable(options.valueOf(whitelistOpt));
     }
 
     Properties formatterArgs() throws IOException {

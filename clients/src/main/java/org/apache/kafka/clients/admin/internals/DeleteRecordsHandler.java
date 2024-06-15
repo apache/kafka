@@ -79,15 +79,15 @@ public final class DeleteRecordsHandler extends Batched<TopicPartition, DeletedR
     @Override
     public DeleteRecordsRequest.Builder buildBatchedRequest(int brokerId, Set<TopicPartition> keys) {
         Map<String, DeleteRecordsRequestData.DeleteRecordsTopic> deletionsForTopic = new HashMap<>();
-        for (Map.Entry<TopicPartition, RecordsToDelete> entry: recordsToDelete.entrySet()) {
-            TopicPartition topicPartition = entry.getKey();
+        for (TopicPartition topicPartition : keys) {
+            RecordsToDelete toDelete = recordsToDelete.get(topicPartition);
             DeleteRecordsRequestData.DeleteRecordsTopic deleteRecords = deletionsForTopic.computeIfAbsent(
                     topicPartition.topic(),
                     key -> new DeleteRecordsRequestData.DeleteRecordsTopic().setName(topicPartition.topic())
             );
             deleteRecords.partitions().add(new DeleteRecordsRequestData.DeleteRecordsPartition()
                     .setPartitionIndex(topicPartition.partition())
-                    .setOffset(entry.getValue().beforeOffset()));
+                    .setOffset(toDelete.beforeOffset()));
         }
 
         DeleteRecordsRequestData data = new DeleteRecordsRequestData()

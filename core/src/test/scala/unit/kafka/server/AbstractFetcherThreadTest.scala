@@ -692,7 +692,7 @@ class AbstractFetcherThreadTest {
     fetcher.doWork()
     if (truncateOnFetch) {
       // Second iteration required here since first iteration is required to
-      // perform initial truncaton based on diverging epoch.
+      // perform initial truncation based on diverging epoch.
       fetcher.doWork()
     }
     assertEquals(Option(Fetching), fetcher.fetchState(partition).map(_.state))

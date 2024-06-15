@@ -182,7 +182,7 @@ public class SaslChannelBuilderTest {
     }
 
     private SaslChannelBuilder createChannelBuilder(SecurityProtocol securityProtocol, String saslMechanism) {
-        Class<?> loginModule = null;
+        Class<?> loginModule;
         switch (saslMechanism) {
             case "PLAIN":
                 loginModule = PlainLoginModule.class;
@@ -233,7 +233,7 @@ public class SaslChannelBuilderTest {
         }
 
         @Override
-        public boolean logout() throws LoginException {
+        public boolean logout() {
             return true;
         }
     }

@@ -37,7 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
 @Timeout(value = 40)
 public class StandardAclTest {
-    public final static List<StandardAcl> TEST_ACLS = new ArrayList<>();
+    public static final List<StandardAcl> TEST_ACLS = new ArrayList<>();
 
     static {
         TEST_ACLS.add(new StandardAcl(
@@ -83,9 +83,7 @@ public class StandardAclTest {
     }
 
     private static int signum(int input) {
-        if (input < 0) return -1;
-        else if (input > 0) return 1;
-        else return 0;
+        return Integer.compare(input, 0);
     }
 
     @Test

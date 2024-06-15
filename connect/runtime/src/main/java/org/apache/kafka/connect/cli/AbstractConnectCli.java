@@ -125,7 +125,7 @@ public abstract class AbstractConnectCli<T extends WorkerConfig> {
 
         RestClient restClient = new RestClient(config);
 
-        ConnectRestServer restServer = new ConnectRestServer(config.rebalanceTimeout(), restClient, workerProps);
+        ConnectRestServer restServer = new ConnectRestServer(config.rebalanceTimeout(), restClient, config.originals());
         restServer.initializeServer();
 
         URI advertisedUrl = restServer.advertisedUrl();

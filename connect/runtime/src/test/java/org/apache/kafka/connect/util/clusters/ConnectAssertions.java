@@ -76,7 +76,7 @@ public class ConnectAssertions {
     }
 
     /**
-     * Assert that at least the requested number of workers are up and running.
+     * Assert that the exact number of workers are up and running.
      *
      * @param numWorkers the number of online workers
      */

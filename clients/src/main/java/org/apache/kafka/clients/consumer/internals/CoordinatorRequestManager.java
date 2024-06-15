@@ -17,7 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
-import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
@@ -28,7 +28,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 
 import java.util.Objects;
@@ -51,7 +50,6 @@ import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.
  */
 public class CoordinatorRequestManager implements RequestManager {
     private static final long COORDINATOR_DISCONNECT_LOGGING_INTERVAL_MS = 60 * 1000;
-    private final Time time;
     private final Logger log;
     private final BackgroundEventHandler backgroundEventHandler;
     private final String groupId;
@@ -62,7 +60,6 @@ public class CoordinatorRequestManager implements RequestManager {
     private Node coordinator;
 
     public CoordinatorRequestManager(
-        final Time time,
         final LogContext logContext,
         final long retryBackoffMs,
         final long retryBackoffMaxMs,
@@ -70,7 +67,6 @@ public class CoordinatorRequestManager implements RequestManager {
         final String groupId
     ) {
         Objects.requireNonNull(groupId);
-        this.time = time;
         this.log = logContext.logger(this.getClass());
         this.backgroundEventHandler = errorHandler;
         this.groupId = groupId;
@@ -175,12 +171,12 @@ public class CoordinatorRequestManager implements RequestManager {
         if (exception == Errors.GROUP_AUTHORIZATION_FAILED.exception()) {
             log.debug("FindCoordinator request failed due to authorization error {}", exception.getMessage());
             KafkaException groupAuthorizationException = GroupAuthorizationException.forGroupId(this.groupId);
-            backgroundEventHandler.add(new ErrorBackgroundEvent(groupAuthorizationException));
+            backgroundEventHandler.add(new ErrorEvent(groupAuthorizationException));
             return;
         }
 
         log.warn("FindCoordinator request failed due to fatal exception", exception);
-        backgroundEventHandler.add(new ErrorBackgroundEvent(exception));
+        backgroundEventHandler.add(new ErrorEvent(exception));
     }
 
     /**

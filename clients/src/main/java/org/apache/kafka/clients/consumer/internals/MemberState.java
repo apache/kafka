@@ -21,6 +21,7 @@ import org.apache.kafka.common.protocol.Errors;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 public enum MemberState {
@@ -79,11 +80,12 @@ public enum MemberState {
     FENCED,
 
     /**
-     * The member transitions to this state after a call to unsubscribe. While in this state, the
-     * member will stop sending heartbeats, will commit offsets if needed and release its
-     * assignment (calling user's callback for partitions revoked or lost). When all these
-     * actions complete, the member will transition out of this state into {@link #LEAVING} to
-     * effectively leave the group.
+     * The member transitions to this state before sending a heartbeat to leave the group,
+     * While in this state, the member will continue sending heartbeats while it release its
+     * assignment calling the user's callback. When callbacks complete, the member will transition
+     * out of this state into {@link #LEAVING} to send a heartbeat to leave the group. Note that
+     * if leaving due to expired poll timer, the member does not execute any callbacks while in
+     * this state and just transitions to {@link #LEAVING} and then {@link #STALE}
      */
     PREPARE_LEAVING,
 
@@ -119,7 +121,7 @@ public enum MemberState {
 
         RECONCILING.previousValidStates = Arrays.asList(STABLE, JOINING, ACKNOWLEDGING, RECONCILING);
 
-        ACKNOWLEDGING.previousValidStates = Arrays.asList(RECONCILING);
+        ACKNOWLEDGING.previousValidStates = Collections.singletonList(RECONCILING);
 
         FATAL.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING, ACKNOWLEDGING,
                 PREPARE_LEAVING, LEAVING, UNSUBSCRIBED);
@@ -130,13 +132,13 @@ public enum MemberState {
         JOINING.previousValidStates = Arrays.asList(FENCED, UNSUBSCRIBED, STALE);
 
         PREPARE_LEAVING.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING,
-                ACKNOWLEDGING, UNSUBSCRIBED, FENCED);
+                ACKNOWLEDGING, UNSUBSCRIBED);
 
-        LEAVING.previousValidStates = Arrays.asList(PREPARE_LEAVING);
+        LEAVING.previousValidStates = Collections.singletonList(PREPARE_LEAVING);
 
-        UNSUBSCRIBED.previousValidStates = Arrays.asList(PREPARE_LEAVING, LEAVING);
+        UNSUBSCRIBED.previousValidStates = Arrays.asList(PREPARE_LEAVING, LEAVING, FENCED);
 
-        STALE.previousValidStates = Arrays.asList(JOINING, RECONCILING, ACKNOWLEDGING, STABLE);
+        STALE.previousValidStates = Collections.singletonList(LEAVING);
     }
 
     private List<MemberState> previousValidStates;

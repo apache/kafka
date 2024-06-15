@@ -16,11 +16,11 @@
  */
 package kafka.docker
 
-import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.{assertArrayEquals, assertEquals, assertThrows}
 import org.junit.jupiter.api.Test
 
 import java.nio.charset.StandardCharsets
-import java.nio.file.{Files, Path}
+import java.nio.file.{Files, Path, Paths}
 
 class KafkaDockerWrapperTest {
   @Test
@@ -125,6 +125,21 @@ class KafkaDockerWrapperTest {
     val expected = "default.config=default value"
 
     assertEquals(expected, actual)
+  }
+
+  @Test
+  def testFormatStorageCmd(): Unit = {
+    val configsPath = Paths.get("/path/to/configs")
+    val envVars = Map("CLUSTER_ID" -> "MYwKGPhXQZidgd0qMv8Mkw")
+
+    val expected = Array("format", "--cluster-id=MYwKGPhXQZidgd0qMv8Mkw", "-c", "/path/to/configs/server.properties")
+    val actual = KafkaDockerWrapper.formatStorageCmd(configsPath, envVars)
+
+    assertArrayEquals(expected.toArray[Object], actual.toArray[Object])
+
+    assertThrows(classOf[RuntimeException], () => {
+      KafkaDockerWrapper.formatStorageCmd(configsPath, Map())
+    })
   }
 
   @Test

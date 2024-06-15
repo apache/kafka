@@ -22,6 +22,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.RecordDeserializationException;
+import org.apache.kafka.common.errors.RecordDeserializationException.DeserializationExceptionOrigin;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -311,25 +312,39 @@ public class CompletedFetch {
                                             Optional<Integer> leaderEpoch,
                                             TimestampType timestampType,
                                             Record record) {
+        ByteBuffer keyBytes = record.key();
+        ByteBuffer valueBytes = record.value();
+        Headers headers = new RecordHeaders(record.headers());
+        K key;
+        V value;
         try {
-            long offset = record.offset();
-            long timestamp = record.timestamp();
-            Headers headers = new RecordHeaders(record.headers());
-            ByteBuffer keyBytes = record.key();
-            K key = keyBytes == null ? null : deserializers.keyDeserializer.deserialize(partition.topic(), headers, keyBytes);
-            ByteBuffer valueBytes = record.value();
-            V value = valueBytes == null ? null : deserializers.valueDeserializer.deserialize(partition.topic(), headers, valueBytes);
-            return new ConsumerRecord<>(partition.topic(), partition.partition(), offset,
-                    timestamp, timestampType,
-                    keyBytes == null ? ConsumerRecord.NULL_SIZE : keyBytes.remaining(),
-                    valueBytes == null ? ConsumerRecord.NULL_SIZE : valueBytes.remaining(),
-                    key, value, headers, leaderEpoch);
+            key = keyBytes == null ? null : deserializers.keyDeserializer.deserialize(partition.topic(), headers, keyBytes);
         } catch (RuntimeException e) {
-            log.error("Deserializers with error: {}", deserializers);
-            throw new RecordDeserializationException(partition, record.offset(),
-                    "Error deserializing key/value for partition " + partition +
-                            " at offset " + record.offset() + ". If needed, please seek past the record to continue consumption.", e);
+            log.error("Key Deserializers with error: {}", deserializers);
+            throw newRecordDeserializationException(DeserializationExceptionOrigin.KEY, partition, timestampType, record, e, headers);
         }
+        try {
+            value = valueBytes == null ? null : deserializers.valueDeserializer.deserialize(partition.topic(), headers, valueBytes);
+        } catch (RuntimeException e) {
+            log.error("Value Deserializers with error: {}", deserializers);
+            throw newRecordDeserializationException(DeserializationExceptionOrigin.VALUE, partition, timestampType, record, e, headers);
+        }
+        return new ConsumerRecord<>(partition.topic(), partition.partition(), record.offset(),
+                record.timestamp(), timestampType,
+                keyBytes == null ? ConsumerRecord.NULL_SIZE : keyBytes.remaining(),
+                valueBytes == null ? ConsumerRecord.NULL_SIZE : valueBytes.remaining(),
+                key, value, headers, leaderEpoch);
+    }
+
+    private static RecordDeserializationException newRecordDeserializationException(DeserializationExceptionOrigin origin,
+                                                                                    TopicPartition partition,
+                                                                                    TimestampType timestampType,
+                                                                                    Record record,
+                                                                                    RuntimeException e,
+                                                                                    Headers headers) {
+        return new RecordDeserializationException(origin, partition, record.offset(), record.timestamp(), timestampType, record.key(), record.value(), headers,
+                "Error deserializing " + origin.name() + " for partition " + partition + " at offset " + record.offset()
+                        + ". If needed, please seek past the record to continue consumption.", e);
     }
 
     private Optional<Integer> maybeLeaderEpoch(int leaderEpoch) {

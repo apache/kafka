@@ -56,7 +56,7 @@ final class ControllerResultAndOffset<T> extends ControllerResult<T> {
     public String toString() {
         return String.format(
             "ControllerResultAndOffset(records=%s, response=%s, isAtomic=%s, offset=%d)",
-            String.join(",", records().stream().map(ApiMessageAndVersion::toString).collect(Collectors.toList())),
+            records().stream().map(ApiMessageAndVersion::toString).collect(Collectors.joining(",")),
             response(),
             isAtomic(),
             offset

@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.integration;
 
 import java.util.stream.Stream;
-import kafka.server.KafkaConfig;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -31,6 +30,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -85,13 +85,13 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
         new Properties(),
         asList(
             new Properties() {{
-                    setProperty(KafkaConfig.RackProp(), AssignmentTestUtils.RACK_0);
+                    setProperty(ServerConfigs.BROKER_RACK_CONFIG, AssignmentTestUtils.RACK_0);
                 }},
             new Properties() {{
-                    setProperty(KafkaConfig.RackProp(), AssignmentTestUtils.RACK_1);
+                    setProperty(ServerConfigs.BROKER_RACK_CONFIG, AssignmentTestUtils.RACK_1);
                 }},
             new Properties() {{
-                    setProperty(KafkaConfig.RackProp(), AssignmentTestUtils.RACK_2);
+                    setProperty(ServerConfigs.BROKER_RACK_CONFIG, AssignmentTestUtils.RACK_2);
                 }}
         )
     );

@@ -1398,6 +1398,7 @@ $ bin/kafka-acls.sh \
     <li>commit=num_secs: This tunes the frequency with which ext4 commits to its metadata journal. Setting this to a lower value reduces the loss of unflushed data during a crash. Setting this to a higher value will improve throughput.
     <li>nobh: This setting controls additional ordering guarantees when using data=writeback mode. This should be safe with Kafka as we do not depend on write ordering and improves throughput and latency.
     <li>delalloc: Delayed allocation means that the filesystem avoid allocating any blocks until the physical write occurs. This allows ext4 to allocate a large extent instead of smaller pages and helps ensure the data is written sequentially. This feature is great for throughput. It does seem to involve some locking in the filesystem which adds a bit of latency variance.
+    <li>fast_commit: Added in Linux 5.10, <a href="https://lwn.net/Articles/842385/">fast_commit</a> is a lighter-weight journaling method which can be used with data=ordered journaling mode. Enabling it seems to significantly reduce latency.
   </ul>
 
   <h4 class="anchor-heading"><a id="replace_disk" class="anchor-link"></a><a href="#replace_disk">Replace KRaft Controller Disk</a></h4>
@@ -2114,6 +2115,24 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
     <td>kafka.controller:type=KafkaController,name=ActiveBrokerCount</td>
   </tr>
   <tr>
+    <td>Migrating ZK Broker Count</td>
+    <td>The number of brokers registered with the Controller that haven't yet migrated to KRaft mode.</td>
+    <td>kafka.controller:type=KafkaController,name=MigratingZkBrokerCount</td>
+  </tr>
+  <tr>
+    <td>ZK Migrating State</td>
+    <td>
+      <ul style="list-style: none; padding-left: 0; margin: 0;">
+        <li>0 - NONE, cluster created in KRaft mode;</li>
+        <li>4 - ZK, Migration has not started, controller is a ZK controller;</li>
+        <li>2 - PRE_MIGRATION, the KRaft Controller is waiting for all ZK brokers to register in migration mode;</li>
+        <li>1 - MIGRATION, ZK metadata has been migrated, but some broker is still running in ZK mode;</li>
+        <li>3 - POST_MIGRATION, the cluster migration is complete;</li>
+      </ul>
+    </td>
+    <td>kafka.controller:type=KafkaController,name=ZkMigrationState</td>
+  </tr>
+  <tr>
     <td>Global Topic Count</td>
     <td>The number of global topics as observed by this Controller.</td>
     <td>kafka.controller:type=KafkaController,name=GlobalTopicCount</td>
@@ -2126,7 +2145,7 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
   <tr>
     <td>Offline Partition Count</td>
     <td>The number of offline topic partitions (non-internal) as observed by this Controller.</td>
-    <td>kafka.controller:type=KafkaController,name=OfflinePartitionCount</td>
+    <td>kafka.controller:type=KafkaController,name=OfflinePartitionsCount</td>
   </tr>
   <tr>
     <td>Preferred Replica Imbalance Count</td>
@@ -2538,7 +2557,22 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
         <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
       </tr>
       <tr>
+        <td>buffer-exhausted-rate</td>
+        <td>The average per-second number of record sends that are dropped due to buffer exhaustion</td>
+        <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>buffer-exhausted-total</td>
+        <td>The total number of record sends that are dropped due to buffer exhaustion</td>
+        <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>bufferpool-wait-time</td>
+        <td>The fraction of time an appender waits for space allocation.</td>
+        <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>bufferpool-wait-ratio</td>
         <td>The fraction of time an appender waits for space allocation.</td>
         <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
       </tr>
@@ -2582,7 +2616,11 @@ These metrics are reported on both Controllers and Brokers in a KRaft Cluster
         <td>The total time the Producer spent aborting transactions in nanoseconds (for EOS).</td>
         <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
       </tr>
-
+      <tr>
+        <td>metadata-wait-time-ns-total</td>
+        <td>the total time in nanoseconds that has spent waiting for metadata from the Kafka broker</td>
+        <td>kafka.producer:type=producer-metrics,client-id=([-.\w]+)</td>
+      </tr>
   </tbody></table>
 
   <h5 class="anchor-heading"><a id="producer_sender_monitoring" class="anchor-link"></a><a href="#producer_sender_monitoring">Producer Sender Metrics</a></h5>
@@ -3057,15 +3095,26 @@ active-process-ratio metrics which have a recording level of <code>info</code>:
         <td>The fraction of time the stream thread spent on processing this task among all assigned active tasks.</td>
         <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
       </tr>
+      <tr>
+        <td>input-buffer-bytes-total</td>
+        <td>The total number of bytes accumulated by this task,</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>cache-size-bytes-total</td>
+        <td>The cache size in bytes accumulated by this task.</td>
+        <td>kafka.streams:type=stream-task-metrics,thread-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
  </tbody>
 </table>
 
  <h5 class="anchor-heading"><a id="kafka_streams_node_monitoring" class="anchor-link"></a><a href="#kafka_streams_node_monitoring">Processor Node Metrics</a></h5>
  The following metrics are only available on certain types of nodes, i.e., the process-* metrics are only available for
- source processor nodes, the suppression-emit-* metrics are only available for suppression operation nodes, and the
- record-e2e-latency-* metrics are only available for source processor nodes and terminal nodes (nodes without successor
+ source processor nodes, the <code>suppression-emit-*</code> metrics are only available for suppression operation nodes,
+ <code>emit-final-*</code> metrics are only available for windowed aggregations nodes, and the
+ <code>record-e2e-latency-*</code> metrics are only available for source processor nodes and terminal nodes (nodes without successor
  nodes).
- All of the metrics have a recording level of <code>debug</code>, except for the record-e2e-latency-* metrics which have
+ All of the metrics have a recording level of <code>debug</code>, except for the <code>record-e2e-latency-*</code> metrics which have
  a recording level of <code>info</code>:
  <table class="data-table">
       <tbody>
@@ -3102,6 +3151,26 @@ active-process-ratio metrics which have a recording level of <code>info</code>:
       <tr>
         <td>suppression-emit-total</td>
         <td>The total number of records that have been emitted downstream from suppression operation nodes.</td>
+        <td>kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>emit-final-latency-max</td>
+        <td>The max latency to emit final records when a record could be emitted.</td>
+        <td>kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>emit-final-latency-avg</td>
+        <td>The avg latency to emit final records when a record could be emitted.</td>
+        <td>kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>emit-final-records-rate</td>
+        <td>The rate of records emitted when records could be emitted.</td>
+        <td>kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>emit-final-records-total</td>
+        <td>The total number of records emitted.</td>
         <td>kafka.streams:type=stream-processor-node-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
       </tr>
       <tr>
@@ -3207,22 +3276,32 @@ for built-in state stores, currently we have:
       </tr>
       <tr>
         <td>all-latency-avg</td>
-        <td>The average all operation execution time in ns.</td>
+        <td>The average execution time in ns, from iterator create to close time.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
-        <td>all-latency-max</td>
+        <td>all-latency-max, from iterator create to close time.</td>
         <td>The maximum all operation execution time in ns.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
-        <td>range-latency-avg</td>
-        <td>The average range execution time in ns.</td>
+        <td>range-latency-avg, from iterator create to close time.</td>
+        <td>The average range execution time in ns, from iterator create to close time.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
-        <td>range-latency-max</td>
+        <td>range-latency-max, from iterator create to close time.</td>
         <td>The maximum range execution time in ns.</td>
+        <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>prefix-scan-latency-avg</td>
+        <td>The average prefix-scan execution time in ns, from iterator create to close time.</td>
+        <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>prefix-scan-latency-max</td>
+        <td>The maximum prefix-scan execution time in ns, from iterator create to close time.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
        <tr>
@@ -3278,6 +3357,11 @@ for built-in state stores, currently we have:
       <tr>
         <td>range-rate</td>
         <td>The average range rate for this store.</td>
+        <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>prefix-scan-rate</td>
+        <td>The average prefix-scan rate for this store.</td>
         <td>kafka.streams:type=stream-state-metrics,thread-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
       <tr>
@@ -3774,17 +3858,11 @@ foo
   <p>The following features are not fully implemented in KRaft mode:</p>
 
   <ul>
-    <li>Supporting JBOD configurations with multiple storage directories</li>
+    <li>Supporting JBOD configurations with multiple storage directories. Note that an Early Access release is supported in 3.7 as per <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-858%3A+Handle+JBOD+broker+disk+failure+in+KRaft">KIP-858</a>. Note that it is not yet recommended for use in production environments. Please refer to the <a href="https://cwiki.apache.org/confluence/display/KAFKA/Kafka+JBOD+in+KRaft+Early+Access+Release+Notes">release notes</a> to help us test it and provide feedback at <a href="https://issues.apache.org/jira/browse/KAFKA-16061">KAFKA-16061</a>.</li>
     <li>Modifying certain dynamic configurations on the standalone KRaft controller</li>
   </ul>
 
   <h4 class="anchor-heading"><a id="kraft_zk_migration" class="anchor-link"></a><a href="#kraft_zk_migration">ZooKeeper to KRaft Migration</a></h4>
-
-  <p>
-    <b>ZooKeeper to KRaft migration is considered an Early Access feature and is not recommended for production clusters.</b>
-    Please report issues with ZooKeeper to KRaft migration using the
-    <a href="https://issues.apache.org/jira/projects/KAFKA" target="_blank">project JIRA</a> and the "kraft" component.
-  </p>
 
   <h3>Terminology</h3>
   <ul>
@@ -3807,9 +3885,15 @@ foo
   <h3>Limitations</h3>
   <ul>
     <li>While a cluster is being migrated from ZK mode to KRaft mode, we do not support changing the <i>metadata
-      version</i> (also known as the <i>inter.broker.protocol</i> version.) Please do not attempt to do this during
+      version</i> (also known as the <i>inter.broker.protocol.version</i>.) Please do not attempt to do this during
       a migration, or you may break the cluster.</li>
     <li>After the migration has been finalized, it is not possible to revert back to ZooKeeper mode.</li>
+    <li>
+      During the migration, if a ZK broker is running with multiple log directories,
+      any directory failure will cause the broker to shutdown.
+      Brokers with broken log directories will only be able to migrate to KRaft once the directories are repaired.
+      For further details refer to <a href="https://issues.apache.org/jira/browse/KAFKA-16431">KAFKA-16431</a>.
+    </li>
     <li><a href="#kraft_missing">As noted above</a>, some features are not fully implemented in KRaft mode. If you are
       using one of those features, you will not be able to migrate to KRaft yet.</li>
   </ul>
@@ -4063,8 +4147,10 @@ listeners=CONTROLLER://:9093
           </ul>
         </td>
         <td>
-          It is important to perform the <code>zookeeper-shell.sh</code> step quickly, to minimize the amount of
-          time that the cluster lacks a controller.
+          It is important to perform the <code>zookeeper-shell.sh</code> step <b>quickly</b>, to minimize the amount of
+          time that the cluster lacks a controller. Until the <code> /controller</code> znode is deleted,
+          you can also ignore any errors in the broker log about failing to connect to the Kraft controller.
+          Those error logs should disappear after second roll to pure zookeeper mode.
         </td>
       </tr>
       <tr>
@@ -4072,7 +4158,8 @@ listeners=CONTROLLER://:9093
         <td>
           <ul>
             <li>
-              On each broker, remove the <code>process.roles</code> configuration, and
+              On each broker, remove the <code>process.roles</code> configuration,
+              replace the <code>node.id</code> with <code>broker.id</code> and
               restore the <code>zookeeper.connect</code> configuration to its previous value.
               If your cluster requires other ZooKeeper configurations for brokers, such as
               <code>zookeeper.ssl.protocol</code>, re-add those configurations as well.
@@ -4088,7 +4175,7 @@ listeners=CONTROLLER://:9093
             <li>
               On each broker, remove the <code>zookeeper.metadata.migration.enable</code>,
               <code>controller.listener.names</code>, and <code>controller.quorum.voters</code>
-              configurations. Replace <code>node.id</code> with <code>broker.id</code>.
+              configurations.
               Then perform a second rolling restart of all brokers.
             </li>
             <li>
@@ -4100,7 +4187,9 @@ listeners=CONTROLLER://:9093
           <ul>
             <li>
               It is important to perform the <code>zookeeper-shell.sh</code> step <b>quickly</b>, to minimize the amount of
-              time that the cluster lacks a controller.
+              time that the cluster lacks a controller. Until the <code> /controller</code> znode is deleted,
+              you can also ignore any errors in the broker log about failing to connect to the Kraft controller.
+              Those error logs should disappear after second roll to pure zookeeper mode.
             </li>
             <li>
               Make sure that on the first cluster roll, <code>zookeeper.metadata.migration.enable</code> remains set to

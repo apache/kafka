@@ -36,12 +36,11 @@ public class IntGaugeSuiteTest {
     private static IntGaugeSuite<String> createIntGaugeSuite() {
         MetricConfig config = new MetricConfig();
         Metrics metrics = new Metrics(config);
-        IntGaugeSuite<String> suite = new IntGaugeSuite<>(log,
+        return new IntGaugeSuite<>(log,
             "mySuite",
             metrics,
             name -> new MetricName(name, "group", "myMetric", Collections.emptyMap()),
             3);
-        return suite;
     }
 
     @Test

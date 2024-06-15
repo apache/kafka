@@ -219,13 +219,7 @@ public class RecordHeadersTest {
     }
 
     private int getCount(Headers headers) {
-        int count = 0;
-        Iterator<Header> headerIterator = headers.iterator();
-        while (headerIterator.hasNext()) {
-            headerIterator.next();
-            count++;
-        }
-        return count;
+        return headers.toArray().length;
     }
     
     static void assertHeader(String key, String value, Header actual) {

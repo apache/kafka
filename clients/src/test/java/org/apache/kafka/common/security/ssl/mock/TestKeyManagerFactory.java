@@ -61,8 +61,8 @@ public class TestKeyManagerFactory extends KeyManagerFactorySpi {
         public static final String ALIAS = "TestAlias";
         private static final String CN = "localhost";
         private static final String SIGNATURE_ALGORITHM = "RSA";
-        private KeyPair keyPair;
-        private X509Certificate certificate;
+        private final KeyPair keyPair;
+        private final X509Certificate certificate;
 
         protected TestKeyManager() {
             try {

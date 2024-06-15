@@ -40,7 +40,7 @@ public class ProducerInterceptorsTest {
     private int onSendCount = 0;
 
     private class AppendProducerInterceptor implements ProducerInterceptor<Integer, String> {
-        private String appendStr = "";
+        private final String appendStr;
         private boolean throwExceptionOnSend = false;
         private boolean throwExceptionOnAck = false;
 

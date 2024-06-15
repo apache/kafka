@@ -267,6 +267,12 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         return JoinGroupRequest.UNKNOWN_MEMBER_ID;
     }
 
+    @Override
+    protected void handlePollTimeoutExpiry() {
+        listener.onPollTimeoutExpiry();
+        maybeLeaveGroup("worker poll timeout has expired.");
+    }
+
     /**
      * Return the current generation. The generation refers to this worker's knowledge with
      * respect to which generation is the latest one and, therefore, this information is local.

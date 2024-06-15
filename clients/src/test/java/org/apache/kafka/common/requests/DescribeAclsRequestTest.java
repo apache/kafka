@@ -101,7 +101,7 @@ public class DescribeAclsRequestTest {
 
     private static void assertRequestEquals(final DescribeAclsRequest original, final DescribeAclsRequest actual) {
         final AclBindingFilter originalFilter = original.filter();
-        final AclBindingFilter acttualFilter = actual.filter();
-        assertEquals(originalFilter, acttualFilter);
+        final AclBindingFilter actualFilter = actual.filter();
+        assertEquals(originalFilter, actualFilter);
     }
 }

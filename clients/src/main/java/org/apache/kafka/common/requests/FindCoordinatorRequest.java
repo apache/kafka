@@ -79,10 +79,6 @@ public class FindCoordinatorRequest extends AbstractRequest {
     public static class NoBatchedFindCoordinatorsException extends UnsupportedVersionException {
         private static final long serialVersionUID = 1L;
 
-        public NoBatchedFindCoordinatorsException(String message, Throwable cause) {
-            super(message, cause);
-        }
-
         public NoBatchedFindCoordinatorsException(String message) {
             super(message);
         }

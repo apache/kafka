@@ -237,12 +237,12 @@ public class OffsetFetchRequest extends AbstractRequest {
                 group.setTopics(null);
             } else {
                 // Otherwise, topics are translated to the new structure.
-                data.topics().forEach(topic -> {
+                data.topics().forEach(topic ->
                     group.topics().add(new OffsetFetchRequestTopics()
                         .setName(topic.name())
                         .setPartitionIndexes(topic.partitionIndexes())
-                    );
-                });
+                    )
+                );
             }
 
             return Collections.singletonList(group);

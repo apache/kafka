@@ -25,7 +25,6 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
@@ -984,7 +983,7 @@ public abstract class AbstractWindowBytesStoreTest {
     }
 
     @Test
-    public void shouldLogAndMeasureExpiredRecords() {
+    public void shouldMeasureExpiredRecords() {
         final Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
         final WindowStore<Integer, String> windowStore =
             buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, false, Serdes.Integer(), Serdes.String());
@@ -993,22 +992,17 @@ public abstract class AbstractWindowBytesStoreTest {
             new StreamsConfig(streamsConfig),
             recordCollector
         );
-        final Time time = new SystemTime();
+        final Time time = Time.SYSTEM;
         context.setSystemTimeMs(time.milliseconds());
         context.setTime(1L);
         windowStore.init((StateStoreContext) context, windowStore);
 
-        try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
-            // Advance stream time by inserting record with large enough timestamp that records with timestamp 0 are expired
-            windowStore.put(1, "initial record", 2 * RETENTION_PERIOD);
+        // Advance stream time by inserting record with large enough timestamp that records with timestamp 0 are expired
+        windowStore.put(1, "initial record", 2 * RETENTION_PERIOD);
 
-            // Try inserting a record with timestamp 0 -- should be dropped
-            windowStore.put(1, "late record", 0L);
-            windowStore.put(1, "another on-time record", RETENTION_PERIOD + 1);
-
-            final List<String> messages = appender.getMessages();
-            assertThat(messages, hasItem("Skipping record for expired segment."));
-        }
+        // Try inserting a record with timestamp 0 -- should be dropped
+        windowStore.put(1, "late record", 0L);
+        windowStore.put(1, "another on-time record", RETENTION_PERIOD + 1);
 
         final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
 

@@ -479,7 +479,7 @@ class GroupCoordinatorAdapterTest {
 
     when(groupCoordinator.handleFetchOffsets(
       "group",
-      true,
+      requireStable = true,
       None
     )).thenReturn((
       Errors.NONE,
@@ -509,7 +509,7 @@ class GroupCoordinatorAdapterTest {
     val future = adapter.fetchAllOffsets(
       ctx,
       new OffsetFetchRequestData.OffsetFetchRequestGroup().setGroupId("group"),
-      true
+      requireStable = true
     )
 
     assertTrue(future.isDone)
@@ -561,7 +561,7 @@ class GroupCoordinatorAdapterTest {
 
     when(groupCoordinator.handleFetchOffsets(
       "group",
-      true,
+      requireStable = true,
       Some(Seq(foo0, foo1, bar1))
     )).thenReturn((
       Errors.NONE,
@@ -599,7 +599,7 @@ class GroupCoordinatorAdapterTest {
           new OffsetFetchRequestData.OffsetFetchRequestTopics()
             .setName(bar1.topic)
             .setPartitionIndexes(List[Integer](bar1.partition).asJava)).asJava),
-      true
+      requireStable = true
     )
 
     assertTrue(future.isDone)
@@ -761,7 +761,8 @@ class GroupCoordinatorAdapterTest {
         )
       )),
       capturedCallback.capture(),
-      ArgumentMatchers.eq(RequestLocal(bufferSupplier))
+      ArgumentMatchers.eq(RequestLocal(bufferSupplier)),
+      ArgumentMatchers.any()
     )
 
     capturedCallback.getValue.apply(Map(

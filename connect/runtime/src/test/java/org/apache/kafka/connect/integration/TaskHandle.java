@@ -48,7 +48,7 @@ public class TaskHandle {
     private CountDownLatch recordsRemainingLatch;
     private CountDownLatch recordsToCommitLatch;
     private int expectedRecords = -1;
-    private int expectedCommits = -1;
+    private final int expectedCommits = -1;
 
     public TaskHandle(ConnectorHandle connectorHandle, String taskId, Consumer<SinkRecord> consumer) {
         this.taskId = taskId;

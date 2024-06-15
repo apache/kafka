@@ -71,8 +71,8 @@ public class OAuthBearerUnsecuredJwsTest {
         assertEquals(4, jws.claims().size());
         assertEquals(subject, jws.claims().get("sub"));
         assertEquals(subject, jws.principalName());
-        assertEquals(issuedAt, Number.class.cast(jws.claims().get("iat")).longValue());
-        assertEquals(expirationTime, Number.class.cast(jws.claims().get("exp")).longValue());
+        assertEquals(issuedAt, ((Number) jws.claims().get("iat")).longValue());
+        assertEquals(expirationTime, ((Number) jws.claims().get("exp")).longValue());
         assertEquals(expirationTime * 1000, jws.lifetimeMs());
         assertEquals(scope, jws.claims().get("scope"));
         assertEquals(new HashSet<>(scope), jws.scope());
@@ -110,8 +110,8 @@ public class OAuthBearerUnsecuredJwsTest {
         String headerJson = "{\"alg\":\"" + algorithm + "\"}";
         String encodedHeader = encoder.encodeToString(headerJson.getBytes(StandardCharsets.UTF_8));
         String subjectJson = subject != null ? "\"sub\":\"" + subject + "\"" : null;
-        String issuedAtJson = issuedAt != null ? "\"iat\":" + issuedAt.longValue() : null;
-        String expirationTimeJson = expirationTime != null ? "\"exp\":" + expirationTime.longValue() : null;
+        String issuedAtJson = issuedAt != null ? "\"iat\":" + issuedAt : null;
+        String expirationTimeJson = expirationTime != null ? "\"exp\":" + expirationTime : null;
         String scopeJson = scope != null ? scopeJson(scope) : null;
         String claimsJson = claimsJson(subjectJson, issuedAtJson, expirationTimeJson, scopeJson);
         String encodedClaims = encoder.encodeToString(claimsJson.getBytes(StandardCharsets.UTF_8));

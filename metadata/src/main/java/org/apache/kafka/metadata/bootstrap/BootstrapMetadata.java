@@ -80,7 +80,7 @@ public class BootstrapMetadata {
     ) {
         this.records = Objects.requireNonNull(records);
         if (metadataVersion.isLessThan(MINIMUM_BOOTSTRAP_VERSION)) {
-            throw new RuntimeException("Bootstrap metadata versions before " +
+            throw new RuntimeException("Bootstrap metadata.version before " +
                     MINIMUM_BOOTSTRAP_VERSION + " are not supported. Can't load metadata from " +
                     source);
         }

@@ -71,6 +71,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -78,6 +79,7 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 public class InternalTopologyBuilderTest {
 
@@ -220,7 +222,9 @@ public class InternalTopologyBuilderTest {
                         null,
                         "globalTopic",
                         "global-processor",
-                () -> processor)
+                () -> processor,
+                false
+            )
         );
         assertThat(exception.getMessage(), containsString("#get() must return a new object each time it is called."));
     }
@@ -328,7 +332,8 @@ public class InternalTopologyBuilderTest {
             null,
             "globalTopic",
             "global-processor",
-            new MockApiProcessorSupplier<>()
+            new MockApiProcessorSupplier<>(),
+            false
         );
         builder.initializeSubscription();
 
@@ -352,7 +357,8 @@ public class InternalTopologyBuilderTest {
             null,
             "globalTopic",
             "global-processor",
-            new MockApiProcessorSupplier<>()
+            new MockApiProcessorSupplier<>(),
+            false
         );
         builder.initializeSubscription();
 
@@ -464,7 +470,8 @@ public class InternalTopologyBuilderTest {
             null,
             "global-topic",
             "global-processor",
-            new MockApiProcessorSupplier<>()
+            new MockApiProcessorSupplier<>(),
+            false
         );
 
         final TopologyException exception = assertThrows(
@@ -495,7 +502,8 @@ public class InternalTopologyBuilderTest {
                 null,
                 "global-topic",
                 "global-processor",
-                new MockApiProcessorSupplier<>()
+                new MockApiProcessorSupplier<>(),
+                false
             )
         );
 
@@ -520,7 +528,8 @@ public class InternalTopologyBuilderTest {
             null,
             "global-topic",
             "global-processor",
-            new MockApiProcessorSupplier<>()
+            new MockApiProcessorSupplier<>(),
+            false
         );
 
         final TopologyException exception = assertThrows(
@@ -533,7 +542,8 @@ public class InternalTopologyBuilderTest {
                 null,
                 "global-topic",
                 "global-processor-2",
-                new MockApiProcessorSupplier<>()
+                new MockApiProcessorSupplier<>(),
+                false
             )
         );
 
@@ -557,6 +567,29 @@ public class InternalTopologyBuilderTest {
         final List<StateStore> suppliers = builder.buildTopology().stateStores();
         assertEquals(1, suppliers.size());
         assertEquals(storeBuilder.name(), suppliers.get(0).name());
+    }
+
+    @Test
+    public void testStateStoreNamesForSubtopology() {
+        builder.addStateStore(storeBuilder);
+        builder.setApplicationId("X");
+
+        builder.addSource(null, "source-1", null, null, null, "topic-1");
+        builder.addProcessor("processor-1", new MockApiProcessorSupplier<>(), "source-1");
+        builder.connectProcessorAndStateStores("processor-1", storeBuilder.name());
+
+        builder.addSource(null, "source-2", null, null, null, "topic-2");
+        builder.addProcessor("processor-2", new MockApiProcessorSupplier<>(), "source-2");
+
+        builder.buildTopology();
+        final Set<String> stateStoreNames = builder.stateStoreNamesForSubtopology(0);
+        assertThat(stateStoreNames, equalTo(mkSet(storeBuilder.name())));
+
+        final Set<String> emptyStoreNames = builder.stateStoreNamesForSubtopology(1);
+        assertThat(emptyStoreNames, equalTo(mkSet()));
+
+        final Set<String> stateStoreNamesUnknownSubtopology = builder.stateStoreNamesForSubtopology(13);
+        assertThat(stateStoreNamesUnknownSubtopology, nullValue());
     }
 
     @Test
@@ -728,7 +761,8 @@ public class InternalTopologyBuilderTest {
             null,
             "globalTopic",
             "global-processor",
-            new MockApiProcessorSupplier<>()
+            new MockApiProcessorSupplier<>(),
+            false
         );
         newNodeGroups = builder.nodeGroups();
         assertNotEquals(oldNodeGroups, newNodeGroups);
@@ -891,14 +925,14 @@ public class InternalTopologyBuilderTest {
         assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE, properties1.get(TopicConfig.CLEANUP_POLICY_CONFIG));
         assertEquals("40000", properties1.get(TopicConfig.RETENTION_MS_CONFIG));
         assertEquals("appId-store1-changelog", topicConfig1.name());
-        assertTrue(topicConfig1 instanceof WindowedChangelogTopicConfig);
+        assertInstanceOf(WindowedChangelogTopicConfig.class, topicConfig1);
         final InternalTopicConfig topicConfig2 = topicsInfo.stateChangelogTopics.get("appId-store2-changelog");
         final Map<String, String> properties2 = topicConfig2.getProperties(Collections.emptyMap(), 10000);
         assertEquals(3, properties2.size());
         assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE, properties2.get(TopicConfig.CLEANUP_POLICY_CONFIG));
         assertEquals("40000", properties2.get(TopicConfig.RETENTION_MS_CONFIG));
         assertEquals("appId-store2-changelog", topicConfig2.name());
-        assertTrue(topicConfig2 instanceof WindowedChangelogTopicConfig);
+        assertInstanceOf(WindowedChangelogTopicConfig.class, topicConfig2);
     }
 
     @Test
@@ -923,7 +957,7 @@ public class InternalTopologyBuilderTest {
         assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT, properties.get(TopicConfig.CLEANUP_POLICY_CONFIG));
         assertEquals(Long.toString(60_000L + 24 * 60 * 60 * 1000L), properties.get(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG));
         assertEquals("appId-vstore-changelog", topicConfig.name());
-        assertTrue(topicConfig instanceof VersionedChangelogTopicConfig);
+        assertInstanceOf(VersionedChangelogTopicConfig.class, topicConfig);
     }
 
     @Test
@@ -940,7 +974,7 @@ public class InternalTopologyBuilderTest {
         assertEquals(2, properties.size());
         assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT, properties.get(TopicConfig.CLEANUP_POLICY_CONFIG));
         assertEquals("appId-testStore-changelog", topicConfig.name());
-        assertTrue(topicConfig instanceof UnwindowedUnversionedChangelogTopicConfig);
+        assertInstanceOf(UnwindowedUnversionedChangelogTopicConfig.class, topicConfig);
     }
 
     @Test
@@ -956,7 +990,7 @@ public class InternalTopologyBuilderTest {
         assertEquals(String.valueOf(-1), properties.get(TopicConfig.RETENTION_MS_CONFIG));
         assertEquals(TopicConfig.CLEANUP_POLICY_DELETE, properties.get(TopicConfig.CLEANUP_POLICY_CONFIG));
         assertEquals("appId-foo", topicConfig.name());
-        assertTrue(topicConfig instanceof RepartitionTopicConfig);
+        assertInstanceOf(RepartitionTopicConfig.class, topicConfig);
     }
 
     @Test
@@ -1152,7 +1186,8 @@ public class InternalTopologyBuilderTest {
             null,
             "anyTopicName",
             sameNameForSourceAndProcessor,
-            new MockApiProcessorSupplier<>()
+            new MockApiProcessorSupplier<>(),
+            false
         ));
     }
 
@@ -1296,7 +1331,8 @@ public class InternalTopologyBuilderTest {
             null,
             globalTopic,
             "global-processor",
-            new MockApiProcessorSupplier<>()
+            new MockApiProcessorSupplier<>(),
+            false
         );
         builder.initializeSubscription();
 

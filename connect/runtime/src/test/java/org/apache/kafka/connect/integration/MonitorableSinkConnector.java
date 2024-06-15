@@ -94,7 +94,6 @@ public class MonitorableSinkConnector extends SampleSinkConnector {
 
     public static class MonitorableSinkTask extends SinkTask {
 
-        private String connectorName;
         private String taskId;
         TaskHandle taskHandle;
         Map<TopicPartition, Integer> committedOffsets;
@@ -113,7 +112,7 @@ public class MonitorableSinkConnector extends SampleSinkConnector {
         @Override
         public void start(Map<String, String> props) {
             taskId = props.get("task.id");
-            connectorName = props.get("connector.name");
+            String connectorName = props.get("connector.name");
             taskHandle = RuntimeHandles.get().connectorHandle(connectorName).taskHandle(taskId);
             log.debug("Starting task {}", taskId);
             taskHandle.recordTaskStart();

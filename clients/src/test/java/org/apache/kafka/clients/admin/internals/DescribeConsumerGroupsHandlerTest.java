@@ -22,8 +22,8 @@ import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -296,7 +296,7 @@ public class DescribeConsumerGroupsHandlerTest {
     }
 
     private DescribeGroupsResponse buildResponse(Errors error, String protocolType) {
-        DescribeGroupsResponse response = new DescribeGroupsResponse(
+        return new DescribeGroupsResponse(
                 new DescribeGroupsResponseData()
                     .setGroups(singletonList(
                             new DescribedGroup()
@@ -314,7 +314,6 @@ public class DescribeConsumerGroupsHandlerTest {
                                             .setMemberAssignment(ConsumerProtocol.serializeAssignment(
                                                     new Assignment(new ArrayList<>(tps))).array())
                                             )))));
-        return response;
     }
 
     private AdminApiHandler.ApiResult<CoordinatorKey, ConsumerGroupDescription> handleClassicGroupWithError(
@@ -369,7 +368,7 @@ public class DescribeConsumerGroupsHandlerTest {
         assertEquals(emptySet(), result.completedKeys.keySet());
         assertEquals(emptyList(), result.unmappedKeys);
         assertEquals(singleton(key), result.failedKeys.keySet());
-        assertTrue(expectedExceptionType.isInstance(result.failedKeys.get(key)));
+        assertInstanceOf(expectedExceptionType, result.failedKeys.get(key));
     }
 
     private void assertRequestAndKeys(

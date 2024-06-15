@@ -120,7 +120,7 @@ public class StripedReplicaPlacer implements ReplicaPlacer {
      * A list of brokers that we can iterate through.
      */
     static class BrokerList {
-        final static BrokerList EMPTY = new BrokerList();
+        static final BrokerList EMPTY = new BrokerList();
         private final List<Integer> brokers = new ArrayList<>(0);
 
         /**
@@ -181,7 +181,7 @@ public class StripedReplicaPlacer implements ReplicaPlacer {
          *                  returned in this epoch.
          */
         int next(int epoch) {
-            if (brokers.size() == 0) return -1;
+            if (brokers.isEmpty()) return -1;
             if (this.epoch != epoch) {
                 this.epoch = epoch;
                 this.index = 0;

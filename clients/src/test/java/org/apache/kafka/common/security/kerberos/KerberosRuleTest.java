@@ -17,7 +17,7 @@
 package org.apache.kafka.common.security.kerberos;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.junit.jupiter.api.Test;
 
@@ -34,16 +34,15 @@ public class KerberosRuleTest {
         assertEquals(KerberosRule.replaceParameters("hello $0", new String[]{"no recursion $1"}), "hello no recursion $1");
 
         // negative test cases
-        try {
-            KerberosRule.replaceParameters("$0", new String[]{});
-            fail("An out-of-bounds parameter number should trigger an exception!");
-        } catch (BadFormatString bfs) {
-        }
-        try {
-            KerberosRule.replaceParameters("hello $a", new String[]{"does not matter"});
-            fail("A malformed parameter name should trigger an exception!");
-        } catch (BadFormatString bfs) {
-        }
+        assertThrows(
+            BadFormatString.class,
+            () -> KerberosRule.replaceParameters("$0", new String[]{}),
+            "An out-of-bounds parameter number should trigger an exception!");
+
+        assertThrows(
+            BadFormatString.class,
+            () -> KerberosRule.replaceParameters("hello $a", new String[]{"does not matter"}),
+            "A malformed parameter name should trigger an exception!");
     }
 
 }

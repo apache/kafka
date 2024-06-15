@@ -23,8 +23,9 @@ on:
         description: Docker image type to be built and pushed
         options: 
           - "jvm"
+          - "native"
       rc_docker_image:
-        description: RC docker image that needs to be built and pushed to Dockerhub (Example:- apache/kafka:3.6.0-rc0)
+        description: RC docker image that needs to be built and pushed to Dockerhub (Example:- apache/kafka:3.8.0-rc0 (OR) apache/kafka-native:3.8.0-rc0)
         required: true
       kafka_url:
         description: Kafka url to be used to build the docker image

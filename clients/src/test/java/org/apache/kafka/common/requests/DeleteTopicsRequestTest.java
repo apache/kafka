@@ -77,7 +77,7 @@ public class DeleteTopicsRequestTest {
 
             } else {
                 // We should fail if version is less than 6.
-                assertThrows(UnsupportedVersionException.class, () -> requestWithNames.serialize());
+                assertThrows(UnsupportedVersionException.class, requestWithNames::serialize);
             }
         }
     }
@@ -105,7 +105,7 @@ public class DeleteTopicsRequestTest {
                 requestWithIdsSerialized.data().topics().forEach(topic -> assertNull(topic.name()));
             } else {
                 // We should fail if version is less than 6.
-                assertThrows(UnsupportedVersionException.class, () -> requestWithIds.serialize());
+                assertThrows(UnsupportedVersionException.class, requestWithIds::serialize);
             }
         }
     }

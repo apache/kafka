@@ -21,6 +21,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 import org.apache.kafka.common.ConsumerGroupState;
+import org.apache.kafka.common.GroupType;
 
 /**
  * A listing of a consumer group in the cluster.
@@ -29,6 +30,7 @@ public class ConsumerGroupListing {
     private final String groupId;
     private final boolean isSimpleConsumerGroup;
     private final Optional<ConsumerGroupState> state;
+    private final Optional<GroupType> type;
 
     /**
      * Create an instance with the specified parameters.
@@ -37,7 +39,7 @@ public class ConsumerGroupListing {
      * @param isSimpleConsumerGroup If consumer group is simple or not.
      */
     public ConsumerGroupListing(String groupId, boolean isSimpleConsumerGroup) {
-        this(groupId, isSimpleConsumerGroup, Optional.empty());
+        this(groupId, isSimpleConsumerGroup, Optional.empty(), Optional.empty());
     }
 
     /**
@@ -48,9 +50,27 @@ public class ConsumerGroupListing {
      * @param state The state of the consumer group
      */
     public ConsumerGroupListing(String groupId, boolean isSimpleConsumerGroup, Optional<ConsumerGroupState> state) {
+        this(groupId, isSimpleConsumerGroup, state, Optional.empty());
+    }
+
+    /**
+     * Create an instance with the specified parameters.
+     *
+     * @param groupId                   Group Id.
+     * @param isSimpleConsumerGroup     If consumer group is simple or not.
+     * @param state                     The state of the consumer group.
+     * @param type                      The type of the consumer group.
+     */
+    public ConsumerGroupListing(
+        String groupId,
+        boolean isSimpleConsumerGroup,
+        Optional<ConsumerGroupState> state,
+        Optional<GroupType> type
+    ) {
         this.groupId = groupId;
         this.isSimpleConsumerGroup = isSimpleConsumerGroup;
         this.state = Objects.requireNonNull(state);
+        this.type = Objects.requireNonNull(type);
     }
 
     /**
@@ -74,42 +94,38 @@ public class ConsumerGroupListing {
         return state;
     }
 
+    /**
+     * The type of the consumer group.
+     *
+     * @return An Optional containing the type, if available.
+     */
+    public Optional<GroupType> type() {
+        return type;
+    }
+
     @Override
     public String toString() {
         return "(" +
             "groupId='" + groupId + '\'' +
             ", isSimpleConsumerGroup=" + isSimpleConsumerGroup +
             ", state=" + state +
+            ", type=" + type +
             ')';
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(groupId, isSimpleConsumerGroup, state);
+        return Objects.hash(groupId, isSimpleConsumerGroup(), state, type);
     }
 
     @Override
-    public boolean equals(Object obj) {
-        if (this == obj)
-            return true;
-        if (obj == null)
-            return false;
-        if (getClass() != obj.getClass())
-            return false;
-        ConsumerGroupListing other = (ConsumerGroupListing) obj;
-        if (groupId == null) {
-            if (other.groupId != null)
-                return false;
-        } else if (!groupId.equals(other.groupId))
-            return false;
-        if (isSimpleConsumerGroup != other.isSimpleConsumerGroup)
-            return false;
-        if (state == null) {
-            if (other.state != null)
-                return false;
-        } else if (!state.equals(other.state))
-            return false;
-        return true;
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof ConsumerGroupListing)) return false;
+        ConsumerGroupListing that = (ConsumerGroupListing) o;
+        return isSimpleConsumerGroup() == that.isSimpleConsumerGroup() &&
+            Objects.equals(groupId, that.groupId) &&
+            Objects.equals(state, that.state) &&
+            Objects.equals(type, that.type);
     }
-
 }

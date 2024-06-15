@@ -34,11 +34,11 @@ public class TopicCollectionTest {
         List<Uuid> topicIds = Arrays.asList(Uuid.randomUuid(), Uuid.randomUuid(), Uuid.randomUuid());
         List<String> topicNames = Arrays.asList("foo", "bar");
 
-        TopicCollection idCollection = TopicCollection.ofTopicIds(topicIds);
-        TopicCollection nameCollection = TopicCollection.ofTopicNames(topicNames);
+        TopicIdCollection idCollection = TopicCollection.ofTopicIds(topicIds);
+        TopicNameCollection nameCollection = TopicCollection.ofTopicNames(topicNames);
 
-        assertTrue(((TopicIdCollection) idCollection).topicIds().containsAll(topicIds));
-        assertTrue(((TopicNameCollection) nameCollection).topicNames().containsAll(topicNames));
+        assertTrue(idCollection.topicIds().containsAll(topicIds));
+        assertTrue(nameCollection.topicNames().containsAll(topicNames));
     }
 
 }

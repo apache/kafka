@@ -188,7 +188,7 @@ public class ScramControlManager {
                 } else {
                     if (!scramIsSupported) {
                         userToError.put(deletion.name(), new ApiError(UNSUPPORTED_VERSION,
-                            "The current metadata version does not support SCRAM"));
+                            "The current metadata.version does not support SCRAM"));
                     } else {
                         ApiError error = validateDeletion(deletion);
                         if (error.isFailure()) {
@@ -209,7 +209,7 @@ public class ScramControlManager {
                 } else {
                     if (!scramIsSupported) {
                         userToError.put(upsertion.name(), new ApiError(UNSUPPORTED_VERSION,
-                            "The current metadata version does not support SCRAM"));
+                            "The current metadata.version does not support SCRAM"));
                     } else {
                         ApiError error = validateUpsertion(upsertion);
                         if (error.isFailure()) {

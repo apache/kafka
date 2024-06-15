@@ -29,7 +29,6 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RECORD_E2E_LATENCY_AVG_DESCRIPTION;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RECORD_E2E_LATENCY_MAX_DESCRIPTION;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RECORD_E2E_LATENCY_MIN_DESCRIPTION;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TASK_LEVEL_GROUP;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_DESCRIPTION;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMinAndMaxToSensor;
@@ -60,12 +59,6 @@ public class ProcessorNodeMetrics {
     private static final String PROCESS_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + PROCESS_DESCRIPTION;
     private static final String PROCESS_RATE_DESCRIPTION =
         RATE_DESCRIPTION_PREFIX + PROCESS_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
-
-    private static final String FORWARD = "forward";
-    private static final String FORWARD_DESCRIPTION = "calls to forward";
-    private static final String FORWARD_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + FORWARD_DESCRIPTION;
-    private static final String FORWARD_RATE_DESCRIPTION =
-        RATE_DESCRIPTION_PREFIX + FORWARD_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
 
     private static final String EMITTED_RECORDS = "window-aggregate-final-emit";
     private static final String EMITTED_RECORDS_DESCRIPTION = "emit final records";
@@ -136,32 +129,6 @@ public class ProcessorNodeMetrics {
         );
     }
 
-    public static Sensor forwardSensor(final String threadId,
-                                       final String taskId,
-                                       final String processorNodeId,
-                                       final StreamsMetricsImpl streamsMetrics) {
-        final Sensor parentSensor = throughputParentSensor(
-            threadId,
-            taskId,
-            FORWARD,
-            FORWARD_RATE_DESCRIPTION,
-            FORWARD_TOTAL_DESCRIPTION,
-            RecordingLevel.DEBUG,
-            streamsMetrics
-        );
-        return throughputSensor(
-            threadId,
-            taskId,
-            processorNodeId,
-            FORWARD,
-            FORWARD_RATE_DESCRIPTION,
-            FORWARD_TOTAL_DESCRIPTION,
-            RecordingLevel.DEBUG,
-            streamsMetrics,
-            parentSensor
-        );
-    }
-
     public static Sensor e2ELatencySensor(final String threadId,
                                           final String taskId,
                                           final String processorNodeId,
@@ -213,27 +180,6 @@ public class ProcessorNodeMetrics {
             EMITTED_RECORDS,
             EMITTED_RECORDS_RATE_DESCRIPTION,
             EMITTED_RECORDS_TOTAL_DESCRIPTION
-        );
-        return sensor;
-    }
-
-    private static Sensor throughputParentSensor(final String threadId,
-                                                 final String taskId,
-                                                 final String operation,
-                                                 final String descriptionOfRate,
-                                                 final String descriptionOfCount,
-                                                 final RecordingLevel recordingLevel,
-                                                 final StreamsMetricsImpl streamsMetrics) {
-        // use operation name as sensor suffix and metric prefix
-        final Sensor sensor = streamsMetrics.taskLevelSensor(threadId, taskId, operation, recordingLevel);
-        final Map<String, String> parentTagMap = streamsMetrics.nodeLevelTagMap(threadId, taskId, ROLLUP_VALUE);
-        addInvocationRateAndCountToSensor(
-            sensor,
-            PROCESSOR_NODE_LEVEL_GROUP,
-            parentTagMap,
-            operation,
-            descriptionOfRate,
-            descriptionOfCount
         );
         return sensor;
     }

@@ -33,10 +33,8 @@ import java.util.Optional;
 /**
  * This class represents the entry containing the metadata about a remote log segment. This is similar to
  * {@link RemoteLogSegmentMetadata} but it does not contain topic partition information. This class keeps
- * only remote log segment ID but not the topic partition.
- *
- * This class is used in storing the snapshot of remote log metadata for a specific topic partition as mentioned
- * in {@link RemoteLogMetadataSnapshotFile.Snapshot}.
+ * only remote log segment ID but not the topic partition. This class is used in storing the snapshot of
+ * remote log metadata for a specific topic partition.
  */
 public class RemoteLogSegmentMetadataSnapshot extends RemoteLogMetadata {
 

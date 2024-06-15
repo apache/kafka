@@ -35,9 +35,10 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.SortedSet;
-import java.util.UUID;
+import java.util.TreeMap;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.junit.Before;
 import org.junit.Test;
@@ -61,14 +62,14 @@ public class RackAwareGraphConstructorTest {
         TP_SIZE, PARTITION_SIZE, false);
     private final SortedSet<TaskId> taskIds = (SortedSet<TaskId>) taskTopicPartitionMap.keySet();
     private final List<TaskId> taskIdList = new ArrayList<>(taskIds);
-    private final SortedMap<UUID, ClientState> clientStateMap = getRandomClientState(CLIENT_SIZE,
+    private final SortedMap<ProcessId, ClientState> clientStateMap = getRandomClientState(CLIENT_SIZE,
         TP_SIZE, PARTITION_SIZE, 1, false, taskIds);
-    private final List<UUID> clientList = new ArrayList<>(clientStateMap.keySet());
-    private final Map<TaskId, UUID> taskClientMap = new HashMap<>();
-    private final Map<UUID, Integer> originalAssignedTaskNumber = new HashMap<>();
+    private final List<ProcessId> clientList = new ArrayList<>(clientStateMap.keySet());
+    private final Map<TaskId, ProcessId> taskClientMap = new HashMap<>();
+    private final Map<ProcessId, Integer> originalAssignedTaskNumber = new HashMap<>();
     private final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = getTasksForTopicGroup(TP_SIZE,
         PARTITION_SIZE);
-    private RackAwareGraphConstructor constructor;
+    private RackAwareGraphConstructor<ClientState> constructor;
 
     @Parameter
     public String constructorType;
@@ -86,15 +87,16 @@ public class RackAwareGraphConstructorTest {
         randomAssignTasksToClient(taskIdList, clientStateMap);
 
         if (constructorType.equals(MIN_COST)) {
-            constructor = new MinTrafficGraphConstructor();
+            constructor = new MinTrafficGraphConstructor<>();
         } else if (constructorType.equals(BALANCE_SUBTOPOLOGY)) {
-            constructor = new BalanceSubtopologyGraphConstructor(tasksForTopicGroup);
+            final List<Set<TaskId>> taskSetsPerTopicGroup = new ArrayList<>(new TreeMap<>(tasksForTopicGroup).values());
+            constructor = new BalanceSubtopologyGraphConstructor<>(taskSetsPerTopicGroup);
         }
         graph = constructor.constructTaskGraph(
             clientList, taskIdList, clientStateMap, taskClientMap, originalAssignedTaskNumber, ClientState::hasAssignedTask, this::getCost, 10, 1, false, false);
     }
 
-    private int getCost(final TaskId taskId, final UUID processId, final boolean inCurrentAssignment, final int trafficCost, final int nonOverlapCost, final boolean isStandby) {
+    private int getCost(final TaskId taskId, final ProcessId processId, final boolean inCurrentAssignment, final int trafficCost, final int nonOverlapCost, final boolean isStandby) {
         return 1;
     }
 
@@ -154,7 +156,7 @@ public class RackAwareGraphConstructorTest {
         final int sinkId = clientList.size() + taskIdList.size();
         int totalFlow = 0;
         for (int i = 0; i < clientList.size(); i++) {
-            final UUID clientId = clientList.get(i);
+            final ProcessId clientId = clientList.get(i);
             final int originalAssignedCount = originalAssignedTaskNumber.get(clientId);
 
             final int clientNodeId = i + taskIdList.size();
@@ -220,7 +222,7 @@ public class RackAwareGraphConstructorTest {
         for (final Set<TaskId> tasks : tasksForTopicGroup.values()) {
             final int taskCount = tasks.size();
             for (int j = 0; j < clientList.size(); j++) {
-                final UUID clientId = clientList.get(j);
+                final ProcessId clientId = clientList.get(j);
                 final int originalAssignedCount = originalAssignedTaskNumber.get(clientId);
                 final int expectedCapacity = (int) Math.ceil(originalAssignedCount * 1.0 / taskIdList.size() * taskCount);
                 final int clientNodeId = topicGroupIndex * clientList.size() + taskIdList.size() + j;
@@ -242,7 +244,7 @@ public class RackAwareGraphConstructorTest {
         final int sinkId = clientList.size() + tasksForTopicGroup.size() * clientList.size() + taskIdList.size();
         int totalFlow = 0;
         for (int i = 0; i < clientList.size(); i++) {
-            final UUID clientId = clientList.get(i);
+            final ProcessId clientId = clientList.get(i);
             final int originalAssignedCount = originalAssignedTaskNumber.get(clientId);
 
             final int clientNodeId =
@@ -280,7 +282,7 @@ public class RackAwareGraphConstructorTest {
         }
     }
 
-    private void randomAssignTasksToClient(final List<TaskId> taskIdList, final SortedMap<UUID, ClientState> clientStateMap) {
+    private void randomAssignTasksToClient(final List<TaskId> taskIdList, final SortedMap<ProcessId, ClientState> clientStateMap) {
         int totalAssigned = 0;
         for (final ClientState clientState : clientStateMap.values()) {
             clientState.assignActive(taskIdList.get(totalAssigned++));

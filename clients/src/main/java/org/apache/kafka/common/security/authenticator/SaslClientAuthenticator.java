@@ -342,8 +342,7 @@ public class SaslClientAuthenticator implements Authenticator {
         previousSaslClientAuthenticator.close();
         reauthInfo.reauthenticating(apiVersionsResponseFromOriginalAuthentication,
                 reauthenticationContext.reauthenticationBeginNanos());
-        NetworkReceive netInBufferFromChannel = reauthenticationContext.networkReceive();
-        netInBuffer = netInBufferFromChannel;
+        netInBuffer = reauthenticationContext.networkReceive();
         setSaslState(SaslState.REAUTH_PROCESS_ORIG_APIVERSIONS_RESPONSE); // Will set immediately
         authenticate();
     }
@@ -682,7 +681,7 @@ public class SaslClientAuthenticator implements Authenticator {
 
         public void setAuthenticationEndAndSessionReauthenticationTimes(long nowNanos) {
             authenticationEndNanos = nowNanos;
-            long sessionLifetimeMsToUse = 0;
+            long sessionLifetimeMsToUse;
             if (positiveSessionLifetimeMs != null) {
                 // pick a random percentage between 85% and 95% for session re-authentication
                 double pctWindowFactorToTakeNetworkLatencyAndClockDriftIntoAccount = 0.85;

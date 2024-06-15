@@ -54,7 +54,7 @@ public class CleanShutdownFileHandler {
         public int version;
         public Long brokerEpoch;
 
-        public Content() {};
+        public Content() {}
 
         public Content(int version, Long brokerEpoch) {
             this.version = version;
@@ -86,7 +86,6 @@ public class CleanShutdownFileHandler {
         }
     }
 
-    @SuppressWarnings("unchecked")
     public OptionalLong read() {
         try {
             String text = Utils.readFileAsString(cleanShutdownFile.toPath().toString());

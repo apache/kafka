@@ -116,8 +116,7 @@ public final class EventHandlerExceptionInfo {
         if (a == null) return b == null;
         if (b == null) return false;
         if (!a.getClass().equals(b.getClass())) return false;
-        if (!Objects.equals(a.getMessage(), b.getMessage())) return false;
-        return true;
+        return Objects.equals(a.getMessage(), b.getMessage());
     }
 
     EventHandlerExceptionInfo(
@@ -191,6 +190,10 @@ public final class EventHandlerExceptionInfo {
             }
         }
         bld.append(".");
+        if (!isFault && internalException.getMessage() != null) {
+            bld.append(" Exception message: ");
+            bld.append(internalException.getMessage());
+        }
         return bld.toString();
     }
 

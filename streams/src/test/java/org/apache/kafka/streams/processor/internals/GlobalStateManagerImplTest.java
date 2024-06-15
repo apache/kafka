@@ -23,15 +23,20 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
+import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
@@ -55,6 +60,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -75,6 +81,9 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class GlobalStateManagerImplTest {
 
@@ -86,30 +95,37 @@ public class GlobalStateManagerImplTest {
     private final String storeName2 = "t2-store";
     private final String storeName3 = "t3-store";
     private final String storeName4 = "t4-store";
+    private final String storeName5 = "t5-store";
     private final TopicPartition t1 = new TopicPartition("t1", 1);
     private final TopicPartition t2 = new TopicPartition("t2", 1);
     private final TopicPartition t3 = new TopicPartition("t3", 1);
     private final TopicPartition t4 = new TopicPartition("t4", 1);
+    private final TopicPartition t5 = new TopicPartition("t5", 1);
     private GlobalStateManagerImpl stateManager;
     private StateDirectory stateDirectory;
     private StreamsConfig streamsConfig;
-    private NoOpReadOnlyStore<Object, Object> store1, store2, store3, store4;
+    private NoOpReadOnlyStore<Object, Object> store1, store2, store3, store4, store5;
     private MockConsumer<byte[], byte[]> consumer;
     private File checkpointFile;
     private ProcessorTopology topology;
     private InternalMockProcessorContext processorContext;
+    private Optional<InternalTopologyBuilder.ReprocessFactory<?, ?, ?, ?>> optionalMockReprocessFactory;
+    private DeserializationExceptionHandler deserializationExceptionHandler;
 
     static ProcessorTopology withGlobalStores(final List<StateStore> stateStores,
-                                              final Map<String, String> storeToChangelogTopic) {
+                                              final Map<String, String> storeToChangelogTopic,
+                                              final Map<String, Optional<InternalTopologyBuilder.ReprocessFactory<?, ?, ?, ?>>> reprocessFactoryMap) {
         return new ProcessorTopology(Collections.emptyList(),
                                      Collections.emptyMap(),
                                      Collections.emptyMap(),
                                      Collections.emptyList(),
                                      stateStores,
                                      storeToChangelogTopic,
-                                     Collections.emptySet());
+                                     Collections.emptySet(),
+                                     reprocessFactoryMap);
     }
 
+    @SuppressWarnings("unchecked")
     @Before
     public void before() {
         final Map<String, String> storeToTopic = new HashMap<>();
@@ -118,14 +134,25 @@ public class GlobalStateManagerImplTest {
         storeToTopic.put(storeName2, t2.topic());
         storeToTopic.put(storeName3, t3.topic());
         storeToTopic.put(storeName4, t4.topic());
+        storeToTopic.put(storeName5, t5.topic());
 
         store1 = new NoOpReadOnlyStore<>(storeName1, true);
         store2 = new ConverterStore<>(storeName2, true);
         store3 = new NoOpReadOnlyStore<>(storeName3);
         store4 = new NoOpReadOnlyStore<>(storeName4);
+        store5 = new NoOpReadOnlyStore<>(storeName5);
 
-        topology = withGlobalStores(asList(store1, store2, store3, store4), storeToTopic);
-
+        optionalMockReprocessFactory = mock(Optional.class);
+        when(optionalMockReprocessFactory.isPresent()).thenReturn(false);
+        topology = withGlobalStores(asList(store1, store2, store3, store4, store5), storeToTopic,
+            mkMap(
+                mkEntry(storeName1, Optional.empty()),
+                mkEntry(storeName2, Optional.empty()),
+                mkEntry(storeName3, Optional.empty()),
+                mkEntry(storeName4, Optional.empty()),
+                mkEntry(storeName5, optionalMockReprocessFactory)
+            )
+        );
         streamsConfig = new StreamsConfig(new Properties() {
             {
                 put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
@@ -223,7 +250,7 @@ public class GlobalStateManagerImplTest {
     @Test
     public void shouldReturnInitializedStoreNames() {
         final Set<String> storeNames = stateManager.initialize();
-        assertEquals(Utils.mkSet(storeName1, storeName2, storeName3, storeName4), storeNames);
+        assertEquals(Utils.mkSet(storeName1, storeName2, storeName3, storeName4, storeName5), storeNames);
     }
 
     @Test
@@ -691,7 +718,7 @@ public class GlobalStateManagerImplTest {
                 return numberOfCalls.incrementAndGet();
             }
         };
-        initializeConsumer(0, 0, t1, t2, t3, t4);
+        initializeConsumer(0, 0, t1, t2, t3, t4, t5);
 
         streamsConfig = new StreamsConfig(mkMap(
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
@@ -857,7 +884,7 @@ public class GlobalStateManagerImplTest {
                 return numberOfCalls.incrementAndGet();
             }
         };
-        initializeConsumer(0, 0, t1, t2, t3, t4);
+        initializeConsumer(0, 0, t1, t2, t3, t4, t5);
 
         streamsConfig = new StreamsConfig(mkMap(
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
@@ -1018,7 +1045,7 @@ public class GlobalStateManagerImplTest {
                 throw new TimeoutException("KABOOM!");
             }
         };
-        initializeConsumer(0, 0, t1, t2, t3, t4);
+        initializeConsumer(0, 0, t1, t2, t3, t4, t5);
 
         streamsConfig = new StreamsConfig(mkMap(
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "appId"),
@@ -1090,6 +1117,44 @@ public class GlobalStateManagerImplTest {
             equalTo("Global task did not make progress to restore state within 301000 ms. Adjust `task.timeout.ms` if needed.")
         );
         assertThat(time.milliseconds() - startTime, equalTo(331_100L));
+    }
+
+    @SuppressWarnings("unchecked")
+    private void setUpReprocessing() {
+        final InternalTopologyBuilder.ReprocessFactory reprocessFactory = mock(InternalTopologyBuilder.ReprocessFactory.class);
+        final ProcessorSupplier processorSupplier = mock(ProcessorSupplier.class);
+        final Processor processor = mock(Processor.class);
+        final Deserializer deserializer = mock(Deserializer.class);
+
+        when(optionalMockReprocessFactory.isPresent()).thenReturn(true);
+        when(optionalMockReprocessFactory.get()).thenReturn(reprocessFactory);
+        when(reprocessFactory.processorSupplier()).thenReturn(processorSupplier);
+        when(processorSupplier.get()).thenReturn(processor);
+        when(reprocessFactory.keyDeserializer()).thenReturn(deserializer);
+        when(reprocessFactory.valueDeserializer()).thenReturn(deserializer);
+        when(deserializer.deserialize(any(), any())).thenThrow(new StreamsException("fail"));
+    }
+
+    @Test
+    public void shouldFailOnDeserializationErrorsWhenReprocessing() {
+        setUpReprocessing();
+        initializeConsumer(2, 0, t5);
+
+        stateManager.initialize();
+
+        assertThrows(StreamsException.class, () -> stateManager.registerStore(store5, stateRestoreCallback, null));
+    }
+
+    @Test
+    public void shouldSkipOnDeserializationErrorsWhenReprocessing() {
+        stateManager.setDeserializationExceptionHandler(new LogAndContinueExceptionHandler());
+        setUpReprocessing();
+        initializeConsumer(2, 0, t5);
+
+        stateManager.initialize();
+
+        stateManager.registerStore(store5, stateRestoreCallback, null);
+        assertEquals(0, stateRestoreCallback.restored.size());
     }
 
     private void writeCorruptCheckpoint() throws IOException {

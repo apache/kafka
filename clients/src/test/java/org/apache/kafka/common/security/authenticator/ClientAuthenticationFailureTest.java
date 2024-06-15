@@ -43,7 +43,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -52,13 +51,12 @@ import java.util.concurrent.Future;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ClientAuthenticationFailureTest {
-    private static MockTime time = new MockTime(50);
+    private static final MockTime TIME = new MockTime(50);
 
     private NioEchoServer server;
     private Map<String, Object> saslServerConfigs;
     private Map<String, Object> saslClientConfigs;
     private final String topic = "test";
-    private TestJaasConfig testJaasConfig;
 
     @BeforeEach
     public void setup() throws Exception {
@@ -66,13 +64,13 @@ public class ClientAuthenticationFailureTest {
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
 
         saslServerConfigs = new HashMap<>();
-        saslServerConfigs.put(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, Arrays.asList("PLAIN"));
+        saslServerConfigs.put(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, Collections.singletonList("PLAIN"));
 
         saslClientConfigs = new HashMap<>();
         saslClientConfigs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SASL_PLAINTEXT");
         saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "PLAIN");
 
-        testJaasConfig = TestJaasConfig.createConfiguration("PLAIN", Arrays.asList("PLAIN"));
+        TestJaasConfig testJaasConfig = TestJaasConfig.createConfiguration("PLAIN", Collections.singletonList("PLAIN"));
         testJaasConfig.setClientOptions("PLAIN", TestJaasConfig.USERNAME, "anotherpassword");
         server = createEchoServer(securityProtocol);
     }
@@ -140,6 +138,6 @@ public class ClientAuthenticationFailureTest {
 
     private NioEchoServer createEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol) throws Exception {
         return NetworkTestUtils.createEchoServer(listenerName, securityProtocol,
-                new TestSecurityConfig(saslServerConfigs), new CredentialCache(), time);
+                new TestSecurityConfig(saslServerConfigs), new CredentialCache(), TIME);
     }
 }

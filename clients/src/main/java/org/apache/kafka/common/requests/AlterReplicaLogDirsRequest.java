@@ -83,7 +83,7 @@ public class AlterReplicaLogDirsRequest extends AbstractRequest {
         data.dirs().forEach(alterDir ->
             alterDir.topics().forEach(topic ->
                 topic.partitions().forEach(partition ->
-                    result.put(new TopicPartition(topic.name(), partition.intValue()), alterDir.path())))
+                    result.put(new TopicPartition(topic.name(), partition), alterDir.path())))
         );
         return result;
     }

@@ -42,7 +42,7 @@ public interface Message {
      * @param cache         The serialization size cache to populate.
      * @param version       The version to use.
      *
-     * @throws {@see org.apache.kafka.common.errors.UnsupportedVersionException}
+     * @throws org.apache.kafka.common.errors.UnsupportedVersionException
      *                      If the specified version is too new to be supported
      *                      by this software.
      */
@@ -69,7 +69,7 @@ public interface Message {
      *                      previously populated the size cache using #{Message#size()}.
      * @param version       The version to use.
      *
-     * @throws {@see org.apache.kafka.common.errors.UnsupportedVersionException}
+     * @throws org.apache.kafka.common.errors.UnsupportedVersionException
      *                      If the specified version is too new to be supported
      *                      by this software.
      */
@@ -82,7 +82,7 @@ public interface Message {
      * @param readable      The source readable.
      * @param version       The version to use.
      *
-     * @throws {@see org.apache.kafka.common.errors.UnsupportedVersionException}
+     * @throws org.apache.kafka.common.errors.UnsupportedVersionException
      *                      If the specified version is too new to be supported
      *                      by this software.
      */

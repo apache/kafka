@@ -25,8 +25,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class OffsetCommitMetricsManagerTest {
-    private Time time = new MockTime();
-    private Metrics metrics = new Metrics(time);
+    private final Time time = new MockTime();
+    private final Metrics metrics = new Metrics(time);
 
     @Test
     public void testOffsetCommitMetrics() {

@@ -23,6 +23,7 @@ on:
         description: Docker image type to build and test
         options: 
           - "jvm"
+          - "native"
       kafka_url:
         description: Kafka url to be used to build the docker image
         required: true

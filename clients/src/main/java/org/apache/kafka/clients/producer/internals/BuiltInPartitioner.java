@@ -45,7 +45,7 @@ public class BuiltInPartitioner {
     private final AtomicReference<StickyPartitionInfo> stickyPartitionInfo = new AtomicReference<>();
 
     // Visible and used for testing only.
-    static volatile public Supplier<Integer> mockRandom = null;
+    public static volatile Supplier<Integer> mockRandom = null;
 
     /**
      * BuiltInPartitioner constructor.
@@ -76,7 +76,7 @@ public class BuiltInPartitioner {
             // We don't have stats to do adaptive partitioning (or it's disabled), just switch to the next
             // partition based on uniform distribution.
             List<PartitionInfo> availablePartitions = cluster.availablePartitionsForTopic(topic);
-            if (availablePartitions.size() > 0) {
+            if (!availablePartitions.isEmpty()) {
                 partition = availablePartitions.get(random % availablePartitions.size()).partition();
             } else {
                 // We don't have available partitions, just pick one among all partitions.
@@ -331,7 +331,7 @@ public class BuiltInPartitioner {
     /**
      * The partition load stats for each topic that are used for adaptive partition distribution.
      */
-    private final static class PartitionLoadStats {
+    private static final class PartitionLoadStats {
         public final int[] cumulativeFrequencyTable;
         public final int[] partitionIds;
         public final int length;

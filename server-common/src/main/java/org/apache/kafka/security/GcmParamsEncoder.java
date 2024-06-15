@@ -16,12 +16,13 @@
  */
 package org.apache.kafka.security;
 
-import javax.crypto.spec.GCMParameterSpec;
 import java.security.AlgorithmParameters;
 import java.security.spec.AlgorithmParameterSpec;
 import java.security.spec.InvalidParameterSpecException;
 import java.util.HashMap;
 import java.util.Map;
+
+import javax.crypto.spec.GCMParameterSpec;
 
 public class GcmParamsEncoder implements CipherParamsEncoder {
 

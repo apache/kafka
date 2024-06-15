@@ -22,6 +22,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
@@ -60,7 +61,7 @@ public class TimestampedSegmentTest {
 
     @Test
     public void shouldDeleteStateDirectoryOnDestroy() throws Exception {
-        final TimestampedSegment segment = new TimestampedSegment("segment", "window", 0L, metricsRecorder);
+        final TimestampedSegment segment = new TimestampedSegment("segment", "window", 0L, Position.emptyPosition(), metricsRecorder);
         final String directoryPath = TestUtils.tempDirectory().getAbsolutePath();
         final File directory = new File(directoryPath);
 
@@ -82,11 +83,11 @@ public class TimestampedSegmentTest {
 
     @Test
     public void shouldBeEqualIfIdIsEqual() {
-        final TimestampedSegment segment = new TimestampedSegment("anyName", "anyName", 0L, metricsRecorder);
+        final TimestampedSegment segment = new TimestampedSegment("anyName", "anyName", 0L, Position.emptyPosition(), metricsRecorder);
         final TimestampedSegment segmentSameId =
-            new TimestampedSegment("someOtherName", "someOtherName", 0L, metricsRecorder);
+            new TimestampedSegment("someOtherName", "someOtherName", 0L, Position.emptyPosition(), metricsRecorder);
         final TimestampedSegment segmentDifferentId =
-            new TimestampedSegment("anyName", "anyName", 1L, metricsRecorder);
+            new TimestampedSegment("anyName", "anyName", 1L, Position.emptyPosition(), metricsRecorder);
 
         assertThat(segment, equalTo(segment));
         assertThat(segment, equalTo(segmentSameId));
@@ -101,11 +102,11 @@ public class TimestampedSegmentTest {
 
     @Test
     public void shouldHashOnSegmentIdOnly() {
-        final TimestampedSegment segment = new TimestampedSegment("anyName", "anyName", 0L, metricsRecorder);
+        final TimestampedSegment segment = new TimestampedSegment("anyName", "anyName", 0L, Position.emptyPosition(), metricsRecorder);
         final TimestampedSegment segmentSameId =
-            new TimestampedSegment("someOtherName", "someOtherName", 0L, metricsRecorder);
+            new TimestampedSegment("someOtherName", "someOtherName", 0L, Position.emptyPosition(), metricsRecorder);
         final TimestampedSegment segmentDifferentId =
-            new TimestampedSegment("anyName", "anyName", 1L, metricsRecorder);
+            new TimestampedSegment("anyName", "anyName", 1L, Position.emptyPosition(), metricsRecorder);
 
         final Set<TimestampedSegment> set = new HashSet<>();
         assertTrue(set.add(segment));
@@ -119,9 +120,9 @@ public class TimestampedSegmentTest {
 
     @Test
     public void shouldCompareSegmentIdOnly() {
-        final TimestampedSegment segment1 = new TimestampedSegment("a", "C", 50L, metricsRecorder);
-        final TimestampedSegment segment2 = new TimestampedSegment("b", "B", 100L, metricsRecorder);
-        final TimestampedSegment segment3 = new TimestampedSegment("c", "A", 0L, metricsRecorder);
+        final TimestampedSegment segment1 = new TimestampedSegment("a", "C", 50L, Position.emptyPosition(), metricsRecorder);
+        final TimestampedSegment segment2 = new TimestampedSegment("b", "B", 100L, Position.emptyPosition(), metricsRecorder);
+        final TimestampedSegment segment3 = new TimestampedSegment("c", "A", 0L, Position.emptyPosition(), metricsRecorder);
 
         assertThat(segment1.compareTo(segment1), equalTo(0));
         assertThat(segment1.compareTo(segment2), equalTo(-1));

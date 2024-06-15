@@ -50,7 +50,7 @@ public final class ProduceAction implements TieredStorageTestAction {
      * This timeout should exceed the {@link org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils#STORAGE_WAIT_TIMEOUT_SEC}
      * so that the test can verify that the active segment gets rolled and offloaded to the remote storage.
      */
-    private static final int OFFLOAD_WAIT_TIMEOUT_SEC = 40;
+    private static final int OFFLOAD_WAIT_TIMEOUT_SEC = 10;
 
     private final TopicPartition topicPartition;
     private final List<OffloadedSegmentSpec> offloadedSegmentSpecs;

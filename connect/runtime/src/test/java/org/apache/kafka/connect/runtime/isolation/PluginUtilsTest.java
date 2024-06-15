@@ -388,13 +388,13 @@ public class PluginUtilsTest {
 
     @Test
     public void testEmptyPluginUrls() throws Exception {
-        assertEquals(Collections.<Path>emptyList(), PluginUtils.pluginUrls(pluginPath));
+        assertEquals(Collections.emptyList(), PluginUtils.pluginUrls(pluginPath));
     }
 
     @Test
     public void testEmptyStructurePluginUrls() throws Exception {
         createBasicDirectoryLayout();
-        assertEquals(Collections.<Path>emptyList(), PluginUtils.pluginUrls(pluginPath));
+        assertEquals(Collections.emptyList(), PluginUtils.pluginUrls(pluginPath));
     }
 
     @Test

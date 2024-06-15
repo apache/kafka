@@ -83,7 +83,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.Executor;
 
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonList;
@@ -135,8 +134,8 @@ public class ErrorHandlingTaskTest {
 
     private static final TaskConfig TASK_CONFIG = new TaskConfig(TASK_PROPS);
 
-    private ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
-    private TargetState initialState = TargetState.STARTED;
+    private final ConnectorTaskId taskId = new ConnectorTaskId("job", 0);
+    private final TargetState initialState = TargetState.STARTED;
     private Time time;
     private MockConnectMetrics metrics;
     @SuppressWarnings("unused")
@@ -180,7 +179,7 @@ public class ErrorHandlingTaskTest {
 
     private ErrorHandlingMetrics errorHandlingMetrics;
 
-    private boolean enableTopicCreation;
+    private final boolean enableTopicCreation;
 
     @Parameterized.Parameters
     public static Collection<Boolean> parameters() {
@@ -229,7 +228,7 @@ public class ErrorHandlingTaskTest {
     }
 
     @Test
-    public void testErrorHandlingInSinkTasks() throws Exception {
+    public void testErrorHandlingInSinkTasks() {
         Map<String, String> reportProps = new HashMap<>();
         reportProps.put(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true");
         reportProps.put(ConnectorConfig.ERRORS_LOG_INCLUDE_MESSAGES_CONFIG, "true");
@@ -484,7 +483,7 @@ public class ErrorHandlingTaskTest {
                 offsetReader, offsetWriter, offsetStore, workerConfig,
                 ClusterConfigState.EMPTY, metrics, pluginLoader, time,
                 retryWithToleranceOperator,
-                statusBackingStore, (Executor) Runnable::run, () -> errorReporters));
+                statusBackingStore, Runnable::run, () -> errorReporters));
 
     }
 

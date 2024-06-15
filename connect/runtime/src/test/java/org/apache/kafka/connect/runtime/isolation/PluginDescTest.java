@@ -204,7 +204,7 @@ public class PluginDescTest {
         assertNotEquals(transformDescPluginPath, transformDescClasspath);
     }
 
-    @SuppressWarnings({"rawtypes", "unchecked"})
+    @SuppressWarnings("rawtypes")
     @Test
     public void testPluginDescComparison() {
         PluginDesc<SinkConnector> connectorDescPluginPath = new PluginDesc<>(

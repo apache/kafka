@@ -29,15 +29,13 @@ import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.SinkUtils;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.NoRetryException;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.rules.TestName;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 
 import javax.ws.rs.core.Response;
 import java.util.ArrayList;
@@ -68,14 +66,14 @@ import static org.apache.kafka.connect.runtime.WorkerConfig.VALUE_CONVERTER_CLAS
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Integration tests for Kafka Connect's connector offset management REST APIs
  */
-@Category(IntegrationTest.class)
+@Tag("integration")
 public class OffsetsApiIntegrationTest {
     private static final long OFFSET_COMMIT_INTERVAL_MS = TimeUnit.SECONDS.toMillis(1);
     private static final long OFFSET_READ_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(30);
@@ -83,20 +81,18 @@ public class OffsetsApiIntegrationTest {
     private static final int NUM_TASKS = 2;
     private static final int NUM_RECORDS_PER_PARTITION = 10;
     private static final Map<Map<String, String>, EmbeddedConnectCluster> CONNECT_CLUSTERS = new ConcurrentHashMap<>();
-    @Rule
-    public TestName currentTest = new TestName();
     private EmbeddedConnectCluster connect;
     private String connectorName;
     private String topic;
 
-    @Before
-    public void setup() {
-        connectorName = currentTest.getMethodName();
-        topic = currentTest.getMethodName();
+    @BeforeEach
+    public void setup(TestInfo testInfo) {
+        connectorName = testInfo.getTestMethod().get().getName();
+        topic = testInfo.getTestMethod().get().getName();
         connect = defaultConnectCluster();
     }
 
-    @After
+    @AfterEach
     public void tearDown() {
         Set<String> remainingConnectors = new HashSet<>(connect.connectors());
         if (remainingConnectors.remove(connectorName)) {
@@ -104,9 +100,9 @@ public class OffsetsApiIntegrationTest {
         }
         try {
             assertEquals(
-                    "Some connectors were not properly cleaned up after this test",
                     Collections.emptySet(),
-                    remainingConnectors
+                    remainingConnectors,
+                    "Some connectors were not properly cleaned up after this test"
             );
         } finally {
             // Make a last-ditch effort to clean up the leaked connectors
@@ -115,7 +111,7 @@ public class OffsetsApiIntegrationTest {
         }
     }
 
-    @AfterClass
+    @AfterAll
     public static void close() {
         // stop all Connect, Kafka and Zk threads.
         CONNECT_CLUSTERS.values().forEach(EmbeddedConnectCluster::stop);
@@ -283,7 +279,7 @@ public class OffsetsApiIntegrationTest {
     }
 
     @Test
-    public void testAlterOffsetsNonExistentConnector() throws Exception {
+    public void testAlterOffsetsNonExistentConnector() {
         ConnectRestException e = assertThrows(ConnectRestException.class,
                 () -> connect.alterConnectorOffsets("non-existent-connector", new ConnectorOffsets(Collections.singletonList(
                         new ConnectorOffset(Collections.emptyMap(), Collections.emptyMap())))));

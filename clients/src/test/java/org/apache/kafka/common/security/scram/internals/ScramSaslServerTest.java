@@ -36,13 +36,12 @@ public class ScramSaslServerTest {
     private static final String USER_A = "userA";
     private static final String USER_B = "userB";
 
-    private ScramMechanism mechanism;
     private ScramFormatter formatter;
     private ScramSaslServer saslServer;
 
     @BeforeEach
     public void setUp() throws Exception {
-        mechanism = ScramMechanism.SCRAM_SHA_256;
+        ScramMechanism mechanism = ScramMechanism.SCRAM_SHA_256;
         formatter  = new ScramFormatter(mechanism);
         CredentialCache.Cache<ScramCredential> credentialCache = new CredentialCache().createCache(mechanism.mechanismName(), ScramCredential.class);
         credentialCache.put(USER_A, formatter.generateCredential("passwordA", 4096));

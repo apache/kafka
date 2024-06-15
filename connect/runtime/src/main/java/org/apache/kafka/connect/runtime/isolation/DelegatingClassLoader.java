@@ -46,7 +46,7 @@ public class DelegatingClassLoader extends URLClassLoader {
     private final ConcurrentMap<String, String> aliases;
 
     // Although this classloader does not load classes directly but rather delegates loading to a
-    // PluginClassLoader or its parent through its base class, because of the use of inheritance in
+    // PluginClassLoader or its parent through its base class, because of the use of inheritance
     // in the latter case, this classloader needs to also be declared as parallel capable to use
     // fine-grain locking when loading classes.
     static {

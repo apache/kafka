@@ -33,12 +33,11 @@ public class ConsumerMetrics {
     }
 
     public ConsumerMetrics(String metricGroupPrefix) {
-        this(new HashSet<String>(), metricGroupPrefix);
+        this(new HashSet<>(), metricGroupPrefix);
     }
 
     private List<MetricNameTemplate> getAllTemplates() {
-        List<MetricNameTemplate> l = new ArrayList<>(this.fetcherMetrics.getAllTemplates());
-        return l;
+        return new ArrayList<>(this.fetcherMetrics.getAllTemplates());
     }
 
     public static void main(String[] args) {

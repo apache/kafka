@@ -41,18 +41,19 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.runtime.rest.util.SSLUtils;
 import org.apache.kafka.connect.util.Callback;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import javax.net.ssl.SSLContext;
 import java.io.IOException;
@@ -74,9 +75,10 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.StrictStubs.class)
+@ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 @SuppressWarnings("unchecked")
-@Category(IntegrationTest.class)
+@Tag("integration")
 public class RestForwardingIntegrationTest {
 
     private Map<String, Object> sslConfig;
@@ -89,17 +91,17 @@ public class RestForwardingIntegrationTest {
     @Mock
     private Herder leaderHerder;
 
-    private SslContextFactory factory;
+    private SslContextFactory.Client factory;
     private CloseableHttpClient httpClient;
     private Collection<CloseableHttpResponse> responses;
 
-    @Before
+    @BeforeEach
     public void setUp() throws IOException, GeneralSecurityException {
         sslConfig = TestSslUtils.createSslConfig(false, true, Mode.SERVER, TestUtils.tempFile(), "testCert");
         responses = new ArrayList<>();
     }
 
-    @After
+    @AfterEach
     public void tearDown() throws IOException {
         for (CloseableHttpResponse response: responses) {
             response.close();

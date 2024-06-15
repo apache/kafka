@@ -34,6 +34,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -98,7 +99,7 @@ public class KafkaFutureTest {
         assertEquals(expectedException, executionException.getCause().getClass());
         assertEquals(expectedMessage, executionException.getCause().getMessage());
 
-        executionException = assertThrows(ExecutionException.class, () -> future.get());
+        executionException = assertThrows(ExecutionException.class, future::get);
         assertEquals(expectedException, executionException.getCause().getClass());
         assertEquals(expectedMessage, executionException.getCause().getMessage());
 
@@ -113,7 +114,7 @@ public class KafkaFutureTest {
         assertEquals(expectedMessage, cancellationException.getMessage());
         assertEquals(CancellationException.class, cancellationException.getClass());
 
-        cancellationException = assertThrows(CancellationException.class, () -> future.get());
+        cancellationException = assertThrows(CancellationException.class, future::get);
         assertEquals(expectedMessage, cancellationException.getMessage());
         assertEquals(CancellationException.class, cancellationException.getClass());
 
@@ -154,7 +155,7 @@ public class KafkaFutureTest {
         assertFalse(futureFail.completeExceptionally(new RuntimeException("We require more minerals")));
         assertFalse(futureFail.cancel(true));
 
-        ExecutionException executionException = assertThrows(ExecutionException.class, () -> futureFail.get());
+        ExecutionException executionException = assertThrows(ExecutionException.class, futureFail::get);
         assertEquals(RuntimeException.class, executionException.getCause().getClass());
         assertEquals("We require more vespene gas", executionException.getCause().getMessage());
 
@@ -316,7 +317,7 @@ public class KafkaFutureTest {
         assertIsFailed(dependantFuture);
         awaitAndAssertResult(future, 21, null);
         Throwable cause = awaitAndAssertFailure(dependantFuture, CompletionException.class, "java.lang.RuntimeException: We require more vespene gas");
-        assertTrue(cause.getCause() instanceof RuntimeException);
+        assertInstanceOf(RuntimeException.class, cause.getCause());
         assertEquals(cause.getCause().getMessage(), "We require more vespene gas");
     }
 
@@ -438,7 +439,7 @@ public class KafkaFutureTest {
         assertFalse(dependantFuture.isDone());
         assertTrue(future.cancel(true));
         assertTrue(ran[0]);
-        assertTrue(err[0] instanceof CancellationException);
+        assertInstanceOf(CancellationException.class, err[0]);
     }
 
     private static class CompleterThread<T> extends Thread {

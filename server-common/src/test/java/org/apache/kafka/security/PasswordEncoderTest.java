@@ -16,15 +16,16 @@
  */
 package org.apache.kafka.security;
 
-import javax.crypto.SecretKeyFactory;
-
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.server.util.Csv;
+
 import org.junit.jupiter.api.Test;
 
 import java.security.GeneralSecurityException;
 import java.util.Map;
+
+import javax.crypto.SecretKeyFactory;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -36,9 +37,9 @@ class PasswordEncoderTest {
     public void testEncodeDecode() throws GeneralSecurityException {
         PasswordEncoder encoder = PasswordEncoder.encrypting(new Password("password-encoder-secret"),
                 null,
-                PasswordEncoderConfigs.DEFAULT_CIPHER_ALGORITHM,
-                PasswordEncoderConfigs.DEFAULT_KEY_LENGTH,
-                PasswordEncoderConfigs.DEFAULT_ITERATIONS);
+                PasswordEncoderConfigs.PASSWORD_ENCODER_CIPHER_ALGORITHM_DEFAULT,
+                PasswordEncoderConfigs.PASSWORD_ENCODER_KEY_LENGTH_DEFAULT,
+                PasswordEncoderConfigs.PASSWORD_ENCODER_ITERATIONS_DEFAULT);
         String password = "test-password";
         String encoded = encoder.encode(new Password(password));
         Map<String, String> encodedMap = Csv.parseCsvMap(encoded);
@@ -96,10 +97,10 @@ class PasswordEncoderTest {
         verifyEncodeDecode(null, "AES/CBC/PKCS5Padding", 128);
         verifyEncodeDecode(null, "AES/CFB/PKCS5Padding", 128);
         verifyEncodeDecode(null, "AES/OFB/PKCS5Padding", 128);
-        verifyEncodeDecode("PBKDF2WithHmacSHA1", PasswordEncoderConfigs.DEFAULT_CIPHER_ALGORITHM, 128);
+        verifyEncodeDecode("PBKDF2WithHmacSHA1", PasswordEncoderConfigs.PASSWORD_ENCODER_CIPHER_ALGORITHM_DEFAULT, 128);
         verifyEncodeDecode(null, "AES/GCM/NoPadding", 128);
-        verifyEncodeDecode("PBKDF2WithHmacSHA256", PasswordEncoderConfigs.DEFAULT_CIPHER_ALGORITHM, 128);
-        verifyEncodeDecode("PBKDF2WithHmacSHA512", PasswordEncoderConfigs.DEFAULT_CIPHER_ALGORITHM, 128);
+        verifyEncodeDecode("PBKDF2WithHmacSHA256", PasswordEncoderConfigs.PASSWORD_ENCODER_CIPHER_ALGORITHM_DEFAULT, 128);
+        verifyEncodeDecode("PBKDF2WithHmacSHA512", PasswordEncoderConfigs.PASSWORD_ENCODER_CIPHER_ALGORITHM_DEFAULT, 128);
     }
 
     private void verifyEncodeDecode(String keyFactoryAlg, String cipherAlg, int keyLength) throws GeneralSecurityException {
@@ -107,7 +108,7 @@ class PasswordEncoderTest {
                 keyFactoryAlg,
                 cipherAlg,
                 keyLength,
-                PasswordEncoderConfigs.DEFAULT_ITERATIONS);
+                PasswordEncoderConfigs.PASSWORD_ENCODER_ITERATIONS_DEFAULT);
         String password = "test-password";
         String encoded = encoder.encode(new Password(password));
         verifyEncodedPassword(encoder, password, encoded);

@@ -130,24 +130,27 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
 
-        if (timestamp < observedStreamTime - gracePeriod) {
-            expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
-            LOG.warn("Skipping record for expired put.");
-            return PUT_RETURN_CODE_NOT_PUT;
+        synchronized (position) {
+            if (timestamp < observedStreamTime - gracePeriod) {
+                expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
+                LOG.warn("Skipping record for expired put.");
+                StoreQueryUtils.updatePosition(position, stateStoreContext);
+                return PUT_RETURN_CODE_NOT_PUT;
+            }
+            observedStreamTime = Math.max(observedStreamTime, timestamp);
+
+            final long foundTs = doPut(
+                versionedStoreClient,
+                observedStreamTime,
+                key,
+                value,
+                timestamp
+            );
+
+            StoreQueryUtils.updatePosition(position, stateStoreContext);
+
+            return foundTs;
         }
-        observedStreamTime = Math.max(observedStreamTime, timestamp);
-
-        final long foundTs = doPut(
-            versionedStoreClient,
-            observedStreamTime,
-            key,
-            value,
-            timestamp
-        );
-
-        StoreQueryUtils.updatePosition(position, stateStoreContext);
-
-        return foundTs;
     }
 
     @Override
@@ -155,26 +158,28 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
 
-        if (timestamp < observedStreamTime - gracePeriod) {
-            expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
-            LOG.warn("Skipping record for expired delete.");
-            return null;
+        synchronized (position) {
+            if (timestamp < observedStreamTime - gracePeriod) {
+                expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
+                LOG.warn("Skipping record for expired delete.");
+                return null;
+            }
+
+            final VersionedRecord<byte[]> existingRecord = get(key, timestamp);
+
+            observedStreamTime = Math.max(observedStreamTime, timestamp);
+            doPut(
+                versionedStoreClient,
+                observedStreamTime,
+                key,
+                null,
+                timestamp
+            );
+
+            StoreQueryUtils.updatePosition(position, stateStoreContext);
+
+            return existingRecord;
         }
-
-        final VersionedRecord<byte[]> existingRecord = get(key, timestamp);
-
-        observedStreamTime = Math.max(observedStreamTime, timestamp);
-        doPut(
-            versionedStoreClient,
-            observedStreamTime,
-            key,
-            null,
-            timestamp
-        );
-
-        StoreQueryUtils.updatePosition(position, stateStoreContext);
-
-        return existingRecord;
     }
 
     @Override
@@ -361,11 +366,11 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
         metricsRecorder.init(ProcessorContextUtils.getMetricsImpl(context), context.taskId());
 
-        segmentStores.openExisting(context, observedStreamTime);
-
         final File positionCheckpointFile = new File(context.stateDir(), name() + ".position");
-        this.positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
-        this.position = StoreQueryUtils.readPositionFromCheckpoint(positionCheckpoint);
+        positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
+        position = StoreQueryUtils.readPositionFromCheckpoint(positionCheckpoint);
+        segmentStores.setPosition(position);
+        segmentStores.openExisting(context, observedStreamTime);
 
         // register and possibly restore the state from the logs
         stateStoreContext.register(
@@ -408,36 +413,39 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         // "segment" entry -- restoring a single changelog entry could require loading multiple
         // records into memory. how high this memory amplification will be is very much dependent
         // on the specific workload and the value of the "segment interval" parameter.
-        for (final ConsumerRecord<byte[], byte[]> record : records) {
-            if (record.timestamp() < observedStreamTime - gracePeriod) {
-                // record is older than grace period and was therefore never written to the store
-                continue;
-            }
-            // advance observed stream time as usual, for use in deciding whether records have
-            // exceeded the store's grace period and should be dropped.
-            observedStreamTime = Math.max(observedStreamTime, record.timestamp());
+        synchronized (position) {
+            for (final ConsumerRecord<byte[], byte[]> record : records) {
+                if (record.timestamp() < observedStreamTime - gracePeriod) {
+                    // record is older than grace period and was therefore never written to the store
+                    continue;
+                }
+                // advance observed stream time as usual, for use in deciding whether records have
+                // exceeded the store's grace period and should be dropped.
+                observedStreamTime = Math.max(observedStreamTime, record.timestamp());
 
-            ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
+                ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
                     record,
                     consistencyEnabled,
                     position
-            );
+                );
 
-            // put records to write buffer
-            doPut(
+                // put records to write buffer
+                doPut(
                     restoreClient,
                     endOfBatchStreamTime,
                     new Bytes(record.key()),
                     record.value(),
                     record.timestamp()
-            );
+                );
+            }
+
+            try {
+                restoreWriteBuffer.flush();
+            } catch (final RocksDBException e) {
+                throw new ProcessorStateException("Error restoring batch to store " + name, e);
+            }
         }
 
-        try {
-            restoreWriteBuffer.flush();
-        } catch (final RocksDBException e) {
-            throw new ProcessorStateException("Error restoring batch to store " + name, e);
-        }
     }
 
     private void validateStoreOpen() {

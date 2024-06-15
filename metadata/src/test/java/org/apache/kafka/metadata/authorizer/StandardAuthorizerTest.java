@@ -254,7 +254,7 @@ public class StandardAuthorizerTest {
         return authorizer;
     }
 
-    private final static AtomicLong NEXT_ID = new AtomicLong(0);
+    private static final AtomicLong NEXT_ID = new AtomicLong(0);
 
     static StandardAcl newFooAcl(AclOperation op, AclPermissionType permission) {
         return new StandardAcl(
@@ -356,7 +356,7 @@ public class StandardAuthorizerTest {
     }
 
     @Test
-    public void testListAcls() throws Exception {
+    public void testListAcls() {
         StandardAuthorizer authorizer = createAndInitializeStandardAuthorizer();
         List<StandardAclWithId> fooAcls = asList(
             withId(newFooAcl(READ, ALLOW)),
@@ -641,7 +641,7 @@ public class StandardAuthorizerTest {
      * listeners.
      */
     @Test
-    public void testStartWithEarlyStartListeners() throws Exception {
+    public void testStartWithEarlyStartListeners() {
         StandardAuthorizer authorizer = new StandardAuthorizer();
         authorizer.configure(Collections.singletonMap(SUPER_USERS_CONFIG, "User:superman"));
         Map<Endpoint, ? extends CompletionStage<Void>> futures2 = authorizer.
@@ -674,7 +674,7 @@ public class StandardAuthorizerTest {
     }
 
     @Test
-    public void testCompleteInitialLoad() throws Exception {
+    public void testCompleteInitialLoad() {
         StandardAuthorizer authorizer = new StandardAuthorizer();
         authorizer.configure(Collections.singletonMap(SUPER_USERS_CONFIG, "User:superman"));
         Map<Endpoint, ? extends CompletionStage<Void>> futures = authorizer.
@@ -687,7 +687,7 @@ public class StandardAuthorizerTest {
     }
 
     @Test
-    public void testCompleteInitialLoadWithException() throws Exception {
+    public void testCompleteInitialLoadWithException() {
         StandardAuthorizer authorizer = new StandardAuthorizer();
         authorizer.configure(Collections.singletonMap(SUPER_USERS_CONFIG, "User:superman"));
         Map<Endpoint, ? extends CompletionStage<Void>> futures = authorizer.

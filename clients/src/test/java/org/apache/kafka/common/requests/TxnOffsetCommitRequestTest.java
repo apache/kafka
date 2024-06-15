@@ -38,11 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
 
-    private static String transactionalId = "transactionalId";
-    private static int producerId = 10;
-    private static short producerEpoch = 1;
-    private static int generationId = 5;
-    private static Map<TopicPartition, CommittedOffset> offsets = new HashMap<>();
+    private static final Map<TopicPartition, CommittedOffset> OFFSETS = new HashMap<>();
     private static TxnOffsetCommitRequest.Builder builder;
     private static TxnOffsetCommitRequest.Builder builderWithGroupMetadata;
 
@@ -50,32 +46,36 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
     @Override
     public void setUp() {
         super.setUp();
-        offsets.clear();
-        offsets.put(new TopicPartition(topicOne, partitionOne),
+        OFFSETS.clear();
+        OFFSETS.put(new TopicPartition(topicOne, partitionOne),
             new CommittedOffset(
                 offset,
                 metadata,
                 Optional.of((int) leaderEpoch)));
-        offsets.put(new TopicPartition(topicTwo, partitionTwo),
+        OFFSETS.put(new TopicPartition(topicTwo, partitionTwo),
             new CommittedOffset(
                 offset,
                 metadata,
                 Optional.of((int) leaderEpoch)));
 
+        String transactionalId = "transactionalId";
+        int producerId = 10;
+        short producerEpoch = 1;
         builder = new TxnOffsetCommitRequest.Builder(
             transactionalId,
             groupId,
             producerId,
             producerEpoch,
-            offsets
+            OFFSETS
         );
 
+        int generationId = 5;
         builderWithGroupMetadata = new TxnOffsetCommitRequest.Builder(
             transactionalId,
             groupId,
             producerId,
             producerEpoch,
-            offsets,
+            OFFSETS,
             memberId,
             generationId,
             Optional.of(groupInstanceId)
@@ -118,7 +118,7 @@ public class TxnOffsetCommitRequestTest extends OffsetCommitRequestTest {
             } else {
                 request = builderWithGroupMetadata.build(version);
             }
-            assertEquals(offsets, request.offsets());
+            assertEquals(OFFSETS, request.offsets());
             assertEquals(expectedTopics, TxnOffsetCommitRequest.getTopics(request.offsets()));
 
             TxnOffsetCommitResponse response =

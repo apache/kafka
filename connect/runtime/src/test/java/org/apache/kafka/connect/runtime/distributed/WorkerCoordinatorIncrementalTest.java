@@ -75,21 +75,18 @@ public class WorkerCoordinatorIncrementalTest {
     @Rule
     public MockitoRule rule = MockitoJUnit.rule().strictness(Strictness.STRICT_STUBS);
 
-    private String connectorId1 = "connector1";
-    private String connectorId2 = "connector2";
-    private String connectorId3 = "connector3";
-    private ConnectorTaskId taskId1x0 = new ConnectorTaskId(connectorId1, 0);
-    private ConnectorTaskId taskId1x1 = new ConnectorTaskId(connectorId1, 1);
-    private ConnectorTaskId taskId2x0 = new ConnectorTaskId(connectorId2, 0);
-    private ConnectorTaskId taskId3x0 = new ConnectorTaskId(connectorId3, 0);
+    private final String connectorId1 = "connector1";
+    private final String connectorId2 = "connector2";
+    private final ConnectorTaskId taskId1x0 = new ConnectorTaskId(connectorId1, 0);
+    private final ConnectorTaskId taskId2x0 = new ConnectorTaskId(connectorId2, 0);
 
-    private String groupId = "test-group";
-    private int sessionTimeoutMs = 10;
-    private int rebalanceTimeoutMs = 60;
-    private int heartbeatIntervalMs = 2;
-    private long retryBackoffMs = 100;
-    private long retryBackoffMaxMs = 1000;
-    private int requestTimeoutMs = 1000;
+    private final String groupId = "test-group";
+    private final int sessionTimeoutMs = 10;
+    private final int rebalanceTimeoutMs = 60;
+    private final int heartbeatIntervalMs = 2;
+    private final long retryBackoffMs = 100;
+    private final long retryBackoffMaxMs = 1000;
+    private final int requestTimeoutMs = 1000;
     private MockTime time;
     private MockClient client;
     private Node node;
@@ -115,8 +112,6 @@ public class WorkerCoordinatorIncrementalTest {
     private int configStorageCalls;
 
     private ClusterConfigState configState1;
-    private ClusterConfigState configState2;
-    private ClusterConfigState configStateSingleTaskConnectors;
 
     // Arguments are:
     // - Protocol type
@@ -564,6 +559,9 @@ public class WorkerCoordinatorIncrementalTest {
             this.revokedTasks = tasks;
             revokedCount++;
         }
+
+        @Override
+        public void onPollTimeoutExpiry() {}
     }
 
     private static ExtendedAssignment deserializeAssignment(Map<String, ByteBuffer> assignment,

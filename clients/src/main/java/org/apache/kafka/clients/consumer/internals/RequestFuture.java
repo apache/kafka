@@ -92,7 +92,7 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
     }
 
     /**
-     * Check if the request is retriable (convenience method for checking if
+     * Check if the request is retriable. This is a convenience method for checking if
      * the exception is an instance of {@link RetriableException}.
      * @return true if it is retriable, false otherwise
      * @throws IllegalStateException if the future is not complete or completed successfully

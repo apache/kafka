@@ -16,17 +16,6 @@
  */
 package org.apache.kafka.raft.internals;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.UncheckedIOException;
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
-import java.util.NoSuchElementException;
-import java.util.Optional;
-import java.util.function.BiFunction;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.record.ControlRecordType;
@@ -42,6 +31,18 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.ControlRecord;
 import org.apache.kafka.server.common.serialization.RecordSerde;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.Optional;
+import java.util.function.BiFunction;
 
 public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseable {
     private final Records records;
@@ -214,7 +215,11 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
             if (batch.isControlBatch()) {
                 List<ControlRecord> records = new ArrayList<>(numRecords);
                 for (int i = 0; i < numRecords; i++) {
-                    ControlRecord record = readRecord(input, batch.sizeInBytes(), RecordsIterator::decodeControlRecord);
+                    ControlRecord record = readRecord(
+                        input,
+                        batch.sizeInBytes(),
+                        RecordsIterator::decodeControlRecord
+                    );
                     records.add(record);
                 }
                 result = Batch.control(
@@ -365,6 +370,12 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
                 break;
             case SNAPSHOT_FOOTER:
                 message = ControlRecordUtils.deserializeSnapshotFooterRecord(value.get());
+                break;
+            case KRAFT_VERSION:
+                message = ControlRecordUtils.deserializeKRaftVersionRecord(value.get());
+                break;
+            case KRAFT_VOTERS:
+                message = ControlRecordUtils.deserializeVotersRecord(value.get());
                 break;
             default:
                 throw new IllegalArgumentException(String.format("Unknown control record type %s", type));

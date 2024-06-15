@@ -118,7 +118,8 @@ abstract class EmbeddedConnect {
     };
 
     /**
-     * Start the connect cluster and the embedded Kafka and Zookeeper cluster.
+     * Start the Connect cluster and the embedded Kafka and Zookeeper cluster,
+     * and wait for the Kafka and Connect clusters to become healthy.
      */
     public void start() {
         if (maskExitProcedures) {
@@ -131,6 +132,27 @@ abstract class EmbeddedConnect {
             httpClient.start();
         } catch (Exception e) {
             throw new ConnectException("Failed to start HTTP client", e);
+        }
+
+        try {
+            if (numBrokers > 0) {
+                assertions().assertExactlyNumBrokersAreUp(
+                        numBrokers,
+                        "Kafka cluster did not start in time"
+                );
+                log.info("Completed startup of {} Kafka brokers", numBrokers);
+            }
+
+            int numWorkers = workers().size();
+            if (numWorkers > 0) {
+                assertions().assertExactlyNumWorkersAreUp(
+                        numWorkers,
+                        "Connect cluster did not start in time"
+                );
+                log.info("Completed startup of {} Connect workers", numWorkers);
+            }
+        } catch (InterruptedException e) {
+            throw new RuntimeException("Interrupted while awaiting cluster startup", e);
         }
     }
 
@@ -269,6 +291,43 @@ abstract class EmbeddedConnect {
         }
         throw new ConnectRestException(response.getStatus(),
                 "Could not execute PUT request. Error response: " + responseToString(response));
+    }
+
+    /**
+     * Patch the config of a connector.
+     *
+     * @param connName   the name of the connector
+     * @param connConfigPatch the configuration patch
+     * @throws ConnectRestException if the REST API returns error status
+     * @throws ConnectException if the configuration fails to be serialized or if the request could not be sent
+     */
+    public String patchConnectorConfig(String connName, Map<String, String> connConfigPatch) {
+        String url = endpointForResource(String.format("connectors/%s/config", connName));
+        return doPatchConnectorConfig(url, connConfigPatch);
+    }
+
+    /**
+     * Execute a PATCH request with the given connector configuration on the given URL endpoint.
+     *
+     * @param url        the full URL of the endpoint that corresponds to the given REST resource
+     * @param connConfigPatch the configuration patch
+     * @throws ConnectRestException if the REST api returns error status
+     * @throws ConnectException if the configuration fails to be serialized or if the request could not be sent
+     */
+    protected String doPatchConnectorConfig(String url, Map<String, String> connConfigPatch) {
+        ObjectMapper mapper = new ObjectMapper();
+        String content;
+        try {
+            content = mapper.writeValueAsString(connConfigPatch);
+        } catch (IOException e) {
+            throw new ConnectException("Could not serialize connector configuration and execute PUT request");
+        }
+        Response response = requestPatch(url, content);
+        if (response.getStatus() < Response.Status.BAD_REQUEST.getStatusCode()) {
+            return responseToString(response);
+        }
+        throw new ConnectRestException(response.getStatus(),
+                "Could not execute PATCH request. Error response: " + responseToString(response));
     }
 
     /**

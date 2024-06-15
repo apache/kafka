@@ -29,6 +29,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.InvalidPidMappingException;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -881,6 +882,11 @@ public class StreamsProducerTest {
     }
 
     @Test
+    public void shouldThrowTaskMigratedExceptionOnEosSendPInvalidPidMapping() {
+        testThrowTaskMigratedExceptionOnEosSend(new InvalidPidMappingException("KABOOM!"));
+    }
+
+    @Test
     public void shouldThrowTaskMigratedExceptionOnEosSendInvalidEpoch() {
         testThrowTaskMigratedExceptionOnEosSend(new InvalidProducerEpochException("KABOOM!"));
     }
@@ -926,6 +932,12 @@ public class StreamsProducerTest {
     public void shouldThrowTaskMigrateExceptionOnEosSendOffsetProducerFenced() {
         // cannot use `eosMockProducer.fenceProducer()` because this would already trigger in `beginTransaction()`
         testThrowTaskMigrateExceptionOnEosSendOffset(new ProducerFencedException("KABOOM!"));
+    }
+
+    @Test
+    public void shouldThrowTaskMigrateExceptionOnEosSendOffsetInvalidPidMapping() {
+        // cannot use `eosMockProducer.fenceProducer()` because this would already trigger in `beginTransaction()`
+        testThrowTaskMigrateExceptionOnEosSendOffset(new InvalidPidMappingException("KABOOM!"));
     }
 
     @Test
@@ -991,6 +1003,11 @@ public class StreamsProducerTest {
     }
 
     @Test
+    public void shouldThrowTaskMigratedExceptionOnEosCommitWithInvalidPidMapping() {
+        testThrowTaskMigratedExceptionOnEos(new InvalidPidMappingException("KABOOM!"));
+    }
+
+    @Test
     public void shouldThrowTaskMigratedExceptionOnEosCommitWithInvalidEpoch() {
         testThrowTaskMigratedExceptionOnEos(new InvalidProducerEpochException("KABOOM!"));
     }
@@ -1046,6 +1063,11 @@ public class StreamsProducerTest {
     @Test
     public void shouldSwallowExceptionOnEosAbortTxProducerFenced() {
         testSwallowExceptionOnEosAbortTx(new ProducerFencedException("KABOOM!"));
+    }
+
+    @Test
+    public void shouldSwallowExceptionOnEosAbortTxInvalidPidMapping() {
+        testSwallowExceptionOnEosAbortTx(new InvalidPidMappingException("KABOOM!"));
     }
 
     @Test

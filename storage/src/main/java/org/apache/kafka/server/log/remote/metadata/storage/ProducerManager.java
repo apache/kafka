@@ -72,15 +72,11 @@ public class ProducerManager implements Closeable {
         }
 
         try {
-            Callback callback = new Callback() {
-                @Override
-                public void onCompletion(RecordMetadata metadata,
-                                         Exception exception) {
-                    if (exception != null) {
-                        future.completeExceptionally(exception);
-                    } else {
-                        future.complete(metadata);
-                    }
+            Callback callback = (metadata, exception) -> {
+                if (exception != null) {
+                    future.completeExceptionally(exception);
+                } else {
+                    future.complete(metadata);
                 }
             };
             producer.send(new ProducerRecord<>(rlmmConfig.remoteLogMetadataTopicName(), metadataPartitionNum, null,

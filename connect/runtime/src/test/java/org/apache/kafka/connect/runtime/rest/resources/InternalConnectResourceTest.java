@@ -188,7 +188,7 @@ public class InternalConnectResourceTest {
     }
 
     @Test
-    public void testFenceZombiesConnectorNotFound() throws Throwable {
+    public void testFenceZombiesConnectorNotFound() {
         @SuppressWarnings("unchecked")
         final ArgumentCaptor<Callback<Void>> cb = ArgumentCaptor.forClass(Callback.class);
 

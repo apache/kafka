@@ -101,32 +101,34 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         public void put(final DBAccessor accessor,
                         final byte[] key,
                         final byte[] valueWithTimestamp) {
-            if (valueWithTimestamp == null) {
-                try {
-                    accessor.delete(oldColumnFamily, key);
-                } catch (final RocksDBException e) {
-                    // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
-                    throw new ProcessorStateException("Error while removing key from store " + name, e);
-                }
-                try {
-                    accessor.delete(newColumnFamily, key);
-                } catch (final RocksDBException e) {
-                    // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
-                    throw new ProcessorStateException("Error while removing key from store " + name, e);
-                }
-            } else {
-                try {
-                    accessor.delete(oldColumnFamily, key);
-                } catch (final RocksDBException e) {
-                    // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
-                    throw new ProcessorStateException("Error while removing key from store " + name, e);
-                }
-                try {
-                    accessor.put(newColumnFamily, key, valueWithTimestamp);
-                    StoreQueryUtils.updatePosition(position, context);
-                } catch (final RocksDBException e) {
-                    // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
-                    throw new ProcessorStateException("Error while putting key/value into store " + name, e);
+            synchronized (position) {
+                if (valueWithTimestamp == null) {
+                    try {
+                        accessor.delete(oldColumnFamily, key);
+                    } catch (final RocksDBException e) {
+                        // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
+                        throw new ProcessorStateException("Error while removing key from store " + name, e);
+                    }
+                    try {
+                        accessor.delete(newColumnFamily, key);
+                    } catch (final RocksDBException e) {
+                        // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
+                        throw new ProcessorStateException("Error while removing key from store " + name, e);
+                    }
+                } else {
+                    try {
+                        accessor.delete(oldColumnFamily, key);
+                    } catch (final RocksDBException e) {
+                        // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
+                        throw new ProcessorStateException("Error while removing key from store " + name, e);
+                    }
+                    try {
+                        accessor.put(newColumnFamily, key, valueWithTimestamp);
+                        StoreQueryUtils.updatePosition(position, context);
+                    } catch (final RocksDBException e) {
+                        // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
+                        throw new ProcessorStateException("Error while putting key/value into store " + name, e);
+                    }
                 }
             }
         }

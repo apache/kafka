@@ -1,0 +1,45 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Docker Image CVE Scanner
+on:
+  schedule:
+    # This job will run at 3:30 UTC daily
+    - cron: '30 3 * * *'
+  workflow_dispatch:
+jobs:
+  scan_jvm:
+    if: github.repository == 'apache/kafka'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # This is an array of supported tags. Make sure this array only contains the supported tags
+        supported_image_tag: ['latest', '3.7.0']
+    steps:
+      - name: Run CVE scan
+        uses: aquasecurity/trivy-action@master
+        if: always()
+        with:
+          image-ref: apache/kafka:${{ matrix.supported_image_tag }}
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          output: scan_report_jvm_${{ matrix.supported_image_tag }}.txt
+          exit-code: '1'
+      - name: Upload CVE scan report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: scan_report_jvm_${{ matrix.supported_image_tag }}.txt
+          path: scan_report_jvm_${{ matrix.supported_image_tag }}.txt

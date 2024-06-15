@@ -1836,7 +1836,7 @@ public interface KStream<K, V> {
      * a value (with arbitrary type) for the result record.
      * The key of the result record is the same as for both joining input records.
      * Furthermore, for each input record of both {@code KStream}s that does not satisfy the join predicate the provided
-     * {@link ValueJoiner} will be called with a {@code null} value for the this/other stream, respectively.
+     * {@link ValueJoiner} will be called with a {@code null} value for this/other stream, respectively.
      * If an input record value is {@code null} the record will not be included in the join operation and thus no
      * output record will be added to the resulting {@code KStream}.
      * <p>
@@ -1917,7 +1917,7 @@ public interface KStream<K, V> {
      * Note that the key is read-only and should not be modified, as this can lead to undefined behaviour.
      * The key of the result record is the same as for both joining input records.
      * Furthermore, for each input record of both {@code KStream}s that does not satisfy the join predicate the provided
-     * {@link ValueJoinerWithKey} will be called with a {@code null} value for the this/other stream, respectively.
+     * {@link ValueJoinerWithKey} will be called with a {@code null} value for this/other stream, respectively.
      * If an input record value is {@code null} the record will not be included in the join operation and thus no
      * output record will be added to the resulting {@code KStream}.
      * <p>

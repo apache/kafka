@@ -53,10 +53,6 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
         String EXCLUDE = "exclude";
         String INCLUDE = "include";
 
-        // for backwards compatibility
-        String INCLUDE_ALIAS = "whitelist";
-        String EXCLUDE_ALIAS = "blacklist";
-
         String RENAME = "renames";
     }
 
