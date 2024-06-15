@@ -17,8 +17,6 @@
 
 package org.apache.kafka.connect.runtime.isolation;
 
-import java.net.URL;
-import java.nio.file.Paths;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.config.provider.FileConfigProvider;
 import org.apache.kafka.connect.json.JsonConverter;
@@ -28,8 +26,11 @@ import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.Before;
+import org.junit.Test;
+
+import java.net.URL;
+import java.nio.file.Paths;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
@@ -47,7 +48,7 @@ public class PluginDescTest {
     private PluginClassLoader pluginLoader;
     private PluginClassLoader otherPluginLoader;
 
-    @BeforeEach
+    @Before
     public void setUp() throws Exception {
         // Fairly simple use case, thus no need to create a random directory here yet.
         URL location = Paths.get("/tmp").toUri().toURL();

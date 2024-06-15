@@ -16,18 +16,6 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.SortedSet;
-import java.util.TreeSet;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
@@ -40,21 +28,34 @@ import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.tools.MockSinkConnector;
 import org.apache.kafka.connect.tools.MockSourceConnector;
 import org.apache.kafka.connect.transforms.Transformation;
+import org.junit.Before;
 import org.junit.Rule;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.SortedSet;
+import java.util.TreeSet;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class PluginUtilsTest {
     @Rule
     public TemporaryFolder rootDir = new TemporaryFolder();
     private Path pluginPath;
 
-    @BeforeEach
+    @Before
     public void setUp() throws Exception {
         pluginPath = rootDir.newFolder("plugins").toPath().toRealPath();
     }
@@ -190,9 +191,9 @@ public class PluginUtilsTest {
         // Classes in the API should never be loaded in isolation.
         for (String clazz : apiClasses) {
             assertFalse(
-                    PluginUtils.shouldLoadInIsolation(clazz),
-                    clazz + " from 'api' is loaded in isolation but should not be"
-                        );
+                clazz + " from 'api' is loaded in isolation but should not be",
+                PluginUtils.shouldLoadInIsolation(clazz)
+            );
         }
     }
 
@@ -221,8 +222,8 @@ public class PluginUtilsTest {
         );
         for (String clazz : runtimeClasses) {
             assertFalse(
-                    PluginUtils.shouldLoadInIsolation(clazz),
-                    clazz + " from 'runtime' is loaded in isolation but should not be"
+                clazz + " from 'runtime' is loaded in isolation but should not be",
+                PluginUtils.shouldLoadInIsolation(clazz)
             );
         }
     }
@@ -250,8 +251,8 @@ public class PluginUtilsTest {
         );
         for (String clazz : jsonConverterClasses) {
             assertTrue(
-                    PluginUtils.shouldLoadInIsolation(clazz),
-                    clazz + " from 'runtime' is not loaded in isolation but should be"
+                clazz + " from 'runtime' is not loaded in isolation but should be",
+                PluginUtils.shouldLoadInIsolation(clazz)
             );
         }
     }
@@ -305,8 +306,8 @@ public class PluginUtilsTest {
         );
         for (String clazz : transformsClasses) {
             assertTrue(
-                    PluginUtils.shouldLoadInIsolation(clazz),
-                    clazz + " from 'transforms' is not loaded in isolation but should be"
+                clazz + " from 'transforms' is not loaded in isolation but should be",
+                PluginUtils.shouldLoadInIsolation(clazz)
             );
         }
     }
@@ -324,8 +325,8 @@ public class PluginUtilsTest {
         );
         for (String clazz : jsonConverterClasses) {
             assertTrue(
-                    PluginUtils.shouldLoadInIsolation(clazz),
-                    clazz + " from 'json' is not loaded in isolation but should be"
+                clazz + " from 'json' is not loaded in isolation but should be",
+                PluginUtils.shouldLoadInIsolation(clazz)
             );
         }
     }
@@ -341,8 +342,8 @@ public class PluginUtilsTest {
         );
         for (String clazz : jsonConverterClasses) {
             assertTrue(
-                    PluginUtils.shouldLoadInIsolation(clazz),
-                    clazz + " from 'file' is not loaded in isolation but should be"
+                clazz + " from 'file' is not loaded in isolation but should be",
+                PluginUtils.shouldLoadInIsolation(clazz)
             );
         }
     }
@@ -356,8 +357,8 @@ public class PluginUtilsTest {
         );
         for (String clazz : basicAuthExtensionClasses) {
             assertTrue(
-                    PluginUtils.shouldLoadInIsolation(clazz),
-                    clazz + " from 'basic-auth-extension' is not loaded in isolation but should be"
+                clazz + " from 'basic-auth-extension' is not loaded in isolation but should be",
+                PluginUtils.shouldLoadInIsolation(clazz)
             );
         }
     }

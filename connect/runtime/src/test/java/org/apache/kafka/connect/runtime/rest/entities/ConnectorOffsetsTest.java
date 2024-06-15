@@ -16,10 +16,11 @@
  */
 package org.apache.kafka.connect.runtime.rest.entities;
 
+import org.junit.Test;
+
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
-import org.junit.jupiter.api.Test;
 
 import static org.junit.Assert.assertEquals;
 

@@ -16,32 +16,6 @@
  */
 package org.apache.kafka.connect.runtime.distributed;
 
-import javax.crypto.SecretKey;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.AbstractExecutorService;
-import java.util.concurrent.Callable;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-import java.util.function.Function;
-import java.util.function.Supplier;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
@@ -98,16 +72,41 @@ import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.FutureCallback;
 import org.apache.kafka.connect.util.Stage;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
+import org.mockito.junit.MockitoJUnitRunner;
 import org.mockito.stubbing.Answer;
+
+import javax.crypto.SecretKey;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.AbstractExecutorService;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.function.Function;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static java.util.Collections.singletonList;
 import static javax.ws.rs.core.Response.Status.FORBIDDEN;
@@ -123,12 +122,12 @@ import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.INT
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V1;
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V2;
 import static org.apache.kafka.connect.source.SourceTask.TransactionBoundary.CONNECTOR;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.AdditionalMatchers.leq;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -148,8 +147,7 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.withSettings;
 
-@ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.STRICT_STUBS)
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 @SuppressWarnings("unchecked")
 public class DistributedHerderTest {
     private static final Map<String, String> HERDER_CONFIG = new HashMap<>();
@@ -303,7 +301,7 @@ public class DistributedHerderTest {
     private final SampleConnectorClientConfigOverridePolicy
         noneConnectorClientConfigOverridePolicy = new SampleConnectorClientConfigOverridePolicy();
 
-    @BeforeEach
+    @Before
     public void setUp() throws Exception {
         time = new MockTime();
         metrics = new MockConnectMetrics(time);
@@ -325,7 +323,7 @@ public class DistributedHerderTest {
         when(herder.connectorType(anyMap())).thenReturn(ConnectorType.SOURCE);
     }
 
-    @AfterEach
+    @After
     public void tearDown() {
         if (metrics != null) metrics.stop();
         if (herderExecutor != null) {
@@ -1815,7 +1813,7 @@ public class DistributedHerderTest {
         herder.stopConnector(CONN1, cb); // external request
         herder.tick(); // continue
 
-        assertTrue(cb.isDone(), "Callback should already have been invoked by herder");
+        assertTrue("Callback should already have been invoked by herder", cb.isDone());
         cb.get(0, TimeUnit.MILLISECONDS);
 
         verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore);
@@ -1842,11 +1840,11 @@ public class DistributedHerderTest {
         herder.stopConnector(CONN1, cb); // external request
         herder.tick(); // continue
 
-        assertTrue(cb.isDone(), "Callback should already have been invoked by herder");
+        assertTrue("Callback should already have been invoked by herder", cb.isDone());
         ExecutionException e = assertThrows(
+                "Should not be able to handle request to stop connector when not leader",
                 ExecutionException.class,
-                () -> cb.get(0, TimeUnit.SECONDS),
-                "Should not be able to handle request to stop connector when not leader"
+                () -> cb.get(0, TimeUnit.SECONDS)
         );
         assertInstanceOf(NotLeaderException.class, e.getCause());
 
@@ -1882,11 +1880,11 @@ public class DistributedHerderTest {
         herder.stopConnector(CONN1, cb); // external request
         herder.tick(); // continue
 
-        assertTrue(cb.isDone(), "Callback should already have been invoked by herder");
+        assertTrue("Callback should already have been invoked by herder", cb.isDone());
         ExecutionException e = assertThrows(
+                "Should not be able to handle request to stop connector when not leader",
                 ExecutionException.class,
-                () -> cb.get(0, TimeUnit.SECONDS),
-                "Should not be able to handle request to stop connector when not leader"
+                () -> cb.get(0, TimeUnit.SECONDS)
         );
         assertEquals(e.getCause(), taskConfigsWriteException);
 
@@ -3617,8 +3615,8 @@ public class DistributedHerderTest {
         List<String> errors = validatedConfigs.get(SourceConnectorConfig.EXACTLY_ONCE_SUPPORT_CONFIG).errorMessages();
         assertFalse(errors.isEmpty());
         assertTrue(
-                errors.get(0).contains("The connector does not implement the API required for preflight validation of exactly-once source support."),
-                "Error message did not contain expected text: " + errors.get(0));
+                "Error message did not contain expected text: " + errors.get(0),
+                errors.get(0).contains("The connector does not implement the API required for preflight validation of exactly-once source support."));
         assertEquals(1, errors.size());
     }
 
@@ -3638,8 +3636,8 @@ public class DistributedHerderTest {
         List<String> errors = validatedConfigs.get(SourceConnectorConfig.EXACTLY_ONCE_SUPPORT_CONFIG).errorMessages();
         assertFalse(errors.isEmpty());
         assertTrue(
-                errors.get(0).contains(errorMessage),
-                "Error message did not contain expected text: " + errors.get(0));
+                "Error message did not contain expected text: " + errors.get(0),
+                errors.get(0).contains(errorMessage));
         assertEquals(1, errors.size());
     }
 
@@ -3674,8 +3672,8 @@ public class DistributedHerderTest {
         List<String> errors = validatedConfigs.get(SourceConnectorConfig.EXACTLY_ONCE_SUPPORT_CONFIG).errorMessages();
         assertFalse(errors.isEmpty());
         assertTrue(
-                errors.get(0).contains("String must be one of (case insensitive): "),
-                "Error message did not contain expected text: " + errors.get(0));
+                "Error message did not contain expected text: " + errors.get(0),
+                errors.get(0).contains("String must be one of (case insensitive): "));
         assertEquals(1, errors.size());
     }
 
@@ -3712,8 +3710,8 @@ public class DistributedHerderTest {
         List<String> errors = validatedConfigs.get(SourceConnectorConfig.TRANSACTION_BOUNDARY_CONFIG).errorMessages();
         assertFalse(errors.isEmpty());
         assertTrue(
-                errors.get(0).contains("The connector does not support connector-defined transaction boundaries with the given configuration."),
-                "Error message did not contain expected text: " + errors.get(0));
+                "Error message did not contain expected text: " + errors.get(0),
+                errors.get(0).contains("The connector does not support connector-defined transaction boundaries with the given configuration."));
         assertEquals(1, errors.size());
     }
 
@@ -3733,8 +3731,8 @@ public class DistributedHerderTest {
         List<String> errors = validatedConfigs.get(SourceConnectorConfig.TRANSACTION_BOUNDARY_CONFIG).errorMessages();
         assertFalse(errors.isEmpty());
         assertTrue(
-                errors.get(0).contains(errorMessage),
-                "Error message did not contain expected text: " + errors.get(0));
+                "Error message did not contain expected text: " + errors.get(0),
+                errors.get(0).contains(errorMessage));
         assertEquals(1, errors.size());
     }
 
@@ -3752,8 +3750,8 @@ public class DistributedHerderTest {
         List<String> errors = validatedConfigs.get(SourceConnectorConfig.TRANSACTION_BOUNDARY_CONFIG).errorMessages();
         assertFalse(errors.isEmpty());
         assertTrue(
-                errors.get(0).contains("String must be one of (case insensitive): "),
-                "Error message did not contain expected text: " + errors.get(0));
+                "Error message did not contain expected text: " + errors.get(0),
+                errors.get(0).contains("String must be one of (case insensitive): "));
         assertEquals(1, errors.size());
     }
 
@@ -4211,7 +4209,7 @@ public class DistributedHerderTest {
     private void stopBackgroundHerder() throws Exception {
         herder.stop();
         herderExecutor.shutdown();
-        assertTrue(herderExecutor.awaitTermination(10, TimeUnit.SECONDS), "herder thread did not finish in time");
+        assertTrue("herder thread did not finish in time", herderExecutor.awaitTermination(10, TimeUnit.SECONDS));
         herderFuture.get();
         assertTrue(noneConnectorClientConfigOverridePolicy.isClosed());
     }

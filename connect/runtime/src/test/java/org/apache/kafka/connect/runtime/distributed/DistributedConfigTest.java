@@ -17,6 +17,13 @@
 
 package org.apache.kafka.connect.runtime.distributed;
 
+import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
+
 import javax.crypto.KeyGenerator;
 import javax.crypto.Mac;
 import java.security.InvalidParameterException;
@@ -30,33 +37,24 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
 
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.INTER_WORKER_KEY_GENERATION_ALGORITHM_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.INTER_WORKER_SIGNATURE_ALGORITHM_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.INTER_WORKER_VERIFICATION_ALGORITHMS_CONFIG;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.STRICT_STUBS)
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class DistributedConfigTest {
 
     public Map<String, String> configs() {
@@ -150,8 +148,7 @@ public class DistributedConfigTest {
         Set<String> supportedAlgorithms = DistributedConfig.supportedAlgorithms(type);
         Set<String> unsupportedAlgorithms = new HashSet<>(Arrays.asList(expectedAlgorithms));
         unsupportedAlgorithms.removeAll(supportedAlgorithms);
-        assertEquals(Collections.emptySet(), unsupportedAlgorithms, 
-                type + " algorithms were found that should be supported by this JVM but are not");
+        assertEquals(type + " algorithms were found that should be supported by this JVM but are not", Collections.emptySet(), unsupportedAlgorithms);
     }
 
     @Test

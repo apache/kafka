@@ -16,26 +16,24 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
+import org.apache.kafka.connect.sink.SinkConnector;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
+
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.Collections;
 import java.util.SortedSet;
 import java.util.TreeSet;
-import org.apache.kafka.connect.sink.SinkConnector;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
 
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.STRICT_STUBS)
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class DelegatingClassLoaderTest {
 
     public PluginClassLoader parent;
@@ -57,7 +55,7 @@ public class DelegatingClassLoaderTest {
         }
     }
 
-    @BeforeEach
+    @Before
     @SuppressWarnings({"unchecked"})
     public void setUp() {
         parent = mock(PluginClassLoader.class);

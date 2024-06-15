@@ -16,14 +16,15 @@
  */
 package org.apache.kafka.connect.runtime.rest;
 
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
+import org.junit.Test;
+
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
-import org.junit.jupiter.api.Test;
 
 import static org.apache.kafka.connect.runtime.rest.RestServerConfig.LISTENERS_DEFAULT;
 import static org.junit.Assert.assertEquals;

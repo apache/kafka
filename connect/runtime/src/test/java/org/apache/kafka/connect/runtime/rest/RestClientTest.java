@@ -17,14 +17,6 @@
 
 package org.apache.kafka.connect.runtime.rest;
 
-import javax.crypto.SecretKey;
-import javax.ws.rs.core.Response;
-import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Objects;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeoutException;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -36,29 +28,35 @@ import org.eclipse.jetty.client.HttpClient;
 import org.eclipse.jetty.client.api.ContentResponse;
 import org.eclipse.jetty.client.api.Request;
 import org.junit.Rule;
+import org.junit.Test;
 import org.junit.experimental.runners.Enclosed;
-import org.junit.jupiter.api.Nested;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoJUnitRunner;
 import org.mockito.junit.MockitoRule;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+
+import javax.crypto.SecretKey;
+import javax.ws.rs.core.Response;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Objects;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
@@ -108,9 +106,8 @@ public class RestClientTest {
     }
 
 
-    @Nested
     @RunWith(Parameterized.class)
-    class RequestFailureParameterizedTest {
+    public static class RequestFailureParameterizedTest {
 
         @Rule
         public MockitoRule initRule = MockitoJUnit.rule().strictness(Strictness.STRICT_STUBS);
@@ -122,7 +119,7 @@ public class RestClientTest {
         public Throwable requestException;
         
         @Parameterized.Parameters
-        public Collection<Object[]> requestExceptions() {
+        public static Collection<Object[]> requestExceptions() {
             return Arrays.asList(new Object[][]{
                     {new InterruptedException()},
                     {new ExecutionException(null)},
@@ -130,7 +127,7 @@ public class RestClientTest {
             });
         }
 
-        private Request buildThrowingMockRequest(Throwable t) throws ExecutionException, InterruptedException, TimeoutException {
+        private static Request buildThrowingMockRequest(Throwable t) throws ExecutionException, InterruptedException, TimeoutException {
             Request req = mock(Request.class);
             when(req.header(anyString(), anyString())).thenReturn(req);
             when(req.send()).thenThrow(t);
@@ -150,14 +147,12 @@ public class RestClientTest {
     }
 
 
-    @Nested
-    @ExtendWith(MockitoExtension.class)
-    @MockitoSettings(strictness = Strictness.STRICT_STUBS)
-    class Tests {
+    @RunWith(MockitoJUnitRunner.StrictStubs.class)
+    public static class Tests {
         @Mock
         private HttpClient httpClient;
 
-        private String toJsonString(Object obj) {
+        private static String toJsonString(Object obj) {
             try {
                 return OBJECT_MAPPER.writeValueAsString(obj);
             } catch (JsonProcessingException e) {
