@@ -18,14 +18,13 @@
 package integration.kafka.admin
 
 import kafka.api.IntegrationTestHarness
+import kafka.server.KafkaConfig
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.errors.{InvalidProducerEpochException, ProducerFencedException}
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.coordinator.transaction.{TransactionLogConfigs, TransactionStateManagerConfigs}
-import org.apache.kafka.server.config.ServerLogConfigs
 import org.junit.jupiter.api.Assertions.{assertInstanceOf, assertThrows, assertTrue, fail}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Tag, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -33,6 +32,7 @@ import java.util.concurrent.ExecutionException
 import java.util.{Collections, Properties}
 import scala.collection.Seq
 
+@Tag("integration")
 class AdminFenceProducersIntegrationTest extends IntegrationTestHarness {
   override def brokerCount = 1
 
@@ -57,12 +57,12 @@ class AdminFenceProducersIntegrationTest extends IntegrationTestHarness {
 
   def overridingProps(): Properties = {
     val props = new Properties()
-    props.put(ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, false.toString)
+    props.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
     // Set a smaller value for the number of partitions for speed
-    props.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, 1.toString)
-    props.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, 1.toString)
-    props.put(TransactionLogConfigs.TRANSACTIONS_TOPIC_MIN_ISR_CONFIG, 1.toString)
-    props.put(TransactionStateManagerConfigs.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_CONFIG, "2000")
+    props.put(KafkaConfig.TransactionsTopicPartitionsProp, 1.toString)
+    props.put(KafkaConfig.TransactionsTopicReplicationFactorProp, 1.toString)
+    props.put(KafkaConfig.TransactionsTopicMinISRProp, 1.toString)
+    props.put(KafkaConfig.TransactionsAbortTimedOutTransactionCleanupIntervalMsProp, "2000")
     props
   }
 
