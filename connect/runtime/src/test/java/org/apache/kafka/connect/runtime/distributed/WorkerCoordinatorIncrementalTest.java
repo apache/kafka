@@ -120,7 +120,6 @@ public class WorkerCoordinatorIncrementalTest {
     }
 
     public void init(ConnectProtocolCompatibility compatibility) {
-        System.err.println("init:" + compatibility);
         LogContext loggerFactory = new LogContext();
 
         this.time = new MockTime();

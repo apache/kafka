@@ -60,13 +60,14 @@ import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.FutureCallback;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -111,6 +112,7 @@ import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.withSettings;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 @SuppressWarnings("unchecked")
 public class StandaloneHerderTest {
     private static final String CONNECTOR_NAME = "test";
@@ -141,12 +143,14 @@ public class StandaloneHerderTest {
     private final SampleConnectorClientConfigOverridePolicy
             noneConnectorClientConfigOverridePolicy = new SampleConnectorClientConfigOverridePolicy();
 
-    @BeforeEach
-    public void setup() throws ExecutionException, InterruptedException {
+    public void setup(boolean mockTransform) {
         herder = mock(StandaloneHerder.class, withSettings()
                 .useConstructor(worker, WORKER_ID, KAFKA_CLUSTER_ID, statusBackingStore, new MemoryConfigBackingStore(transformer), noneConnectorClientConfigOverridePolicy, new MockTime())
                 .defaultAnswer(CALLS_REAL_METHODS));
         createCallback = new FutureCallback<>();
+        final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
+        if (mockTransform)
+            when(transformer.transform(eq(CONNECTOR_NAME), configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
     }
 
     @AfterEach
@@ -157,8 +161,7 @@ public class StandaloneHerderTest {
 
     @Test
     public void testCreateSourceConnector() throws Exception {
-        final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
-        when(transformer.transform(eq(CONNECTOR_NAME), configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
+        setup(true);
         Map<String, String> connectorProps = mockStartConnector(SourceSink.SOURCE);
         Map<String, String> generatedTaskProps = taskConfig(SourceSink.SOURCE);
         ConnectorConfig connConfig = getConnectorConfig(SourceSink.SOURCE, connectorProps);
@@ -186,6 +189,7 @@ public class StandaloneHerderTest {
 
     @Test
     public void testCreateConnectorFailedValidation() {
+        setup(false);
         // Basic validation should be performed and return an error, but should still evaluate the connector's config
 
         Map<String, String> config = connectorConfig(SourceSink.SOURCE);
@@ -216,8 +220,7 @@ public class StandaloneHerderTest {
 
     @Test
     public void testCreateConnectorAlreadyExists() throws Throwable {
-        final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
-        when(transformer.transform(eq(CONNECTOR_NAME), configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
+        setup(true);
         // First addition should succeed
         Map<String, String> connectorProps = mockStartConnector(SourceSink.SOURCE);
         Map<String, String> generatedTaskProps = taskConfig(SourceSink.SOURCE);
@@ -256,8 +259,7 @@ public class StandaloneHerderTest {
 
     @Test
     public void testCreateSinkConnector() throws Exception {
-        final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
-        when(transformer.transform(eq(CONNECTOR_NAME), configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
+        setup(true);
         Map<String, String> connectorProps = mockStartConnector(SourceSink.SINK);
         Map<String, String> generatedTaskProps = taskConfig(SourceSink.SINK);
         ConnectorConfig connConfig = getConnectorConfig(SourceSink.SINK, connectorProps);
@@ -285,8 +287,7 @@ public class StandaloneHerderTest {
 
     @Test
     public void testCreateConnectorWithStoppedInitialState() throws Exception {
-        final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
-        when(transformer.transform(eq(CONNECTOR_NAME), configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
+        setup(true);
         Map<String, String> config = connectorConfig(SourceSink.SINK);
         expectConfigValidation(SourceSink.SINK, config);
 
@@ -307,8 +308,7 @@ public class StandaloneHerderTest {
 
     @Test
     public void testDestroyConnector() throws Exception {
-        final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
-        when(transformer.transform(eq(CONNECTOR_NAME), configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
+        setup(true);
         Map<String, String> connectorProps = mockStartConnector(SourceSink.SOURCE);
         Map<String, String> generatedTaskProps = taskConfig(SourceSink.SOURCE);
         ConnectorConfig connConfig = getConnectorConfig(SourceSink.SOURCE, connectorProps);
@@ -354,8 +354,7 @@ public class StandaloneHerderTest {
 
     @Test
     public void testRestartConnectorSameTaskConfigs() throws Exception {
-        final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
-        when(transformer.transform(eq(CONNECTOR_NAME), configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
+        setup(true);
         Map<String, String> connectorProps = mockStartConnector(SourceSink.SOURCE);
         Map<String, String> generatedTaskProps = taskConfig(SourceSink.SOURCE);
         ClusterConfigState configState = buildConfigState(connectorProps, generatedTaskProps);
@@ -394,9 +393,7 @@ public class StandaloneHerderTest {
 
     @Test
     public void testRestartConnectorNewTaskConfigs() throws Exception {
-        final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
-        when(transformer.transform(eq(CONNECTOR_NAME), configCapture.capture()))
-            .thenAnswer(invocation -> configCapture.getValue());
+        setup(true);
 
         Map<String, String> connectorProps = mockStartConnector(SourceSink.SOURCE);
         Map<String, String> generatedTaskProps = taskConfig(SourceSink.SOURCE);
@@ -444,8 +441,7 @@ public class StandaloneHerderTest {
 
     @Test
     public void testRestartConnectorFailureOnStart() throws Exception {
-        final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
-        when(transformer.transform(eq(CONNECTOR_NAME), configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
+        setup(true);
         Map<String, String> connectorProps = mockStartConnector(SourceSink.SOURCE);
         Map<String, String> generatedTaskProps = taskConfig(SourceSink.SOURCE);
         ClusterConfigState configState = buildConfigState(connectorProps, generatedTaskProps);
@@ -486,8 +482,7 @@ public class StandaloneHerderTest {
 
     @Test
     public void testRestartTask() throws Exception {
-        final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
-        when(transformer.transform(eq(CONNECTOR_NAME), configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
+        setup(true);
         ConnectorTaskId taskId = new ConnectorTaskId(CONNECTOR_NAME, 0);
         Map<String, String> connectorProps = mockStartConnector(SourceSink.SOURCE);
         Map<String, String> generatedTaskProps = taskConfig(SourceSink.SOURCE);
@@ -527,8 +522,7 @@ public class StandaloneHerderTest {
 
     @Test
     public void testRestartTaskFailureOnStart() throws Exception {
-        final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
-        when(transformer.transform(eq(CONNECTOR_NAME), configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
+        setup(true);
         ConnectorTaskId taskId = new ConnectorTaskId(CONNECTOR_NAME, 0);
         Map<String, String> connectorProps = mockStartConnector(SourceSink.SOURCE);
         Map<String, String> generatedTaskProps = taskConfig(SourceSink.SOURCE);
@@ -566,6 +560,7 @@ public class StandaloneHerderTest {
 
     @Test
     public void testRestartConnectorAndTasksUnknownConnector() {
+        setup(false);
         FutureCallback<ConnectorStateInfo> restartCallback = new FutureCallback<>();
         RestartRequest restartRequest = new RestartRequest("UnknownConnector", false, true);
         herder.restartConnectorAndTasks(restartRequest, restartCallback);
@@ -575,8 +570,7 @@ public class StandaloneHerderTest {
 
     @Test
     public void testRestartConnectorAndTasksNoStatus() throws Exception {
-        final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
-        when(transformer.transform(eq(CONNECTOR_NAME), configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
+        setup(true);
         RestartRequest restartRequest = new RestartRequest(CONNECTOR_NAME, false, true);
         doReturn(Optional.empty()).when(herder).buildRestartPlan(restartRequest);
         Map<String, String> connectorProps = mockStartConnector(SourceSink.SINK);
@@ -612,8 +606,7 @@ public class StandaloneHerderTest {
 
     @Test
     public void testRestartConnectorAndTasksNoRestarts() throws Exception {
-        final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
-        when(transformer.transform(eq(CONNECTOR_NAME), configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
+        setup(true);
         RestartRequest restartRequest = new RestartRequest(CONNECTOR_NAME, false, true);
         RestartPlan restartPlan = mock(RestartPlan.class);
         ConnectorStateInfo connectorStateInfo = mock(ConnectorStateInfo.class);
@@ -653,8 +646,7 @@ public class StandaloneHerderTest {
 
     @Test
     public void testRestartConnectorAndTasksOnlyConnector() throws Exception {
-        final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
-        when(transformer.transform(eq(CONNECTOR_NAME), configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
+        setup(true);
         RestartRequest restartRequest = new RestartRequest(CONNECTOR_NAME, false, true);
         RestartPlan restartPlan = mock(RestartPlan.class);
         ConnectorStateInfo connectorStateInfo = mock(ConnectorStateInfo.class);
@@ -698,8 +690,7 @@ public class StandaloneHerderTest {
 
     @Test
     public void testRestartConnectorAndTasksOnlyTasks() throws Exception {
-        final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
-        when(transformer.transform(eq(CONNECTOR_NAME), configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
+        setup(true);
         ConnectorTaskId taskId = new ConnectorTaskId(CONNECTOR_NAME, 0);
         RestartRequest restartRequest = new RestartRequest(CONNECTOR_NAME, false, true);
         RestartPlan restartPlan = mock(RestartPlan.class);
@@ -748,8 +739,7 @@ public class StandaloneHerderTest {
 
     @Test
     public void testRestartConnectorAndTasksBoth() throws Exception {
-        final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
-        when(transformer.transform(eq(CONNECTOR_NAME), configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
+        setup(true);
         ConnectorTaskId taskId = new ConnectorTaskId(CONNECTOR_NAME, 0);
         RestartRequest restartRequest = new RestartRequest(CONNECTOR_NAME, false, true);
         RestartPlan restartPlan = mock(RestartPlan.class);
@@ -802,8 +792,7 @@ public class StandaloneHerderTest {
 
     @Test
     public void testCreateAndStop() throws Exception {
-        final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
-        when(transformer.transform(eq(CONNECTOR_NAME), configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
+        setup(true);
         ConnectorTaskId taskId = new ConnectorTaskId(CONNECTOR_NAME, 0);
         Map<String, String> connectorProps = mockStartConnector(SourceSink.SOURCE);
         Map<String, String> generatedTaskProps = taskConfig(SourceSink.SOURCE);
@@ -841,8 +830,7 @@ public class StandaloneHerderTest {
 
     @Test
     public void testAccessors() throws Exception {
-        final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
-        when(transformer.transform(eq(CONNECTOR_NAME), configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
+        setup(true);
         Map<String, String> connConfig = connectorConfig(SourceSink.SOURCE);
         System.out.println(connConfig);
 
@@ -915,8 +903,7 @@ public class StandaloneHerderTest {
 
     @Test
     public void testPutConnectorConfig() throws Exception {
-        final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
-        when(transformer.transform(eq(CONNECTOR_NAME), configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
+        setup(true);
         Map<String, String> connConfig = connectorConfig(SourceSink.SOURCE);
         Map<String, String> newConnConfig = new HashMap<>(connConfig);
         newConnConfig.put("foo", "bar");
@@ -979,6 +966,7 @@ public class StandaloneHerderTest {
 
     @Test
     public void testPatchConnectorConfigNotFound() {
+        setup(false);
         Map<String, String> connConfigPatch = new HashMap<>();
         connConfigPatch.put("foo1", "baz1");
 
@@ -992,8 +980,7 @@ public class StandaloneHerderTest {
 
     @Test
     public void testPatchConnectorConfig() throws ExecutionException, InterruptedException, TimeoutException {
-        final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
-        when(transformer.transform(eq(CONNECTOR_NAME), configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
+        setup(true);
         // Create the connector.
         Map<String, String> originalConnConfig = connectorConfig(SourceSink.SOURCE);
         originalConnConfig.put("foo0", "unaffected");
@@ -1050,6 +1037,7 @@ public class StandaloneHerderTest {
 
     @Test
     public void testPutTaskConfigs() {
+        setup(false);
         Callback<Void> cb = mock(Callback.class);
 
         assertThrows(UnsupportedOperationException.class, () -> herder.putTaskConfigs(CONNECTOR_NAME,
@@ -1058,6 +1046,7 @@ public class StandaloneHerderTest {
 
     @Test
     public void testCorruptConfig() {
+        setup(false);
         Map<String, String> config = new HashMap<>();
         config.put(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME);
         config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, BogusSinkConnector.class.getName());
@@ -1100,8 +1089,7 @@ public class StandaloneHerderTest {
 
     @Test
     public void testTargetStates() throws Exception {
-        final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
-        when(transformer.transform(eq(CONNECTOR_NAME), configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
+        setup(true);
         Map<String, String> connectorProps = mockStartConnector(SourceSink.SOURCE);
         Map<String, String> generatedTaskProps = taskConfig(SourceSink.SOURCE);
         ClusterConfigState configState = buildConfigState(connectorProps, generatedTaskProps);
@@ -1152,6 +1140,7 @@ public class StandaloneHerderTest {
 
     @Test
     public void testModifyConnectorOffsetsUnknownConnector() {
+        setup(false);
         FutureCallback<Message> alterOffsetsCallback = new FutureCallback<>();
         herder.alterConnectorOffsets("unknown-connector",
                 Collections.singletonMap(Collections.singletonMap("partitionKey", "partitionValue"), Collections.singletonMap("offsetKey", "offsetValue")),
@@ -1167,6 +1156,7 @@ public class StandaloneHerderTest {
 
     @Test
     public void testModifyConnectorOffsetsConnectorNotInStoppedState() {
+        setup(false);
         Map<String, String> connectorConfig = connectorConfig(SourceSink.SOURCE);
 
         herder.configState = new ClusterConfigState(
@@ -1198,6 +1188,7 @@ public class StandaloneHerderTest {
 
     @Test
     public void testAlterConnectorOffsets() throws Exception {
+        setup(false);
         ArgumentCaptor<Callback<Message>> workerCallbackCapture = ArgumentCaptor.forClass(Callback.class);
         Message msg = new Message("The offsets for this connector have been altered successfully");
         doAnswer(invocation -> {
@@ -1229,6 +1220,7 @@ public class StandaloneHerderTest {
 
     @Test
     public void testResetConnectorOffsets() throws Exception {
+        setup(false);
         ArgumentCaptor<Callback<Message>> workerCallbackCapture = ArgumentCaptor.forClass(Callback.class);
         Message msg = new Message("The offsets for this connector have been reset successfully");
 
@@ -1257,10 +1249,9 @@ public class StandaloneHerderTest {
         assertEquals(msg, resetOffsetsCallback.get(1000, TimeUnit.MILLISECONDS));
     }
 
-    @Test()
+    @Test
     public void testRequestTaskReconfigurationDoesNotDeadlock() throws Exception {
-        final ArgumentCaptor<Map<String, String>> configCapture = ArgumentCaptor.forClass(Map.class);
-        when(transformer.transform(eq(CONNECTOR_NAME), configCapture.capture())).thenAnswer(invocation -> configCapture.getValue());
+        setup(true);
         Map<String, String> connectorProps = mockStartConnector(SourceSink.SOURCE);
         Map<String, String> generatedTaskProps = taskConfig(SourceSink.SOURCE);
         ConnectorConfig connConfig = getConnectorConfig(SourceSink.SOURCE, connectorProps);

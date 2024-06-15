@@ -114,6 +114,10 @@ public class SynchronizationTest {
             barrier = new CyclicBarrier(2);
         }
 
+        /**
+         * From a thread under test, await for the test orchestrator to continue execution
+         * @param obj Object to test with the breakpoint's current predicate
+         */
         public void await(T obj) {
             Predicate<T> predicate;
             CyclicBarrier barrier;
@@ -133,6 +137,12 @@ public class SynchronizationTest {
             }
         }
 
+        /**
+         * From the test orchestrating thread, await for the test thread to continue execution
+         * @throws InterruptedException If the current thread is interrupted while waiting
+         * @throws BrokenBarrierException If the test thread is interrupted while waiting
+         * @throws TimeoutException If the barrier is not reached before 1s passes.
+         */
         public void testAwait()
             throws InterruptedException, BrokenBarrierException, TimeoutException {
             CyclicBarrier barrier;
@@ -209,6 +219,7 @@ public class SynchronizationTest {
 
     @Test
     @Timeout(15)
+    // If the test times out, then there's a deadlock in the test but not necessarily the code
     public void testSimultaneousUpwardAndDownwardDelegating() throws Exception {
         String t1Class = TestPlugins.TestPlugin.SAMPLING_CONVERTER.className();
         // Grab a reference to the target PluginClassLoader before activating breakpoints
