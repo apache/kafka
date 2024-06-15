@@ -58,10 +58,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class CompletedFetchTest {
 
-    private final static String TOPIC_NAME = "test";
-    private final static TopicPartition TP = new TopicPartition(TOPIC_NAME, 0);
-    private final static long PRODUCER_ID = 1000L;
-    private final static short PRODUCER_EPOCH = 0;
+    private static final String TOPIC_NAME = "test";
+    private static final TopicPartition TP = new TopicPartition(TOPIC_NAME, 0);
+    private static final long PRODUCER_ID = 1000L;
+    private static final short PRODUCER_EPOCH = 0;
 
     @Test
     public void testSimple() {

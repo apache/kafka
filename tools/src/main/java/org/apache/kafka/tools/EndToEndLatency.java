@@ -54,9 +54,9 @@ import java.util.stream.Collectors;
  * <p> e.g. [localhost:9092 test 10000 1 20] </p>
  */
 public class EndToEndLatency {
-    private final static long POLL_TIMEOUT_MS = 60000;
-    private final static short DEFAULT_REPLICATION_FACTOR = 1;
-    private final static int DEFAULT_NUM_PARTITIONS = 1;
+    private static final long POLL_TIMEOUT_MS = 60000;
+    private static final short DEFAULT_REPLICATION_FACTOR = 1;
+    private static final int DEFAULT_NUM_PARTITIONS = 1;
 
     public static void main(String... args) {
         Exit.exit(mainNoExit(args));

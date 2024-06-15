@@ -81,14 +81,14 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         }
     }
 
-    private final static Consumer<Throwable> NO_OP_HANDLER = ex -> { };
+    private static final Consumer<Throwable> NO_OP_HANDLER = ex -> { };
 
     /**
      * When waiting for the metadata layer to commit batches, we block the migration driver thread for this
      * amount of time. A large value is selected to avoid timeouts in the common case, but prevent us from
      * blocking indefinitely.
      */
-    final static int METADATA_COMMIT_MAX_WAIT_MS = 300_000;
+    static final int METADATA_COMMIT_MAX_WAIT_MS = 300_000;
 
     private final Time time;
     private final Logger log;

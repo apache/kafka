@@ -53,7 +53,7 @@ public abstract class KafkaFuture<T> implements Future<T> {
      * @deprecated Since Kafka 3.0. Use the {@link BaseFunction} functional interface.
      */
     @Deprecated
-    public static abstract class Function<A, B> implements BaseFunction<A, B> { }
+    public abstract static class Function<A, B> implements BaseFunction<A, B> { }
 
     /**
      * A consumer of two different types of object.

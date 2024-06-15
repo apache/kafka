@@ -21,6 +21,7 @@ import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.MetadataRecoveryStrategy;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NodeApiVersions;
@@ -372,7 +373,7 @@ public class FetchRequestManagerTest {
         // NOTE: by design the FetchRequestManager doesn't perform network I/O internally. That means that calling
         // the close() method with a Timer will NOT send out the close session requests on close. The network
         // I/O logic is handled inside ConsumerNetworkThread.runAtClose, so we need to run that logic here.
-        ConsumerNetworkThread.runAtClose(singletonList(Optional.of(fetcher)), networkClientDelegate, timer);
+        ConsumerNetworkThread.runAtClose(singletonList(Optional.of(fetcher)), networkClientDelegate);
         // the network is polled during the last state of clean up.
         networkClientDelegate.poll(time.timer(1));
         // validate that closing the fetcher has sent a request with final epoch. 2 requests are sent, one for the
@@ -1912,7 +1913,8 @@ public class FetchRequestManagerTest {
         Node node = cluster.nodes().get(0);
         NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
                 1000, 1000, 64 * 1024, 64 * 1024, 1000, 10 * 1000, 127 * 1000,
-                time, true, new ApiVersions(), metricsManager.throttleTimeSensor(), new LogContext());
+                time, true, new ApiVersions(), metricsManager.throttleTimeSensor(), new LogContext(),
+                MetadataRecoveryStrategy.NONE);
 
         ApiVersionsResponse apiVersionsResponse = TestUtils.defaultApiVersionsResponse(
                 400, ApiMessageType.ListenerType.ZK_BROKER);

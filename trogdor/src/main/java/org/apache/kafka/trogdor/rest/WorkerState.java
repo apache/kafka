@@ -17,12 +17,13 @@
 
 package org.apache.kafka.trogdor.rest;
 
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.trogdor.task.TaskSpec;
+
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.JsonNode;
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.trogdor.task.TaskSpec;
 
 /**
  * The state which a worker is in on the Agent.

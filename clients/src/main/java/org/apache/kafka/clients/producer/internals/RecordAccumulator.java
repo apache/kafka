@@ -293,7 +293,7 @@ public class RecordAccumulator {
                                      boolean abortOnNewBatch,
                                      long nowMs,
                                      Cluster cluster) throws InterruptedException {
-        TopicInfo topicInfo = topicInfoMap.computeIfAbsent(topic, k -> new TopicInfo(logContext, k, batchSize));
+        TopicInfo topicInfo = topicInfoMap.computeIfAbsent(topic, k -> new TopicInfo(createBuiltInPartitioner(logContext, k, batchSize)));
 
         // We keep track of the number of appending thread to make sure we do not miss batches in
         // abortIncompleteBatches().
@@ -1033,8 +1033,13 @@ public class RecordAccumulator {
      * Get the deque for the given topic-partition, creating it if necessary.
      */
     private Deque<ProducerBatch> getOrCreateDeque(TopicPartition tp) {
-        TopicInfo topicInfo = topicInfoMap.computeIfAbsent(tp.topic(), k -> new TopicInfo(logContext, k, batchSize));
+        TopicInfo topicInfo = topicInfoMap.computeIfAbsent(tp.topic(),
+                k -> new TopicInfo(createBuiltInPartitioner(logContext, k, batchSize)));
         return topicInfo.batches.computeIfAbsent(tp.partition(), k -> new ArrayDeque<>());
+    }
+
+    BuiltInPartitioner createBuiltInPartitioner(LogContext logContext, String topic, int stickyBatchSize) {
+        return new BuiltInPartitioner(logContext, topic, stickyBatchSize);
     }
 
     /**
@@ -1208,7 +1213,7 @@ public class RecordAccumulator {
     /*
      * Metadata about a record just appended to the record accumulator
      */
-    public final static class RecordAppendResult {
+    public static final class RecordAppendResult {
         public final FutureRecordMetadata future;
         public final boolean batchIsFull;
         public final boolean newBatchCreated;
@@ -1242,7 +1247,7 @@ public class RecordAccumulator {
     /*
      * The set of nodes that have at least one complete record batch in the accumulator
      */
-    public final static class ReadyCheckResult {
+    public static final class ReadyCheckResult {
         public final Set<Node> readyNodes;
         public final long nextReadyCheckDelayMs;
         public final Set<String> unknownLeaderTopics;
@@ -1261,8 +1266,8 @@ public class RecordAccumulator {
         public final ConcurrentMap<Integer /*partition*/, Deque<ProducerBatch>> batches = new CopyOnWriteMap<>();
         public final BuiltInPartitioner builtInPartitioner;
 
-        public TopicInfo(LogContext logContext, String topic, int stickyBatchSize) {
-            builtInPartitioner = new BuiltInPartitioner(logContext, topic, stickyBatchSize);
+        public TopicInfo(BuiltInPartitioner builtInPartitioner) {
+            this.builtInPartitioner = builtInPartitioner;
         }
     }
 
@@ -1270,9 +1275,9 @@ public class RecordAccumulator {
      * Node latency stats for each node that are used for adaptive partition distribution
      * Visible for testing
      */
-    public final static class NodeLatencyStats {
-        volatile public long readyTimeMs;  // last time the node had batches ready to send
-        volatile public long drainTimeMs;  // last time the node was able to drain batches
+    public static final class NodeLatencyStats {
+        public volatile long readyTimeMs;  // last time the node had batches ready to send
+        public volatile long drainTimeMs;  // last time the node was able to drain batches
 
         NodeLatencyStats(long nowMs) {
             readyTimeMs = nowMs;

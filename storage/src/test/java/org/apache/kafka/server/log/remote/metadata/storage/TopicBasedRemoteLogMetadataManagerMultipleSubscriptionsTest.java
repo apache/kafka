@@ -27,7 +27,6 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
@@ -58,7 +57,7 @@ import static org.mockito.Mockito.verify;
 @ClusterTestDefaults(brokers = 3)
 public class TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest {
     private final ClusterInstance clusterInstance;
-    private final Time time = new SystemTime();
+    private final Time time = Time.SYSTEM;
 
     TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest(ClusterInstance clusterInstance) {
         this.clusterInstance = clusterInstance;

@@ -26,7 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-final public class LeaderRecoveryStateTest {
+public final class LeaderRecoveryStateTest {
     private static final byte NO_CHANGE = (byte) -1;
 
     @Test

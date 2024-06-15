@@ -22,6 +22,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -56,11 +57,12 @@ import org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment.Assi
 import org.apache.kafka.streams.processor.assignment.KafkaStreamsAssignment.AssignedTask.Type;
 import org.apache.kafka.streams.processor.assignment.KafkaStreamsState;
 import org.apache.kafka.streams.processor.assignment.ProcessId;
+import org.apache.kafka.streams.processor.assignment.TaskAssignor;
+import org.apache.kafka.streams.processor.assignment.assignors.StickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentListener;
 import org.apache.kafka.streams.processor.internals.assignment.HighAvailabilityTaskAssignor;
-import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.AfterClass;
@@ -85,7 +87,9 @@ import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.produceSynchronously;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.readExactNumRecordsFromOffset;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.RACK_AWARE_ASSIGNMENT_TAG_KEYS;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.sameInstance;
@@ -165,7 +169,7 @@ public class TaskAssignorIntegrationTest {
         final AtomicBoolean taskAssignorErrored = new AtomicBoolean(false);
     }
 
-    public static class NewStyleTaskAssignor implements org.apache.kafka.streams.processor.assignment.TaskAssignor {
+    public static class CustomTaskAssignor implements TaskAssignor {
 
         AtomicBoolean assignPartition0;
         AtomicBoolean assignPartition1;
@@ -229,11 +233,11 @@ public class TaskAssignorIntegrationTest {
 
     @Test
     public void shouldProperlyConfigureNewPublicTaskAssignorAndFollowCustomAssignmentLogic() throws NoSuchFieldException, IllegalAccessException, InterruptedException {
-        final Class<NewStyleTaskAssignor> taskAssignorClassToUse = NewStyleTaskAssignor.class;
+        final Class<CustomTaskAssignor> taskAssignorClassToUse = CustomTaskAssignor.class;
         final ConfigContainer assignorConfigs = new ConfigContainer();
 
         // Should choose to use the new assignor if both configs are set
-        configMap.put(StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, OldStyleTaskAssignor.class.getName());
+        configMap.put(StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, MyLegacyTaskAssignor.class.getName());
         configMap.put(StreamsConfig.TASK_ASSIGNOR_CLASS_CONFIG, taskAssignorClassToUse.getName());
 
         configMap.put(CONTAINER_CONFIG, assignorConfigs);
@@ -285,39 +289,66 @@ public class TaskAssignorIntegrationTest {
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
             // only assign partition 0 at the start, so we should only get data from task 0_0 at first
             assignorConfigs.assignPartition0.set(true);
-            assignorConfigs.assignPartition1.set(false);
-            assignorConfigs.assignPoisonPartition2.set(false);
 
             kafkaStreams.start();
 
             validateConfiguration(taskAssignorClassToUse, configuredAssignmentListener, kafkaStreams);
 
-            IntegrationTestUtils.waitForApplicationState(Collections.singletonList(kafkaStreams), State.RUNNING, Duration.ofSeconds(30));
+            waitForStreamsState(kafkaStreams, State.RUNNING);
 
             assertThat(assignorConfigs.taskAssignorConfigured.get(), is((true)));
             assertThat(assignorConfigs.taskAssignorErrored.get(), is((false)));
 
-            long startOffset = 0L;
-            verifyOutputRecordsForInputPartition(String.valueOf(PARTITION_0), startOffset);
+            verifyOutputRecordsForInputPartition(String.valueOf(PARTITION_0), 0L);
 
-            //allow partition 1 to be assigned and bounce the node
-            // verify output for partition 1
+            // allow partition 1 to be assigned and verify we now get output for partition 1
+            assignorConfigs.assignPartition1.set(true);
+            triggerRebalance(kafkaStreams);
+            waitForStreamsState(kafkaStreams, State.RUNNING);
 
-            // make sure it can reach running with no tasks assigned
+            verifyOutputRecordsForInputPartition(String.valueOf(PARTITION_1), NUM_RECORDS_PER_PARTITION);
 
-            // allow poison pill partition to be assigned and bounce the node
-            // verify client enters error state
+            // assign no tasks at all and make sure it can reach RUNNING
+            assignorConfigs.assignPartition0.set(false);
+            assignorConfigs.assignPartition1.set(false);
+            triggerRebalance(kafkaStreams);
+            waitForStreamsState(kafkaStreams, State.RUNNING);
+
+            // finally allow the "poison pill" partition 2 to be assigned and verify Streams goes into ERROR
+            assignorConfigs.assignPoisonPartition2.set(true);
+            triggerRebalance(kafkaStreams);
+            waitForStreamsState(kafkaStreams, State.ERROR);
+        }
+    }
+
+    @Test
+    public void shouldUseStickyTaskAssignor() throws Exception {
+        final Class<StickyTaskAssignor> taskAssignorClass = StickyTaskAssignor.class;
+
+        // Should use the new assignor if it's configured and the internal legacy assignor config is not
+        configMap.put(StreamsConfig.TASK_ASSIGNOR_CLASS_CONFIG, taskAssignorClass.getName());
+        final Properties properties = mkObjectProperties(configMap);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        builder.stream(inputTopic);
+
+        try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
+            kafkaStreams.start();
+
+            validateConfiguration(taskAssignorClass, configuredAssignmentListener, kafkaStreams);
+
+            waitForStreamsState(kafkaStreams, State.RUNNING);
         }
     }
 
     // Just a dummy implementation so we can check the config
-    public static final class OldStyleTaskAssignor extends HighAvailabilityTaskAssignor implements TaskAssignor { }
+    public static final class MyLegacyTaskAssignor extends HighAvailabilityTaskAssignor { }
 
     @Test
-    public void shouldProperlyConfigureOldInternalAssignor() throws NoSuchFieldException, IllegalAccessException {
-        final Class<OldStyleTaskAssignor> taskAssignorClass = OldStyleTaskAssignor.class;
+    public void shouldProperlyConfigureLegacyTaskAssignor() throws Exception {
+        final Class<MyLegacyTaskAssignor> taskAssignorClass = MyLegacyTaskAssignor.class;
 
-        // Should use the old internal assignor if it's configured while the new public assignor config is not
+        // Should use the legacy assignor if it's configured while the new public assignor config is not
         configMap.put(StreamsConfig.InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, taskAssignorClass.getName());
         final Properties properties = mkObjectProperties(configMap);
 
@@ -328,6 +359,8 @@ public class TaskAssignorIntegrationTest {
             kafkaStreams.start();
 
             validateConfiguration(taskAssignorClass, configuredAssignmentListener, kafkaStreams);
+
+            waitForStreamsState(kafkaStreams, State.RUNNING);
         }
     }
 
@@ -336,8 +369,8 @@ public class TaskAssignorIntegrationTest {
     // to extract all these fields, so reflection is a good choice until we find that the maintenance
     // burden is too high.
     //
-    // Also note that this is an integration test because so many components have to come together to
-    // ensure these configurations wind up where they belong, and any number of future code changes
+    // Also note that this  has to be done in an integration test because so many components have to come together
+    // to ensure these configurations wind up where they belong, and any number of future code changes
     // could break this change.
     @SuppressWarnings("unchecked")
     private void validateConfiguration(final Class<?> taskAssignorClass,
@@ -374,24 +407,27 @@ public class TaskAssignorIntegrationTest {
         assertThat(configs.acceptableRecoveryLag(), is(6L));
         assertThat(configs.maxWarmupReplicas(), is(7));
         assertThat(configs.probingRebalanceIntervalMs(), is(480000L));
+        assertThat(configs.rackAwareTrafficCost(), is(OptionalInt.of(11)));
+        assertThat(configs.rackAwareNonOverlapCost(), is(OptionalInt.of(12)));
+        assertThat(configs.rackAwareAssignmentStrategy(), is(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC));
+        assertThat(configs.rackAwareAssignmentTags(), is(RACK_AWARE_ASSIGNMENT_TAG_KEYS));
         assertThat(actualAssignmentListener, sameInstance(configuredAssignmentListener));
 
-        if (TaskAssignor.class.isAssignableFrom(taskAssignorClass)) {
-            // Old/internal task assignor interface
-            final Field taskAssignorSupplierField = StreamsPartitionAssignor.class.getDeclaredField("internalTaskAssignorSupplier");
-            taskAssignorSupplierField.setAccessible(true);
-            final Supplier<TaskAssignor> taskAssignorSupplier =
-                (Supplier<TaskAssignor>) taskAssignorSupplierField.get(streamsPartitionAssignor);
-            final TaskAssignor oldTaskAssignor = taskAssignorSupplier.get();
+        if (MyLegacyTaskAssignor.class.isAssignableFrom(taskAssignorClass)) {
+            final Field legacytaskAssignorSupplierField = StreamsPartitionAssignor.class.getDeclaredField("legacyTaskAssignorSupplier");
+            legacytaskAssignorSupplierField.setAccessible(true);
+            final Supplier<MyLegacyTaskAssignor> legacyTaskAssignorSupplier =
+                (Supplier<MyLegacyTaskAssignor>) legacytaskAssignorSupplierField.get(streamsPartitionAssignor);
+            final MyLegacyTaskAssignor legacyTaskAssignor = legacyTaskAssignorSupplier.get();
 
-            assertThat(oldTaskAssignor, instanceOf(taskAssignorClass));
-        } else if (org.apache.kafka.streams.processor.assignment.TaskAssignor.class.isAssignableFrom(taskAssignorClass)) {
+            assertThat(legacyTaskAssignor, instanceOf(taskAssignorClass));
+        } else if (TaskAssignor.class.isAssignableFrom(taskAssignorClass)) {
             // New/public task assignor interface
             final Field taskAssignorSupplierField = StreamsPartitionAssignor.class.getDeclaredField("customTaskAssignorSupplier");
             taskAssignorSupplierField.setAccessible(true);
-            final Supplier<Optional<org.apache.kafka.streams.processor.assignment.TaskAssignor>> taskAssignorSupplier =
-                (Supplier<Optional<org.apache.kafka.streams.processor.assignment.TaskAssignor>>) taskAssignorSupplierField.get(streamsPartitionAssignor);
-            final Optional<org.apache.kafka.streams.processor.assignment.TaskAssignor> newTaskAssignor = taskAssignorSupplier.get();
+            final Supplier<Optional<TaskAssignor>> taskAssignorSupplier =
+                (Supplier<Optional<TaskAssignor>>) taskAssignorSupplierField.get(streamsPartitionAssignor);
+            final Optional<TaskAssignor> newTaskAssignor = taskAssignorSupplier.get();
 
             assertThat(newTaskAssignor.isPresent(), is(true));
             assertThat(newTaskAssignor.get(), instanceOf(taskAssignorClass));
@@ -408,7 +444,15 @@ public class TaskAssignorIntegrationTest {
         final List<KeyValue<String, String>> output =
             readExactNumRecordsFromOffset(outputTopic, 0, startOffset, NUM_RECORDS_PER_PARTITION, configMap);
 
+        assertThat(output.size(), equalTo(NUM_RECORDS_PER_PARTITION));
+
         for (final KeyValue<String, String> record : output) {
+            // Check keys to make sure we only processed records from the given input partition
+            assertThat(record.key, equalTo(inputPartition));
+
+            // Check values to make sure we fully processed these records
+            assertThat(record.value, equalTo(inputPartition));
+
             if (!record.key.equals(inputPartition)) {
                 throw new AssertionError(String.format("Output record key did not match expected partition: key=%s and partition=%s", record.key, inputPartition));
             } else if (!record.value.equals(inputPartition)) {
@@ -428,23 +472,43 @@ public class TaskAssignorIntegrationTest {
     }
 
     private static Map<String, Object> basicConfigs(final String appId, final AssignmentListener configuredAssignmentListener) {
-        return mkMap(
+        final Map<String, Object> configMap = mkMap(
             mkEntry(StreamsConfig.InternalConfig.ASSIGNMENT_LISTENER, configuredAssignmentListener),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
             mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-            mkEntry(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, "5"),
-            mkEntry(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, "6"),
-            mkEntry(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, "7"),
-            mkEntry(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, "480000"),
+
             mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),
             mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class),
             mkEntry(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class),
             mkEntry(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class),
             mkEntry(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class),
-            mkEntry(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class)
+            mkEntry(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class),
+
+            // assignor configs
+            mkEntry(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, "5"),
+            mkEntry(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, "6"),
+            mkEntry(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, "7"),
+            mkEntry(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, "480000"),
+            mkEntry(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG, StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC),
+            mkEntry(StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG, 11),
+            mkEntry(StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG, 12),
+            mkEntry(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, "480000"),
+            mkEntry(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, String.join(",", RACK_AWARE_ASSIGNMENT_TAG_KEYS)),
+            mkEntry(ConsumerConfig.CLIENT_RACK_CONFIG, "rack1")
         );
+        RACK_AWARE_ASSIGNMENT_TAG_KEYS.forEach(key -> configMap.put(StreamsConfig.clientTagPrefix(key), "dummy"));
+
+        return configMap;
     }
 
+    private static void waitForStreamsState(final KafkaStreams kafkaStreams, final State state) throws InterruptedException {
+        IntegrationTestUtils.waitForApplicationState(Collections.singletonList(kafkaStreams), state, Duration.ofSeconds(30));
+    }
+
+    private static void triggerRebalance(final KafkaStreams kafkaStreams) {
+        kafkaStreams.removeStreamThread();
+        kafkaStreams.addStreamThread();
+    }
 
 }

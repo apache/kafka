@@ -28,15 +28,15 @@ import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class DefaultPartitionerTest {
-    private final static byte[] KEY_BYTES = "key".getBytes();
-    private final static Node[] NODES = new Node[] {
+    private static final byte[] KEY_BYTES = "key".getBytes();
+    private static final Node[] NODES = new Node[] {
         new Node(0, "localhost", 99),
         new Node(1, "localhost", 100),
         new Node(12, "localhost", 101)
     };
-    private final static String TOPIC = "test";
+    private static final String TOPIC = "test";
     // Intentionally make the partition list not in partition order to test the edge cases.
-    private final static List<PartitionInfo> PARTITIONS = asList(new PartitionInfo(TOPIC, 1, null, NODES, NODES),
+    private static final List<PartitionInfo> PARTITIONS = asList(new PartitionInfo(TOPIC, 1, null, NODES, NODES),
                                                     new PartitionInfo(TOPIC, 2, NODES[1], NODES, NODES),
                                                     new PartitionInfo(TOPIC, 0, NODES[0], NODES, NODES));
 

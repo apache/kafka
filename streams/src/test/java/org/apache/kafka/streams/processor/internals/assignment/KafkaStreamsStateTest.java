@@ -31,7 +31,6 @@ import java.util.Arrays;
 import java.util.Optional;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.UUID;
 import org.apache.kafka.streams.processor.assignment.KafkaStreamsState;
 import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.junit.Test;
@@ -40,7 +39,7 @@ public class KafkaStreamsStateTest {
     @Test
     public void shouldCorrectlyReturnTasksByLag() {
         final KafkaStreamsState state = new DefaultKafkaStreamsState(
-            new ProcessId(UUID.randomUUID()),
+            ProcessId.randomProcessId(),
             10,
             mkMap(),
             mkSortedSet(NAMED_TASK_T0_0_0, NAMED_TASK_T0_0_1),
@@ -71,7 +70,7 @@ public class KafkaStreamsStateTest {
     @Test
     public void shouldThrowExceptionOnLagOperationsIfLagsWereNotComputed() {
         final KafkaStreamsState state = new DefaultKafkaStreamsState(
-            new ProcessId(UUID.randomUUID()),
+            ProcessId.randomProcessId(),
             10,
             mkMap(),
             mkSortedSet(NAMED_TASK_T0_0_0, NAMED_TASK_T0_0_1),

@@ -16,9 +16,10 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.raft.internals.ReplicaKey;
+
 import java.io.Closeable;
 import java.util.Optional;
-import org.apache.kafka.raft.internals.ReplicaKey;
 
 public interface EpochState extends Closeable {
 

@@ -202,26 +202,10 @@ def determineCommitId() {
 }
 
 def excludedSpotlessModules = [':clients',
-                               ':connect:api',
-                               ':connect:basic-auth-extension',
-                               ':connect:file',
-                               ':connect:json',
-                               ':connect:mirror',
-                               ':connect:mirror-client',
                                ':connect:runtime',
-                               ':connect:test-plugins',
-                               ':connect:transforms',
                                ':core',
-                               ':examples',
-                               ':generator',
-                               ':group-coordinator:group-coordinator-api', // https://github.com/apache/kafka/pull/16198
-                               ':group-coordinator',
-                               ':jmh-benchmarks',
-                               ':log4j-appender',
                                ':metadata',
-                               ':raft',
                                ':server',
-                               ':shell',
                                ':storage',
                                ':storage:storage-api', //  rename in settings.gradle
                                ':streams',
@@ -250,8 +234,7 @@ def excludedSpotlessModules = [':clients',
                                ':streams:upgrade-system-tests-34',
                                ':streams:upgrade-system-tests-35',
                                ':streams:upgrade-system-tests-36',
-                               ':streams:upgrade-system-tests-37',
-                               ':trogdor']
+                               ':streams:upgrade-system-tests-37']
 
 
 apply from: file('wrapper.gradle')
@@ -441,9 +424,6 @@ subprojects {
     }
   }
 
-  // Remove the relevant project name once it's converted to JUnit 5
-  def shouldUseJUnit5 = !(["runtime"].contains(it.project.name))
-
   def testLoggingEvents = ["passed", "skipped", "failed"]
   def testShowStandardStreams = false
   def testExceptionFormat = 'full'
@@ -536,8 +516,7 @@ subprojects {
 
     exclude testsToExclude
 
-    if (shouldUseJUnit5)
-      useJUnitPlatform()
+    useJUnitPlatform()
 
     retry {
       maxRetries = userMaxTestRetries
@@ -564,23 +543,18 @@ subprojects {
 
     exclude testsToExclude
 
-    if (shouldUseJUnit5) {
-      if (project.name == 'streams') {
-        useJUnitPlatform {
-          includeTags "integration"
-          includeTags "org.apache.kafka.test.IntegrationTest"
-	  // Both engines are needed to run JUnit 4 tests alongside JUnit 5 tests.
-          // junit-vintage (JUnit 4) can be removed once the JUnit 4 migration is complete.
-          includeEngines "junit-vintage", "junit-jupiter"
-        }
-      } else {
-        useJUnitPlatform {
-          includeTags "integration"
-        }
+    if (project.name == 'streams') {
+      useJUnitPlatform {
+        includeTags "integration"
+        includeTags "org.apache.kafka.test.IntegrationTest"
+        // Both engines are needed to run JUnit 4 tests alongside JUnit 5 tests.
+        // junit-vintage (JUnit 4) can be removed once the JUnit 4 migration is complete.
+        includeEngines "junit-vintage", "junit-jupiter"
       }
     } else {
-      useJUnit {
-        includeCategories 'org.apache.kafka.test.IntegrationTest'
+      useJUnitPlatform {
+        includeTags "integration"
+        includeTags 'org.apache.kafka.test.IntegrationTest'
       }
     }
 
@@ -607,23 +581,18 @@ subprojects {
 
     exclude testsToExclude
 
-    if (shouldUseJUnit5) {
-      if (project.name == 'streams') {
-        useJUnitPlatform {
-          excludeTags "integration"
-          excludeTags "org.apache.kafka.test.IntegrationTest"
-	  // Both engines are needed to run JUnit 4 tests alongside JUnit 5 tests.
-          // junit-vintage (JUnit 4) can be removed once the JUnit 4 migration is complete.
-          includeEngines "junit-vintage", "junit-jupiter"
-        }
-      } else {
-        useJUnitPlatform {
-          excludeTags "integration"
-        }
+    if (project.name == 'streams') {
+      useJUnitPlatform {
+        excludeTags "integration"
+        excludeTags "org.apache.kafka.test.IntegrationTest"
+        // Both engines are needed to run JUnit 4 tests alongside JUnit 5 tests.
+        // junit-vintage (JUnit 4) can be removed once the JUnit 4 migration is complete.
+        includeEngines "junit-vintage", "junit-jupiter"
       }
     } else {
-      useJUnit {
-        excludeCategories 'org.apache.kafka.test.IntegrationTest'
+      useJUnitPlatform {
+        excludeTags "integration"
+        excludeTags 'org.apache.kafka.test.IntegrationTest'
       }
     }
 
@@ -845,6 +814,7 @@ subprojects {
     apply plugin: 'com.diffplug.spotless'
     spotless {
       java {
+        targetExclude 'src/generated/**/*.java' 
         importOrder('kafka', 'org.apache.kafka', 'com', 'net', 'org', 'java', 'javax', '', '\\#')
         removeUnusedImports()
       }
@@ -921,6 +891,7 @@ project(':server') {
   dependencies {
     implementation project(':clients')
     implementation project(':server-common')
+    implementation project(':storage')
     implementation project(':group-coordinator')
     implementation project(':transaction-coordinator')
     implementation project(':raft')
@@ -1523,6 +1494,10 @@ project(':transaction-coordinator') {
     archivesName = "kafka-transaction-coordinator"
   }
 
+  dependencies {
+    implementation project(':clients')
+
+  }
   sourceSets {
     main {
       java {
@@ -1534,6 +1509,10 @@ project(':transaction-coordinator') {
         srcDirs = ["src/generated/java", "src/test/java"]
       }
     }
+  }
+
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-transaction-coordinator.xml")
   }
 
   javadoc {
@@ -3243,10 +3222,13 @@ project(':connect:runtime') {
     testImplementation project(':storage')
     testImplementation project(':connect:test-plugins')
     testImplementation project(':group-coordinator')
-    
-    testImplementation libs.junitJupiterApi
+
+    testImplementation libs.junitJupiter
     testImplementation libs.junitVintageEngine
+    testImplementation libs.mockitoJunitJupiter
     testImplementation libs.mockitoCore
+    testImplementation libs.hamcrest
+    testImplementation libs.mockitoJunitJupiter
     testImplementation libs.httpclient
 
     testRuntimeOnly libs.slf4jlog4j

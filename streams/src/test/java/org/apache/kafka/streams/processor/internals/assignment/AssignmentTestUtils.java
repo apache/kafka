@@ -232,6 +232,13 @@ public final class AssignmentTestUtils {
     public static final String CHANGELOG_TOPIC_PREFIX = "changelog-topic";
     public static final String RACK_PREFIX = "rack";
 
+    public static final List<String> RACK_AWARE_ASSIGNMENT_TAG_KEYS = new ArrayList<>();
+    static {
+        for (int i = 0; i < StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_LIST_SIZE; i++) {
+            RACK_AWARE_ASSIGNMENT_TAG_KEYS.add("key-" + i);
+        }
+    }
+
     private AssignmentTestUtils() {}
 
     static Map<ProcessId, ClientState> getClientStatesMap(final ClientState... states) {

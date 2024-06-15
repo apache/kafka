@@ -70,10 +70,10 @@ import static org.apache.kafka.common.utils.Utils.mkSet;
 @Tag("integration")
 @ExtendWith(ClusterTestExtensions.class)
 public class ListConsumerGroupTest {
-    private final static String TOPIC_PREFIX = "test.topic.";
-    private final static String TOPIC_PARTITIONS_GROUP_PREFIX = "test.topic.partitions.group.";
-    private final static String TOPIC_GROUP_PREFIX = "test.topic.group.";
-    private final static String PROTOCOL_GROUP_PREFIX = "test.protocol.group.";
+    private static final String TOPIC_PREFIX = "test.topic.";
+    private static final String TOPIC_PARTITIONS_GROUP_PREFIX = "test.topic.partitions.group.";
+    private static final String TOPIC_GROUP_PREFIX = "test.topic.group.";
+    private static final String PROTOCOL_GROUP_PREFIX = "test.protocol.group.";
     private final ClusterInstance clusterInstance;
 
     ListConsumerGroupTest(ClusterInstance clusterInstance) {

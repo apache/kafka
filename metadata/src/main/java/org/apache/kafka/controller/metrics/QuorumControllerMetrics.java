@@ -38,33 +38,33 @@ import java.util.function.Consumer;
  * @link{org.apache.kafka.controller.metrics.ControllerMetadataMetrics}, not here.
  */
 public class QuorumControllerMetrics implements AutoCloseable {
-    private final static MetricName ACTIVE_CONTROLLER_COUNT = getMetricName(
+    private static final MetricName ACTIVE_CONTROLLER_COUNT = getMetricName(
         "KafkaController", "ActiveControllerCount");
-    private final static MetricName EVENT_QUEUE_TIME_MS = getMetricName(
+    private static final MetricName EVENT_QUEUE_TIME_MS = getMetricName(
         "ControllerEventManager", "EventQueueTimeMs");
-    private final static MetricName EVENT_QUEUE_PROCESSING_TIME_MS = getMetricName(
+    private static final MetricName EVENT_QUEUE_PROCESSING_TIME_MS = getMetricName(
         "ControllerEventManager", "EventQueueProcessingTimeMs");
-    private final static MetricName ZK_WRITE_BEHIND_LAG = getMetricName(
+    private static final MetricName ZK_WRITE_BEHIND_LAG = getMetricName(
         "KafkaController", "ZkWriteBehindLag");
-    private final static MetricName ZK_WRITE_SNAPSHOT_TIME_MS = getMetricName(
+    private static final MetricName ZK_WRITE_SNAPSHOT_TIME_MS = getMetricName(
         "KafkaController", "ZkWriteSnapshotTimeMs");
-    private final static MetricName ZK_WRITE_DELTA_TIME_MS = getMetricName(
+    private static final MetricName ZK_WRITE_DELTA_TIME_MS = getMetricName(
         "KafkaController", "ZkWriteDeltaTimeMs");
-    private final static MetricName LAST_APPLIED_RECORD_OFFSET = getMetricName(
+    private static final MetricName LAST_APPLIED_RECORD_OFFSET = getMetricName(
         "KafkaController", "LastAppliedRecordOffset");
-    private final static MetricName LAST_COMMITTED_RECORD_OFFSET = getMetricName(
+    private static final MetricName LAST_COMMITTED_RECORD_OFFSET = getMetricName(
         "KafkaController", "LastCommittedRecordOffset");
-    private final static MetricName LAST_APPLIED_RECORD_TIMESTAMP = getMetricName(
+    private static final MetricName LAST_APPLIED_RECORD_TIMESTAMP = getMetricName(
         "KafkaController", "LastAppliedRecordTimestamp");
-    private final static MetricName LAST_APPLIED_RECORD_LAG_MS = getMetricName(
+    private static final MetricName LAST_APPLIED_RECORD_LAG_MS = getMetricName(
         "KafkaController", "LastAppliedRecordLagMs");
-    private final static MetricName TIMED_OUT_BROKER_HEARTBEAT_COUNT = getMetricName(
+    private static final MetricName TIMED_OUT_BROKER_HEARTBEAT_COUNT = getMetricName(
         "KafkaController", "TimedOutBrokerHeartbeatCount");
-    private final static MetricName EVENT_QUEUE_OPERATIONS_STARTED_COUNT = getMetricName(
+    private static final MetricName EVENT_QUEUE_OPERATIONS_STARTED_COUNT = getMetricName(
         "KafkaController", "EventQueueOperationsStartedCount");
-    private final static MetricName EVENT_QUEUE_OPERATIONS_TIMED_OUT_COUNT = getMetricName(
+    private static final MetricName EVENT_QUEUE_OPERATIONS_TIMED_OUT_COUNT = getMetricName(
         "KafkaController", "EventQueueOperationsTimedOutCount");
-    private final static MetricName NEW_ACTIVE_CONTROLLERS_COUNT = getMetricName(
+    private static final MetricName NEW_ACTIVE_CONTROLLERS_COUNT = getMetricName(
         "KafkaController", "NewActiveControllersCount");
 
     private final Optional<MetricsRegistry> registry;

@@ -74,9 +74,9 @@ import static org.apache.kafka.streams.processor.internals.StateManagerUtil.pars
 
 public class TaskManager {
 
-    private final static String BUG_ERROR_MESSAGE = "This indicates a bug. " +
+    private static final String BUG_ERROR_MESSAGE = "This indicates a bug. " +
         "Please report at https://issues.apache.org/jira/projects/KAFKA/issues or to the dev-mailing list (https://kafka.apache.org/contact).";
-    private final static String INTERRUPTED_ERROR_MESSAGE = "Thread got interrupted. " + BUG_ERROR_MESSAGE;
+    private static final String INTERRUPTED_ERROR_MESSAGE = "Thread got interrupted. " + BUG_ERROR_MESSAGE;
 
     // initialize the task list
     // activeTasks needs to be concurrent as it can be accessed
