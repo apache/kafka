@@ -22,11 +22,12 @@ import org.apache.kafka.common.metadata.RemoveUserScramCredentialRecord;
 import org.apache.kafka.common.metadata.UserScramCredentialRecord;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.image.writer.RecordListWriter;
-import org.apache.kafka.server.common.MetadataVersion;
-import org.apache.kafka.server.util.MockRandom;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.ScramCredentialData;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.util.MockRandom;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
