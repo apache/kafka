@@ -792,6 +792,7 @@ https://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/
 <USE docker/README.md FOR STEPS TO CREATE RELEASE CANDIDATE DOCKER IMAGE>
 * Docker release artifact to be voted upon:
 apache/kafka:%(rc_tag)s
+apache/kafka-native:%(rc_tag)s
 
 * Maven artifacts to be voted upon:
 https://repository.apache.org/content/groups/staging/org/apache/kafka/
