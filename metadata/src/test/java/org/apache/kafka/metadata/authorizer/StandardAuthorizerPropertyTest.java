@@ -16,13 +16,6 @@
  */
 package org.apache.kafka.metadata.authorizer;
 
-import net.jqwik.api.Assume;
-import net.jqwik.api.ForAll;
-import net.jqwik.api.Property;
-import net.jqwik.api.constraints.AlphaChars;
-import net.jqwik.api.constraints.Chars;
-import net.jqwik.api.constraints.NumericChars;
-import net.jqwik.api.constraints.Size;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBinding;
@@ -38,6 +31,14 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
+
+import net.jqwik.api.Assume;
+import net.jqwik.api.ForAll;
+import net.jqwik.api.Property;
+import net.jqwik.api.constraints.AlphaChars;
+import net.jqwik.api.constraints.Chars;
+import net.jqwik.api.constraints.NumericChars;
+import net.jqwik.api.constraints.Size;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

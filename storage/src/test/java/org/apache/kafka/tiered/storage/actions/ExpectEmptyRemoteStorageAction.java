@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.tiered.storage.actions;
 
-import org.apache.kafka.tiered.storage.TieredStorageTestAction;
-import org.apache.kafka.tiered.storage.TieredStorageTestContext;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorageSnapshot;
 import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.tiered.storage.TieredStorageTestAction;
+import org.apache.kafka.tiered.storage.TieredStorageTestContext;
 
 import java.io.PrintStream;
 
