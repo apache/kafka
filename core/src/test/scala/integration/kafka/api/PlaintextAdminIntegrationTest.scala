@@ -1015,7 +1015,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     var resourceToConfig = describeConfigs.all().get()
     var matches = pattern.findAllMatchIn(resourceToConfig.toString)
     var describes = matches.map(e => e.group(1)).toList
-    describes.foreach(e => assertNotNull(e))
+    describes.foreach(e => assertNotEquals("null", e))
 
     val excludeDescribe = new DescribeConfigsOptions().includeDocumentation(false)
     describeConfigs = client.describeConfigs(Collections.singletonList(resource), excludeDescribe)
