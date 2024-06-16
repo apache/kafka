@@ -503,22 +503,6 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
-  def testBrokerIdConfigChange(quorum: String): Unit = {
-    val newValue: Long = 100000L
-    val brokerId: String = this.brokers.head.config.brokerId.toString
-    setBrokerConfigs(brokerId, newValue)
-    for (b <- this.brokers) {
-      val value = if (b.config.brokerId.toString == brokerId) newValue else QuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT
-      TestUtils.retry(10000) {
-        assertEquals(value, b.quotaManagers.leader.upperBound)
-        assertEquals(value, b.quotaManagers.follower.upperBound)
-        assertEquals(value, b.quotaManagers.alterLogDirs.upperBound)
-      }
-    }
-  }
-
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
   def testBrokerIdConfigChangeAndDelete(quorum: String): Unit = {
     val newValue: Long = 100000L
     val brokerId: String = this.brokers.head.config.brokerId.toString
@@ -537,21 +521,6 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
         assertEquals(QuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT, b.quotaManagers.leader.upperBound)
         assertEquals(QuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT, b.quotaManagers.follower.upperBound)
         assertEquals(QuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT, b.quotaManagers.alterLogDirs.upperBound)
-      }
-    }
-  }
-
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testDefaultBrokerIdConfigChange(quorum: String): Unit = {
-    val newValue: Long = 100000L
-    val brokerId: String = ""
-    setBrokerConfigs(brokerId, newValue)
-    for (b <- this.brokers) {
-      TestUtils.retry(10000) {
-        assertEquals(newValue, b.quotaManagers.leader.upperBound)
-        assertEquals(newValue, b.quotaManagers.follower.upperBound)
-        assertEquals(newValue, b.quotaManagers.alterLogDirs.upperBound)
       }
     }
   }

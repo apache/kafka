@@ -247,11 +247,9 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig,
 
     def getOrDefault(prop: String): Long = updatedDynamicBrokerConfigs get prop match {
       case Some(value) => value.toLong
-      case None => {
-        updatedDynamicDefaultConfigs get prop match {
-          case Some(defaultValue) => defaultValue.toLong
-          case None => QuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT
-        }
+      case None => updatedDynamicDefaultConfigs get prop match {
+        case Some(defaultValue) => defaultValue.toLong
+        case None => QuotaConfigs.QUOTA_BYTES_PER_SECOND_DEFAULT
       }
     }
     quotaManagers.leader.updateQuota(upperBound(getOrDefault(QuotaConfigs.LEADER_REPLICATION_THROTTLED_RATE_CONFIG).toDouble))
