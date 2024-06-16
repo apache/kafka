@@ -147,7 +147,6 @@ public class ScramCredentialDataTest {
         assertEquals(data.hashCode(), data.hashCode());
     }
 
-
     private void testRoundTrip(ScramCredentialData scramCredentialData) {
         ApiMessageAndVersion messageAndVersion = new ApiMessageAndVersion(
             scramCredentialData.toRecord("alice", ScramMechanism.SCRAM_SHA_256), (short) 0);
