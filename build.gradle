@@ -204,10 +204,6 @@ def determineCommitId() {
 def excludedSpotlessModules = [':clients',
                                ':connect:runtime',
                                ':core',
-                               ':metadata',
-                               ':server',
-                               ':storage',
-                               ':storage:storage-api', //  rename in settings.gradle
                                ':streams',
                                ':streams:examples',
                                ':streams:streams-scala',

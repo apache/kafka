@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.storage.internals.log;
 
-import com.yammer.metrics.core.Gauge;
 import org.apache.kafka.common.internals.FatalExitError;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
+
+import com.yammer.metrics.core.Gauge;
+
 import org.slf4j.Logger;
 
 import java.util.concurrent.LinkedBlockingQueue;

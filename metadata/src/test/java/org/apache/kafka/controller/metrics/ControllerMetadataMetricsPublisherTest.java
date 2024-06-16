@@ -17,8 +17,6 @@
 
 package org.apache.kafka.controller.metrics;
 
-import java.util.Optional;
-
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.image.AclsImage;
 import org.apache.kafka.image.ClientQuotasImage;
@@ -39,7 +37,10 @@ import org.apache.kafka.image.writer.ImageReWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.server.fault.MockFaultHandler;
+
 import org.junit.jupiter.api.Test;
+
+import java.util.Optional;
 
 import static org.apache.kafka.controller.metrics.ControllerMetricsTestUtils.FakePartitionRegistrationType.NON_PREFERRED_LEADER;
 import static org.apache.kafka.controller.metrics.ControllerMetricsTestUtils.FakePartitionRegistrationType.NORMAL;
