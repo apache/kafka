@@ -96,7 +96,12 @@ Single Node
     - To run the example:-
     ```
     # Run from root of the repo
-    $ IMAGE=<image-name> docker compose -f docker/examples/docker-compose-files/single-node/plaintext/docker-compose.yml up
+  
+    # JVM based Apache Kafka Docker Image
+    $ IMAGE=apache/kafka:latest docker compose -f docker/examples/docker-compose-files/single-node/plaintext/docker-compose.yml up
+  
+    # GraalVM based Native Apache Kafka Docker Image
+    $ IMAGE=apache/kafka-native:latest docker compose -f docker/examples/docker-compose-files/single-node/plaintext/docker-compose.yml up
     ```
     - To produce messages using client scripts:-
     ```
@@ -110,7 +115,12 @@ Single Node
     - To run the example:-
     ```
     # Run from root of the repo
-    $ IMAGE=<image-name> docker compose -f docker/examples/docker-compose-files/single-node/ssl/docker-compose.yml up
+    
+    # JVM based Apache Kafka Docker Image
+    $ IMAGE=apache/kafka:latest docker compose -f docker/examples/docker-compose-files/single-node/ssl/docker-compose.yml up
+
+    # GraalVM based Native Apache Kafka Docker Image
+    $ IMAGE=apache/kafka-native:latest docker compose -f docker/examples/docker-compose-files/single-node/ssl/docker-compose.yml up
     ```
     - To produce messages using client scripts (Ensure that java version >= 17):-
     ```
@@ -125,7 +135,12 @@ Single Node
     - To run the example:-
     ```
     # Run from root of the repo
-    $ IMAGE=<image-name> docker compose -f docker/examples/docker-compose-files/single-node/file-input/docker-compose.yml up
+  
+    # JVM based Apache Kafka Docker Image
+    $ IMAGE=apache/kafka:latest docker compose -f docker/examples/docker-compose-files/single-node/file-input/docker-compose.yml up
+  
+    # GraalVM based Native Apache Kafka Docker Image
+    $ IMAGE=apache/kafka-native:latest docker compose -f docker/examples/docker-compose-files/single-node/file-input/docker-compose.yml up
     ```
     - To produce messages using client scripts (Ensure that java version >= 17):-
     ```
@@ -151,7 +166,12 @@ Multi Node Cluster
         - To run the example:-
         ```
         # Run from root of the repo
-        $ IMAGE=<image-name> docker compose -f docker/examples/docker-compose-files/cluster/combined/plaintext/docker-compose.yml up
+      
+        # JVM based Apache Kafka Docker Image
+        $ IMAGE=apache/kafka:latest docker compose -f docker/examples/docker-compose-files/cluster/combined/plaintext/docker-compose.yml up
+      
+        # GraalVM based Native Apache Kafka Docker Image
+        $ IMAGE=apache/kafka-native:latest docker compose -f docker/examples/docker-compose-files/cluster/combined/plaintext/docker-compose.yml up
         ```
         - To access using client script:-
         ```
@@ -165,7 +185,12 @@ Multi Node Cluster
         - To run the example:-
         ```
         # Run from root of the repo
-        $ IMAGE=<image-name> docker compose -f docker/examples/docker-compose-files/cluster/combined/ssl/docker-compose.yml up
+      
+        # JVM based Apache Kafka Docker Image
+        $ IMAGE=apache/kafka:latest docker compose -f docker/examples/docker-compose-files/cluster/combined/ssl/docker-compose.yml up
+      
+        # GraalVM based Native Apache Kafka Docker Image
+        $ IMAGE=apache/kafka-native:latest docker compose -f docker/examples/docker-compose-files/cluster/combined/ssl/docker-compose.yml up
         ```
         - To produce messages using client scripts (Ensure that java version >= 17):-
         ```
@@ -181,7 +206,12 @@ Multi Node Cluster
         - To run the example:-
         ```
         # Run from root of the repo
-        $ IMAGE=<image-name> docker compose -f docker/examples/docker-compose-files/cluster/isolated/plaintext/docker-compose.yml up
+      
+        # JVM based Apache Kafka Docker Image
+        $ IMAGE=apache/kafka:latest docker compose -f docker/examples/docker-compose-files/cluster/isolated/plaintext/docker-compose.yml up
+      
+        # GraalVM based Native Apache Kafka Docker Image
+        $ IMAGE=apache/kafka-native:latest docker compose -f docker/examples/docker-compose-files/cluster/isolated/plaintext/docker-compose.yml up
         ```
         - To access using client script:-
         ```
@@ -194,7 +224,12 @@ Multi Node Cluster
         - To run the example:-
         ```
         # Run from root of the repo
-        $ IMAGE=<image-name> docker compose -f docker/examples/docker-compose-files/cluster/isolated/ssl/docker-compose.yml up
+      
+        # JVM based Apache Kafka Docker Image
+        $ IMAGE=apache/kafka:latest docker compose -f docker/examples/docker-compose-files/cluster/isolated/ssl/docker-compose.yml up
+      
+        # GraalVM based Native Apache Kafka Docker Image
+        $ IMAGE=apache/kafka-native:latest docker compose -f docker/examples/docker-compose-files/cluster/isolated/ssl/docker-compose.yml up
         ```
         - To produce messages using client scripts (Ensure that java version >= 17):-
         ```
