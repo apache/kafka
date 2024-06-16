@@ -17,9 +17,6 @@
 
 package org.apache.kafka.metadata.util;
 
-import java.io.File;
-import java.nio.file.Path;
-import java.util.List;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.SnapshotFooterRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
@@ -28,12 +25,18 @@ import org.apache.kafka.metadata.util.BatchFileReader.BatchAndType;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.Test;
+
+import java.io.File;
+import java.nio.file.Path;
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-final public class BatchFileWriterReaderTest {
+public final class BatchFileWriterReaderTest {
     @Test
     public void testHeaderFooter() throws Exception {
         File tempFile = TestUtils.tempFile();

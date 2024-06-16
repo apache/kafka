@@ -91,7 +91,7 @@ public class PurgeRepartitionTopicIntegrationTest {
 
     private class RepartitionTopicCreatedWithExpectedConfigs implements TestCondition {
         @Override
-        final public boolean conditionMet() {
+        public final boolean conditionMet() {
             try {
                 final Set<String> topics = adminClient.listTopics().names().get();
 

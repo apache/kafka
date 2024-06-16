@@ -57,7 +57,7 @@ public class SchemaSourceTask extends SourceTask {
     private boolean multipleSchema;
     private int partitionCount;
 
-    private final static Schema VALUE_SCHEMA = SchemaBuilder.struct().version(1).name("record")
+    private static final Schema VALUE_SCHEMA = SchemaBuilder.struct().version(1).name("record")
         .field("boolean", Schema.BOOLEAN_SCHEMA)
         .field("int", Schema.INT32_SCHEMA)
         .field("long", Schema.INT64_SCHEMA)
@@ -68,7 +68,7 @@ public class SchemaSourceTask extends SourceTask {
         .field("seqno", Schema.INT64_SCHEMA)
         .build();
 
-    private final static Schema VALUE_SCHEMA_2 = SchemaBuilder.struct().version(2).name("record")
+    private static final Schema VALUE_SCHEMA_2 = SchemaBuilder.struct().version(2).name("record")
         .field("boolean", Schema.BOOLEAN_SCHEMA)
         .field("int", Schema.INT32_SCHEMA)
         .field("long", Schema.INT64_SCHEMA)

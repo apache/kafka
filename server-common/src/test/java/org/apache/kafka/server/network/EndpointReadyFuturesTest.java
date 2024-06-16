@@ -37,7 +37,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-final public class EndpointReadyFuturesTest {
+public final class EndpointReadyFuturesTest {
     private static final Endpoint EXTERNAL =
             new Endpoint("EXTERNAL", SecurityProtocol.SSL, "127.0.0.1", 9092);
 

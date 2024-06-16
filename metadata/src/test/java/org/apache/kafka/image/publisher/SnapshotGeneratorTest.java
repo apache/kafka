@@ -27,6 +27,7 @@ import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.server.fault.FaultHandlerException;
 import org.apache.kafka.server.fault.MockFaultHandler;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -87,7 +88,7 @@ public class SnapshotGeneratorTest {
             .numBytes(100);
     }
 
-    private final static MetadataDelta TEST_DELTA;
+    private static final MetadataDelta TEST_DELTA;
 
     static {
         TEST_DELTA = new MetadataDelta.Builder().
@@ -96,7 +97,7 @@ public class SnapshotGeneratorTest {
         TEST_DELTA.replay(RecordTestUtils.testRecord(0).message());
     }
 
-    private final static MetadataImage TEST_IMAGE = TEST_DELTA.apply(MetadataProvenance.EMPTY);
+    private static final MetadataImage TEST_IMAGE = TEST_DELTA.apply(MetadataProvenance.EMPTY);
 
     @Test
     public void testCreateSnapshot() throws Exception {

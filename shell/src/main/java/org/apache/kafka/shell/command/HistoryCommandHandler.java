@@ -35,7 +35,7 @@ import java.util.Optional;
  * Implements the history command.
  */
 public final class HistoryCommandHandler implements Commands.Handler {
-    public final static Commands.Type TYPE = new HistoryCommandType();
+    public static final Commands.Type TYPE = new HistoryCommandType();
 
     public static class HistoryCommandType implements Commands.Type {
         private HistoryCommandType() {

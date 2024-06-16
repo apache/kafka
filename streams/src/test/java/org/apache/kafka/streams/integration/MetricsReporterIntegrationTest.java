@@ -84,7 +84,7 @@ public class MetricsReporterIntegrationTest {
         streamsConfiguration.put(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, MetricReporterImpl.class.getName());
     }
 
-    final static Map<String, Object> METRIC_NAME_TO_INITIAL_VALUE = new HashMap<>();
+    static final Map<String, Object> METRIC_NAME_TO_INITIAL_VALUE = new HashMap<>();
 
     public static class MetricReporterImpl implements MetricsReporter {
 

@@ -82,6 +82,7 @@ import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.snapshot.RecordsSnapshotWriter;
 import org.apache.kafka.snapshot.SnapshotReader;
 import org.apache.kafka.snapshot.SnapshotWriter;
+
 import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
@@ -149,7 +150,7 @@ import static org.apache.kafka.raft.RaftUtil.hasValidTopicPartition;
  *    as FileRecords, but we use {@link UnalignedRecords} in FetchSnapshotResponse because the records
  *    are not necessarily offset-aligned.
  */
-final public class KafkaRaftClient<T> implements RaftClient<T> {
+public final class KafkaRaftClient<T> implements RaftClient<T> {
     private static final int RETRY_BACKOFF_BASE_MS = 100;
     public static final int MAX_FETCH_WAIT_MS = 500;
     public static final int MAX_BATCH_SIZE_BYTES = 8 * 1024 * 1024;

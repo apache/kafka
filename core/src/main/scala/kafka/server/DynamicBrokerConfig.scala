@@ -117,8 +117,6 @@ object DynamicBrokerConfig {
     AllDynamicConfigs.intersect(passwordConfigs)
   }
 
-  private val nonDynamicProps: Set[String] = KafkaConfig.configNames.toSet -- DynamicConfig.Broker.names.asScala
-
   def isPasswordConfig(name: String): Boolean = DynamicBrokerConfig.DynamicPasswordConfigs.exists(name.endsWith)
 
   def brokerConfigSynonyms(name: String, matchListenerOverride: Boolean): List[String] = {
@@ -168,7 +166,7 @@ object DynamicBrokerConfig {
   }
 
   private def nonDynamicConfigs(props: Properties): Set[String] = {
-    props.asScala.keySet.intersect(nonDynamicProps)
+    props.asScala.keySet.intersect(DynamicConfig.Broker.nonDynamicProps)
   }
 
   private def securityConfigsWithoutListenerPrefix(props: Properties): Set[String] = {
@@ -182,16 +180,6 @@ object DynamicBrokerConfig {
       case (k, v) => baseProps.put(k, v)
     }
     DynamicConfig.Broker.validate(baseProps)
-  }
-
-  private[server] def addDynamicConfigs(configDef: ConfigDef): Unit = {
-    KafkaConfig.configKeys.forKeyValue { (configName, config) =>
-      if (AllDynamicConfigs.contains(configName)) {
-        configDef.define(config.name, config.`type`, config.defaultValue, config.validator,
-          config.importance, config.documentation, config.group, config.orderInGroup, config.width,
-          config.displayName, config.dependents, config.recommender)
-      }
-    }
   }
 
   private[server] def dynamicConfigUpdateModes: util.Map[String, String] = {
@@ -321,7 +309,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   }
 
   private def verifyReconfigurableConfigs(configNames: Set[String]): Unit = CoreUtils.inWriteLock(lock) {
-    val nonDynamic = configNames.intersect(nonDynamicProps)
+    val nonDynamic = configNames.intersect(DynamicConfig.Broker.nonDynamicProps)
     require(nonDynamic.isEmpty, s"Reconfigurable contains non-dynamic configs $nonDynamic")
   }
 

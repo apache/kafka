@@ -17,14 +17,6 @@
 
 package org.apache.kafka.controller;
 
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.Optional;
-import java.util.OptionalLong;
-import java.util.Set;
-import java.util.TreeSet;
-
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -33,8 +25,17 @@ import org.apache.kafka.controller.BrokerHeartbeatManager.BrokerHeartbeatStateIt
 import org.apache.kafka.controller.BrokerHeartbeatManager.BrokerHeartbeatStateList;
 import org.apache.kafka.controller.BrokerHeartbeatManager.UsableBrokerIterator;
 import org.apache.kafka.metadata.placement.UsableBroker;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.Optional;
+import java.util.OptionalLong;
+import java.util.Set;
+import java.util.TreeSet;
 
 import static org.apache.kafka.controller.BrokerControlState.CONTROLLED_SHUTDOWN;
 import static org.apache.kafka.controller.BrokerControlState.FENCED;

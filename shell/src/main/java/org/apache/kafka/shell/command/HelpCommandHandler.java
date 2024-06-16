@@ -33,7 +33,7 @@ import java.util.Optional;
  * Implements the help command.
  */
 public final class HelpCommandHandler implements Commands.Handler {
-    public final static Commands.Type TYPE = new HelpCommandType();
+    public static final Commands.Type TYPE = new HelpCommandType();
 
     public static class HelpCommandType implements Commands.Type {
         private HelpCommandType() {

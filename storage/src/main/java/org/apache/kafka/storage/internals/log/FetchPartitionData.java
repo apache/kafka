@@ -16,14 +16,14 @@
  */
 package org.apache.kafka.storage.internals.log;
 
-import java.util.OptionalInt;
-import java.util.OptionalLong;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.Records;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalInt;
+import java.util.OptionalLong;
 
 public class FetchPartitionData {
     public final Errors error;

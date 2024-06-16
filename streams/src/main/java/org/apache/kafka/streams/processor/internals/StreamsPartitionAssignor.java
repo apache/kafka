@@ -59,12 +59,12 @@ import org.apache.kafka.streams.processor.internals.assignment.ClientState;
 import org.apache.kafka.streams.processor.internals.assignment.CopartitionedTopicsEnforcer;
 import org.apache.kafka.streams.processor.internals.assignment.DefaultTaskTopicPartition;
 import org.apache.kafka.streams.processor.internals.assignment.FallbackPriorTaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.LegacyStickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.RackUtils;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
-import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
-import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
+import org.apache.kafka.streams.processor.internals.assignment.LegacyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.DefaultTaskInfo;
 import org.apache.kafka.streams.state.HostInfo;
 import org.slf4j.Logger;
@@ -224,7 +224,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
 
     private Supplier<Optional<org.apache.kafka.streams.processor.assignment.TaskAssignor>>
         customTaskAssignorSupplier;
-    private Supplier<TaskAssignor> internalTaskAssignorSupplier;
+    private Supplier<LegacyTaskAssignor> legacyTaskAssignorSupplier;
     private byte uniqueField;
     private Map<String, String> clientTags;
 
@@ -259,7 +259,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         copartitionedTopicsEnforcer = assignorConfiguration.copartitionedTopicsEnforcer();
         rebalanceProtocol = assignorConfiguration.rebalanceProtocol();
         customTaskAssignorSupplier = assignorConfiguration::customTaskAssignor;
-        internalTaskAssignorSupplier = assignorConfiguration::taskAssignor;
+        legacyTaskAssignorSupplier = assignorConfiguration::taskAssignor;
         assignmentListener = assignorConfiguration.assignmentListener();
         uniqueField = 0;
         clientTags = referenceContainer.clientTags;
@@ -817,7 +817,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
             };
         } else {
             customTaskAssignmentListener = (assignment, subscription) -> { };
-            final TaskAssignor taskAssignor = createTaskAssignor(lagComputationSuccessful);
+            final LegacyTaskAssignor taskAssignor = createTaskAssignor(lagComputationSuccessful);
             final RackAwareTaskAssignor rackAwareTaskAssignor = new RackAwareTaskAssignor(
                 fullMetadata,
                 partitionsForTask,
@@ -859,10 +859,10 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         return customTaskAssignmentListener;
     }
 
-    private TaskAssignor createTaskAssignor(final boolean lagComputationSuccessful) {
-        final TaskAssignor taskAssignor = internalTaskAssignorSupplier.get();
-        if (taskAssignor instanceof StickyTaskAssignor) {
-            // special case: to preserve pre-existing behavior, we invoke the StickyTaskAssignor
+    private LegacyTaskAssignor createTaskAssignor(final boolean lagComputationSuccessful) {
+        final LegacyTaskAssignor taskAssignor = legacyTaskAssignorSupplier.get();
+        if (taskAssignor instanceof LegacyStickyTaskAssignor) {
+            // special case: to preserve pre-existing behavior, we invoke the LegacyStickyTaskAssignor
             // whether or not lag computation failed.
             return taskAssignor;
         } else if (lagComputationSuccessful) {

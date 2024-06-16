@@ -81,7 +81,7 @@ import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_2_IV0, IBP_2_2_IV1}
 import org.apache.kafka.server.common.{FinalizedFeatures, GroupVersion, MetadataVersion}
-import org.apache.kafka.server.config._
+import org.apache.kafka.server.config.{ConfigType, KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.metrics.ClientMetricsTestUtils
 import org.apache.kafka.server.util.{FutureUtils, MockTime}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchParams, FetchPartitionData, LogConfig}

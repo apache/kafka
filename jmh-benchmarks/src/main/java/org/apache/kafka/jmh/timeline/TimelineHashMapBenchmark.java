@@ -43,7 +43,7 @@ import java.util.concurrent.TimeUnit;
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 
 public class TimelineHashMapBenchmark {
-    private final static int NUM_ENTRIES = 1_000_000;
+    private static final int NUM_ENTRIES = 1_000_000;
 
     @Benchmark
     public Map<Integer, String> testAddEntriesInHashMap() {

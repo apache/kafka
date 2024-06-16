@@ -24,6 +24,7 @@ import org.apache.kafka.metadata.ControllerRegistration;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.MetadataVersion;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -37,9 +38,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class QuorumFeaturesTest {
-    private final static Map<String, VersionRange> LOCAL;
+    private static final Map<String, VersionRange> LOCAL;
 
-    private final static QuorumFeatures QUORUM_FEATURES;
+    private static final QuorumFeatures QUORUM_FEATURES;
 
     static {
         Map<String, VersionRange> local = new HashMap<>();
