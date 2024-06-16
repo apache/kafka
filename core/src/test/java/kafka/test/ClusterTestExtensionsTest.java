@@ -234,15 +234,18 @@ public class ClusterTestExtensionsTest {
         Assertions.assertEquals(1, clusterInstance.supportedGroupProtocols().size());
     }
 
-    @ClusterTest(brokers = 4)
+    @ClusterTest(types = {Type.ZK, Type.CO_KRAFT, Type.KRAFT}, brokers = 4)
     public void testClusterAliveBrokers(ClusterInstance clusterInstance) throws Exception {
         clusterInstance.waitForReadyBrokers();
-        Map<Integer, KafkaBroker> startBrokers = clusterInstance.brokers();
 
         // Remove broker id 0
         clusterInstance.shutdownBroker(0);
-        startBrokers.remove(0);
+        Assertions.assertFalse(clusterInstance.aliveBrokers().containsKey(0));
+        Assertions.assertTrue(clusterInstance.brokers().containsKey(0));
 
-        Assertions.assertEquals(startBrokers, clusterInstance.aliveBrokers());
+        // add broker id 0 back
+        clusterInstance.startBroker(0);
+        Assertions.assertTrue(clusterInstance.aliveBrokers().containsKey(0));
+        Assertions.assertTrue(clusterInstance.brokers().containsKey(0));
     }
 }
