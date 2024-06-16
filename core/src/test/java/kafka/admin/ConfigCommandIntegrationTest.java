@@ -522,10 +522,10 @@ public class ConfigCommandIntegrationTest {
                 new ConfigCommand.ConfigCommandOptions(toArray(alterOpts, entityOp(brokerId),
                         asList("--delete-config", String.join(",", config))));
         ConfigCommand.alterConfig(client, deleteOpts);
-        verifyConfigDefaultValue(client, brokerId, config);
+        verifyPerBrokerConfigValue(client, brokerId, config);
     }
 
-    private void verifyConfigDefaultValue(Admin client, Optional<String> brokerId, Set<String> config) throws Exception {
+    private void verifyPerBrokerConfigValue(Admin client, Optional<String> brokerId, Set<String> config) throws Exception {
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, brokerId.orElse(""));
         TestUtils.waitForCondition(() -> {
             Map<String, String> current = getConfigEntryStream(client, configResource)
