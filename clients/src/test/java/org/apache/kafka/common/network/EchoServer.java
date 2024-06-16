@@ -41,6 +41,8 @@ class EchoServer extends Thread {
     // JDK has a bug where sockets may get blocked on a read operation if they are closed during a TLS handshake.
     // While rare, this would cause the CI pipeline to hang. We set a reasonably high SO_TIMEOUT to avoid blocking reads
     // indefinitely.
+    // The JDK bug is similar to JDK-8274524, but it affects the else branch of SSLSocketImpl::bruteForceCloseInput
+    // which wasn't fixed in it. Please refer to the comments in KAFKA-16219 for more information.
     private static final int SO_TIMEOUT_MS = 30_000;
 
     public final int port;
