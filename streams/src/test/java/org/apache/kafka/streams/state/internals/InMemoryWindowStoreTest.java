@@ -28,7 +28,7 @@ import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.util.LinkedList;
 import java.util.List;
@@ -37,8 +37,9 @@ import static java.time.Duration.ofMillis;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.toStoreKeyBinary;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+
 
 public class InMemoryWindowStoreTest extends AbstractWindowBytesStoreTest {
 
@@ -64,6 +65,7 @@ public class InMemoryWindowStoreTest extends AbstractWindowBytesStoreTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldRestore() {
+        setup();
         // should be empty initially
         assertFalse(windowStore.all().hasNext());
 
@@ -92,7 +94,7 @@ public class InMemoryWindowStoreTest extends AbstractWindowBytesStoreTest {
 
     @Test
     public void shouldNotExpireFromOpenIterator() {
-
+        setup();
         windowStore.put(1, "one", 0L);
         windowStore.put(1, "two", 10L);
 
@@ -123,7 +125,7 @@ public class InMemoryWindowStoreTest extends AbstractWindowBytesStoreTest {
 
     @Test
     public void testExpiration() {
-
+        setup();
         long currentTime = 0;
         windowStore.put(1, "one", currentTime);
 
@@ -167,6 +169,7 @@ public class InMemoryWindowStoreTest extends AbstractWindowBytesStoreTest {
 
     @Test
     public void shouldMatchPositionAfterPut() {
+        setup();
         final MeteredWindowStore<Integer, String> meteredSessionStore = (MeteredWindowStore<Integer, String>) windowStore;
         final ChangeLoggingWindowBytesStore changeLoggingSessionBytesStore = (ChangeLoggingWindowBytesStore) meteredSessionStore.wrapped();
         final InMemoryWindowStore inMemoryWindowStore = (InMemoryWindowStore) changeLoggingSessionBytesStore.wrapped();

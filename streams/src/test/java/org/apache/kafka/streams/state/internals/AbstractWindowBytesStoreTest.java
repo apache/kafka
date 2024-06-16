@@ -42,9 +42,8 @@ import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -66,12 +65,12 @@ import static org.apache.kafka.test.StreamsTestUtils.valuesToSet;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public abstract class AbstractWindowBytesStoreTest {
 
@@ -101,8 +100,8 @@ public abstract class AbstractWindowBytesStoreTest {
                                                        final Serde<K> keySerde,
                                                        final Serde<V> valueSerde);
 
-    @Before
-    public void setup() {
+    protected void setup() {
+        
         windowStore = buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, false, Serdes.Integer(), Serdes.String());
 
         recordCollector = new MockRecordCollector();
@@ -120,13 +119,14 @@ public abstract class AbstractWindowBytesStoreTest {
         windowStore.init((StateStoreContext) context, windowStore);
     }
 
-    @After
+    @AfterEach
     public void after() {
         windowStore.close();
     }
 
     @Test
     public void testRangeAndSinglePointFetch() {
+        setup();
         putFirstBatch(windowStore, defaultStartTime, context);
 
         assertEquals(
@@ -259,6 +259,7 @@ public abstract class AbstractWindowBytesStoreTest {
 
     @Test
     public void shouldGetAll() {
+        setup();
         putFirstBatch(windowStore, defaultStartTime, context);
 
         assertEquals(
@@ -269,6 +270,7 @@ public abstract class AbstractWindowBytesStoreTest {
 
     @Test
     public void shouldGetAllNonDeletedRecords() {
+        setup();
         // Add some records
         windowStore.put(0, "zero", defaultStartTime + 0);
         windowStore.put(1, "one", defaultStartTime + 1);
@@ -289,6 +291,7 @@ public abstract class AbstractWindowBytesStoreTest {
 
     @Test
     public void shouldGetAllReturnTimestampOrderedRecords() {
+        setup();
         // Add some records in different order
         windowStore.put(4, "four", defaultStartTime + 4);
         windowStore.put(0, "zero", defaultStartTime + 0);
@@ -307,6 +310,7 @@ public abstract class AbstractWindowBytesStoreTest {
 
     @Test
     public void shouldEarlyClosedIteratorStillGetAllRecords() {
+        setup();
         windowStore.put(0, "zero", defaultStartTime + 0);
         windowStore.put(1, "one", defaultStartTime + 1);
 
@@ -323,6 +327,7 @@ public abstract class AbstractWindowBytesStoreTest {
 
     @Test
     public void shouldGetBackwardAll() {
+        setup();
         putFirstBatch(windowStore, defaultStartTime, context);
 
         assertEquals(
@@ -333,6 +338,7 @@ public abstract class AbstractWindowBytesStoreTest {
 
     @Test
     public void shouldFetchAllInTimeRange() {
+        setup();
         putFirstBatch(windowStore, defaultStartTime, context);
 
         assertEquals(
@@ -351,6 +357,7 @@ public abstract class AbstractWindowBytesStoreTest {
 
     @Test
     public void shouldBackwardFetchAllInTimeRange() {
+        setup();
         putFirstBatch(windowStore, defaultStartTime, context);
 
         assertEquals(
@@ -369,6 +376,7 @@ public abstract class AbstractWindowBytesStoreTest {
 
     @Test
     public void testFetchRange() {
+        setup();
         putFirstBatch(windowStore, defaultStartTime, context);
 
         assertEquals(
@@ -463,6 +471,7 @@ public abstract class AbstractWindowBytesStoreTest {
 
     @Test
     public void testBackwardFetchRange() {
+        setup();
         putFirstBatch(windowStore, defaultStartTime, context);
 
         assertEquals(
@@ -557,6 +566,7 @@ public abstract class AbstractWindowBytesStoreTest {
 
     @Test
     public void testPutAndFetchBefore() {
+        setup();
         putFirstBatch(windowStore, defaultStartTime, context);
 
         assertEquals(
@@ -646,6 +656,7 @@ public abstract class AbstractWindowBytesStoreTest {
 
     @Test
     public void testPutAndFetchAfter() {
+        setup();
         putFirstBatch(windowStore, defaultStartTime, context);
 
         assertEquals(
@@ -759,6 +770,7 @@ public abstract class AbstractWindowBytesStoreTest {
 
     @Test
     public void testPutSameKeyTimestamp() {
+        setup();
         windowStore.close();
         windowStore = buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, true, Serdes.Integer(), Serdes.String());
         windowStore.init((StateStoreContext) context, windowStore);
@@ -820,6 +832,7 @@ public abstract class AbstractWindowBytesStoreTest {
 
     @Test
     public void shouldCloseOpenIteratorsWhenStoreIsClosedAndNotThrowInvalidStateStoreExceptionOnHasNext() {
+        setup();
         windowStore.put(1, "one", 1L);
         windowStore.put(1, "two", 2L);
         windowStore.put(1, "three", 3L);
@@ -834,6 +847,7 @@ public abstract class AbstractWindowBytesStoreTest {
 
     @Test
     public void shouldFetchAndIterateOverExactKeys() {
+        setup();
         final long windowSize = 0x7a00000000000000L;
         final long retentionPeriod = 0x7a00000000000000L;
         final WindowStore<String, String> windowStore = buildWindowStore(retentionPeriod,
@@ -880,6 +894,7 @@ public abstract class AbstractWindowBytesStoreTest {
 
     @Test
     public void testDeleteAndUpdate() {
+        setup();
         final long currentTime = 0;
         windowStore.put(1, "one", currentTime);
         windowStore.put(1, "one v2", currentTime);
@@ -894,21 +909,25 @@ public abstract class AbstractWindowBytesStoreTest {
 
     @Test
     public void shouldReturnNullOnWindowNotFound() {
+        setup();
         assertNull(windowStore.fetch(1, 0L));
     }
 
     @Test
     public void shouldThrowNullPointerExceptionOnPutNullKey() {
+        setup();
         assertThrows(NullPointerException.class, () -> windowStore.put(null, "anyValue", 0L));
     }
 
     @Test
     public void shouldThrowNullPointerExceptionOnGetNullKey() {
+        setup();
         assertThrows(NullPointerException.class, () -> windowStore.fetch(null, ofEpochMilli(1L), ofEpochMilli(2L)));
     }
 
     @Test
     public void shouldFetchAndIterateOverExactBinaryKeys() {
+        setup();
         final WindowStore<Bytes, String> windowStore = buildWindowStore(RETENTION_PERIOD,
             WINDOW_SIZE,
             true,
@@ -950,6 +969,7 @@ public abstract class AbstractWindowBytesStoreTest {
 
     @Test
     public void shouldReturnSameResultsForSingleKeyFetchAndEqualKeyRangeFetch() {
+        setup();
         windowStore.put(1, "one", 0L);
         windowStore.put(2, "two", 1L);
         windowStore.put(2, "two", 2L);
@@ -967,6 +987,7 @@ public abstract class AbstractWindowBytesStoreTest {
 
     @Test
     public void shouldNotThrowInvalidRangeExceptionWithNegativeFromKey() {
+        setup();
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
              final KeyValueIterator<Windowed<Integer>, String> iterator = windowStore.fetch(-1, 1, 0L, 10L)) {
             assertFalse(iterator.hasNext());
@@ -984,6 +1005,7 @@ public abstract class AbstractWindowBytesStoreTest {
 
     @Test
     public void shouldMeasureExpiredRecords() {
+        setup();
         final Properties streamsConfig = StreamsTestUtils.getStreamsConfig();
         final WindowStore<Integer, String> windowStore =
             buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, false, Serdes.Integer(), Serdes.String());
@@ -1036,6 +1058,7 @@ public abstract class AbstractWindowBytesStoreTest {
 
     @Test
     public void shouldNotThrowExceptionWhenFetchRangeIsExpired() {
+        setup();
         windowStore.put(1, "one", 0L);
         windowStore.put(1, "two", 4 * RETENTION_PERIOD);
 
@@ -1047,6 +1070,7 @@ public abstract class AbstractWindowBytesStoreTest {
 
     @Test
     public void testWindowIteratorPeek() {
+        setup();
         final long currentTime = 0;
         windowStore.put(1, "one", currentTime);
 
@@ -1063,6 +1087,7 @@ public abstract class AbstractWindowBytesStoreTest {
 
     @Test
     public void testValueIteratorPeek() {
+        setup();
         windowStore.put(1, "one", 0L);
 
         try (final WindowStoreIterator<String> iterator = windowStore.fetch(1, 0L, 10L)) {
@@ -1078,6 +1103,7 @@ public abstract class AbstractWindowBytesStoreTest {
 
     @Test
     public void shouldNotThrowConcurrentModificationException() {
+        setup();
         long currentTime = 0;
         windowStore.put(1, "one", currentTime);
 
@@ -1103,6 +1129,7 @@ public abstract class AbstractWindowBytesStoreTest {
 
     @Test
     public void testFetchDuplicates() {
+        setup();
         windowStore.close();
         windowStore = buildWindowStore(RETENTION_PERIOD, WINDOW_SIZE, true, Serdes.Integer(), Serdes.String());
         windowStore.init((StateStoreContext) context, windowStore);
