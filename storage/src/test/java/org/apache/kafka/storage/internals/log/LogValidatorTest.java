@@ -77,10 +77,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class LogValidatorTest {
-    Time time = Time.SYSTEM;
-    TopicPartition topicPartition = new TopicPartition("topic", 0);
-    Set<MetricName> metricsKeySet = KafkaYammerMetrics.defaultRegistry().allMetrics().keySet();
-    LogValidator.MetricsRecorder metricsRecorder = UnifiedLog.newValidatorMetricsRecorder(new BrokerTopicStats(false).allTopicsStats());
+    private final Time time = Time.SYSTEM;
+    private final TopicPartition topicPartition = new TopicPartition("topic", 0);
+    private final Set<MetricName> metricsKeySet = KafkaYammerMetrics.defaultRegistry().allMetrics().keySet();
+    private final LogValidator.MetricsRecorder metricsRecorder = UnifiedLog.newValidatorMetricsRecorder(new BrokerTopicStats(false).allTopicsStats());
 
     @Test
     public void testOnlyOneBatch() {
