@@ -23,6 +23,7 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.server.util.ThroughputThrottler;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

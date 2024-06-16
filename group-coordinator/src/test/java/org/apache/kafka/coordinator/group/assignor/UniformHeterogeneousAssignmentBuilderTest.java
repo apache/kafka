@@ -601,4 +601,49 @@ public class UniformHeterogeneousAssignmentBuilderTest {
 
         assertAssignment(expectedAssignment, computedAssignment);
     }
+
+    @Test
+    public void testFirstAssignmentWithTwoMembersIncludingOneWithoutSubscriptions() {
+        Map<Uuid, TopicMetadata> topicMetadata = new HashMap<>();
+        topicMetadata.put(topic1Uuid, new TopicMetadata(
+            topic1Uuid,
+            topic1Name,
+            3,
+            mkMapOfPartitionRacks(3)
+        ));
+
+        Map<String, MemberSubscriptionAndAssignmentImpl> members = new TreeMap<>();
+
+        members.put(memberA, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
+            mkSet(topic1Uuid),
+            Assignment.EMPTY
+        ));
+
+        members.put(memberB, new MemberSubscriptionAndAssignmentImpl(
+            Optional.empty(),
+            Collections.emptySet(),
+            Assignment.EMPTY
+        ));
+
+        GroupSpec groupSpec = new GroupSpecImpl(
+            members,
+            HETEROGENEOUS,
+            Collections.emptyMap()
+        );
+        SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadata);
+
+        GroupAssignment computedAssignment = assignor.assign(
+            groupSpec,
+            subscribedTopicMetadata
+        );
+
+        Map<String, Map<Uuid, Set<Integer>>> expectedAssignment = new HashMap<>();
+        expectedAssignment.put(memberA, mkAssignment(
+            mkTopicAssignment(topic1Uuid, 0, 1, 2)
+        ));
+        expectedAssignment.put(memberB, Collections.emptyMap());
+
+        assertAssignment(expectedAssignment, computedAssignment);
+    }
 }

@@ -16,26 +16,25 @@
  */
 package org.apache.kafka.connect.mirror;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Collections;
-import java.util.Optional;
-import java.util.OptionalLong;
-import java.util.concurrent.ExecutionException;
-
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.source.SourceRecord;
 
 import org.junit.jupiter.api.Test;
+
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.OptionalLong;
+import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 

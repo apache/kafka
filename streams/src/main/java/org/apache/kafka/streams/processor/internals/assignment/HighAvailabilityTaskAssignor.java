@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.internals.Task;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,7 +32,6 @@ import java.util.SortedMap;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.BiPredicate;
@@ -49,13 +49,13 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
     public static final int DEFAULT_HIGH_AVAILABILITY_NON_OVERLAP_COST = 1;
 
     @Override
-    public boolean assign(final Map<UUID, ClientState> clients,
+    public boolean assign(final Map<ProcessId, ClientState> clients,
                           final Set<TaskId> allTaskIds,
                           final Set<TaskId> statefulTaskIds,
                           final RackAwareTaskAssignor rackAwareTaskAssignor,
                           final AssignmentConfigs configs) {
         final SortedSet<TaskId> statefulTasks = new TreeSet<>(statefulTaskIds);
-        final TreeMap<UUID, ClientState> clientStates = new TreeMap<>(clients);
+        final TreeMap<ProcessId, ClientState> clientStates = new TreeMap<>(clients);
 
         assignActiveStatefulTasks(clientStates, statefulTasks, rackAwareTaskAssignor, configs);
 
@@ -69,20 +69,20 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
 
         final AtomicInteger remainingWarmupReplicas = new AtomicInteger(configs.maxWarmupReplicas());
 
-        final Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients = tasksToCaughtUpClients(
+        final Map<TaskId, SortedSet<ProcessId>> tasksToCaughtUpClients = tasksToCaughtUpClients(
             statefulTasks,
             clientStates,
             configs.acceptableRecoveryLag()
         );
 
-        final Map<TaskId, SortedSet<UUID>> tasksToClientByLag = tasksToClientByLag(statefulTasks, clientStates);
+        final Map<TaskId, SortedSet<ProcessId>> tasksToClientByLag = tasksToClientByLag(statefulTasks, clientStates);
 
         // We temporarily need to know which standby tasks were intended as warmups
         // for active tasks, so that we don't move them (again) when we plan standby
         // task movements. We can then immediately treat warmups exactly the same as
         // hot-standby replicas, so we just track it right here as metadata, rather
         // than add "warmup" assignments to ClientState, for example.
-        final Map<UUID, Set<TaskId>> warmups = new TreeMap<>();
+        final Map<ProcessId, Set<TaskId>> warmups = new TreeMap<>();
 
         final int neededActiveTaskMovements = assignActiveTaskMovements(
             tasksToCaughtUpClients,
@@ -113,7 +113,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         return probingRebalanceNeeded;
     }
 
-    private static void assignActiveStatefulTasks(final SortedMap<UUID, ClientState> clientStates,
+    private static void assignActiveStatefulTasks(final SortedMap<ProcessId, ClientState> clientStates,
                                                   final SortedSet<TaskId> statefulTasks,
                                                   final RackAwareTaskAssignor rackAwareTaskAssignor,
                                                   final AssignmentConfigs configs) {
@@ -140,7 +140,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         }
     }
 
-    private void assignStandbyReplicaTasks(final TreeMap<UUID, ClientState> clientStates,
+    private void assignStandbyReplicaTasks(final TreeMap<ProcessId, ClientState> clientStates,
                                            final Set<TaskId> allTaskIds,
                                            final Set<TaskId> statefulTasks,
                                            final RackAwareTaskAssignor rackAwareTaskAssignor,
@@ -168,7 +168,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         }
     }
 
-    private static void balanceTasksOverThreads(final SortedMap<UUID, ClientState> clientStates,
+    private static void balanceTasksOverThreads(final SortedMap<ProcessId, ClientState> clientStates,
                                                 final Function<ClientState, Set<TaskId>> currentAssignmentAccessor,
                                                 final BiConsumer<ClientState, TaskId> taskUnassignor,
                                                 final BiConsumer<ClientState, TaskId> taskAssignor,
@@ -176,12 +176,12 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         boolean keepBalancing = true;
         while (keepBalancing) {
             keepBalancing = false;
-            for (final Map.Entry<UUID, ClientState> sourceEntry : clientStates.entrySet()) {
-                final UUID sourceClient = sourceEntry.getKey();
+            for (final Map.Entry<ProcessId, ClientState> sourceEntry : clientStates.entrySet()) {
+                final ProcessId sourceClient = sourceEntry.getKey();
                 final ClientState sourceClientState = sourceEntry.getValue();
 
-                for (final Map.Entry<UUID, ClientState> destinationEntry : clientStates.entrySet()) {
-                    final UUID destinationClient = destinationEntry.getKey();
+                for (final Map.Entry<ProcessId, ClientState> destinationEntry : clientStates.entrySet()) {
+                    final ProcessId destinationClient = destinationEntry.getKey();
                     final ClientState destinationClientState = destinationEntry.getValue();
                     if (sourceClient.equals(destinationClient)) {
                         continue;
@@ -228,7 +228,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         return proposedSkew < skew;
     }
 
-    private static void assignStatelessActiveTasks(final TreeMap<UUID, ClientState> clientStates,
+    private static void assignStatelessActiveTasks(final TreeMap<ProcessId, ClientState> clientStates,
                                                    final Iterable<TaskId> statelessTasks,
                                                    final RackAwareTaskAssignor rackAwareTaskAssignor) {
         final ConstrainedPrioritySet statelessActiveTaskClientsByTaskLoad = new ConstrainedPrioritySet(
@@ -240,7 +240,7 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         final SortedSet<TaskId> sortedTasks = new TreeSet<>();
         for (final TaskId task : statelessTasks) {
             sortedTasks.add(task);
-            final UUID client = statelessActiveTaskClientsByTaskLoad.poll(task);
+            final ProcessId client = statelessActiveTaskClientsByTaskLoad.poll(task);
             final ClientState state = clientStates.get(client);
             state.assignActive(task);
             statelessActiveTaskClientsByTaskLoad.offer(client);
@@ -252,15 +252,15 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         }
     }
 
-    private static Map<TaskId, SortedSet<UUID>> tasksToCaughtUpClients(final Set<TaskId> statefulTasks,
-                                                                       final Map<UUID, ClientState> clientStates,
+    private static Map<TaskId, SortedSet<ProcessId>> tasksToCaughtUpClients(final Set<TaskId> statefulTasks,
+                                                                       final Map<ProcessId, ClientState> clientStates,
                                                                        final long acceptableRecoveryLag) {
-        final Map<TaskId, SortedSet<UUID>> taskToCaughtUpClients = new HashMap<>();
+        final Map<TaskId, SortedSet<ProcessId>> taskToCaughtUpClients = new HashMap<>();
 
         for (final TaskId task : statefulTasks) {
-            final TreeSet<UUID> caughtUpClients = new TreeSet<>();
-            for (final Map.Entry<UUID, ClientState> clientEntry : clientStates.entrySet()) {
-                final UUID client = clientEntry.getKey();
+            final TreeSet<ProcessId> caughtUpClients = new TreeSet<>();
+            for (final Map.Entry<ProcessId, ClientState> clientEntry : clientStates.entrySet()) {
+                final ProcessId client = clientEntry.getKey();
                 final long taskLag = clientEntry.getValue().lagFor(task);
                 if (activeRunning(taskLag) || unbounded(acceptableRecoveryLag) || acceptable(acceptableRecoveryLag, taskLag)) {
                     caughtUpClients.add(client);
@@ -272,11 +272,11 @@ public class HighAvailabilityTaskAssignor implements TaskAssignor {
         return taskToCaughtUpClients;
     }
 
-    private static Map<TaskId, SortedSet<UUID>> tasksToClientByLag(final Set<TaskId> statefulTasks,
-                                                              final Map<UUID, ClientState> clientStates) {
-        final Map<TaskId, SortedSet<UUID>> tasksToClientByLag = new HashMap<>();
+    private static Map<TaskId, SortedSet<ProcessId>> tasksToClientByLag(final Set<TaskId> statefulTasks,
+                                                              final Map<ProcessId, ClientState> clientStates) {
+        final Map<TaskId, SortedSet<ProcessId>> tasksToClientByLag = new HashMap<>();
         for (final TaskId task : statefulTasks) {
-            final SortedSet<UUID> clientLag = new TreeSet<>(Comparator.<UUID>comparingLong(a ->
+            final SortedSet<ProcessId> clientLag = new TreeSet<>(Comparator.<ProcessId>comparingLong(a ->
                     clientStates.get(a).lagFor(task)).thenComparing(a -> a));
             clientLag.addAll(clientStates.keySet());
             tasksToClientByLag.put(task, clientLag);

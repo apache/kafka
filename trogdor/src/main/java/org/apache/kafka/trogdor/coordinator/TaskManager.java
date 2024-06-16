@@ -17,11 +17,6 @@
 
 package org.apache.kafka.trogdor.coordinator;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import com.fasterxml.jackson.databind.node.LongNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.utils.Scheduler;
@@ -46,6 +41,13 @@ import org.apache.kafka.trogdor.rest.WorkerReceiving;
 import org.apache.kafka.trogdor.rest.WorkerState;
 import org.apache.kafka.trogdor.task.TaskController;
 import org.apache.kafka.trogdor.task.TaskSpec;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.LongNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

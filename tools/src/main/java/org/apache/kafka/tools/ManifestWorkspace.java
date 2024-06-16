@@ -19,6 +19,7 @@ package org.apache.kafka.tools;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.runtime.isolation.PluginSource;
 import org.apache.kafka.connect.runtime.isolation.PluginType;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

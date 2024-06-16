@@ -1235,7 +1235,7 @@ public class RaftEventSimulationTest {
 
             int correlationId = outbound.correlationId();
             Node destination = outbound.destination();
-            RaftRequest.Inbound inbound = new RaftRequest.Inbound(correlationId, outbound.data(),
+            RaftRequest.Inbound inbound = new RaftRequest.Inbound(correlationId, outbound.apiVersion(), outbound.data(),
                 cluster.time.milliseconds());
 
             if (!filters.get(destination.id()).acceptInbound(inbound))

@@ -17,12 +17,8 @@
 
 package org.apache.kafka.jmh.util;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.security.SecureRandom;
-import java.util.concurrent.TimeUnit;
-
 import org.apache.kafka.common.utils.ByteUtils;
+
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.CompilerControl;
 import org.openjdk.jmh.annotations.Fork;
@@ -39,6 +35,11 @@ import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
+
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.security.SecureRandom;
+import java.util.concurrent.TimeUnit;
 
 @OutputTimeUnit(TimeUnit.SECONDS)
 @Fork(3)

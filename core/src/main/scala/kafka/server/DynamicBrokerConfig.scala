@@ -1166,27 +1166,46 @@ class DynamicRemoteLogConfig(server: KafkaBroker) extends BrokerReconfigurable w
 
   override def validateReconfiguration(newConfig: KafkaConfig): Unit = {
     newConfig.values.forEach { (k, v) =>
-      if (reconfigurableConfigs.contains(k)) {
-        if (k.equals(RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP)) {
-          val newValue = v.asInstanceOf[Long]
-          val oldValue = getValue(server.config, k)
-          if (newValue != oldValue && newValue <= 0) {
-            val errorMsg = s"Dynamic remote log manager config update validation failed for $k=$v"
-            throw new ConfigException(s"$errorMsg, value should be at least 1")
-          }
+      if (RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP.equals(k) ||
+        RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP.equals(k) ||
+        RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP.equals(k)) {
+        val newValue = v.asInstanceOf[Long]
+        val oldValue = getValue(server.config, k)
+        if (newValue != oldValue && newValue <= 0) {
+          val errorMsg = s"Dynamic remote log manager config update validation failed for $k=$v"
+          throw new ConfigException(s"$errorMsg, value should be at least 1")
         }
       }
     }
   }
 
   override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
-    val oldValue = oldConfig.getLong(RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP)
-    val newValue = newConfig.getLong(RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP)
-    if (oldValue != newValue) {
-      val remoteLogManager = server.remoteLogManagerOpt
-      if (remoteLogManager.nonEmpty) {
+    def oldLongValue(k: String): Long = oldConfig.getLong(k)
+    def newLongValue(k: String): Long = newConfig.getLong(k)
+
+    def isChangedLongValue(k : String): Boolean = oldLongValue(k) != newLongValue(k)
+
+    val remoteLogManager = server.remoteLogManagerOpt
+    if (remoteLogManager.nonEmpty) {
+      if (isChangedLongValue(RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP)) {
+        val oldValue = oldLongValue(RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP)
+        val newValue = newLongValue(RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP)
         remoteLogManager.get.resizeCacheSize(newValue)
         info(s"Dynamic remote log manager config: ${RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP} updated, " +
+          s"old value: $oldValue, new value: $newValue")
+      }
+      if (isChangedLongValue(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP)) {
+        val oldValue = oldLongValue(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP)
+        val newValue = newLongValue(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP)
+        remoteLogManager.get.updateCopyQuota(newValue)
+        info(s"Dynamic remote log manager config: ${RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP} updated, " +
+          s"old value: $oldValue, new value: $newValue")
+      }
+      if (isChangedLongValue(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP)) {
+        val oldValue = oldLongValue(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP)
+        val newValue = newLongValue(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP)
+        remoteLogManager.get.updateFetchQuota(newValue)
+        info(s"Dynamic remote log manager config: ${RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP} updated, " +
           s"old value: $oldValue, new value: $newValue")
       }
     }
@@ -1194,8 +1213,10 @@ class DynamicRemoteLogConfig(server: KafkaBroker) extends BrokerReconfigurable w
 
   private def getValue(config: KafkaConfig, name: String): Long = {
     name match {
-      case RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP =>
-        config.getLong(RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP)
+      case RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP |
+           RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP |
+           RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP =>
+        config.getLong(name)
       case n => throw new IllegalStateException(s"Unexpected dynamic remote log manager config $n")
     }
   }
@@ -1204,6 +1225,8 @@ class DynamicRemoteLogConfig(server: KafkaBroker) extends BrokerReconfigurable w
 object DynamicRemoteLogConfig {
   val ReconfigurableConfigs = Set(
     RemoteLogManagerConfig.REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP,
-    RemoteLogManagerConfig.REMOTE_FETCH_MAX_WAIT_MS_PROP
+    RemoteLogManagerConfig.REMOTE_FETCH_MAX_WAIT_MS_PROP,
+    RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND_PROP,
+    RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND_PROP
   )
 }

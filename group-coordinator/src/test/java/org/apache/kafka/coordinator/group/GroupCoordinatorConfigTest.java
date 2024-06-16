@@ -31,6 +31,7 @@ public class GroupCoordinatorConfigTest {
         ConsumerGroupPartitionAssignor assignor = new RangeAssignor();
         GroupCoordinatorConfig config = new GroupCoordinatorConfig(
             10,
+            10,
             30,
             10,
             55,
@@ -65,6 +66,7 @@ public class GroupCoordinatorConfigTest {
         assertEquals(24 * 60 * 60 * 1000L, config.offsetsRetentionMs);
         assertEquals(5000, config.offsetCommitTimeoutMs);
         assertEquals(CompressionType.GZIP, config.compressionType);
+        assertEquals(10, config.appendLingerMs);
     }
 
     public static GroupCoordinatorConfig createGroupCoordinatorConfig(
@@ -74,6 +76,7 @@ public class GroupCoordinatorConfigTest {
     ) {
         return new GroupCoordinatorConfig(
             1,
+            10,
             45,
             5,
             Integer.MAX_VALUE,

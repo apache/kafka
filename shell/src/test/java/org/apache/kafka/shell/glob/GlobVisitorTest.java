@@ -17,12 +17,10 @@
 
 package org.apache.kafka.shell.glob;
 
-import static java.util.concurrent.TimeUnit.MINUTES;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-
 import org.apache.kafka.image.node.MetadataNode;
 import org.apache.kafka.shell.glob.GlobVisitor.MetadataNodeInfo;
 import org.apache.kafka.shell.state.MetadataShellState;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -35,6 +33,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
+
+import static java.util.concurrent.TimeUnit.MINUTES;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(value = 5, unit = MINUTES)
 public class GlobVisitorTest {

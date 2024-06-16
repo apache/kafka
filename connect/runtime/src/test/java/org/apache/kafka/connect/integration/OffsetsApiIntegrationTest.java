@@ -143,6 +143,15 @@ public class OffsetsApiIntegrationTest {
 
             result.start();
 
+            try {
+                result.assertions().assertExactlyNumWorkersAreUp(
+                        NUM_WORKERS,
+                        "Workers did not complete startup in time"
+                );
+            } catch (InterruptedException e) {
+                throw new RuntimeException("Interrupted while awaiting cluster startup", e);
+            }
+
             return result;
         });
     }

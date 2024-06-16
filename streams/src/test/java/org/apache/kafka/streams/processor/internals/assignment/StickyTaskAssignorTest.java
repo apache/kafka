@@ -27,6 +27,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.assignment.AssignmentConfigs;
+import org.apache.kafka.streams.processor.assignment.ProcessId;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.junit.Before;
@@ -41,7 +42,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.UUID;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
@@ -68,12 +68,12 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_3_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_3_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.TASK_3_2;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_1;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_2;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_3;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_4;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_5;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_6;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_1;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_2;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_3;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_4;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_5;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_6;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertBalancedTasks;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertValidAssignment;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.copyClientStateMap;
@@ -108,7 +108,7 @@ public class StickyTaskAssignorTest {
 
     private final List<Integer> expectedTopicGroupIds = asList(1, 2);
     private final Time time = new MockTime();
-    private final Map<UUID, ClientState> clients = new TreeMap<>();
+    private final Map<ProcessId, ClientState> clients = new TreeMap<>();
 
     private boolean enableRackAwareTaskAssignor;
 
@@ -131,9 +131,9 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldAssignOneActiveTaskToEachProcessWhenTaskCountSameAsProcessCount() {
-        createClient(UUID_1, 1);
-        createClient(UUID_2, 1);
-        createClient(UUID_3, 1);
+        createClient(PID_1, 1);
+        createClient(PID_2, 1);
+        createClient(PID_3, 1);
 
         final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2);
         assertThat(probingRebalanceNeeded, is(false));
@@ -145,9 +145,9 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldAssignTopicGroupIdEvenlyAcrossClientsWithNoStandByTasks() {
-        createClient(UUID_1, 2);
-        createClient(UUID_2, 2);
-        createClient(UUID_3, 2);
+        createClient(PID_1, 2);
+        createClient(PID_2, 2);
+        createClient(PID_3, 2);
 
         final boolean probingRebalanceNeeded = assign(TASK_1_0, TASK_1_1, TASK_2_2, TASK_2_0, TASK_2_1, TASK_1_2);
         assertThat(probingRebalanceNeeded, is(false));
@@ -157,9 +157,9 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldAssignTopicGroupIdEvenlyAcrossClientsWithStandByTasks() {
-        createClient(UUID_1, 2);
-        createClient(UUID_2, 2);
-        createClient(UUID_3, 2);
+        createClient(PID_1, 2);
+        createClient(PID_2, 2);
+        createClient(PID_3, 2);
 
         final boolean probingRebalanceNeeded = assign(1, TASK_2_0, TASK_1_1, TASK_1_2, TASK_1_0, TASK_2_1, TASK_2_2);
         assertThat(probingRebalanceNeeded, is(false));
@@ -169,65 +169,65 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldNotMigrateActiveTaskToOtherProcess() {
-        createClientWithPreviousActiveTasks(UUID_1, 1, TASK_0_0);
-        createClientWithPreviousActiveTasks(UUID_2, 1, TASK_0_1);
+        createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0);
+        createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_1);
 
         assertThat(assign(TASK_0_0, TASK_0_1, TASK_0_2), is(false));
 
-        assertThat(clients.get(UUID_1).activeTasks(), hasItems(TASK_0_0));
-        assertThat(clients.get(UUID_2).activeTasks(), hasItems(TASK_0_1));
+        assertThat(clients.get(PID_1).activeTasks(), hasItems(TASK_0_0));
+        assertThat(clients.get(PID_2).activeTasks(), hasItems(TASK_0_1));
         assertThat(allActiveTasks(), equalTo(asList(TASK_0_0, TASK_0_1, TASK_0_2)));
 
         clients.clear();
 
         // flip the previous active tasks assignment around.
-        createClientWithPreviousActiveTasks(UUID_1, 1, TASK_0_1);
-        createClientWithPreviousActiveTasks(UUID_2, 1, TASK_0_2);
+        createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_1);
+        createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_2);
 
         assertThat(assign(TASK_0_0, TASK_0_1, TASK_0_2), is(false));
 
-        assertThat(clients.get(UUID_1).activeTasks(), hasItems(TASK_0_1));
-        assertThat(clients.get(UUID_2).activeTasks(), hasItems(TASK_0_2));
+        assertThat(clients.get(PID_1).activeTasks(), hasItems(TASK_0_1));
+        assertThat(clients.get(PID_2).activeTasks(), hasItems(TASK_0_2));
         assertThat(allActiveTasks(), equalTo(asList(TASK_0_0, TASK_0_1, TASK_0_2)));
     }
 
     @Test
     public void shouldMigrateActiveTasksToNewProcessWithoutChangingAllAssignments() {
-        createClientWithPreviousActiveTasks(UUID_1, 1, TASK_0_0, TASK_0_2);
-        createClientWithPreviousActiveTasks(UUID_2, 1, TASK_0_1);
-        createClient(UUID_3, 1);
+        createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0, TASK_0_2);
+        createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_1);
+        createClient(PID_3, 1);
 
         final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2);
 
         assertThat(probingRebalanceNeeded, is(false));
-        assertThat(clients.get(UUID_2).activeTasks(), equalTo(singleton(TASK_0_1)));
-        assertThat(clients.get(UUID_1).activeTasks().size(), equalTo(1));
-        assertThat(clients.get(UUID_3).activeTasks().size(), equalTo(1));
+        assertThat(clients.get(PID_2).activeTasks(), equalTo(singleton(TASK_0_1)));
+        assertThat(clients.get(PID_1).activeTasks().size(), equalTo(1));
+        assertThat(clients.get(PID_3).activeTasks().size(), equalTo(1));
         assertThat(allActiveTasks(), equalTo(asList(TASK_0_0, TASK_0_1, TASK_0_2)));
     }
 
     @Test
     public void shouldAssignBasedOnCapacity() {
-        createClient(UUID_1, 1);
-        createClient(UUID_2, 2);
+        createClient(PID_1, 1);
+        createClient(PID_2, 2);
         final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2);
 
         assertThat(probingRebalanceNeeded, is(false));
-        assertThat(clients.get(UUID_1).activeTasks().size(), equalTo(1));
-        assertThat(clients.get(UUID_2).activeTasks().size(), equalTo(2));
+        assertThat(clients.get(PID_1).activeTasks().size(), equalTo(1));
+        assertThat(clients.get(PID_2).activeTasks().size(), equalTo(2));
     }
 
     @Test
     public void shouldAssignTasksEvenlyWithUnequalTopicGroupSizes() {
-        createClientWithPreviousActiveTasks(UUID_1, 1, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_0_4, TASK_0_5, TASK_1_0);
+        createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_0_4, TASK_0_5, TASK_1_0);
 
-        createClient(UUID_2, 1);
+        createClient(PID_2, 1);
 
         assertThat(assign(TASK_1_0, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_0_4, TASK_0_5), is(false));
 
         final Set<TaskId> allTasks = new HashSet<>(asList(TASK_0_0, TASK_0_1, TASK_1_0, TASK_0_5, TASK_0_2, TASK_0_3, TASK_0_4));
-        final Set<TaskId> client1Tasks = clients.get(UUID_1).activeTasks();
-        final Set<TaskId> client2Tasks = clients.get(UUID_2).activeTasks();
+        final Set<TaskId> client1Tasks = clients.get(PID_1).activeTasks();
+        final Set<TaskId> client2Tasks = clients.get(PID_2).activeTasks();
 
         // one client should get 3 tasks and the other should have 4
         assertThat(
@@ -241,85 +241,85 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldKeepActiveTaskStickinessWhenMoreClientThanActiveTasks() {
-        createClientWithPreviousActiveTasks(UUID_1, 1, TASK_0_0);
-        createClientWithPreviousActiveTasks(UUID_2, 1, TASK_0_2);
-        createClientWithPreviousActiveTasks(UUID_3, 1, TASK_0_1);
-        createClient(UUID_4, 1);
-        createClient(UUID_5, 1);
+        createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0);
+        createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_2);
+        createClientWithPreviousActiveTasks(PID_3, 1, TASK_0_1);
+        createClient(PID_4, 1);
+        createClient(PID_5, 1);
 
         assertThat(assign(TASK_0_0, TASK_0_1, TASK_0_2), is(false));
 
-        assertThat(clients.get(UUID_1).activeTasks(), equalTo(singleton(TASK_0_0)));
-        assertThat(clients.get(UUID_2).activeTasks(), equalTo(singleton(TASK_0_2)));
-        assertThat(clients.get(UUID_3).activeTasks(), equalTo(singleton(TASK_0_1)));
+        assertThat(clients.get(PID_1).activeTasks(), equalTo(singleton(TASK_0_0)));
+        assertThat(clients.get(PID_2).activeTasks(), equalTo(singleton(TASK_0_2)));
+        assertThat(clients.get(PID_3).activeTasks(), equalTo(singleton(TASK_0_1)));
 
         // change up the assignment and make sure it is still sticky
         clients.clear();
-        createClient(UUID_1, 1);
-        createClientWithPreviousActiveTasks(UUID_2, 1, TASK_0_0);
-        createClient(UUID_3, 1);
-        createClientWithPreviousActiveTasks(UUID_4, 1, TASK_0_2);
-        createClientWithPreviousActiveTasks(UUID_5, 1, TASK_0_1);
+        createClient(PID_1, 1);
+        createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_0);
+        createClient(PID_3, 1);
+        createClientWithPreviousActiveTasks(PID_4, 1, TASK_0_2);
+        createClientWithPreviousActiveTasks(PID_5, 1, TASK_0_1);
 
         assertThat(assign(TASK_0_0, TASK_0_1, TASK_0_2), is(false));
 
-        assertThat(clients.get(UUID_2).activeTasks(), equalTo(singleton(TASK_0_0)));
-        assertThat(clients.get(UUID_4).activeTasks(), equalTo(singleton(TASK_0_2)));
-        assertThat(clients.get(UUID_5).activeTasks(), equalTo(singleton(TASK_0_1)));
+        assertThat(clients.get(PID_2).activeTasks(), equalTo(singleton(TASK_0_0)));
+        assertThat(clients.get(PID_4).activeTasks(), equalTo(singleton(TASK_0_2)));
+        assertThat(clients.get(PID_5).activeTasks(), equalTo(singleton(TASK_0_1)));
     }
 
     @Test
     public void shouldAssignTasksToClientWithPreviousStandbyTasks() {
-        final ClientState client1 = createClient(UUID_1, 1);
+        final ClientState client1 = createClient(PID_1, 1);
         client1.addPreviousStandbyTasks(mkSet(TASK_0_2));
-        final ClientState client2 = createClient(UUID_2, 1);
+        final ClientState client2 = createClient(PID_2, 1);
         client2.addPreviousStandbyTasks(mkSet(TASK_0_1));
-        final ClientState client3 = createClient(UUID_3, 1);
+        final ClientState client3 = createClient(PID_3, 1);
         client3.addPreviousStandbyTasks(mkSet(TASK_0_0));
 
         final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2);
 
         assertThat(probingRebalanceNeeded, is(false));
 
-        assertThat(clients.get(UUID_1).activeTasks(), equalTo(singleton(TASK_0_2)));
-        assertThat(clients.get(UUID_2).activeTasks(), equalTo(singleton(TASK_0_1)));
-        assertThat(clients.get(UUID_3).activeTasks(), equalTo(singleton(TASK_0_0)));
+        assertThat(clients.get(PID_1).activeTasks(), equalTo(singleton(TASK_0_2)));
+        assertThat(clients.get(PID_2).activeTasks(), equalTo(singleton(TASK_0_1)));
+        assertThat(clients.get(PID_3).activeTasks(), equalTo(singleton(TASK_0_0)));
     }
 
     @Test
     public void shouldAssignBasedOnCapacityWhenMultipleClientHaveStandbyTasks() {
-        final ClientState c1 = createClientWithPreviousActiveTasks(UUID_1, 1, TASK_0_0);
+        final ClientState c1 = createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0);
         c1.addPreviousStandbyTasks(mkSet(TASK_0_1));
-        final ClientState c2 = createClientWithPreviousActiveTasks(UUID_2, 2, TASK_0_2);
+        final ClientState c2 = createClientWithPreviousActiveTasks(PID_2, 2, TASK_0_2);
         c2.addPreviousStandbyTasks(mkSet(TASK_0_1));
 
         final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2);
 
         assertThat(probingRebalanceNeeded, is(false));
 
-        assertThat(clients.get(UUID_1).activeTasks(), equalTo(singleton(TASK_0_0)));
-        assertThat(clients.get(UUID_2).activeTasks(), equalTo(mkSet(TASK_0_2, TASK_0_1)));
+        assertThat(clients.get(PID_1).activeTasks(), equalTo(singleton(TASK_0_0)));
+        assertThat(clients.get(PID_2).activeTasks(), equalTo(mkSet(TASK_0_2, TASK_0_1)));
     }
 
     @Test
     public void shouldAssignStandbyTasksToDifferentClientThanCorrespondingActiveTaskIsAssignedTo() {
-        createClientWithPreviousActiveTasks(UUID_1, 1, TASK_0_0);
-        createClientWithPreviousActiveTasks(UUID_2, 1, TASK_0_1);
-        createClientWithPreviousActiveTasks(UUID_3, 1, TASK_0_2);
-        createClientWithPreviousActiveTasks(UUID_4, 1, TASK_0_3);
+        createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0);
+        createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_1);
+        createClientWithPreviousActiveTasks(PID_3, 1, TASK_0_2);
+        createClientWithPreviousActiveTasks(PID_4, 1, TASK_0_3);
 
         final boolean probingRebalanceNeeded = assign(1, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
         assertThat(probingRebalanceNeeded, is(false));
 
 
-        assertThat(clients.get(UUID_1).standbyTasks(), not(hasItems(TASK_0_0)));
-        assertThat(clients.get(UUID_1).standbyTasks().size(), lessThanOrEqualTo(2));
-        assertThat(clients.get(UUID_2).standbyTasks(), not(hasItems(TASK_0_1)));
-        assertThat(clients.get(UUID_2).standbyTasks().size(), lessThanOrEqualTo(2));
-        assertThat(clients.get(UUID_3).standbyTasks(), not(hasItems(TASK_0_2)));
-        assertThat(clients.get(UUID_3).standbyTasks().size(), lessThanOrEqualTo(2));
-        assertThat(clients.get(UUID_4).standbyTasks(), not(hasItems(TASK_0_3)));
-        assertThat(clients.get(UUID_4).standbyTasks().size(), lessThanOrEqualTo(2));
+        assertThat(clients.get(PID_1).standbyTasks(), not(hasItems(TASK_0_0)));
+        assertThat(clients.get(PID_1).standbyTasks().size(), lessThanOrEqualTo(2));
+        assertThat(clients.get(PID_2).standbyTasks(), not(hasItems(TASK_0_1)));
+        assertThat(clients.get(PID_2).standbyTasks().size(), lessThanOrEqualTo(2));
+        assertThat(clients.get(PID_3).standbyTasks(), not(hasItems(TASK_0_2)));
+        assertThat(clients.get(PID_3).standbyTasks().size(), lessThanOrEqualTo(2));
+        assertThat(clients.get(PID_4).standbyTasks(), not(hasItems(TASK_0_3)));
+        assertThat(clients.get(PID_4).standbyTasks().size(), lessThanOrEqualTo(2));
 
         int nonEmptyStandbyTaskCount = 0;
         for (final ClientState clientState : clients.values()) {
@@ -332,31 +332,31 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldAssignMultipleReplicasOfStandbyTask() {
-        createClientWithPreviousActiveTasks(UUID_1, 1, TASK_0_0);
-        createClientWithPreviousActiveTasks(UUID_2, 1, TASK_0_1);
-        createClientWithPreviousActiveTasks(UUID_3, 1, TASK_0_2);
+        createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0);
+        createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_1);
+        createClientWithPreviousActiveTasks(PID_3, 1, TASK_0_2);
 
         final boolean probingRebalanceNeeded = assign(2, TASK_0_0, TASK_0_1, TASK_0_2);
         assertThat(probingRebalanceNeeded, is(false));
 
-        assertThat(clients.get(UUID_1).standbyTasks(), equalTo(mkSet(TASK_0_1, TASK_0_2)));
-        assertThat(clients.get(UUID_2).standbyTasks(), equalTo(mkSet(TASK_0_2, TASK_0_0)));
-        assertThat(clients.get(UUID_3).standbyTasks(), equalTo(mkSet(TASK_0_0, TASK_0_1)));
+        assertThat(clients.get(PID_1).standbyTasks(), equalTo(mkSet(TASK_0_1, TASK_0_2)));
+        assertThat(clients.get(PID_2).standbyTasks(), equalTo(mkSet(TASK_0_2, TASK_0_0)));
+        assertThat(clients.get(PID_3).standbyTasks(), equalTo(mkSet(TASK_0_0, TASK_0_1)));
     }
 
     @Test
     public void shouldNotAssignStandbyTaskReplicasWhenNoClientAvailableWithoutHavingTheTaskAssigned() {
-        createClient(UUID_1, 1);
+        createClient(PID_1, 1);
         final boolean probingRebalanceNeeded = assign(1, TASK_0_0);
         assertThat(probingRebalanceNeeded, is(false));
-        assertThat(clients.get(UUID_1).standbyTasks().size(), equalTo(0));
+        assertThat(clients.get(PID_1).standbyTasks().size(), equalTo(0));
     }
 
     @Test
     public void shouldAssignActiveAndStandbyTasks() {
-        createClient(UUID_1, 1);
-        createClient(UUID_2, 1);
-        createClient(UUID_3, 1);
+        createClient(PID_1, 1);
+        createClient(PID_2, 1);
+        createClient(PID_3, 1);
 
         final boolean probingRebalanceNeeded = assign(1, TASK_0_0, TASK_0_1, TASK_0_2);
         assertThat(probingRebalanceNeeded, is(false));
@@ -367,25 +367,25 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldAssignAtLeastOneTaskToEachClientIfPossible() {
-        createClient(UUID_1, 3);
-        createClient(UUID_2, 1);
-        createClient(UUID_3, 1);
+        createClient(PID_1, 3);
+        createClient(PID_2, 1);
+        createClient(PID_3, 1);
 
         final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2);
         assertThat(probingRebalanceNeeded, is(false));
-        assertThat(clients.get(UUID_1).assignedTaskCount(), equalTo(1));
-        assertThat(clients.get(UUID_2).assignedTaskCount(), equalTo(1));
-        assertThat(clients.get(UUID_3).assignedTaskCount(), equalTo(1));
+        assertThat(clients.get(PID_1).assignedTaskCount(), equalTo(1));
+        assertThat(clients.get(PID_2).assignedTaskCount(), equalTo(1));
+        assertThat(clients.get(PID_3).assignedTaskCount(), equalTo(1));
     }
 
     @Test
     public void shouldAssignEachActiveTaskToOneClientWhenMoreClientsThanTasks() {
-        createClient(UUID_1, 1);
-        createClient(UUID_2, 1);
-        createClient(UUID_3, 1);
-        createClient(UUID_4, 1);
-        createClient(UUID_5, 1);
-        createClient(UUID_6, 1);
+        createClient(PID_1, 1);
+        createClient(PID_2, 1);
+        createClient(PID_3, 1);
+        createClient(PID_4, 1);
+        createClient(PID_5, 1);
+        createClient(PID_6, 1);
 
         final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2);
         assertThat(probingRebalanceNeeded, is(false));
@@ -395,12 +395,12 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldBalanceActiveAndStandbyTasksAcrossAvailableClients() {
-        createClient(UUID_1, 1);
-        createClient(UUID_2, 1);
-        createClient(UUID_3, 1);
-        createClient(UUID_4, 1);
-        createClient(UUID_5, 1);
-        createClient(UUID_6, 1);
+        createClient(PID_1, 1);
+        createClient(PID_2, 1);
+        createClient(PID_3, 1);
+        createClient(PID_4, 1);
+        createClient(PID_5, 1);
+        createClient(PID_6, 1);
 
         final boolean probingRebalanceNeeded = assign(1, TASK_0_0, TASK_0_1, TASK_0_2);
         assertThat(probingRebalanceNeeded, is(false));
@@ -412,8 +412,8 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldAssignMoreTasksToClientWithMoreCapacity() {
-        createClient(UUID_2, 2);
-        createClient(UUID_1, 1);
+        createClient(PID_2, 2);
+        createClient(PID_1, 1);
 
         final boolean probingRebalanceNeeded = assign(
             TASK_0_0,
@@ -431,16 +431,16 @@ public class StickyTaskAssignorTest {
         );
 
         assertThat(probingRebalanceNeeded, is(false));
-        assertThat(clients.get(UUID_2).assignedTaskCount(), equalTo(8));
-        assertThat(clients.get(UUID_1).assignedTaskCount(), equalTo(4));
+        assertThat(clients.get(PID_2).assignedTaskCount(), equalTo(8));
+        assertThat(clients.get(PID_1).assignedTaskCount(), equalTo(4));
     }
 
     @Test
     public void shouldEvenlyDistributeByTaskIdAndPartition() {
-        createClient(UUID_1, 4);
-        createClient(UUID_2, 4);
-        createClient(UUID_3, 4);
-        createClient(UUID_4, 4);
+        createClient(PID_1, 4);
+        createClient(PID_2, 4);
+        createClient(PID_3, 4);
+        createClient(PID_4, 4);
 
         final List<TaskId> taskIds = new ArrayList<>();
         final TaskId[] taskIdArray = new TaskId[16];
@@ -461,7 +461,7 @@ public class StickyTaskAssignorTest {
         final Cluster cluster = getRandomCluster(nodeSize, topicSize, partitionSize);
         final Map<TaskId, Set<TopicPartition>> partitionsForTask = getTaskTopicPartitionMap(topicSize, partitionSize, false);
         final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask = getTaskTopicPartitionMap(topicSize, partitionSize, true);
-        final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer = getRandomProcessRacks(clientSize, nodeSize);
+        final Map<ProcessId, Map<String, Optional<String>>> racksForProcessConsumer = getRandomProcessRacks(clientSize, nodeSize);
         final InternalTopicManager internalTopicManager = mockInternalTopicManagerForRandomChangelog(nodeSize, topicSize, partitionSize);
         final AssignmentConfigs configs = new AssignmentConfigs(
             0L,
@@ -493,30 +493,30 @@ public class StickyTaskAssignorTest {
         final Set<TaskId> expectedClientThreeAssignment = getExpectedTaskIdAssignment(taskIds, 2, 6, 10, 14);
         final Set<TaskId> expectedClientFourAssignment = getExpectedTaskIdAssignment(taskIds, 3, 7, 11, 15);
 
-        final Map<UUID, Set<TaskId>> sortedAssignments = sortClientAssignments(clients);
+        final Map<ProcessId, Set<TaskId>> sortedAssignments = sortClientAssignments(clients);
 
-        assertThat(sortedAssignments.get(UUID_1), equalTo(expectedClientOneAssignment));
-        assertThat(sortedAssignments.get(UUID_2), equalTo(expectedClientTwoAssignment));
-        assertThat(sortedAssignments.get(UUID_3), equalTo(expectedClientThreeAssignment));
-        assertThat(sortedAssignments.get(UUID_4), equalTo(expectedClientFourAssignment));
+        assertThat(sortedAssignments.get(PID_1), equalTo(expectedClientOneAssignment));
+        assertThat(sortedAssignments.get(PID_2), equalTo(expectedClientTwoAssignment));
+        assertThat(sortedAssignments.get(PID_3), equalTo(expectedClientThreeAssignment));
+        assertThat(sortedAssignments.get(PID_4), equalTo(expectedClientFourAssignment));
     }
 
     @Test
     public void shouldNotHaveSameAssignmentOnAnyTwoHosts() {
-        final List<UUID> allUUIDs = asList(UUID_1, UUID_2, UUID_3, UUID_4);
-        createClient(UUID_1, 1);
-        createClient(UUID_2, 1);
-        createClient(UUID_3, 1);
-        createClient(UUID_4, 1);
+        final List<ProcessId> allProcessIds = asList(PID_1, PID_2, PID_3, PID_4);
+        createClient(PID_1, 1);
+        createClient(PID_2, 1);
+        createClient(PID_3, 1);
+        createClient(PID_4, 1);
 
         final boolean probingRebalanceNeeded = assign(1, TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
         assertThat(probingRebalanceNeeded, is(false));
 
-        for (final UUID uuid : allUUIDs) {
+        for (final ProcessId uuid : allProcessIds) {
             final Set<TaskId> taskIds = clients.get(uuid).assignedTasks();
-            for (final UUID otherUUID : allUUIDs) {
-                if (!uuid.equals(otherUUID)) {
-                    assertThat("clients shouldn't have same task assignment", clients.get(otherUUID).assignedTasks(),
+            for (final ProcessId otherProcessId : allProcessIds) {
+                if (!uuid.equals(otherProcessId)) {
+                    assertThat("clients shouldn't have same task assignment", clients.get(otherProcessId).assignedTasks(),
                                not(equalTo(taskIds)));
                 }
             }
@@ -526,20 +526,20 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldNotHaveSameAssignmentOnAnyTwoHostsWhenThereArePreviousActiveTasks() {
-        final List<UUID> allUUIDs = asList(UUID_1, UUID_2, UUID_3);
-        createClientWithPreviousActiveTasks(UUID_1, 1, TASK_0_1, TASK_0_2);
-        createClientWithPreviousActiveTasks(UUID_2, 1, TASK_0_3);
-        createClientWithPreviousActiveTasks(UUID_3, 1, TASK_0_0);
-        createClient(UUID_4, 1);
+        final List<ProcessId> allProcessIds = asList(PID_1, PID_2, PID_3);
+        createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_1, TASK_0_2);
+        createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_3);
+        createClientWithPreviousActiveTasks(PID_3, 1, TASK_0_0);
+        createClient(PID_4, 1);
 
         final boolean probingRebalanceNeeded = assign(1, TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
         assertThat(probingRebalanceNeeded, is(false));
 
-        for (final UUID uuid : allUUIDs) {
+        for (final ProcessId uuid : allProcessIds) {
             final Set<TaskId> taskIds = clients.get(uuid).assignedTasks();
-            for (final UUID otherUUID : allUUIDs) {
-                if (!uuid.equals(otherUUID)) {
-                    assertThat("clients shouldn't have same task assignment", clients.get(otherUUID).assignedTasks(),
+            for (final ProcessId otherProcessId : allProcessIds) {
+                if (!uuid.equals(otherProcessId)) {
+                    assertThat("clients shouldn't have same task assignment", clients.get(otherProcessId).assignedTasks(),
                                not(equalTo(taskIds)));
                 }
             }
@@ -549,24 +549,24 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldNotHaveSameAssignmentOnAnyTwoHostsWhenThereArePreviousStandbyTasks() {
-        final List<UUID> allUUIDs = asList(UUID_1, UUID_2, UUID_3, UUID_4);
+        final List<ProcessId> allProcessIds = asList(PID_1, PID_2, PID_3, PID_4);
 
-        final ClientState c1 = createClientWithPreviousActiveTasks(UUID_1, 1, TASK_0_1, TASK_0_2);
+        final ClientState c1 = createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_1, TASK_0_2);
         c1.addPreviousStandbyTasks(mkSet(TASK_0_3, TASK_0_0));
-        final ClientState c2 = createClientWithPreviousActiveTasks(UUID_2, 1, TASK_0_3, TASK_0_0);
+        final ClientState c2 = createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_3, TASK_0_0);
         c2.addPreviousStandbyTasks(mkSet(TASK_0_1, TASK_0_2));
 
-        createClient(UUID_3, 1);
-        createClient(UUID_4, 1);
+        createClient(PID_3, 1);
+        createClient(PID_4, 1);
 
         final boolean probingRebalanceNeeded = assign(1, TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
         assertThat(probingRebalanceNeeded, is(false));
 
-        for (final UUID uuid : allUUIDs) {
+        for (final ProcessId uuid : allProcessIds) {
             final Set<TaskId> taskIds = clients.get(uuid).assignedTasks();
-            for (final UUID otherUUID : allUUIDs) {
-                if (!uuid.equals(otherUUID)) {
-                    assertThat("clients shouldn't have same task assignment", clients.get(otherUUID).assignedTasks(),
+            for (final ProcessId otherProcessId : allProcessIds) {
+                if (!uuid.equals(otherProcessId)) {
+                    assertThat("clients shouldn't have same task assignment", clients.get(otherProcessId).assignedTasks(),
                                not(equalTo(taskIds)));
                 }
             }
@@ -575,42 +575,42 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldReBalanceTasksAcrossAllClientsWhenCapacityAndTaskCountTheSame() {
-        createClientWithPreviousActiveTasks(UUID_3, 1, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
-        createClient(UUID_1, 1);
-        createClient(UUID_2, 1);
-        createClient(UUID_4, 1);
+        createClientWithPreviousActiveTasks(PID_3, 1, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
+        createClient(PID_1, 1);
+        createClient(PID_2, 1);
+        createClient(PID_4, 1);
 
         final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
         assertThat(probingRebalanceNeeded, is(false));
 
-        assertThat(clients.get(UUID_1).assignedTaskCount(), equalTo(1));
-        assertThat(clients.get(UUID_2).assignedTaskCount(), equalTo(1));
-        assertThat(clients.get(UUID_3).assignedTaskCount(), equalTo(1));
-        assertThat(clients.get(UUID_4).assignedTaskCount(), equalTo(1));
+        assertThat(clients.get(PID_1).assignedTaskCount(), equalTo(1));
+        assertThat(clients.get(PID_2).assignedTaskCount(), equalTo(1));
+        assertThat(clients.get(PID_3).assignedTaskCount(), equalTo(1));
+        assertThat(clients.get(PID_4).assignedTaskCount(), equalTo(1));
     }
 
     @Test
     public void shouldReBalanceTasksAcrossClientsWhenCapacityLessThanTaskCount() {
-        createClientWithPreviousActiveTasks(UUID_3, 1, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
-        createClient(UUID_1, 1);
-        createClient(UUID_2, 1);
+        createClientWithPreviousActiveTasks(PID_3, 1, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3);
+        createClient(PID_1, 1);
+        createClient(PID_2, 1);
 
         final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
         assertThat(probingRebalanceNeeded, is(false));
 
-        assertThat(clients.get(UUID_3).assignedTaskCount(), equalTo(2));
-        assertThat(clients.get(UUID_1).assignedTaskCount(), equalTo(1));
-        assertThat(clients.get(UUID_2).assignedTaskCount(), equalTo(1));
+        assertThat(clients.get(PID_3).assignedTaskCount(), equalTo(2));
+        assertThat(clients.get(PID_1).assignedTaskCount(), equalTo(1));
+        assertThat(clients.get(PID_2).assignedTaskCount(), equalTo(1));
     }
 
     @Test
     public void shouldRebalanceTasksToClientsBasedOnCapacity() {
-        createClientWithPreviousActiveTasks(UUID_2, 1, TASK_0_0, TASK_0_3, TASK_0_2);
-        createClient(UUID_3, 2);
+        createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_0, TASK_0_3, TASK_0_2);
+        createClient(PID_3, 2);
         final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_2, TASK_0_3);
         assertThat(probingRebalanceNeeded, is(false));
-        assertThat(clients.get(UUID_2).assignedTaskCount(), equalTo(1));
-        assertThat(clients.get(UUID_3).assignedTaskCount(), equalTo(2));
+        assertThat(clients.get(PID_2).assignedTaskCount(), equalTo(1));
+        assertThat(clients.get(PID_3).assignedTaskCount(), equalTo(2));
     }
 
     @Test
@@ -618,59 +618,59 @@ public class StickyTaskAssignorTest {
         final Set<TaskId> p1PrevTasks = mkSet(TASK_0_0, TASK_0_2);
         final Set<TaskId> p2PrevTasks = mkSet(TASK_0_1, TASK_0_3);
 
-        createClientWithPreviousActiveTasks(UUID_1, 1, TASK_0_0, TASK_0_2);
-        createClientWithPreviousActiveTasks(UUID_2, 1, TASK_0_1, TASK_0_3);
-        createClientWithPreviousActiveTasks(UUID_3, 1);
+        createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0, TASK_0_2);
+        createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_1, TASK_0_3);
+        createClientWithPreviousActiveTasks(PID_3, 1);
 
         final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_2, TASK_0_1, TASK_0_3);
         assertThat(probingRebalanceNeeded, is(false));
 
-        final Set<TaskId> p3ActiveTasks = clients.get(UUID_3).activeTasks();
+        final Set<TaskId> p3ActiveTasks = clients.get(PID_3).activeTasks();
         assertThat(p3ActiveTasks.size(), equalTo(1));
         if (p1PrevTasks.removeAll(p3ActiveTasks)) {
-            assertThat(clients.get(UUID_2).activeTasks(), equalTo(p2PrevTasks));
+            assertThat(clients.get(PID_2).activeTasks(), equalTo(p2PrevTasks));
         } else {
-            assertThat(clients.get(UUID_1).activeTasks(), equalTo(p1PrevTasks));
+            assertThat(clients.get(PID_1).activeTasks(), equalTo(p1PrevTasks));
         }
     }
 
     @Test
     public void shouldNotMoveAnyTasksWhenNewTasksAdded() {
-        createClientWithPreviousActiveTasks(UUID_1, 1, TASK_0_0, TASK_0_1);
-        createClientWithPreviousActiveTasks(UUID_2, 1, TASK_0_2, TASK_0_3);
+        createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0, TASK_0_1);
+        createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_2, TASK_0_3);
 
         final boolean probingRebalanceNeeded = assign(TASK_0_3, TASK_0_1, TASK_0_4, TASK_0_2, TASK_0_0, TASK_0_5);
         assertThat(probingRebalanceNeeded, is(false));
 
-        assertThat(clients.get(UUID_1).activeTasks(), hasItems(TASK_0_0, TASK_0_1));
-        assertThat(clients.get(UUID_2).activeTasks(), hasItems(TASK_0_2, TASK_0_3));
+        assertThat(clients.get(PID_1).activeTasks(), hasItems(TASK_0_0, TASK_0_1));
+        assertThat(clients.get(PID_2).activeTasks(), hasItems(TASK_0_2, TASK_0_3));
     }
 
     @Test
     public void shouldAssignNewTasksToNewClientWhenPreviousTasksAssignedToOldClients() {
 
-        createClientWithPreviousActiveTasks(UUID_1, 1, TASK_0_2, TASK_0_1);
-        createClientWithPreviousActiveTasks(UUID_2, 1, TASK_0_0, TASK_0_3);
-        createClient(UUID_3, 1);
+        createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_2, TASK_0_1);
+        createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_0, TASK_0_3);
+        createClient(PID_3, 1);
 
         final boolean probingRebalanceNeeded = assign(TASK_0_3, TASK_0_1, TASK_0_4, TASK_0_2, TASK_0_0, TASK_0_5);
         assertThat(probingRebalanceNeeded, is(false));
 
-        assertThat(clients.get(UUID_1).activeTasks(), hasItems(TASK_0_2, TASK_0_1));
-        assertThat(clients.get(UUID_2).activeTasks(), hasItems(TASK_0_0, TASK_0_3));
-        assertThat(clients.get(UUID_3).activeTasks(), hasItems(TASK_0_4, TASK_0_5));
+        assertThat(clients.get(PID_1).activeTasks(), hasItems(TASK_0_2, TASK_0_1));
+        assertThat(clients.get(PID_2).activeTasks(), hasItems(TASK_0_0, TASK_0_3));
+        assertThat(clients.get(PID_3).activeTasks(), hasItems(TASK_0_4, TASK_0_5));
     }
 
     @Test
     public void shouldAssignTasksNotPreviouslyActiveToNewClient() {
-        final ClientState c1 = createClientWithPreviousActiveTasks(UUID_1, 1, TASK_0_1, TASK_1_2, TASK_1_3);
+        final ClientState c1 = createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_1, TASK_1_2, TASK_1_3);
         c1.addPreviousStandbyTasks(mkSet(TASK_0_0, TASK_1_1, TASK_2_0, TASK_2_1, TASK_2_3));
-        final ClientState c2 = createClientWithPreviousActiveTasks(UUID_2, 1, TASK_0_0, TASK_1_1, TASK_2_2);
+        final ClientState c2 = createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_0, TASK_1_1, TASK_2_2);
         c2.addPreviousStandbyTasks(mkSet(TASK_0_1, TASK_1_0, TASK_0_2, TASK_2_0, TASK_0_3, TASK_1_2, TASK_2_1, TASK_1_3, TASK_2_3));
-        final ClientState c3 = createClientWithPreviousActiveTasks(UUID_3, 1, TASK_2_0, TASK_2_1, TASK_2_3);
+        final ClientState c3 = createClientWithPreviousActiveTasks(PID_3, 1, TASK_2_0, TASK_2_1, TASK_2_3);
         c3.addPreviousStandbyTasks(mkSet(TASK_0_2, TASK_1_2));
 
-        final ClientState newClient = createClient(UUID_4, 1);
+        final ClientState newClient = createClient(PID_4, 1);
         newClient.addPreviousStandbyTasks(mkSet(TASK_0_0, TASK_1_0, TASK_0_1, TASK_0_2, TASK_1_1, TASK_2_0, TASK_0_3, TASK_1_2, TASK_2_1, TASK_1_3, TASK_2_2, TASK_2_3));
 
         final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_1_0, TASK_0_1, TASK_0_2, TASK_1_1, TASK_2_0, TASK_0_3, TASK_1_2, TASK_2_1, TASK_1_3, TASK_2_2, TASK_2_3);
@@ -691,15 +691,15 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldAssignTasksNotPreviouslyActiveToMultipleNewClients() {
-        final ClientState c1 = createClientWithPreviousActiveTasks(UUID_1, 1, TASK_0_1, TASK_1_2, TASK_1_3);
+        final ClientState c1 = createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_1, TASK_1_2, TASK_1_3);
         c1.addPreviousStandbyTasks(mkSet(TASK_0_0, TASK_1_1, TASK_2_0, TASK_2_1, TASK_2_3));
-        final ClientState c2 = createClientWithPreviousActiveTasks(UUID_2, 1, TASK_0_0, TASK_1_1, TASK_2_2);
+        final ClientState c2 = createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_0, TASK_1_1, TASK_2_2);
         c2.addPreviousStandbyTasks(mkSet(TASK_0_1, TASK_1_0, TASK_0_2, TASK_2_0, TASK_0_3, TASK_1_2, TASK_2_1, TASK_1_3, TASK_2_3));
 
-        final ClientState bounce1 = createClient(UUID_3, 1);
+        final ClientState bounce1 = createClient(PID_3, 1);
         bounce1.addPreviousStandbyTasks(mkSet(TASK_2_0, TASK_2_1, TASK_2_3));
 
-        final ClientState bounce2 = createClient(UUID_4, 1);
+        final ClientState bounce2 = createClient(PID_4, 1);
         bounce2.addPreviousStandbyTasks(mkSet(TASK_0_2, TASK_0_3, TASK_1_0));
 
         final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_1_0, TASK_0_1, TASK_0_2, TASK_1_1, TASK_2_0, TASK_0_3, TASK_1_2, TASK_2_1, TASK_1_3, TASK_2_2, TASK_2_3);
@@ -720,17 +720,17 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldAssignTasksToNewClient() {
-        createClientWithPreviousActiveTasks(UUID_1, 1, TASK_0_1, TASK_0_2);
-        createClient(UUID_2, 1);
+        createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_1, TASK_0_2);
+        createClient(PID_2, 1);
         assertThat(assign(TASK_0_1, TASK_0_2), is(false));
-        assertThat(clients.get(UUID_1).activeTaskCount(), equalTo(1));
+        assertThat(clients.get(PID_1).activeTaskCount(), equalTo(1));
     }
 
     @Test
     public void shouldAssignTasksToNewClientWithoutFlippingAssignmentBetweenExistingClients() {
-        final ClientState c1 = createClientWithPreviousActiveTasks(UUID_1, 1, TASK_0_0, TASK_0_1, TASK_0_2);
-        final ClientState c2 = createClientWithPreviousActiveTasks(UUID_2, 1, TASK_0_3, TASK_0_4, TASK_0_5);
-        final ClientState newClient = createClient(UUID_3, 1);
+        final ClientState c1 = createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0, TASK_0_1, TASK_0_2);
+        final ClientState c2 = createClientWithPreviousActiveTasks(PID_2, 1, TASK_0_3, TASK_0_4, TASK_0_5);
+        final ClientState newClient = createClient(PID_3, 1);
 
         final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_0_4, TASK_0_5);
         assertThat(probingRebalanceNeeded, is(false));
@@ -747,10 +747,10 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldAssignTasksToNewClientWithoutFlippingAssignmentBetweenExistingAndBouncedClients() {
-        final ClientState c1 = createClientWithPreviousActiveTasks(UUID_1, 1, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_6);
-        final ClientState c2 = createClient(UUID_2, 1);
+        final ClientState c1 = createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_6);
+        final ClientState c2 = createClient(PID_2, 1);
         c2.addPreviousStandbyTasks(mkSet(TASK_0_3, TASK_0_4, TASK_0_5));
-        final ClientState newClient = createClient(UUID_3, 1);
+        final ClientState newClient = createClient(PID_3, 1);
 
         final boolean probingRebalanceNeeded = assign(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_0_4, TASK_0_5, TASK_0_6);
         assertThat(probingRebalanceNeeded, is(false));
@@ -769,8 +769,8 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldViolateBalanceToPreserveActiveTaskStickiness() {
-        final ClientState c1 = createClientWithPreviousActiveTasks(UUID_1, 1, TASK_0_0, TASK_0_1, TASK_0_2);
-        final ClientState c2 = createClient(UUID_2, 1);
+        final ClientState c1 = createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0, TASK_0_1, TASK_0_2);
+        final ClientState c2 = createClient(PID_2, 1);
 
         final List<TaskId> taskIds = asList(TASK_0_0, TASK_0_1, TASK_0_2);
         Collections.shuffle(taskIds);
@@ -783,7 +783,7 @@ public class StickyTaskAssignorTest {
         final Map<TaskId, Set<TopicPartition>> partitionsForTask = getTaskTopicPartitionMap(topicSize, partitionSize, false);
         final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask = getTaskTopicPartitionMap(topicSize, partitionSize, true);
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = new HashMap<>();
-        final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer = getRandomProcessRacks(clientSize, nodeSize);
+        final Map<ProcessId, Map<String, Optional<String>>> racksForProcessConsumer = getRandomProcessRacks(clientSize, nodeSize);
         final InternalTopicManager internalTopicManager = mockInternalTopicManagerForRandomChangelog(nodeSize, topicSize, partitionSize);
 
         final AssignmentConfigs configs = new AssignmentConfigs(
@@ -822,9 +822,9 @@ public class StickyTaskAssignorTest {
 
     @Test
     public void shouldOptimizeStatefulAndStatelessTaskTraffic() {
-        final ClientState c1 = createClientWithPreviousActiveTasks(UUID_1, 1, TASK_0_0, TASK_0_1, TASK_0_2);
-        final ClientState c2 = createClientWithPreviousActiveTasks(UUID_2, 1, TASK_1_0, TASK_1_1, TASK_0_3, TASK_1_3);
-        final ClientState c3 = createClientWithPreviousActiveTasks(UUID_3, 1, TASK_1_2);
+        final ClientState c1 = createClientWithPreviousActiveTasks(PID_1, 1, TASK_0_0, TASK_0_1, TASK_0_2);
+        final ClientState c2 = createClientWithPreviousActiveTasks(PID_2, 1, TASK_1_0, TASK_1_1, TASK_0_3, TASK_1_3);
+        final ClientState c3 = createClientWithPreviousActiveTasks(PID_3, 1, TASK_1_2);
 
         final List<TaskId> taskIds = asList(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3, TASK_1_0, TASK_1_1, TASK_1_2, TASK_1_3);
         final List<TaskId> statefulTaskIds = asList(TASK_0_0, TASK_0_1, TASK_1_0, TASK_1_1);
@@ -833,7 +833,7 @@ public class StickyTaskAssignorTest {
         final Cluster cluster = getClusterForAllTopics();
         final Map<TaskId, Set<TopicPartition>> partitionsForTask = getTaskTopicPartitionMapForAllTasks();
         final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask = getTaskChangelogMapForAllTasks();
-        final Map<UUID, Map<String, Optional<String>>> racksForProcessConsumer = getProcessRacksForAllProcess();
+        final Map<ProcessId, Map<String, Optional<String>>> racksForProcessConsumer = getProcessRacksForAllProcess();
         final InternalTopicManager internalTopicManager = mockInternalTopicManagerForChangelog();
 
         final AssignmentConfigs configs = new AssignmentConfigs(
@@ -933,7 +933,7 @@ public class StickyTaskAssignorTest {
         final List<Set<TaskId>> statefulAndStatelessTasks = getRandomSubset(taskIds, 2);
         final Set<TaskId> statefulTasks = statefulAndStatelessTasks.get(0);
         final Set<TaskId> statelessTasks = statefulAndStatelessTasks.get(1);
-        final SortedMap<UUID, ClientState> clientStateMap = getRandomClientState(clientSize,
+        final SortedMap<ProcessId, ClientState> clientStateMap = getRandomClientState(clientSize,
             tpSize, partitionSize, maxCapacity, false, statefulTasks);
 
 
@@ -973,7 +973,7 @@ public class StickyTaskAssignorTest {
             tpSize, partitionSize, false);
         final Cluster cluster = getRandomCluster(nodeSize, tpSize, partitionSize);
         final Map<TaskId, Set<TopicPartition>> taskChangelogTopicPartitionMap = getTaskTopicPartitionMap(tpSize, partitionSize, true);
-        final Map<UUID, Map<String, Optional<String>>> processRackMap = getRandomProcessRacks(clientSize, nodeSize);
+        final Map<ProcessId, Map<String, Optional<String>>> processRackMap = getRandomProcessRacks(clientSize, nodeSize);
         final InternalTopicManager mockInternalTopicManager = mockInternalTopicManagerForRandomChangelog(nodeSize, tpSize, partitionSize);
 
         AssignmentConfigs configs = new AssignmentConfigs(
@@ -1002,7 +1002,7 @@ public class StickyTaskAssignorTest {
         final List<Set<TaskId>> statefulAndStatelessTasks = getRandomSubset(taskIds, 2);
         final Set<TaskId> statefulTasks = statefulAndStatelessTasks.get(0);
         final Set<TaskId> statelessTasks = statefulAndStatelessTasks.get(1);
-        final SortedMap<UUID, ClientState> clientStateMap = getRandomClientState(clientSize,
+        final SortedMap<ProcessId, ClientState> clientStateMap = getRandomClientState(clientSize,
             tpSize, partitionSize, maxCapacity, false, statefulTasks);
 
         new StickyTaskAssignor().assign(
@@ -1024,7 +1024,7 @@ public class StickyTaskAssignorTest {
             return;
         }
 
-        final SortedMap<UUID, ClientState> clientStateMapCopy = copyClientStateMap(clientStateMap);
+        final SortedMap<ProcessId, ClientState> clientStateMapCopy = copyClientStateMap(clientStateMap);
         configs = new AssignmentConfigs(
             0L,
             1,
@@ -1055,7 +1055,7 @@ public class StickyTaskAssignorTest {
             configs
         );
 
-        for (final Map.Entry<UUID, ClientState> entry : clientStateMap.entrySet()) {
+        for (final Map.Entry<ProcessId, ClientState> entry : clientStateMap.entrySet()) {
             assertThat(entry.getValue().statefulActiveTasks(), equalTo(clientStateMapCopy.get(entry.getKey()).statefulActiveTasks()));
             assertThat(entry.getValue().standbyTasks(), equalTo(clientStateMapCopy.get(entry.getKey()).standbyTasks()));
         }
@@ -1112,11 +1112,11 @@ public class StickyTaskAssignorTest {
         return tasks;
     }
 
-    private ClientState createClient(final UUID processId, final int capacity) {
+    private ClientState createClient(final ProcessId processId, final int capacity) {
         return createClientWithPreviousActiveTasks(processId, capacity);
     }
 
-    private ClientState createClientWithPreviousActiveTasks(final UUID processId, final int capacity, final TaskId... taskIds) {
+    private ClientState createClientWithPreviousActiveTasks(final ProcessId processId, final int capacity, final TaskId... taskIds) {
         final ClientState clientState = new ClientState(processId, capacity);
         clientState.addPreviousActiveTasks(mkSet(taskIds));
         clients.put(processId, clientState);
@@ -1124,7 +1124,7 @@ public class StickyTaskAssignorTest {
     }
 
     private void assertActiveTaskTopicGroupIdsEvenlyDistributed() {
-        for (final Map.Entry<UUID, ClientState> clientStateEntry : clients.entrySet()) {
+        for (final Map.Entry<ProcessId, ClientState> clientStateEntry : clients.entrySet()) {
             final List<Integer> topicGroupIds = new ArrayList<>();
             final Set<TaskId> activeTasks = clientStateEntry.getValue().activeTasks();
             for (final TaskId activeTask : activeTasks) {
@@ -1135,9 +1135,9 @@ public class StickyTaskAssignorTest {
         }
     }
 
-    private static Map<UUID, Set<TaskId>> sortClientAssignments(final Map<UUID, ClientState> clients) {
-        final Map<UUID, Set<TaskId>> sortedAssignments = new HashMap<>();
-        for (final Map.Entry<UUID, ClientState> entry : clients.entrySet()) {
+    private static Map<ProcessId, Set<TaskId>> sortClientAssignments(final Map<ProcessId, ClientState> clients) {
+        final Map<ProcessId, Set<TaskId>> sortedAssignments = new HashMap<>();
+        for (final Map.Entry<ProcessId, ClientState> entry : clients.entrySet()) {
             final Set<TaskId> sorted = new TreeSet<>(entry.getValue().activeTasks());
             sortedAssignments.put(entry.getKey(), sorted);
         }
