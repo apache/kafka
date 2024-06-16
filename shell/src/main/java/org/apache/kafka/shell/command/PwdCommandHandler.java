@@ -33,7 +33,7 @@ import java.util.Optional;
  * Implements the pwd command.
  */
 public final class PwdCommandHandler implements Commands.Handler {
-    public final static Commands.Type TYPE = new PwdCommandType();
+    public static final Commands.Type TYPE = new PwdCommandType();
 
     public static class PwdCommandType implements Commands.Type {
         private PwdCommandType() {

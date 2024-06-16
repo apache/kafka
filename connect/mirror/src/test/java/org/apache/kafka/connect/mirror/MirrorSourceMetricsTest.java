@@ -34,10 +34,10 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 public class MirrorSourceMetricsTest {
 
-    private final static String SOURCE = "source";
-    private final static String TARGET = "target";
-    private final static TopicPartition TP = new TopicPartition("topic", 0);
-    private final static TopicPartition SOURCE_TP = new TopicPartition(SOURCE + "." + TP.topic(), TP.partition());
+    private static final String SOURCE = "source";
+    private static final String TARGET = "target";
+    private static final TopicPartition TP = new TopicPartition("topic", 0);
+    private static final TopicPartition SOURCE_TP = new TopicPartition(SOURCE + "." + TP.topic(), TP.partition());
 
     private final Map<String, String> configs = new HashMap<>();
     private TestReporter reporter;

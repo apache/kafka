@@ -16,15 +16,17 @@
  */
 package org.apache.kafka.raft.internals;
 
+import org.junit.jupiter.api.Test;
+
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.IntStream;
-import org.junit.jupiter.api.Test;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-final public class VoterSetHistoryTest {
+public final class VoterSetHistoryTest {
     @Test
     void testStaticVoterSet() {
         VoterSet staticVoterSet = new VoterSet(VoterSetTest.voterMap(IntStream.of(1, 2, 3), true));

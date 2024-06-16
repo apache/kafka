@@ -119,8 +119,8 @@ import static org.mockito.Mockito.when;
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class RocksDBStoreTest extends AbstractKeyValueStoreTest {
     private static boolean enableBloomFilters = false;
-    final static String DB_NAME = "db-name";
-    final static String METRICS_SCOPE = "metrics-scope";
+    static final String DB_NAME = "db-name";
+    static final String METRICS_SCOPE = "metrics-scope";
 
     private File dir;
     private final Time time = new MockTime();

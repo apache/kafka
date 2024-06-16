@@ -25,7 +25,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class FieldPathNotationTest {
-    final static String[] EMPTY_PATH = new String[] {};
+    static final String[] EMPTY_PATH = new String[] {};
 
     @Test
     void shouldBuildV1WithDotsAndBacktickPair() {

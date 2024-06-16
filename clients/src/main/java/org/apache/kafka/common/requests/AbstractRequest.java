@@ -29,7 +29,7 @@ import java.util.Map;
 
 public abstract class AbstractRequest implements AbstractRequestResponse {
 
-    public static abstract class Builder<T extends AbstractRequest> {
+    public abstract static class Builder<T extends AbstractRequest> {
         private final ApiKeys apiKey;
         private final short oldestAllowedVersion;
         private final short latestAllowedVersion;
@@ -340,6 +340,16 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return RemoveRaftVoterRequest.parse(buffer, apiVersion);
             case UPDATE_RAFT_VOTER:
                 return UpdateRaftVoterRequest.parse(buffer, apiVersion);
+            case INITIALIZE_SHARE_GROUP_STATE:
+                return InitializeShareGroupStateRequest.parse(buffer, apiVersion);
+            case READ_SHARE_GROUP_STATE:
+                return ReadShareGroupStateRequest.parse(buffer, apiVersion);
+            case WRITE_SHARE_GROUP_STATE:
+                return WriteShareGroupStateRequest.parse(buffer, apiVersion);
+            case DELETE_SHARE_GROUP_STATE:
+                return DeleteShareGroupStateRequest.parse(buffer, apiVersion);
+            case READ_SHARE_GROUP_STATE_SUMMARY:
+                return ReadShareGroupStateSummaryRequest.parse(buffer, apiVersion);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseRequest`, the " +
                         "code should be updated to do so.", apiKey));

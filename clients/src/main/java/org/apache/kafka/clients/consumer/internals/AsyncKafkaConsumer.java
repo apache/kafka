@@ -256,6 +256,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private final AtomicLong currentThread = new AtomicLong(NO_CURRENT_THREAD);
     private final AtomicInteger refCount = new AtomicInteger(0);
 
+    private FetchCommittedOffsetsEvent pendingOffsetFetchEvent;
+
     AsyncKafkaConsumer(final ConsumerConfig config,
                        final Deserializer<K> keyDeserializer,
                        final Deserializer<V> valueDeserializer) {
@@ -1234,7 +1236,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         clientTelemetryReporter.ifPresent(reporter -> reporter.initiateClose(timeout.toMillis()));
         closeTimer.update();
         // Prepare shutting down the network thread
-        prepareShutdown(closeTimer, firstException);
+        releaseAssignmentAndLeaveGroup(closeTimer, firstException);
         closeTimer.update();
         swallow(log, Level.ERROR, "Failed invoking asynchronous commit callback.",
             () -> awaitPendingAsyncCommitsAndExecuteCommitCallbacks(closeTimer, false), firstException);
@@ -1270,24 +1272,22 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * 2. revoke all partitions
      * 3. if partition revocation completes successfully, send leave group
      */
-    void prepareShutdown(final Timer timer, final AtomicReference<Throwable> firstException) {
+    void releaseAssignmentAndLeaveGroup(final Timer timer, final AtomicReference<Throwable> firstException) {
         if (!groupMetadata.get().isPresent())
             return;
 
         if (autoCommitEnabled)
-            autoCommitSync(timer);
+            commitSyncAllConsumed(timer);
 
         applicationEventHandler.add(new CommitOnCloseEvent());
-        completeQuietly(
-            () -> {
-                maybeRevokePartitions();
-                applicationEventHandler.addAndGet(new LeaveOnCloseEvent(calculateDeadlineMs(timer)));
-            },
-            "Failed to send leaveGroup heartbeat with a timeout(ms)=" + timer.timeoutMs(), firstException);
+        completeQuietly(() -> maybeRevokePartitions(),
+            "Failed to execute callback to release assignment", firstException);
+        completeQuietly(() -> applicationEventHandler.addAndGet(new LeaveOnCloseEvent(calculateDeadlineMs(timer))),
+            "Failed to send leave group heartbeat with a timeout(ms)=" + timer.timeoutMs(), firstException);
     }
 
     // Visible for testing
-    void autoCommitSync(final Timer timer) {
+    void commitSyncAllConsumed(final Timer timer) {
         Map<TopicPartition, OffsetAndMetadata> allConsumed = subscriptions.allConsumed();
         log.debug("Sending synchronous auto-commit of offsets {} on closing", allConsumed);
         try {
@@ -1323,7 +1323,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             function.run();
         } catch (TimeoutException e) {
             log.debug("Timeout expired before the {} operation could complete.", msg);
+            firstException.compareAndSet(null, e);
         } catch (Exception e) {
+            log.error(msg, e);
             firstException.compareAndSet(null, e);
         }
     }
@@ -1502,7 +1504,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 Timer timer = time.timer(Long.MAX_VALUE);
                 UnsubscribeEvent unsubscribeEvent = new UnsubscribeEvent(calculateDeadlineMs(timer));
                 applicationEventHandler.add(unsubscribeEvent);
-                log.info("Unsubscribing all topics or patterns and assigned partitions");
+                log.info("Unsubscribing all topics or patterns and assigned partitions {}",
+                    subscriptions.assignedPartitions());
 
                 try {
                     processBackgroundEvents(unsubscribeEvent.future(), timer);
@@ -1512,7 +1515,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 }
                 resetGroupMetadata();
             }
-            subscriptions.unsubscribe();
+        } catch (Exception e) {
+            log.error("Unsubscribe failed", e);
+            throw e;
         } finally {
             release();
         }
@@ -1666,21 +1671,64 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             return true;
 
         log.debug("Refreshing committed offsets for partitions {}", initializingPartitions);
+
+        // The shorter the timeout provided to poll(), the more likely the offsets fetch will time out. To handle
+        // this case, on the first attempt to fetch the committed offsets, a FetchCommittedOffsetsEvent is created
+        // (with potentially a longer timeout) and stored. The event is used for the first attempt, but in the
+        // case it times out, subsequent attempts will also use the event in order to wait for the results.
+        if (!canReusePendingOffsetFetchEvent(initializingPartitions)) {
+            // Give the event a reasonable amount of time to complete.
+            final long timeoutMs = Math.max(defaultApiTimeoutMs, timer.remainingMs());
+            final long deadlineMs = calculateDeadlineMs(time, timeoutMs);
+            pendingOffsetFetchEvent = new FetchCommittedOffsetsEvent(initializingPartitions, deadlineMs);
+            applicationEventHandler.add(pendingOffsetFetchEvent);
+        }
+
+        final CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future = pendingOffsetFetchEvent.future();
+
         try {
-            final FetchCommittedOffsetsEvent event =
-                new FetchCommittedOffsetsEvent(
-                    initializingPartitions,
-                    calculateDeadlineMs(timer));
-            wakeupTrigger.setActiveTask(event.future());
-            final Map<TopicPartition, OffsetAndMetadata> offsets = applicationEventHandler.addAndGet(event);
+            wakeupTrigger.setActiveTask(future);
+            final Map<TopicPartition, OffsetAndMetadata> offsets = ConsumerUtils.getResult(future, timer);
+
+            // Clear the pending event once its result is successfully retrieved.
+            pendingOffsetFetchEvent = null;
+
             refreshCommittedOffsets(offsets, metadata, subscriptions);
             return true;
         } catch (TimeoutException e) {
-            log.error("Couldn't refresh committed offsets before timeout expired");
+            log.debug(
+                "The committed offsets for the following partition(s) could not be refreshed within the timeout: {} ",
+                initializingPartitions
+            );
             return false;
+        } catch (InterruptException e) {
+            throw e;
+        } catch (Throwable t) {
+            pendingOffsetFetchEvent = null;
+            throw ConsumerUtils.maybeWrapAsKafkaException(t);
         } finally {
             wakeupTrigger.clearTask();
         }
+    }
+
+    /**
+     * This determines if the {@link #pendingOffsetFetchEvent pending offset fetch event} can be reused. Reuse
+     * is only possible if all the following conditions are true:
+     *
+     * <ul>
+     *     <li>A pending offset fetch event exists</li>
+     *     <li>The partition set of the pending offset fetch event is the same as the given partition set</li>
+     *     <li>The pending offset fetch event has not expired</li>
+     * </ul>
+     */
+    private boolean canReusePendingOffsetFetchEvent(Set<TopicPartition> partitions) {
+        if (pendingOffsetFetchEvent == null)
+            return false;
+
+        if (!pendingOffsetFetchEvent.partitions().equals(partitions))
+            return false;
+
+        return pendingOffsetFetchEvent.deadlineMs() > time.milliseconds();
     }
 
     private void updateLastSeenEpochIfNewer(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata) {
@@ -1981,6 +2029,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     // Visible for testing
     SubscriptionState subscriptions() {
         return subscriptions;
+    }
+
+    boolean hasPendingOffsetFetchEvent() {
+        return pendingOffsetFetchEvent != null;
     }
 
     private void maybeUpdateSubscriptionMetadata() {

@@ -34,7 +34,7 @@ import java.util.Optional;
  * Implements the exit command.
  */
 public final class ExitCommandHandler implements Commands.Handler {
-    public final static Commands.Type TYPE = new ExitCommandType();
+    public static final Commands.Type TYPE = new ExitCommandType();
 
     public static class ExitCommandType implements Commands.Type {
         private ExitCommandType() {

@@ -2328,7 +2328,7 @@ public class KafkaAdminClient extends AdminClient {
         }
 
         if (topicNamesList.isEmpty()) {
-            return Collections.unmodifiableMap(topicFutures);
+            return new HashMap<>(topicFutures);
         }
 
         // First, we need to retrieve the node info.
@@ -2348,7 +2348,7 @@ public class KafkaAdminClient extends AdminClient {
                 );
             });
 
-        return Collections.unmodifiableMap(topicFutures);
+        return new HashMap<>(topicFutures);
     }
 
     private Map<Uuid, KafkaFuture<TopicDescription>> handleDescribeTopicsByIds(Collection<Uuid> topicIds, DescribeTopicsOptions options) {
@@ -2772,9 +2772,20 @@ public class KafkaAdminClient extends AdminClient {
             }, now);
         }
 
-        return new DescribeConfigsResult(new HashMap<>(nodeFutures.entrySet().stream()
+        return new DescribeConfigsResult(
+            nodeFutures.entrySet()
+                .stream()
                 .flatMap(x -> x.getValue().entrySet().stream())
-                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue))));
+                .collect(Collectors.toMap(
+                    Map.Entry::getKey,
+                    Map.Entry::getValue,
+                    (oldValue, newValue) -> {
+                        // Duplicate keys should not occur, throw an exception to signal this issue
+                        throw new IllegalStateException(String.format("Duplicate key for values: %s and %s", oldValue, newValue));
+                    },
+                    HashMap::new
+                ))
+        );
     }
 
     private Config describeConfigResult(DescribeConfigsResponseData.DescribeConfigsResult describeConfigsResult) {
@@ -3483,7 +3494,7 @@ public class KafkaAdminClient extends AdminClient {
             .collect(Collectors.toSet());
     }
 
-    private final static class ListConsumerGroupsResults {
+    private static final class ListConsumerGroupsResults {
         private final List<Throwable> errors;
         private final HashMap<String, ConsumerGroupListing> listings;
         private final HashSet<Node> remaining;

@@ -431,11 +431,14 @@ public class RemoteLogManager implements Closeable {
 
             leaderPartitions.forEach(this::cacheTopicPartitionIds);
             followerPartitions.forEach(this::cacheTopicPartitionIds);
-            followerPartitions.forEach(this::removeRemoteTopicPartitionMetrics);
 
             remoteLogMetadataManager.onPartitionLeadershipChanges(leaderPartitions, followerPartitions);
             followerPartitions.forEach(topicIdPartition ->
                     doHandleLeaderOrFollowerPartitions(topicIdPartition, RLMTask::convertToFollower));
+
+            // If this node was the previous leader for the partition, then the RLMTask might be running in the
+            // background thread and might emit metrics. So, removing the metrics after marking this node as follower.
+            followerPartitions.forEach(this::removeRemoteTopicPartitionMetrics);
 
             leaderPartitionsWithLeaderEpoch.forEach((topicIdPartition, leaderEpoch) ->
                     doHandleLeaderOrFollowerPartitions(topicIdPartition,
@@ -633,7 +636,7 @@ public class RemoteLogManager implements Closeable {
         return Optional.empty();
     }
 
-    private static abstract class CancellableRunnable implements Runnable {
+    private abstract static class CancellableRunnable implements Runnable {
         private volatile boolean cancelled = false;
 
         public void cancel() {
@@ -663,6 +666,15 @@ public class RemoteLogManager implements Closeable {
         } else {
             return Collections.emptyList();
         }
+    }
+
+    // VisibleForTesting
+    RLMTask rlmTask(TopicIdPartition topicIdPartition) {
+        RLMTaskWithFuture task = leaderOrFollowerTasks.get(topicIdPartition);
+        if (task != null) {
+            return task.rlmTask;
+        }
+        return null;
     }
 
     class RLMTask extends CancellableRunnable {
@@ -893,11 +905,18 @@ public class RemoteLogManager implements Closeable {
             logger.info("Copied {} to remote storage with segment-id: {}", logFileName, copySegmentFinishedRlsm.remoteLogSegmentId());
 
             long bytesLag = log.onlyLocalLogSegmentsSize() - log.activeSegment().size();
-            String topic = topicIdPartition.topic();
-            int partition = topicIdPartition.partition();
-            long segmentsLag = log.onlyLocalLogSegmentsCount();
-            brokerTopicStats.recordRemoteCopyLagBytes(topic, partition, bytesLag);
-            brokerTopicStats.recordRemoteCopyLagSegments(topic, partition, segmentsLag);
+            long segmentsLag = log.onlyLocalLogSegmentsCount() - 1;
+            recordLagStats(bytesLag, segmentsLag);
+        }
+
+        // VisibleForTesting
+        void recordLagStats(long bytesLag, long segmentsLag) {
+            if (isLeader()) {
+                String topic = topicIdPartition.topic();
+                int partition = topicIdPartition.partition();
+                brokerTopicStats.recordRemoteCopyLagBytes(topic, partition, bytesLag);
+                brokerTopicStats.recordRemoteCopyLagSegments(topic, partition, segmentsLag);
+            }
         }
 
         private Path toPathIfExists(File file) {
@@ -983,7 +1002,9 @@ public class RemoteLogManager implements Closeable {
                     }
                 }
                 if (shouldDeleteSegment) {
-                    logStartOffset = OptionalLong.of(metadata.endOffset() + 1);
+                    if (!logStartOffset.isPresent() || logStartOffset.getAsLong() < metadata.endOffset() + 1) {
+                        logStartOffset = OptionalLong.of(metadata.endOffset() + 1);
+                    }
                     logger.info("About to delete remote log segment {} due to retention size {} breach. Log size after deletion will be {}.",
                             metadata.remoteLogSegmentId(), retentionSizeData.get().retentionSize, remainingBreachedSize + retentionSizeData.get().retentionSize);
                 }
@@ -1000,7 +1021,9 @@ public class RemoteLogManager implements Closeable {
                     remainingBreachedSize = Math.max(0, remainingBreachedSize - metadata.segmentSizeInBytes());
                     // It is fine to have logStartOffset as `metadata.endOffset() + 1` as the segment offset intervals
                     // are ascending with in an epoch.
-                    logStartOffset = OptionalLong.of(metadata.endOffset() + 1);
+                    if (!logStartOffset.isPresent() || logStartOffset.getAsLong() < metadata.endOffset() + 1) {
+                        logStartOffset = OptionalLong.of(metadata.endOffset() + 1);
+                    }
                     logger.info("About to delete remote log segment {} due to retention time {}ms breach based on the largest record timestamp in the segment",
                             metadata.remoteLogSegmentId(), retentionTimeData.get().retentionMs);
                 }

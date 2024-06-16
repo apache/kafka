@@ -20,8 +20,8 @@ import org.apache.kafka.streams.kstream.Aggregator;
 
 public class MockAggregator {
 
-    public final static Aggregator<Object, Object, String> TOSTRING_ADDER = toStringInstance("+");
-    public final static Aggregator<Object, Object, String> TOSTRING_REMOVER = toStringInstance("-");
+    public static final Aggregator<Object, Object, String> TOSTRING_ADDER = toStringInstance("+");
+    public static final Aggregator<Object, Object, String> TOSTRING_REMOVER = toStringInstance("-");
 
     public static <K, V> Aggregator<K, V, String> toStringInstance(final String sep) {
         return (aggKey, value, aggregate) -> aggregate + sep + value;

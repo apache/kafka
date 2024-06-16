@@ -29,6 +29,7 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetada
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+
 import org.opentest4j.AssertionFailedError;
 
 import java.nio.ByteBuffer;

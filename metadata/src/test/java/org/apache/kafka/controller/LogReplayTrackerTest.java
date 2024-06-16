@@ -18,6 +18,7 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.common.metadata.NoOpRecord;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 

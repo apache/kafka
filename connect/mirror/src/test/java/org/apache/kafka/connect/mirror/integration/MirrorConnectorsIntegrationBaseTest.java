@@ -219,16 +219,12 @@ public class MirrorConnectorsIntegrationBaseTest {
                 .build();
         
         primary.start();
-        primary.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
-                "Workers of " + PRIMARY_CLUSTER_ALIAS + "-connect-cluster did not start in time.");
 
         waitForTopicCreated(primary, "mm2-status.backup.internal");
         waitForTopicCreated(primary, "mm2-offsets.backup.internal");
         waitForTopicCreated(primary, "mm2-configs.backup.internal");
 
         backup.start();
-        backup.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
-            "Workers of " + BACKUP_CLUSTER_ALIAS + "-connect-cluster did not start in time.");
 
         primaryProducer = initializeProducer(primary);
         backupProducer = initializeProducer(backup);

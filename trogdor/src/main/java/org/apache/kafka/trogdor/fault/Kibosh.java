@@ -37,13 +37,13 @@ import java.util.TreeMap;
 public final class Kibosh {
     public static final Kibosh INSTANCE = new Kibosh();
 
-    public final static String KIBOSH_CONTROL = "kibosh_control";
+    public static final String KIBOSH_CONTROL = "kibosh_control";
 
     @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
     @JsonSubTypes({
             @JsonSubTypes.Type(value = KiboshFilesUnreadableFaultSpec.class, name = "unreadable"),
         })
-    public static abstract class KiboshFaultSpec {
+    public abstract static class KiboshFaultSpec {
         @Override
         public final boolean equals(Object o) {
             if (this == o) return true;
@@ -122,7 +122,7 @@ public final class Kibosh {
     public static class KiboshControlFile {
         private final List<KiboshFaultSpec> faults;
 
-        public final static KiboshControlFile EMPTY =
+        public static final KiboshControlFile EMPTY =
             new KiboshControlFile(Collections.emptyList());
 
         public static KiboshControlFile read(Path controlPath) throws IOException {
