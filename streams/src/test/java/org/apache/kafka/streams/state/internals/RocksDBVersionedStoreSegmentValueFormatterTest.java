@@ -18,61 +18,49 @@ package org.apache.kafka.streams.state.internals;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
+
 import org.apache.kafka.streams.state.internals.RocksDBVersionedStoreSegmentValueFormatter.SegmentValue;
 import org.apache.kafka.streams.state.internals.RocksDBVersionedStoreSegmentValueFormatter.SegmentValue.SegmentSearchResult;
-import org.junit.Test;
-import org.junit.experimental.runners.Enclosed;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
-@RunWith(Enclosed.class)
 public class RocksDBVersionedStoreSegmentValueFormatterTest {
 
     /**
      * Non-exceptional scenarios which are expected to occur during regular store operation.
      */
-    @RunWith(Parameterized.class)
     public static class ExpectedCasesTest {
-
-        private static final List<TestCase> TEST_CASES = new ArrayList<>();
-
-        static {
-            // test cases are expected to have timestamps in strictly decreasing order (except for the degenerate case)
-            TEST_CASES.add(new TestCase("degenerate", 10, new TestRecord(null, 10)));
-            TEST_CASES.add(new TestCase("single record", 10, new TestRecord("foo".getBytes(), 1)));
-            TEST_CASES.add(new TestCase("multiple records", 10, new TestRecord("foo".getBytes(), 8), new TestRecord("bar".getBytes(), 3), new TestRecord("baz".getBytes(), 0)));
-            TEST_CASES.add(new TestCase("single tombstone", 10, new TestRecord(null, 1)));
-            TEST_CASES.add(new TestCase("multiple tombstone", 10, new TestRecord(null, 4), new TestRecord(null, 1)));
-            TEST_CASES.add(new TestCase("tombstones and records (r, t, r)", 10, new TestRecord("foo".getBytes(), 5), new TestRecord(null, 2), new TestRecord("bar".getBytes(), 1)));
-            TEST_CASES.add(new TestCase("tombstones and records (t, r, t)", 10, new TestRecord(null, 5), new TestRecord("foo".getBytes(), 2), new TestRecord(null, 1)));
-            TEST_CASES.add(new TestCase("tombstones and records (r, r, t, t)", 10, new TestRecord("foo".getBytes(), 6), new TestRecord("bar".getBytes(), 5), new TestRecord(null, 2), new TestRecord(null, 1)));
-            TEST_CASES.add(new TestCase("tombstones and records (t, t, r, r)", 10, new TestRecord(null, 7), new TestRecord(null, 6), new TestRecord("foo".getBytes(), 2), new TestRecord("bar".getBytes(), 1)));
-            TEST_CASES.add(new TestCase("record with empty bytes", 10, new TestRecord(new byte[0], 1)));
-            TEST_CASES.add(new TestCase("records with empty bytes (r, e)", 10, new TestRecord("foo".getBytes(), 4), new TestRecord(new byte[0], 1)));
-            TEST_CASES.add(new TestCase("records with empty bytes (e, e, r)", 10, new TestRecord(new byte[0], 8), new TestRecord(new byte[0], 2), new TestRecord("foo".getBytes(), 1)));
+        
+        // test cases are expected to have timestamps in strictly decreasing order (except for the degenerate case)
+        private static Stream<Arguments> data() {
+            return Stream.of(
+                Arguments.of(new TestCase("degenerate", 10, new TestRecord(null, 10))),
+                Arguments.of(new TestCase("single record", 10, new TestRecord("foo".getBytes(), 1))),
+                Arguments.of(new TestCase("multiple records", 10, new TestRecord("foo".getBytes(), 8), new TestRecord("bar".getBytes(), 3), new TestRecord("baz".getBytes(), 0))),
+                Arguments.of(new TestCase("single tombstone", 10, new TestRecord(null, 1))),
+                Arguments.of(new TestCase("multiple tombstone", 10, new TestRecord(null, 4), new TestRecord(null, 1))),
+                Arguments.of(new TestCase("tombstones and records (r, t, r)", 10, new TestRecord("foo".getBytes(), 5), new TestRecord(null, 2), new TestRecord("bar".getBytes(), 1))),
+                Arguments.of(new TestCase("tombstones and records (t, r, t)", 10, new TestRecord(null, 5), new TestRecord("foo".getBytes(), 2), new TestRecord(null, 1))),
+                Arguments.of(new TestCase("tombstones and records (r, r, t, t)", 10, new TestRecord("foo".getBytes(), 6), new TestRecord("bar".getBytes(), 5), new TestRecord(null, 2), new TestRecord(null, 1))),
+                Arguments.of(new TestCase("tombstones and records (t, t, r, r)", 10, new TestRecord(null, 7), new TestRecord(null, 6), new TestRecord("foo".getBytes(), 2), new TestRecord("bar".getBytes(), 1))),
+                Arguments.of(new TestCase("record with empty bytes", 10, new TestRecord(new byte[0], 1))),
+                Arguments.of(new TestCase("records with empty bytes (r, e)", 10, new TestRecord("foo".getBytes(), 4), new TestRecord(new byte[0], 1))),
+                Arguments.of(new TestCase("records with empty bytes (e, e, r)", 10, new TestRecord(new byte[0], 8), new TestRecord(new byte[0], 2), new TestRecord("foo".getBytes(), 1)))
+            );
         }
 
-        private final TestCase testCase;
-
-        public ExpectedCasesTest(final TestCase testCase) {
-            this.testCase = testCase;
-        }
-
-        @Parameterized.Parameters(name = "{0}")
-        public static Collection<TestCase> data() {
-            return TEST_CASES;
-        }
-
-        @Test
-        public void shouldSerializeAndDeserialize() {
+        @ParameterizedTest
+        @MethodSource("data")
+        public void shouldSerializeAndDeserialize(final TestCase testCase) {
             final SegmentValue segmentValue = buildSegmentWithInsertLatest(testCase);
 
             final byte[] serialized = segmentValue.serialize();
@@ -81,22 +69,25 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
             verifySegmentContents(deserialized, testCase);
         }
 
-        @Test
-        public void shouldBuildWithInsertLatest() {
+        @ParameterizedTest
+        @MethodSource("data")
+        public void shouldBuildWithInsertLatest(final TestCase testCase) {
             final SegmentValue segmentValue = buildSegmentWithInsertLatest(testCase);
 
             verifySegmentContents(segmentValue, testCase);
         }
 
-        @Test
-        public void shouldBuildWithInsertEarliest() {
+        @ParameterizedTest
+        @MethodSource("data")
+        public void shouldBuildWithInsertEarliest(final TestCase testCase) {
             final SegmentValue segmentValue = buildSegmentWithInsertEarliest(testCase);
 
             verifySegmentContents(segmentValue, testCase);
         }
 
-        @Test
-        public void shouldInsertAtIndex() {
+        @ParameterizedTest
+        @MethodSource("data")
+        public void shouldInsertAtIndex(final TestCase testCase) {
             if (testCase.isDegenerate) {
                 // cannot insert into degenerate segment
                 return;
@@ -136,8 +127,9 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
             }
         }
 
-        @Test
-        public void shouldUpdateAtIndex() {
+        @ParameterizedTest
+        @MethodSource("data")
+        public void shouldUpdateAtIndex(final TestCase testCase) {
             if (testCase.isDegenerate) {
                 // cannot update degenerate segment
                 return;
@@ -172,8 +164,9 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
             }
         }
 
-        @Test
-        public void shouldFindByTimestamp() {
+        @ParameterizedTest
+        @MethodSource("data")
+        public void shouldFindByTimestamp(final TestCase testCase) {
             if (testCase.isDegenerate) {
                 // cannot find() on degenerate segment
                 return;
@@ -215,8 +208,9 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
             assertThrows(IllegalArgumentException.class, () -> segmentValue.find(testCase.minTimestamp - 1, false));
         }
 
-        @Test
-        public void shouldFindAll() {
+        @ParameterizedTest
+        @MethodSource("data")
+        public void shouldFindAll(final TestCase testCase) {
             if (testCase.isDegenerate) {
                 // cannot find() on degenerate segment
                 return;
@@ -251,16 +245,18 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
             assertThrows(IllegalArgumentException.class, () -> segmentValue.find(testCase.minTimestamp - 1, false));
         }
 
-        @Test
-        public void shouldGetTimestamps() {
+        @ParameterizedTest
+        @MethodSource("data")
+        public void shouldGetTimestamps(final TestCase testCase) {
             final byte[] segmentValue = buildSegmentWithInsertLatest(testCase).serialize();
 
             assertThat(RocksDBVersionedStoreSegmentValueFormatter.getNextTimestamp(segmentValue), equalTo(testCase.nextTimestamp));
             assertThat(RocksDBVersionedStoreSegmentValueFormatter.getMinTimestamp(segmentValue), equalTo(testCase.minTimestamp));
         }
 
-        @Test
-        public void shouldCreateNewWithRecord() {
+        @ParameterizedTest
+        @MethodSource("data")
+        public void shouldCreateNewWithRecord(final TestCase testCase) {
             if (testCase.records.size() != 1) {
                 return;
             }
@@ -280,38 +276,27 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
      * inconsistency among segments. These tests verify that the store is able to recover
      * gracefully even if this happens.
      */
-    @RunWith(Parameterized.class)
     public static class ExceptionalCasesTest {
 
         private static final long INSERT_VALID_FROM_TIMESTAMP = 10L;
         private static final long INSERT_VALID_TO_TIMESTAMP = 13L;
         private static final byte[] INSERT_VALUE = "new".getBytes();
-        private static final List<TestCase> TEST_CASES = new ArrayList<>();
-
-        static {
-            // test cases are expected to have timestamps in strictly decreasing order
-            TEST_CASES.add(new TestCase("truncate all, single record", 15, new TestRecord(null, 12)));
-            TEST_CASES.add(new TestCase("truncate all, single record, exact timestamp match", 15, new TestRecord(null, INSERT_VALID_FROM_TIMESTAMP)));
-            TEST_CASES.add(new TestCase("truncate all, multiple records", 15, new TestRecord(null, 12), new TestRecord("foo".getBytes(), 11)));
-            TEST_CASES.add(new TestCase("truncate all, multiple records, exact timestamp match", 15, new TestRecord(null, 12), new TestRecord("foo".getBytes(), 11), new TestRecord(null, INSERT_VALID_FROM_TIMESTAMP)));
-            TEST_CASES.add(new TestCase("partial truncation, single record", 15, new TestRecord(null, 8)));
-            TEST_CASES.add(new TestCase("partial truncation, multiple records", 15, new TestRecord("foo".getBytes(), 12), new TestRecord("bar".getBytes(), 8)));
-            TEST_CASES.add(new TestCase("partial truncation, on record boundary", 15, new TestRecord("foo".getBytes(), 12), new TestRecord("bar".getBytes(), INSERT_VALID_FROM_TIMESTAMP), new TestRecord("baz".getBytes(), 8)));
+        
+        private static Stream<Arguments> data() {
+            return Stream.of(
+                Arguments.of(new TestCase("truncate all, single record", 15, new TestRecord(null, 12))),
+                Arguments.of(new TestCase("truncate all, single record, exact timestamp match", 15, new TestRecord(null, INSERT_VALID_FROM_TIMESTAMP))),
+                Arguments.of(new TestCase("truncate all, multiple records", 15, new TestRecord(null, 12), new TestRecord("foo".getBytes(), 11))),
+                Arguments.of(new TestCase("truncate all, multiple records, exact timestamp match", 15, new TestRecord(null, 12), new TestRecord("foo".getBytes(), 11), new TestRecord(null, INSERT_VALID_FROM_TIMESTAMP))),
+                Arguments.of(new TestCase("partial truncation, single record", 15, new TestRecord(null, 8))),
+                Arguments.of(new TestCase("partial truncation, multiple records", 15, new TestRecord("foo".getBytes(), 12), new TestRecord("bar".getBytes(), 8))),
+                Arguments.of(new TestCase("partial truncation, on record boundary", 15, new TestRecord("foo".getBytes(), 12), new TestRecord("bar".getBytes(), INSERT_VALID_FROM_TIMESTAMP), new TestRecord("baz".getBytes(), 8)))
+            );
         }
 
-        private final TestCase testCase;
-
-        public ExceptionalCasesTest(final TestCase testCase) {
-            this.testCase = testCase;
-        }
-
-        @Parameterized.Parameters(name = "{0}")
-        public static Collection<TestCase> data() {
-            return TEST_CASES;
-        }
-
-        @Test
-        public void shouldRecoverFromStoreInconsistencyOnInsertLatest() {
+        @ParameterizedTest
+        @MethodSource("data")
+        public void shouldRecoverFromStoreInconsistencyOnInsertLatest(final TestCase testCase) {
             final SegmentValue segmentValue = buildSegmentWithInsertLatest(testCase);
 
             segmentValue.insertAsLatest(INSERT_VALID_FROM_TIMESTAMP, INSERT_VALID_TO_TIMESTAMP, INSERT_VALUE);
