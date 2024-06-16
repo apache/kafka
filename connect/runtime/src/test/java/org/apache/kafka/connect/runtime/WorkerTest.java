@@ -89,7 +89,7 @@ import org.apache.kafka.connect.util.SinkUtils;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.AdditionalAnswers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;

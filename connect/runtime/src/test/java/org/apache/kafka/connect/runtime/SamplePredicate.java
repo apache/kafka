@@ -16,12 +16,13 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import java.util.Map;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.transforms.predicates.Predicate;
+
+import java.util.Map;
 
 public class SamplePredicate implements Predicate<SourceRecord>, Versioned {
 
