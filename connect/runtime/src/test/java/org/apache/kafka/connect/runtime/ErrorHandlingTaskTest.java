@@ -221,7 +221,7 @@ public class ErrorHandlingTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testErrorHandlingInSinkTasks(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         Map<String, String> reportProps = new HashMap<>();
@@ -273,7 +273,7 @@ public class ErrorHandlingTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testErrorHandlingInSourceTasks(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         Map<String, String> reportProps = new HashMap<>();
@@ -335,7 +335,7 @@ public class ErrorHandlingTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testErrorHandlingInSourceTasksWithBadConverter(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         Map<String, String> reportProps = new HashMap<>();

@@ -317,7 +317,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testStartAndStopConnector(boolean enableTopicCreation) throws Throwable {
         setup(enableTopicCreation);
         final String connectorClass = SampleSourceConnector.class.getName();
@@ -386,7 +386,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testStartConnectorFailure(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         final String nonConnectorClass = "java.util.HashMap";
@@ -428,7 +428,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testAddConnectorByAlias(boolean enableTopicCreation) throws Throwable {
         setup(enableTopicCreation);
         final String connectorAlias = "SampleSourceConnector";
@@ -473,7 +473,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testAddConnectorByShortAlias(boolean enableTopicCreation) throws Throwable {
         setup(enableTopicCreation);
         final String shortConnectorAlias = "WorkerTest";
@@ -517,7 +517,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testStopInvalidConnector(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         mockKafkaClusterId();
@@ -532,7 +532,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testReconfigureConnectorTasks(boolean enableTopicCreation) throws Throwable {
         setup(enableTopicCreation);
         final String connectorClass = SampleSourceConnector.class.getName();
@@ -608,7 +608,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testAddRemoveSourceTask(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         mockKafkaClusterId();
@@ -662,7 +662,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testAddRemoveSinkTask(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         // Most of the other cases use source tasks; we make sure to get code coverage for sink tasks here as well
@@ -719,7 +719,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testAddRemoveExactlyOnceSourceTask(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         Map<String, String> workerProps = new HashMap<>();
@@ -793,7 +793,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testTaskStatusMetricsStatuses(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         mockInternalConverters();
@@ -877,7 +877,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testConnectorStatusMetricsGroup_taskStatusCounter(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         ConcurrentMap<ConnectorTaskId, WorkerTask<?, ?>> tasks = new ConcurrentHashMap<>();
@@ -908,7 +908,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testStartTaskFailure(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         mockInternalConverters();
@@ -938,7 +938,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testCleanupTasksOnStop(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         mockInternalConverters();
@@ -985,7 +985,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testConverterOverrides(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         mockInternalConverters();
@@ -1041,7 +1041,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testProducerConfigsWithoutOverrides(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         when(connectorConfig.originalsWithPrefix(CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX)).thenReturn(new HashMap<>());
@@ -1054,7 +1054,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testProducerConfigsWithOverrides(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         Map<String, String> props = new HashMap<>(workerProps);
@@ -1077,7 +1077,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testProducerConfigsWithClientOverrides(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         Map<String, String> props = new HashMap<>(workerProps);
@@ -1105,7 +1105,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testConsumerConfigsWithoutOverrides(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         Map<String, String> expectedConfigs = new HashMap<>(defaultConsumerConfigs);
@@ -1120,7 +1120,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testConsumerConfigsWithOverrides(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         Map<String, String> props = new HashMap<>(workerProps);
@@ -1145,7 +1145,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testConsumerConfigsWithClientOverrides(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         Map<String, String> props = new HashMap<>(workerProps);
@@ -1173,7 +1173,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testConsumerConfigsClientOverridesWithNonePolicy(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         Map<String, String> props = new HashMap<>(workerProps);
@@ -1192,7 +1192,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testAdminConfigsClientOverridesWithAllPolicy(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         Map<String, String> props = new HashMap<>(workerProps);
@@ -1220,7 +1220,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testAdminConfigsClientOverridesWithNonePolicy(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         Map<String, String> props = new HashMap<>(workerProps);
@@ -1237,7 +1237,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testRegularSourceOffsetsConsumerConfigs(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         final Map<String, Object> connectorConsumerOverrides = new HashMap<>();
@@ -1278,7 +1278,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testExactlyOnceSourceOffsetsConsumerConfigs(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         final Map<String, Object> connectorConsumerOverrides = new HashMap<>();
@@ -1319,7 +1319,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testExactlyOnceSourceTaskProducerConfigs(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         final Map<String, Object> connectorProducerOverrides = new HashMap<>();
@@ -1377,7 +1377,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testOffsetStoreForRegularSourceConnector(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         mockInternalConverters();
@@ -1466,7 +1466,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testOffsetStoreForExactlyOnceSourceConnector(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         mockInternalConverters();
@@ -1555,7 +1555,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testOffsetStoreForRegularSourceTask(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         mockInternalConverters();
@@ -1673,7 +1673,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testOffsetStoreForExactlyOnceSourceTask(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         mockInternalConverters();
@@ -1768,7 +1768,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testWorkerMetrics(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         mockKafkaClusterId();
@@ -1801,7 +1801,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testExecutorServiceShutdown(boolean enableTopicCreation) throws InterruptedException {
         setup(enableTopicCreation);
         mockKafkaClusterId();
@@ -1824,7 +1824,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testExecutorServiceShutdownWhenTerminationFails(boolean enableTopicCreation) throws InterruptedException {
         setup(enableTopicCreation);
         mockKafkaClusterId();
@@ -1847,7 +1847,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testExecutorServiceShutdownWhenTerminationThrowsException(boolean enableTopicCreation) throws InterruptedException {
         setup(enableTopicCreation);
         mockKafkaClusterId();
@@ -1871,7 +1871,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     @SuppressWarnings("unchecked")
     public void testZombieFencing(boolean enableTopicCreation) {
         setup(enableTopicCreation);
@@ -1914,7 +1914,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testGetSinkConnectorOffsets(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         mockKafkaClusterId();
@@ -1943,7 +1943,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testGetSinkConnectorOffsetsAdminClientSynchronousError(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         mockKafkaClusterId();
@@ -1969,7 +1969,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testGetSinkConnectorOffsetsAdminClientAsynchronousError(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         mockKafkaClusterId();
@@ -2016,7 +2016,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testGetSourceConnectorOffsets(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         mockKafkaClusterId();
@@ -2058,7 +2058,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testGetSourceConnectorOffsetsError(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         mockKafkaClusterId();
@@ -2088,7 +2088,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testAlterOffsetsConnectorDoesNotSupportOffsetAlteration(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         mockKafkaClusterId();
@@ -2119,7 +2119,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     @SuppressWarnings("unchecked")
     public void testAlterOffsetsSourceConnector(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
@@ -2158,7 +2158,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     @SuppressWarnings("unchecked")
     public void testAlterOffsetsSourceConnectorError(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
@@ -2198,7 +2198,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testNormalizeSourceConnectorOffsets(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         Map<Map<String, ?>, Map<String, ?>> offsets = Collections.singletonMap(
@@ -2222,7 +2222,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testAlterOffsetsSinkConnectorNoDeletes(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         @SuppressWarnings("unchecked")
@@ -2246,7 +2246,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testAlterOffsetSinkConnectorOnlyDeletes(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         @SuppressWarnings("unchecked")
@@ -2273,7 +2273,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testAlterOffsetsSinkConnectorAltersAndDeletes(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         @SuppressWarnings("unchecked")
@@ -2344,7 +2344,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testAlterOffsetsSinkConnectorAlterOffsetsError(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         mockKafkaClusterId();
@@ -2385,7 +2385,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testAlterOffsetsSinkConnectorDeleteOffsetsError(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         mockKafkaClusterId();
@@ -2436,7 +2436,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testAlterOffsetsSinkConnectorSynchronousError(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         mockKafkaClusterId();
@@ -2473,7 +2473,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     @SuppressWarnings("unchecked")
     public void testResetOffsetsSourceConnectorExactlyOnceSupportEnabled(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
@@ -2524,7 +2524,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testResetOffsetsSinkConnector(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         mockKafkaClusterId();
@@ -2567,7 +2567,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testResetOffsetsSinkConnectorDeleteConsumerGroupError(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         mockKafkaClusterId();
@@ -2603,7 +2603,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     @SuppressWarnings("unchecked")
     public void testModifySourceConnectorOffsetsTimeout(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
@@ -2640,7 +2640,7 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testModifyOffsetsSinkConnectorTimeout(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         mockKafkaClusterId();
@@ -2672,14 +2672,14 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testConnectorGeneratesTooManyTasksButMaxNotEnforced(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         testConnectorGeneratesTooManyTasks(false);
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testConnectorGeneratesTooManyTasksAndMaxEnforced(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         testConnectorGeneratesTooManyTasks(true);
@@ -2793,14 +2793,14 @@ public class WorkerTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testStartTaskWithTooManyTaskConfigsButMaxNotEnforced(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         testStartTaskWithTooManyTaskConfigs(false);
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testStartTaskWithTooManyTaskConfigsAndMaxEnforced(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         testStartTaskWithTooManyTaskConfigs(true);

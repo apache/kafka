@@ -260,7 +260,7 @@ public class WorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testStartPaused(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         final CountDownLatch pauseLatch = new CountDownLatch(1);
@@ -286,7 +286,7 @@ public class WorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testPause(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         createWorkerTask();
@@ -327,7 +327,7 @@ public class WorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testPollsInBackground(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         createWorkerTask();
@@ -354,7 +354,7 @@ public class WorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testFailureInPoll(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         createWorkerTask();
@@ -387,7 +387,7 @@ public class WorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testFailureInPollAfterCancel(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         createWorkerTask();
@@ -428,7 +428,7 @@ public class WorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testFailureInPollAfterStop(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         createWorkerTask();
@@ -463,7 +463,7 @@ public class WorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testPollReturnsNoRecords(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         // Test that the task handles an empty list of records
@@ -495,7 +495,7 @@ public class WorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testCommit(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         // Test that the task commits properly when prompted
@@ -531,7 +531,7 @@ public class WorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testCommitFailure(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         // Test that the task commits properly when prompted
@@ -567,7 +567,7 @@ public class WorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testSendRecordsRetries(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         createWorkerTask();
@@ -602,7 +602,7 @@ public class WorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testSendRecordsProducerCallbackFail(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         createWorkerTask();
@@ -623,7 +623,7 @@ public class WorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testSendRecordsProducerSendFailsImmediately(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         createWorkerTask();
@@ -642,7 +642,7 @@ public class WorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testSendRecordsTaskCommitRecordFail(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         createWorkerTask();
@@ -667,7 +667,7 @@ public class WorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testSourceTaskIgnoresProducerException(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         createWorkerTaskWithErrorToleration();
@@ -707,7 +707,7 @@ public class WorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testSlowTaskStart(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         final CountDownLatch startupLatch = new CountDownLatch(1);
@@ -745,7 +745,7 @@ public class WorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testCancel(boolean enableTopicCreation) {
         setup(enableTopicCreation);
         createWorkerTask();

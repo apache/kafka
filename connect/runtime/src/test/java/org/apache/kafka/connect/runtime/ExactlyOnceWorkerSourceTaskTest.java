@@ -57,6 +57,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -288,7 +289,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testRemoveMetrics(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         createWorkerTask();
@@ -307,7 +308,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testStartPaused(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         createWorkerTask(TargetState.PAUSED);
@@ -332,7 +333,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testPause(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         createWorkerTask();
@@ -373,7 +374,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testFailureInPreProducerCheck(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         createWorkerTask();
@@ -389,7 +390,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testFailureInProducerInitialization(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         createWorkerTask();
@@ -406,7 +407,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testFailureInPostProducerCheck(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         createWorkerTask();
@@ -424,7 +425,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testFailureInOffsetStoreStart(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         createWorkerTask();
@@ -443,7 +444,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testPollsInBackground(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         createWorkerTask();
@@ -470,7 +471,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testFailureInPoll(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         createWorkerTask();
@@ -495,7 +496,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testFailureInPollAfterCancel(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         createWorkerTask();
@@ -523,7 +524,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testFailureInPollAfterStop(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         createWorkerTask();
@@ -554,7 +555,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testPollReturnsNoRecords(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         // Test that the task handles an empty list of records
@@ -581,7 +582,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testPollBasedCommit(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         Map<String, String> connectorProps = sourceConnectorProps(SourceTask.TransactionBoundary.POLL);
@@ -611,7 +612,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testIntervalBasedCommit(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         long commitInterval = 618;
@@ -655,28 +656,28 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testConnectorCommitOnBatch(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         testConnectorBasedCommit(TransactionContext::commitTransaction, false);
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testConnectorCommitOnRecord(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         testConnectorBasedCommit(ctx -> ctx.commitTransaction(SOURCE_RECORD_2), false);
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testConnectorAbortOnBatch(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         testConnectorBasedCommit(TransactionContext::abortTransaction, true);
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testConnectorAbortOnRecord(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         testConnectorBasedCommit(ctx -> ctx.abortTransaction(SOURCE_RECORD_2), true);
@@ -729,7 +730,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testConnectorAbortsEmptyTransaction(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         Map<String, String> connectorProps = sourceConnectorProps(SourceTask.TransactionBoundary.CONNECTOR);
@@ -776,7 +777,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testMixedConnectorTransactionBoundaryCommitLastRecordAbortBatch(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         // We fail tasks that try to abort and commit a transaction for the same record or same batch
@@ -816,7 +817,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testMixedConnectorTransactionBoundaryAbortLastRecordCommitBatch(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         // We fail tasks that try to abort and commit a transaction for the same record or same batch
@@ -861,7 +862,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testCommitFlushSyncCallbackFailure(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         Exception failure = new RecordTooLargeException();
@@ -875,7 +876,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testCommitFlushAsyncCallbackFailure(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         Exception failure = new RecordTooLargeException();
@@ -895,7 +896,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testCommitTransactionFailure(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         Exception failure = new RecordTooLargeException();
@@ -939,7 +940,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testSendRecordsRetries(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         createWorkerTask();
@@ -985,7 +986,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testSendRecordsProducerSendFailsImmediately(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         createWorkerTask();
@@ -1010,7 +1011,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testSlowTaskStart(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         final CountDownLatch startupLatch = new CountDownLatch(1);
@@ -1046,7 +1047,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     }
 
     @ParameterizedTest
-    @MethodSource("parameters")
+    @ValueSource(booleans = {true, false})
     public void testCancel(boolean enableTopicCreation) throws Exception {
         setup(enableTopicCreation);
         createWorkerTask();
