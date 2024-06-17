@@ -694,7 +694,9 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             }
             if (memberInfo.memberEpoch.isPresent()) {
                 data = data.setGenerationIdOrMemberEpoch(memberInfo.memberEpoch.get());
-                lastEpochSentOnCommit = Optional.of(memberInfo.memberEpoch.get());
+                lastEpochSentOnCommit = memberInfo.memberEpoch;
+            } else {
+                lastEpochSentOnCommit = Optional.empty();
             }
 
             OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(data);
@@ -758,7 +760,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                     } else if (error == Errors.STALE_MEMBER_EPOCH) {
                         log.error("OffsetCommit failed for member {} with stale member epoch error. Last epoch sent: {}",
                             memberInfo.memberId.orElse("undefined"),
-                            lastEpochSentOnCommit.isPresent() ? lastEpochSentOnCommit.get() : "None");
+                            lastEpochSentOnCommit.isPresent() ? lastEpochSentOnCommit.get() : "undefined");
                         future.completeExceptionally(error.exception());
                         return;
                     } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
@@ -802,6 +804,13 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             }
         }
     }
+
+    // Visible for testing
+    Optional<Integer> lastEpochSentOnCommit() {
+        return lastEpochSentOnCommit;
+    }
+
+
 
     /**
      * Represents a request that can be retried or aborted, based on member ID and epoch
